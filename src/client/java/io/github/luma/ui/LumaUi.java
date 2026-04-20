@@ -28,6 +28,7 @@ public final class LumaUi {
 
     public static FlowLayout screenBody() {
         FlowLayout layout = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        layout.padding(Insets.bottom(12));
         layout.gap(8);
         return layout;
     }

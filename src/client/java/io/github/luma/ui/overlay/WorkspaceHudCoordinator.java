@@ -4,6 +4,7 @@ import io.github.luma.LumaMod;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.WorkspaceHudSnapshot;
+import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.controller.WorkspaceHudController;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -104,7 +105,7 @@ public final class WorkspaceHudCoordinator {
     }
 
     private Component buildActionbar(OperationSnapshot snapshot) {
-        int percent = (int) Math.floor(snapshot.progress().fraction() * 100.0D);
+        int percent = OperationProgressPresenter.displayPercent(snapshot);
         Component stage = Component.literal(this.humanStage(snapshot.stage()))
                 .withStyle(this.stageColor(snapshot.stage()));
         Component progressBar = Component.literal(this.progressBar(percent))
@@ -123,20 +124,29 @@ public final class WorkspaceHudCoordinator {
             return;
         }
 
-        Component title = Component.literal(this.workspaceSnapshot.workspaceLabel());
-        String plus = "+" + this.workspaceSnapshot.plusCount();
-        String minus = "-" + this.workspaceSnapshot.minusCount();
+        String titleText = this.workspaceSnapshot.projectName() == null || this.workspaceSnapshot.projectName().isBlank()
+                ? this.workspaceSnapshot.workspaceLabel()
+                : this.workspaceSnapshot.projectName();
+        String branchText = this.workspaceSnapshot.activeVariantId() == null || this.workspaceSnapshot.activeVariantId().isBlank()
+                ? ""
+                : "branch: " + this.workspaceSnapshot.activeVariantId();
+        String plusText = "+" + this.workspaceSnapshot.plusCount();
+        String minusText = "-" + this.workspaceSnapshot.minusCount();
 
-        int titleWidth = client.font.width(title.getString());
-        int countersWidth = client.font.width(plus) + 8 + client.font.width(minus);
-        int boxWidth = Math.max(titleWidth, countersWidth) + 12;
+        int titleWidth = client.font.width(titleText);
+        int branchWidth = branchText.isBlank() ? 0 : client.font.width(branchText);
+        int countersWidth = client.font.width(plusText) + 8 + client.font.width(minusText);
+        int boxWidth = Math.max(titleWidth, Math.max(branchWidth, countersWidth)) + 12;
         int x = drawContext.guiWidth() - boxWidth - 8;
         int y = 8;
 
-        drawContext.fill(x, y, x + boxWidth, y + 24, 0x7A0B1016);
-        drawContext.drawString(client.font, title, x + 6, y + 4, 0xF3F7FA, true);
-        drawContext.drawString(client.font, plus, x + 6, y + 14, 0x69E38A, true);
-        drawContext.drawString(client.font, minus, x + 14 + client.font.width(plus), y + 14, 0xFF7373, true);
+        drawContext.fill(x, y, x + boxWidth, y + 34, 0x7A0B1016);
+        drawContext.drawString(client.font, titleText, x + 6, y + 4, 0xFFF3F7FA, true);
+        if (!branchText.isBlank()) {
+            drawContext.drawString(client.font, branchText, x + 6, y + 14, 0xFF98A6B3, false);
+        }
+        drawContext.drawString(client.font, plusText, x + 6, y + 24, 0xFF69E38A, false);
+        drawContext.drawString(client.font, minusText, x + 14 + client.font.width(plusText), y + 24, 0xFFFF7373, false);
     }
 
     private String fingerprint(OperationSnapshot snapshot) {
@@ -194,7 +204,7 @@ public final class WorkspaceHudCoordinator {
         StringBuilder builder = new StringBuilder(22);
         builder.append('[');
         for (int index = 0; index < 20; index++) {
-            builder.append(index < filled ? '█' : '░');
+            builder.append(index < filled ? '=' : '-');
         }
         builder.append(']');
         return builder.toString();

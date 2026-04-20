@@ -40,7 +40,7 @@ public final class WorkspaceHudController {
 
             return new WorkspaceHudSnapshot(
                     project.name(),
-                    project.name() + " · " + project.activeVariantId(),
+                    project.name() + " | " + project.activeVariantId(),
                     project.activeVariantId(),
                     pending,
                     operationSnapshot
