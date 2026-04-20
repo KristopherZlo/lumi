@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "luma",
+  "version": "${version}",
+  "name": "Luma",
+  "description": "Builder-friendly project history for Minecraft structures.",
+  "authors": [
+    "OpenAI Codex"
+  ],
+  "contact": {},
+  "license": "All Rights Reserved",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "io.github.luma.LumaMod"
+    ],
+    "client": [
+      "io.github.luma.LumaClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "${minecraft_version}",
+    "java": ">=21",
+    "fabric-api": ">=${fabric_api_version}",
+    "owo": ">=${owo_version}",
+    "cloth-config": ">=${cloth_config_version}"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "key.category.luma.general": "Luma",
+  "key.luma.open_dashboard": "Открыть экран проектов",
+  "luma.screen.dashboard.title": "Проекты",
+  "luma.screen.project.title": "Проект",
+  "luma.action.create_project": "Создать проект",
+  "luma.action.save_version": "Сохранить версию",
+  "luma.action.restore": "Вернуть",
+  "luma.action.compare": "Сравнить"
+}

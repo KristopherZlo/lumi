@@ -1,0 +1,10 @@
+{
+  "key.category.luma.general": "Luma",
+  "key.luma.open_dashboard": "Open project dashboard",
+  "luma.screen.dashboard.title": "Projects",
+  "luma.screen.project.title": "Project",
+  "luma.action.create_project": "Create project",
+  "luma.action.save_version": "Save version",
+  "luma.action.restore": "Restore",
+  "luma.action.compare": "Compare"
+}
