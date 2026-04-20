@@ -10,6 +10,7 @@ import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ChangeStatsFactory;
+import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.integration.common.IntegrationStatusService;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.ui.state.ProjectTab;
@@ -30,6 +31,7 @@ public final class ProjectScreenController {
     private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
     private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
     private final IntegrationStatusService integrationStatusService = new IntegrationStatusService();
+    private final VersionLineageService versionLineageService = new VersionLineageService();
 
     public ProjectViewState loadState(String projectName, ProjectTab selectedTab, String selectedVersionId, String status) {
         if (!this.client.hasSingleplayerServer()) {
@@ -52,12 +54,16 @@ public final class ProjectScreenController {
 
         try {
             var server = ClientProjectAccess.requireSingleplayerServer(this.client);
-            var loadedVersions = new ArrayList<>(this.projectService.loadVersions(server, projectName));
+            var project = this.projectService.loadProject(server, projectName);
+            var loadedVariants = new ArrayList<>(this.projectService.loadVariants(server, projectName));
+            var loadedVersions = new ArrayList<>(this.versionLineageService.reachableVersions(
+                    this.projectService.loadVersions(server, projectName),
+                    loadedVariants
+            ));
             loadedVersions.sort(java.util.Comparator.comparing(io.github.luma.domain.model.ProjectVersion::createdAt).reversed());
             var loadedJournal = new ArrayList<>(this.recoveryService.loadJournal(server, projectName));
             loadedJournal.sort(java.util.Comparator.comparing(io.github.luma.domain.model.RecoveryJournalEntry::timestamp).reversed());
-            var project = this.projectService.loadProject(server, projectName);
-            var selectedVersion = this.resolveSelectedVersion(loadedVersions, selectedVersionId);
+            var selectedVersion = this.resolveSelectedVersion(loadedVersions, loadedVariants, project.activeVariantId(), selectedVersionId);
             var diff = selectedVersion != null
                     ? this.diffService.compareVersionToParent(server, projectName, selectedVersion.id())
                     : null;
@@ -67,7 +73,7 @@ public final class ProjectScreenController {
             return new ProjectViewState(
                     project,
                     loadedVersions,
-                    this.projectService.loadVariants(server, projectName),
+                    loadedVariants,
                     loadedJournal,
                     this.recoveryService.loadDraft(server, projectName).orElse(null),
                     selectedVersion,
@@ -124,6 +130,24 @@ public final class ProjectScreenController {
             return "luma.status.world_operation_busy";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Save request failed for project {}", projectName, exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
+    public String amendVersion(String projectName, String message) {
+        try {
+            this.versionService.startAmendVersion(
+                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
+                    projectName,
+                    message,
+                    this.client.getUser().getName()
+            );
+            return "luma.status.amend_started";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Amend request rejected for project {}", projectName, exception);
+            return "luma.status.world_operation_busy";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Amend request failed for project {}", projectName, exception);
             return "luma.status.operation_failed";
         }
     }
@@ -211,6 +235,8 @@ public final class ProjectScreenController {
 
     private io.github.luma.domain.model.ProjectVersion resolveSelectedVersion(
             List<io.github.luma.domain.model.ProjectVersion> versions,
+            List<io.github.luma.domain.model.ProjectVariant> variants,
+            String activeVariantId,
             String selectedVersionId
     ) {
         if (versions.isEmpty()) {
@@ -225,6 +251,7 @@ public final class ProjectScreenController {
             }
         }
 
-        return versions.getFirst();
+        io.github.luma.domain.model.ProjectVersion activeHead = this.versionLineageService.resolveVariantHead(versions, variants, activeVariantId);
+        return activeHead != null ? activeHead : versions.getFirst();
     }
 }

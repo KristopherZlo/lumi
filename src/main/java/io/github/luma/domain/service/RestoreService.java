@@ -76,6 +76,10 @@ public final class RestoreService {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion version = this.resolveVersion(project, versions, variants, versionId);
+        ProjectVariant targetVariant = variants.stream()
+                .filter(candidate -> candidate.id().equals(version.variantId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Version branch is missing: " + version.variantId()));
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         RecoveryDraft pendingDraft = HistoryCaptureManager.getInstance()
                 .freezeSession(level.getServer(), project.id().toString())
@@ -154,24 +158,43 @@ public final class RestoreService {
                             });
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,
-                            () -> {
-                                this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                                        Instant.now(),
-                                        "restore-completed",
-                                        "Restored project state to version " + version.id(),
-                                        version.id(),
-                                        version.variantId()
-                                ));
-                                HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
-                                LumaMod.LOGGER.info(
-                                        "Completed restore for project {} to version {} with {} prepared chunk batches",
-                                        project.name(),
-                                        version.id(),
-                                        batches.size()
-                                );
-                            }
+                            () -> this.completeRestore(level, layout, project, variants, targetVariant, version, batches.size())
                     );
                 }
+        );
+    }
+
+    private void completeRestore(
+            ServerLevel level,
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVariant> variants,
+            ProjectVariant targetVariant,
+            ProjectVersion version,
+            int batchCount
+    ) throws IOException {
+        Instant now = Instant.now();
+        this.variantRepository.save(layout, this.replaceVariantHead(variants, targetVariant.id(), version.id()));
+        io.github.luma.domain.model.BuildProject updatedProject = targetVariant.id().equals(project.activeVariantId())
+                ? project.withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION).withUpdatedAt(now)
+                : project.withActiveVariantId(targetVariant.id(), now)
+                        .withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION);
+        this.projectRepository.save(layout, updatedProject);
+        this.recoveryRepository.deleteDraft(layout);
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                now,
+                "restore-completed",
+                "Restored project state and reset branch head to version " + version.id(),
+                version.id(),
+                targetVariant.id()
+        ));
+        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
+        LumaMod.LOGGER.info(
+                "Completed restore for project {} to version {} on variant {} with {} prepared chunk batches",
+                project.name(),
+                version.id(),
+                targetVariant.id(),
+                batchCount
         );
     }
 
@@ -507,6 +530,25 @@ public final class RestoreService {
                     : versionMap.get(cursor.parentVersionId());
         }
         return false;
+    }
+
+    private List<ProjectVariant> replaceVariantHead(List<ProjectVariant> variants, String targetVariantId, String targetVersionId) {
+        List<ProjectVariant> updated = new ArrayList<>();
+        for (ProjectVariant variant : variants) {
+            if (!variant.id().equals(targetVariantId)) {
+                updated.add(variant);
+                continue;
+            }
+            updated.add(new ProjectVariant(
+                    variant.id(),
+                    variant.name(),
+                    variant.baseVersionId(),
+                    targetVersionId,
+                    variant.main(),
+                    variant.createdAt()
+            ));
+        }
+        return updated;
     }
 
     static List<PreparedChunkBatch> collapsePreparedBatches(List<PreparedChunkBatch> batches) {

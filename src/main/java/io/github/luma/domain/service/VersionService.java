@@ -66,6 +66,69 @@ public final class VersionService {
         return this.startSaveVersion(level, projectName, message, author, VersionKind.MANUAL);
     }
 
+    public OperationHandle startAmendVersion(ServerLevel level, String projectName, String message, String author) throws IOException {
+        ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
+        BuildProject project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
+        RecoveryDraft draft = HistoryCaptureManager.getInstance()
+                .consumeSession(level.getServer(), project.id().toString())
+                .map(TrackedChangeBuffer::toDraft)
+                .or(() -> persistedDraft)
+                .orElseThrow(() -> new IllegalArgumentException("No pending tracked changes for " + projectName));
+        if (draft.isEmpty()) {
+            throw new IllegalArgumentException("No pending tracked changes for " + projectName);
+        }
+
+        // Preserve the live draft shape as the fallback if amend preparation fails.
+        this.recoveryRepository.saveDraft(layout, draft);
+
+        return this.worldOperationManager.startBackgroundOperation(
+                level,
+                project.id().toString(),
+                "amend-version",
+                "blocks",
+                progressSink -> {
+                    List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+                    ProjectVariant activeVariant = variants.stream()
+                            .filter(variant -> variant.id().equals(project.activeVariantId()))
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
+                    if (activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
+                        throw new IllegalArgumentException("Current branch has no head version to amend");
+                    }
+
+                    ProjectVersion headVersion = this.versionRepository.load(layout, activeVariant.headVersionId())
+                            .orElseThrow(() -> new IllegalArgumentException("Head version is missing: " + activeVariant.headVersionId()));
+                    RecoveryDraft amendedDraft = this.buildAmendedDraft(layout, project, activeVariant, headVersion, draft);
+                    if (amendedDraft.isEmpty()) {
+                        throw new IllegalArgumentException("Amend would produce an empty version");
+                    }
+
+                    String amendMessage = message == null || message.isBlank() ? "Amended version" : message;
+                    ProjectVersion amendedVersion = this.writeVersion(
+                            level,
+                            layout,
+                            project,
+                            amendedDraft,
+                            amendMessage,
+                            author,
+                            VersionKind.MANUAL,
+                            true,
+                            headVersion.parentVersionId(),
+                            progressSink
+                    );
+                    this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                            Instant.now(),
+                            "version-amended",
+                            "Amended active branch head",
+                            amendedVersion.id(),
+                            activeVariant.id()
+                    ));
+                }
+        );
+    }
+
     /**
      * Starts an asynchronous save operation for the current tracked changes.
      *
@@ -151,6 +214,32 @@ public final class VersionService {
             boolean schedulePreview,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
+        return this.writeVersion(
+                level,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                versionKind,
+                schedulePreview,
+                "",
+                progressSink
+        );
+    }
+
+    ProjectVersion writeVersion(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String message,
+            String author,
+            VersionKind versionKind,
+            boolean schedulePreview,
+            String parentVersionIdOverride,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVariant activeVariant = variants.stream()
@@ -160,6 +249,9 @@ public final class VersionService {
                         .filter(variant -> variant.id().equals(project.activeVariantId()))
                         .findFirst()
                         .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name())));
+        String parentVersionId = parentVersionIdOverride == null || parentVersionIdOverride.isBlank()
+                ? activeVariant.headVersionId()
+                : parentVersionIdOverride;
 
         int nextIndex = versions.size() + 1;
         Instant now = Instant.now();
@@ -186,7 +278,8 @@ public final class VersionService {
         this.patchMetaRepository.save(layout, patchMetadata);
 
         String snapshotId = "";
-        boolean createSnapshot = this.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind);
+        boolean createSnapshot = (parentVersionId == null || parentVersionId.isBlank())
+                || this.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind);
         LumaMod.LOGGER.info(
                 "Snapshot policy for version {} in project {} resolved to {}",
                 versionId,
@@ -210,7 +303,7 @@ public final class VersionService {
                 versionId,
                 project.id().toString(),
                 activeVariant.id(),
-                activeVariant.headVersionId(),
+                parentVersionId == null ? "" : parentVersionId,
                 snapshotId,
                 List.of(patchMetadata.id()),
                 project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind,
@@ -255,6 +348,59 @@ public final class VersionService {
         }
 
         return version;
+    }
+
+    static List<StoredBlockChange> mergeChanges(List<StoredBlockChange> baseChanges, List<StoredBlockChange> overlayChanges) {
+        Instant now = Instant.now();
+        TrackedChangeBuffer buffer = TrackedChangeBuffer.create(
+                "merge",
+                "project",
+                "variant",
+                "",
+                "merge",
+                io.github.luma.domain.model.WorldMutationSource.SYSTEM,
+                now
+        );
+        for (StoredBlockChange change : baseChanges == null ? List.<StoredBlockChange>of() : baseChanges) {
+            buffer.addChange(change, now);
+        }
+        for (StoredBlockChange change : overlayChanges == null ? List.<StoredBlockChange>of() : overlayChanges) {
+            buffer.addChange(change, now);
+        }
+        return buffer.orderedChanges();
+    }
+
+    private RecoveryDraft buildAmendedDraft(
+            ProjectLayout layout,
+            BuildProject project,
+            ProjectVariant activeVariant,
+            ProjectVersion headVersion,
+            RecoveryDraft draft
+    ) throws IOException {
+        List<StoredBlockChange> headChanges = this.loadPatchChanges(layout, headVersion.patchIds());
+        List<StoredBlockChange> mergedChanges = mergeChanges(headChanges, draft.changes());
+        return new RecoveryDraft(
+                project.id().toString(),
+                activeVariant.id(),
+                headVersion.parentVersionId(),
+                draft.actor(),
+                draft.mutationSource(),
+                draft.startedAt(),
+                draft.updatedAt(),
+                mergedChanges
+        );
+    }
+
+    private List<StoredBlockChange> loadPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
+        List<StoredBlockChange> changes = new ArrayList<>();
+        for (String patchId : patchIds) {
+            Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
+            if (metadata.isEmpty()) {
+                continue;
+            }
+            changes.addAll(this.patchDataRepository.loadChanges(layout, metadata.get()));
+        }
+        return changes;
     }
 
     private void tryRefreshPreview(ProjectLayout layout, BuildProject project, ProjectVersion version, ServerLevel level) {

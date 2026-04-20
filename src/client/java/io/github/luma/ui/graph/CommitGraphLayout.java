@@ -2,6 +2,7 @@ package io.github.luma.ui.graph;
 
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.service.VersionLineageService;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -20,6 +21,8 @@ import java.util.Map;
  */
 public final class CommitGraphLayout {
 
+    private static final VersionLineageService VERSION_LINEAGE = new VersionLineageService();
+
     private CommitGraphLayout() {
     }
 
@@ -32,9 +35,12 @@ public final class CommitGraphLayout {
             return List.of();
         }
 
-        List<ProjectVersion> orderedVersions = versions.stream()
+        List<ProjectVersion> orderedVersions = VERSION_LINEAGE.reachableVersions(versions, variants).stream()
                 .sorted(Comparator.comparing(ProjectVersion::createdAt).reversed())
                 .toList();
+        if (orderedVersions.isEmpty()) {
+            return List.of();
+        }
         Map<String, ProjectVersion> versionMap = new HashMap<>();
         Map<String, Integer> rowIndexByVersionId = new HashMap<>();
         for (int index = 0; index < orderedVersions.size(); index++) {

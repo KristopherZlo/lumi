@@ -213,6 +213,18 @@ public final class ProjectScreen extends LumaScreen {
         });
         saveButton.active(!pending.isEmpty() && !operationActive);
         actions.child(saveButton);
+
+        ButtonComponent amendButton = UIComponents.button(Component.translatable("luma.action.amend_version"), button -> {
+            String status = this.controller.amendVersion(this.projectName, this.saveMessage);
+            if ("luma.status.amend_started".equals(status)) {
+                this.saveMessage = "";
+                this.selectedVariantId = this.state.project().activeVariantId();
+                this.selectedVersionId = "";
+            }
+            this.refresh(status);
+        });
+        amendButton.active(!pending.isEmpty() && !operationActive && this.activeHeadVersion() != null);
+        actions.child(amendButton);
         section.child(actions);
         if (!pending.isEmpty()) {
             this.setInitialFocus(this.commitMessageInput);
@@ -794,6 +806,26 @@ public final class ProjectScreen extends LumaScreen {
             }
         }
         return this.state.variants().isEmpty() ? null : this.state.variants().getFirst();
+    }
+
+    private ProjectVersion activeHeadVersion() {
+        if (this.state.project() == null) {
+            return null;
+        }
+        for (ProjectVariant variant : this.state.variants()) {
+            if (!variant.id().equals(this.state.project().activeVariantId())) {
+                continue;
+            }
+            if (variant.headVersionId() == null || variant.headVersionId().isBlank()) {
+                return null;
+            }
+            for (ProjectVersion version : this.state.versions()) {
+                if (version.id().equals(variant.headVersionId())) {
+                    return version;
+                }
+            }
+        }
+        return null;
     }
 
     private List<ProjectVersion> filteredVersions(String variantId) {

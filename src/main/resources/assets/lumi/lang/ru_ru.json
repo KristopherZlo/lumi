@@ -16,6 +16,7 @@
   "luma.action.open_workspace": "Открыть workspace",
   "luma.action.open_details": "Открыть детали",
   "luma.action.save_version": "Сохранить версию",
+  "luma.action.amend_version": "Изменить head",
   "luma.action.restore": "Откатить",
   "luma.action.compare": "Сравнить",
   "luma.action.compare_overlay": "Подсветить в мире",
@@ -345,5 +346,6 @@
   "luma.project.operation_stage": "Этап: %s",
   "luma.project.operation_progress": "Прогресс: %s / %s %s",
   "luma.status.save_started": "Сохранение запущено. Lumi пишет данные версии в фоне.",
+  "luma.status.amend_started": "Изменение head запущено. Lumi переписывает голову ветки в фоне.",
   "luma.status.recovery_save_started": "Сохранение recovery-черновика запущено. Lumi пишет данные версии в фоне."
 }

@@ -16,6 +16,7 @@
   "luma.action.open_workspace": "Open workspace",
   "luma.action.open_details": "Open details",
   "luma.action.save_version": "Save version",
+  "luma.action.amend_version": "Amend head",
   "luma.action.restore": "Restore",
   "luma.action.compare": "Compare",
   "luma.action.compare_overlay": "Highlight in world",
@@ -344,5 +345,6 @@
   "luma.project.operation_stage": "Stage: %s",
   "luma.project.operation_progress": "Progress: %s / %s %s",
   "luma.status.save_started": "Save started. Lumi is writing version data in the background.",
+  "luma.status.amend_started": "Amend started. Lumi is rewriting the branch head in the background.",
   "luma.status.recovery_save_started": "Recovery draft save started. Lumi is writing version data in the background."
 }

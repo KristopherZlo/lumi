@@ -7,6 +7,7 @@ import io.github.luma.domain.model.VersionDiff;
 import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.CompareViewState;
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ public final class CompareScreenController {
     private final DiffService diffService = new DiffService();
     private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
     private final ProjectService projectService = new ProjectService();
+    private final VersionLineageService versionLineageService = new VersionLineageService();
 
     public static boolean isCurrentWorldReference(String reference) {
         if (reference == null) {
@@ -57,20 +59,27 @@ public final class CompareScreenController {
 
         try {
             var server = ClientProjectAccess.requireSingleplayerServer(this.client);
-            var versions = new ArrayList<>(this.diffService.listVersions(server, projectName));
-            versions.sort(Comparator.comparing(ProjectVersion::createdAt).reversed());
             var variants = new ArrayList<>(this.diffService.listVariants(server, projectName));
+            var versions = new ArrayList<>(this.versionLineageService.reachableVersions(
+                    this.diffService.listVersions(server, projectName),
+                    variants
+            ));
+            versions.sort(Comparator.comparing(ProjectVersion::createdAt).reversed());
             var project = this.projectService.loadProject(server, projectName);
             String activeVariantId = project.activeVariantId();
+            String activeHeadVersionId = this.activeHeadVersionId(variants, activeVariantId);
 
             String resolvedRight = this.resolveReference(versions, variants, rightReference);
+            if (resolvedRight.isBlank() && !activeHeadVersionId.isBlank()) {
+                resolvedRight = activeHeadVersionId;
+            }
             if (resolvedRight.isBlank() && !versions.isEmpty()) {
                 resolvedRight = versions.getFirst().id();
             }
 
             String resolvedLeft = this.resolveReference(versions, variants, leftReference);
             if (resolvedLeft.isBlank() && CURRENT_WORLD_REFERENCE.equals(resolvedRight)) {
-                resolvedLeft = this.activeHeadVersionId(variants, activeVariantId);
+                resolvedLeft = activeHeadVersionId;
             }
             if (resolvedLeft.isBlank() && !resolvedRight.isBlank() && !CURRENT_WORLD_REFERENCE.equals(resolvedRight)) {
                 resolvedLeft = this.parentOrPrevious(versions, resolvedRight);
