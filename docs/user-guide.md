@@ -4,12 +4,11 @@
 
 The mandatory MVP is currently intended for **local singleplayer worlds**. Luma runs on the integrated server and stores project data inside the save folder for that world.
 
-## Opening the dashboard
+## Opening the workspace
 
-- Press `U` by default to open the Luma dashboard.
-- The dashboard focuses on the automatic workspace for your current dimension.
-- Open that workspace to continue saving history, comparing versions, or handling recovery drafts.
-- Workspaces for other dimensions in the same world appear as a secondary list.
+- Press `U` by default to open the automatic workspace for your current dimension.
+- If the workspace does not exist yet, Luma bootstraps it automatically.
+- The `Workspaces` button in the header opens the dashboard when you want to move between dimensions.
 
 ## Legacy manual projects
 
@@ -17,20 +16,25 @@ Manual bounded projects still exist as a legacy fallback through commands such a
 
 ## Working with history
 
-Open a workspace from the dashboard to reach the main workspace screen.
+The main workspace screen is organized like a source-control view:
 
-The main workspace screen is organized around `History`. It lets you:
+- the commit composer always stays at the top
+- the middle area shows one commit graph across all variants in the workspace
+- the detail pane on the right owns restore, compare, branch checkout, and version details
 
-- Enter a message and save a new version from currently tracked edits.
-- Open a version as the active context for `Changes`, `Preview`, and `Materials`.
-- Restore a version into the world.
-- Open compare from the selected or clicked version.
+The commit graph is branch-aware and built from real `parentVersionId` links plus current variant heads. Clicking a node selects it and updates the detail pane.
 
 New versions are stored primarily as patches. Luma creates checkpoint snapshots when the configured policy requires them.
+
+For automatic whole-dimension workspaces, the first visible history node is `Initial`. This is a metadata-backed `WORLD_ROOT` that records the world seed, game version, and generator context for that workspace.
 
 ## Restore behavior
 
 Restore reconstructs the target state from the nearest checkpoint snapshot plus the patch chain after that snapshot.
+
+When the selected target is on the current active branch lineage, Luma first tries a direct patch replay or rollback path. This keeps restore focused on tracked positions instead of expanding through checkpoint chunk payloads unnecessarily.
+
+When you restore `Initial`, Luma restores only the chunks that the current workspace has already tracked. In the current implementation this uses the workspace baseline-chunk history for those tracked chunks; it does not rewind unrelated world state such as inventory, time, gamerules, or untouched chunks.
 
 Important runtime rules:
 
@@ -61,6 +65,8 @@ Use the `Branches` section to:
 - Switch the active branch.
 
 When you switch branches, Luma restores that branch head into the world and future saves continue from that head only.
+
+If you only want to move the active branch without restoring a specific selected version, use `Checkout branch` from the version detail pane.
 
 ## Compare
 
@@ -103,4 +109,4 @@ Each world stores Luma project data under:
 <world save>/luma/projects/
 ```
 
-Each project is stored as a folder ending in `.mbp`. See [storage-format.md](storage-format.md) for the exact layout.
+Each project is stored as a folder ending in `.mbp`. Shared world-origin metadata is stored in `luma/world-origin.json`. See [storage-format.md](storage-format.md) for the exact layout.

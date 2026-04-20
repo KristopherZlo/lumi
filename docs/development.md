@@ -44,6 +44,8 @@ The codebase currently follows these top-level areas:
 - `src/client/java/io/github/luma/ui`
   `Screen + Controller + ViewState` client UI implementation with router-driven navigation.
 
+For the current architecture, responsibility boundaries, and runtime invariants, see [architecture.md](architecture.md).
+
 ## UI architecture
 
 The current menu flow is centered around:
@@ -55,7 +57,14 @@ The current menu flow is centered around:
 - `CompareScreen`
 - `SettingsScreen`
 
-Controllers own service access and loading logic. Screens keep transient UI state. Project tabs are split into separate builder classes under `ui/tab`.
+Controllers own service access and loading logic. Screens keep transient UI state. `LumaScreen` is the shared non-pausing base class for in-world menus. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
+
+Current UX assumptions:
+
+- pressing `U` opens the current dimension workspace directly
+- the dashboard is now secondary navigation from the workspace header
+- the workspace screen is source-control-first: commit composer, commit graph, details/actions
+- version actions such as restore, compare, and branch checkout live in the detail pane, not on graph nodes
 
 ## History architecture
 
@@ -63,10 +72,28 @@ Current runtime history behavior:
 
 - `HistoryCaptureManager` records block changes inside project bounds.
 - Changes are aggregated into a recovery draft and journaled while the session is active.
+- `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces.
 - `VersionService` stores new versions as patch-first history and inserts checkpoint snapshots by policy.
-- `RestoreService` reconstructs the target state from checkpoint snapshot plus patch chain.
+- `RestoreService` prefers direct same-variant patch replay, uses tracked baseline chunks for `WORLD_ROOT`, and falls back to checkpoint snapshot plus patch chain when direct replay is not valid.
 - `VariantService` keeps one head pointer per variant.
 - `DiffService` reconstructs version-to-version changes from patch history.
+
+The current history pipeline is intentionally split into:
+
+- async preparation, compression, and decoding work away from the server tick
+- bounded chunk-batch application on the server tick through `WorldOperationManager`
+- operation snapshots that surface progress to the UI instead of pretending a long task finished immediately
+
+Current world-apply runtime types:
+
+- `ChunkBatch`
+- `SectionBatch`
+- `EntityBatch`
+- `LocalQueue`
+- `GlobalDispatcher`
+- `BatchState`
+- `BatchProcessor`
+- `HistoryStore`
 
 ## Build and packaging notes
 
@@ -82,6 +109,12 @@ Project data is stored per world under:
 <world>/luma/projects/<project>.mbp/
 ```
 
+Shared world origin metadata lives next to the projects root:
+
+```text
+<world>/luma/world-origin.json
+```
+
 See [storage-format.md](storage-format.md) for the exact folder and file layout.
 
 ## Commit policy
@@ -89,8 +122,9 @@ See [storage-format.md](storage-format.md) for the exact folder and file layout.
 The repository keeps a strict implementation policy:
 
 - initialize git before implementation work
-- commit every 100-300 lines or earlier for a coherent vertical slice
+- commit every 100-300 changed lines of code or earlier for a coherent vertical slice
 - avoid mixing unrelated build, storage, UI, integration, and migration changes when they can stand alone
+- update the affected documentation in the same change set whenever behavior, storage, or architecture changes
 
 The current repo also ships that policy in [commit-policy.md](commit-policy.md).
 
@@ -100,4 +134,6 @@ The current repo also ships that policy in [commit-policy.md](commit-policy.md).
 - Keep the mod usable through menus first. Commands are fallback tools.
 - Preserve the singleplayer-first assumption unless a change explicitly expands runtime scope.
 - When touching storage, prefer forward-only adjustments with simple legacy handling for the current local format.
-
+- Apply OOP and SOLID consistently. Favor small, focused collaborators with explicit responsibilities over utility-heavy procedural code.
+- Keep business rules in domain services and models, Minecraft-specific side effects in adapter layers, and file I/O inside repositories.
+- Treat documentation as part of the implementation. If a change alters data flow, storage, or user-visible behavior, update the docs before the work is considered done.

@@ -1,0 +1,208 @@
+# Architecture
+
+## Purpose
+
+Luma is a singleplayer-first Fabric mod that gives Minecraft builders a project-oriented history workflow. The codebase is organized to keep user-facing domain rules separate from Minecraft engine integration, file persistence, and client UI.
+
+The architecture is intentionally optimized around three requirements:
+
+- history operations must remain reliable after crashes or interrupted sessions
+- long save and restore work must avoid freezing the server tick
+- the UI must expose progress as operations, not as fake instant actions
+
+## Layered design
+
+### Bootstrap layer
+
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations once per server tick, flushes idle capture sessions, and persists active sessions on server shutdown.
+
+### Domain model layer
+
+`src/main/java/io/github/luma/domain/model` contains immutable records and focused mutable runtime structures used by the domain services.
+
+Important model groups:
+
+- project identity and settings: `BuildProject`, `ProjectVariant`, `ProjectVersion`, `ProjectSettings`
+- world bootstrap metadata: `WorldOriginInfo`
+- history payloads: `StoredBlockChange`, `StatePayload`, `PatchMetadata`, `SnapshotData`, `RecoveryDraft`
+- user-visible summaries: `ChangeStats`, `PendingChangeSummary`, `VersionDiff`, `MaterialDeltaEntry`
+- operation state: `OperationHandle`, `OperationProgress`, `OperationSnapshot`, `OperationStage`, `WorkspaceHudSnapshot`
+- mutable capture runtime: `TrackedChangeBuffer`
+
+### Domain service layer
+
+`src/main/java/io/github/luma/domain/service` owns business workflows and orchestration.
+
+Key services:
+
+- `ProjectService`: create, load, and update projects
+- `ProjectService`: also owns world-origin bootstrap and automatic `WORLD_ROOT` creation for dimension workspaces
+- `VersionService`: save tracked edits as versions and enforce snapshot policy
+- `RestoreService`: build restore plans, decode world-root baseline restores, and prepare chunk batches
+- `RecoveryService`: restore, persist, or discard interrupted tracked work
+- `VariantService`: branch creation and branch switching
+- `DiffService`: reconstruct version or live-world differences
+- `PreviewService`: generate non-blocking preview images
+- `ProjectIntegrityService`: validate storage consistency
+
+These services should express product rules, not raw Minecraft side effects or raw file layouts.
+
+### Minecraft adapter layer
+
+`src/main/java/io/github/luma/minecraft` contains code that touches Minecraft engine APIs directly.
+
+Important adapters:
+
+- `HistoryCaptureManager`: captures player edits into per-project tracked buffers
+- `WorldMutationContext`: prevents restore and automation from being re-captured as player edits
+- `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
+- `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime
+- `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
+- `LumaCommands`: fallback command interface
+
+### Storage layer
+
+`src/main/java/io/github/luma/storage` and `storage/repository` own the on-disk layout and persistence.
+
+Important boundaries:
+
+- `ProjectLayout` is the single source of truth for project-relative paths
+- metadata repositories read and write lightweight manifests
+- payload repositories read and write compressed binary history data
+- `StorageIo` owns low-level atomic-write and NBT binary helpers
+
+### Client UI layer
+
+`src/client/java/io/github/luma/ui` follows a `Screen + Controller + ViewState` structure.
+
+Responsibilities are split as follows:
+
+- screens keep transient UI state and rendering
+- controllers invoke services and translate failures into status keys
+- view-state records provide immutable inputs to the rendering layer
+- tab builders keep larger screen sections isolated
+- `LumaScreen` ensures Luma screens never pause the game
+- `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
+
+## Core runtime flows
+
+## Capture flow
+
+1. A Minecraft mixin intercepts a block mutation.
+2. `WorldMutationContext` filters out non-player sources.
+3. `HistoryCaptureManager` finds matching projects for the block position.
+4. Whole-dimension workspaces capture baseline chunks on first touch.
+5. A per-project `TrackedChangeBuffer` merges the change by packed block position.
+6. Idle or dirty sessions are flushed into recovery storage.
+
+Important invariants:
+
+- the first observed old state is preserved
+- the latest new state wins
+- no-op edits are removed from the buffer
+- restore-originated mutations never re-enter player history
+
+## Save flow
+
+1. UI or commands call `VersionService.startSaveVersion(...)`.
+2. The live in-memory buffer is consumed first; persisted recovery storage is only a fallback.
+3. The draft is persisted once as a durable fallback while async save work runs.
+4. `WorldOperationManager` executes background preparation off the tick thread.
+5. `PatchDataRepository` writes the binary patch payload.
+6. `PatchMetaRepository` writes the lightweight patch index.
+7. `VersionService` evaluates snapshot policy and optionally asks `SnapshotWriter` for a checkpoint snapshot.
+8. `VersionRepository` writes the final version manifest only after payload files exist.
+9. Preview generation runs later on a separate low-priority executor.
+
+For automatic dimension workspaces, the history chain starts with a metadata-backed `WORLD_ROOT` version. It records the world origin context instead of a normal patch/snapshot payload.
+
+## Restore flow
+
+1. UI calls `RestoreService.restore(...)`.
+2. Active capture is frozen and an optional safety checkpoint is written first.
+3. When the target lies on the current active variant lineage, `RestoreService` prefers a direct patch replay path:
+   reverse patch application for ancestor restores, forward patch application for descendant restores, plus rollback of any pending draft.
+4. If the target is `WORLD_ROOT`, restore decodes only tracked baseline chunks for the current workspace.
+5. If direct replay is not valid, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
+6. Baseline gaps are added only for the snapshot-based whole-dimension fallback path.
+7. Prepared placements are collapsed by final block position before tick-thread application.
+8. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
+9. Chunk commit order is fixed to section blocks -> block entities -> entity batch.
+10. Completion writes a recovery journal entry and leaves operation state available to the UI.
+
+Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never happen on the tick-thread apply path.
+
+## Recovery flow
+
+Recovery is designed to survive crash-like exits without rewriting one large draft file on every change.
+
+Current strategy:
+
+- active sessions live in memory as `TrackedChangeBuffer`
+- periodic flushes append to `recovery/draft.wal.lz4`
+- compaction rewrites the latest state into `recovery/draft.bin.lz4`
+- restore/save recovery actions reuse the same operation model as save and restore
+
+## Threading model
+
+Luma uses a strict two-stage operation pattern:
+
+- prepare stage: file I/O, compression, decompression, snapshot capture, and decode work off-thread
+- apply stage: bounded world mutation batches on the server thread
+
+Current guarantees:
+
+- only one world operation runs per world at a time
+- the world-operation executor is single-threaded and low priority
+- preview generation uses a separate low-priority executor
+- operation progress is observable through `OperationSnapshot`
+- client HUD state is polled separately from screen rendering so non-pausing menus, the top-right diff overlay, and the action-bar progress bar keep updating while screens are open
+
+## Storage format summary
+
+The current durable history format is schema v3.
+
+Main files:
+
+- `world-origin.json`: shared world seed/version/generator manifest for all dimension workspaces
+- `versions/*.json`: version manifests
+- `patches/<patchId>.meta.json`: patch metadata and chunk index
+- `patches/<patchId>.bin.lz4`: patch payload
+- `snapshots/<snapshotId>.bin.lz4`: checkpoint snapshot payload
+- `recovery/draft.bin.lz4`: compacted recovery base
+- `recovery/draft.wal.lz4`: append-only recovery log
+- `recovery/journal.json`: user-facing workflow log
+
+See [storage-format.md](storage-format.md) for the exact layout.
+
+## Logging and observability
+
+The mod is expected to log the following at minimum:
+
+- operation start, rejection, progress, completion, and failure
+- world-origin bootstrap and root-history initialization
+- capture buffer lifecycle changes
+- restore plan summaries
+- recovery compaction and draft deletion
+- UI-triggered service failures that map to generic status text
+
+Logs are part of the support surface. New background or storage work should not be introduced without meaningful logs.
+
+## Testing strategy
+
+The current test suite is organized around:
+
+- model behavior such as `TrackedChangeBuffer`
+- repository round-trips for patch, snapshot, and recovery storage
+- service-level diff and history policy behavior
+- project layout and storage path invariants
+
+When extending history or storage behavior, update both tests and documentation in the same change.
+
+## Extension rules
+
+- Keep domain services narrow and explicit. If a class starts owning more than one reason to change, split it.
+- Add new repository types instead of growing one repository into a mixed metadata and payload god object.
+- Prefer immutable records for persisted state and summaries.
+- Restrict mutable state to clearly bounded runtime coordinators such as capture buffers or active operations.
+- Preserve the menu-first product flow. Commands should remain a fallback, not the primary UX model.
