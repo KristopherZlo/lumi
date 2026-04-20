@@ -62,7 +62,6 @@ Included from the requested list:
 Compatibility replacements used because the exact requested mod has no Fabric 1.21.11 release available on Modrinth:
 
 - `ModernFix` -> `ModernFix-mVUS`
-- `LazyDFU` -> `LazyDFU Reloaded`
 
 ## Not installed
 
@@ -71,11 +70,12 @@ The following requested mods are not installed in this profile because a Fabric 
 - Indium
 - Memory Leak Fix
 - Starlight
+- LazyDFU
 - Chloride
 - Fastload
 - Cull Less Leaves
 
-`Chloride` is also not available as a Fabric mod for this Minecraft version.
+`Chloride` is also not available as a Fabric mod for this Minecraft version. `LazyDFU Reloaded` was evaluated as a fallback candidate but was not kept in the profile because the available jar was not a valid Fabric mod jar for 1.21.11.
 
 ## Runtime dependencies
 
