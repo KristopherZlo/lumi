@@ -8,7 +8,6 @@ import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.CompareViewState;
-import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -22,7 +21,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-public final class CompareScreen extends BaseOwoScreen<FlowLayout> {
+public final class CompareScreen extends LumaScreen {
 
     private static final int BLOCK_LIMIT = 24;
     private static final int MATERIAL_LIMIT = 16;

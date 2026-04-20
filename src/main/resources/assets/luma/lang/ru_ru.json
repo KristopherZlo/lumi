@@ -1,6 +1,6 @@
 {
   "key.category.luma.general": "Luma",
-  "key.luma.open_dashboard": "Открыть экран рабочих пространств",
+  "key.luma.open_dashboard": "Открыть текущее рабочее пространство",
 
   "luma.common.yes": "Да",
   "luma.common.no": "Нет",
@@ -46,6 +46,7 @@
   "luma.action.branch_create": "Новая ветка",
   "luma.action.branch_switch": "Переключить ветку",
   "luma.action.open_history": "Открыть историю",
+  "luma.action.workspaces": "Пространства",
   "luma.action.diff_to_current": "Сравнить с текущим миром",
   "luma.action.switch_then_restore": "Переключить и откатить",
   "luma.action.more_tools": "Ещё",
@@ -142,6 +143,7 @@
   "luma.project.log_help": "Последние события восстановления и отката для этого workspace.",
 
   "luma.history.message_input": "Сообщение",
+  "luma.history.message_required": "Сообщение (обязательно)",
   "luma.history.empty": "Сохранённых версий пока нет.",
   "luma.history.version_header": "%s | %s",
   "luma.history.version_header_selected": "%s | %s | выбрано",
@@ -163,6 +165,7 @@
   "luma.history.empty_branch": "В этой ветке нет версий под текущий фильтр.",
 
   "luma.version_kind.initial": "Начальная",
+  "luma.version_kind.world_root": "Начальная",
   "luma.version_kind.manual": "Ручное сохранение",
   "luma.version_kind.recovery": "Восстановление",
   "luma.version_kind.restore": "Контрольная точка перед откатом",
@@ -305,13 +308,16 @@
   "luma.status.operation_failed": "Операция завершилась ошибкой.",
   "luma.status.version_saved": "Версия сохранена.",
   "luma.status.version_restored": "Версия восстановлена.",
+  "luma.status.restore_started": "Откат запущен. Luma применяет блоки в фоне.",
   "luma.status.variant_created": "Ветка создана.",
   "luma.status.variant_switched": "Ветка переключена.",
   "luma.status.preview_refreshed": "Превью обновлено.",
   "luma.status.recovery_ready": "Доступны действия восстановления.",
   "luma.status.draft_restored": "Recovery-черновик снова применён.",
+  "luma.status.draft_restore_started": "Восстановление recovery-черновика запущено. Luma применяет блоки в фоне.",
   "luma.status.draft_discarded": "Recovery-черновик отброшен.",
   "luma.status.recovery_version_saved": "Recovery-черновик сохранён как версия.",
+  "luma.status.world_operation_busy": "Сейчас уже выполняется другая операция изменения мира.",
   "luma.status.settings_ready": "Настройки проекта загружены.",
   "luma.status.settings_saved": "Настройки проекта сохранены.",
   "luma.status.settings_invalid": "Исправь невалидные поля перед сохранением.",
@@ -326,4 +332,10 @@
   "luma.status.compare_failed": "Сравнение завершилось ошибкой.",
   "luma.status.compare_overlay_enabled": "Подсветка в мире включена.",
   "luma.status.compare_overlay_cleared": "Подсветка в мире очищена."
+  ,
+  "luma.project.operation_title": "Фоновая операция",
+  "luma.project.operation_stage": "Этап: %s",
+  "luma.project.operation_progress": "Прогресс: %s / %s %s",
+  "luma.status.save_started": "Сохранение запущено. Luma пишет данные версии в фоне.",
+  "luma.status.recovery_save_started": "Сохранение recovery-черновика запущено. Luma пишет данные версии в фоне."
 }

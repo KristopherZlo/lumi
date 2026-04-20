@@ -15,8 +15,8 @@ import io.github.luma.ui.state.ProjectViewState;
 import io.github.luma.ui.tab.ChangesTabView;
 import io.github.luma.ui.tab.MaterialsTabView;
 import io.github.luma.ui.tab.PreviewTabView;
-import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -34,7 +34,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-public final class ProjectScreen extends BaseOwoScreen<FlowLayout> {
+public final class ProjectScreen extends LumaScreen {
 
     private static final String FILTER_ALL = "all";
     private static final String FILTER_COMMITS = "commits";
@@ -59,6 +59,7 @@ public final class ProjectScreen extends BaseOwoScreen<FlowLayout> {
             null,
             List.of(),
             List.of(),
+            null,
             new io.github.luma.domain.model.ProjectIntegrityReport(true, List.of(), List.of()),
             ProjectTab.HISTORY,
             "luma.status.project_ready"
@@ -73,6 +74,7 @@ public final class ProjectScreen extends BaseOwoScreen<FlowLayout> {
     private ProjectTab detailTab = ProjectTab.CHANGES;
     private boolean branchComposerExpanded = false;
     private boolean diagnosticsExpanded = false;
+    private TextBoxComponent commitMessageInput;
 
     public ProjectScreen(Screen parent, String projectName) {
         this(parent, projectName, "", "luma.status.project_ready");
@@ -121,6 +123,7 @@ public final class ProjectScreen extends BaseOwoScreen<FlowLayout> {
 
         FlowLayout header = LumaUi.actionRow();
         header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        header.child(UIComponents.button(Component.translatable("luma.action.workspaces"), button -> this.router.openDashboard(this)));
         header.child(UIComponents.button(Component.translatable("luma.action.settings"), button -> this.router.openSettings(this, this.projectName)));
         if (this.state.recoveryDraft() != null) {
             header.child(UIComponents.button(Component.translatable("luma.action.recovery"), button -> this.router.openRecovery(this, this.projectName)));
@@ -159,6 +162,9 @@ public final class ProjectScreen extends BaseOwoScreen<FlowLayout> {
         }
 
         body.child(this.pendingSection());
+        if (this.state.operationSnapshot() != null) {
+            body.child(this.operationSection());
+        }
         body.child(this.branchesSection());
         body.child(this.historySection());
         body.child(this.detailsSection());
@@ -172,15 +178,11 @@ public final class ProjectScreen extends BaseOwoScreen<FlowLayout> {
 
     private FlowLayout pendingSection() {
         PendingChangeSummary pending = this.controller.summarizePending(this.state.recoveryDraft());
+        boolean operationActive = this.state.operationSnapshot() != null && !this.state.operationSnapshot().terminal();
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.project.pending_title"),
                 Component.translatable("luma.project.pending_help", this.state.project().activeVariantId())
         );
-
-        if (pending.isEmpty()) {
-            section.child(LumaUi.caption(Component.translatable("luma.dashboard.pending_clean")));
-            return section;
-        }
 
         FlowLayout stats = LumaUi.actionRow();
         stats.child(LumaUi.statChip(Component.translatable("luma.dashboard.pending_added"), Component.literal(Integer.toString(pending.addedBlocks()))));
@@ -188,25 +190,58 @@ public final class ProjectScreen extends BaseOwoScreen<FlowLayout> {
         stats.child(LumaUi.statChip(Component.translatable("luma.dashboard.pending_changed"), Component.literal(Integer.toString(pending.changedBlocks()))));
         section.child(stats);
 
-        var messageInput = UIComponents.textBox(Sizing.fill(100), this.saveMessage);
-        messageInput.onChanged().subscribe(value -> this.saveMessage = value);
+        this.commitMessageInput = UIComponents.textBox(Sizing.fill(100), this.saveMessage);
+        this.commitMessageInput.setHint(Component.translatable("luma.history.message_required"));
+        this.commitMessageInput.onChanged().subscribe(value -> this.saveMessage = value);
         section.child(LumaUi.formField(
                 Component.translatable("luma.history.message_input"),
-                Component.translatable("luma.history.quick_save_hint"),
-                messageInput
+                Component.translatable(
+                        pending.isEmpty()
+                                ? "luma.dashboard.pending_clean"
+                                : "luma.history.quick_save_hint"
+                ),
+                this.commitMessageInput
         ));
 
         FlowLayout actions = LumaUi.actionRow();
-        actions.child(UIComponents.button(Component.translatable("luma.action.save_version"), button -> {
+        ButtonComponent saveButton = UIComponents.button(Component.translatable("luma.action.save_version"), button -> {
             String status = this.controller.saveVersion(this.projectName, this.saveMessage);
-            if ("luma.status.version_saved".equals(status)) {
+            if ("luma.status.save_started".equals(status)) {
                 this.saveMessage = "";
                 this.selectedVariantId = this.state.project().activeVariantId();
                 this.selectedVersionId = "";
             }
             this.refresh(status);
-        }));
+        });
+        saveButton.active(!pending.isEmpty() && !operationActive);
+        actions.child(saveButton);
         section.child(actions);
+        if (!pending.isEmpty()) {
+            this.setInitialFocus(this.commitMessageInput);
+            this.commitMessageInput.setFocused(true);
+        }
+        return section;
+    }
+
+    private FlowLayout operationSection() {
+        var operation = this.state.operationSnapshot();
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.project.operation_title"),
+                Component.literal(operation.handle().label())
+        );
+        section.child(LumaUi.caption(Component.translatable(
+                "luma.project.operation_stage",
+                operation.stage().name().toLowerCase(Locale.ROOT)
+        )));
+        section.child(LumaUi.caption(Component.translatable(
+                "luma.project.operation_progress",
+                operation.progress().completedUnits(),
+                operation.progress().totalUnits(),
+                operation.progress().unitLabel()
+        )));
+        if (operation.detail() != null && !operation.detail().isBlank()) {
+            section.child(LumaUi.caption(Component.literal(operation.detail())));
+        }
         return section;
     }
 
@@ -581,7 +616,7 @@ public final class ProjectScreen extends BaseOwoScreen<FlowLayout> {
     private void restoreVersion(ProjectVariant selectedVariant, ProjectVersion version) {
         String status;
         if (!selectedVariant.id().equals(this.state.project().activeVariantId())) {
-            status = this.controller.switchVariant(this.projectName, selectedVariant.id());
+            status = this.controller.switchVariant(this.projectName, selectedVariant.id(), false);
             if (!"luma.status.variant_switched".equals(status)) {
                 this.refresh(status);
                 return;
@@ -676,6 +711,7 @@ public final class ProjectScreen extends BaseOwoScreen<FlowLayout> {
             case RECOVERY -> "luma.version_kind.recovery";
             case RESTORE -> "luma.version_kind.restore";
             case LEGACY -> "luma.version_kind.legacy";
+            case WORLD_ROOT -> "luma.version_kind.world_root";
         };
     }
 

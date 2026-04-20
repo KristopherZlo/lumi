@@ -2,7 +2,6 @@ package io.github.luma.ui.screen;
 
 import io.github.luma.ui.controller.CreateProjectScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
-import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -15,7 +14,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
-public final class CreateProjectScreen extends BaseOwoScreen<FlowLayout> {
+public final class CreateProjectScreen extends LumaScreen {
 
     private final Screen parent;
     private final Minecraft client = Minecraft.getInstance();

@@ -6,7 +6,6 @@ import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.controller.SettingsScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
-import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -19,7 +18,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-public final class SettingsScreen extends BaseOwoScreen<FlowLayout> {
+public final class SettingsScreen extends LumaScreen {
 
     private final Screen parent;
     private final String projectName;

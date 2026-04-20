@@ -90,6 +90,7 @@ public final class HistoryTabView {
 
     private static String versionKindKey(io.github.luma.domain.model.VersionKind versionKind) {
         return switch (versionKind) {
+            case WORLD_ROOT -> "luma.version_kind.world_root";
             case INITIAL -> "luma.version_kind.initial";
             case MANUAL -> "luma.version_kind.manual";
             case RECOVERY -> "luma.version_kind.recovery";

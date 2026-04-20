@@ -1,6 +1,6 @@
 {
   "key.category.luma.general": "Luma",
-  "key.luma.open_dashboard": "Open workspace dashboard",
+  "key.luma.open_dashboard": "Open current workspace",
 
   "luma.common.yes": "Yes",
   "luma.common.no": "No",
@@ -46,6 +46,7 @@
   "luma.action.branch_create": "New branch",
   "luma.action.branch_switch": "Switch branch",
   "luma.action.open_history": "Open history",
+  "luma.action.workspaces": "Workspaces",
   "luma.action.diff_to_current": "Compare to current world",
   "luma.action.switch_then_restore": "Switch and restore",
   "luma.action.more_tools": "More",
@@ -142,6 +143,7 @@
   "luma.project.log_help": "Recent recovery and restore events for this workspace.",
 
   "luma.history.message_input": "Message",
+  "luma.history.message_required": "Message (required)",
   "luma.history.empty": "No versions have been saved yet.",
   "luma.history.version_header": "%s | %s",
   "luma.history.version_header_selected": "%s | %s | selected",
@@ -163,6 +165,7 @@
   "luma.history.empty_branch": "This branch does not have versions matching the current filter.",
 
   "luma.version_kind.initial": "Initial",
+  "luma.version_kind.world_root": "Initial",
   "luma.version_kind.manual": "Manual save",
   "luma.version_kind.recovery": "Recovery",
   "luma.version_kind.restore": "Restore checkpoint",
@@ -305,13 +308,16 @@
   "luma.status.operation_failed": "The requested operation failed.",
   "luma.status.version_saved": "Version saved.",
   "luma.status.version_restored": "Version restored.",
+  "luma.status.restore_started": "Restore started. Luma is applying blocks in the background.",
   "luma.status.variant_created": "Branch created.",
   "luma.status.variant_switched": "Branch switched.",
   "luma.status.preview_refreshed": "Preview refreshed.",
   "luma.status.recovery_ready": "Recovery actions are available.",
   "luma.status.draft_restored": "Recovery draft reapplied.",
+  "luma.status.draft_restore_started": "Recovery draft restore started. Luma is applying blocks in the background.",
   "luma.status.draft_discarded": "Recovery draft discarded.",
   "luma.status.recovery_version_saved": "Recovery draft saved as a version.",
+  "luma.status.world_operation_busy": "Another world operation is already running.",
   "luma.status.settings_ready": "Project settings loaded.",
   "luma.status.settings_saved": "Project settings saved.",
   "luma.status.settings_invalid": "Fix the invalid fields before saving.",
@@ -325,5 +331,10 @@
   "luma.status.compare_ready": "Compare view ready.",
   "luma.status.compare_failed": "Compare operation failed.",
   "luma.status.compare_overlay_enabled": "World highlight enabled.",
-  "luma.status.compare_overlay_cleared": "World highlight cleared."
+  "luma.status.compare_overlay_cleared": "World highlight cleared.",
+  "luma.project.operation_title": "Background operation",
+  "luma.project.operation_stage": "Stage: %s",
+  "luma.project.operation_progress": "Progress: %s / %s %s",
+  "luma.status.save_started": "Save started. Luma is writing version data in the background.",
+  "luma.status.recovery_save_started": "Recovery draft save started. Luma is writing version data in the background."
 }

@@ -10,7 +10,6 @@ import io.github.luma.ui.state.DashboardProjectItem;
 import io.github.luma.ui.state.DashboardViewState;
 import io.github.luma.ui.state.ProjectTab;
 import io.github.luma.ui.state.ProjectViewState;
-import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -23,7 +22,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-public final class DashboardScreen extends BaseOwoScreen<FlowLayout> {
+public final class DashboardScreen extends LumaScreen {
 
     private final Screen parent;
     private final Minecraft client = Minecraft.getInstance();
@@ -42,6 +41,7 @@ public final class DashboardScreen extends BaseOwoScreen<FlowLayout> {
             null,
             List.of(),
             List.of(),
+            null,
             new io.github.luma.domain.model.ProjectIntegrityReport(true, List.of(), List.of()),
             ProjectTab.HISTORY,
             "luma.status.project_ready"

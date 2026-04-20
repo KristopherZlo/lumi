@@ -3,7 +3,6 @@ package io.github.luma.ui.screen;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.RecoveryScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
-import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -16,7 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-public final class RecoveryScreen extends BaseOwoScreen<FlowLayout> {
+public final class RecoveryScreen extends LumaScreen {
 
     private final Screen parent;
     private final String projectName;
