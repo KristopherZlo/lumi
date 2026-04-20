@@ -77,15 +77,16 @@ Current compare behavior:
 - You can compare two version ids directly.
 - You can also enter branch ids, and Lumi compares the current heads of those branches.
 - You can compare a saved version against the current live world by using the `current` preset.
-- The compare result shows changed block counts, changed chunk counts, a sample of changed positions, and material delta entries.
+- The compare result focuses on changed block counts, changed chunk counts, a compact sample of changed positions, and material delta entries.
+- The compare setup keeps manual `From` and `To` inputs, but also exposes quick presets for the common parent, selected-version, and active-head workflows.
 - `Highlight in world` enables a client-side overlay that highlights changed block positions in the live world.
 - The overlay prioritizes changed blocks nearest to your current camera position, so large diffs stay usable while you move through the build.
 
 ## Version details
 
-- `Preview` shows the generated preview metadata for the selected version and can refresh the preview file.
+- `Preview` is the primary detail tab. It shows the generated top-down thumbnail for the selected version and can refresh the preview file.
 - `Materials` shows the per-block-id delta between the selected version and its parent.
-- `Changes` shows the sampled block-level diff for the selected version.
+- The old sampled `Changes` view remains in code for future iteration, but it is currently hidden from the main details UI because it was too noisy to be useful.
 
 Preview generation is lightweight and asynchronous failure-safe in the sense that version saving does not fail if preview generation fails.
 

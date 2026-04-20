@@ -219,10 +219,12 @@
 
   "luma.preview.no_version": "Select a version to inspect its preview.",
   "luma.preview.summary": "Preview for %s | %s x %s",
+  "luma.preview.help": "Top-down thumbnail for the selected version. Use it to quickly confirm you picked the right save before compare or restore.",
   "luma.preview.unavailable": "This version does not have a generated preview yet.",
   "luma.preview.missing_file": "The preview metadata exists, but the preview file is missing.",
   "luma.preview.load_failed": "The preview file could not be loaded on the client.",
   "luma.preview.path": "Preview file: %s",
+  "luma.preview.refresh_help": "Refresh preview rebuilds the thumbnail from the saved version data.",
 
   "luma.materials.no_version": "Select a version to inspect the material delta.",
   "luma.materials.empty": "No material delta is available for the selected version.",
@@ -338,6 +340,7 @@
   "luma.status.compare_overlay_enabled": "World highlight enabled.",
   "luma.status.compare_overlay_cleared": "World highlight cleared.",
   "luma.project.operation_title": "Background operation",
+  "luma.project.operation_percent_label": "Overall",
   "luma.project.operation_stage": "Stage: %s",
   "luma.project.operation_progress": "Progress: %s / %s %s",
   "luma.status.save_started": "Save started. Lumi is writing version data in the background.",

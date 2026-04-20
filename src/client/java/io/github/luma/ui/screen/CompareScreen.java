@@ -23,8 +23,8 @@ import net.minecraft.network.chat.Component;
 
 public final class CompareScreen extends LumaScreen {
 
-    private static final int BLOCK_LIMIT = 24;
-    private static final int MATERIAL_LIMIT = 16;
+    private static final int BLOCK_LIMIT = 8;
+    private static final int MATERIAL_LIMIT = 8;
 
     private final Screen parent;
     private final String projectName;
@@ -126,12 +126,6 @@ public final class CompareScreen extends LumaScreen {
                 Component.translatable("luma.compare.left_help"),
                 leftBox
         ));
-        section.child(this.resolvedRow(
-                Component.translatable("luma.compare.left_resolved"),
-                this.leftReference,
-                this.state.leftResolvedVersionId()
-        ));
-        section.child(this.presetCard(true));
 
         var rightBox = UIComponents.textBox(Sizing.fill(100), this.rightReference);
         rightBox.onChanged().subscribe(value -> this.rightReference = value);
@@ -140,18 +134,26 @@ public final class CompareScreen extends LumaScreen {
                 Component.translatable("luma.compare.right_help"),
                 rightBox
         ));
-        section.child(this.resolvedRow(
-                Component.translatable("luma.compare.right_resolved"),
-                this.rightReference,
-                this.state.rightResolvedVersionId()
-        ));
-        section.child(this.presetCard(false));
+        if (!this.state.leftResolvedVersionId().isBlank() || !this.state.rightResolvedVersionId().isBlank()) {
+            section.child(LumaUi.insetSection(
+                    Component.literal(this.displayResolved(this.state.leftResolvedVersionId())
+                            + " -> "
+                            + this.displayResolved(this.state.rightResolvedVersionId())),
+                    null
+            ));
+        }
 
         if (!this.state.variants().isEmpty()) {
             section.child(LumaUi.caption(Component.translatable(
                     "luma.compare.variants_hint",
                     String.join(", ", this.state.variants().stream().map(ProjectVariant::id).toList())
             )));
+        }
+
+        FlowLayout presets = this.quickPresetRow();
+        if (!presets.children().isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.compare.preset_help")));
+            section.child(presets);
         }
 
         FlowLayout actions = LumaUi.actionRow();
@@ -181,6 +183,18 @@ public final class CompareScreen extends LumaScreen {
         stats.child(LumaUi.statChip(
                 Component.translatable("luma.history.commit_chunks"),
                 Component.literal(Integer.toString(this.state.diff().changedChunks()))
+        ));
+        stats.child(LumaUi.statChip(
+                Component.translatable("luma.change_type.added"),
+                Component.literal(Integer.toString(this.changeCount(ChangeType.ADDED)))
+        ));
+        stats.child(LumaUi.statChip(
+                Component.translatable("luma.change_type.removed"),
+                Component.literal(Integer.toString(this.changeCount(ChangeType.REMOVED)))
+        ));
+        stats.child(LumaUi.statChip(
+                Component.translatable("luma.change_type.changed"),
+                Component.literal(Integer.toString(this.changeCount(ChangeType.CHANGED)))
         ));
         section.child(stats);
 
@@ -251,69 +265,43 @@ public final class CompareScreen extends LumaScreen {
         return section;
     }
 
-    private FlowLayout resolvedRow(Component label, String rawReference, String resolvedReference) {
-        FlowLayout row = LumaUi.insetSection(label, this.resolvedText(rawReference, resolvedReference));
-        return row;
-    }
-
-    private FlowLayout presetCard(boolean leftSide) {
-        FlowLayout card = LumaUi.insetSection(
-                Component.translatable(leftSide ? "luma.compare.left_preset_title" : "luma.compare.right_preset_title"),
-                Component.translatable("luma.compare.preset_help")
-        );
-
-        FlowLayout firstRow = LumaUi.actionRow();
+    private FlowLayout quickPresetRow() {
+        FlowLayout row = LumaUi.actionRow();
         String selectedVersionId = this.contextVersionId.isBlank() ? this.selectedVersionId() : this.contextVersionId;
-        if (!selectedVersionId.isBlank()) {
-            firstRow.child(this.presetButton(
-                    leftSide,
-                    Component.translatable("luma.compare.preset_selected_version"),
+        String parentVersionId = this.parentVersionId(selectedVersionId);
+        if (!selectedVersionId.isBlank() && !parentVersionId.isBlank()) {
+            row.child(this.pairedPresetButton(
+                    Component.translatable("luma.action.compare_with_parent"),
+                    parentVersionId,
                     selectedVersionId
             ));
         }
-        String parentVersionId = this.parentVersionId(selectedVersionId);
-        if (!parentVersionId.isBlank()) {
-            firstRow.child(this.presetButton(
-                    leftSide,
-                    Component.translatable("luma.compare.preset_parent_version"),
-                    parentVersionId
+        if (!selectedVersionId.isBlank()) {
+            row.child(this.pairedPresetButton(
+                    Component.translatable("luma.action.compare_with_current"),
+                    selectedVersionId,
+                    CompareScreenController.CURRENT_WORLD_REFERENCE
             ));
         }
-        if (firstRow.children().size() > 0) {
-            card.child(firstRow);
-        }
-
-        FlowLayout secondRow = LumaUi.actionRow();
         String activeHeadVersionId = this.activeHeadVersionId();
         if (!activeHeadVersionId.isBlank()) {
-            secondRow.child(this.presetButton(
-                    leftSide,
+            row.child(this.pairedPresetButton(
                     Component.translatable("luma.compare.preset_active_branch"),
-                    activeHeadVersionId
+                    activeHeadVersionId,
+                    CompareScreenController.CURRENT_WORLD_REFERENCE
             ));
         }
-        secondRow.child(this.presetButton(
-                leftSide,
-                Component.translatable("luma.compare.preset_current_world"),
-                CompareScreenController.CURRENT_WORLD_REFERENCE
-        ));
-        card.child(secondRow);
-        return card;
+        return row;
     }
 
-    private ButtonComponent presetButton(boolean leftSide, Component label, String value) {
+    private ButtonComponent pairedPresetButton(Component label, String leftValue, String rightValue) {
         ButtonComponent button = UIComponents.button(label, pressed -> {
-            if (leftSide) {
-                this.leftReference = value;
-            } else {
-                this.rightReference = value;
-            }
+            this.leftReference = leftValue;
+            this.rightReference = rightValue;
             this.status = "luma.status.compare_ready";
             this.rebuild();
         });
-
-        String currentValue = leftSide ? this.leftReference : this.rightReference;
-        button.active(!value.equalsIgnoreCase(currentValue));
+        button.active(!leftValue.equalsIgnoreCase(this.leftReference) || !rightValue.equalsIgnoreCase(this.rightReference));
         return button;
     }
 
@@ -347,27 +335,24 @@ public final class CompareScreen extends LumaScreen {
         return "";
     }
 
-    private Component resolvedText(String rawReference, String resolvedReference) {
-        if (resolvedReference == null || resolvedReference.isBlank()) {
-            if (rawReference == null || rawReference.isBlank()) {
-                return Component.translatable("luma.compare.resolved_waiting");
-            }
-            return Component.translatable("luma.compare.resolved_missing", rawReference);
-        }
-
-        if (CompareScreenController.CURRENT_WORLD_REFERENCE.equals(resolvedReference)
-                || CompareScreenController.isCurrentWorldReference(rawReference)) {
-            return Component.translatable("luma.compare.resolved_current_world");
-        }
-
-        return Component.translatable("luma.compare.resolved_version", resolvedReference);
-    }
-
     private String displayResolved(String resolvedReference) {
+        if (resolvedReference == null || resolvedReference.isBlank()) {
+            return "?";
+        }
         if (CompareScreenController.CURRENT_WORLD_REFERENCE.equals(resolvedReference)) {
             return Component.translatable("luma.compare.current_world_label").getString();
         }
         return resolvedReference;
+    }
+
+    private int changeCount(ChangeType type) {
+        int count = 0;
+        for (var entry : this.state.diff().changedBlocks()) {
+            if (entry.changeType() == type) {
+                count += 1;
+            }
+        }
+        return count;
     }
 
     private String changeTypeKey(ChangeType type) {

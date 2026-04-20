@@ -5,6 +5,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.graph.CommitGraphLayout;
 import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.LumaUi;
@@ -73,7 +74,7 @@ public final class ProjectScreen extends LumaScreen {
     private String variantName = "";
     private String historySearch = "";
     private String historyFilter = FILTER_ALL;
-    private ProjectTab detailTab = ProjectTab.CHANGES;
+    private ProjectTab detailTab = ProjectTab.PREVIEW;
     private boolean branchComposerExpanded = false;
     private boolean diagnosticsExpanded = false;
     private TextBoxComponent commitMessageInput;
@@ -108,6 +109,9 @@ public final class ProjectScreen extends LumaScreen {
         if (this.state.selectedVersion() != null) {
             this.selectedVersionId = this.state.selectedVersion().id();
             this.selectedVariantId = this.state.selectedVersion().variantId();
+        }
+        if (this.detailTab == ProjectTab.CHANGES) {
+            this.detailTab = ProjectTab.PREVIEW;
         }
 
         root.surface(Surface.BLANK);
@@ -223,16 +227,17 @@ public final class ProjectScreen extends LumaScreen {
                 Component.translatable("luma.project.operation_title"),
                 Component.literal(operation.handle().label())
         );
+        FlowLayout stats = LumaUi.actionRow();
+        stats.child(LumaUi.statChip(
+                Component.translatable("luma.project.operation_percent_label"),
+                Component.literal(Integer.toString(OperationProgressPresenter.displayPercent(operation)) + "%")
+        ));
+        section.child(stats);
         section.child(LumaUi.caption(Component.translatable(
                 "luma.project.operation_stage",
                 operation.stage().name().toLowerCase(Locale.ROOT)
         )));
-        section.child(LumaUi.caption(Component.translatable(
-                "luma.project.operation_progress",
-                operation.progress().completedUnits(),
-                operation.progress().totalUnits(),
-                operation.progress().unitLabel()
-        )));
+        section.child(LumaUi.caption(Component.literal(OperationProgressPresenter.progressSummary(operation))));
         if (operation.detail() != null && !operation.detail().isBlank()) {
             section.child(LumaUi.caption(Component.literal(operation.detail())));
         }
@@ -404,7 +409,7 @@ public final class ProjectScreen extends LumaScreen {
         ButtonComponent selectButton = UIComponents.button(Component.translatable("luma.action.select"), button -> {
             this.selectedVariantId = version.variantId();
             this.selectedVersionId = version.id();
-            this.detailTab = ProjectTab.CHANGES;
+            this.detailTab = ProjectTab.PREVIEW;
             this.refresh("luma.status.project_ready");
         });
         selectButton.active(!selected);
@@ -500,7 +505,7 @@ public final class ProjectScreen extends LumaScreen {
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent openDetails = UIComponents.button(Component.translatable("luma.action.open_details"), button -> {
             this.selectedVersionId = version.id();
-            this.detailTab = ProjectTab.CHANGES;
+            this.detailTab = ProjectTab.PREVIEW;
             this.refresh("luma.status.project_ready");
         });
         openDetails.active(this.state.selectedVersion() == null || !version.id().equals(this.state.selectedVersion().id()));
@@ -586,7 +591,6 @@ public final class ProjectScreen extends LumaScreen {
         section.child(versionActions);
 
         FlowLayout switchers = LumaUi.actionRow();
-        switchers.child(this.detailButton(ProjectTab.CHANGES));
         switchers.child(this.detailButton(ProjectTab.PREVIEW));
         switchers.child(this.detailButton(ProjectTab.MATERIALS));
         section.child(switchers);

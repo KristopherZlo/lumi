@@ -1,5 +1,6 @@
 package io.github.luma.ui.tab;
 
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.preview.ProjectPreviewTextureCache;
 import io.github.luma.ui.state.ProjectViewState;
@@ -37,6 +38,7 @@ public final class PreviewTabView {
                 state.selectedVersion().preview().width(),
                 state.selectedVersion().preview().height()
         )));
+        container.child(LumaUi.caption(Component.translatable("luma.preview.help")));
 
         FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         actions.gap(6);
@@ -45,6 +47,7 @@ public final class PreviewTabView {
             onStatusChanged.accept(controller.refreshPreview(projectName, state.selectedVersion().id()));
         }));
         container.child(actions);
+        container.child(LumaUi.caption(Component.translatable("luma.preview.refresh_help")));
 
         if (state.selectedVersion().preview().fileName() == null || state.selectedVersion().preview().fileName().isBlank()) {
             container.child(UIComponents.label(Component.translatable("luma.preview.unavailable")));
@@ -67,8 +70,8 @@ public final class PreviewTabView {
                     state.selectedVersion().preview().width(),
                     state.selectedVersion().preview().height()
             );
-            int width = Math.min(192, Math.max(96, state.selectedVersion().preview().width() * 2));
-            int height = Math.max(96, (int) Math.round(
+            int width = Math.min(240, Math.max(112, state.selectedVersion().preview().width() * 2));
+            int height = Math.max(112, (int) Math.round(
                     (double) state.selectedVersion().preview().height()
                             * (double) width
                             / Math.max(1, state.selectedVersion().preview().width())
@@ -79,7 +82,7 @@ public final class PreviewTabView {
             container.child(UIComponents.label(Component.translatable("luma.preview.load_failed")));
         }
 
-        container.child(UIComponents.label(Component.translatable("luma.preview.path", previewPath)));
+        container.child(LumaUi.caption(Component.translatable("luma.preview.path", previewPath)));
         return container;
     }
 }
