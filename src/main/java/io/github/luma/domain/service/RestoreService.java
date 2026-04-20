@@ -57,7 +57,7 @@ public final class RestoreService {
                         chain.anchor().snapshotId(),
                         project.id().toString(),
                         chain.anchor().snapshotId() + ".nbt.lz4",
-                        project.bounds(),
+                        0,
                         0L,
                         chain.anchor().createdAt()
                 ), level);

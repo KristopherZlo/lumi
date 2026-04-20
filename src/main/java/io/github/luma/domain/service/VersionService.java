@@ -3,6 +3,7 @@ package io.github.luma.domain.service;
 import io.github.luma.domain.model.BlockPatch;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeStats;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVariant;
@@ -102,7 +103,14 @@ public final class VersionService {
         this.patchRepository.save(layout, patch, draft.changes());
 
         if (!snapshotId.isBlank()) {
-            this.snapshotRepository.capture(layout, project.id().toString(), snapshotId, project.bounds(), level, now);
+            this.snapshotRepository.capture(
+                    layout,
+                    project.id().toString(),
+                    snapshotId,
+                    this.collectSnapshotChunks(layout, versions, activeVariant, draft, project),
+                    level,
+                    now
+            );
         }
 
         ChangeStats stats = ChangeStatsFactory.summarize(draft.changes());
@@ -195,6 +203,44 @@ public final class VersionService {
             cursor = version.parentVersionId();
         }
         return length;
+    }
+
+    private List<ChunkPoint> collectSnapshotChunks(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            ProjectVariant activeVariant,
+            RecoveryDraft draft,
+            BuildProject project
+    ) throws IOException {
+        List<ChunkPoint> chunks = ChunkSelectionFactory.fromBounds(project.bounds());
+        java.util.Map<String, ProjectVersion> versionMap = new HashMap<>();
+        for (ProjectVersion version : versions) {
+            versionMap.put(version.id(), version);
+        }
+
+        String cursor = activeVariant.headVersionId();
+        while (cursor != null && !cursor.isBlank()) {
+            ProjectVersion version = versionMap.get(cursor);
+            if (version == null) {
+                break;
+            }
+
+            for (String patchId : version.patchIds()) {
+                chunks = ChunkSelectionFactory.merge(chunks, this.patchToChunkPoints(layout, patchId));
+            }
+
+            cursor = version.parentVersionId();
+        }
+
+        return ChunkSelectionFactory.merge(chunks, ChunkSelectionFactory.fromChanges(draft.changes()));
+    }
+
+    private List<ChunkPoint> patchToChunkPoints(ProjectLayout layout, String patchId) throws IOException {
+        List<ChunkPoint> chunks = new ArrayList<>();
+        for (var chunkDelta : this.patchRepository.loadPatch(layout, patchId).chunkDeltas()) {
+            chunks.add(new ChunkPoint(chunkDelta.chunkX(), chunkDelta.chunkZ()));
+        }
+        return chunks;
     }
 
     private List<ProjectVariant> replaceVariant(List<ProjectVariant> variants, ProjectVariant updatedVariant) {

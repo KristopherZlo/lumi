@@ -6,7 +6,7 @@ public record SnapshotRef(
         String id,
         String projectId,
         String fileName,
-        Bounds3i bounds,
+        int chunkCount,
         long sizeBytes,
         Instant createdAt
 ) {

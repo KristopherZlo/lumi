@@ -66,7 +66,14 @@ public final class ProjectService {
 
         String versionId = versionId(1);
         String snapshotId = snapshotId(1);
-        this.snapshotRepository.capture(layout, project.id().toString(), snapshotId, bounds, level, now);
+        this.snapshotRepository.capture(
+                layout,
+                project.id().toString(),
+                snapshotId,
+                ChunkSelectionFactory.fromBounds(bounds),
+                level,
+                now
+        );
         this.projectRepository.save(layout, project);
         this.variantRepository.save(layout, List.of(ProjectVariant.main(versionId, now)));
         PreviewInfo preview = PreviewInfo.none();
