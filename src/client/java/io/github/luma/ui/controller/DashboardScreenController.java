@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.level.Level;
 
 public final class DashboardScreenController {
 
@@ -23,12 +24,24 @@ public final class DashboardScreenController {
         try {
             List<DashboardProjectItem> items = new ArrayList<>();
             var server = this.client.getSingleplayerServer();
+            var dimension = this.client.level == null ? Level.OVERWORLD : this.client.level.dimension();
+            var level = server.getLevel(dimension);
+            if (level == null) {
+                level = server.overworld();
+            }
+
+            this.projectService.ensureWorldProject(level, this.client.getUser().getName());
             for (var project : this.projectService.listProjects(server)) {
+                var draft = this.recoveryService.loadDraft(server, project.name()).orElse(null);
                 items.add(new DashboardProjectItem(
                         project.name(),
+                        project.dimensionId(),
                         project.activeVariantId(),
                         this.projectService.loadVersions(server, project.name()).size(),
-                        this.recoveryService.hasDraft(server, project.name()),
+                        this.projectService.loadVariants(server, project.name()).size(),
+                        draft == null ? 0 : draft.changes().size(),
+                        draft != null,
+                        project.tracksWholeDimension(),
                         project.favorite(),
                         project.archived(),
                         project.updatedAt().toString()

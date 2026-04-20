@@ -22,7 +22,7 @@ public record BuildProject(
         boolean archived
 ) {
 
-    public static final int CURRENT_SCHEMA_VERSION = 1;
+    public static final int CURRENT_SCHEMA_VERSION = 2;
 
     public static BuildProject create(String name, String dimensionId, Bounds3i bounds, BlockPoint origin, Instant now) {
         return new BuildProject(
@@ -45,8 +45,33 @@ public record BuildProject(
         );
     }
 
+    public static BuildProject createWorldWorkspace(String name, String dimensionId, Instant now) {
+        return new BuildProject(
+                CURRENT_SCHEMA_VERSION,
+                UUID.randomUUID(),
+                name,
+                "",
+                "1.21.11",
+                "fabric",
+                dimensionId,
+                null,
+                null,
+                "main",
+                "main",
+                now,
+                now,
+                ProjectSettings.defaults(),
+                false,
+                false
+        );
+    }
+
     public boolean isLegacySnapshotProject() {
         return this.schemaVersion <= 0;
+    }
+
+    public boolean tracksWholeDimension() {
+        return this.schemaVersion >= CURRENT_SCHEMA_VERSION && this.bounds == null;
     }
 
     public BuildProject withSchemaVersion(int schemaVersion) {

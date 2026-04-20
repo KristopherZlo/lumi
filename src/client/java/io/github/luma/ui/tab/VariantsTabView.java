@@ -1,5 +1,6 @@
 package io.github.luma.ui.tab;
 
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.state.ProjectViewState;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -29,20 +30,21 @@ public final class VariantsTabView {
         container.gap(6);
 
         if (state.project() != null) {
-            container.child(UIComponents.label(Component.translatable(
-                    "luma.variant.active_current",
-                    state.project().activeVariantId()
-            )));
+            container.child(LumaUi.accent(Component.translatable("luma.variant.active_current", state.project().activeVariantId())));
         }
+
+        FlowLayout creationPanel = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        creationPanel.child(LumaUi.caption(Component.translatable(
+                "luma.variant.creation_hint",
+                state.selectedVersion() == null ? "" : state.selectedVersion().id()
+        )));
 
         FlowLayout creationRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         creationRow.gap(6);
-        creationRow.child(UIComponents.label(Component.translatable("luma.variant.name_input")));
         var variantNameInput = UIComponents.textBox(Sizing.fill(40), variantNameSupplier.get());
         variantNameInput.onChanged().subscribe(onVariantNameChanged::accept);
         creationRow.child(variantNameInput);
 
-        creationRow.child(UIComponents.label(Component.translatable("luma.variant.base_version_input")));
         var baseVersionInput = UIComponents.textBox(Sizing.fill(25), baseVersionSupplier.get());
         baseVersionInput.onChanged().subscribe(onBaseVersionChanged::accept);
         creationRow.child(baseVersionInput);
@@ -52,25 +54,28 @@ public final class VariantsTabView {
             String variantName = rawName == null || rawName.isBlank() ? "variant-" + Math.max(1, state.variants().size()) : rawName;
             onStatusChanged.accept(controller.createVariant(projectName, variantName, baseVersionSupplier.get()));
         }));
-        container.child(creationRow);
+        creationPanel.child(creationRow);
+        container.child(creationPanel);
 
         if (state.variants().isEmpty()) {
-            container.child(UIComponents.label(Component.translatable("luma.variant.empty")));
+            container.child(LumaUi.caption(Component.translatable("luma.variant.empty")));
             return container;
         }
 
         for (var variant : state.variants()) {
-            FlowLayout card = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-            card.gap(3);
+            FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+            card.gap(4);
             boolean active = state.project() != null && variant.id().equals(state.project().activeVariantId());
-            card.child(UIComponents.label(Component.translatable(
-                    active ? "luma.variant.entry_active" : "luma.variant.entry",
-                    variant.name(),
-                    variant.id()
-            )));
-            card.child(UIComponents.label(Component.translatable("luma.variant.entry_base", variant.baseVersionId())));
-            card.child(UIComponents.label(Component.translatable("luma.variant.entry_head", variant.headVersionId())));
-            card.child(UIComponents.label(Component.translatable("luma.variant.entry_created", variant.createdAt().toString())));
+            FlowLayout top = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+            top.gap(6);
+            top.child(LumaUi.value(Component.literal(variant.name())));
+            top.child(LumaUi.chip(Component.literal(variant.id())));
+            if (active) {
+                top.child(LumaUi.chip(Component.translatable("luma.variant.active_badge")));
+            }
+            card.child(top);
+            card.child(LumaUi.caption(Component.translatable("luma.variant.entry_head", blankToFallback(variant.headVersionId()))));
+            card.child(LumaUi.caption(Component.translatable("luma.variant.entry_base", blankToFallback(variant.baseVersionId()))));
             card.child(UIComponents.button(Component.translatable("luma.action.variant_switch"), button -> {
                 onStatusChanged.accept(controller.switchVariant(projectName, variant.id()));
             }));
@@ -78,5 +83,9 @@ public final class VariantsTabView {
         }
 
         return container;
+    }
+
+    private static String blankToFallback(String value) {
+        return value == null || value.isBlank() ? "-" : value;
     }
 }

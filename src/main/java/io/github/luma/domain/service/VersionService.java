@@ -24,7 +24,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import net.minecraft.server.level.ServerLevel;
 
 public final class VersionService {
@@ -48,7 +47,9 @@ public final class VersionService {
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         ProjectVersion version = this.versionRepository.load(layout, versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
-        PreviewInfo preview = this.previewService.capture(layout, versionId, project.bounds(), level);
+        PreviewInfo preview = project.tracksWholeDimension()
+                ? PreviewInfo.none()
+                : this.previewService.capture(layout, versionId, project.bounds(), level);
         ProjectVersion updated = new ProjectVersion(
                 version.id(),
                 version.projectId(),
@@ -91,7 +92,7 @@ public final class VersionService {
         Instant now = Instant.now();
         String versionId = ProjectService.versionId(nextIndex);
         String patchId = ProjectService.patchId(nextIndex);
-        String snapshotId = this.shouldCreateCheckpoint(project, versions, activeVariant, draft) ? ProjectService.snapshotId(nextIndex) : "";
+        String snapshotId = ProjectService.snapshotId(nextIndex);
 
         BlockPatch patch = ChangeStatsFactory.createPatch(
                 patchId,
@@ -102,20 +103,18 @@ public final class VersionService {
         );
         this.patchRepository.save(layout, patch, draft.changes());
 
-        if (!snapshotId.isBlank()) {
-            this.snapshotRepository.capture(
-                    layout,
-                    project.id().toString(),
-                    snapshotId,
-                    this.collectSnapshotChunks(layout, versions, activeVariant, draft, project),
-                    level,
-                    now
-            );
-        }
+        this.snapshotRepository.capture(
+                layout,
+                project.id().toString(),
+                snapshotId,
+                this.collectSnapshotChunks(layout, versions, activeVariant, draft),
+                level,
+                now
+        );
 
         ChangeStats stats = ChangeStatsFactory.summarize(draft.changes());
         PreviewInfo preview = PreviewInfo.none();
-        if (project.settings().previewGenerationEnabled()) {
+        if (project.settings().previewGenerationEnabled() && !project.tracksWholeDimension()) {
             try {
                 preview = this.previewService.capture(layout, versionId, project.bounds(), level);
             } catch (Exception ignored) {
@@ -161,58 +160,13 @@ public final class VersionService {
         return version;
     }
 
-    private boolean shouldCreateCheckpoint(
-            BuildProject project,
-            List<ProjectVersion> versions,
-            ProjectVariant activeVariant,
-            RecoveryDraft draft
-    ) {
-        if (project.isLegacySnapshotProject()) {
-            return true;
-        }
-
-        if ((versions.size() + 1) % project.settings().snapshotEveryVersions() == 0) {
-            return true;
-        }
-
-        long changedBlocks = draft.changes().size();
-        if (project.bounds().volume() > 0 && (double) changedBlocks / (double) project.bounds().volume() >= project.settings().snapshotVolumeThreshold()) {
-            return true;
-        }
-
-        return this.patchChainLength(versions, activeVariant.headVersionId()) >= 10;
-    }
-
-    private int patchChainLength(List<ProjectVersion> versions, String headVersionId) {
-        Map<String, ProjectVersion> versionMap = new HashMap<>();
-        for (ProjectVersion version : versions) {
-            versionMap.put(version.id(), version);
-        }
-
-        int length = 0;
-        String cursor = headVersionId;
-        while (cursor != null && !cursor.isBlank()) {
-            ProjectVersion version = versionMap.get(cursor);
-            if (version == null) {
-                break;
-            }
-            if (version.snapshotId() != null && !version.snapshotId().isBlank()) {
-                break;
-            }
-            length += version.patchIds().size();
-            cursor = version.parentVersionId();
-        }
-        return length;
-    }
-
     private List<ChunkPoint> collectSnapshotChunks(
             ProjectLayout layout,
             List<ProjectVersion> versions,
             ProjectVariant activeVariant,
-            RecoveryDraft draft,
-            BuildProject project
+            RecoveryDraft draft
     ) throws IOException {
-        List<ChunkPoint> chunks = ChunkSelectionFactory.fromBounds(project.bounds());
+        List<ChunkPoint> chunks = new ArrayList<>();
         java.util.Map<String, ProjectVersion> versionMap = new HashMap<>();
         for (ProjectVersion version : versions) {
             versionMap.put(version.id(), version);

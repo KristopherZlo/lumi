@@ -36,4 +36,18 @@ class BuildProjectTest {
         assertEquals("main", updated.activeVariantId());
         assertFalse(project.favorite());
     }
+
+    @Test
+    void worldWorkspaceUsesAutomaticTrackingWithoutBounds() {
+        BuildProject workspace = BuildProject.createWorldWorkspace(
+                "world",
+                "minecraft:overworld",
+                Instant.parse("2026-04-20T12:00:00Z")
+        );
+
+        assertTrue(workspace.tracksWholeDimension());
+        assertEquals(BuildProject.CURRENT_SCHEMA_VERSION, workspace.schemaVersion());
+        assertEquals("main", workspace.activeVariantId());
+        assertEquals("minecraft:overworld", workspace.dimensionId());
+    }
 }

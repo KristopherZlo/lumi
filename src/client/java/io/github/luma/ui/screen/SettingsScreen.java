@@ -82,8 +82,7 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> {
 
         root.child(numberRow("luma.settings.auto_minutes", this.autoVersionMinutes, value -> this.autoVersionMinutes = value));
         root.child(numberRow("luma.settings.idle_seconds", this.sessionIdleSeconds, value -> this.sessionIdleSeconds = value));
-        root.child(numberRow("luma.settings.snapshot_every", this.snapshotEveryVersions, value -> this.snapshotEveryVersions = value));
-        root.child(numberRow("luma.settings.snapshot_volume", this.snapshotVolumeThreshold, value -> this.snapshotVolumeThreshold = value));
+        root.child(UIComponents.label(Component.translatable("luma.settings.snapshot_mode_hint")));
 
         FlowLayout projectActions = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         projectActions.gap(6);

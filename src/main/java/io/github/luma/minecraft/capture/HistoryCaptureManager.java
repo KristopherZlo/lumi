@@ -5,11 +5,13 @@ import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeSession;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.minecraft.world.BlockStateNbtCodec;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.VariantRepository;
@@ -35,6 +37,7 @@ public final class HistoryCaptureManager {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final RecoveryService recoveryService = new RecoveryService();
     private final Map<String, ChangeSession> activeSessions = new HashMap<>();
     private final Map<String, CachedProjects> projectCaches = new HashMap<>();
@@ -60,10 +63,23 @@ public final class HistoryCaptureManager {
 
         try {
             Instant now = Instant.now();
-            for (TrackedProject trackedProject : this.loadTrackedProjects(level.getServer())) {
-                if (!this.matches(level, trackedProject.project(), pos)) {
-                    continue;
-                }
+            List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
+            if (matchingProjects.stream().noneMatch(trackedProject -> trackedProject.project().tracksWholeDimension())) {
+                this.projectService.ensureWorldProject(level, "player");
+                this.invalidateProjectCache(level.getServer());
+                matchingProjects = this.matchingProjects(level, pos);
+            }
+
+            boolean hasWorldWorkspace = matchingProjects.stream()
+                    .anyMatch(trackedProject -> trackedProject.project().tracksWholeDimension());
+            if (hasWorldWorkspace) {
+                matchingProjects = matchingProjects.stream()
+                        .filter(trackedProject -> trackedProject.project().tracksWholeDimension())
+                        .toList();
+            }
+
+            for (TrackedProject trackedProject : matchingProjects) {
+                this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, now);
 
                 ChangeSession session = this.getOrCreateSession(level.getServer(), trackedProject, now);
                 BlockChangeRecord change = new BlockChangeRecord(
@@ -104,9 +120,22 @@ public final class HistoryCaptureManager {
     public void flushIdleSessions(MinecraftServer server) {
         Instant now = Instant.now();
         List<String> sessionsToFinalize = new ArrayList<>();
+        Map<String, Integer> idleThresholds = new HashMap<>();
+
+        try {
+            for (TrackedProject trackedProject : this.loadTrackedProjects(server)) {
+                idleThresholds.put(
+                        trackedProject.project().id().toString(),
+                        trackedProject.project().settings().sessionIdleSeconds()
+                );
+            }
+        } catch (IOException exception) {
+            LumaMod.LOGGER.warn("Failed to load tracked projects for idle flush", exception);
+        }
 
         for (Map.Entry<String, ChangeSession> entry : this.activeSessions.entrySet()) {
-            if (Duration.between(entry.getValue().updatedAt(), now).getSeconds() >= 5) {
+            int idleSeconds = idleThresholds.getOrDefault(entry.getKey(), 5);
+            if (Duration.between(entry.getValue().updatedAt(), now).getSeconds() >= idleSeconds) {
                 sessionsToFinalize.add(entry.getKey());
             }
         }
@@ -170,6 +199,10 @@ public final class HistoryCaptureManager {
             return false;
         }
 
+        if (project.tracksWholeDimension()) {
+            return true;
+        }
+
         return pos.getX() >= project.bounds().min().x()
                 && pos.getX() <= project.bounds().max().x()
                 && pos.getY() >= project.bounds().min().y()
@@ -202,6 +235,41 @@ public final class HistoryCaptureManager {
 
         this.projectCaches.put(cacheKey, new CachedProjects(Instant.now(), trackedProjects));
         return trackedProjects;
+    }
+
+    private List<TrackedProject> matchingProjects(ServerLevel level, BlockPos pos) throws IOException {
+        List<TrackedProject> matching = new ArrayList<>();
+        for (TrackedProject trackedProject : this.loadTrackedProjects(level.getServer())) {
+            if (this.matches(level, trackedProject.project(), pos)) {
+                matching.add(trackedProject);
+            }
+        }
+        return matching;
+    }
+
+    private void captureChunkBaseline(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            Instant now
+    ) throws IOException {
+        ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
+        if (this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
+            return;
+        }
+
+        this.baselineChunkRepository.captureIfMissing(
+                trackedProject.layout(),
+                trackedProject.project().id().toString(),
+                chunk,
+                level,
+                now,
+                pos,
+                oldState,
+                oldBlockEntity
+        );
     }
 
     private String cacheKey(MinecraftServer server) {

@@ -10,6 +10,7 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.BlockChangeApplier;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
@@ -31,6 +32,7 @@ public final class RestoreService {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final VariantRepository variantRepository = new VariantRepository();
+    private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SnapshotRepository snapshotRepository = new SnapshotRepository();
     private final PatchRepository patchRepository = new PatchRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
@@ -53,18 +55,35 @@ public final class RestoreService {
 
         WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
             try {
-                this.snapshotRepository.restore(layout, new SnapshotRef(
-                        chain.anchor().snapshotId(),
-                        project.id().toString(),
-                        chain.anchor().snapshotId() + ".nbt.lz4",
-                        0,
-                        0L,
-                        chain.anchor().createdAt()
-                ), level);
+                if (version.snapshotId() != null && !version.snapshotId().isBlank()) {
+                    SnapshotRef snapshot = new SnapshotRef(
+                            version.snapshotId(),
+                            project.id().toString(),
+                            version.snapshotId() + ".nbt.lz4",
+                            0,
+                            0L,
+                            version.createdAt()
+                    );
+                    this.snapshotRepository.restore(layout, snapshot, level);
+                    this.baselineChunkRepository.restoreMissing(
+                            layout,
+                            level,
+                            this.snapshotRepository.loadChunks(layout, snapshot)
+                    );
+                } else {
+                    this.snapshotRepository.restore(layout, new SnapshotRef(
+                            chain.anchor().snapshotId(),
+                            project.id().toString(),
+                            chain.anchor().snapshotId() + ".nbt.lz4",
+                            0,
+                            0L,
+                            chain.anchor().createdAt()
+                    ), level);
 
-                for (ProjectVersion patchVersion : chain.patchVersions()) {
-                    for (String patchId : patchVersion.patchIds()) {
-                        BlockChangeApplier.applyChanges(level, this.patchRepository.loadChanges(layout, patchId));
+                    for (ProjectVersion patchVersion : chain.patchVersions()) {
+                        for (String patchId : patchVersion.patchIds()) {
+                            BlockChangeApplier.applyChanges(level, this.patchRepository.loadChanges(layout, patchId));
+                        }
                     }
                 }
             } catch (IOException exception) {

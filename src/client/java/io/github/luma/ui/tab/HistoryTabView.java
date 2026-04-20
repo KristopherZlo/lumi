@@ -1,5 +1,6 @@
 package io.github.luma.ui.tab;
 
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.state.ProjectViewState;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -28,44 +29,50 @@ public final class HistoryTabView {
         FlowLayout container = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
         container.gap(6);
 
-        FlowLayout toolbar = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        toolbar.gap(6);
-        toolbar.child(UIComponents.label(Component.translatable("luma.history.message_input")));
+        FlowLayout toolbar = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        toolbar.child(LumaUi.caption(Component.translatable("luma.history.quick_save_hint")));
+
+        FlowLayout toolbarRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        toolbarRow.gap(6);
+        toolbarRow.child(UIComponents.label(Component.translatable("luma.history.message_input")));
         var messageInput = UIComponents.textBox(Sizing.fill(70), saveMessageSupplier.get());
         messageInput.onChanged().subscribe(onSaveMessageChanged::accept);
-        toolbar.child(messageInput);
-        toolbar.child(UIComponents.button(Component.translatable("luma.action.save_version"), button -> {
+        toolbarRow.child(messageInput);
+        toolbarRow.child(UIComponents.button(Component.translatable("luma.action.save_version"), button -> {
             onStatusChanged.accept(controller.saveVersion(projectName, saveMessageSupplier.get()));
         }));
+        toolbar.child(toolbarRow);
         container.child(toolbar);
 
         if (state.versions().isEmpty()) {
-            container.child(UIComponents.label(Component.translatable("luma.history.empty")));
+            container.child(LumaUi.caption(Component.translatable("luma.history.empty")));
             return container;
         }
 
         for (var version : state.versions()) {
-            FlowLayout card = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-            card.gap(3);
-            card.child(UIComponents.label(Component.translatable(
-                    state.selectedVersion() != null && version.id().equals(state.selectedVersion().id())
-                            ? "luma.history.version_header_selected"
-                            : "luma.history.version_header",
-                    version.id(),
-                    Component.translatable(versionKindKey(version.versionKind()))
-            )));
-            card.child(UIComponents.label(Component.translatable("luma.history.version_message", version.message())));
-            card.child(UIComponents.label(Component.translatable("luma.history.version_author", version.author())));
-            card.child(UIComponents.label(Component.translatable("luma.history.version_date", version.createdAt().toString())));
-            card.child(UIComponents.label(Component.translatable(
+            FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+            card.gap(4);
+
+            FlowLayout top = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+            top.gap(6);
+            top.child(LumaUi.value(Component.literal(version.id())));
+            top.child(LumaUi.chip(Component.translatable(versionKindKey(version.versionKind()))));
+            if (state.selectedVersion() != null && version.id().equals(state.selectedVersion().id())) {
+                top.child(LumaUi.chip(Component.translatable("luma.history.selected_badge")));
+            }
+            card.child(top);
+
+            card.child(LumaUi.caption(Component.translatable("luma.history.version_message", version.message())));
+            card.child(LumaUi.caption(Component.translatable(
                     "luma.history.version_changes",
                     version.stats().changedBlocks(),
                     version.stats().changedChunks(),
                     version.stats().distinctBlockTypes()
             )));
-            card.child(UIComponents.label(Component.translatable(
-                    "luma.history.version_source",
-                    version.sourceInfo().operationLabel()
+            card.child(LumaUi.caption(Component.translatable(
+                    "luma.history.version_meta",
+                    version.author(),
+                    version.createdAt().toString()
             )));
             FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
             actions.gap(6);

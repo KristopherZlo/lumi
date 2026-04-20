@@ -76,7 +76,27 @@ public final class DiffService {
         ProjectVersion version = this.versionRepository.load(layout, versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
         if (version.parentVersionId() == null || version.parentVersionId().isBlank()) {
-            return new VersionDiff(version.id(), version.id(), List.of(), 0);
+            List<DiffBlockEntry> changedBlocks = new ArrayList<>();
+            Set<Long> changedChunks = new HashSet<>();
+            for (String patchId : version.patchIds()) {
+                for (BlockChangeRecord change : this.patchRepository.loadChanges(layout, patchId)) {
+                    if (change.oldState().equals(change.newState())) {
+                        continue;
+                    }
+                    changedBlocks.add(new DiffBlockEntry(
+                            change.pos(),
+                            change.oldState(),
+                            change.newState(),
+                            this.changeType(change.oldState(), change.newState())
+                    ));
+                    changedChunks.add(chunkKey(change.pos()));
+                }
+            }
+
+            changedBlocks.sort(java.util.Comparator.comparing((DiffBlockEntry entry) -> entry.pos().x())
+                    .thenComparing(entry -> entry.pos().y())
+                    .thenComparing(entry -> entry.pos().z()));
+            return new VersionDiff(version.id(), version.id(), changedBlocks, changedChunks.size());
         }
 
         return this.compareVersions(server, projectName, version.parentVersionId(), version.id());

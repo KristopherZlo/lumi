@@ -9,6 +9,7 @@ import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.storage.ProjectLayout;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import net.minecraft.core.BlockPos;
@@ -49,6 +51,34 @@ public final class ProjectService {
     public BuildProject loadProject(MinecraftServer server, String projectName) throws IOException {
         return this.projectRepository.load(this.resolveLayout(server, projectName))
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+    }
+
+    public BuildProject ensureWorldProject(ServerLevel level, String author) throws IOException {
+        Path root = this.projectsRoot(level.getServer());
+        Files.createDirectories(root);
+
+        for (BuildProject project : this.projectRepository.loadAll(root)) {
+            if (project.tracksWholeDimension() && project.dimensionId().equals(level.dimension().identifier().toString())) {
+                return project;
+            }
+        }
+
+        Instant now = Instant.now();
+        String projectName = this.uniqueProjectName(root, this.defaultProjectName(level));
+        ProjectLayout layout = ProjectLayout.of(root, projectName);
+        BuildProject project = BuildProject.createWorldWorkspace(projectName, level.dimension().identifier().toString(), now);
+
+        this.projectRepository.save(layout, project);
+        this.variantRepository.save(layout, List.of(ProjectVariant.main("", now)));
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                now,
+                "workspace-created",
+                "World workspace tracking enabled",
+                "",
+                "main"
+        ));
+        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
+        return project;
     }
 
     public BuildProject createProject(ServerLevel level, String name, BlockPos from, BlockPos to, String author) throws IOException {
@@ -156,6 +186,15 @@ public final class ProjectService {
         return server.getWorldPath(LevelResource.ROOT).resolve("luma").resolve("projects");
     }
 
+    public String defaultProjectName(ServerLevel level) {
+        String worldName = level.getServer().getWorldData().getLevelName();
+        String dimension = this.dimensionLabel(level.dimension().identifier().toString());
+        if ("Overworld".equals(dimension)) {
+            return worldName;
+        }
+        return worldName + " - " + dimension;
+    }
+
     public static String versionId(int number) {
         return String.format(Locale.ROOT, "v%04d", number);
     }
@@ -166,5 +205,32 @@ public final class ProjectService {
 
     public static String patchId(int number) {
         return String.format(Locale.ROOT, "patch-%04d", number);
+    }
+
+    private String uniqueProjectName(Path root, String preferredName) throws IOException {
+        List<String> existingNames = new ArrayList<>();
+        for (BuildProject project : this.projectRepository.loadAll(root)) {
+            existingNames.add(project.name().toLowerCase(Locale.ROOT));
+        }
+
+        if (!existingNames.contains(preferredName.toLowerCase(Locale.ROOT))) {
+            return preferredName;
+        }
+
+        int suffix = 2;
+        while (existingNames.contains((preferredName + " " + suffix).toLowerCase(Locale.ROOT))) {
+            suffix += 1;
+        }
+        return preferredName + " " + suffix;
+    }
+
+    private String dimensionLabel(String dimensionId) {
+        if ("minecraft:the_nether".equals(dimensionId)) {
+            return "Nether";
+        }
+        if ("minecraft:the_end".equals(dimensionId)) {
+            return "End";
+        }
+        return "Overworld";
     }
 }
