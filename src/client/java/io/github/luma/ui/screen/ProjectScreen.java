@@ -667,7 +667,9 @@ public final class ProjectScreen extends LumaScreen {
 
     private boolean matchesFilter(ProjectVersion version) {
         return switch (this.historyFilter) {
-            case FILTER_COMMITS -> version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.MANUAL;
+            case FILTER_COMMITS -> version.versionKind() == VersionKind.WORLD_ROOT
+                    || version.versionKind() == VersionKind.INITIAL
+                    || version.versionKind() == VersionKind.MANUAL;
             case FILTER_RECOVERY -> version.versionKind() == VersionKind.RECOVERY;
             case FILTER_RESTORE -> version.versionKind() == VersionKind.RESTORE;
             default -> true;

@@ -11,13 +11,15 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
-import io.github.luma.storage.repository.SnapshotRepository;
+import io.github.luma.storage.repository.SnapshotWriter;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
+import io.github.luma.storage.repository.WorldOriginRepository;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,14 +32,22 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 
+/**
+ * Owns project creation, lookup, and project-level metadata updates.
+ *
+ * <p>This service exposes the main entry points for discovering projects in the
+ * current world, creating bounded or whole-dimension workspaces, and resolving
+ * stable ids used by history storage.
+ */
 public final class ProjectService {
 
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
-    private final SnapshotRepository snapshotRepository = new SnapshotRepository();
+    private final SnapshotWriter snapshotWriter = new SnapshotWriter();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final PreviewService previewService = new PreviewService();
+    private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
 
     public List<BuildProject> listProjects(MinecraftServer server) throws IOException {
         return this.projectRepository.loadAll(this.projectsRoot(server));
@@ -53,12 +63,19 @@ public final class ProjectService {
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
     }
 
+    /**
+     * Ensures that the current dimension has one automatic whole-dimension
+     * workspace.
+     */
     public BuildProject ensureWorldProject(ServerLevel level, String author) throws IOException {
         Path root = this.projectsRoot(level.getServer());
         Files.createDirectories(root);
+        this.ensureWorldOrigin(level.getServer());
 
         for (BuildProject project : this.projectRepository.loadAll(root)) {
             if (project.tracksWholeDimension() && project.dimensionId().equals(level.dimension().identifier().toString())) {
+                ProjectLayout existingLayout = this.resolveLayout(level.getServer(), project.name());
+                this.ensureWorldRootVersion(existingLayout, project, author, Instant.now());
                 return project;
             }
         }
@@ -67,20 +84,39 @@ public final class ProjectService {
         String projectName = this.uniqueProjectName(root, this.defaultProjectName(level));
         ProjectLayout layout = ProjectLayout.of(root, projectName);
         BuildProject project = BuildProject.createWorldWorkspace(projectName, level.dimension().identifier().toString(), now);
+        String rootVersionId = this.ensureWorldRootVersion(layout, project, author, now);
 
         this.projectRepository.save(layout, project);
-        this.variantRepository.save(layout, List.of(ProjectVariant.main("", now)));
+        this.variantRepository.save(layout, List.of(ProjectVariant.main(rootVersionId, now)));
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,
                 "workspace-created",
-                "World workspace tracking enabled",
-                "",
+                "World workspace tracking enabled with initial root",
+                rootVersionId,
                 "main"
         ));
         HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
         return project;
     }
 
+    public WorldOriginInfo ensureWorldOrigin(MinecraftServer server) throws IOException {
+        return this.worldOriginRepository.ensure(server);
+    }
+
+    public void bootstrapWorld(MinecraftServer server) throws IOException {
+        this.ensureWorldOrigin(server);
+        for (BuildProject project : this.listProjects(server)) {
+            if (!project.tracksWholeDimension()) {
+                continue;
+            }
+            this.ensureWorldRootVersion(this.resolveLayout(server, project.name()), project, "Luma", Instant.now());
+        }
+    }
+
+    /**
+     * Creates a bounded project with an initial checkpoint snapshot and main
+     * variant head.
+     */
     public BuildProject createProject(ServerLevel level, String name, BlockPos from, BlockPos to, String author) throws IOException {
         Path root = this.projectsRoot(level.getServer());
         Files.createDirectories(root);
@@ -96,7 +132,7 @@ public final class ProjectService {
 
         String versionId = versionId(1);
         String snapshotId = snapshotId(1);
-        this.snapshotRepository.capture(
+        this.snapshotWriter.capture(
                 layout,
                 project.id().toString(),
                 snapshotId,
@@ -232,5 +268,58 @@ public final class ProjectService {
             return "End";
         }
         return "Overworld";
+    }
+
+    private String ensureWorldRootVersion(
+            ProjectLayout layout,
+            BuildProject project,
+            String author,
+            Instant now
+    ) throws IOException {
+        List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+        if (!versions.isEmpty()) {
+            return versions.getFirst().id();
+        }
+
+        this.projectRepository.save(layout, project);
+        String versionId = versionId(1);
+        ProjectVersion rootVersion = new ProjectVersion(
+                versionId,
+                project.id().toString(),
+                "main",
+                "",
+                "",
+                List.of(),
+                VersionKind.WORLD_ROOT,
+                author == null ? "Luma" : author,
+                "Initial",
+                ChangeStats.empty(),
+                PreviewInfo.none(),
+                ExternalSourceInfo.manual(),
+                now
+        );
+        this.versionRepository.save(layout, rootVersion);
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        if (variants.isEmpty()) {
+            this.variantRepository.save(layout, List.of(ProjectVariant.main(versionId, now)));
+        } else {
+            List<ProjectVariant> updated = new ArrayList<>();
+            for (ProjectVariant variant : variants) {
+                if (variant.headVersionId() == null || variant.headVersionId().isBlank()) {
+                    updated.add(new ProjectVariant(
+                            variant.id(),
+                            variant.name(),
+                            variant.baseVersionId() == null || variant.baseVersionId().isBlank() ? versionId : variant.baseVersionId(),
+                            versionId,
+                            variant.main(),
+                            variant.createdAt()
+                    ));
+                } else {
+                    updated.add(variant);
+                }
+            }
+            this.variantRepository.save(layout, updated);
+        }
+        return versionId;
     }
 }
