@@ -16,6 +16,20 @@ Use a custom nickname:
 .\scripts\run-test-client.ps1 -Username YourNickHere
 ```
 
+The script automatically selects a compatible local JDK 17+ and overrides an older shell `JAVA_HOME` for that launch only.
+
+If you want to force a specific JDK:
+
+```powershell
+.\scripts\run-test-client.ps1 -JavaHome "C:\Program Files\Java\jdk-21"
+```
+
+If you only want to verify the Gradle profile without starting Minecraft:
+
+```powershell
+.\scripts\run-test-client.ps1 -GradleTasks tasks --all
+```
+
 You can also call Gradle directly:
 
 ```powershell
