@@ -6,8 +6,8 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.resources.Identifier;
+import io.github.luma.ui.screen.DashboardScreen;
 import org.lwjgl.glfw.GLFW;
 
 public final class LumaClient implements ClientModInitializer {
@@ -37,7 +37,7 @@ public final class LumaClient implements ClientModInitializer {
                 continue;
             }
 
-            client.setScreen(new TitleScreen());
+            client.setScreen(new DashboardScreen(client.screen));
         }
     }
 }
