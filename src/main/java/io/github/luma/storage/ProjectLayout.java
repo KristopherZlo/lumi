@@ -64,4 +64,8 @@ public record ProjectLayout(Path root) {
     public Path recoveryJournalFile() {
         return this.recoveryDir().resolve("journal.json");
     }
+
+    public Path previewFile(String versionId) {
+        return this.previewsDir().resolve(versionId + ".png");
+    }
 }

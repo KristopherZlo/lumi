@@ -6,9 +6,11 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
+import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
@@ -33,6 +35,7 @@ public final class ProjectService {
     private final VersionRepository versionRepository = new VersionRepository();
     private final SnapshotRepository snapshotRepository = new SnapshotRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final PreviewService previewService = new PreviewService();
 
     public List<BuildProject> listProjects(MinecraftServer server) throws IOException {
         return this.projectRepository.loadAll(this.projectsRoot(server));
@@ -66,6 +69,14 @@ public final class ProjectService {
         this.snapshotRepository.capture(layout, project.id().toString(), snapshotId, bounds, level, now);
         this.projectRepository.save(layout, project);
         this.variantRepository.save(layout, List.of(ProjectVariant.main(versionId, now)));
+        PreviewInfo preview = PreviewInfo.none();
+        if (project.settings().previewGenerationEnabled()) {
+            try {
+                preview = this.previewService.capture(layout, versionId, bounds, level);
+            } catch (Exception ignored) {
+                preview = PreviewInfo.none();
+            }
+        }
         this.versionRepository.save(layout, new ProjectVersion(
                 versionId,
                 project.id().toString(),
@@ -77,7 +88,7 @@ public final class ProjectService {
                 author,
                 "Initial version",
                 ChangeStats.empty(),
-                PreviewInfo.none(),
+                preview,
                 ExternalSourceInfo.manual(),
                 now
         ));
@@ -88,8 +99,42 @@ public final class ProjectService {
                 versionId,
                 "main"
         ));
+        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
 
         return project;
+    }
+
+    public BuildProject updateSettings(MinecraftServer server, String projectName, ProjectSettings settings) throws IOException {
+        ProjectLayout layout = this.resolveLayout(server, projectName);
+        BuildProject project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        BuildProject updated = project
+                .withSettings(settings, Instant.now())
+                .withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION);
+        this.projectRepository.save(layout, updated);
+        return updated;
+    }
+
+    public BuildProject setFavorite(MinecraftServer server, String projectName, boolean favorite) throws IOException {
+        ProjectLayout layout = this.resolveLayout(server, projectName);
+        BuildProject project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        BuildProject updated = project
+                .withFavorite(favorite, Instant.now())
+                .withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION);
+        this.projectRepository.save(layout, updated);
+        return updated;
+    }
+
+    public BuildProject setArchived(MinecraftServer server, String projectName, boolean archived) throws IOException {
+        ProjectLayout layout = this.resolveLayout(server, projectName);
+        BuildProject project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        BuildProject updated = project
+                .withArchived(archived, Instant.now())
+                .withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION);
+        this.projectRepository.save(layout, updated);
+        return updated;
     }
 
     public List<ProjectVersion> loadVersions(MinecraftServer server, String projectName) throws IOException {

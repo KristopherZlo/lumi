@@ -66,6 +66,7 @@ public final class VariantService {
                 baseVersionId,
                 variantId
         ));
+        HistoryCaptureManager.getInstance().invalidateProjectCache(server);
         return variant;
     }
 
@@ -93,6 +94,7 @@ public final class VariantService {
                 targetVariant.headVersionId(),
                 targetVariant.id()
         ));
+        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
         return targetVariant;
     }
 

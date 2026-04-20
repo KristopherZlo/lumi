@@ -16,4 +16,12 @@ public record ExternalSourceInfo(
     public static ExternalSourceInfo manual() {
         return new ExternalSourceInfo("MANUAL", "manual", "Manual Save", "", null, false, false, Map.of());
     }
+
+    public static ExternalSourceInfo recovery() {
+        return new ExternalSourceInfo("SYSTEM", "recovery", "Recovery Draft", "", null, false, false, Map.of());
+    }
+
+    public static ExternalSourceInfo restore() {
+        return new ExternalSourceInfo("SYSTEM", "restore", "Restore", "", null, false, false, Map.of());
+    }
 }

@@ -81,7 +81,7 @@ public final class ProjectRepository {
                         : project.activeVariantId(),
                 project.createdAt(),
                 project.updatedAt(),
-                project.settings() == null ? io.github.luma.domain.model.ProjectSettings.defaults() : project.settings(),
+                io.github.luma.domain.model.ProjectSettings.sanitize(project.settings()),
                 project.favorite(),
                 project.archived()
         );

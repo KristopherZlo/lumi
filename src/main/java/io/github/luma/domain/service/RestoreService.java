@@ -4,6 +4,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.SnapshotRef;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
@@ -33,6 +34,7 @@ public final class RestoreService {
     private final SnapshotRepository snapshotRepository = new SnapshotRepository();
     private final PatchRepository patchRepository = new PatchRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final VersionService versionService = new VersionService();
 
     public ProjectVersion restore(ServerLevel level, String projectName, String versionId) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
@@ -43,6 +45,10 @@ public final class RestoreService {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion version = this.resolveVersion(project, versions, variants, versionId);
+        var draft = this.recoveryRepository.loadDraft(layout);
+        if (project.settings().safetySnapshotBeforeRestore() && draft.isPresent() && !draft.get().isEmpty()) {
+            this.versionService.saveVersion(level, projectName, "", "Luma", VersionKind.RESTORE);
+        }
         RestoreChain chain = this.resolveChain(versions, version);
 
         WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {

@@ -111,4 +111,67 @@ public record BuildProject(
                 this.archived
         );
     }
+
+    public BuildProject withSettings(ProjectSettings settings, Instant updatedAt) {
+        return new BuildProject(
+                this.schemaVersion,
+                this.id,
+                this.name,
+                this.description,
+                this.minecraftVersion,
+                this.modLoader,
+                this.dimensionId,
+                this.bounds,
+                this.origin,
+                this.mainVariantId,
+                this.activeVariantId,
+                this.createdAt,
+                updatedAt,
+                ProjectSettings.sanitize(settings),
+                this.favorite,
+                this.archived
+        );
+    }
+
+    public BuildProject withFavorite(boolean favorite, Instant updatedAt) {
+        return new BuildProject(
+                this.schemaVersion,
+                this.id,
+                this.name,
+                this.description,
+                this.minecraftVersion,
+                this.modLoader,
+                this.dimensionId,
+                this.bounds,
+                this.origin,
+                this.mainVariantId,
+                this.activeVariantId,
+                this.createdAt,
+                updatedAt,
+                this.settings,
+                favorite,
+                this.archived
+        );
+    }
+
+    public BuildProject withArchived(boolean archived, Instant updatedAt) {
+        return new BuildProject(
+                this.schemaVersion,
+                this.id,
+                this.name,
+                this.description,
+                this.minecraftVersion,
+                this.modLoader,
+                this.dimensionId,
+                this.bounds,
+                this.origin,
+                this.mainVariantId,
+                this.activeVariantId,
+                this.createdAt,
+                updatedAt,
+                this.settings,
+                this.favorite,
+                archived
+        );
+    }
 }

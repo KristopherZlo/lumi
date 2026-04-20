@@ -35,8 +35,39 @@ public final class VersionService {
     private final SnapshotRepository snapshotRepository = new SnapshotRepository();
     private final PatchRepository patchRepository = new PatchRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final PreviewService previewService = new PreviewService();
 
     public ProjectVersion saveVersion(ServerLevel level, String projectName, String message, String author) throws IOException {
+        return this.saveVersion(level, projectName, message, author, VersionKind.MANUAL);
+    }
+
+    public ProjectVersion refreshPreview(ServerLevel level, String projectName, String versionId) throws IOException {
+        ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
+        BuildProject project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        ProjectVersion version = this.versionRepository.load(layout, versionId)
+                .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
+        PreviewInfo preview = this.previewService.capture(layout, versionId, project.bounds(), level);
+        ProjectVersion updated = new ProjectVersion(
+                version.id(),
+                version.projectId(),
+                version.variantId(),
+                version.parentVersionId(),
+                version.snapshotId(),
+                version.patchIds(),
+                version.versionKind(),
+                version.author(),
+                version.message(),
+                version.stats(),
+                preview,
+                version.sourceInfo(),
+                version.createdAt()
+        );
+        this.versionRepository.save(layout, updated);
+        return updated;
+    }
+
+    public ProjectVersion saveVersion(ServerLevel level, String projectName, String message, String author, VersionKind versionKind) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         BuildProject project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
@@ -75,6 +106,14 @@ public final class VersionService {
         }
 
         ChangeStats stats = ChangeStatsFactory.summarize(draft.changes());
+        PreviewInfo preview = PreviewInfo.none();
+        if (project.settings().previewGenerationEnabled()) {
+            try {
+                preview = this.previewService.capture(layout, versionId, project.bounds(), level);
+            } catch (Exception ignored) {
+                preview = PreviewInfo.none();
+            }
+        }
         ProjectVersion version = new ProjectVersion(
                 versionId,
                 project.id().toString(),
@@ -82,12 +121,12 @@ public final class VersionService {
                 activeVariant.headVersionId(),
                 snapshotId,
                 List.of(patch.id()),
-                project.isLegacySnapshotProject() ? VersionKind.LEGACY : VersionKind.MANUAL,
+                project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind,
                 author,
-                message == null || message.isBlank() ? "Saved version" : message,
+                this.resolveMessage(message, project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind),
                 stats,
-                PreviewInfo.none(),
-                ExternalSourceInfo.manual(),
+                preview,
+                this.resolveSourceInfo(project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind),
                 now
         );
 
@@ -105,10 +144,11 @@ public final class VersionService {
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,
                 "version-saved",
-                "Saved version from tracked changes",
+                this.resolveJournalMessage(version.versionKind()),
                 version.id(),
                 activeVariant.id()
         ));
+        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
 
         return version;
     }
@@ -163,5 +203,35 @@ public final class VersionService {
             result.add(variant.id().equals(updatedVariant.id()) ? updatedVariant : variant);
         }
         return result;
+    }
+
+    private String resolveMessage(String message, VersionKind versionKind) {
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+
+        return switch (versionKind) {
+            case RECOVERY -> "Recovered draft";
+            case LEGACY -> "Migrated legacy save";
+            case RESTORE -> "Restore safety checkpoint";
+            case INITIAL, MANUAL -> "Saved version";
+        };
+    }
+
+    private ExternalSourceInfo resolveSourceInfo(VersionKind versionKind) {
+        return switch (versionKind) {
+            case RECOVERY -> ExternalSourceInfo.recovery();
+            case RESTORE -> ExternalSourceInfo.restore();
+            case INITIAL, MANUAL, LEGACY -> ExternalSourceInfo.manual();
+        };
+    }
+
+    private String resolveJournalMessage(VersionKind versionKind) {
+        return switch (versionKind) {
+            case RECOVERY -> "Saved recovery draft as a new version";
+            case LEGACY -> "Saved a new version while migrating a legacy snapshot project";
+            case RESTORE -> "Saved restore checkpoint version";
+            case INITIAL, MANUAL -> "Saved version from tracked changes";
+        };
     }
 }
