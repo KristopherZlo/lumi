@@ -28,7 +28,10 @@ public final class DashboardScreenController {
                         project.name(),
                         project.activeVariantId(),
                         this.projectService.loadVersions(server, project.name()).size(),
-                        this.recoveryService.hasDraft(server, project.name())
+                        this.recoveryService.hasDraft(server, project.name()),
+                        project.favorite(),
+                        project.archived(),
+                        project.updatedAt().toString()
                 ));
             }
 
