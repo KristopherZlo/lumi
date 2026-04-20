@@ -79,6 +79,7 @@ Current compare behavior:
 - You can compare a saved version against the current live world by using the `current` preset.
 - The compare result shows changed block counts, changed chunk counts, a sample of changed positions, and material delta entries.
 - `Highlight in world` enables a client-side overlay that highlights changed block positions in the live world.
+- The overlay prioritizes changed blocks nearest to your current camera position, so large diffs stay usable while you move through the build.
 
 ## Version details
 

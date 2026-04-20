@@ -1,22 +1,23 @@
 package io.github.luma.domain.service;
 
-import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
-import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.VersionDiff;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.storage.ProjectLayout;
-import io.github.luma.storage.repository.PatchRepository;
+import io.github.luma.storage.repository.PatchDataRepository;
+import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.ProjectRepository;
-import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -36,8 +37,8 @@ public final class DiffService {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final VariantRepository variantRepository = new VariantRepository();
-    private final PatchRepository patchRepository = new PatchRepository();
-    private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
+    private final PatchDataRepository patchDataRepository = new PatchDataRepository();
 
     public VersionDiff compareVersions(MinecraftServer server, String projectName, String leftVersionId, String rightVersionId) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
@@ -61,13 +62,17 @@ public final class DiffService {
         List<DiffBlockEntry> changedBlocks = new ArrayList<>();
         Set<Long> changedChunks = new HashSet<>();
         for (BlockPoint pos : allPositions) {
-            String leftState = leftStates.containsKey(pos) ? leftStates.get(pos).finalState() : rightStates.get(pos).initialState();
-            String rightState = rightStates.containsKey(pos) ? rightStates.get(pos).finalState() : leftStates.get(pos).initialState();
-            if (leftState.equals(rightState)) {
+            StatePayload leftState = leftStates.containsKey(pos)
+                    ? leftStates.get(pos).finalState()
+                    : rightStates.get(pos).initialState();
+            StatePayload rightState = rightStates.containsKey(pos)
+                    ? rightStates.get(pos).finalState()
+                    : leftStates.get(pos).initialState();
+            if (this.statesEqual(leftState, rightState)) {
                 continue;
             }
 
-            changedBlocks.add(new DiffBlockEntry(pos, leftState, rightState, this.changeType(leftState, rightState)));
+            changedBlocks.add(this.diffEntry(pos, leftState, rightState));
             changedChunks.add(chunkKey(pos));
         }
 
@@ -84,19 +89,12 @@ public final class DiffService {
         if (version.parentVersionId() == null || version.parentVersionId().isBlank()) {
             List<DiffBlockEntry> changedBlocks = new ArrayList<>();
             Set<Long> changedChunks = new HashSet<>();
-            for (String patchId : version.patchIds()) {
-                for (BlockChangeRecord change : this.patchRepository.loadChanges(layout, patchId)) {
-                    if (change.oldState().equals(change.newState())) {
-                        continue;
-                    }
-                    changedBlocks.add(new DiffBlockEntry(
-                            change.pos(),
-                            change.oldState(),
-                            change.newState(),
-                            this.changeType(change.oldState(), change.newState())
-                    ));
-                    changedChunks.add(chunkKey(change.pos()));
+            for (StoredBlockChange change : this.loadPatchChanges(layout, version.patchIds())) {
+                if (this.statesEqual(change.oldValue(), change.newValue())) {
+                    continue;
                 }
+                changedBlocks.add(this.diffEntry(change.pos(), change.oldValue(), change.newValue()));
+                changedChunks.add(chunkKey(change.pos()));
             }
 
             changedBlocks.sort(java.util.Comparator.comparing((DiffBlockEntry entry) -> entry.pos().x())
@@ -126,7 +124,7 @@ public final class DiffService {
         }
 
         VersionDiff baseDiff = this.compareVersions(server, projectName, targetVersion.id(), activeHeadVersionId);
-        RecoveryDraft draft = this.recoveryRepository.loadDraft(layout).orElse(null);
+        RecoveryDraft draft = HistoryCaptureManager.getInstance().snapshotDraft(server, project.id().toString()).orElse(null);
         if (draft == null || draft.isEmpty()) {
             return baseDiff;
         }
@@ -201,12 +199,10 @@ public final class DiffService {
         List<ProjectVersion> path = this.pathFromAncestor(versionMap, ancestor, target);
         Map<BlockPoint, StateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
-            for (String patchId : version.patchIds()) {
-                for (BlockChangeRecord change : this.patchRepository.loadChanges(layout, patchId)) {
-                    states.compute(change.pos(), (pos, current) -> current == null
-                            ? new StateAccumulator(change.oldState(), change.newState())
-                            : current.withFinalState(change.newState()));
-                }
+            for (StoredBlockChange change : this.loadPatchChanges(layout, version.patchIds())) {
+                states.compute(change.pos(), (pos, current) -> current == null
+                        ? new StateAccumulator(change.oldValue(), change.newValue())
+                        : current.withFinalState(change.newValue()));
             }
         }
         return states;
@@ -229,6 +225,18 @@ public final class DiffService {
         return path;
     }
 
+    private ChangeType changeType(StatePayload leftState, StatePayload rightState) {
+        boolean leftAir = this.isAir(leftState);
+        boolean rightAir = this.isAir(rightState);
+        if (leftAir && !rightAir) {
+            return ChangeType.ADDED;
+        }
+        if (!leftAir && rightAir) {
+            return ChangeType.REMOVED;
+        }
+        return ChangeType.CHANGED;
+    }
+
     private ChangeType changeType(String leftState, String rightState) {
         boolean leftAir = this.isAir(leftState);
         boolean rightAir = this.isAir(rightState);
@@ -245,16 +253,32 @@ public final class DiffService {
         return "minecraft:air".equals(this.extractBlockId(state));
     }
 
-    private VersionDiff applyDraft(VersionDiff baseDiff, List<BlockChangeRecord> changes) {
+    ChangeType classifyStateChange(StatePayload leftState, StatePayload rightState) {
+        return this.changeType(leftState, rightState);
+    }
+
+    boolean statesEqual(StatePayload leftState, StatePayload rightState) {
+        if (leftState == rightState) {
+            return true;
+        }
+        if (leftState == null || rightState == null) {
+            return false;
+        }
+        return leftState.equalsState(rightState);
+    }
+
+    private VersionDiff applyDraft(VersionDiff baseDiff, List<StoredBlockChange> changes) {
         Map<BlockPoint, DiffBlockEntry> changed = new LinkedHashMap<>();
         for (DiffBlockEntry entry : baseDiff.changedBlocks()) {
             changed.put(entry.pos(), entry);
         }
 
-        for (BlockChangeRecord change : changes) {
+        for (StoredBlockChange change : changes) {
+            String oldState = this.toStateString(change.oldValue());
+            String newState = this.toStateString(change.newValue());
             DiffBlockEntry existing = changed.get(change.pos());
-            String leftState = existing == null ? change.oldState() : existing.leftState();
-            String rightState = change.newState();
+            String leftState = existing == null ? oldState : existing.leftState();
+            String rightState = newState;
             if (Objects.equals(leftState, rightState)) {
                 changed.remove(change.pos());
                 continue;
@@ -281,16 +305,52 @@ public final class DiffService {
         return new VersionDiff(baseDiff.leftVersionId(), "current", result, changedChunks.size());
     }
 
+    private List<StoredBlockChange> loadPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
+        List<StoredBlockChange> changes = new ArrayList<>();
+        for (String patchId : patchIds) {
+            PatchMetadataHolder metadata = this.loadPatchMetadata(layout, patchId);
+            changes.addAll(this.patchDataRepository.loadChanges(layout, metadata.metadata()));
+        }
+        return changes;
+    }
+
+    private PatchMetadataHolder loadPatchMetadata(ProjectLayout layout, String patchId) throws IOException {
+        return new PatchMetadataHolder(
+                this.patchMetaRepository.load(layout, patchId)
+                        .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId))
+        );
+    }
+
     private static long chunkKey(BlockPoint pos) {
         long chunkX = pos.x() >> 4;
         long chunkZ = pos.z() >> 4;
         return (chunkX << 32) ^ (chunkZ & 0xffffffffL);
     }
 
-    private record StateAccumulator(String initialState, String finalState) {
+    private DiffBlockEntry diffEntry(BlockPoint pos, StatePayload leftState, StatePayload rightState) {
+        return new DiffBlockEntry(
+                pos,
+                this.toStateString(leftState),
+                this.toStateString(rightState),
+                this.changeType(leftState, rightState)
+        );
+    }
 
-        private StateAccumulator withFinalState(String state) {
+    private String toStateString(StatePayload state) {
+        return state == null ? "" : state.toStateSnbt();
+    }
+
+    private boolean isAir(StatePayload state) {
+        return state == null || "minecraft:air".equals(state.blockId());
+    }
+
+    private record StateAccumulator(StatePayload initialState, StatePayload finalState) {
+
+        private StateAccumulator withFinalState(StatePayload state) {
             return new StateAccumulator(this.initialState, state);
         }
+    }
+
+    private record PatchMetadataHolder(io.github.luma.domain.model.PatchMetadata metadata) {
     }
 }

@@ -41,7 +41,7 @@ Key services:
 - `RestoreService`: build restore plans, decode world-root baseline restores, and prepare chunk batches
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching
-- `DiffService`: reconstruct version or live-world differences
+- `DiffService`: reconstruct version or live-world differences using structured state payload comparison before formatting UI-facing diff entries
 - `PreviewService`: generate non-blocking preview images
 - `ProjectIntegrityService`: validate storage consistency
 
@@ -83,6 +83,7 @@ Responsibilities are split as follows:
 - tab builders keep larger screen sections isolated
 - `LumaScreen` ensures Luma screens never pause the game
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
+- `CompareOverlayRenderer` renders a client-side compare overlay that prioritizes the nearest changed blocks to the current camera position
 
 ## Core runtime flows
 
