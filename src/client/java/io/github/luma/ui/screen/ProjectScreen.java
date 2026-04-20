@@ -5,6 +5,8 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.ui.graph.CommitGraphLayout;
+import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.controller.CompareScreenController;
@@ -103,15 +105,9 @@ public final class ProjectScreen extends LumaScreen {
         if (this.state.project() != null && this.selectedVariantId.isBlank()) {
             this.selectedVariantId = this.state.project().activeVariantId();
         }
-        if (!this.belongsToSelectedVariant(this.state.selectedVersion())) {
-            ProjectVersion firstVariantVersion = this.firstVersionForVariant(this.selectedVariantId);
-            if (firstVariantVersion != null && !firstVariantVersion.id().equals(this.selectedVersionId)) {
-                this.selectedVersionId = firstVariantVersion.id();
-                this.state = this.controller.loadState(this.projectName, ProjectTab.HISTORY, this.selectedVersionId, this.statusKey);
-            }
-        }
         if (this.state.selectedVersion() != null) {
             this.selectedVersionId = this.state.selectedVersion().id();
+            this.selectedVariantId = this.state.selectedVersion().variantId();
         }
 
         root.surface(Surface.BLANK);
@@ -165,9 +161,7 @@ public final class ProjectScreen extends LumaScreen {
         if (this.state.operationSnapshot() != null) {
             body.child(this.operationSection());
         }
-        body.child(this.branchesSection());
-        body.child(this.historySection());
-        body.child(this.detailsSection());
+        body.child(this.workspaceMainSection());
         body.child(this.diagnosticsSection());
     }
 
@@ -317,12 +311,12 @@ public final class ProjectScreen extends LumaScreen {
         row.child(meta);
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent openButton = UIComponents.button(Component.translatable("luma.action.open_history"), button -> {
+        ButtonComponent openButton = UIComponents.button(Component.translatable("luma.action.select"), button -> {
             this.selectedVariantId = variant.id();
-            this.selectedVersionId = "";
+            this.selectedVersionId = variant.headVersionId() == null ? "" : variant.headVersionId();
             this.refresh("luma.status.project_ready");
         });
-        openButton.active(!viewing);
+        openButton.active(variant.headVersionId() != null && !variant.headVersionId().isBlank());
         actions.child(openButton);
 
         if (!active) {
@@ -334,6 +328,107 @@ public final class ProjectScreen extends LumaScreen {
         }
         row.child(actions);
         return row;
+    }
+
+    private FlowLayout workspaceMainSection() {
+        FlowLayout section = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        section.gap(8);
+
+        FlowLayout graphColumn = UIContainers.verticalFlow(Sizing.fill(62), Sizing.content());
+        graphColumn.gap(8);
+        graphColumn.child(this.branchesSection());
+        graphColumn.child(this.commitGraphSection());
+
+        FlowLayout detailColumn = UIContainers.verticalFlow(Sizing.fill(38), Sizing.content());
+        detailColumn.gap(8);
+        detailColumn.child(this.detailsSection());
+
+        section.child(graphColumn);
+        section.child(detailColumn);
+        return section;
+    }
+
+    private FlowLayout commitGraphSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.project.graph_title"),
+                Component.translatable("luma.project.graph_help")
+        );
+
+        List<CommitGraphNode> nodes = CommitGraphLayout.build(
+                this.state.versions(),
+                this.state.variants(),
+                this.state.project().activeVariantId()
+        );
+        if (nodes.isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.history.empty")));
+            return section;
+        }
+
+        for (CommitGraphNode node : nodes) {
+            section.child(this.graphNodeRow(node));
+        }
+        return section;
+    }
+
+    private FlowLayout graphNodeRow(CommitGraphNode node) {
+        ProjectVersion version = node.version();
+        boolean selected = this.state.selectedVersion() != null && version.id().equals(this.state.selectedVersion().id());
+
+        FlowLayout row = LumaUi.insetSection(
+                Component.literal(this.graphPrefix(node) + " " + this.displayMessage(version)),
+                Component.translatable("luma.history.version_meta", this.safeText(version.author()), this.formatTimestamp(version.createdAt()))
+        );
+
+        FlowLayout meta = LumaUi.actionRow();
+        meta.child(LumaUi.chip(Component.literal(version.id())));
+        meta.child(LumaUi.chip(Component.translatable(this.versionKindKey(version.versionKind()))));
+        meta.child(LumaUi.chip(Component.translatable("luma.dashboard.active_branch", version.variantId())));
+        if (selected) {
+            meta.child(LumaUi.chip(Component.translatable("luma.history.selected_badge")));
+        }
+        if (node.activeHead()) {
+            meta.child(LumaUi.chip(Component.translatable("luma.project.active_head_badge")));
+        }
+        for (String headVariant : node.headVariants()) {
+            meta.child(LumaUi.chip(Component.translatable("luma.project.head_badge", headVariant)));
+        }
+        row.child(meta);
+
+        row.child(LumaUi.caption(Component.translatable(
+                "luma.history.version_changes",
+                version.stats().changedBlocks(),
+                version.stats().changedChunks(),
+                version.stats().distinctBlockTypes()
+        )));
+
+        ButtonComponent selectButton = UIComponents.button(Component.translatable("luma.action.select"), button -> {
+            this.selectedVariantId = version.variantId();
+            this.selectedVersionId = version.id();
+            this.detailTab = ProjectTab.CHANGES;
+            this.refresh("luma.status.project_ready");
+        });
+        selectButton.active(!selected);
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(selectButton);
+        row.child(actions);
+        return row;
+    }
+
+    private String graphPrefix(CommitGraphNode node) {
+        StringBuilder builder = new StringBuilder(node.laneCount() * 2);
+        for (int lane = 0; lane < node.laneCount(); lane++) {
+            if (lane == node.lane()) {
+                builder.append(node.activeHead() ? '◆' : '●');
+            } else if (node.activeLanes().contains(lane)) {
+                builder.append('│');
+            } else {
+                builder.append(' ');
+            }
+            if (lane + 1 < node.laneCount()) {
+                builder.append(' ');
+            }
+        }
+        return builder.toString();
     }
 
     private FlowLayout historySection() {
@@ -442,6 +537,14 @@ public final class ProjectScreen extends LumaScreen {
                 Component.translatable("luma.project.selected_version_short", this.state.selectedVersion().id())
         );
 
+        FlowLayout meta = LumaUi.actionRow();
+        meta.child(LumaUi.chip(Component.translatable(this.versionKindKey(this.state.selectedVersion().versionKind()))));
+        meta.child(LumaUi.chip(Component.translatable("luma.dashboard.active_branch", this.state.selectedVersion().variantId())));
+        if (this.isActiveHead(this.state.selectedVersion())) {
+            meta.child(LumaUi.chip(Component.translatable("luma.project.active_head_badge")));
+        }
+        section.child(meta);
+
         FlowLayout compareActions = LumaUi.actionRow();
         String parentVersionId = this.parentVersionId(this.state.selectedVersion().id());
         ButtonComponent compareParent = UIComponents.button(Component.translatable("luma.action.compare_with_parent"), button -> this.router.openCompare(
@@ -461,6 +564,26 @@ public final class ProjectScreen extends LumaScreen {
                 this.state.selectedVersion().id()
         )));
         section.child(compareActions);
+
+        FlowLayout versionActions = LumaUi.actionRow();
+        ButtonComponent checkoutButton = UIComponents.button(Component.translatable("luma.action.checkout_branch"), button -> this.refresh(
+                this.controller.switchVariant(this.projectName, this.state.selectedVersion().variantId(), false)
+        ));
+        checkoutButton.active(this.state.project() != null
+                && !this.state.selectedVersion().variantId().equals(this.state.project().activeVariantId()));
+        versionActions.child(checkoutButton);
+
+        ProjectVariant selectedVariant = this.variantFor(this.state.selectedVersion().variantId());
+        if (selectedVariant != null) {
+            ButtonComponent restoreButton = UIComponents.button(Component.translatable(
+                    selectedVariant.id().equals(this.state.project().activeVariantId())
+                            ? "luma.action.restore"
+                            : "luma.action.switch_then_restore"
+            ), button -> this.restoreVersion(selectedVariant, this.state.selectedVersion()));
+            restoreButton.active(this.state.operationSnapshot() == null || this.state.operationSnapshot().terminal());
+            versionActions.child(restoreButton);
+        }
+        section.child(versionActions);
 
         FlowLayout switchers = LumaUi.actionRow();
         switchers.child(this.detailButton(ProjectTab.CHANGES));
@@ -613,6 +736,20 @@ public final class ProjectScreen extends LumaScreen {
         return button;
     }
 
+    private boolean isActiveHead(ProjectVersion version) {
+        if (version == null) {
+            return false;
+        }
+        for (ProjectVariant variant : this.state.variants()) {
+            if (variant.headVersionId() != null
+                    && variant.headVersionId().equals(version.id())
+                    && variant.id().equals(this.state.project().activeVariantId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void restoreVersion(ProjectVariant selectedVariant, ProjectVersion version) {
         String status;
         if (!selectedVariant.id().equals(this.state.project().activeVariantId())) {
@@ -627,6 +764,15 @@ public final class ProjectScreen extends LumaScreen {
         this.selectedVersionId = version.id();
         status = this.controller.restoreVersion(this.projectName, version.id());
         this.refresh(status);
+    }
+
+    private ProjectVariant variantFor(String variantId) {
+        for (ProjectVariant variant : this.state.variants()) {
+            if (variant.id().equals(variantId)) {
+                return variant;
+            }
+        }
+        return null;
     }
 
     private ProjectVariant selectedVariant() {
@@ -715,19 +861,6 @@ public final class ProjectScreen extends LumaScreen {
             case LEGACY -> "luma.version_kind.legacy";
             case WORLD_ROOT -> "luma.version_kind.world_root";
         };
-    }
-
-    private boolean belongsToSelectedVariant(ProjectVersion version) {
-        return version != null && version.variantId().equals(this.selectedVariantId);
-    }
-
-    private ProjectVersion firstVersionForVariant(String variantId) {
-        for (ProjectVersion version : this.state.versions()) {
-            if (variantId != null && variantId.equals(version.variantId())) {
-                return version;
-            }
-        }
-        return null;
     }
 
     private String displayMessage(ProjectVersion version) {
