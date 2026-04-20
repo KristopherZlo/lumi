@@ -109,7 +109,7 @@ public final class ProjectService {
             if (!project.tracksWholeDimension()) {
                 continue;
             }
-            this.ensureWorldRootVersion(this.resolveLayout(server, project.name()), project, "Luma", Instant.now());
+            this.ensureWorldRootVersion(this.resolveLayout(server, project.name()), project, "Lumi", Instant.now());
         }
     }
 
@@ -219,7 +219,7 @@ public final class ProjectService {
     }
 
     public Path projectsRoot(MinecraftServer server) {
-        return server.getWorldPath(LevelResource.ROOT).resolve("luma").resolve("projects");
+        return server.getWorldPath(LevelResource.ROOT).resolve("lumi").resolve("projects");
     }
 
     public String defaultProjectName(ServerLevel level) {
@@ -291,7 +291,7 @@ public final class ProjectService {
                 "",
                 List.of(),
                 VersionKind.WORLD_ROOT,
-                author == null ? "Luma" : author,
+                author == null ? "Lumi" : author,
                 "Initial",
                 ChangeStats.empty(),
                 PreviewInfo.none(),

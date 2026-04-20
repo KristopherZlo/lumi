@@ -2,10 +2,10 @@
 
 ## Root location
 
-For each world, Luma stores project data under:
+For each world, Lumi stores project data under:
 
 ```text
-<world>/luma/projects/
+<world>/lumi/projects/
 ```
 
 Each project is one folder with the suffix `.mbp`.
@@ -13,7 +13,7 @@ Each project is one folder with the suffix `.mbp`.
 Shared world-level metadata is stored at:
 
 ```text
-<world>/luma/world-origin.json
+<world>/lumi/world-origin.json
 ```
 
 Example:

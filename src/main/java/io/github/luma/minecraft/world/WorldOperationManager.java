@@ -563,7 +563,7 @@ public final class WorldOperationManager {
 
         @Override
         public synchronized Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "Luma-WorldOp-" + this.nextIndex++);
+            Thread thread = new Thread(runnable, "Lumi-WorldOp-" + this.nextIndex++);
             thread.setDaemon(true);
             thread.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 2));
             return thread;

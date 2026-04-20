@@ -416,7 +416,7 @@ public final class VersionService {
 
         @Override
         public synchronized Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "Luma-Preview-" + this.nextIndex++);
+            Thread thread = new Thread(runnable, "Lumi-Preview-" + this.nextIndex++);
             thread.setDaemon(true);
             thread.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 2));
             return thread;

@@ -20,8 +20,8 @@ import org.slf4j.LoggerFactory;
  */
 public final class LumaMod implements ModInitializer {
 
-    public static final String MOD_ID = "luma";
-    public static final String MOD_NAME = "Luma";
+    public static final String MOD_ID = "lumi";
+    public static final String MOD_NAME = "Lumi";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_NAME);
     private final LumaCommands commands = new LumaCommands();
     private final ProjectService projectService = new ProjectService();

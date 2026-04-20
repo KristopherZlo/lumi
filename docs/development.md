@@ -97,7 +97,7 @@ Current world-apply runtime types:
 
 ## Build and packaging notes
 
-- Luma is shipped as one distributable mod jar.
+- Lumi is shipped as one distributable mod jar.
 - Support libraries used by the mod are included through Loom jar-in-jar configuration.
 - Fabric API remains an external required mod.
 
@@ -106,13 +106,13 @@ Current world-apply runtime types:
 Project data is stored per world under:
 
 ```text
-<world>/luma/projects/<project>.mbp/
+<world>/lumi/projects/<project>.mbp/
 ```
 
 Shared world origin metadata lives next to the projects root:
 
 ```text
-<world>/luma/world-origin.json
+<world>/lumi/world-origin.json
 ```
 
 See [storage-format.md](storage-format.md) for the exact folder and file layout.

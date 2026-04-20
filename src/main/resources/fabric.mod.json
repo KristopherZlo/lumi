@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "luma",
+  "id": "lumi",
   "version": "${version}",
-  "name": "Luma",
+  "name": "Lumi",
   "description": "Builder-friendly project history for Minecraft structures.",
   "authors": [
     "OpenAI Codex"
@@ -19,7 +19,7 @@
     ]
   },
   "mixins": [
-    "luma.mixins.json"
+    "lumi.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",

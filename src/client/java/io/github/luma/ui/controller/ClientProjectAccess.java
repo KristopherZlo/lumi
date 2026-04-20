@@ -13,7 +13,7 @@ public final class ClientProjectAccess {
 
     public static MinecraftServer requireSingleplayerServer(Minecraft client) {
         if (!client.hasSingleplayerServer() || client.getSingleplayerServer() == null) {
-            throw new IllegalStateException("Luma requires an integrated singleplayer server");
+            throw new IllegalStateException("Lumi requires an integrated singleplayer server");
         }
 
         return client.getSingleplayerServer();

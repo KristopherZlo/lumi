@@ -33,7 +33,7 @@ loom {
     splitEnvironmentSourceSets()
 
     mods {
-        luma {
+        lumi {
             sourceSet sourceSets.main
             sourceSet sourceSets.client
         }
@@ -42,10 +42,10 @@ loom {
     runs {
         testClient {
             inherit client
-            configName = 'Luma Test Client'
+            configName = 'Lumi Test Client'
             runDir = 'run/test-client'
             programArg '--username'
-            programArg providers.gradleProperty('luma.testUsername').orElse('LumaTestClient').get()
+            programArg providers.gradleProperty('lumi.testUsername').orElse('LumiTestClient').get()
         }
     }
 }

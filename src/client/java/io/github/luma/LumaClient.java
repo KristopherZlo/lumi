@@ -21,7 +21,7 @@ public final class LumaClient implements ClientModInitializer {
     private static final KeyMapping.Category KEY_CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "general")
     );
-    private static final String OPEN_DASHBOARD_KEY = "key.luma.open_dashboard";
+    private static final String OPEN_DASHBOARD_KEY = "key.lumi.open_dashboard";
 
     private KeyMapping openDashboardKey;
     private final ProjectService projectService = new ProjectService();

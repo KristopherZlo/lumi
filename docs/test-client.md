@@ -33,7 +33,7 @@ If you only want to verify the Gradle profile without starting Minecraft:
 You can also call Gradle directly:
 
 ```powershell
-.\gradlew.bat installTestClientMods runTestClient -Pluma.testUsername=YourNickHere
+.\gradlew.bat installTestClientMods runTestClient -Plumi.testUsername=YourNickHere
 ```
 
 ## Installed client mods
@@ -89,4 +89,4 @@ The profile also installs the runtime libraries needed by the selected client mo
 - Cloth Config API
 - Text Placeholder API
 
-These are test-client runtime dependencies only. They are not bundled into the final `luma` release jar.
+These are test-client runtime dependencies only. They are not bundled into the final `lumi` release jar.

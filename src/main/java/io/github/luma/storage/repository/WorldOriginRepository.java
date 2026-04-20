@@ -80,7 +80,7 @@ public final class WorldOriginRepository {
     }
 
     private Path root(MinecraftServer server) {
-        return server.getWorldPath(LevelResource.ROOT).resolve("luma");
+        return server.getWorldPath(LevelResource.ROOT).resolve("lumi");
     }
 
     private Path file(MinecraftServer server) {

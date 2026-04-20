@@ -1,6 +1,6 @@
-# Luma
+# Lumi
 
-Luma is a Fabric mod for Minecraft 1.21.11 that gives builders a project-oriented history workflow for per-dimension workspaces. Instead of exposing Git terminology in the UI, Luma works with `workspaces`, `versions`, `branches`, `compare`, `restore`, and `recovery`.
+Lumi is a Fabric mod for Minecraft 1.21.11 that gives builders a project-oriented history workflow for per-dimension workspaces. Instead of exposing Git terminology in the UI, Lumi works with `workspaces`, `versions`, `branches`, `compare`, `restore`, and `recovery`.
 
 The current milestone is **singleplayer-first**. It is designed and validated for local integrated-server worlds, with the primary workflow available through `owo-lib` screens and commands kept as a fallback layer.
 
@@ -8,7 +8,7 @@ The current milestone is **singleplayer-first**. It is designed and validated fo
 
 - Create or reuse an automatic workspace for the current dimension from the dashboard.
 - Track block edits in the current workspace and store history as patch-first versions with checkpoint snapshots.
-- Save manual versions with messages from the History tab or `/luma save`.
+- Save manual versions with messages from the History tab or `/lumi save`.
 - Restore a target version, with a safety checkpoint created from pending tracked edits when enabled.
 - Recover interrupted tracked edits through the Recovery screen.
 - Create and switch named branches with independent heads.
@@ -27,9 +27,9 @@ The current milestone is **singleplayer-first**. It is designed and validated fo
 
 1. Install Minecraft `1.21.11` with the Fabric Loader.
 2. Install Fabric API.
-3. Place the built `luma-<version>.jar` into your `mods` folder.
+3. Place the built `lumi-<version>.jar` into your `mods` folder.
 
-The repository is configured to ship Luma as a **single distributable jar**. Support libraries used by the mod itself are included through Loom jar-in-jar packaging.
+The repository is configured to ship Lumi as a **single distributable jar**. Support libraries used by the mod itself are included through Loom jar-in-jar packaging.
 
 ## Build
 
@@ -53,5 +53,8 @@ The main distributable jar is written to `build/libs/`.
 - [User guide](docs/user-guide.md)
 - [Commands](docs/commands.md)
 - [Development](docs/development.md)
+- [Architecture](docs/architecture.md)
+- [Maintenance guide](docs/maintenance-guide.md)
 - [Storage format](docs/storage-format.md)
 - [Test client profile](docs/test-client.md)
+- [Agent instructions](AGENTS.md)

@@ -116,7 +116,7 @@ public final class RestoreService {
                                 project,
                                 pendingDraft,
                                 "",
-                                "Luma",
+                                "Lumi",
                                 VersionKind.RESTORE,
                                 false,
                                 progressSink

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Luma is a singleplayer-first Fabric mod that gives Minecraft builders a project-oriented history workflow. The codebase is organized to keep user-facing domain rules separate from Minecraft engine integration, file persistence, and client UI.
+Lumi is a singleplayer-first Fabric mod that gives Minecraft builders a project-oriented history workflow. The codebase is organized to keep user-facing domain rules separate from Minecraft engine integration, file persistence, and client UI.
 
 The architecture is intentionally optimized around three requirements:
 
@@ -81,7 +81,7 @@ Responsibilities are split as follows:
 - controllers invoke services and translate failures into status keys
 - view-state records provide immutable inputs to the rendering layer
 - tab builders keep larger screen sections isolated
-- `LumaScreen` ensures Luma screens never pause the game
+- `LumaScreen` ensures Lumi screens never pause the game
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
 - `CompareOverlayRenderer` renders a client-side compare overlay that prioritizes the nearest changed blocks to the current camera position
 
@@ -146,7 +146,7 @@ Current strategy:
 
 ## Threading model
 
-Luma uses a strict two-stage operation pattern:
+Lumi uses a strict two-stage operation pattern:
 
 - prepare stage: file I/O, compression, decompression, snapshot capture, and decode work off-thread
 - apply stage: bounded world mutation batches on the server thread
