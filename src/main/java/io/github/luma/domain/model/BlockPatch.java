@@ -6,6 +6,7 @@ public record BlockPatch(
         String id,
         String projectId,
         String versionId,
+        String fileName,
         List<ChunkDelta> chunkDeltas,
         PatchStats stats
 ) {

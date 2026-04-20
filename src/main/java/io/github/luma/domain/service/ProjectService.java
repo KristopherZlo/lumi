@@ -8,8 +8,10 @@ import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
+import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.SnapshotRepository;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
@@ -30,6 +32,7 @@ public final class ProjectService {
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final SnapshotRepository snapshotRepository = new SnapshotRepository();
+    private final RecoveryRepository recoveryRepository = new RecoveryRepository();
 
     public List<BuildProject> listProjects(MinecraftServer server) throws IOException {
         return this.projectRepository.loadAll(this.projectsRoot(server));
@@ -38,6 +41,11 @@ public final class ProjectService {
     public ProjectLayout resolveLayout(MinecraftServer server, String projectName) throws IOException {
         return this.projectRepository.findLayoutByProjectName(this.projectsRoot(server), projectName)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectName));
+    }
+
+    public BuildProject loadProject(MinecraftServer server, String projectName) throws IOException {
+        return this.projectRepository.load(this.resolveLayout(server, projectName))
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
     }
 
     public BuildProject createProject(ServerLevel level, String name, BlockPos from, BlockPos to, String author) throws IOException {
@@ -51,7 +59,7 @@ public final class ProjectService {
 
         Instant now = Instant.now();
         Bounds3i bounds = Bounds3i.of(from, to);
-        BuildProject project = BuildProject.create(name, bounds, BlockPoint.from(from), now);
+        BuildProject project = BuildProject.create(name, level.dimension().identifier().toString(), bounds, BlockPoint.from(from), now);
 
         String versionId = versionId(1);
         String snapshotId = snapshotId(1);
@@ -65,15 +73,31 @@ public final class ProjectService {
                 "",
                 snapshotId,
                 List.of(),
+                VersionKind.INITIAL,
                 author,
-                "Начальная версия",
+                "Initial version",
                 ChangeStats.empty(),
                 PreviewInfo.none(),
                 ExternalSourceInfo.manual(),
                 now
         ));
+        this.recoveryRepository.appendJournalEntry(layout, new io.github.luma.domain.model.RecoveryJournalEntry(
+                now,
+                "project-created",
+                "Project created with initial checkpoint snapshot",
+                versionId,
+                "main"
+        ));
 
         return project;
+    }
+
+    public List<ProjectVersion> loadVersions(MinecraftServer server, String projectName) throws IOException {
+        return this.versionRepository.loadAll(this.resolveLayout(server, projectName));
+    }
+
+    public List<ProjectVariant> loadVariants(MinecraftServer server, String projectName) throws IOException {
+        return this.variantRepository.loadAll(this.resolveLayout(server, projectName));
     }
 
     public Path projectsRoot(MinecraftServer server) {
@@ -86,5 +110,9 @@ public final class ProjectService {
 
     public static String snapshotId(int number) {
         return String.format(Locale.ROOT, "snapshot-%04d", number);
+    }
+
+    public static String patchId(int number) {
+        return String.format(Locale.ROOT, "patch-%04d", number);
     }
 }

@@ -52,4 +52,16 @@ public record ProjectLayout(Path root) {
     public Path versionFile(String versionId) {
         return this.versionsDir().resolve(versionId + ".json");
     }
+
+    public Path patchFile(String patchId) {
+        return this.patchesDir().resolve(patchId + ".json.lz4");
+    }
+
+    public Path recoveryDraftFile() {
+        return this.recoveryDir().resolve("draft.json");
+    }
+
+    public Path recoveryJournalFile() {
+        return this.recoveryDir().resolve("journal.json");
+    }
 }

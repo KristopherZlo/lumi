@@ -10,6 +10,7 @@ public record ProjectVersion(
         String parentVersionId,
         String snapshotId,
         List<String> patchIds,
+        VersionKind versionKind,
         String author,
         String message,
         ChangeStats stats,

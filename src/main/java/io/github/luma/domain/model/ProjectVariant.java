@@ -12,6 +12,6 @@ public record ProjectVariant(
 ) {
 
     public static ProjectVariant main(String headVersionId, Instant now) {
-        return new ProjectVariant("main", "Основной", headVersionId, headVersionId, true, now);
+        return new ProjectVariant("main", "main", headVersionId, headVersionId, true, now);
     }
 }

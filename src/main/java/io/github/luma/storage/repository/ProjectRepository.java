@@ -35,7 +35,7 @@ public final class ProjectRepository {
             return Optional.empty();
         }
 
-        return Optional.of(GsonProvider.gson().fromJson(Files.readString(layout.projectFile()), BuildProject.class));
+        return Optional.of(this.normalize(GsonProvider.gson().fromJson(Files.readString(layout.projectFile()), BuildProject.class)));
     }
 
     public List<BuildProject> loadAll(Path projectsRoot) throws IOException {
@@ -62,5 +62,28 @@ public final class ProjectRepository {
                     .map(ProjectLayout::new)
                     .findFirst();
         }
+    }
+
+    private BuildProject normalize(BuildProject project) {
+        return new BuildProject(
+                project.schemaVersion(),
+                project.id(),
+                project.name(),
+                project.description(),
+                project.minecraftVersion(),
+                project.modLoader(),
+                project.dimensionId() == null || project.dimensionId().isBlank() ? "minecraft:overworld" : project.dimensionId(),
+                project.bounds(),
+                project.origin(),
+                project.mainVariantId() == null || project.mainVariantId().isBlank() ? "main" : project.mainVariantId(),
+                project.activeVariantId() == null || project.activeVariantId().isBlank()
+                        ? (project.mainVariantId() == null || project.mainVariantId().isBlank() ? "main" : project.mainVariantId())
+                        : project.activeVariantId(),
+                project.createdAt(),
+                project.updatedAt(),
+                project.settings() == null ? io.github.luma.domain.model.ProjectSettings.defaults() : project.settings(),
+                project.favorite(),
+                project.archived()
+        );
     }
 }
