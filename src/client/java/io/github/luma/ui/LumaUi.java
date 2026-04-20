@@ -15,14 +15,34 @@ public final class LumaUi {
     public static final Color TEXT_PRIMARY = Color.ofRgb(0xF3F7FA);
     public static final Color TEXT_MUTED = Color.ofRgb(0x98A6B3);
     public static final Color TEXT_ACCENT = Color.ofRgb(0x71D1FF);
+    public static final Color TEXT_DANGER = Color.ofRgb(0xFF8585);
 
     private LumaUi() {
+    }
+
+    public static FlowLayout screenFrame() {
+        FlowLayout layout = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
+        layout.gap(8);
+        return layout;
+    }
+
+    public static FlowLayout screenBody() {
+        FlowLayout layout = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        layout.gap(8);
+        return layout;
+    }
+
+    public static LumaScrollContainer<FlowLayout> screenScroll(FlowLayout body) {
+        LumaScrollContainer<FlowLayout> scroll = LumaScrollContainer.vertical(Sizing.fill(100), Sizing.fill(100), body);
+        scroll.scrollbarThiccness(6);
+        scroll.scrollStep(24);
+        return scroll;
     }
 
     public static FlowLayout panel(Sizing horizontal, Sizing vertical) {
         FlowLayout layout = UIContainers.verticalFlow(horizontal, vertical);
         layout.surface(Surface.DARK_PANEL);
-        layout.padding(Insets.of(8));
+        layout.padding(Insets.of(10));
         layout.gap(6);
         return layout;
     }
@@ -43,11 +63,78 @@ public final class LumaUi {
         return chip;
     }
 
+    public static FlowLayout statusBanner(Component text) {
+        FlowLayout banner = insetPanel(Sizing.fill(100), Sizing.content());
+        banner.child(accent(text));
+        return banner;
+    }
+
+    public static FlowLayout emptyState(Component title, Component description) {
+        FlowLayout state = panel(Sizing.fill(100), Sizing.content());
+        state.child(value(title));
+        if (description != null) {
+            state.child(caption(description));
+        }
+        return state;
+    }
+
+    public static FlowLayout sectionCard(Component title, Component subtitle) {
+        FlowLayout card = panel(Sizing.fill(100), Sizing.content());
+        if (title != null) {
+            card.child(value(title));
+        }
+        if (subtitle != null) {
+            card.child(caption(subtitle));
+        }
+        return card;
+    }
+
+    public static FlowLayout insetSection(Component title, Component subtitle) {
+        FlowLayout card = insetPanel(Sizing.fill(100), Sizing.content());
+        if (title != null) {
+            card.child(value(title));
+        }
+        if (subtitle != null) {
+            card.child(caption(subtitle));
+        }
+        return card;
+    }
+
+    public static FlowLayout formField(
+            Component label,
+            Component help,
+            io.wispforest.owo.ui.core.UIComponent control
+    ) {
+        FlowLayout field = insetPanel(Sizing.fill(100), Sizing.content());
+        field.child(value(label));
+        if (help != null) {
+            field.child(caption(help));
+        }
+        field.child(control);
+        return field;
+    }
+
     public static FlowLayout metric(Component label, Component value) {
         FlowLayout metric = insetPanel(Sizing.content(), Sizing.content());
         metric.child(value(value));
         metric.child(caption(label));
         return metric;
+    }
+
+    public static FlowLayout statChip(Component label, Component value) {
+        FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+        chip.surface(Surface.PANEL_INSET);
+        chip.padding(Insets.of(4));
+        chip.gap(4);
+        chip.child(value(value));
+        chip.child(caption(label));
+        return chip;
+    }
+
+    public static FlowLayout actionRow() {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(6);
+        return row;
     }
 
     public static LabelComponent title(Component text) {
@@ -60,6 +147,10 @@ public final class LumaUi {
 
     public static LabelComponent accent(Component text) {
         return UIComponents.label(text).color(TEXT_ACCENT).shadow(false);
+    }
+
+    public static LabelComponent danger(Component text) {
+        return UIComponents.label(text).color(TEXT_DANGER).shadow(false);
     }
 
     public static LabelComponent caption(Component text) {

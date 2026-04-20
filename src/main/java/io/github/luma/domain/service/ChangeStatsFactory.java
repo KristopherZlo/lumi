@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.BlockPatch;
 import io.github.luma.domain.model.ChunkDelta;
 import io.github.luma.domain.model.ChangeStats;
+import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.PatchStats;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -49,7 +50,33 @@ public final class ChangeStatsFactory {
         );
     }
 
+    public static PendingChangeSummary summarizePending(List<BlockChangeRecord> changes) {
+        int added = 0;
+        int removed = 0;
+        int changed = 0;
+
+        for (BlockChangeRecord change : changes) {
+            boolean oldAir = isAir(change.oldState());
+            boolean newAir = isAir(change.newState());
+            if (oldAir && !newAir) {
+                added += 1;
+            } else if (!oldAir && newAir) {
+                removed += 1;
+            } else {
+                changed += 1;
+            }
+        }
+
+        return new PendingChangeSummary(added, removed, changed);
+    }
+
     private static String chunkKey(BlockChangeRecord change) {
         return (change.pos().x() >> 4) + ":" + (change.pos().z() >> 4);
+    }
+
+    private static boolean isAir(String state) {
+        return state == null
+                || state.isBlank()
+                || state.contains("minecraft:air");
     }
 }

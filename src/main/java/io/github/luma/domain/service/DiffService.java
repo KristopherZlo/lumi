@@ -4,11 +4,14 @@ import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
+import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionDiff;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchRepository;
+import io.github.luma.storage.repository.ProjectRepository;
+import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
@@ -19,6 +22,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,9 +33,11 @@ public final class DiffService {
     private static final Pattern BLOCK_NAME_PATTERN = Pattern.compile("Name:\\s*\"([^\"]+)\"");
 
     private final ProjectService projectService = new ProjectService();
+    private final ProjectRepository projectRepository = new ProjectRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final PatchRepository patchRepository = new PatchRepository();
+    private final RecoveryRepository recoveryRepository = new RecoveryRepository();
 
     public VersionDiff compareVersions(MinecraftServer server, String projectName, String leftVersionId, String rightVersionId) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
@@ -100,6 +106,32 @@ public final class DiffService {
         }
 
         return this.compareVersions(server, projectName, version.parentVersionId(), version.id());
+    }
+
+    public VersionDiff compareVersionToCurrentState(MinecraftServer server, String projectName, String versionId) throws IOException {
+        ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
+        ProjectVersion targetVersion = this.versionRepository.load(layout, versionId)
+                .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
+        var project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        ProjectVariant activeVariant = variants.stream()
+                .filter(variant -> variant.id().equals(project.activeVariantId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Active branch is missing for " + projectName));
+
+        String activeHeadVersionId = activeVariant.headVersionId();
+        if (activeHeadVersionId == null || activeHeadVersionId.isBlank()) {
+            throw new IllegalArgumentException("Current branch has no committed head yet");
+        }
+
+        VersionDiff baseDiff = this.compareVersions(server, projectName, targetVersion.id(), activeHeadVersionId);
+        RecoveryDraft draft = this.recoveryRepository.loadDraft(layout).orElse(null);
+        if (draft == null || draft.isEmpty()) {
+            return baseDiff;
+        }
+
+        return this.applyDraft(baseDiff, draft.changes());
     }
 
     public List<ProjectVersion> listVersions(MinecraftServer server, String projectName) throws IOException {
@@ -211,6 +243,42 @@ public final class DiffService {
 
     private boolean isAir(String state) {
         return "minecraft:air".equals(this.extractBlockId(state));
+    }
+
+    private VersionDiff applyDraft(VersionDiff baseDiff, List<BlockChangeRecord> changes) {
+        Map<BlockPoint, DiffBlockEntry> changed = new LinkedHashMap<>();
+        for (DiffBlockEntry entry : baseDiff.changedBlocks()) {
+            changed.put(entry.pos(), entry);
+        }
+
+        for (BlockChangeRecord change : changes) {
+            DiffBlockEntry existing = changed.get(change.pos());
+            String leftState = existing == null ? change.oldState() : existing.leftState();
+            String rightState = change.newState();
+            if (Objects.equals(leftState, rightState)) {
+                changed.remove(change.pos());
+                continue;
+            }
+
+            changed.put(change.pos(), new DiffBlockEntry(
+                    change.pos(),
+                    leftState,
+                    rightState,
+                    this.changeType(leftState, rightState)
+            ));
+        }
+
+        List<DiffBlockEntry> result = new ArrayList<>(changed.values());
+        result.sort(java.util.Comparator.comparing((DiffBlockEntry entry) -> entry.pos().x())
+                .thenComparing(entry -> entry.pos().y())
+                .thenComparing(entry -> entry.pos().z()));
+
+        Set<Long> changedChunks = new HashSet<>();
+        for (DiffBlockEntry entry : result) {
+            changedChunks.add(chunkKey(entry.pos()));
+        }
+
+        return new VersionDiff(baseDiff.leftVersionId(), "current", result, changedChunks.size());
     }
 
     private static long chunkKey(BlockPoint pos) {

@@ -8,6 +8,7 @@ import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ProjectIntegrityService;
+import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.integration.common.IntegrationStatusService;
 import io.github.luma.ui.state.ProjectTab;
 import io.github.luma.ui.state.ProjectViewState;
@@ -175,6 +176,13 @@ public final class ProjectScreenController {
         } catch (Exception exception) {
             return "";
         }
+    }
+
+    public io.github.luma.domain.model.PendingChangeSummary summarizePending(io.github.luma.domain.model.RecoveryDraft draft) {
+        if (draft == null || draft.isEmpty()) {
+            return io.github.luma.domain.model.PendingChangeSummary.empty();
+        }
+        return ChangeStatsFactory.summarizePending(draft.changes());
     }
 
     private io.github.luma.domain.model.ProjectVersion resolveSelectedVersion(

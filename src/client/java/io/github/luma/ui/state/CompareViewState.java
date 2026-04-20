@@ -9,6 +9,7 @@ import java.util.List;
 public record CompareViewState(
         List<ProjectVersion> versions,
         List<ProjectVariant> variants,
+        String activeVariantId,
         String leftReference,
         String rightReference,
         String leftResolvedVersionId,

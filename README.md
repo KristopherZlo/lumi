@@ -1,20 +1,20 @@
 # Luma
 
-Luma is a Fabric mod for Minecraft 1.21.11 that gives builders a project-oriented history workflow for a selected build area. Instead of exposing Git terminology in the UI, Luma works with `projects`, `versions`, `variants`, `compare`, `restore`, and `recovery`.
+Luma is a Fabric mod for Minecraft 1.21.11 that gives builders a project-oriented history workflow for per-dimension workspaces. Instead of exposing Git terminology in the UI, Luma works with `workspaces`, `versions`, `branches`, `compare`, `restore`, and `recovery`.
 
 The current milestone is **singleplayer-first**. It is designed and validated for local integrated-server worlds, with the primary workflow available through `owo-lib` screens and commands kept as a fallback layer.
 
 ## Current feature set
 
-- Create a project from in-world bounds through the dashboard menu or `/luma create`.
-- Track block edits inside the project bounds and store history as patch-first versions with checkpoint snapshots.
+- Create or reuse an automatic workspace for the current dimension from the dashboard.
+- Track block edits in the current workspace and store history as patch-first versions with checkpoint snapshots.
 - Save manual versions with messages from the History tab or `/luma save`.
 - Restore a target version, with a safety checkpoint created from pending tracked edits when enabled.
 - Recover interrupted tracked edits through the Recovery screen.
-- Create and switch named variants with independent heads.
-- Compare two versions or variant heads in the Compare screen, including a client-side changed-block overlay mode.
-- Generate lightweight preview images for saved versions and inspect preview metadata in the Preview tab.
-- Inspect material deltas, change summaries, integration availability, and project integrity status from the project UI.
+- Create and switch named branches with independent heads.
+- Compare two versions, branch heads, or the current live world in the Compare screen, including a client-side highlight mode.
+- Generate lightweight preview images for saved versions and inspect preview metadata in version details.
+- Inspect material deltas, change summaries, integration availability, and project integrity status from the workspace UI.
 
 ## Limitations
 
@@ -43,10 +43,10 @@ The main distributable jar is written to `build/libs/`.
 
 1. Open a local singleplayer world.
 2. Press `U` to open the dashboard.
-3. Create a project by entering a name and two corners.
-4. Build inside the tracked bounds.
-5. Open the project, go to `History`, enter a message, and save a version.
-6. Use `Variants`, `Compare`, `Preview`, `Materials`, and `Recovery` from the project UI as needed.
+3. Open the current workspace for the dimension you are in.
+4. Build in the world as usual.
+5. In `History`, enter a message and save a version.
+6. Use `Branches`, version details, `Compare`, `Recovery`, and `Settings` from the workspace UI as needed.
 
 ## Documentation
 
@@ -55,4 +55,3 @@ The main distributable jar is written to `build/libs/`.
 - [Development](docs/development.md)
 - [Storage format](docs/storage-format.md)
 - [Test client profile](docs/test-client.md)
-
