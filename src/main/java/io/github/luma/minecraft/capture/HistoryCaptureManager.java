@@ -1,15 +1,12 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.LumaMod;
-import io.github.luma.domain.model.BlockChangeRecord;
-import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
-import io.github.luma.domain.model.ChangeSession;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.service.ProjectService;
-import io.github.luma.domain.service.RecoveryService;
-import io.github.luma.minecraft.world.BlockStateNbtCodec;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -20,8 +17,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -29,18 +29,27 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 
+/**
+ * Captures player-driven world edits into project-scoped tracked buffers.
+ *
+ * <p>This manager owns the active in-memory capture sessions, baseline chunk
+ * capture for whole-dimension workspaces, periodic recovery draft flushing, and
+ * translation between runtime buffers and persisted recovery storage.
+ */
 public final class HistoryCaptureManager {
 
     private static final HistoryCaptureManager INSTANCE = new HistoryCaptureManager();
+    private static final Duration ACTIVE_DRAFT_FLUSH_INTERVAL = Duration.ofSeconds(3);
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
-    private final RecoveryService recoveryService = new RecoveryService();
-    private final Map<String, ChangeSession> activeSessions = new HashMap<>();
+    private final Map<String, TrackedChangeBuffer> activeBuffers = new HashMap<>();
     private final Map<String, CachedProjects> projectCaches = new HashMap<>();
+    private final Map<String, Instant> lastDraftFlushes = new HashMap<>();
+    private final Set<String> dirtySessions = new HashSet<>();
 
     private HistoryCaptureManager() {
     }
@@ -49,6 +58,13 @@ public final class HistoryCaptureManager {
         return INSTANCE;
     }
 
+    /**
+     * Records one block mutation when the current mutation source is a player.
+     *
+     * <p>The manager resolves matching projects, creates a world workspace on
+     * demand if none exist, captures baseline chunk state when required, and
+     * merges the change into the active {@link TrackedChangeBuffer}.
+     */
     public void recordBlockChange(
             ServerLevel level,
             BlockPos pos,
@@ -64,56 +80,118 @@ public final class HistoryCaptureManager {
         try {
             Instant now = Instant.now();
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
-            if (matchingProjects.stream().noneMatch(trackedProject -> trackedProject.project().tracksWholeDimension())) {
+            if (matchingProjects.isEmpty()) {
                 this.projectService.ensureWorldProject(level, "player");
                 this.invalidateProjectCache(level.getServer());
                 matchingProjects = this.matchingProjects(level, pos);
-            }
-
-            boolean hasWorldWorkspace = matchingProjects.stream()
-                    .anyMatch(trackedProject -> trackedProject.project().tracksWholeDimension());
-            if (hasWorldWorkspace) {
-                matchingProjects = matchingProjects.stream()
-                        .filter(trackedProject -> trackedProject.project().tracksWholeDimension())
-                        .toList();
+                LumaMod.LOGGER.info("Created world workspace automatically for dimension {}", level.dimension().identifier());
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
                 this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, now);
 
-                ChangeSession session = this.getOrCreateSession(level.getServer(), trackedProject, now);
-                BlockChangeRecord change = new BlockChangeRecord(
-                        BlockPoint.from(pos),
-                        BlockStateNbtCodec.serializeBlockState(oldState),
-                        BlockStateNbtCodec.serializeBlockState(newState),
-                        BlockStateNbtCodec.serializeBlockEntity(oldBlockEntity),
-                        BlockStateNbtCodec.serializeBlockEntity(newBlockEntity)
-                );
-                ChangeSession nextSession = session.addChange(change, now);
-
-                if (nextSession.isEmpty()) {
-                    this.activeSessions.remove(trackedProject.project().id().toString());
+                String projectId = trackedProject.project().id().toString();
+                TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, now);
+                buffer.recordChange(pos, oldState, newState, oldBlockEntity, newBlockEntity, now);
+                this.logBufferProgress(trackedProject.project(), buffer);
+                if (buffer.isEmpty()) {
+                    this.activeBuffers.remove(projectId);
+                    this.dirtySessions.remove(projectId);
+                    this.lastDraftFlushes.remove(projectId);
                     this.recoveryRepository.deleteDraft(trackedProject.layout());
+                    LumaMod.LOGGER.info("Discarded empty active buffer for project {}", trackedProject.project().name());
                 } else {
-                    this.activeSessions.put(trackedProject.project().id().toString(), nextSession);
-                    this.recoveryService.saveSessionDraft(trackedProject.layout(), nextSession);
+                    this.dirtySessions.add(projectId);
                 }
             }
         } catch (Exception exception) {
-            LumaMod.LOGGER.warn("Failed to capture block change", exception);
+            LumaMod.LOGGER.warn("Failed to capture block change at {} in {}", pos, level.dimension().identifier(), exception);
         }
     }
 
     public void finalizeProjectSession(MinecraftServer server, String projectId) throws IOException {
-        ChangeSession session = this.activeSessions.remove(projectId);
-        if (session == null) {
-            return;
+        this.freezeSession(server, projectId);
+    }
+
+    public Optional<RecoveryDraft> snapshotDraft(MinecraftServer server, String projectId) throws IOException {
+        TrackedChangeBuffer buffer = this.activeBuffers.get(projectId);
+        if (buffer != null) {
+            return buffer.isEmpty() ? Optional.empty() : Optional.of(buffer.toDraft());
         }
 
-        for (TrackedProject trackedProject : this.loadTrackedProjects(server)) {
-            if (trackedProject.project().id().toString().equals(projectId) && !session.isEmpty()) {
-                this.recoveryService.saveSessionDraft(trackedProject.layout(), session);
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        if (trackedProject == null) {
+            return Optional.empty();
+        }
+        return this.recoveryRepository.loadDraft(trackedProject.layout());
+    }
+
+    /**
+     * Freezes the active session and keeps it durably persisted as a recovery
+     * draft.
+     *
+     * <p>This is used before operations such as restore or variant switching
+     * where capture must stop and the current pending state must survive an
+     * interrupted workflow.
+     */
+    public Optional<TrackedChangeBuffer> freezeSession(MinecraftServer server, String projectId) throws IOException {
+        TrackedChangeBuffer session = this.activeBuffers.remove(projectId);
+        this.dirtySessions.remove(projectId);
+        this.lastDraftFlushes.remove(projectId);
+        if (session == null) {
+            TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+            if (trackedProject == null) {
+                return Optional.empty();
             }
+            return this.recoveryRepository.loadDraft(trackedProject.layout())
+                    .map(draft -> TrackedChangeBuffer.fromDraft(UUID.randomUUID().toString(), draft));
+        }
+
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        if (trackedProject != null && !session.isEmpty()) {
+            this.recoveryRepository.saveDraft(trackedProject.layout(), session.toDraft());
+            LumaMod.LOGGER.info(
+                    "Persisted active buffer for project {} with {} pending changes",
+                    trackedProject.project().name(),
+                    session.size()
+            );
+        }
+        return session.isEmpty() ? Optional.empty() : Optional.of(session);
+    }
+
+    /**
+     * Removes and returns the live tracked buffer for save operations.
+     *
+     * <p>Save prefers the active in-memory session so it can avoid reloading the
+     * compacted recovery draft unless the client was restarted or the session was
+     * already flushed out of memory.
+     */
+    public Optional<TrackedChangeBuffer> consumeSession(MinecraftServer server, String projectId) throws IOException {
+        TrackedChangeBuffer session = this.activeBuffers.remove(projectId);
+        this.dirtySessions.remove(projectId);
+        this.lastDraftFlushes.remove(projectId);
+        if (session != null) {
+            LumaMod.LOGGER.info("Consumed in-memory buffer for project {} with {} pending changes", projectId, session.size());
+            return session.isEmpty() ? Optional.empty() : Optional.of(session);
+        }
+
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        if (trackedProject == null) {
+            return Optional.empty();
+        }
+        return this.recoveryRepository.loadDraft(trackedProject.layout())
+                .map(draft -> TrackedChangeBuffer.fromDraft(UUID.randomUUID().toString(), draft))
+                .filter(buffer -> !buffer.isEmpty());
+    }
+
+    public void discardSession(MinecraftServer server, String projectId) throws IOException {
+        this.activeBuffers.remove(projectId);
+        this.dirtySessions.remove(projectId);
+        this.lastDraftFlushes.remove(projectId);
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        if (trackedProject != null) {
+            this.recoveryRepository.deleteDraft(trackedProject.layout());
+            LumaMod.LOGGER.info("Discarded persisted draft for project {}", trackedProject.project().name());
         }
     }
 
@@ -121,22 +199,52 @@ public final class HistoryCaptureManager {
         Instant now = Instant.now();
         List<String> sessionsToFinalize = new ArrayList<>();
         Map<String, Integer> idleThresholds = new HashMap<>();
+        Map<String, TrackedProject> trackedProjects = new HashMap<>();
 
         try {
             for (TrackedProject trackedProject : this.loadTrackedProjects(server)) {
-                idleThresholds.put(
-                        trackedProject.project().id().toString(),
-                        trackedProject.project().settings().sessionIdleSeconds()
-                );
+                String projectId = trackedProject.project().id().toString();
+                trackedProjects.put(projectId, trackedProject);
+                idleThresholds.put(projectId, trackedProject.project().settings().sessionIdleSeconds());
             }
         } catch (IOException exception) {
             LumaMod.LOGGER.warn("Failed to load tracked projects for idle flush", exception);
         }
 
-        for (Map.Entry<String, ChangeSession> entry : this.activeSessions.entrySet()) {
-            int idleSeconds = idleThresholds.getOrDefault(entry.getKey(), 5);
-            if (Duration.between(entry.getValue().updatedAt(), now).getSeconds() >= idleSeconds) {
-                sessionsToFinalize.add(entry.getKey());
+        for (Map.Entry<String, TrackedChangeBuffer> entry : this.activeBuffers.entrySet()) {
+            String projectId = entry.getKey();
+            TrackedChangeBuffer session = entry.getValue();
+            int idleSeconds = idleThresholds.getOrDefault(projectId, 5);
+            if (Duration.between(session.updatedAt(), now).getSeconds() >= idleSeconds) {
+                sessionsToFinalize.add(projectId);
+                continue;
+            }
+
+            if (!this.dirtySessions.contains(projectId)) {
+                continue;
+            }
+
+            Instant lastFlush = this.lastDraftFlushes.get(projectId);
+            if (lastFlush != null && Duration.between(lastFlush, now).compareTo(ACTIVE_DRAFT_FLUSH_INTERVAL) < 0) {
+                continue;
+            }
+
+            TrackedProject trackedProject = trackedProjects.get(projectId);
+            if (trackedProject == null) {
+                continue;
+            }
+
+            try {
+                this.recoveryRepository.saveDraft(trackedProject.layout(), session.toDraft());
+                this.dirtySessions.remove(projectId);
+                this.lastDraftFlushes.put(projectId, now);
+                LumaMod.LOGGER.info(
+                        "Flushed active draft for project {} with {} pending changes",
+                        trackedProject.project().name(),
+                        session.size()
+                );
+            } catch (IOException exception) {
+                LumaMod.LOGGER.warn("Failed to flush active session for {}", projectId, exception);
             }
         }
 
@@ -150,9 +258,9 @@ public final class HistoryCaptureManager {
     }
 
     public void flushAll(MinecraftServer server) {
-        for (String projectId : List.copyOf(this.activeSessions.keySet())) {
+        for (String projectId : List.copyOf(this.activeBuffers.keySet())) {
             try {
-                this.finalizeProjectSession(server, projectId);
+                this.freezeSession(server, projectId);
             } catch (IOException exception) {
                 LumaMod.LOGGER.warn("Failed to flush session for {}", projectId, exception);
             }
@@ -163,9 +271,9 @@ public final class HistoryCaptureManager {
         this.projectCaches.remove(this.cacheKey(server));
     }
 
-    private ChangeSession getOrCreateSession(MinecraftServer server, TrackedProject trackedProject, Instant now) throws IOException {
+    private TrackedChangeBuffer getOrCreateBuffer(TrackedProject trackedProject, Instant now) throws IOException {
         String projectId = trackedProject.project().id().toString();
-        ChangeSession existing = this.activeSessions.get(projectId);
+        TrackedChangeBuffer existing = this.activeBuffers.get(projectId);
         if (existing != null) {
             return existing;
         }
@@ -175,23 +283,38 @@ public final class HistoryCaptureManager {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + trackedProject.project().name()));
 
-        ChangeSession session = ChangeSession.create(
-                UUID.randomUUID().toString(),
-                projectId,
+        Optional<RecoveryDraft> draft = this.recoveryRepository.loadDraft(trackedProject.layout());
+        TrackedChangeBuffer buffer = draft
+                .filter(candidate -> projectId.equals(candidate.projectId()))
+                .filter(candidate -> activeVariant.id().equals(candidate.variantId()))
+                .map(candidate -> TrackedChangeBuffer.fromDraft(UUID.randomUUID().toString(), candidate))
+                .orElseGet(() -> TrackedChangeBuffer.create(
+                        UUID.randomUUID().toString(),
+                        projectId,
+                        activeVariant.id(),
+                        activeVariant.headVersionId(),
+                        "player",
+                        io.github.luma.domain.model.WorldMutationSource.PLAYER,
+                        now
+                ));
+
+        this.activeBuffers.put(projectId, buffer);
+        LumaMod.LOGGER.info(
+                "Opened active buffer for project {} on variant {} from base {}",
+                trackedProject.project().name(),
                 activeVariant.id(),
-                activeVariant.headVersionId(),
-                "player",
-                io.github.luma.domain.model.WorldMutationSource.PLAYER,
-                now
+                activeVariant.headVersionId()
         );
+        return buffer;
+    }
 
-        var draft = this.recoveryRepository.loadDraft(trackedProject.layout());
-        if (draft.isPresent()) {
-            session = this.recoveryService.mergeDraft(session, draft.get());
+    private TrackedProject findTrackedProject(MinecraftServer server, String projectId) throws IOException {
+        for (TrackedProject trackedProject : this.loadTrackedProjects(server)) {
+            if (trackedProject.project().id().toString().equals(projectId)) {
+                return trackedProject;
+            }
         }
-
-        this.activeSessions.put(projectId, session);
-        return session;
+        return null;
     }
 
     private boolean matches(ServerLevel level, BuildProject project, BlockPos pos) {
@@ -199,7 +322,7 @@ public final class HistoryCaptureManager {
             return false;
         }
 
-        if (project.tracksWholeDimension()) {
+        if (project.tracksWholeDimension() || project.bounds() == null) {
             return true;
         }
 
@@ -274,6 +397,17 @@ public final class HistoryCaptureManager {
 
     private String cacheKey(MinecraftServer server) {
         return server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().toString();
+    }
+
+    private void logBufferProgress(BuildProject project, TrackedChangeBuffer buffer) {
+        int size = buffer.size();
+        if (size == 1 || size == 64 || size == 256 || (size % 1024) == 0) {
+            LumaMod.LOGGER.info(
+                    "Captured {} pending changes for project {}",
+                    size,
+                    project.name()
+            );
+        }
     }
 
     private record TrackedProject(ProjectLayout layout, BuildProject project, List<ProjectVariant> variants) {

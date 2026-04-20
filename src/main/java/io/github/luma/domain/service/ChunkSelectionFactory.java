@@ -3,6 +3,7 @@ package io.github.luma.domain.service;
 import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.StoredBlockChange;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,6 +33,15 @@ public final class ChunkSelectionFactory {
     public static List<ChunkPoint> fromChanges(Collection<BlockChangeRecord> changes) {
         LinkedHashMap<String, ChunkPoint> chunks = new LinkedHashMap<>();
         for (BlockChangeRecord change : changes) {
+            ChunkPoint chunk = ChunkPoint.from(change.pos());
+            chunks.put(key(chunk), chunk);
+        }
+        return List.copyOf(chunks.values());
+    }
+
+    public static List<ChunkPoint> fromStoredChanges(Collection<StoredBlockChange> changes) {
+        LinkedHashMap<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        for (StoredBlockChange change : changes) {
             ChunkPoint chunk = ChunkPoint.from(change.pos());
             chunks.put(key(chunk), chunk);
         }

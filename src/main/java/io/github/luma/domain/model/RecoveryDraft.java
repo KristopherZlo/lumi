@@ -11,7 +11,7 @@ public record RecoveryDraft(
         WorldMutationSource mutationSource,
         Instant startedAt,
         Instant updatedAt,
-        List<BlockChangeRecord> changes
+        List<StoredBlockChange> changes
 ) {
 
     public boolean isEmpty() {

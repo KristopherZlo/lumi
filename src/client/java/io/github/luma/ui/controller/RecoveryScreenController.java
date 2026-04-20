@@ -1,5 +1,6 @@
 package io.github.luma.ui.controller;
 
+import io.github.luma.LumaMod;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.service.ProjectService;
@@ -34,23 +35,31 @@ public final class RecoveryScreenController {
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName
             );
-            return "luma.status.draft_restored";
+            return "luma.status.draft_restore_started";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Recovery draft restore rejected for project {}", projectName, exception);
+            return "luma.status.world_operation_busy";
         } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Recovery draft restore failed for project {}", projectName, exception);
             return "luma.status.operation_failed";
         }
     }
 
     public String saveDraftVersion(String projectName, String message) {
         try {
-            this.versionService.saveVersion(
+            this.versionService.startSaveVersion(
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName,
                     message,
                     this.client.getUser().getName(),
                     VersionKind.RECOVERY
             );
-            return "luma.status.recovery_version_saved";
+            return "luma.status.recovery_save_started";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Recovery draft save rejected for project {}", projectName, exception);
+            return "luma.status.world_operation_busy";
         } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Recovery draft save failed for project {}", projectName, exception);
             return "luma.status.operation_failed";
         }
     }
@@ -60,6 +69,7 @@ public final class RecoveryScreenController {
             this.recoveryService.discardDraft(ClientProjectAccess.requireSingleplayerServer(this.client), projectName);
             return "luma.status.draft_discarded";
         } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Discard draft failed for project {}", projectName, exception);
             return "luma.status.operation_failed";
         }
     }

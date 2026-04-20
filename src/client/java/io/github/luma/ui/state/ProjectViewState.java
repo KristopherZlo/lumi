@@ -2,6 +2,7 @@ package io.github.luma.ui.state;
 
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.MaterialDeltaEntry;
+import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.ProjectIntegrityReport;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
@@ -21,6 +22,7 @@ public record ProjectViewState(
         VersionDiff selectedVersionDiff,
         List<MaterialDeltaEntry> materialDelta,
         List<IntegrationStatus> integrations,
+        OperationSnapshot operationSnapshot,
         ProjectIntegrityReport integrityReport,
         ProjectTab selectedTab,
         String status

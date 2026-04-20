@@ -16,6 +16,14 @@ import java.util.Locale;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
+/**
+ * Manages project variants and variant switching.
+ *
+ * <p>Variants act as lightweight branch heads within a single project. This
+ * service keeps variant metadata consistent, blocks unsafe transitions when a
+ * recovery draft exists, and optionally restores the target head when switching
+ * variants.
+ */
 public final class VariantService {
 
     private final ProjectService projectService = new ProjectService();
@@ -29,6 +37,9 @@ public final class VariantService {
         return this.variantRepository.loadAll(this.projectService.resolveLayout(server, projectName));
     }
 
+    /**
+     * Creates a new variant from the supplied version or the active head.
+     */
     public ProjectVariant createVariant(MinecraftServer server, String projectName, String variantName, String fromVersionId) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
         var project = this.projectRepository.load(layout)
@@ -71,6 +82,14 @@ public final class VariantService {
     }
 
     public ProjectVariant switchVariant(ServerLevel level, String projectName, String variantId) throws IOException {
+        return this.switchVariant(level, projectName, variantId, true);
+    }
+
+    /**
+     * Switches the active variant and optionally restores that variant head into
+     * the world.
+     */
+    public ProjectVariant switchVariant(ServerLevel level, String projectName, String variantId, boolean restoreHead) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
@@ -86,7 +105,7 @@ public final class VariantService {
                 .orElseThrow(() -> new IllegalArgumentException("Variant not found: " + variantId));
 
         this.projectRepository.save(layout, project.withActiveVariantId(targetVariant.id(), Instant.now()).withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION));
-        if (targetVariant.headVersionId() != null && !targetVariant.headVersionId().isBlank()) {
+        if (restoreHead && targetVariant.headVersionId() != null && !targetVariant.headVersionId().isBlank()) {
             this.restoreService.restore(level, projectName, targetVariant.headVersionId());
         }
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(

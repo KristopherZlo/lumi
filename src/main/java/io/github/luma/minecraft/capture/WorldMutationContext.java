@@ -1,25 +1,44 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.WorldMutationSource;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 public final class WorldMutationContext {
 
-    private static final ThreadLocal<WorldMutationSource> CURRENT_SOURCE = ThreadLocal.withInitial(() -> WorldMutationSource.PLAYER);
+    private static final ThreadLocal<Deque<WorldMutationSource>> SOURCE_STACK = ThreadLocal.withInitial(() -> {
+        Deque<WorldMutationSource> stack = new ArrayDeque<>();
+        stack.push(WorldMutationSource.SYSTEM);
+        return stack;
+    });
 
     private WorldMutationContext() {
     }
 
     public static WorldMutationSource currentSource() {
-        return CURRENT_SOURCE.get();
+        return SOURCE_STACK.get().peek();
+    }
+
+    public static void pushSource(WorldMutationSource source) {
+        SOURCE_STACK.get().push(source);
+    }
+
+    public static void popSource() {
+        Deque<WorldMutationSource> stack = SOURCE_STACK.get();
+        if (stack.size() > 1) {
+            stack.pop();
+        } else {
+            stack.clear();
+            stack.push(WorldMutationSource.SYSTEM);
+        }
     }
 
     public static void runWithSource(WorldMutationSource source, Runnable runnable) {
-        WorldMutationSource previous = CURRENT_SOURCE.get();
-        CURRENT_SOURCE.set(source);
+        pushSource(source);
         try {
             runnable.run();
         } finally {
-            CURRENT_SOURCE.set(previous);
+            popSource();
         }
     }
 }

@@ -2,6 +2,12 @@ package io.github.luma.storage;
 
 import java.nio.file.Path;
 
+/**
+ * Canonical path layout for one Luma project on disk.
+ *
+ * <p>This record centralizes all project-relative file and directory names so
+ * that services and repositories do not hardcode storage paths independently.
+ */
 public record ProjectLayout(Path root) {
 
     public static ProjectLayout of(Path projectsRoot, String projectName) {
@@ -54,11 +60,19 @@ public record ProjectLayout(Path root) {
     }
 
     public Path patchFile(String patchId) {
-        return this.patchesDir().resolve(patchId + ".json.lz4");
+        return this.patchDataFile(patchId);
+    }
+
+    public Path patchMetaFile(String patchId) {
+        return this.patchesDir().resolve(patchId + ".meta.json");
+    }
+
+    public Path patchDataFile(String patchId) {
+        return this.patchesDir().resolve(patchId + ".bin.lz4");
     }
 
     public Path recoveryDraftFile() {
-        return this.recoveryDir().resolve("draft.json");
+        return this.recoveryBaseFile();
     }
 
     public Path recoveryJournalFile() {
@@ -67,5 +81,17 @@ public record ProjectLayout(Path root) {
 
     public Path previewFile(String versionId) {
         return this.previewsDir().resolve(versionId + ".png");
+    }
+
+    public Path snapshotFile(String snapshotId) {
+        return this.snapshotsDir().resolve(snapshotId + ".bin.lz4");
+    }
+
+    public Path recoveryBaseFile() {
+        return this.recoveryDir().resolve("draft.bin.lz4");
+    }
+
+    public Path recoveryWalFile() {
+        return this.recoveryDir().resolve("draft.wal.lz4");
     }
 }

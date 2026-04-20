@@ -15,15 +15,23 @@ public final class BlockStateNbtCodec {
     private BlockStateNbtCodec() {
     }
 
+    public static CompoundTag serializeBlockStateTag(BlockState state) {
+        return NbtUtils.writeBlockState(state);
+    }
+
     public static String serializeBlockState(BlockState state) {
-        return NbtUtils.structureToSnbt(NbtUtils.writeBlockState(state));
+        return NbtUtils.structureToSnbt(serializeBlockStateTag(state));
+    }
+
+    public static BlockState deserializeBlockState(ServerLevel level, CompoundTag tag) throws IOException {
+        HolderGetter<Block> blocks = level.registryAccess().lookupOrThrow(Registries.BLOCK);
+        return NbtUtils.readBlockState(blocks, tag == null ? airTag() : tag);
     }
 
     public static BlockState deserializeBlockState(ServerLevel level, String snbt) throws IOException {
         try {
             CompoundTag tag = NbtUtils.snbtToStructure(snbt);
-            HolderGetter<Block> blocks = level.registryAccess().lookupOrThrow(Registries.BLOCK);
-            return NbtUtils.readBlockState(blocks, tag);
+            return deserializeBlockState(level, tag);
         } catch (CommandSyntaxException exception) {
             throw new IOException("Failed to decode block state", exception);
         }
@@ -43,5 +51,11 @@ public final class BlockStateNbtCodec {
         } catch (CommandSyntaxException exception) {
             throw new IOException("Failed to decode block entity NBT", exception);
         }
+    }
+
+    private static CompoundTag airTag() {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", "minecraft:air");
+        return tag;
     }
 }

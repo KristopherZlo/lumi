@@ -22,7 +22,7 @@ public record BuildProject(
         boolean archived
 ) {
 
-    public static final int CURRENT_SCHEMA_VERSION = 2;
+    public static final int CURRENT_SCHEMA_VERSION = 3;
 
     public static BuildProject create(String name, String dimensionId, Bounds3i bounds, BlockPoint origin, Instant now) {
         return new BuildProject(
@@ -71,7 +71,7 @@ public record BuildProject(
     }
 
     public boolean tracksWholeDimension() {
-        return this.schemaVersion >= CURRENT_SCHEMA_VERSION && this.bounds == null;
+        return this.bounds == null;
     }
 
     public BuildProject withSchemaVersion(int schemaVersion) {

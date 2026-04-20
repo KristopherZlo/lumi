@@ -1,5 +1,6 @@
 package io.github.luma.ui.controller;
 
+import io.github.luma.LumaMod;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
@@ -10,6 +11,7 @@ import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.integration.common.IntegrationStatusService;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.ui.state.ProjectTab;
 import io.github.luma.ui.state.ProjectViewState;
 import java.util.ArrayList;
@@ -41,6 +43,7 @@ public final class ProjectScreenController {
                     null,
                     List.of(),
                     List.of(),
+                    null,
                     new io.github.luma.domain.model.ProjectIntegrityReport(true, List.of(), List.of()),
                     selectedTab,
                     "luma.status.singleplayer_only"
@@ -58,6 +61,9 @@ public final class ProjectScreenController {
             var diff = selectedVersion != null
                     ? this.diffService.compareVersionToParent(server, projectName, selectedVersion.id())
                     : null;
+            var operationSnapshot = WorldOperationManager.getInstance()
+                    .snapshot(server, project.id().toString())
+                    .orElse(null);
             return new ProjectViewState(
                     project,
                     loadedVersions,
@@ -68,6 +74,7 @@ public final class ProjectScreenController {
                     diff,
                     diff == null ? List.of() : this.materialDeltaService.summarize(diff),
                     this.integrationStatusService.statuses(),
+                    operationSnapshot,
                     this.integrityService.inspect(server, projectName),
                     selectedTab,
                     status == null || status.isBlank() ? "luma.status.project_ready" : status
@@ -83,6 +90,7 @@ public final class ProjectScreenController {
                     null,
                     List.of(),
                     List.of(),
+                    null,
                     new io.github.luma.domain.model.ProjectIntegrityReport(false, List.of(), List.of("load-failed")),
                     selectedTab,
                     "luma.status.project_failed"
@@ -104,14 +112,18 @@ public final class ProjectScreenController {
 
     public String saveVersion(String projectName, String message) {
         try {
-            this.versionService.saveVersion(
+            this.versionService.startSaveVersion(
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName,
                     message,
                     this.client.getUser().getName()
             );
-            return "luma.status.version_saved";
+            return "luma.status.save_started";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Save request rejected for project {}", projectName, exception);
+            return "luma.status.world_operation_busy";
         } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Save request failed for project {}", projectName, exception);
             return "luma.status.operation_failed";
         }
     }
@@ -123,8 +135,12 @@ public final class ProjectScreenController {
                     projectName,
                     versionId
             );
-            return "luma.status.version_restored";
+            return "luma.status.restore_started";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Restore request rejected for project {}", projectName, exception);
+            return "luma.status.world_operation_busy";
         } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Restore request failed for project {}", projectName, exception);
             return "luma.status.operation_failed";
         }
     }
@@ -139,19 +155,26 @@ public final class ProjectScreenController {
             );
             return "luma.status.variant_created";
         } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Create variant request failed for project {}", projectName, exception);
             return "luma.status.operation_failed";
         }
     }
 
     public String switchVariant(String projectName, String variantId) {
+        return this.switchVariant(projectName, variantId, true);
+    }
+
+    public String switchVariant(String projectName, String variantId, boolean restoreHead) {
         try {
             this.variantService.switchVariant(
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName,
-                    variantId
+                    variantId,
+                    restoreHead
             );
             return "luma.status.variant_switched";
         } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Switch variant request failed for project {}", projectName, exception);
             return "luma.status.operation_failed";
         }
     }
@@ -165,6 +188,7 @@ public final class ProjectScreenController {
             );
             return "luma.status.preview_refreshed";
         } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Preview refresh failed for project {} version {}", projectName, versionId, exception);
             return "luma.status.operation_failed";
         }
     }

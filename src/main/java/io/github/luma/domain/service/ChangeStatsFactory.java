@@ -1,11 +1,12 @@
 package io.github.luma.domain.service;
 
-import io.github.luma.domain.model.BlockChangeRecord;
-import io.github.luma.domain.model.BlockPatch;
 import io.github.luma.domain.model.ChunkDelta;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.PendingChangeSummary;
+import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchStats;
+import io.github.luma.domain.model.PatchChunkSlice;
+import io.github.luma.domain.model.StoredBlockChange;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,21 +17,46 @@ public final class ChangeStatsFactory {
     private ChangeStatsFactory() {
     }
 
-    public static ChangeStats summarize(List<BlockChangeRecord> changes) {
+    public static ChangeStats summarize(List<StoredBlockChange> changes) {
         Map<String, Boolean> blockTypes = new LinkedHashMap<>();
         Map<String, Integer> chunkCounters = new LinkedHashMap<>();
 
-        for (BlockChangeRecord change : changes) {
+        for (StoredBlockChange change : changes) {
             chunkCounters.merge(chunkKey(change), 1, Integer::sum);
-            blockTypes.put(change.newState(), Boolean.TRUE);
+            blockTypes.put(change.newValue().blockId(), Boolean.TRUE);
         }
 
         return new ChangeStats(changes.size(), chunkCounters.size(), blockTypes.size());
     }
 
-    public static BlockPatch createPatch(String patchId, String projectId, String versionId, String fileName, List<BlockChangeRecord> changes) {
+    public static PatchMetadata createPatchMetadata(
+            String patchId,
+            String projectId,
+            String versionId,
+            String fileName,
+            List<PatchChunkSlice> slices
+    ) {
+        List<ChunkDelta> chunkDeltas = new ArrayList<>();
+        for (PatchChunkSlice slice : slices) {
+            chunkDeltas.add(new ChunkDelta(slice.chunkX(), slice.chunkZ(), slice.changeCount()));
+        }
+
+        return new PatchMetadata(
+                patchId,
+                projectId,
+                versionId,
+                fileName,
+                List.copyOf(slices),
+                new PatchStats(
+                        chunkDeltas.stream().mapToInt(ChunkDelta::changedBlocks).sum(),
+                        chunkDeltas.size()
+                )
+        );
+    }
+
+    public static List<ChunkDelta> chunkDeltas(List<StoredBlockChange> changes) {
         Map<String, Integer> chunkCounters = new LinkedHashMap<>();
-        for (BlockChangeRecord change : changes) {
+        for (StoredBlockChange change : changes) {
             chunkCounters.merge(chunkKey(change), 1, Integer::sum);
         }
 
@@ -40,24 +66,17 @@ public final class ChangeStatsFactory {
             chunkDeltas.add(new ChunkDelta(Integer.parseInt(split[0]), Integer.parseInt(split[1]), entry.getValue()));
         }
 
-        return new BlockPatch(
-                patchId,
-                projectId,
-                versionId,
-                fileName,
-                chunkDeltas,
-                new PatchStats(changes.size(), chunkDeltas.size())
-        );
+        return chunkDeltas;
     }
 
-    public static PendingChangeSummary summarizePending(List<BlockChangeRecord> changes) {
+    public static PendingChangeSummary summarizePending(List<StoredBlockChange> changes) {
         int added = 0;
         int removed = 0;
         int changed = 0;
 
-        for (BlockChangeRecord change : changes) {
-            boolean oldAir = isAir(change.oldState());
-            boolean newAir = isAir(change.newState());
+        for (StoredBlockChange change : changes) {
+            boolean oldAir = isAir(change.oldValue().blockId());
+            boolean newAir = isAir(change.newValue().blockId());
             if (oldAir && !newAir) {
                 added += 1;
             } else if (!oldAir && newAir) {
@@ -70,7 +89,7 @@ public final class ChangeStatsFactory {
         return new PendingChangeSummary(added, removed, changed);
     }
 
-    private static String chunkKey(BlockChangeRecord change) {
+    private static String chunkKey(StoredBlockChange change) {
         return (change.pos().x() >> 4) + ":" + (change.pos().z() >> 4);
     }
 

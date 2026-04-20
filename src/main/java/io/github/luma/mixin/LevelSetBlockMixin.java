@@ -1,6 +1,7 @@
 package io.github.luma.mixin;
 
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import net.minecraft.core.BlockPos;
@@ -27,6 +28,9 @@ abstract class LevelSetBlockMixin {
         if (!(level instanceof ServerLevel serverLevel)) {
             return;
         }
+        if (WorldMutationContext.currentSource() != io.github.luma.domain.model.WorldMutationSource.PLAYER) {
+            return;
+        }
 
         BlockState oldState = serverLevel.getBlockState(pos);
         BlockEntity blockEntity = serverLevel.getBlockEntity(pos);
@@ -38,6 +42,9 @@ abstract class LevelSetBlockMixin {
     private void luma$captureAfterSetBlock(BlockPos pos, BlockState newState, int flags, int recursionLeft, CallbackInfoReturnable<Boolean> cir) {
         Level level = (Level) (Object) this;
         if (!(level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        if (WorldMutationContext.currentSource() != io.github.luma.domain.model.WorldMutationSource.PLAYER) {
             return;
         }
 

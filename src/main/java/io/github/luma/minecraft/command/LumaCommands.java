@@ -24,7 +24,7 @@ public final class LumaCommands {
     private final RecoveryService recoveryService = new RecoveryService();
 
     public void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        var root = Commands.literal("luma");
+        var root = Commands.literal("lumi");
 
         root.then(Commands.literal("list")
                 .executes(context -> this.execute(context.getSource(), this::listProjects)));
@@ -126,14 +126,14 @@ public final class LumaCommands {
     private int listProjects(CommandSourceStack source) throws IOException {
         var projects = this.projectService.listProjects(source.getServer());
         if (projects.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("Luma: no projects yet"), false);
+            source.sendSuccess(() -> Component.literal("Lumi: no projects yet"), false);
             return 1;
         }
 
         String names = projects.stream()
                 .map(project -> project.name() + " [" + project.activeVariantId() + "]")
                 .collect(Collectors.joining(", "));
-        source.sendSuccess(() -> Component.literal("Luma projects: " + names), false);
+        source.sendSuccess(() -> Component.literal("Lumi projects: " + names), false);
         return projects.size();
     }
 
@@ -144,14 +144,18 @@ public final class LumaCommands {
     }
 
     private int saveVersion(CommandSourceStack source, String projectName, String message) throws IOException {
-        var version = this.versionService.saveVersion(source.getLevel(), projectName, message, source.getTextName());
-        source.sendSuccess(() -> Component.literal("Saved version " + version.id() + " for " + projectName), true);
+        var operation = this.versionService.startSaveVersion(source.getLevel(), projectName, message, source.getTextName());
+        source.sendSuccess(() -> Component.literal(
+                "Started save operation " + operation.id() + " for " + projectName
+        ), true);
         return 1;
     }
 
     private int restoreVersion(CommandSourceStack source, String projectName, String versionId) throws IOException {
-        var version = this.restoreService.restore(source.getLevel(), projectName, versionId);
-        source.sendSuccess(() -> Component.literal("Restored version " + version.id() + " for " + projectName), true);
+        var operation = this.restoreService.restore(source.getLevel(), projectName, versionId);
+        source.sendSuccess(() -> Component.literal(
+                "Started restore operation " + operation.id() + " for " + projectName
+        ), true);
         return 1;
     }
 
@@ -191,8 +195,10 @@ public final class LumaCommands {
     }
 
     private int restoreDraft(CommandSourceStack source, String projectName) throws IOException {
-        var draft = this.recoveryService.restoreDraft(source.getLevel(), projectName);
-        source.sendSuccess(() -> Component.literal("Re-applied recovery draft with " + draft.changes().size() + " changes"), true);
+        var operation = this.recoveryService.restoreDraft(source.getLevel(), projectName);
+        source.sendSuccess(() -> Component.literal(
+                "Started recovery restore operation " + operation.id() + " for " + projectName
+        ), true);
         return 1;
     }
 
@@ -206,7 +212,7 @@ public final class LumaCommands {
         try {
             return action.run(source);
         } catch (Exception exception) {
-            source.sendFailure(Component.literal("Luma error: " + exception.getMessage()));
+            source.sendFailure(Component.literal("Lumi error: " + exception.getMessage()));
             return 0;
         }
     }

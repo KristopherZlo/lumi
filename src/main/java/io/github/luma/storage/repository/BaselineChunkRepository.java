@@ -18,7 +18,8 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class BaselineChunkRepository {
 
     private static final String FILE_PREFIX = "chunk_";
-    private final SnapshotRepository snapshotRepository = new SnapshotRepository();
+    private final SnapshotWriter snapshotWriter = new SnapshotWriter();
+    private final SnapshotReader snapshotReader = new SnapshotReader();
 
     public boolean captureIfMissing(
             ProjectLayout layout,
@@ -35,17 +36,19 @@ public final class BaselineChunkRepository {
             return false;
         }
 
-        this.snapshotRepository.captureFile(
+        this.snapshotWriter.writeFile(
                 baselineFile,
-                projectId,
-                List.of(chunk),
-                level,
-                now,
-                java.util.Map.of(
-                        changedPos.immutable(),
-                        new SnapshotRepository.SnapshotBlockState(
-                                oldState,
-                                oldBlockEntity == null ? null : oldBlockEntity.copy()
+                this.snapshotWriter.captureData(
+                        projectId,
+                        List.of(chunk),
+                        level,
+                        now,
+                        java.util.Map.of(
+                                changedPos.immutable(),
+                                new SnapshotWriter.SnapshotBlockState(
+                                        oldState,
+                                        oldBlockEntity == null ? null : oldBlockEntity.copy()
+                                )
                         )
                 )
         );
@@ -66,7 +69,7 @@ public final class BaselineChunkRepository {
         try (var stream = Files.list(directory)) {
             for (Path file : stream.filter(Files::isRegularFile).toList()) {
                 String name = file.getFileName().toString();
-                if (!name.startsWith(FILE_PREFIX) || !name.endsWith(".nbt.lz4")) {
+                if (!name.startsWith(FILE_PREFIX) || !name.endsWith(".bin.lz4")) {
                     continue;
                 }
                 ChunkPoint chunk = this.parse(name);
@@ -79,17 +82,38 @@ public final class BaselineChunkRepository {
     }
 
     public void restore(ProjectLayout layout, ChunkPoint chunk, ServerLevel level) throws IOException {
-        this.snapshotRepository.restoreFile(this.file(layout, chunk), level);
+        for (var batch : this.snapshotReader.decodeBatches(this.file(layout, chunk), level)) {
+            io.github.luma.minecraft.world.BlockChangeApplier.applyPreparedBatch(level, batch, 0, batch.placements().size());
+        }
+    }
+
+    public List<io.github.luma.minecraft.world.PreparedChunkBatch> decodeBatches(
+            ProjectLayout layout,
+            ChunkPoint chunk,
+            ServerLevel level
+    ) throws IOException {
+        return this.snapshotReader.decodeBatches(this.file(layout, chunk), level);
+    }
+
+    public List<ChunkPoint> listMissingChunks(ProjectLayout layout, Collection<ChunkPoint> restoredChunks) throws IOException {
+        Set<ChunkPoint> restored = Set.copyOf(restoredChunks);
+        List<ChunkPoint> missing = new ArrayList<>();
+        for (ChunkPoint chunk : this.listChunks(layout)) {
+            if (!restored.contains(chunk)) {
+                missing.add(chunk);
+            }
+        }
+        return missing;
     }
 
     public void restoreMissing(ProjectLayout layout, ServerLevel level, Collection<ChunkPoint> restoredChunks) throws IOException {
-        Set<ChunkPoint> restored = Set.copyOf(restoredChunks);
-        for (ChunkPoint chunk : this.listChunks(layout)) {
-            if (restored.contains(chunk)) {
-                continue;
-            }
+        for (ChunkPoint chunk : this.listMissingChunks(layout, restoredChunks)) {
             this.restore(layout, chunk, level);
         }
+    }
+
+    public Path filePath(ProjectLayout layout, ChunkPoint chunk) {
+        return this.file(layout, chunk);
     }
 
     private Path directory(ProjectLayout layout) {
@@ -97,11 +121,11 @@ public final class BaselineChunkRepository {
     }
 
     private Path file(ProjectLayout layout, ChunkPoint chunk) {
-        return this.directory(layout).resolve(FILE_PREFIX + chunk.x() + "_" + chunk.z() + ".nbt.lz4");
+        return this.directory(layout).resolve(FILE_PREFIX + chunk.x() + "_" + chunk.z() + ".bin.lz4");
     }
 
     private ChunkPoint parse(String fileName) {
-        String body = fileName.substring(FILE_PREFIX.length(), fileName.length() - ".nbt.lz4".length());
+        String body = fileName.substring(FILE_PREFIX.length(), fileName.length() - ".bin.lz4".length());
         String[] parts = body.split("_", 2);
         if (parts.length != 2) {
             return null;

@@ -19,7 +19,9 @@ public final class VersionRepository {
 
     public void save(ProjectLayout layout, ProjectVersion version) throws IOException {
         Files.createDirectories(layout.versionsDir());
-        Files.writeString(layout.versionFile(version.id()), GsonProvider.gson().toJson(version), StandardCharsets.UTF_8);
+        StorageIo.writeAtomically(layout.versionFile(version.id()), output -> output.write(
+                GsonProvider.gson().toJson(version).getBytes(StandardCharsets.UTF_8)
+        ));
     }
 
     public Optional<ProjectVersion> load(ProjectLayout layout, String versionId) throws IOException {

@@ -24,13 +24,16 @@ public final class ProjectIntegrityService {
         }
 
         for (var version : versions) {
-            if (version.snapshotId() != null && !version.snapshotId().isBlank() && !Files.exists(layout.snapshotsDir().resolve(version.snapshotId() + ".nbt.lz4"))) {
+            if (version.snapshotId() != null && !version.snapshotId().isBlank() && !Files.exists(layout.snapshotFile(version.snapshotId()))) {
                 errors.add("Missing snapshot file for " + version.id());
             }
 
             for (String patchId : version.patchIds()) {
-                if (!Files.exists(layout.patchFile(patchId))) {
-                    errors.add("Missing patch file " + patchId + " for " + version.id());
+                if (!Files.exists(layout.patchMetaFile(patchId))) {
+                    errors.add("Missing patch metadata " + patchId + " for " + version.id());
+                }
+                if (!Files.exists(layout.patchDataFile(patchId))) {
+                    errors.add("Missing patch payload " + patchId + " for " + version.id());
                 }
             }
         }

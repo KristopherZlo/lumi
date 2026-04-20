@@ -50,4 +50,29 @@ class BuildProjectTest {
         assertEquals("main", workspace.activeVariantId());
         assertEquals("minecraft:overworld", workspace.dimensionId());
     }
+
+    @Test
+    void olderWorldWorkspaceStillTracksWholeDimensionWhenBoundsAreNull() {
+        Instant now = Instant.parse("2026-04-20T12:00:00Z");
+        BuildProject workspace = new BuildProject(
+                2,
+                java.util.UUID.randomUUID(),
+                "legacy-world",
+                "",
+                "1.21.11",
+                "fabric",
+                "minecraft:overworld",
+                null,
+                null,
+                "main",
+                "main",
+                now,
+                now,
+                ProjectSettings.defaults(),
+                false,
+                false
+        );
+
+        assertTrue(workspace.tracksWholeDimension());
+    }
 }
