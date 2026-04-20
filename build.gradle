@@ -15,6 +15,9 @@ repositories {
         url = 'https://maven.fabricmc.net/'
     }
     maven {
+        url = 'https://api.modrinth.com/maven'
+    }
+    maven {
         url = 'https://maven.wispforest.io'
     }
     maven {
@@ -35,7 +38,47 @@ loom {
             sourceSet sourceSets.client
         }
     }
+
+    runs {
+        testClient {
+            inherit client
+            configName = 'Luma Test Client'
+            runDir = 'run/test-client'
+            programArg '--username'
+            programArg providers.gradleProperty('luma.testUsername').orElse('LumaTestClient').get()
+        }
+    }
 }
+
+configurations {
+    testClientMods
+}
+
+def testClientModVersions = [
+        sodium               : 'mc1.21.11-0.8.7-fabric',
+        entityCulling        : '1.10.1',
+        ferriteCore          : '8.2.0-fabric',
+        modMenu              : '17.0.0',
+        lithium              : 'mc1.21.11-0.21.4-fabric',
+        immediatelyFast      : '1.14.2+1.21.11-fabric',
+        etf                  : '7.1-fabric-1.21.11',
+        emf                  : '3.1.1-fabric-1.21.11',
+        sodiumExtra          : 'mc1.21.11-0.8.3+fabric',
+        modernFixReplacement : '5.26.2-build.1',
+        zoomify              : '2.15.2+1.21.11',
+        krypton              : '0.2.10',
+        voxy                 : '0.2.13-alpha',
+        cubesWithoutBorders  : '3.0.0+1.21.11',
+        rrls                 : '5.1.15+mc1.21.11-fabric',
+        fastQuit             : '3.1.3+mc1.21.11',
+        lazyDfuReplacement   : '1.1',
+        particleCore         : '0.3.2+1.21.11',
+        fabricLanguageKotlin : '1.13.10+kotlin.2.3.20',
+        yacl                 : '3.8.2+1.21.11-fabric',
+        forgeConfigApiPort   : '21.11.1',
+        fzzyConfig           : '0.7.6+1.21.11',
+        placeholderApi       : '2.8.2+1.21.10'
+]
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -52,8 +95,44 @@ dependencies {
     implementation "org.lz4:lz4-java:${project.lz4_version}"
     include "org.lz4:lz4-java:${project.lz4_version}"
 
+    testClientMods "maven.modrinth:fabric-api:${project.fabric_api_version}"
+    testClientMods "maven.modrinth:fabric-language-kotlin:${testClientModVersions.fabricLanguageKotlin}"
+    testClientMods "maven.modrinth:yacl:${testClientModVersions.yacl}"
+    testClientMods "maven.modrinth:forge-config-api-port:${testClientModVersions.forgeConfigApiPort}"
+    testClientMods "maven.modrinth:fzzy-config:${testClientModVersions.fzzyConfig}"
+    testClientMods "maven.modrinth:cloth-config:${project.cloth_config_version}+fabric"
+    testClientMods "maven.modrinth:placeholder-api:${testClientModVersions.placeholderApi}"
+
+    testClientMods "maven.modrinth:sodium:${testClientModVersions.sodium}"
+    testClientMods "maven.modrinth:entityculling:${testClientModVersions.entityCulling}"
+    testClientMods "maven.modrinth:ferrite-core:${testClientModVersions.ferriteCore}"
+    testClientMods "maven.modrinth:modmenu:${testClientModVersions.modMenu}"
+    testClientMods "maven.modrinth:lithium:${testClientModVersions.lithium}"
+    testClientMods "maven.modrinth:immediatelyfast:${testClientModVersions.immediatelyFast}"
+    testClientMods "maven.modrinth:entitytexturefeatures:${testClientModVersions.etf}"
+    testClientMods "maven.modrinth:entity-model-features:${testClientModVersions.emf}"
+    testClientMods "maven.modrinth:sodium-extra:${testClientModVersions.sodiumExtra}"
+    testClientMods "maven.modrinth:modernfix-mvus:${testClientModVersions.modernFixReplacement}"
+    testClientMods "maven.modrinth:zoomify:${testClientModVersions.zoomify}"
+    testClientMods "maven.modrinth:krypton:${testClientModVersions.krypton}"
+    testClientMods "maven.modrinth:voxy:${testClientModVersions.voxy}"
+    testClientMods "maven.modrinth:cubes-without-borders:${testClientModVersions.cubesWithoutBorders}"
+    testClientMods "maven.modrinth:rrls:${testClientModVersions.rrls}"
+    testClientMods "maven.modrinth:fastquit:${testClientModVersions.fastQuit}"
+    testClientMods "maven.modrinth:lazydfu-reloaded:${testClientModVersions.lazyDfuReplacement}"
+    testClientMods "maven.modrinth:particle-core:${testClientModVersions.particleCore}"
+
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+tasks.register('installTestClientMods', Sync) {
+    from(configurations.testClientMods)
+    into(layout.projectDirectory.dir('run/test-client/mods'))
+}
+
+tasks.named('runTestClient').configure {
+    dependsOn(tasks.named('installTestClientMods'))
 }
 
 def targetJavaVersion = 21
