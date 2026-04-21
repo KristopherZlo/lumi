@@ -101,6 +101,8 @@ From that screen you can:
 - discard the draft
 - save the draft as a new version
 
+The recovery screen also shows the current branch, the draft base version, the current head version, and how many chunks the draft touches before you choose an action.
+
 Recovery is only a stored copy of unsaved changes.
 
 It does not create a hidden variant.

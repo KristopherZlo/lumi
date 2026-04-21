@@ -37,7 +37,7 @@ public final class RecoveryScreen extends LumaScreen {
 
     @Override
     protected void build(FlowLayout root) {
-        Optional<io.github.luma.domain.model.RecoveryDraft> draft = this.controller.loadDraft(this.projectName);
+        Optional<io.github.luma.domain.model.RecoveryDraftSummary> draftSummary = this.controller.loadSummary(this.projectName);
 
         root.surface(Surface.BLANK);
         root.padding(Insets.of(10));
@@ -56,7 +56,7 @@ public final class RecoveryScreen extends LumaScreen {
         FlowLayout body = LumaUi.screenBody();
         frame.child(LumaUi.screenScroll(body));
 
-        if (draft.isEmpty()) {
+        if (draftSummary.isEmpty()) {
             FlowLayout empty = LumaUi.emptyState(
                     Component.translatable("luma.recovery.empty_title"),
                     Component.translatable("luma.recovery.no_draft")
@@ -68,14 +68,27 @@ public final class RecoveryScreen extends LumaScreen {
             return;
         }
 
+        var summaryState = draftSummary.get();
         FlowLayout summary = LumaUi.sectionCard(
                 Component.translatable("luma.recovery.summary_title"),
                 Component.translatable(
                         "luma.recovery.draft_present",
-                        draft.get().changes().size(),
-                        draft.get().variantId()
+                        summaryState.changeCount(),
+                        this.safeText(summaryState.variantId())
                 )
         );
+        FlowLayout metrics = LumaUi.actionRow();
+        metrics.child(LumaUi.metric(
+                Component.translatable("luma.history.commit_blocks"),
+                Component.literal(Integer.toString(summaryState.changeCount()))
+        ));
+        metrics.child(LumaUi.metric(
+                Component.translatable("luma.history.commit_chunks"),
+                Component.literal(Integer.toString(summaryState.touchedChunkCount()))
+        ));
+        summary.child(metrics);
+        summary.child(LumaUi.caption(Component.translatable("luma.variant.entry_base", this.safeText(summaryState.baseVersionId()))));
+        summary.child(LumaUi.caption(Component.translatable("luma.variant.entry_head", this.safeText(summaryState.headVersionId()))));
         summary.child(LumaUi.caption(Component.translatable("luma.recovery.summary_help")));
         summary.child(LumaUi.caption(Component.translatable("luma.recovery.summary_behavior")));
         body.child(summary);
@@ -120,5 +133,9 @@ public final class RecoveryScreen extends LumaScreen {
     @Override
     public void onClose() {
         this.client.setScreen(this.parent);
+    }
+
+    private String safeText(String value) {
+        return value == null || value.isBlank() ? "-" : value;
     }
 }

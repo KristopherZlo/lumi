@@ -5,6 +5,7 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.RecoveryDraftSummary;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -15,6 +16,7 @@ import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
+import io.github.luma.storage.repository.VariantRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,6 +40,7 @@ public final class RecoveryService {
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final VariantRepository variantRepository = new VariantRepository();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     public Optional<RecoveryDraft> loadDraft(MinecraftServer server, String projectName) throws IOException {
@@ -49,6 +52,17 @@ public final class RecoveryService {
 
     public List<RecoveryJournalEntry> loadJournal(MinecraftServer server, String projectName) throws IOException {
         return this.recoveryRepository.loadJournal(this.projectService.resolveLayout(server, projectName));
+    }
+
+    public Optional<RecoveryDraftSummary> summarizeDraft(MinecraftServer server, String projectName) throws IOException {
+        ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
+        var project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        Optional<RecoveryDraft> draft = HistoryCaptureManager.getInstance().snapshotDraft(server, project.id().toString());
+        if (draft.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(RecoveryDraftSummary.from(draft.get(), this.variantRepository.loadAll(layout)));
     }
 
     public void saveSessionDraft(ProjectLayout layout, TrackedChangeBuffer session) throws IOException {
