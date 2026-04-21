@@ -29,6 +29,23 @@ Run the dedicated test client profile:
 
 See [test-client.md](test-client.md) for details.
 
+Run the automated test suite:
+
+```powershell
+.\gradlew.bat test
+```
+
+This now includes regression checks for:
+
+- compare overlay nearest-entry selection
+- commit graph layout on large histories
+- material delta summarization on large diffs
+
+Enable verbose runtime tracing for debugging:
+
+- per workspace: `Settings -> Debug -> Debug logging`
+- global JVM flag: `-Dlumi.debug=true`
+
 ## Repository layout
 
 The codebase currently follows these top-level areas:
@@ -83,6 +100,7 @@ The current history pipeline is intentionally split into:
 - async preparation, compression, and decoding work away from the server tick
 - bounded chunk-batch application on the server tick through `WorldOperationManager`
 - operation snapshots that surface progress to the UI instead of pretending a long task finished immediately
+- optional debug tracing for capture, save, restore, recovery, compare, HUD, and background operations
 
 Current world-apply runtime types:
 

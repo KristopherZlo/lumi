@@ -187,6 +187,12 @@ The mod is expected to log the following at minimum:
 - recovery compaction and draft deletion
 - UI-triggered service failures that map to generic status text
 
+There is also a project-scoped debug layer:
+
+- `ProjectSettings.debugLoggingEnabled` turns on verbose tracing for one workspace
+- `-Dlumi.debug=true` turns it on globally
+- debug logs cover capture, save, restore, recovery, compare, compare overlay cache rebuilds, HUD refresh, and world-operation queue/application steps
+
 Logs are part of the support surface. New background or storage work should not be introduced without meaningful logs.
 
 ## Testing strategy
@@ -197,6 +203,7 @@ The current test suite is organized around:
 - repository round-trips for patch, snapshot, and recovery storage
 - service-level diff and history policy behavior
 - project layout and storage path invariants
+- client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
 
 When extending history or storage behavior, update both tests and documentation in the same change.
 

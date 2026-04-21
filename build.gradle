@@ -50,8 +50,23 @@ loom {
     }
 }
 
+sourceSets {
+    test {
+        compileClasspath += sourceSets.client.output
+        runtimeClasspath += sourceSets.client.output
+    }
+}
+
 configurations {
     testClientMods
+}
+
+configurations.named('testImplementation') {
+    extendsFrom configurations.clientImplementation
+}
+
+configurations.named('testRuntimeOnly') {
+    extendsFrom configurations.clientRuntimeOnly
 }
 
 def testClientModVersions = [
