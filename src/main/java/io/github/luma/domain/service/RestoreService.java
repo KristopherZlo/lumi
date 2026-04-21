@@ -9,10 +9,13 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.RestorePlanMode;
+import io.github.luma.domain.model.RestorePlanSummary;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
@@ -27,6 +30,7 @@ import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.SnapshotReader;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
+import io.github.luma.storage.repository.WorldOriginRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -60,6 +64,7 @@ public final class RestoreService {
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final VersionService versionService = new VersionService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
@@ -185,6 +190,61 @@ public final class RestoreService {
         );
     }
 
+    public RestorePlanSummary summarizeRestorePlan(ServerLevel level, String projectName, String versionId) throws IOException {
+        ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
+        var project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        ProjectVersion targetVersion = this.resolveVersion(project, versions, variants, versionId);
+        ProjectVariant activeVariant = variants.stream()
+                .filter(variant -> variant.id().equals(project.activeVariantId()))
+                .findFirst()
+                .orElse(null);
+        String baseVersionId = activeVariant == null ? "" : activeVariant.headVersionId();
+
+        if (targetVersion.id().equals(baseVersionId)) {
+            return new RestorePlanSummary(
+                    RestorePlanMode.NO_OP,
+                    List.of(),
+                    targetVersion.variantId(),
+                    baseVersionId,
+                    targetVersion.id()
+            );
+        }
+
+        List<ProjectVersion> directVersions = this.directRestorePatchVersions(project, versions, variants, targetVersion);
+        if (directVersions != null) {
+            return new RestorePlanSummary(
+                    RestorePlanMode.PATCH_REPLAY,
+                    this.touchedChunksForVersions(layout, directVersions),
+                    targetVersion.variantId(),
+                    baseVersionId,
+                    targetVersion.id()
+            );
+        }
+
+        if (targetVersion.versionKind() == VersionKind.WORLD_ROOT || targetVersion.versionKind() == VersionKind.INITIAL) {
+            List<ChunkPoint> trackedChunks = this.baselineChunkRepository.listChunks(layout);
+            return new RestorePlanSummary(
+                    this.worldRootFallbackMode(level, project),
+                    trackedChunks,
+                    targetVersion.variantId(),
+                    baseVersionId,
+                    targetVersion.id()
+            );
+        }
+
+        RestorePlan plan = this.buildPlan(layout, project, versions, targetVersion);
+        return new RestorePlanSummary(
+                RestorePlanMode.BASELINE_CHUNKS,
+                this.touchedChunksForPlan(plan),
+                targetVersion.variantId(),
+                baseVersionId,
+                targetVersion.id()
+        );
+    }
+
     private void completeRestore(
             ServerLevel level,
             ProjectLayout layout,
@@ -295,78 +355,19 @@ public final class RestoreService {
             ServerLevel level,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
-        ProjectVariant activeVariant = variants.stream()
-                .filter(variant -> variant.id().equals(project.activeVariantId()))
-                .findFirst()
-                .orElse(null);
-        if (activeVariant == null || activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
+        List<ProjectVersion> directVersions = this.directRestorePatchVersions(project, versions, variants, targetVersion);
+        if (directVersions == null) {
             LumaDebugLog.log(project, "restore", "Direct restore unavailable for project {} because active head is missing", project.name());
             return Optional.empty();
         }
-        if (!targetVersion.variantId().equals(activeVariant.id())) {
-            LumaDebugLog.log(
-                    project,
-                    "restore",
-                    "Direct restore unavailable for project {} because target variant {} is not active variant {}",
-                    project.name(),
-                    targetVersion.variantId(),
-                    activeVariant.id()
-            );
-            return Optional.empty();
-        }
 
-        Map<String, ProjectVersion> versionMap = new HashMap<>();
-        for (ProjectVersion version : versions) {
-            versionMap.put(version.id(), version);
-        }
-
+        ProjectVariant activeVariant = variants.stream()
+                .filter(variant -> variant.id().equals(project.activeVariantId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
         String headVersionId = activeVariant.headVersionId();
-        List<ProjectVersion> directVersions = new ArrayList<>();
-        boolean applyNewValues;
-
-        if (targetVersion.id().equals(headVersionId)) {
-            applyNewValues = false;
-        } else if (this.isAncestor(versionMap, targetVersion.id(), headVersionId)) {
-            applyNewValues = false;
-            ProjectVersion cursor = versionMap.get(headVersionId);
-            while (cursor != null && !cursor.id().equals(targetVersion.id())) {
-                directVersions.add(cursor);
-                cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                        ? null
-                        : versionMap.get(cursor.parentVersionId());
-            }
-            if (cursor == null) {
-                LumaDebugLog.log(project, "restore", "Direct reverse restore chain for project {} was broken", project.name());
-                return Optional.empty();
-            }
-        } else if (this.isAncestor(versionMap, headVersionId, targetVersion.id())) {
-            applyNewValues = true;
-            List<ProjectVersion> reversed = new ArrayList<>();
-            ProjectVersion cursor = targetVersion;
-            while (cursor != null && !cursor.id().equals(headVersionId)) {
-                reversed.add(cursor);
-                cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                        ? null
-                        : versionMap.get(cursor.parentVersionId());
-            }
-            if (cursor == null) {
-                LumaDebugLog.log(project, "restore", "Direct forward restore chain for project {} was broken", project.name());
-                return Optional.empty();
-            }
-            for (int index = reversed.size() - 1; index >= 0; index--) {
-                directVersions.add(reversed.get(index));
-            }
-        } else {
-            LumaDebugLog.log(
-                    project,
-                    "restore",
-                    "Direct restore unavailable for project {} because head {} and target {} are on different visible lineages",
-                    project.name(),
-                    headVersionId,
-                    targetVersion.id()
-            );
-            return Optional.empty();
-        }
+        Map<String, ProjectVersion> versionMap = this.versionMap(versions);
+        boolean applyNewValues = this.isAncestor(versionMap, headVersionId, targetVersion.id());
 
         int totalSources = directVersions.size() + (pendingDraft != null && !pendingDraft.isEmpty() ? 1 : 0);
         int completedSources = 0;
@@ -411,6 +412,64 @@ public final class RestoreService {
                 collapsedPlacements
         );
         return Optional.of(collapsed);
+    }
+
+    private List<ProjectVersion> directRestorePatchVersions(
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVersion targetVersion
+    ) {
+        ProjectVariant activeVariant = variants.stream()
+                .filter(variant -> variant.id().equals(project.activeVariantId()))
+                .findFirst()
+                .orElse(null);
+        if (activeVariant == null || activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
+            return null;
+        }
+        if (!targetVersion.variantId().equals(activeVariant.id())) {
+            return null;
+        }
+
+        Map<String, ProjectVersion> versionMap = this.versionMap(versions);
+        String headVersionId = activeVariant.headVersionId();
+        if (targetVersion.id().equals(headVersionId)) {
+            return List.of();
+        }
+
+        if (this.isAncestor(versionMap, targetVersion.id(), headVersionId)) {
+            List<ProjectVersion> directVersions = new ArrayList<>();
+            ProjectVersion cursor = versionMap.get(headVersionId);
+            while (cursor != null && !cursor.id().equals(targetVersion.id())) {
+                directVersions.add(cursor);
+                cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
+                        ? null
+                        : versionMap.get(cursor.parentVersionId());
+            }
+            return cursor == null ? null : directVersions;
+        }
+
+        if (this.isAncestor(versionMap, headVersionId, targetVersion.id())) {
+            List<ProjectVersion> reversed = new ArrayList<>();
+            ProjectVersion cursor = targetVersion;
+            while (cursor != null && !cursor.id().equals(headVersionId)) {
+                reversed.add(cursor);
+                cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
+                        ? null
+                        : versionMap.get(cursor.parentVersionId());
+            }
+            if (cursor == null) {
+                return null;
+            }
+
+            List<ProjectVersion> directVersions = new ArrayList<>();
+            for (int index = reversed.size() - 1; index >= 0; index--) {
+                directVersions.add(reversed.get(index));
+            }
+            return directVersions;
+        }
+
+        return null;
     }
 
     private RestorePlan buildPlan(
@@ -596,6 +655,43 @@ public final class RestoreService {
         return batches;
     }
 
+    private List<ChunkPoint> touchedChunksForVersions(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        for (ProjectVersion version : versions) {
+            for (String patchId : version.patchIds()) {
+                PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
+                        .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
+                for (var chunk : metadata.chunks()) {
+                    chunks.putIfAbsent(chunk.chunkX() + ":" + chunk.chunkZ(), new ChunkPoint(chunk.chunkX(), chunk.chunkZ()));
+                }
+            }
+        }
+        return List.copyOf(chunks.values());
+    }
+
+    private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        for (ChunkPoint chunk : plan.baselineGaps()) {
+            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+        }
+        for (PatchMetadata metadata : plan.patchChain()) {
+            for (var chunk : metadata.chunks()) {
+                chunks.putIfAbsent(chunk.chunkX() + ":" + chunk.chunkZ(), new ChunkPoint(chunk.chunkX(), chunk.chunkZ()));
+            }
+        }
+        return List.copyOf(chunks.values());
+    }
+
+    private RestorePlanMode worldRootFallbackMode(ServerLevel level, io.github.luma.domain.model.BuildProject project) throws IOException {
+        WorldOriginInfo origin = this.worldOriginRepository.load(level.getServer()).orElse(null);
+        if (origin != null
+                && origin.createdWithLumi()
+                && !this.worldOriginRepository.matchesCurrentFingerprints(level.getServer(), project.dimensionId())) {
+            return RestorePlanMode.BLOCKED_FINGERPRINT;
+        }
+        return RestorePlanMode.BASELINE_CHUNKS;
+    }
+
     private boolean isAncestor(Map<String, ProjectVersion> versionMap, String ancestorVersionId, String descendantVersionId) {
         ProjectVersion cursor = versionMap.get(descendantVersionId);
         while (cursor != null) {
@@ -607,6 +703,14 @@ public final class RestoreService {
                     : versionMap.get(cursor.parentVersionId());
         }
         return false;
+    }
+
+    private Map<String, ProjectVersion> versionMap(List<ProjectVersion> versions) {
+        Map<String, ProjectVersion> versionMap = new HashMap<>();
+        for (ProjectVersion version : versions) {
+            versionMap.put(version.id(), version);
+        }
+        return versionMap;
     }
 
     private List<ProjectVariant> replaceVariantHead(List<ProjectVariant> variants, String targetVariantId, String targetVersionId) {

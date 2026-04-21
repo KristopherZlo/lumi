@@ -121,17 +121,18 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 
 1. UI calls `RestoreService.restore(...)`.
 2. The client requires explicit user confirmation before restoring an `INITIAL` or `WORLD_ROOT` version.
-3. Active capture is frozen and an optional safety checkpoint is written first.
-4. When the target lies on the current active variant lineage, `RestoreService` prefers a direct patch replay path, including restores to `WORLD_ROOT`:
+3. The confirmation UI shows a lightweight `RestorePlanSummary` with mode, branch, base version, target version, and affected chunk count before any world mutation starts.
+4. Active capture is frozen and an optional safety checkpoint is written first.
+5. When the target lies on the current active variant lineage, `RestoreService` prefers a direct patch replay path, including restores to `WORLD_ROOT`:
    reverse patch application for ancestor restores, forward patch application for descendant restores, plus rollback of any pending draft.
-5. If direct replay is not valid and the target is `WORLD_ROOT`, restore falls back to tracked baseline chunks for the current workspace.
-6. If direct replay is not valid for a normal version, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
-7. Baseline gaps are added only for the snapshot-based whole-dimension fallback path.
-8. Prepared placements are collapsed by final block position before tick-thread application.
-9. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
-10. Chunk commit order is fixed to section blocks -> block entities -> entity batch.
-11. Completion resets the active variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly.
-12. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
+6. If direct replay is not valid and the target is `WORLD_ROOT`, restore falls back to tracked baseline chunks for the current workspace. Generator regeneration remains blocked when the stored origin fingerprint does not match the current world.
+7. If direct replay is not valid for a normal version, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
+8. Baseline gaps are added only for the snapshot-based whole-dimension fallback path.
+9. Prepared placements are collapsed by final block position before tick-thread application.
+10. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
+11. Chunk commit order is fixed to section blocks -> block entities -> entity batch.
+12. Completion resets the active variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly.
+13. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
 
 Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never happen on the tick-thread apply path.
 

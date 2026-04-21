@@ -14,6 +14,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.MinecraftServer;
@@ -48,7 +49,7 @@ public final class WorldOriginRepository {
 
         WorldOptions options = server.getWorldData().worldGenOptions();
         for (ServerLevel level : server.getAllLevels()) {
-            dimensions.put(level.dimension().identifier().toString(), this.describeDimension(level, options.seed()));
+            dimensions.putIfAbsent(level.dimension().identifier().toString(), this.describeDimension(level, options.seed()));
         }
 
         var currentVersion = SharedConstants.getCurrentVersion();
@@ -59,13 +60,37 @@ public final class WorldOriginRepository {
                 currentVersion.dataVersion().version(),
                 options.seed(),
                 existing != null && existing.createdWithLumi(),
-                this.fingerprintDataPacks(server.getWorldData().getDataConfiguration().dataPacks()),
+                this.nonBlank(existing == null ? "" : existing.datapackFingerprint())
+                        ? existing.datapackFingerprint()
+                        : this.fingerprintDataPacks(server.getWorldData().getDataConfiguration().dataPacks()),
                 Map.copyOf(dimensions),
-                existing == null ? now : existing.createdAt(),
+                existing == null || existing.createdAt() == null ? now : existing.createdAt(),
                 now
         );
         this.save(server, info);
         return info;
+    }
+
+    public boolean matchesCurrentFingerprints(MinecraftServer server, String dimensionId) throws IOException {
+        WorldOriginInfo origin = this.load(server).orElse(null);
+        if (origin == null || !this.nonBlank(origin.datapackFingerprint())) {
+            return false;
+        }
+        String currentDataPacks = this.fingerprintDataPacks(server.getWorldData().getDataConfiguration().dataPacks());
+        if (!Objects.equals(origin.datapackFingerprint(), currentDataPacks)) {
+            return false;
+        }
+        WorldOriginInfo.DimensionOrigin storedDimension = origin.dimensions() == null ? null : origin.dimensions().get(dimensionId);
+        if (storedDimension == null || !this.nonBlank(storedDimension.generatorFingerprint())) {
+            return false;
+        }
+        for (ServerLevel level : server.getAllLevels()) {
+            if (!level.dimension().identifier().toString().equals(dimensionId)) {
+                continue;
+            }
+            return Objects.equals(storedDimension.generatorFingerprint(), this.describeDimension(level, origin.seed()).generatorFingerprint());
+        }
+        return false;
     }
 
     public void save(MinecraftServer server, WorldOriginInfo info) throws IOException {
@@ -121,6 +146,10 @@ public final class WorldOriginRepository {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
+    }
+
+    private boolean nonBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     private Path root(MinecraftServer server) {

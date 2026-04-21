@@ -4,6 +4,7 @@ import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.RestorePlanSummary;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.graph.CommitGraphLayout;
@@ -156,6 +157,11 @@ public final class ProjectScreen extends LumaScreen {
                     Component.translatable("luma.status.project_failed")
             ));
             return;
+        }
+
+        FlowLayout initialRestoreConfirmation = this.initialRestoreConfirmationSection();
+        if (initialRestoreConfirmation != null) {
+            frame.child(initialRestoreConfirmation);
         }
 
         frame.child(this.workspaceMainSection());
@@ -345,10 +351,6 @@ public final class ProjectScreen extends LumaScreen {
 
         FlowLayout primaryBody = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(Sizing.fill(62), Sizing.fill(100), primaryBody);
-        FlowLayout initialRestoreConfirmation = this.initialRestoreConfirmationSection();
-        if (initialRestoreConfirmation != null) {
-            primaryBody.child(initialRestoreConfirmation);
-        }
         primaryBody.child(this.pendingSection());
         if (this.state.operationSnapshot() != null) {
             primaryBody.child(this.operationSection());
@@ -803,6 +805,23 @@ public final class ProjectScreen extends LumaScreen {
                 variant.id(),
                 version.id()
         )));
+        RestorePlanSummary summary = this.controller.restorePlanSummary(this.projectName, version.id());
+        if (summary != null) {
+            section.child(LumaUi.caption(Component.translatable(
+                    "luma.restore.plan_mode",
+                    Component.translatable(this.restorePlanModeKey(summary.mode()))
+            )));
+            section.child(LumaUi.caption(Component.translatable(
+                    "luma.restore.plan_base",
+                    this.safeText(summary.branchId()),
+                    this.safeText(summary.baseVersionId()),
+                    this.safeText(summary.targetVersionId())
+            )));
+            section.child(LumaUi.caption(Component.translatable(
+                    "luma.restore.plan_chunks",
+                    summary.touchedChunks().size()
+            )));
+        }
 
         FlowLayout actions = LumaUi.actionRow();
         actions.child(UIComponents.button(Component.translatable("luma.action.cancel"), button -> {
@@ -849,6 +868,16 @@ public final class ProjectScreen extends LumaScreen {
     private boolean requiresInitialRestoreConfirmation(ProjectVersion version) {
         return version != null
                 && (version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT);
+    }
+
+    private String restorePlanModeKey(io.github.luma.domain.model.RestorePlanMode mode) {
+        return switch (mode) {
+            case PATCH_REPLAY -> "luma.restore.plan_mode.patch_replay";
+            case BASELINE_CHUNKS -> "luma.restore.plan_mode.baseline_chunks";
+            case REGEN_TOUCHED_CHUNKS -> "luma.restore.plan_mode.regen_touched_chunks";
+            case BLOCKED_FINGERPRINT -> "luma.restore.plan_mode.blocked_fingerprint";
+            case NO_OP -> "luma.restore.plan_mode.no_op";
+        };
     }
 
     private ProjectVariant variantFor(String variantId) {
