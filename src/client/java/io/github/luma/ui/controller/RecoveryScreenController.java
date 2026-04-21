@@ -1,7 +1,7 @@
 package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
-import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.RecoveryDraftSummary;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
@@ -17,13 +17,13 @@ public final class RecoveryScreenController {
     private final RecoveryService recoveryService = new RecoveryService();
     private final VersionService versionService = new VersionService();
 
-    public Optional<RecoveryDraft> loadDraft(String projectName) {
+    public Optional<RecoveryDraftSummary> loadSummary(String projectName) {
         if (!this.client.hasSingleplayerServer()) {
             return Optional.empty();
         }
 
         try {
-            return this.recoveryService.loadDraft(ClientProjectAccess.requireSingleplayerServer(this.client), projectName);
+            return this.recoveryService.summarizeDraft(ClientProjectAccess.requireSingleplayerServer(this.client), projectName);
         } catch (IOException exception) {
             return Optional.empty();
         }
