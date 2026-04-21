@@ -210,6 +210,7 @@ The current test suite is organized around:
 - project layout and storage path invariants
 - recovery draft isolation between live capture and save/amend operations
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
+- Fabric GameTest scaffolding for server and client smoke tests, with a production client GameTest task for headless CI
 
 When extending history or storage behavior, update both tests and documentation in the same change.
 

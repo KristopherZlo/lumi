@@ -50,6 +50,16 @@ loom {
     }
 }
 
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'lumi-gametest'
+        enableGameTests = true
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
 sourceSets {
     test {
         compileClasspath += sourceSets.client.output
@@ -139,6 +149,7 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
 
 def downloadPinnedTestClientMods = tasks.register('downloadPinnedTestClientMods') {
@@ -179,6 +190,12 @@ tasks.register('installTestClientMods', Sync) {
 
 tasks.named('runTestClient').configure {
     dependsOn(tasks.named('installTestClientMods'))
+}
+
+tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    jvmArgs.add('-Dfabric.client.gametest')
+    jvmArgs.add('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
+    useXVFB = true
 }
 
 def targetJavaVersion = 21

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "lumi-gametest",
+  "version": "1.0.0",
+  "name": "Lumi Game Tests",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "io.github.luma.gametest.LumiGameTests"
+    ],
+    "fabric-client-gametest": [
+      "io.github.luma.gametest.LumiClientGameTests"
+    ]
+  },
+  "depends": {
+    "fabric-gametest-api-v1": "*",
+    "fabric-client-gametest-api-v1": "*",
+    "lumi": "*"
+  }
+}
