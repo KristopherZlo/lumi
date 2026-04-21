@@ -57,6 +57,8 @@
   "luma.action.hide_branch_creator": "Скрыть форму ветки",
   "luma.action.show_diagnostics": "Показать диагностику",
   "luma.action.hide_diagnostics": "Скрыть диагностику",
+  "luma.action.cancel": "Отмена",
+  "luma.action.confirm_initial_restore": "Откатить Initial",
 
   "luma.tab.history": "История",
   "luma.tab.variants": "Ветки",
@@ -147,6 +149,10 @@
   "luma.project.integrations_help": "Сводка доступности и возможностей поддерживаемых внешних инструментов.",
   "luma.project.log_title": "Журнал recovery",
   "luma.project.log_help": "Последние события восстановления и отката для этого workspace.",
+  "luma.restore.initial_confirm_title": "Откатить Initial: %s",
+  "luma.restore.initial_confirm_help": "Это передвинет head активной ветки на начальную версию и запустит откат.",
+  "luma.restore.initial_confirm_warning": "Внимание: это может удалить отслеженные изменения в затронутых чанках. Если позже будет включён быстрый regen, содержимое чанков может быть заменено генератором мира.",
+  "luma.restore.initial_confirm_target": "Целевая ветка: %s | версия: %s",
 
   "luma.history.message_input": "Сообщение",
   "luma.history.message_required": "Сообщение (обязательно)",
@@ -325,6 +331,7 @@
   "luma.status.version_saved": "Версия сохранена.",
   "luma.status.version_restored": "Версия восстановлена.",
   "luma.status.restore_started": "Откат запущен. Lumi применяет блоки в фоне.",
+  "luma.status.initial_restore_confirmation_required": "Подтверди откат к Initial перед тем, как Lumi изменит мир.",
   "luma.status.variant_created": "Ветка создана.",
   "luma.status.variant_switched": "Ветка переключена.",
   "luma.status.preview_refreshed": "Превью обновлено.",
