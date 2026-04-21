@@ -72,12 +72,12 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.ENTITY));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXPLOSION));
-        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FLUID));
+        assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FLUID));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FIRE));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.BLOCK_UPDATE));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.PISTON));
-        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK));
+        assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.MOB));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXPLOSIVE));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXTERNAL_TOOL));

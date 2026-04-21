@@ -27,7 +27,7 @@ Important model groups:
 - history payloads: `StoredBlockChange`, `StatePayload`, `PatchMetadata`, `SnapshotData`, `RecoveryDraft`
 - user-visible summaries: `ChangeStats`, `PendingChangeSummary`, `VersionDiff`, `MaterialDeltaEntry`
 - operation state: `OperationHandle`, `OperationProgress`, `OperationSnapshot`, `OperationStage`, `WorkspaceHudSnapshot`
-- mutable capture runtime: `TrackedChangeBuffer`
+- mutable capture runtime: `TrackedChangeBuffer`, `CaptureSessionState`
 
 ### Domain service layer
 
@@ -55,7 +55,8 @@ These services should express product rules, not raw Minecraft side effects or r
 
 Important adapters:
 
-- `HistoryCaptureManager`: captures tracked player actions, explosives, explosions, falling blocks, fluids, fire, growth, piston movement, and selected block-changing mob mutations into per-project buffers
+- `HistoryCaptureManager`: captures explicit tracked actions immediately, keeps per-project causal envelopes, and drains dirty-chunk stabilization before drafts are persisted or consumed
+- `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff for dirty envelope chunks
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime
@@ -96,9 +97,11 @@ Responsibilities are split as follows:
 1. A Minecraft mixin intercepts a block mutation.
 2. `WorldMutationContext` accepts only explicit player, explosive, explosion, falling-block, selected mob, and other targeted mutation scopes.
 3. `HistoryCaptureManager` finds matching projects for the block position.
-4. Whole-dimension workspaces capture baseline chunks on first touch.
-5. A per-project `TrackedChangeBuffer` merges the change by packed block position.
-6. Idle or dirty sessions are flushed into recovery storage.
+4. Explicit root mutations capture a session-local baseline for the touched chunk plus a one-chunk halo.
+5. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position.
+6. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
+7. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft.
+8. Idle or dirty sessions are flushed into recovery storage.
 
 Important invariants:
 
@@ -146,7 +149,7 @@ Recovery is designed to survive crash-like exits without rewriting one large dra
 
 Current strategy:
 
-- active sessions live in memory as `TrackedChangeBuffer`
+- active sessions live in memory as `CaptureSessionState`, which owns the mutable `TrackedChangeBuffer`, chunk envelope, session-start chunk baselines, and pending stabilization state
 - periodic flushes append to `recovery/draft.wal.lz4`
 - compaction rewrites the latest state into `recovery/draft.bin.lz4`
 - in-progress save/amend drafts move to `recovery/operation-draft.bin.lz4` so new edits can start a separate live draft
@@ -193,6 +196,7 @@ The mod is expected to log the following at minimum:
 - operation start, rejection, progress, completion, and failure
 - world-origin bootstrap and root-history initialization
 - capture buffer lifecycle changes
+- dirty-chunk stabilization summaries before draft persistence
 - restore plan summaries
 - recovery compaction and draft deletion
 - UI-triggered service failures that map to generic status text

@@ -73,10 +73,11 @@ Use Lumi if you want to:
 1. A mixin catches a block change.
 2. `HistoryCaptureManager` finds matching projects.
 3. Explicit builder-driven sources can bootstrap a dimension project on demand, but ambient world-settling sources do not.
-4. Secondary sources such as falling blocks, fluids, fire, growth, mob griefing, and block updates only append while a capture session is already active and near that session's current chunk footprint.
-5. Accepted secondary effects can extend the tracked chunk set locally, but they do not attach unrelated far-away world settling to the same draft.
-6. `TrackedChangeBuffer` merges the change.
-7. Recovery draft data flushes on an interval.
+4. Whole-dimension sessions now keep a causal chunk envelope rooted in explicit builder edits. The first root chunk captures a one-chunk halo baseline for later stabilization.
+5. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
+6. `TrackedChangeBuffer` still merges explicit and targeted realtime changes immediately.
+7. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks against the current world and stores the final stabilized diff.
+8. Recovery draft data flushes on an interval.
 
 ### Save
 

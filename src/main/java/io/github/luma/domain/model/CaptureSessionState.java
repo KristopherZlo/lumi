@@ -1,9 +1,12 @@
 package io.github.luma.domain.model;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -19,6 +22,8 @@ public final class CaptureSessionState {
     public static final int STABILIZATION_HALO_RADIUS = 1;
 
     private final TrackedChangeBuffer buffer;
+    private final LinkedHashMap<ChunkPoint, List<StoredBlockChange>> startingChunkChanges;
+    private final LinkedHashMap<ChunkPoint, Map<BlockPoint, StatePayload>> baselineChunkStates = new LinkedHashMap<>();
     private final LinkedHashSet<ChunkPoint> rootChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> dirtyChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> pendingReconcileChunks = new LinkedHashSet<>();
@@ -27,6 +32,7 @@ public final class CaptureSessionState {
 
     private CaptureSessionState(TrackedChangeBuffer buffer) {
         this.buffer = buffer;
+        this.startingChunkChanges = groupStartingChanges(buffer.orderedChanges());
     }
 
     public static CaptureSessionState create(TrackedChangeBuffer buffer) {
@@ -64,6 +70,15 @@ public final class CaptureSessionState {
             changed |= this.pendingReconcileChunks.add(envelopeChunk);
         }
         return changed;
+    }
+
+    public boolean markEnvelopeChunkDirty(ChunkPoint chunk) {
+        if (chunk == null) {
+            return false;
+        }
+        boolean dirtyChanged = this.dirtyChunks.add(chunk);
+        boolean pendingChanged = this.pendingReconcileChunks.add(chunk);
+        return dirtyChanged || pendingChanged;
     }
 
     public boolean isWithinStabilizationEnvelope(ChunkPoint chunk) {
@@ -117,8 +132,52 @@ public final class CaptureSessionState {
         this.dirtyChunks.removeAll(reconciledChunks);
     }
 
+    public void requeuePendingChunks(Collection<ChunkPoint> chunks) {
+        this.reconciliationInFlight = false;
+        if (chunks == null) {
+            return;
+        }
+        for (ChunkPoint chunk : chunks) {
+            if (chunk == null) {
+                continue;
+            }
+            this.dirtyChunks.add(chunk);
+            this.pendingReconcileChunks.add(chunk);
+        }
+    }
+
     public void replaceChunkChanges(Collection<ChunkPoint> chunks, Collection<StoredBlockChange> replacements, Instant now) {
         this.buffer.replaceChunks(chunks, replacements, now);
+    }
+
+    public void captureBaselineChunk(ChunkPoint chunk, Map<BlockPoint, StatePayload> states) {
+        if (chunk == null || states == null || this.baselineChunkStates.containsKey(chunk)) {
+            return;
+        }
+        this.baselineChunkStates.put(chunk, Map.copyOf(states));
+    }
+
+    public boolean hasBaselineChunk(ChunkPoint chunk) {
+        return chunk != null && this.baselineChunkStates.containsKey(chunk);
+    }
+
+    public Map<BlockPoint, StatePayload> baselineChunkState(ChunkPoint chunk) {
+        Map<BlockPoint, StatePayload> states = this.baselineChunkStates.get(chunk);
+        return states == null ? Map.of() : states;
+    }
+
+    public List<StoredBlockChange> startingChunkChanges(Collection<ChunkPoint> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return List.of();
+        }
+        List<StoredBlockChange> changes = new ArrayList<>();
+        for (ChunkPoint chunk : chunks) {
+            if (chunk == null) {
+                continue;
+            }
+            changes.addAll(this.startingChunkChanges.getOrDefault(chunk, List.of()));
+        }
+        return List.copyOf(changes);
     }
 
     public boolean trackFallingEntity(UUID entityId) {
@@ -141,5 +200,14 @@ public final class CaptureSessionState {
             }
         }
         return chunks;
+    }
+
+    private static LinkedHashMap<ChunkPoint, List<StoredBlockChange>> groupStartingChanges(List<StoredBlockChange> changes) {
+        LinkedHashMap<ChunkPoint, List<StoredBlockChange>> grouped = new LinkedHashMap<>();
+        for (StoredBlockChange change : changes) {
+            ChunkPoint chunk = ChunkPoint.from(change.pos());
+            grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>()).add(change);
+        }
+        return grouped;
     }
 }

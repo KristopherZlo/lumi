@@ -41,10 +41,10 @@ On narrower screens the project menu switches to a single scroll column, so hist
 Tracked history includes:
 
 - player block edits
-- supported falling-block edits
+- supported falling-block outcomes inside an active causal envelope
 - supported mob edits
 - TNT ignition
-- fluid spread
+- fluid fallout inside an active causal envelope
 - fire spread and burn-out
 - crop, sapling, and stem growth
 - piston movement
@@ -52,7 +52,8 @@ Tracked history includes:
 
 Lumi does not record its own restore apply pass as normal history.
 Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
-Secondary effects such as falling gravel, fire spread, fluid spread, piston aftermath, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay near the chunks already touched by that same active session.
+Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi captures a one-chunk halo baseline around the root chunk, then reconciles later fallout such as falling gravel and fluid spread against the current world before the draft is flushed, saved, or frozen.
+Secondary effects such as falling gravel, fire spread, fluid spread, piston aftermath, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay inside that same causal envelope.
 
 For automatic dimension projects, the first node is `Initial`.
 
