@@ -72,8 +72,10 @@ Use Lumi if you want to:
 
 1. A mixin catches a block change.
 2. `HistoryCaptureManager` finds matching projects.
-3. `TrackedChangeBuffer` merges the change.
-4. Recovery draft data flushes on an interval.
+3. Explicit builder-driven sources can bootstrap a dimension project on demand, but ambient world-settling sources do not.
+4. Ambient sources such as fluid, fire, growth, mob griefing, and block updates only record inside chunks that the project has already tracked.
+5. `TrackedChangeBuffer` merges the change.
+6. Recovery draft data flushes on an interval.
 
 ### Save
 
