@@ -85,6 +85,8 @@ Current UX assumptions:
 - the dashboard is now secondary navigation from the workspace header
 - the workspace screen is source-control-first: commit composer, commit graph, details/actions
 - version actions such as restore, compare, and branch checkout live in the detail pane, not on graph nodes
+- narrow screens use one scroll column instead of the two-pane workspace layout
+- repeated rows are unframed inside section cards to avoid card-in-card clipping and wasted padding
 
 ## History architecture
 

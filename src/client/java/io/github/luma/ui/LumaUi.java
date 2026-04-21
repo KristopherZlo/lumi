@@ -105,14 +105,16 @@ public final class LumaUi {
     }
 
     public static FlowLayout insetSection(Component title, Component subtitle) {
-        FlowLayout card = insetPanel(Sizing.fill(100), Sizing.content());
+        FlowLayout section = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        section.padding(Insets.of(4));
+        section.gap(4);
         if (title != null) {
-            card.child(value(title));
+            section.child(value(title));
         }
         if (subtitle != null) {
-            card.child(caption(subtitle));
+            section.child(caption(subtitle));
         }
-        return card;
+        return section;
     }
 
     public static FlowLayout formField(
@@ -173,10 +175,10 @@ public final class LumaUi {
     }
 
     private static LabelComponent compactValue(Component text) {
-        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(true);
+        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(true).maxWidth(180);
     }
 
     private static LabelComponent compactCaption(Component text) {
-        return UIComponents.label(text).color(TEXT_MUTED).shadow(false);
+        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(180);
     }
 }
