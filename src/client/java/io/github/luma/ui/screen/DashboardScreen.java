@@ -77,8 +77,7 @@ public final class DashboardScreen extends LumaScreen {
         header.child(UIComponents.button(Component.translatable("luma.action.refresh"), button -> this.refresh("luma.status.dashboard_ready")));
         frame.child(header);
 
-        FlowLayout titleRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        titleRow.gap(8);
+        FlowLayout titleRow = LumaUi.actionRow();
         titleRow.child(LumaUi.value(Component.translatable("luma.screen.dashboard.title")));
         titleRow.child(LumaUi.chip(Component.translatable("luma.dashboard.current_dimension", this.currentDimensionLabel())));
         frame.child(titleRow);
@@ -118,8 +117,7 @@ public final class DashboardScreen extends LumaScreen {
                 Component.translatable("luma.dashboard.workspace_help")
         );
 
-        FlowLayout top = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        top.gap(8);
+        FlowLayout top = LumaUi.actionRow();
         top.child(LumaUi.value(Component.literal(item.name())));
         top.child(LumaUi.chip(Component.translatable("luma.dashboard.workspace_dimension", this.dimensionLabel(item.dimensionId()))));
         top.child(LumaUi.chip(Component.translatable("luma.dashboard.active_branch", item.activeVariantId())));

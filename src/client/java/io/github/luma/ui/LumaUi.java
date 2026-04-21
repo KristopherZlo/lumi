@@ -16,6 +16,8 @@ public final class LumaUi {
     public static final Color TEXT_MUTED = Color.ofRgb(0x98A6B3);
     public static final Color TEXT_ACCENT = Color.ofRgb(0x71D1FF);
     public static final Color TEXT_DANGER = Color.ofRgb(0xFF8585);
+    private static final int VALUE_WRAP_WIDTH = 420;
+    private static final int BODY_WRAP_WIDTH = 360;
 
     private LumaUi() {
     }
@@ -72,7 +74,7 @@ public final class LumaUi {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         chip.surface(Surface.PANEL_INSET);
         chip.padding(Insets.of(4));
-        chip.child(caption(text));
+        chip.child(compactCaption(text));
         return chip;
     }
 
@@ -139,34 +141,42 @@ public final class LumaUi {
         chip.surface(Surface.PANEL_INSET);
         chip.padding(Insets.of(4));
         chip.gap(4);
-        chip.child(value(value));
-        chip.child(caption(label));
+        chip.child(compactValue(value));
+        chip.child(compactCaption(label));
         return chip;
     }
 
     public static FlowLayout actionRow() {
-        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        FlowLayout row = UIContainers.ltrTextFlow(Sizing.fill(100), Sizing.content());
         row.gap(6);
         return row;
     }
 
     public static LabelComponent title(Component text) {
-        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(false);
+        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(false).maxWidth(VALUE_WRAP_WIDTH);
     }
 
     public static LabelComponent value(Component text) {
-        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(true);
+        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(true).maxWidth(VALUE_WRAP_WIDTH);
     }
 
     public static LabelComponent accent(Component text) {
-        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false);
+        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false).maxWidth(BODY_WRAP_WIDTH);
     }
 
     public static LabelComponent danger(Component text) {
-        return UIComponents.label(text).color(TEXT_DANGER).shadow(false);
+        return UIComponents.label(text).color(TEXT_DANGER).shadow(false).maxWidth(BODY_WRAP_WIDTH);
     }
 
     public static LabelComponent caption(Component text) {
+        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(BODY_WRAP_WIDTH);
+    }
+
+    private static LabelComponent compactValue(Component text) {
+        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(true);
+    }
+
+    private static LabelComponent compactCaption(Component text) {
         return UIComponents.label(text).color(TEXT_MUTED).shadow(false);
     }
 }

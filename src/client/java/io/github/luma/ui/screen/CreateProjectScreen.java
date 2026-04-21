@@ -1,5 +1,6 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.CreateProjectScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -52,15 +53,14 @@ public final class CreateProjectScreen extends LumaScreen {
         root.padding(Insets.of(10));
         root.gap(8);
 
-        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        header.gap(6);
+        FlowLayout header = LumaUi.actionRow();
         header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
         root.child(header);
 
-        root.child(UIComponents.label(Component.translatable("luma.screen.create_project.title")).shadow(true));
-        root.child(UIComponents.label(Component.translatable(this.status)));
+        root.child(LumaUi.value(Component.translatable("luma.screen.create_project.title")));
+        root.child(LumaUi.caption(Component.translatable(this.status)));
 
-        root.child(UIComponents.label(Component.translatable("luma.create_project.name")));
+        root.child(LumaUi.caption(Component.translatable("luma.create_project.name")));
         var nameBox = UIComponents.textBox(Sizing.fill(100), this.name);
         nameBox.onChanged().subscribe(value -> this.name = value);
         root.child(nameBox);
@@ -98,9 +98,8 @@ public final class CreateProjectScreen extends LumaScreen {
             java.util.function.Consumer<String> onY,
             java.util.function.Consumer<String> onZ
     ) {
-        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        row.gap(6);
-        row.child(UIComponents.label(Component.translatable(labelKey)));
+        FlowLayout row = LumaUi.actionRow();
+        row.child(LumaUi.caption(Component.translatable(labelKey)));
 
         var xBox = UIComponents.textBox(Sizing.fixed(60), x);
         xBox.onChanged().subscribe(onX::accept);

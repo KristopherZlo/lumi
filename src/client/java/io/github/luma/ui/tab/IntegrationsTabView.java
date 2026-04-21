@@ -1,7 +1,7 @@
 package io.github.luma.ui.tab;
 
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.state.ProjectViewState;
-import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
@@ -16,24 +16,24 @@ public final class IntegrationsTabView {
         FlowLayout container = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
         container.gap(6);
 
-        container.child(UIComponents.label(Component.translatable(
+        container.child(LumaUi.caption(Component.translatable(
                 state.integrityReport().valid() ? "luma.integrity.valid" : "luma.integrity.invalid"
         )));
 
         for (var error : state.integrityReport().errors()) {
-            container.child(UIComponents.label(Component.translatable("luma.integrity.error", error)));
+            container.child(LumaUi.danger(Component.translatable("luma.integrity.error", error)));
         }
         for (var warning : state.integrityReport().warnings()) {
-            container.child(UIComponents.label(Component.translatable("luma.integrity.warning", warning)));
+            container.child(LumaUi.caption(Component.translatable("luma.integrity.warning", warning)));
         }
 
         if (state.integrations().isEmpty()) {
-            container.child(UIComponents.label(Component.translatable("luma.integrations.empty")));
+            container.child(LumaUi.caption(Component.translatable("luma.integrations.empty")));
             return container;
         }
 
         for (var integration : state.integrations()) {
-            container.child(UIComponents.label(Component.translatable(
+            container.child(LumaUi.caption(Component.translatable(
                     "luma.integrations.entry",
                     integration.toolId(),
                     integration.available() ? Component.translatable("luma.common.available") : Component.translatable("luma.common.unavailable"),

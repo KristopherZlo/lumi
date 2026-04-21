@@ -32,9 +32,8 @@ public final class HistoryTabView {
         FlowLayout toolbar = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
         toolbar.child(LumaUi.caption(Component.translatable("luma.history.quick_save_hint")));
 
-        FlowLayout toolbarRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        toolbarRow.gap(6);
-        toolbarRow.child(UIComponents.label(Component.translatable("luma.history.message_input")));
+        FlowLayout toolbarRow = LumaUi.actionRow();
+        toolbarRow.child(LumaUi.caption(Component.translatable("luma.history.message_input")));
         var messageInput = UIComponents.textBox(Sizing.fill(70), saveMessageSupplier.get());
         messageInput.onChanged().subscribe(onSaveMessageChanged::accept);
         toolbarRow.child(messageInput);
@@ -53,8 +52,7 @@ public final class HistoryTabView {
             FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
             card.gap(4);
 
-            FlowLayout top = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-            top.gap(6);
+            FlowLayout top = LumaUi.actionRow();
             top.child(LumaUi.value(Component.literal(version.id())));
             top.child(LumaUi.chip(Component.translatable(versionKindKey(version.versionKind()))));
             if (state.selectedVersion() != null && version.id().equals(state.selectedVersion().id())) {
@@ -74,8 +72,7 @@ public final class HistoryTabView {
                     version.author(),
                     version.createdAt().toString()
             )));
-            FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-            actions.gap(6);
+            FlowLayout actions = LumaUi.actionRow();
             actions.child(UIComponents.button(Component.translatable("luma.action.select"), button -> onVersionSelected.accept(version.id())));
             actions.child(UIComponents.button(Component.translatable("luma.action.compare"), button -> onCompareRequested.accept(version.id())));
             actions.child(UIComponents.button(Component.translatable("luma.action.restore"), button -> {

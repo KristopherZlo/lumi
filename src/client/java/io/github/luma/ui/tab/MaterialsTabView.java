@@ -1,8 +1,8 @@
 package io.github.luma.ui.tab;
 
 import io.github.luma.ui.MaterialEntryView;
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.state.ProjectViewState;
-import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
@@ -20,12 +20,12 @@ public final class MaterialsTabView {
         container.gap(6);
 
         if (state.selectedVersion() == null) {
-            container.child(UIComponents.label(Component.translatable("luma.materials.no_version")));
+            container.child(LumaUi.caption(Component.translatable("luma.materials.no_version")));
             return container;
         }
 
         if (state.materialDelta().isEmpty()) {
-            container.child(UIComponents.label(Component.translatable("luma.materials.empty")));
+            container.child(LumaUi.caption(Component.translatable("luma.materials.empty")));
             return container;
         }
 
@@ -48,7 +48,7 @@ public final class MaterialsTabView {
         }
 
         if (state.materialDelta().size() > MATERIAL_LIMIT) {
-            container.child(UIComponents.label(Component.translatable(
+            container.child(LumaUi.caption(Component.translatable(
                     "luma.materials.more",
                     state.materialDelta().size() - MATERIAL_LIMIT
             )));

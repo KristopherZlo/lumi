@@ -1,8 +1,8 @@
 package io.github.luma.ui.tab;
 
 import io.github.luma.domain.model.ChangeType;
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.state.ProjectViewState;
-import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
@@ -20,16 +20,16 @@ public final class ChangesTabView {
         container.gap(6);
 
         if (state.selectedVersion() == null) {
-            container.child(UIComponents.label(Component.translatable("luma.changes.no_version")));
+            container.child(LumaUi.caption(Component.translatable("luma.changes.no_version")));
             return container;
         }
 
         if (state.selectedVersionDiff() == null) {
-            container.child(UIComponents.label(Component.translatable("luma.changes.no_parent")));
+            container.child(LumaUi.caption(Component.translatable("luma.changes.no_parent")));
             return container;
         }
 
-        container.child(UIComponents.label(Component.translatable(
+        container.child(LumaUi.value(Component.translatable(
                 "luma.changes.summary",
                 state.selectedVersion().id(),
                 state.selectedVersionDiff().changedBlockCount(),
@@ -37,7 +37,7 @@ public final class ChangesTabView {
         )));
 
         if (state.selectedVersionDiff().changedBlocks().isEmpty()) {
-            container.child(UIComponents.label(Component.translatable("luma.changes.empty")));
+            container.child(LumaUi.caption(Component.translatable("luma.changes.empty")));
             return container;
         }
 
@@ -49,7 +49,7 @@ public final class ChangesTabView {
 
             String leftState = entry.leftState() == null || entry.leftState().isBlank() ? "-" : entry.leftState();
             String rightState = entry.rightState() == null || entry.rightState().isBlank() ? "-" : entry.rightState();
-            container.child(UIComponents.label(Component.translatable(
+            container.child(LumaUi.caption(Component.translatable(
                     "luma.changes.entry",
                     Component.translatable(changeTypeKey(entry.changeType())),
                     entry.pos().x(),
@@ -61,7 +61,7 @@ public final class ChangesTabView {
         }
 
         if (state.selectedVersionDiff().changedBlocks().size() > SAMPLE_LIMIT) {
-            container.child(UIComponents.label(Component.translatable(
+            container.child(LumaUi.caption(Component.translatable(
                     "luma.changes.more",
                     state.selectedVersionDiff().changedBlocks().size() - SAMPLE_LIMIT
             )));
