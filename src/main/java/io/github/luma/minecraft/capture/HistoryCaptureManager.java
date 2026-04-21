@@ -17,14 +17,17 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -41,6 +44,8 @@ public final class HistoryCaptureManager {
 
     private static final HistoryCaptureManager INSTANCE = new HistoryCaptureManager();
     private static final Duration ACTIVE_DRAFT_FLUSH_INTERVAL = Duration.ofSeconds(3);
+    private static final int STARTUP_CAPTURE_TRACE_LIMIT = 32;
+    private static final int CAPTURE_SUMMARY_ENTRY_LIMIT = 4;
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -48,6 +53,7 @@ public final class HistoryCaptureManager {
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final Map<String, TrackedChangeBuffer> activeBuffers = new HashMap<>();
+    private final Map<String, CaptureSessionDiagnostics> sessionDiagnostics = new HashMap<>();
     private final Map<String, CachedProjects> projectCaches = new HashMap<>();
     private final Map<String, Instant> lastDraftFlushes = new HashMap<>();
     private final Set<String> dirtySessions = new HashSet<>();
@@ -131,7 +137,12 @@ public final class HistoryCaptureManager {
                     continue;
                 }
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
+                int pendingBefore = buffer.size();
                 buffer.recordChange(pos, oldState, newState, oldBlockEntity, newBlockEntity, now);
+                int pendingAfter = buffer.size();
+                CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
+                diagnostics.record(source, pos, oldState, newState, oldBlockEntity != null, newBlockEntity != null);
+                this.logAcceptedCaptureTrace(trackedProject.project(), buffer, diagnostics, pendingBefore, pendingAfter);
                 LumaDebugLog.log(
                         trackedProject.project(),
                         "capture",
@@ -142,11 +153,12 @@ public final class HistoryCaptureManager {
                         buffer.variantId(),
                         buffer.baseVersionId()
                 );
-                this.logBufferProgress(trackedProject.project(), buffer);
+                this.logBufferProgress(trackedProject.project(), buffer, diagnostics);
                 if (buffer.isEmpty()) {
                     this.activeBuffers.remove(projectId);
                     this.dirtySessions.remove(projectId);
                     this.lastDraftFlushes.remove(projectId);
+                    this.clearSessionDiagnostics(projectId);
                     this.recoveryRepository.deleteDraft(trackedProject.layout());
                     LumaMod.LOGGER.info("Discarded empty active buffer for project {}", trackedProject.project().name());
                 } else {
@@ -187,6 +199,7 @@ public final class HistoryCaptureManager {
         TrackedChangeBuffer session = this.activeBuffers.remove(projectId);
         this.dirtySessions.remove(projectId);
         this.lastDraftFlushes.remove(projectId);
+        this.clearSessionDiagnostics(projectId);
         if (session == null) {
             TrackedProject trackedProject = this.findTrackedProject(server, projectId);
             if (trackedProject == null) {
@@ -233,6 +246,7 @@ public final class HistoryCaptureManager {
         TrackedChangeBuffer session = this.activeBuffers.remove(projectId);
         this.dirtySessions.remove(projectId);
         this.lastDraftFlushes.remove(projectId);
+        this.clearSessionDiagnostics(projectId);
         if (session != null) {
             LumaMod.LOGGER.info("Consumed in-memory buffer for project {} with {} pending changes", projectId, session.size());
             TrackedProject trackedProject = this.findTrackedProject(server, projectId);
@@ -268,6 +282,7 @@ public final class HistoryCaptureManager {
         this.activeBuffers.remove(projectId);
         this.dirtySessions.remove(projectId);
         this.lastDraftFlushes.remove(projectId);
+        this.clearSessionDiagnostics(projectId);
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         if (trackedProject != null) {
             this.recoveryRepository.deleteDraft(trackedProject.layout());
@@ -406,11 +421,13 @@ public final class HistoryCaptureManager {
                 ));
 
         this.activeBuffers.put(projectId, buffer);
+        this.sessionDiagnostics.putIfAbsent(projectId, new CaptureSessionDiagnostics());
         LumaMod.LOGGER.info(
-                "Opened active buffer for project {} on variant {} from base {}",
+                "Opened active buffer for project {} on variant {} from base {} using {} source",
                 trackedProject.project().name(),
                 activeVariant.id(),
-                activeVariant.headVersionId()
+                activeVariant.headVersionId(),
+                source
         );
         LumaDebugLog.log(
                 trackedProject.project(),
@@ -585,15 +602,79 @@ public final class HistoryCaptureManager {
         return server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().toString();
     }
 
-    private void logBufferProgress(BuildProject project, TrackedChangeBuffer buffer) {
+    private CaptureSessionDiagnostics diagnosticsForSession(String projectId) {
+        return this.sessionDiagnostics.computeIfAbsent(projectId, ignored -> new CaptureSessionDiagnostics());
+    }
+
+    private void clearSessionDiagnostics(String projectId) {
+        this.sessionDiagnostics.remove(projectId);
+    }
+
+    private void logAcceptedCaptureTrace(
+            BuildProject project,
+            TrackedChangeBuffer buffer,
+            CaptureSessionDiagnostics diagnostics,
+            int pendingBefore,
+            int pendingAfter
+    ) {
+        int accepted = diagnostics.acceptedMutations();
+        if (accepted <= STARTUP_CAPTURE_TRACE_LIMIT) {
+            LumaMod.LOGGER.info(
+                    "Capture trace {}/{} for project {}: source={} sessionSource={} pos={} chunk={}:{} {} -> {} oldBe={} newBe={} pending={} delta={}",
+                    accepted,
+                    STARTUP_CAPTURE_TRACE_LIMIT,
+                    project.name(),
+                    diagnostics.lastSource(),
+                    buffer.mutationSource(),
+                    this.formatPos(diagnostics.lastPos()),
+                    diagnostics.lastChunk().x(),
+                    diagnostics.lastChunk().z(),
+                    diagnostics.lastOldBlockId(),
+                    diagnostics.lastNewBlockId(),
+                    diagnostics.lastOldBlockEntity(),
+                    diagnostics.lastNewBlockEntity(),
+                    pendingAfter,
+                    pendingAfter - pendingBefore
+            );
+            if (accepted == STARTUP_CAPTURE_TRACE_LIMIT) {
+                LumaMod.LOGGER.info(
+                        "Capture trace limit reached for project {}. Further accepted mutations in this session will be summarized only at progress checkpoints.",
+                        project.name()
+                );
+            }
+        }
+    }
+
+    private void logBufferProgress(BuildProject project, TrackedChangeBuffer buffer, CaptureSessionDiagnostics diagnostics) {
         int size = buffer.size();
         if (size == 1 || size == 64 || size == 256 || (size % 1024) == 0) {
             LumaMod.LOGGER.info(
-                    "Captured {} pending changes for project {}",
+                    "Captured {} pending changes for project {} (accepted={} sources=[{}] transitions=[{}] last={} source={} chunk={}:{})",
                     size,
-                    project.name()
+                    project.name(),
+                    diagnostics.acceptedMutations(),
+                    diagnostics.describeTopSources(CAPTURE_SUMMARY_ENTRY_LIMIT),
+                    diagnostics.describeTopTransitions(CAPTURE_SUMMARY_ENTRY_LIMIT),
+                    this.formatPos(diagnostics.lastPos()),
+                    diagnostics.lastSource(),
+                    diagnostics.lastChunk().x(),
+                    diagnostics.lastChunk().z()
             );
         }
+    }
+
+    private String formatPos(BlockPos pos) {
+        if (pos == null) {
+            return "unknown";
+        }
+        return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
+    private static String blockId(BlockState state) {
+        if (state == null) {
+            return "minecraft:air";
+        }
+        return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
     }
 
     public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
@@ -708,5 +789,94 @@ public final class HistoryCaptureManager {
     }
 
     private record CachedProjects(Instant loadedAt, List<TrackedProject> projects) {
+    }
+
+    private static final class CaptureSessionDiagnostics {
+
+        private int acceptedMutations;
+        private final Map<String, Integer> sourceCounts = new LinkedHashMap<>();
+        private final Map<String, Integer> transitionCounts = new LinkedHashMap<>();
+        private BlockPos lastPos;
+        private ChunkPoint lastChunk = new ChunkPoint(0, 0);
+        private String lastSource = "unknown";
+        private String lastOldBlockId = "minecraft:air";
+        private String lastNewBlockId = "minecraft:air";
+        private boolean lastOldBlockEntity;
+        private boolean lastNewBlockEntity;
+
+        private void record(
+                io.github.luma.domain.model.WorldMutationSource source,
+                BlockPos pos,
+                BlockState oldState,
+                BlockState newState,
+                boolean oldBlockEntity,
+                boolean newBlockEntity
+        ) {
+            this.acceptedMutations += 1;
+            String sourceKey = source == null ? "unknown" : source.name();
+            String transitionKey = blockId(oldState) + " -> " + blockId(newState);
+            this.sourceCounts.merge(sourceKey, 1, Integer::sum);
+            this.transitionCounts.merge(transitionKey, 1, Integer::sum);
+            this.lastPos = pos == null ? null : pos.immutable();
+            this.lastChunk = pos == null ? new ChunkPoint(0, 0) : new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
+            this.lastSource = sourceKey;
+            this.lastOldBlockId = blockId(oldState);
+            this.lastNewBlockId = blockId(newState);
+            this.lastOldBlockEntity = oldBlockEntity;
+            this.lastNewBlockEntity = newBlockEntity;
+        }
+
+        private int acceptedMutations() {
+            return this.acceptedMutations;
+        }
+
+        private String lastSource() {
+            return this.lastSource;
+        }
+
+        private BlockPos lastPos() {
+            return this.lastPos;
+        }
+
+        private ChunkPoint lastChunk() {
+            return this.lastChunk;
+        }
+
+        private String lastOldBlockId() {
+            return this.lastOldBlockId;
+        }
+
+        private String lastNewBlockId() {
+            return this.lastNewBlockId;
+        }
+
+        private boolean lastOldBlockEntity() {
+            return this.lastOldBlockEntity;
+        }
+
+        private boolean lastNewBlockEntity() {
+            return this.lastNewBlockEntity;
+        }
+
+        private String describeTopSources(int limit) {
+            return this.describeTopCounts(this.sourceCounts, limit);
+        }
+
+        private String describeTopTransitions(int limit) {
+            return this.describeTopCounts(this.transitionCounts, limit);
+        }
+
+        private String describeTopCounts(Map<String, Integer> counts, int limit) {
+            if (counts.isEmpty()) {
+                return "none";
+            }
+            return counts.entrySet().stream()
+                    .sorted(Map.Entry.<String, Integer>comparingByValue(Comparator.reverseOrder())
+                            .thenComparing(Map.Entry.comparingByKey()))
+                    .limit(limit)
+                    .map(entry -> entry.getKey() + "=" + entry.getValue())
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElse("none");
+        }
     }
 }
