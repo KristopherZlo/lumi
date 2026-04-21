@@ -75,6 +75,8 @@ public final class ProjectScreen extends LumaScreen {
     private String historySearch = "";
     private String historyFilter = FILTER_ALL;
     private ProjectTab detailTab = ProjectTab.PREVIEW;
+    private String pendingInitialRestoreVariantId = "";
+    private String pendingInitialRestoreVersionId = "";
     private boolean branchComposerExpanded = false;
     private boolean diagnosticsExpanded = false;
     private TextBoxComponent commitMessageInput;
@@ -343,6 +345,10 @@ public final class ProjectScreen extends LumaScreen {
 
         FlowLayout primaryBody = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(Sizing.fill(62), Sizing.fill(100), primaryBody);
+        FlowLayout initialRestoreConfirmation = this.initialRestoreConfirmationSection();
+        if (initialRestoreConfirmation != null) {
+            primaryBody.child(initialRestoreConfirmation);
+        }
         primaryBody.child(this.pendingSection());
         if (this.state.operationSnapshot() != null) {
             primaryBody.child(this.operationSection());
@@ -763,6 +769,63 @@ public final class ProjectScreen extends LumaScreen {
     }
 
     private void restoreVersion(ProjectVariant selectedVariant, ProjectVersion version) {
+        if (this.requiresInitialRestoreConfirmation(version)) {
+            this.pendingInitialRestoreVariantId = selectedVariant.id();
+            this.pendingInitialRestoreVersionId = version.id();
+            this.selectedVariantId = selectedVariant.id();
+            this.selectedVersionId = version.id();
+            this.refresh("luma.status.initial_restore_confirmation_required");
+            return;
+        }
+
+        this.executeRestoreVersion(selectedVariant, version);
+    }
+
+    private FlowLayout initialRestoreConfirmationSection() {
+        if (this.pendingInitialRestoreVersionId.isBlank()) {
+            return null;
+        }
+
+        ProjectVersion version = this.versionFor(this.pendingInitialRestoreVersionId);
+        ProjectVariant variant = this.variantFor(this.pendingInitialRestoreVariantId);
+        if (version == null || variant == null) {
+            this.clearInitialRestoreConfirmation();
+            return null;
+        }
+
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.restore.initial_confirm_title", version.id()),
+                Component.translatable("luma.restore.initial_confirm_help")
+        );
+        section.child(LumaUi.danger(Component.translatable("luma.restore.initial_confirm_warning")));
+        section.child(LumaUi.caption(Component.translatable(
+                "luma.restore.initial_confirm_target",
+                variant.id(),
+                version.id()
+        )));
+
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(UIComponents.button(Component.translatable("luma.action.cancel"), button -> {
+            this.clearInitialRestoreConfirmation();
+            this.refresh("luma.status.project_ready");
+        }));
+        ButtonComponent confirmButton = UIComponents.button(Component.translatable("luma.action.confirm_initial_restore"), button -> {
+            ProjectVariant confirmedVariant = this.variantFor(this.pendingInitialRestoreVariantId);
+            ProjectVersion confirmedVersion = this.versionFor(this.pendingInitialRestoreVersionId);
+            this.clearInitialRestoreConfirmation();
+            if (confirmedVariant == null || confirmedVersion == null) {
+                this.refresh("luma.status.operation_failed");
+                return;
+            }
+            this.executeRestoreVersion(confirmedVariant, confirmedVersion);
+        });
+        confirmButton.active(this.state.operationSnapshot() == null || this.state.operationSnapshot().terminal());
+        actions.child(confirmButton);
+        section.child(actions);
+        return section;
+    }
+
+    private void executeRestoreVersion(ProjectVariant selectedVariant, ProjectVersion version) {
         String status;
         if (!selectedVariant.id().equals(this.state.project().activeVariantId())) {
             status = this.controller.switchVariant(this.projectName, selectedVariant.id(), false);
@@ -776,6 +839,16 @@ public final class ProjectScreen extends LumaScreen {
         this.selectedVersionId = version.id();
         status = this.controller.restoreVersion(this.projectName, version.id());
         this.refresh(status);
+    }
+
+    private void clearInitialRestoreConfirmation() {
+        this.pendingInitialRestoreVariantId = "";
+        this.pendingInitialRestoreVersionId = "";
+    }
+
+    private boolean requiresInitialRestoreConfirmation(ProjectVersion version) {
+        return version != null
+                && (version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT);
     }
 
     private ProjectVariant variantFor(String variantId) {
@@ -802,6 +875,18 @@ public final class ProjectScreen extends LumaScreen {
             }
         }
         return this.state.variants().isEmpty() ? null : this.state.variants().getFirst();
+    }
+
+    private ProjectVersion versionFor(String versionId) {
+        if (versionId == null || versionId.isBlank()) {
+            return null;
+        }
+        for (ProjectVersion version : this.state.versions()) {
+            if (version.id().equals(versionId)) {
+                return version;
+            }
+        }
+        return null;
     }
 
     private ProjectVersion activeHeadVersion() {

@@ -57,6 +57,8 @@
   "luma.action.hide_branch_creator": "Hide branch form",
   "luma.action.show_diagnostics": "Show diagnostics",
   "luma.action.hide_diagnostics": "Hide diagnostics",
+  "luma.action.cancel": "Cancel",
+  "luma.action.confirm_initial_restore": "Restore Initial",
 
   "luma.tab.history": "History",
   "luma.tab.variants": "Branches",
@@ -147,6 +149,10 @@
   "luma.project.integrations_help": "Availability and capability summary for supported external tools.",
   "luma.project.log_title": "Recovery log",
   "luma.project.log_help": "Recent recovery and restore events for this workspace.",
+  "luma.restore.initial_confirm_title": "Restore Initial: %s",
+  "luma.restore.initial_confirm_help": "This moves the active branch head to the initial version and starts the rollback.",
+  "luma.restore.initial_confirm_warning": "Warning: this may remove tracked changes in affected chunks. If fast regeneration is enabled later, it may also replace chunk contents from the world generator.",
+  "luma.restore.initial_confirm_target": "Target branch: %s | version: %s",
 
   "luma.history.message_input": "Message",
   "luma.history.message_required": "Message (required)",
@@ -325,6 +331,7 @@
   "luma.status.version_saved": "Version saved.",
   "luma.status.version_restored": "Version restored.",
   "luma.status.restore_started": "Restore started. Lumi is applying blocks in the background.",
+  "luma.status.initial_restore_confirmation_required": "Confirm restore to Initial before Lumi changes the world.",
   "luma.status.variant_created": "Branch created.",
   "luma.status.variant_switched": "Branch switched.",
   "luma.status.preview_refreshed": "Preview refreshed.",
