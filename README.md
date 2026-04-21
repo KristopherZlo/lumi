@@ -63,6 +63,7 @@ Use Lumi if you want to:
 - preview images and version metadata
 - material delta summaries and integrity checks
 - zip import/export for project history
+- conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
 
 ## How It Works
