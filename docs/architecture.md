@@ -58,7 +58,7 @@ Important adapters:
 - `HistoryCaptureManager`: captures explicit tracked actions immediately, keeps per-project causal envelopes, and drains dirty-chunk stabilization before drafts are persisted or consumed
 - `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
 - `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
-- `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff for dirty envelope chunks
+- `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime

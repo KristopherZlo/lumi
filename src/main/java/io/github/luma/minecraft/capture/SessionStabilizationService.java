@@ -78,7 +78,10 @@ public final class SessionStabilizationService {
             }
 
             List<StoredBlockChange> deltaChanges = this.deltaChanges(project, session, capturedChunks.captured());
-            List<StoredBlockChange> composedChanges = composeChanges(session.startingChunkChanges(pendingChunks), deltaChanges);
+            List<StoredBlockChange> composedChanges = composeChanges(
+                    session.currentChunkChanges(processedChunks),
+                    deltaChanges
+            );
             int bufferBefore = session.buffer().size();
             session.replaceChunkChanges(processedChunks, composedChanges, Instant.now());
             int bufferAfter = session.buffer().size();
