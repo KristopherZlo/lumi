@@ -16,6 +16,12 @@ Shared world-level metadata is stored at:
 <world>/lumi/world-origin.json
 ```
 
+Project history archives exported from commands are stored at:
+
+```text
+<world>/lumi/exports/
+```
+
 Example:
 
 ```text
@@ -185,6 +191,8 @@ Stores recovery, restore, migration, and other workflow events shown in the Log 
 
 Reserved for future cache artifacts and rebuildable derived data.
 
+The `cache/baseline-chunks/` subtree is not rebuildable without touching the live world. It is part of archive export/import and must not be treated as disposable cache data by maintenance workflows.
+
 ### `locks/`
 
 Reserved for future coordination and lock files.
@@ -198,3 +206,19 @@ Current behavior:
 - legacy projects can be loaded
 - the first new save after loading legacy data writes a patch-era version on top of that project
 - no compatibility layer is provided for older development-era patch or recovery payload formats
+
+## Archive format
+
+Project import/export uses a zip archive with:
+
+- `manifest.json`
+- `project/project.json`
+- `project/variants.json`
+- `project/versions/*`
+- `project/patches/*`
+- `project/snapshots/*`
+- `project/cache/baseline-chunks/*`
+- optional `project/previews/*`
+- optional `project/recovery/journal.json`
+
+Recovery draft payloads are intentionally excluded from archives, so export/import remains focused on stable project history rather than live unsaved state.

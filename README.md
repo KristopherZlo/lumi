@@ -62,6 +62,7 @@ Use Lumi if you want to:
 - recovery drafts with WAL compaction
 - preview images and version metadata
 - material delta summaries and integrity checks
+- zip import/export for project history
 - capture of player edits plus supported entity and explosion edits
 
 ## How It Works
@@ -136,6 +137,12 @@ Main files:
 - `recovery/draft.wal.lz4`
 - `recovery/journal.json`
 
+History archives exported from commands are written under:
+
+```text
+<save>/lumi/exports/
+```
+
 See [docs/storage-format.md](docs/storage-format.md) for the full format.
 
 ## Target
@@ -194,7 +201,6 @@ Current scope:
 
 - singleplayer / integrated-server first
 - menu flow first, commands as fallback
-- no full import/export pipeline yet
 - no merge/conflict flow yet
 - no partial restore yet
 - compare overlay marks changed positions, not a full 3D preview
