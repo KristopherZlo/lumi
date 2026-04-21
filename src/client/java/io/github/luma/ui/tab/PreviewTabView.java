@@ -28,11 +28,11 @@ public final class PreviewTabView {
         container.gap(6);
 
         if (state.selectedVersion() == null) {
-            container.child(UIComponents.label(Component.translatable("luma.preview.no_version")));
+            container.child(LumaUi.caption(Component.translatable("luma.preview.no_version")));
             return container;
         }
 
-        container.child(UIComponents.label(Component.translatable(
+        container.child(LumaUi.value(Component.translatable(
                 "luma.preview.summary",
                 state.selectedVersion().id(),
                 state.selectedVersion().preview().width(),
@@ -40,8 +40,7 @@ public final class PreviewTabView {
         )));
         container.child(LumaUi.caption(Component.translatable("luma.preview.help")));
 
-        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        actions.gap(6);
+        FlowLayout actions = LumaUi.actionRow();
         actions.child(UIComponents.button(Component.translatable("luma.action.refresh_preview"), button -> {
             ProjectPreviewTextureCache.release(projectName, state.selectedVersion().id());
             onStatusChanged.accept(controller.refreshPreview(projectName, state.selectedVersion().id()));
@@ -50,13 +49,13 @@ public final class PreviewTabView {
         container.child(LumaUi.caption(Component.translatable("luma.preview.refresh_help")));
 
         if (state.selectedVersion().preview().fileName() == null || state.selectedVersion().preview().fileName().isBlank()) {
-            container.child(UIComponents.label(Component.translatable("luma.preview.unavailable")));
+            container.child(LumaUi.caption(Component.translatable("luma.preview.unavailable")));
             return container;
         }
 
         String previewPath = controller.resolvePreviewPath(projectName, state.selectedVersion().id());
         if (previewPath == null || previewPath.isBlank() || !Files.exists(Path.of(previewPath))) {
-            container.child(UIComponents.label(Component.translatable("luma.preview.missing_file")));
+            container.child(LumaUi.caption(Component.translatable("luma.preview.missing_file")));
             return container;
         }
 
@@ -79,7 +78,7 @@ public final class PreviewTabView {
             texture.sizing(Sizing.fixed(width), Sizing.fixed(height));
             container.child(texture);
         } catch (Exception exception) {
-            container.child(UIComponents.label(Component.translatable("luma.preview.load_failed")));
+            container.child(LumaUi.caption(Component.translatable("luma.preview.load_failed")));
         }
 
         container.child(LumaUi.caption(Component.translatable("luma.preview.path", previewPath)));

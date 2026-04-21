@@ -130,8 +130,7 @@ public final class ProjectScreen extends LumaScreen {
         }
         frame.child(header);
 
-        FlowLayout titleRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        titleRow.gap(8);
+        FlowLayout titleRow = LumaUi.actionRow();
         titleRow.child(LumaUi.value(Component.translatable("luma.screen.project.title", this.projectName)));
         if (this.state.project() != null) {
             titleRow.child(LumaUi.chip(Component.translatable(

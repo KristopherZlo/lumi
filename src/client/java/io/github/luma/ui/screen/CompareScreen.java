@@ -83,8 +83,7 @@ public final class CompareScreen extends LumaScreen {
         header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
         frame.child(header);
 
-        FlowLayout titleRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        titleRow.gap(8);
+        FlowLayout titleRow = LumaUi.actionRow();
         titleRow.child(LumaUi.value(Component.translatable("luma.screen.compare.title", this.projectName)));
         if (!this.state.activeVariantId().isBlank()) {
             titleRow.child(LumaUi.chip(Component.translatable("luma.dashboard.active_branch", this.state.activeVariantId())));

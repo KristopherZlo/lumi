@@ -39,8 +39,7 @@ public final class VariantsTabView {
                 state.selectedVersion() == null ? "" : state.selectedVersion().id()
         )));
 
-        FlowLayout creationRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        creationRow.gap(6);
+        FlowLayout creationRow = LumaUi.actionRow();
         var variantNameInput = UIComponents.textBox(Sizing.fill(40), variantNameSupplier.get());
         variantNameInput.onChanged().subscribe(onVariantNameChanged::accept);
         creationRow.child(variantNameInput);
@@ -66,8 +65,7 @@ public final class VariantsTabView {
             FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
             card.gap(4);
             boolean active = state.project() != null && variant.id().equals(state.project().activeVariantId());
-            FlowLayout top = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-            top.gap(6);
+            FlowLayout top = LumaUi.actionRow();
             top.child(LumaUi.value(Component.literal(variant.name())));
             top.child(LumaUi.chip(Component.literal(variant.id())));
             if (active) {

@@ -1,7 +1,7 @@
 package io.github.luma.ui.tab;
 
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.state.ProjectViewState;
-import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
@@ -17,34 +17,33 @@ public final class LogTabView {
         container.gap(6);
 
         if (state.project() != null && state.project().isLegacySnapshotProject()) {
-            container.child(UIComponents.label(Component.translatable("luma.log.legacy_notice")));
+            container.child(LumaUi.caption(Component.translatable("luma.log.legacy_notice")));
         }
 
         if (state.recoveryDraft() != null) {
-            container.child(UIComponents.label(Component.translatable(
+            container.child(LumaUi.caption(Component.translatable(
                     "luma.recovery.draft_present",
                     state.recoveryDraft().changes().size(),
                     state.recoveryDraft().variantId()
             )));
         } else {
-            container.child(UIComponents.label(Component.translatable("luma.recovery.no_draft")));
+            container.child(LumaUi.caption(Component.translatable("luma.recovery.no_draft")));
         }
 
         if (state.journal().isEmpty()) {
-            container.child(UIComponents.label(Component.translatable("luma.log.empty")));
+            container.child(LumaUi.caption(Component.translatable("luma.log.empty")));
             return container;
         }
 
         for (var entry : state.journal()) {
-            FlowLayout card = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-            card.gap(2);
-            card.child(UIComponents.label(Component.translatable("luma.log.entry_header", entry.type(), entry.timestamp().toString())));
-            card.child(UIComponents.label(Component.translatable("luma.log.entry_message", entry.message())));
+            FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+            card.child(LumaUi.value(Component.translatable("luma.log.entry_header", entry.type(), entry.timestamp().toString())));
+            card.child(LumaUi.caption(Component.translatable("luma.log.entry_message", entry.message())));
             if (entry.versionId() != null && !entry.versionId().isBlank()) {
-                card.child(UIComponents.label(Component.translatable("luma.log.entry_version", entry.versionId())));
+                card.child(LumaUi.caption(Component.translatable("luma.log.entry_version", entry.versionId())));
             }
             if (entry.variantId() != null && !entry.variantId().isBlank()) {
-                card.child(UIComponents.label(Component.translatable("luma.log.entry_variant", entry.variantId())));
+                card.child(LumaUi.caption(Component.translatable("luma.log.entry_variant", entry.variantId())));
             }
             container.child(card);
         }
