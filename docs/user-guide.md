@@ -34,6 +34,8 @@ Lumi stores new versions as patches first.
 
 Checkpoint snapshots are added by policy.
 
+On narrower screens the project menu switches to a single scroll column, so history, diagnostics, and details stack instead of being squeezed into two panes.
+
 Tracked history includes:
 
 - player block edits

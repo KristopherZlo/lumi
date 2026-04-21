@@ -346,27 +346,52 @@ public final class ProjectScreen extends LumaScreen {
     }
 
     private FlowLayout workspaceMainSection() {
+        if (this.usesSingleColumnWorkspace()) {
+            FlowLayout section = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
+            section.gap(8);
+
+            FlowLayout body = LumaUi.screenBody();
+            this.bodyScroll = LumaUi.screenScroll(Sizing.fill(100), Sizing.fill(100), body);
+            this.populatePrimaryBody(body);
+            this.populateDetailBody(body);
+            body.child(LumaUi.bottomSpacer());
+            section.child(this.bodyScroll);
+            return section;
+        }
+
         FlowLayout section = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fill(100));
         section.gap(8);
 
         FlowLayout primaryBody = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(Sizing.fill(62), Sizing.fill(100), primaryBody);
-        primaryBody.child(this.pendingSection());
-        if (this.state.operationSnapshot() != null) {
-            primaryBody.child(this.operationSection());
-        }
-        primaryBody.child(this.branchesSection());
-        primaryBody.child(this.commitGraphSection());
-        primaryBody.child(this.diagnosticsSection());
+        this.populatePrimaryBody(primaryBody);
         primaryBody.child(LumaUi.bottomSpacer());
 
         FlowLayout detailBody = LumaUi.screenBody();
-        detailBody.child(this.detailsSection());
+        this.populateDetailBody(detailBody);
         detailBody.child(LumaUi.bottomSpacer());
 
         section.child(this.bodyScroll);
         section.child(LumaUi.screenScroll(Sizing.fill(38), Sizing.fill(100), detailBody));
         return section;
+    }
+
+    private void populatePrimaryBody(FlowLayout body) {
+        body.child(this.pendingSection());
+        if (this.state.operationSnapshot() != null) {
+            body.child(this.operationSection());
+        }
+        body.child(this.branchesSection());
+        body.child(this.commitGraphSection());
+        body.child(this.diagnosticsSection());
+    }
+
+    private void populateDetailBody(FlowLayout body) {
+        body.child(this.detailsSection());
+    }
+
+    private boolean usesSingleColumnWorkspace() {
+        return this.width < 920;
     }
 
     private FlowLayout commitGraphSection() {
