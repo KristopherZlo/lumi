@@ -52,7 +52,7 @@ Tracked history includes:
 
 Lumi does not record its own restore apply pass as normal history.
 Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
-Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi captures a one-chunk halo baseline around the root chunk, then reconciles later fallout such as falling gravel and fluid spread against the current world before the draft is flushed, saved, or frozen.
+Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi keeps a one-chunk halo around the root chunk, captures per-chunk baselines lazily as fallout reaches those chunks, then reconciles later fallout such as falling gravel and fluid spread against the current world before the draft is flushed, saved, or frozen.
 Secondary effects such as falling gravel, fire spread, fluid spread, piston aftermath, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay inside that same causal envelope.
 
 For automatic dimension projects, the first node is `Initial`.

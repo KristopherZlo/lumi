@@ -109,8 +109,8 @@ public final class SessionStabilizationService {
 
         List<StoredBlockChange> changes = new ArrayList<>();
         for (BlockPoint pos : positions) {
-            StatePayload baseline = baselineStates.get(pos);
-            StatePayload live = liveStates.get(pos);
+            StatePayload baseline = baselineStates.getOrDefault(pos, StatePayload.air());
+            StatePayload live = liveStates.getOrDefault(pos, StatePayload.air());
             if (statesEqual(baseline, live)) {
                 continue;
             }

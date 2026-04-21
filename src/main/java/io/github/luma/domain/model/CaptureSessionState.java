@@ -55,30 +55,20 @@ public final class CaptureSessionState {
         if (chunk == null) {
             return false;
         }
-        boolean changed = this.rootChunks.add(chunk);
-        this.markDirtyChunk(chunk);
-        return changed;
+        return this.rootChunks.add(chunk);
     }
 
     public boolean markDirtyChunk(ChunkPoint chunk) {
         if (chunk == null) {
             return false;
         }
-        boolean changed = false;
-        for (ChunkPoint envelopeChunk : halo(chunk, STABILIZATION_HALO_RADIUS)) {
-            changed |= this.dirtyChunks.add(envelopeChunk);
-            changed |= this.pendingReconcileChunks.add(envelopeChunk);
-        }
-        return changed;
-    }
-
-    public boolean markEnvelopeChunkDirty(ChunkPoint chunk) {
-        if (chunk == null) {
-            return false;
-        }
         boolean dirtyChanged = this.dirtyChunks.add(chunk);
         boolean pendingChanged = this.pendingReconcileChunks.add(chunk);
         return dirtyChanged || pendingChanged;
+    }
+
+    public boolean markEnvelopeChunkDirty(ChunkPoint chunk) {
+        return this.markDirtyChunk(chunk);
     }
 
     public boolean isWithinStabilizationEnvelope(ChunkPoint chunk) {
@@ -190,16 +180,6 @@ public final class CaptureSessionState {
 
     public boolean isTrackedFallingEntity(UUID entityId) {
         return entityId != null && this.trackedFallingEntities.contains(entityId);
-    }
-
-    private static Set<ChunkPoint> halo(ChunkPoint center, int radius) {
-        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
-        for (int offsetX = -radius; offsetX <= radius; offsetX++) {
-            for (int offsetZ = -radius; offsetZ <= radius; offsetZ++) {
-                chunks.add(new ChunkPoint(center.x() + offsetX, center.z() + offsetZ));
-            }
-        }
-        return chunks;
     }
 
     private static LinkedHashMap<ChunkPoint, List<StoredBlockChange>> groupStartingChanges(List<StoredBlockChange> changes) {
