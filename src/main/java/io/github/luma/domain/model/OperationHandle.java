@@ -6,6 +6,7 @@ public record OperationHandle(
         String id,
         String projectId,
         String label,
-        Instant startedAt
+        Instant startedAt,
+        boolean debugEnabled
 ) {
 }

@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchMetadata;
@@ -81,9 +82,10 @@ public final class RestoreService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Version branch is missing: " + version.variantId()));
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
-        RecoveryDraft pendingDraft = HistoryCaptureManager.getInstance()
-                .freezeSession(level.getServer(), project.id().toString())
-                .map(TrackedChangeBuffer::toDraft)
+        Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
+                .freezeSession(level.getServer(), project.id().toString());
+        Optional<RecoveryDraft> frozenDraft = frozenSession.map(TrackedChangeBuffer::toDraft);
+        RecoveryDraft pendingDraft = frozenDraft
                 .or(() -> persistedDraft)
                 .orElse(null);
         LumaMod.LOGGER.info(
@@ -91,6 +93,16 @@ public final class RestoreService {
                 project.name(),
                 version.id(),
                 version.variantId()
+        );
+        LumaDebugLog.log(
+                project,
+                "restore",
+                "Starting restore for project {} to version {} on variant {} using pendingDraft={} from {}",
+                project.name(),
+                version.id(),
+                version.variantId(),
+                pendingDraft != null && !pendingDraft.isEmpty(),
+                frozenDraft.isPresent() ? "frozen live buffer" : (persistedDraft.isPresent() ? "persisted draft" : "none")
         );
 
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
@@ -106,10 +118,18 @@ public final class RestoreService {
                 project.id().toString(),
                 "restore-version",
                 "blocks",
+                LumaDebugLog.enabled(project),
                 progressSink -> {
                     if (project.settings().safetySnapshotBeforeRestore() && pendingDraft != null && !pendingDraft.isEmpty()) {
                         LumaMod.LOGGER.info(
                                 "Creating safety checkpoint before restore for project {} with {} pending changes",
+                                project.name(),
+                                pendingDraft.changes().size()
+                        );
+                        LumaDebugLog.log(
+                                project,
+                                "restore",
+                                "Writing safety checkpoint before restore for project {} with {} draft changes",
                                 project.name(),
                                 pendingDraft.changes().size()
                         );
@@ -229,6 +249,13 @@ public final class RestoreService {
                 trackedChunks.size(),
                 project.name()
         );
+        LumaDebugLog.log(
+                project,
+                "restore",
+                "World root restore decoded {} tracked chunks into {} chunk batches",
+                trackedChunks.size(),
+                collapsed.size()
+        );
         return collapsed;
     }
 
@@ -272,9 +299,18 @@ public final class RestoreService {
                 .findFirst()
                 .orElse(null);
         if (activeVariant == null || activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
+            LumaDebugLog.log(project, "restore", "Direct restore unavailable for project {} because active head is missing", project.name());
             return Optional.empty();
         }
         if (!targetVersion.variantId().equals(activeVariant.id())) {
+            LumaDebugLog.log(
+                    project,
+                    "restore",
+                    "Direct restore unavailable for project {} because target variant {} is not active variant {}",
+                    project.name(),
+                    targetVersion.variantId(),
+                    activeVariant.id()
+            );
             return Optional.empty();
         }
 
@@ -299,6 +335,7 @@ public final class RestoreService {
                         : versionMap.get(cursor.parentVersionId());
             }
             if (cursor == null) {
+                LumaDebugLog.log(project, "restore", "Direct reverse restore chain for project {} was broken", project.name());
                 return Optional.empty();
             }
         } else if (this.isAncestor(versionMap, headVersionId, targetVersion.id())) {
@@ -312,12 +349,21 @@ public final class RestoreService {
                         : versionMap.get(cursor.parentVersionId());
             }
             if (cursor == null) {
+                LumaDebugLog.log(project, "restore", "Direct forward restore chain for project {} was broken", project.name());
                 return Optional.empty();
             }
             for (int index = reversed.size() - 1; index >= 0; index--) {
                 directVersions.add(reversed.get(index));
             }
         } else {
+            LumaDebugLog.log(
+                    project,
+                    "restore",
+                    "Direct restore unavailable for project {} because head {} and target {} are on different visible lineages",
+                    project.name(),
+                    headVersionId,
+                    targetVersion.id()
+            );
             return Optional.empty();
         }
 
@@ -373,6 +419,14 @@ public final class RestoreService {
             ProjectVersion targetVersion
     ) throws IOException {
         RestoreChain chain = this.resolveChain(versions, targetVersion);
+        LumaDebugLog.log(
+                project,
+                "restore",
+                "Building restore plan for project {} target {} with anchor {}",
+                project.name(),
+                targetVersion.id(),
+                chain.anchor().id()
+        );
         List<ChunkPointAccumulator> restoredChunks = new ArrayList<>();
 
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
@@ -403,6 +457,14 @@ public final class RestoreService {
         List<io.github.luma.domain.model.ChunkPoint> baselineGaps = project.tracksWholeDimension()
                 ? this.baselineChunkRepository.listMissingChunks(layout, dedupedChunks)
                 : List.of();
+        LumaDebugLog.log(
+                project,
+                "restore",
+                "Restore plan for project {} resolved {} patch metadata entries and {} baseline gaps",
+                project.name(),
+                patchMetadata.size(),
+                baselineGaps.size()
+        );
 
         return new RestorePlan(chain.anchor(), patchMetadata, baselineGaps);
     }
@@ -476,6 +538,13 @@ public final class RestoreService {
                     collapsedPlacements
             );
         }
+        LumaDebugLog.log(
+                "restore",
+                "Decoded restore plan with {} raw chunk batches and placements {} -> {} after collapse",
+                batches.size(),
+                rawPlacements,
+                collapsedPlacements
+        );
         return collapsed;
     }
 
@@ -516,6 +585,13 @@ public final class RestoreService {
         for (Map.Entry<ChunkPoint, List<PreparedBlockPlacement>> entry : grouped.entrySet()) {
             batches.add(new PreparedChunkBatch(entry.getKey(), List.copyOf(entry.getValue())));
         }
+        LumaDebugLog.log(
+                "restore",
+                "Decoded {} stored changes into {} grouped chunk batches using {} values",
+                changes.size(),
+                batches.size(),
+                applyNewValues ? "new" : "old"
+        );
         return batches;
     }
 

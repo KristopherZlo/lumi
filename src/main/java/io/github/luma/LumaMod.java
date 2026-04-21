@@ -1,5 +1,6 @@
 package io.github.luma;
 
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.command.LumaCommands;
 import io.github.luma.domain.service.ProjectService;
@@ -45,5 +46,8 @@ public final class LumaMod implements ModInitializer {
             WorldOperationManager.getInstance().shutdown();
         });
         LOGGER.info("{} bootstrap initialized", MOD_NAME);
+        if (LumaDebugLog.globalEnabled()) {
+            LOGGER.info("{} global debug logging is enabled via -Dlumi.debug=true", MOD_NAME);
+        }
     }
 }

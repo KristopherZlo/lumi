@@ -8,6 +8,7 @@ import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.VersionLineageService;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.CompareViewState;
 import java.util.ArrayList;
@@ -53,7 +54,8 @@ public final class CompareScreenController {
                     "",
                     null,
                     List.of(),
-                    "luma.status.singleplayer_only"
+                    "luma.status.singleplayer_only",
+                    LumaDebugLog.globalEnabled()
             );
         }
 
@@ -66,6 +68,7 @@ public final class CompareScreenController {
             ));
             versions.sort(Comparator.comparing(ProjectVersion::createdAt).reversed());
             var project = this.projectService.loadProject(server, projectName);
+            boolean debugEnabled = LumaDebugLog.enabled(project);
             String activeVariantId = project.activeVariantId();
             String activeHeadVersionId = this.activeHeadVersionId(variants, activeVariantId);
 
@@ -85,6 +88,19 @@ public final class CompareScreenController {
                 resolvedLeft = this.parentOrPrevious(versions, resolvedRight);
             }
 
+            LumaDebugLog.log(
+                    project,
+                    "compare",
+                    "Resolved compare request for {}: leftInput='{}' -> '{}' | rightInput='{}' -> '{}' | versions={} | variants={}",
+                    projectName,
+                    leftReference,
+                    resolvedLeft,
+                    rightReference,
+                    resolvedRight,
+                    versions.size(),
+                    variants.size()
+            );
+
             VersionDiff diff;
             if (resolvedLeft.isBlank() || resolvedRight.isBlank() || (
                     CURRENT_WORLD_REFERENCE.equals(resolvedLeft) && CURRENT_WORLD_REFERENCE.equals(resolvedRight)
@@ -98,6 +114,17 @@ public final class CompareScreenController {
                 diff = this.diffService.compareVersions(server, projectName, resolvedLeft, resolvedRight);
             }
             List<MaterialDeltaEntry> materialDelta = diff == null ? List.of() : this.materialDeltaService.summarize(diff);
+            if (diff != null) {
+                LumaDebugLog.log(
+                        project,
+                        "compare",
+                        "Built compare diff {} -> {} with {} changed blocks and {} changed chunks",
+                        diff.leftVersionId(),
+                        diff.rightVersionId(),
+                        diff.changedBlockCount(),
+                        diff.changedChunks()
+                );
+            }
 
             return new CompareViewState(
                     versions,
@@ -109,7 +136,8 @@ public final class CompareScreenController {
                     resolvedRight,
                     diff,
                     materialDelta,
-                    status == null || status.isBlank() ? "luma.status.compare_ready" : status
+                    status == null || status.isBlank() ? "luma.status.compare_ready" : status,
+                    debugEnabled
             );
         } catch (Exception exception) {
             return new CompareViewState(
@@ -122,7 +150,8 @@ public final class CompareScreenController {
                     "",
                     null,
                     List.of(),
-                    "luma.status.compare_failed"
+                    "luma.status.compare_failed",
+                    LumaDebugLog.globalEnabled()
             );
         }
     }
@@ -135,7 +164,8 @@ public final class CompareScreenController {
         CompareOverlayRenderer.show(
                 state.leftResolvedVersionId(),
                 state.rightResolvedVersionId(),
-                state.diff().changedBlocks()
+                state.diff().changedBlocks(),
+                state.debugEnabled()
         );
         return "luma.status.compare_overlay_enabled";
     }

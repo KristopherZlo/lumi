@@ -2,6 +2,7 @@ package io.github.luma.ui.overlay;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
 import java.util.ArrayList;
@@ -27,11 +28,30 @@ public final class CompareOverlayRenderer {
     private CompareOverlayRenderer() {
     }
 
-    public static void show(String leftVersionId, String rightVersionId, List<DiffBlockEntry> changedBlocks) {
-        ACTIVE_STATE.set(new OverlayState(leftVersionId, rightVersionId, List.copyOf(changedBlocks)));
+    public static void show(String leftVersionId, String rightVersionId, List<DiffBlockEntry> changedBlocks, boolean debugEnabled) {
+        boolean resolvedDebug = debugEnabled || LumaDebugLog.globalEnabled();
+        ACTIVE_STATE.set(new OverlayState(leftVersionId, rightVersionId, List.copyOf(changedBlocks), resolvedDebug));
+        if (debugEnabled || LumaDebugLog.globalEnabled()) {
+            LumaDebugLog.log(
+                    "compare-overlay",
+                    "Activated compare overlay {} -> {} with {} changed blocks",
+                    leftVersionId,
+                    rightVersionId,
+                    changedBlocks == null ? 0 : changedBlocks.size()
+            );
+        }
     }
 
     public static void clear() {
+        OverlayState state = ACTIVE_STATE.get();
+        if (state != null && (state.debugEnabled() || LumaDebugLog.globalEnabled())) {
+            LumaDebugLog.log(
+                    "compare-overlay",
+                    "Cleared compare overlay {} -> {}",
+                    state.leftVersionId(),
+                    state.rightVersionId()
+            );
+        }
         ACTIVE_STATE.set(null);
     }
 
@@ -130,7 +150,7 @@ public final class CompareOverlayRenderer {
         }
     }
 
-    private static List<DiffBlockEntry> selectNearestEntries(
+    static List<DiffBlockEntry> selectNearestEntries(
             List<DiffBlockEntry> changedBlocks,
             double cameraX,
             double cameraY,
@@ -182,15 +202,29 @@ public final class CompareOverlayRenderer {
         private final String leftVersionId;
         private final String rightVersionId;
         private final List<DiffBlockEntry> changedBlocks;
+        private final boolean debugEnabled;
         private int cachedCameraBlockX = Integer.MIN_VALUE;
         private int cachedCameraBlockY = Integer.MIN_VALUE;
         private int cachedCameraBlockZ = Integer.MIN_VALUE;
         private List<DiffBlockEntry> cachedVisibleEntries = List.of();
 
-        private OverlayState(String leftVersionId, String rightVersionId, List<DiffBlockEntry> changedBlocks) {
+        private OverlayState(String leftVersionId, String rightVersionId, List<DiffBlockEntry> changedBlocks, boolean debugEnabled) {
             this.leftVersionId = leftVersionId;
             this.rightVersionId = rightVersionId;
             this.changedBlocks = List.copyOf(changedBlocks);
+            this.debugEnabled = debugEnabled;
+        }
+
+        private String leftVersionId() {
+            return this.leftVersionId;
+        }
+
+        private String rightVersionId() {
+            return this.rightVersionId;
+        }
+
+        private boolean debugEnabled() {
+            return this.debugEnabled;
         }
 
         private List<DiffBlockEntry> changedBlocks() {
@@ -210,7 +244,22 @@ public final class CompareOverlayRenderer {
             this.cachedCameraBlockX = cameraBlockX;
             this.cachedCameraBlockY = cameraBlockY;
             this.cachedCameraBlockZ = cameraBlockZ;
+            long startedAt = System.nanoTime();
             this.cachedVisibleEntries = selectNearestEntries(this.changedBlocks, cameraX, cameraY, cameraZ);
+            if (this.debugEnabled) {
+                LumaDebugLog.log(
+                        "compare-overlay",
+                        "Rebuilt visible overlay cache for {} -> {} at {}:{}:{}: total={} visible={} in {} us",
+                        this.leftVersionId,
+                        this.rightVersionId,
+                        cameraBlockX,
+                        cameraBlockY,
+                        cameraBlockZ,
+                        this.changedBlocks.size(),
+                        this.cachedVisibleEntries.size(),
+                        (System.nanoTime() - startedAt) / 1_000L
+                );
+            }
             return this.cachedVisibleEntries;
         }
     }

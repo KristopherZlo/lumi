@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -63,15 +64,24 @@ public final class RecoveryService {
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
-        RecoveryDraft draft = HistoryCaptureManager.getInstance()
-                .freezeSession(level.getServer(), project.id().toString())
-                .map(TrackedChangeBuffer::toDraft)
+        Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
+                .freezeSession(level.getServer(), project.id().toString());
+        Optional<RecoveryDraft> frozenDraft = frozenSession.map(TrackedChangeBuffer::toDraft);
+        RecoveryDraft draft = frozenDraft
                 .or(() -> persistedDraft)
                 .orElseThrow(() -> new IllegalArgumentException("No recovery draft available for " + projectName));
         LumaMod.LOGGER.info(
                 "Starting recovery draft restore for project {} with {} changes",
                 project.name(),
                 draft.changes().size()
+        );
+        LumaDebugLog.log(
+                project,
+                "recovery",
+                "Starting recovery restore for project {} with {} changes from {}",
+                project.name(),
+                draft.changes().size(),
+                frozenDraft.isPresent() ? "frozen live buffer" : "persisted draft"
         );
 
         Instant now = Instant.now();
@@ -88,6 +98,7 @@ public final class RecoveryService {
                 project.id().toString(),
                 "restore-draft",
                 "blocks",
+                LumaDebugLog.enabled(project),
                 progressSink -> {
                     progressSink.update(OperationStage.PREPARING, 0, draft.changes().size(), "Decoding recovery draft");
                     List<PreparedChunkBatch> batches = this.decodeDraft(level, draft.changes(), progressSink);
@@ -164,6 +175,12 @@ public final class RecoveryService {
                     List.copyOf(entry.getValue())
             ));
         }
+        LumaDebugLog.log(
+                "recovery",
+                "Decoded recovery draft with {} changes into {} chunk batches",
+                changes.size(),
+                batches.size()
+        );
         return batches;
     }
 }
