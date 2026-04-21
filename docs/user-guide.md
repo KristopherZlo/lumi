@@ -178,6 +178,16 @@ The settings screen includes:
 
 You can also mark the project as favorite or archived there.
 
+## Cleanup
+
+Lumi cleanup is currently command-first.
+
+Use `/lumi cleanup inspect <project>` to see a dry run for orphaned previews, unreferenced snapshots, disposable cache files outside `baseline-chunks`, and stale operation drafts.
+
+Use `/lumi cleanup apply <project>` only after that review.
+
+If a Lumi world operation is still running for the project, cleanup keeps `recovery/operation-draft.bin.lz4` and reports the skip instead of deleting it.
+
 ## Storage Path
 
 Lumi stores project data under:

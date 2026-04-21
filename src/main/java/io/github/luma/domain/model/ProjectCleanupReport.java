@@ -8,4 +8,10 @@ public record ProjectCleanupReport(
         List<String> warnings,
         long reclaimedBytes
 ) {
+
+    public ProjectCleanupReport {
+        candidates = candidates == null ? List.of() : List.copyOf(candidates);
+        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        reclaimedBytes = Math.max(0L, reclaimedBytes);
+    }
 }

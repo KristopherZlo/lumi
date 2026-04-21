@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ProjectCleanupCandidate;
 import io.github.luma.domain.model.ProjectCleanupPolicy;
 import io.github.luma.domain.model.ProjectCleanupReport;
 import io.github.luma.domain.model.ProjectVersion;
@@ -85,9 +86,9 @@ public final class ProjectCleanupService {
         return Set.copyOf(referenced);
     }
 
-    private long totalBytes(List<io.github.luma.domain.model.ProjectCleanupCandidate> candidates) {
+    private long totalBytes(List<ProjectCleanupCandidate> candidates) {
         long totalBytes = 0L;
-        for (io.github.luma.domain.model.ProjectCleanupCandidate candidate : candidates) {
+        for (ProjectCleanupCandidate candidate : candidates) {
             totalBytes += Math.max(0L, candidate.sizeBytes());
         }
         return totalBytes;

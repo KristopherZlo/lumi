@@ -35,6 +35,8 @@ class ProjectCleanupRepositoryTest {
         assertTrue(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("cache/render-cache.bin")));
         assertTrue(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("recovery/operation-draft.bin.lz4")));
         assertFalse(candidates.stream().anyMatch(candidate -> candidate.relativePath().contains("baseline-chunks")));
+        assertFalse(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("recovery/draft.bin.lz4")));
+        assertFalse(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("recovery/journal.json")));
     }
 
     @Test
@@ -54,6 +56,8 @@ class ProjectCleanupRepositoryTest {
         assertFalse(Files.exists(layout.previewsDir().resolve("stale.png")));
         assertFalse(Files.exists(layout.cacheDir().resolve("render-cache.bin")));
         assertTrue(Files.exists(layout.cacheDir().resolve("baseline-chunks").resolve("chunk_0_0.bin.lz4")));
+        assertTrue(Files.exists(layout.recoveryDraftFile()));
+        assertTrue(Files.exists(layout.recoveryJournalFile()));
         assertFalse(Files.exists(layout.recoveryOperationDraftFile()));
     }
 
@@ -83,7 +87,9 @@ class ProjectCleanupRepositoryTest {
         Files.write(layout.cacheDir().resolve("render-cache.bin"), new byte[]{5});
         Files.createDirectories(layout.cacheDir().resolve("baseline-chunks"));
         Files.write(layout.cacheDir().resolve("baseline-chunks").resolve("chunk_0_0.bin.lz4"), new byte[]{6});
-        Files.write(layout.recoveryOperationDraftFile(), new byte[]{7});
+        Files.write(layout.recoveryDraftFile(), new byte[]{7});
+        Files.writeString(layout.recoveryJournalFile(), "[]");
+        Files.write(layout.recoveryOperationDraftFile(), new byte[]{8});
         return layout;
     }
 }
