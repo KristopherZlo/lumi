@@ -1,6 +1,5 @@
 package io.github.luma.ui.overlay;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.luma.debug.LumaDebugLog;
@@ -17,7 +16,6 @@ import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.shapes.Shapes;
-import org.lwjgl.glfw.GLFW;
 
 public final class CompareOverlayRenderer {
 
@@ -32,14 +30,15 @@ public final class CompareOverlayRenderer {
 
     public static void show(String leftVersionId, String rightVersionId, List<DiffBlockEntry> changedBlocks, boolean debugEnabled) {
         boolean resolvedDebug = debugEnabled || LumaDebugLog.globalEnabled();
-        ACTIVE_STATE.set(new OverlayState(leftVersionId, rightVersionId, List.copyOf(changedBlocks), resolvedDebug));
+        List<DiffBlockEntry> resolvedBlocks = changedBlocks == null ? List.of() : List.copyOf(changedBlocks);
+        ACTIVE_STATE.set(new OverlayState(leftVersionId, rightVersionId, resolvedBlocks, resolvedDebug, true));
         if (debugEnabled || LumaDebugLog.globalEnabled()) {
             LumaDebugLog.log(
                     "compare-overlay",
                     "Activated compare overlay {} -> {} with {} changed blocks",
                     leftVersionId,
                     rightVersionId,
-                    changedBlocks == null ? 0 : changedBlocks.size()
+                    resolvedBlocks.size()
             );
         }
     }
@@ -58,20 +57,53 @@ public final class CompareOverlayRenderer {
     }
 
     public static boolean active() {
+        OverlayState state = ACTIVE_STATE.get();
+        return state != null && state.visible();
+    }
+
+    public static boolean hasData() {
         return ACTIVE_STATE.get() != null;
+    }
+
+    public static boolean visible() {
+        return active();
+    }
+
+    public static boolean toggleVisibility() {
+        while (true) {
+            OverlayState state = ACTIVE_STATE.get();
+            if (state == null) {
+                return false;
+            }
+
+            OverlayState replacement = state.withVisible(!state.visible());
+            if (!ACTIVE_STATE.compareAndSet(state, replacement)) {
+                continue;
+            }
+
+            if (replacement.debugEnabled() || LumaDebugLog.globalEnabled()) {
+                LumaDebugLog.log(
+                        "compare-overlay",
+                        "{} compare overlay {} -> {}",
+                        replacement.visible() ? "Showed" : "Hid",
+                        replacement.leftVersionId(),
+                        replacement.rightVersionId()
+                );
+            }
+            return replacement.visible();
+        }
     }
 
     public static void render(WorldRenderContext context) {
         OverlayState state = ACTIVE_STATE.get();
-        if (state == null || state.changedBlocks().isEmpty()) {
+        if (state == null || !state.visible() || state.changedBlocks().isEmpty()) {
             return;
         }
 
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
         PoseStack matrices = context.matrices();
-        boolean xrayMode = xrayRequested();
-        VertexConsumer fillConsumer = context.consumers().getBuffer(xrayMode ? RenderTypes.debugFilledBox() : RenderTypes.debugQuads());
-        VertexConsumer lineConsumer = context.consumers().getBuffer(xrayMode ? RenderTypes.linesTranslucent() : RenderTypes.lines());
+        VertexConsumer fillConsumer = context.consumers().getBuffer(RenderTypes.debugFilledBox());
+        VertexConsumer lineConsumer = context.consumers().getBuffer(RenderTypes.linesTranslucent());
         for (DiffBlockEntry entry : state.visibleEntries(camera.x, camera.y, camera.z)) {
             ColorChannels color = ColorChannels.of(entry.changeType());
             float minX = (float) (entry.pos().x() - camera.x) + INSET;
@@ -93,16 +125,6 @@ public final class CompareOverlayRenderer {
                     OUTLINE_ALPHA
             );
         }
-    }
-
-    private static boolean xrayRequested() {
-        Minecraft client = Minecraft.getInstance();
-        if (client == null || client.getWindow() == null) {
-            return false;
-        }
-        var window = client.getWindow();
-        return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
-                || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
     }
 
     private static void renderFilledBox(
@@ -216,16 +238,24 @@ public final class CompareOverlayRenderer {
         private final String rightVersionId;
         private final List<DiffBlockEntry> changedBlocks;
         private final boolean debugEnabled;
+        private final boolean visible;
         private int cachedCameraBlockX = Integer.MIN_VALUE;
         private int cachedCameraBlockY = Integer.MIN_VALUE;
         private int cachedCameraBlockZ = Integer.MIN_VALUE;
         private List<DiffBlockEntry> cachedVisibleEntries = List.of();
 
-        private OverlayState(String leftVersionId, String rightVersionId, List<DiffBlockEntry> changedBlocks, boolean debugEnabled) {
+        private OverlayState(
+                String leftVersionId,
+                String rightVersionId,
+                List<DiffBlockEntry> changedBlocks,
+                boolean debugEnabled,
+                boolean visible
+        ) {
             this.leftVersionId = leftVersionId;
             this.rightVersionId = rightVersionId;
             this.changedBlocks = List.copyOf(changedBlocks);
             this.debugEnabled = debugEnabled;
+            this.visible = visible;
         }
 
         private String leftVersionId() {
@@ -238,6 +268,25 @@ public final class CompareOverlayRenderer {
 
         private boolean debugEnabled() {
             return this.debugEnabled;
+        }
+
+        private boolean visible() {
+            return this.visible;
+        }
+
+        private synchronized OverlayState withVisible(boolean nextVisible) {
+            OverlayState replacement = new OverlayState(
+                    this.leftVersionId,
+                    this.rightVersionId,
+                    this.changedBlocks,
+                    this.debugEnabled,
+                    nextVisible
+            );
+            replacement.cachedCameraBlockX = this.cachedCameraBlockX;
+            replacement.cachedCameraBlockY = this.cachedCameraBlockY;
+            replacement.cachedCameraBlockZ = this.cachedCameraBlockZ;
+            replacement.cachedVisibleEntries = this.cachedVisibleEntries;
+            return replacement;
         }
 
         private List<DiffBlockEntry> changedBlocks() {

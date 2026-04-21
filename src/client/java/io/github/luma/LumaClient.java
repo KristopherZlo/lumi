@@ -22,8 +22,10 @@ public final class LumaClient implements ClientModInitializer {
             Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "general")
     );
     private static final String OPEN_DASHBOARD_KEY = "key.lumi.open_dashboard";
+    private static final String TOGGLE_COMPARE_OVERLAY_KEY = "key.lumi.toggle_compare_overlay";
 
     private KeyMapping openDashboardKey;
+    private KeyMapping toggleCompareOverlayKey;
     private final ProjectService projectService = new ProjectService();
 
     @Override
@@ -34,6 +36,12 @@ public final class LumaClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_U,
                 KEY_CATEGORY
         ));
+        this.toggleCompareOverlayKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                TOGGLE_COMPARE_OVERLAY_KEY,
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_H,
+                KEY_CATEGORY
+        ));
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
         WorldRenderEvents.BEFORE_DEBUG_RENDER.register(CompareOverlayRenderer::render);
@@ -42,6 +50,10 @@ public final class LumaClient implements ClientModInitializer {
 
     private void onEndTick(Minecraft client) {
         WorkspaceHudCoordinator.getInstance().tick(client);
+        while (this.toggleCompareOverlayKey.consumeClick()) {
+            CompareOverlayRenderer.toggleVisibility();
+        }
+
         while (this.openDashboardKey.consumeClick()) {
             if (client.player == null) {
                 continue;

@@ -81,6 +81,7 @@ Controllers own service access and loading logic. Screens keep transient UI stat
 Current UX assumptions:
 
 - pressing `U` opens the current dimension workspace directly
+- pressing `H` hides or shows the current compare overlay without clearing the diff data
 - the dashboard is now secondary navigation from the workspace header
 - the workspace screen is source-control-first: commit composer, commit graph, details/actions
 - version actions such as restore, compare, and branch checkout live in the detail pane, not on graph nodes
@@ -91,7 +92,7 @@ Current runtime history behavior:
 
 - `HistoryCaptureManager` records tracked block changes inside project bounds, including explosions, Enderman block moves, and falling-block placement, while still excluding Lumi's own restore applications.
 - Changes are aggregated into a recovery draft and journaled while the session is active.
-- `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces.
+- `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
 - `RestoreService` prefers direct same-variant patch replay, including `WORLD_ROOT` ancestor restores, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored version on success without deleting detached versions.
 - `VariantService` keeps one head pointer per variant.

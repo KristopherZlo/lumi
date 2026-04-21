@@ -6,13 +6,19 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.DataPackConfig;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -20,6 +26,8 @@ import net.minecraft.world.level.storage.LevelResource;
  * Reads and writes the shared world-origin manifest for one save.
  */
 public final class WorldOriginRepository {
+
+    private static final int CURRENT_SCHEMA_VERSION = 2;
 
     public Optional<WorldOriginInfo> load(MinecraftServer server) throws IOException {
         Path file = this.file(server);
@@ -38,17 +46,20 @@ public final class WorldOriginRepository {
             dimensions.putAll(existing.dimensions());
         }
 
+        WorldOptions options = server.getWorldData().worldGenOptions();
         for (ServerLevel level : server.getAllLevels()) {
-            dimensions.put(level.dimension().identifier().toString(), this.describeDimension(level));
+            dimensions.put(level.dimension().identifier().toString(), this.describeDimension(level, options.seed()));
         }
 
         var currentVersion = SharedConstants.getCurrentVersion();
-        WorldOptions options = server.getWorldData().worldGenOptions();
         WorldOriginInfo info = new WorldOriginInfo(
+                CURRENT_SCHEMA_VERSION,
                 server.getWorldData().getLevelName(),
                 currentVersion.name(),
                 currentVersion.dataVersion().version(),
                 options.seed(),
+                existing != null && existing.createdWithLumi(),
+                this.fingerprintDataPacks(server.getWorldData().getDataConfiguration().dataPacks()),
                 Map.copyOf(dimensions),
                 existing == null ? now : existing.createdAt(),
                 now
@@ -65,18 +76,51 @@ public final class WorldOriginRepository {
         ));
     }
 
-    private WorldOriginInfo.DimensionOrigin describeDimension(ServerLevel level) {
+    private WorldOriginInfo.DimensionOrigin describeDimension(ServerLevel level, long seed) {
         var generator = level.getChunkSource().getGenerator();
+        String dimensionId = level.dimension().identifier().toString();
         String generatorType = generator.getTypeNameForDataFixer()
                 .<String>map(Object::toString)
                 .orElse(generator.getClass().getName());
         String biomeSourceType = generator.getBiomeSource().getClass().getName();
+        int seaLevel = generator.getSeaLevel();
         return new WorldOriginInfo.DimensionOrigin(
-                level.dimension().identifier().toString(),
+                dimensionId,
                 generatorType,
                 biomeSourceType,
-                generator.getSeaLevel()
+                seaLevel,
+                this.fingerprint(
+                        "generator",
+                        List.of(dimensionId, generatorType, biomeSourceType, Integer.toString(seaLevel), Long.toString(seed))
+                )
         );
+    }
+
+    private String fingerprintDataPacks(DataPackConfig config) {
+        List<String> entries = new ArrayList<>();
+        for (String enabled : config.getEnabled()) {
+            entries.add("enabled:" + enabled);
+        }
+        for (String disabled : config.getDisabled()) {
+            entries.add("disabled:" + disabled);
+        }
+        entries.sort(String::compareTo);
+        return this.fingerprint("datapacks", entries);
+    }
+
+    private String fingerprint(String namespace, List<String> entries) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(namespace.getBytes(StandardCharsets.UTF_8));
+            digest.update((byte) 0);
+            for (String entry : entries) {
+                digest.update(entry.getBytes(StandardCharsets.UTF_8));
+                digest.update((byte) 0);
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private Path root(MinecraftServer server) {

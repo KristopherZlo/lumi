@@ -210,22 +210,27 @@ public final class CompareScreen extends LumaScreen {
 
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent overlayButton = UIComponents.button(
-                Component.translatable(
-                        CompareOverlayRenderer.active()
-                                ? "luma.action.hide_highlight"
-                                : "luma.action.highlight_compare"
-                ),
+                this.overlayButtonLabel(),
                 button -> {
-                    this.status = CompareOverlayRenderer.active()
-                            ? this.controller.clearOverlay()
+                    this.status = CompareOverlayRenderer.hasData()
+                            ? this.controller.toggleOverlayVisibility()
                             : this.controller.showOverlay(this.state);
                     this.rebuild();
                 }
         );
-        overlayButton.active(!this.state.diff().changedBlocks().isEmpty() || CompareOverlayRenderer.active());
+        overlayButton.active(!this.state.diff().changedBlocks().isEmpty() || CompareOverlayRenderer.hasData());
         actions.child(overlayButton);
         section.child(actions);
         return section;
+    }
+
+    private Component overlayButtonLabel() {
+        if (!CompareOverlayRenderer.hasData()) {
+            return Component.translatable("luma.action.highlight_compare");
+        }
+        return Component.translatable(CompareOverlayRenderer.visible()
+                ? "luma.action.hide_highlight"
+                : "luma.action.show_highlight");
     }
 
     private FlowLayout changedBlocksSection() {
