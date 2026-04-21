@@ -31,6 +31,8 @@ Desktop.ini
 !docs/**/*.md
 
 AGENTS.md
+docs/commit-policy.md
+docs/maintenance-guide.md
 CLAUDE.md
 GEMINI.md
 COPILOT.md
