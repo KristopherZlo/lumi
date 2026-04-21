@@ -1,7 +1,11 @@
 package io.github.luma.minecraft.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import io.github.luma.domain.model.ProjectArchiveExportResult;
+import io.github.luma.domain.model.ProjectArchiveImportResult;
+import io.github.luma.domain.service.ProjectArchiveService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
@@ -18,6 +22,7 @@ import net.minecraft.network.chat.Component;
 public final class LumaCommands {
 
     private final ProjectService projectService = new ProjectService();
+    private final ProjectArchiveService projectArchiveService = new ProjectArchiveService();
     private final VersionService versionService = new VersionService();
     private final RestoreService restoreService = new RestoreService();
     private final VariantService variantService = new VariantService();
@@ -120,6 +125,28 @@ public final class LumaCommands {
                                         StringArgumentType.getString(context, "project")
                                 ))))));
 
+        var archive = Commands.literal("archive");
+        archive.then(Commands.literal("export")
+                .then(Commands.argument("project", StringArgumentType.string())
+                        .executes(context -> this.execute(context.getSource(), source -> this.exportProjectArchive(
+                                source,
+                                StringArgumentType.getString(context, "project"),
+                                false
+                        )))
+                        .then(Commands.argument("includePreviews", BoolArgumentType.bool())
+                                .executes(context -> this.execute(context.getSource(), source -> this.exportProjectArchive(
+                                        source,
+                                        StringArgumentType.getString(context, "project"),
+                                        BoolArgumentType.getBool(context, "includePreviews")
+                                ))))));
+        archive.then(Commands.literal("import")
+                .then(Commands.argument("archivePath", StringArgumentType.greedyString())
+                        .executes(context -> this.execute(context.getSource(), source -> this.importProjectArchive(
+                                source,
+                                StringArgumentType.getString(context, "archivePath")
+                        )))));
+        root.then(archive);
+
         dispatcher.register(root);
     }
 
@@ -206,6 +233,23 @@ public final class LumaCommands {
         this.recoveryService.discardDraft(source.getServer(), projectName);
         source.sendSuccess(() -> Component.literal("Discarded recovery draft for " + projectName), true);
         return 1;
+    }
+
+    private int exportProjectArchive(CommandSourceStack source, String projectName, boolean includePreviews) throws IOException {
+        ProjectArchiveExportResult result = this.projectArchiveService.exportProject(source.getServer(), projectName, includePreviews);
+        source.sendSuccess(() -> Component.literal(
+                "Exported " + projectName + " to " + result.archiveFile() + " (" + result.manifest().entries().size() + " files)"
+        ), true);
+        return result.manifest().entries().size();
+    }
+
+    private int importProjectArchive(CommandSourceStack source, String archivePath) throws IOException {
+        ProjectArchiveImportResult result = this.projectArchiveService.importProject(source.getServer(), archivePath);
+        source.sendSuccess(() -> Component.literal(
+                "Imported " + result.manifest().projectName() + " from " + result.archiveFile()
+                        + " (" + result.manifest().entries().size() + " files)"
+        ), true);
+        return result.manifest().entries().size();
     }
 
     private int execute(CommandSourceStack source, IoAction action) {

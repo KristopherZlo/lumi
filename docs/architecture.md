@@ -37,6 +37,7 @@ Key services:
 
 - `ProjectService`: create, load, and update projects
 - `ProjectService`: also owns world-origin bootstrap and automatic `WORLD_ROOT` creation for dimension workspaces
+- `ProjectArchiveService`: export stable project history to zip archives and import it back into project storage
 - `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy
 - `RestoreService`: build restore plans, decode world-root baseline restores, and prepare chunk batches
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
@@ -69,6 +70,7 @@ Important boundaries:
 - `ProjectLayout` is the single source of truth for project-relative paths
 - metadata repositories read and write lightweight manifests
 - payload repositories read and write compressed binary history data
+- `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export
 - `StorageIo` owns low-level atomic-write and NBT binary helpers
 
 ### Client UI layer
@@ -170,6 +172,7 @@ The current durable history format is schema v3.
 Main files:
 
 - `world-origin.json`: shared world seed/version/datapack/generator manifest for all dimension workspaces
+- `exports/*.zip`: command-driven project history archives
 - `versions/*.json`: version manifests
 - `patches/<patchId>.meta.json`: patch metadata and chunk index
 - `patches/<patchId>.bin.lz4`: patch payload
@@ -206,6 +209,7 @@ The current test suite is organized around:
 
 - model behavior such as `TrackedChangeBuffer`
 - repository round-trips for patch, snapshot, and recovery storage
+- repository round-trips for archive export/import boundaries
 - service-level diff and history policy behavior
 - project layout and storage path invariants
 - recovery draft isolation between live capture and save/amend operations

@@ -123,8 +123,42 @@ Re-applies the recovery draft back into the world.
 
 Deletes the pending draft without applying it.
 
+## Archive commands
+
+### Export a project archive
+
+```mcfunction
+/lumi archive export <project> [includePreviews]
+```
+
+Examples:
+
+```mcfunction
+/lumi archive export tower
+/lumi archive export tower true
+```
+
+Writes a zip archive under `<save>/lumi/exports/`.
+
+The archive contains project metadata, variants, versions, patches, snapshots, baseline chunks, and the recovery journal. Preview PNGs are included only when `includePreviews` is `true`. Recovery draft payloads are excluded.
+
+### Import a project archive
+
+```mcfunction
+/lumi archive import <archivePath>
+```
+
+Examples:
+
+```mcfunction
+/lumi archive import tower-history-20260421-083000.zip
+/lumi archive import C:\exports\tower-history-20260421-083000.zip
+```
+
+Imports the archive into the current world's Lumi project storage. Relative paths resolve from `<save>/lumi/exports/`.
+
 ## Notes
 
 - Commands currently target the local integrated server workflow.
-- Compare, preview refresh, project settings, and dashboard filters are currently menu-first features.
+- Compare, preview refresh, project settings, cleanup, and dashboard filters are currently menu-first or command-first features.
 - Recovery draft save-as-version is available from the Recovery screen, not from a command yet.
