@@ -53,7 +53,7 @@ These services should express product rules, not raw Minecraft side effects or r
 
 Important adapters:
 
-- `HistoryCaptureManager`: captures tracked player actions, explosives, explosions, falling blocks, and selected block-changing mob mutations into per-project buffers
+- `HistoryCaptureManager`: captures tracked player actions, explosives, explosions, falling blocks, fluids, fire, growth, piston movement, and selected block-changing mob mutations into per-project buffers
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime

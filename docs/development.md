@@ -92,7 +92,7 @@ Current UX assumptions:
 
 Current runtime history behavior:
 
-- `HistoryCaptureManager` records tracked block changes inside project bounds, including TNT ignition, explosions, falling-block start and landing changes, and selected mob block mutations, while still excluding Lumi's own restore applications.
+- `HistoryCaptureManager` records tracked block changes inside project bounds, including TNT ignition, explosions, falling-block start and landing changes, fluid spread, fire spread and burn-out, crop/sapling/stem growth, piston movement, and selected mob block mutations, while still excluding Lumi's own restore applications.
 - Changes are aggregated into a recovery draft and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.

@@ -3,14 +3,20 @@
   "package": "io.github.luma.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "CropBlockMixin",
     "FallingBlockEntityMixin",
     "FallingBlockMixin",
+    "FireBlockMixin",
+    "FlowingFluidMixin",
     "LevelExplosionMixin",
     "LevelSetBlockMixin",
+    "PistonBaseBlockMixin",
+    "SaplingBlockMixin",
     "ServerLevelEntityTickMixin",
     "ServerLevelExplosionMixin",
     "ServerGamePacketListenerMixin",
     "ServerPlayerGameModeMixin",
+    "StemBlockMixin",
     "TntBlockMixin"
   ],
   "injectors": {
