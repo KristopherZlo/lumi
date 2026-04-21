@@ -2,6 +2,7 @@ package io.github.luma.domain.model;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -109,6 +110,47 @@ public final class TrackedChangeBuffer {
         this.updatedAt = now;
     }
 
+    public void replaceChunks(Collection<ChunkPoint> chunks, Collection<StoredBlockChange> replacements, Instant now) {
+        if (chunks != null) {
+            for (ChunkPoint chunk : chunks) {
+                if (chunk == null) {
+                    continue;
+                }
+                this.removeChunk(chunk);
+            }
+        }
+
+        if (replacements != null) {
+            for (StoredBlockChange change : replacements) {
+                this.addChange(change, now);
+            }
+        }
+        this.updatedAt = now;
+    }
+
+    public boolean touchesChunk(ChunkPoint chunk) {
+        if (chunk == null) {
+            return false;
+        }
+        for (StoredBlockChange change : this.changes.values()) {
+            if (ChunkPoint.from(change.pos()).equals(chunk)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public List<ChunkPoint> touchedChunks() {
+        LinkedHashMap<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        for (StoredBlockChange change : this.changes.values()) {
+            ChunkPoint chunk = ChunkPoint.from(change.pos());
+            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+        }
+        List<ChunkPoint> ordered = new ArrayList<>(chunks.values());
+        ordered.sort(java.util.Comparator.comparingInt(ChunkPoint::x).thenComparingInt(ChunkPoint::z));
+        return List.copyOf(ordered);
+    }
+
     public RecoveryDraft toDraft() {
         return new RecoveryDraft(
                 this.projectId,
@@ -176,5 +218,13 @@ public final class TrackedChangeBuffer {
             display.add(change.toRecord());
         }
         return display;
+    }
+
+    private void removeChunk(ChunkPoint chunk) {
+        this.changes.entrySet().removeIf(entry -> {
+            StoredBlockChange change = entry.getValue();
+            return (change.pos().x() >> 4) == chunk.x()
+                    && (change.pos().z() >> 4) == chunk.z();
+        });
     }
 }
