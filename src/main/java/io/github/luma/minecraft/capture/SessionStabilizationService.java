@@ -1,25 +1,25 @@
 package io.github.luma.minecraft.capture;
 
-import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
+import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.HashMap;
+import java.util.Objects;
 import java.util.Set;
-import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.nbt.CompoundTag;
 
 /**
  * Reconciles causal envelopes against the live world after ambient fallout.
@@ -31,10 +31,22 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public final class SessionStabilizationService {
 
+    private static final CompoundTag AIR_STATE = airState();
+    private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
+
     public ReconciliationResult stabilizePendingChunks(
             ServerLevel level,
             BuildProject project,
             CaptureSessionState session
+    ) {
+        return this.stabilizePendingChunks(level, project, session, false);
+    }
+
+    public ReconciliationResult stabilizePendingChunks(
+            ServerLevel level,
+            BuildProject project,
+            CaptureSessionState session,
+            boolean requireLoadedChunks
     ) {
         if (session == null || !session.hasPendingReconciliation()) {
             return ReconciliationResult.noOp();
@@ -50,14 +62,32 @@ public final class SessionStabilizationService {
         }
 
         try {
-            List<StoredBlockChange> deltaChanges = this.deltaChanges(level, project, session, pendingChunks);
+            CapturedChunks capturedChunks = this.captureLiveChunks(level, pendingChunks);
+            if (requireLoadedChunks && !capturedChunks.missingChunks().isEmpty()) {
+                throw new IllegalStateException(
+                        "Dirty chunks are not loaded for stabilization: " + capturedChunks.missingChunks()
+                );
+            }
+            List<ChunkPoint> processedChunks = capturedChunks.captured().keySet().stream().toList();
+            if (processedChunks.isEmpty()) {
+                session.finishReconciliation(List.of());
+                if (!capturedChunks.missingChunks().isEmpty()) {
+                    session.requeuePendingChunks(capturedChunks.missingChunks());
+                }
+                return ReconciliationResult.noOp();
+            }
+
+            List<StoredBlockChange> deltaChanges = this.deltaChanges(project, session, capturedChunks.captured());
             List<StoredBlockChange> composedChanges = composeChanges(session.startingChunkChanges(pendingChunks), deltaChanges);
             int bufferBefore = session.buffer().size();
-            session.replaceChunkChanges(pendingChunks, composedChanges, Instant.now());
+            session.replaceChunkChanges(processedChunks, composedChanges, Instant.now());
             int bufferAfter = session.buffer().size();
-            session.finishReconciliation(pendingChunks);
+            session.finishReconciliation(processedChunks);
+            if (!capturedChunks.missingChunks().isEmpty()) {
+                session.requeuePendingChunks(capturedChunks.missingChunks());
+            }
             return new ReconciliationResult(
-                    pendingChunks.size(),
+                    processedChunks.size(),
                     deltaChanges.size(),
                     composedChanges.size(),
                     bufferBefore,
@@ -70,68 +100,62 @@ public final class SessionStabilizationService {
         }
     }
 
-    public Map<BlockPoint, StatePayload> captureBaselineChunkState(
+    public ChunkSnapshotPayload captureBaselineChunkState(
             ServerLevel level,
             BuildProject project,
             ChunkPoint chunk,
-            BlockPos overridePos,
-            BlockState overrideState,
+            net.minecraft.core.BlockPos overridePos,
+            net.minecraft.world.level.block.state.BlockState overrideState,
             CompoundTag overrideBlockEntity
     ) {
-        Map<BlockPoint, StatePayload> overrides = overridePos == null || overrideState == null
-                ? Map.of()
-                : Map.of(
-                        BlockPoint.from(overridePos),
-                        StatePayload.capture(overrideState, overrideBlockEntity)
-                );
-        return this.captureChunkState(level, project.bounds(), chunk, overrides);
+        return this.chunkSnapshotCaptureService.captureLoadedChunk(
+                        level,
+                        chunk,
+                        overridePos,
+                        overrideState,
+                        overrideBlockEntity
+                )
+                .orElseThrow(() -> new IllegalStateException(
+                        "Chunk %d:%d is not loaded for session baseline capture in %s".formatted(
+                                chunk.x(),
+                                chunk.z(),
+                                project == null ? "unknown-project" : project.name()
+                        )
+                ));
     }
 
     private List<StoredBlockChange> deltaChanges(
-            ServerLevel level,
             BuildProject project,
             CaptureSessionState session,
-            List<ChunkPoint> chunks
+            Map<ChunkPoint, ChunkSnapshotPayload> liveChunks
     ) {
-        Map<BlockPoint, StatePayload> baselineStates = new LinkedHashMap<>();
-        for (ChunkPoint chunk : chunks) {
-            baselineStates.putAll(session.baselineChunkState(chunk));
-        }
-
-        Map<BlockPoint, StatePayload> liveStates = new LinkedHashMap<>();
-        for (ChunkPoint chunk : chunks) {
-            liveStates.putAll(this.captureChunkState(level, project.bounds(), chunk, Map.of()));
-        }
-
-        Set<BlockPoint> positions = new LinkedHashSet<>();
-        positions.addAll(baselineStates.keySet());
-        positions.addAll(liveStates.keySet());
-
         List<StoredBlockChange> changes = new ArrayList<>();
-        for (BlockPoint pos : positions) {
-            StatePayload baseline = baselineStates.getOrDefault(pos, StatePayload.air());
-            StatePayload live = liveStates.getOrDefault(pos, StatePayload.air());
-            if (statesEqual(baseline, live)) {
+        for (Map.Entry<ChunkPoint, ChunkSnapshotPayload> entry : liveChunks.entrySet()) {
+            ChunkSnapshotPayload baseline = session.baselineChunkState(entry.getKey());
+            if (baseline == null) {
                 continue;
             }
-            changes.add(new StoredBlockChange(pos, baseline, live));
+            changes.addAll(this.diffChunk(
+                    baseline,
+                    entry.getValue(),
+                    project == null ? null : project.bounds()
+            ));
         }
         return List.copyOf(changes);
     }
 
-    private Map<BlockPoint, StatePayload> captureChunkState(
-            ServerLevel level,
-            Bounds3i bounds,
-            ChunkPoint chunk,
-            Map<BlockPoint, StatePayload> overrides
+    private List<StoredBlockChange> diffChunk(
+            ChunkSnapshotPayload baseline,
+            ChunkSnapshotPayload live,
+            Bounds3i bounds
     ) {
-        LinkedHashMap<BlockPoint, StatePayload> states = new LinkedHashMap<>();
-        int minX = chunk.x() << 4;
+        List<StoredBlockChange> changes = new ArrayList<>();
+        int minX = baseline.chunkX() << 4;
         int maxX = minX + 15;
-        int minZ = chunk.z() << 4;
+        int minZ = baseline.chunkZ() << 4;
         int maxZ = minZ + 15;
-        int minY = level.getMinY();
-        int maxY = level.getMaxY();
+        int minY = Math.max(baseline.minBuildHeight(), live.minBuildHeight());
+        int maxY = Math.min(baseline.maxBuildHeight(), live.maxBuildHeight());
         if (bounds != null) {
             minX = Math.max(minX, bounds.min().x());
             maxX = Math.min(maxX, bounds.max().x());
@@ -141,50 +165,93 @@ public final class SessionStabilizationService {
             maxY = Math.min(maxY, bounds.max().y());
         }
         if (minX > maxX || minY > maxY || minZ > maxZ) {
-            return states;
+            return changes;
         }
 
+        Map<Integer, ChunkSectionSnapshotPayload> baselineSections = indexSections(baseline);
+        Map<Integer, ChunkSectionSnapshotPayload> liveSections = indexSections(live);
         for (int y = minY; y <= maxY; y++) {
+            int sectionY = y >> 4;
+            ChunkSectionSnapshotPayload baselineSection = baselineSections.get(sectionY);
+            ChunkSectionSnapshotPayload liveSection = liveSections.get(sectionY);
+            int localY = y & 15;
             for (int z = minZ; z <= maxZ; z++) {
+                int localZ = z & 15;
                 for (int x = minX; x <= maxX; x++) {
-                    BlockPoint point = new BlockPoint(x, y, z);
-                    StatePayload override = overrides.get(point);
-                    if (override != null) {
-                        applyState(states, point, override);
+                    int localX = x & 15;
+                    CompoundTag baselineState = this.readStateTag(baselineSection, localX, localY, localZ);
+                    CompoundTag liveState = this.readStateTag(liveSection, localX, localY, localZ);
+                    CompoundTag baselineBlockEntity = this.readBlockEntityTag(baseline, y, localX, localZ);
+                    CompoundTag liveBlockEntity = this.readBlockEntityTag(live, y, localX, localZ);
+                    if (Objects.equals(baselineState, liveState)
+                            && Objects.equals(baselineBlockEntity, liveBlockEntity)) {
                         continue;
                     }
-
-                    BlockPos pos = new BlockPos(x, y, z);
-                    BlockState state = level.getBlockState(pos);
-                    BlockEntity blockEntity = level.getBlockEntity(pos);
-                    CompoundTag blockEntityTag = blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
-                    applyState(states, point, StatePayload.capture(state, blockEntityTag));
+                    changes.add(new StoredBlockChange(
+                            new io.github.luma.domain.model.BlockPoint(x, y, z),
+                            payload(baselineState, baselineBlockEntity),
+                            payload(liveState, liveBlockEntity)
+                    ));
                 }
             }
         }
-        return states;
+        return changes;
     }
 
-    private static void applyState(Map<BlockPoint, StatePayload> states, BlockPoint pos, StatePayload payload) {
-        if (payload == null || isAir(payload)) {
-            states.remove(pos);
-            return;
+    private CapturedChunks captureLiveChunks(ServerLevel level, List<ChunkPoint> chunks) {
+        LinkedHashMap<ChunkPoint, ChunkSnapshotPayload> captured = new LinkedHashMap<>();
+        List<ChunkPoint> missingChunks = new ArrayList<>();
+        for (ChunkPoint chunk : chunks) {
+            this.chunkSnapshotCaptureService.captureLoadedChunk(level, chunk)
+                    .ifPresentOrElse(
+                            snapshot -> captured.put(chunk, snapshot),
+                            () -> missingChunks.add(chunk)
+                    );
         }
-        states.put(pos, payload);
+        return new CapturedChunks(captured, List.copyOf(missingChunks));
     }
 
-    private static boolean isAir(StatePayload payload) {
-        return payload == null || "minecraft:air".equals(payload.blockId());
+    private static Map<Integer, ChunkSectionSnapshotPayload> indexSections(ChunkSnapshotPayload chunk) {
+        HashMap<Integer, ChunkSectionSnapshotPayload> sections = new HashMap<>();
+        for (ChunkSectionSnapshotPayload section : chunk.sections()) {
+            sections.put(section.sectionY(), section);
+        }
+        return sections;
     }
 
-    private static boolean statesEqual(StatePayload first, StatePayload second) {
-        if (first == second) {
-            return true;
+    private CompoundTag readStateTag(ChunkSectionSnapshotPayload section, int localX, int localY, int localZ) {
+        if (section == null || section.palette().isEmpty()) {
+            return AIR_STATE;
         }
-        if (first == null || second == null) {
-            return false;
+        int paletteIndex = section.paletteIndexAt(localX, localY, localZ);
+        if (paletteIndex < 0 || paletteIndex >= section.palette().size()) {
+            return AIR_STATE;
         }
-        return first.equalsState(second);
+        CompoundTag tag = section.palette().get(paletteIndex);
+        return tag == null ? AIR_STATE : tag;
+    }
+
+    private CompoundTag readBlockEntityTag(ChunkSnapshotPayload chunk, int worldY, int localX, int localZ) {
+        return chunk.blockEntities().get(
+                io.github.luma.storage.repository.SnapshotWriter.packVerticalIndex(
+                        worldY - chunk.minBuildHeight(),
+                        localX,
+                        localZ
+                )
+        );
+    }
+
+    private static StatePayload payload(CompoundTag stateTag, CompoundTag blockEntityTag) {
+        return new StatePayload(
+                stateTag == null ? AIR_STATE.copy() : stateTag.copy(),
+                blockEntityTag == null ? null : blockEntityTag.copy()
+        );
+    }
+
+    private static CompoundTag airState() {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", "minecraft:air");
+        return tag;
     }
 
     private static List<StoredBlockChange> composeChanges(
@@ -226,5 +293,11 @@ public final class SessionStabilizationService {
         public static ReconciliationResult busy() {
             return new ReconciliationResult(0, 0, 0, 0, 0, true);
         }
+    }
+
+    private record CapturedChunks(
+            Map<ChunkPoint, ChunkSnapshotPayload> captured,
+            List<ChunkPoint> missingChunks
+    ) {
     }
 }

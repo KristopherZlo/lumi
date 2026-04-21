@@ -177,7 +177,7 @@ Stores the current compacted recovery base snapshot in schema v3 binary format.
 
 Stores append-only recovery draft updates as an LZ4-compressed write-ahead log.
 
-The active in-memory `TrackedChangeBuffer` is periodically flushed into recovery storage instead of rewriting one large JSON file for every change. Once the WAL reaches the compaction threshold, the latest entry is rewritten into `draft.bin.lz4` and the WAL is removed.
+The active in-memory `TrackedChangeBuffer` is periodically snapshotted into an immutable `RecoveryDraft` and queued to the low-priority capture-maintenance executor instead of rewriting one large JSON file for every change on the server tick. Once the WAL reaches the compaction threshold, the latest entry is rewritten into `draft.bin.lz4` and the WAL is removed.
 
 ### `recovery/operation-draft.bin.lz4`
 
@@ -195,7 +195,7 @@ Stores recovery, restore, migration, and other workflow events shown in the Log 
 
 Reserved for future cache artifacts and rebuildable derived data.
 
-The `cache/baseline-chunks/` subtree is not rebuildable without touching the live world. It is part of archive export/import and must not be treated as disposable cache data by maintenance workflows.
+The `cache/baseline-chunks/` subtree is not rebuildable without touching the live world. It is part of archive export/import and must not be treated as disposable cache data by maintenance workflows. Each baseline file is written from a prepared compact chunk snapshot payload captured on the server thread, then compressed and persisted later by the capture-maintenance executor.
 Other cache files are treated as disposable cleanup candidates.
 
 ### `locks/`

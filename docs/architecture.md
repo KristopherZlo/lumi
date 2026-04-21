@@ -56,6 +56,8 @@ These services should express product rules, not raw Minecraft side effects or r
 Important adapters:
 
 - `HistoryCaptureManager`: captures explicit tracked actions immediately, keeps per-project causal envelopes, and drains dirty-chunk stabilization before drafts are persisted or consumed
+- `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
+- `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff for dirty envelope chunks
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
@@ -149,9 +151,10 @@ Recovery is designed to survive crash-like exits without rewriting one large dra
 
 Current strategy:
 
-- active sessions live in memory as `CaptureSessionState`, which owns the mutable `TrackedChangeBuffer`, chunk envelope, session-start chunk baselines, and pending stabilization state
-- periodic flushes append to `recovery/draft.wal.lz4`
-- compaction rewrites the latest state into `recovery/draft.bin.lz4`
+- active sessions live in memory as `CaptureSessionState`, which owns the mutable `TrackedChangeBuffer`, chunk envelope, compact session-start chunk baselines, and pending stabilization state
+- periodic flushes enqueue immutable `RecoveryDraft` snapshots to a dedicated capture-maintenance executor
+- that executor appends `recovery/draft.wal.lz4` entries and performs WAL compaction into `recovery/draft.bin.lz4`
+- first-touch whole-dimension baseline writes are queued through the same executor after the server thread copies a compact chunk snapshot payload
 - in-progress save/amend drafts move to `recovery/operation-draft.bin.lz4` so new edits can start a separate live draft
 - restore/save recovery actions reuse the same operation model as save and restore
 
@@ -159,8 +162,10 @@ Current strategy:
 
 Lumi uses a strict two-stage operation pattern:
 
-- prepare stage: file I/O, compression, decompression, snapshot capture, and decode work off-thread
+- prepare stage: file I/O, compression, decompression, async recovery maintenance, snapshot persistence, and decode work off-thread
 - apply stage: bounded world mutation batches on the server thread
+
+For live capture, the server thread is limited to compact chunk-copy work. It no longer samples whole chunks block-by-block through `Level.getBlockState()` or compacts recovery WAL data inline.
 
 Current guarantees:
 

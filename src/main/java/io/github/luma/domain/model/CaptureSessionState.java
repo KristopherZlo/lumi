@@ -23,7 +23,7 @@ public final class CaptureSessionState {
 
     private final TrackedChangeBuffer buffer;
     private final LinkedHashMap<ChunkPoint, List<StoredBlockChange>> startingChunkChanges;
-    private final LinkedHashMap<ChunkPoint, Map<BlockPoint, StatePayload>> baselineChunkStates = new LinkedHashMap<>();
+    private final LinkedHashMap<ChunkPoint, ChunkSnapshotPayload> baselineChunkStates = new LinkedHashMap<>();
     private final LinkedHashSet<ChunkPoint> rootChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> dirtyChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> pendingReconcileChunks = new LinkedHashSet<>();
@@ -140,20 +140,19 @@ public final class CaptureSessionState {
         this.buffer.replaceChunks(chunks, replacements, now);
     }
 
-    public void captureBaselineChunk(ChunkPoint chunk, Map<BlockPoint, StatePayload> states) {
-        if (chunk == null || states == null || this.baselineChunkStates.containsKey(chunk)) {
+    public void captureBaselineChunk(ChunkPoint chunk, ChunkSnapshotPayload snapshot) {
+        if (chunk == null || snapshot == null || this.baselineChunkStates.containsKey(chunk)) {
             return;
         }
-        this.baselineChunkStates.put(chunk, Map.copyOf(states));
+        this.baselineChunkStates.put(chunk, snapshot);
     }
 
     public boolean hasBaselineChunk(ChunkPoint chunk) {
         return chunk != null && this.baselineChunkStates.containsKey(chunk);
     }
 
-    public Map<BlockPoint, StatePayload> baselineChunkState(ChunkPoint chunk) {
-        Map<BlockPoint, StatePayload> states = this.baselineChunkStates.get(chunk);
-        return states == null ? Map.of() : states;
+    public ChunkSnapshotPayload baselineChunkState(ChunkPoint chunk) {
+        return this.baselineChunkStates.get(chunk);
     }
 
     public List<StoredBlockChange> startingChunkChanges(Collection<ChunkPoint> chunks) {

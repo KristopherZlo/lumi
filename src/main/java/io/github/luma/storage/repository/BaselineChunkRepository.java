@@ -1,6 +1,7 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.storage.ProjectLayout;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -10,10 +11,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.state.BlockState;
 
 public final class BaselineChunkRepository {
 
@@ -21,36 +19,22 @@ public final class BaselineChunkRepository {
     private final SnapshotWriter snapshotWriter = new SnapshotWriter();
     private final SnapshotReader snapshotReader = new SnapshotReader();
 
-    public boolean captureIfMissing(
+    public boolean writeIfMissing(
             ProjectLayout layout,
             String projectId,
-            ChunkPoint chunk,
-            ServerLevel level,
-            Instant now,
-            BlockPos changedPos,
-            BlockState oldState,
-            CompoundTag oldBlockEntity
+            ChunkSnapshotPayload chunkSnapshot,
+            Instant now
     ) throws IOException {
-        Path baselineFile = this.file(layout, chunk);
+        Path baselineFile = this.file(layout, chunkSnapshot.chunk());
         if (Files.exists(baselineFile)) {
             return false;
         }
 
-        this.snapshotWriter.writeFile(
+        this.snapshotWriter.writePreparedChunkFile(
                 baselineFile,
-                this.snapshotWriter.captureData(
-                        projectId,
-                        List.of(chunk),
-                        level,
-                        now,
-                        java.util.Map.of(
-                                changedPos.immutable(),
-                                new SnapshotWriter.SnapshotBlockState(
-                                        oldState,
-                                        oldBlockEntity == null ? null : oldBlockEntity.copy()
-                                )
-                        )
-                )
+                projectId,
+                chunkSnapshot,
+                now
         );
         return true;
     }

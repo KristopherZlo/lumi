@@ -1,5 +1,7 @@
 package io.github.luma.storage.repository;
 
+import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
+import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.SnapshotChunkData;
@@ -88,6 +90,24 @@ public final class SnapshotWriter {
         StorageIo.writeAtomically(snapshotFile, output -> this.writeCompressed(output, snapshot));
     }
 
+    public void writePreparedChunkFile(
+            Path snapshotFile,
+            String projectId,
+            ChunkSnapshotPayload chunk,
+            Instant now
+    ) throws IOException {
+        this.writePreparedChunkFile(snapshotFile, projectId, List.of(chunk), now);
+    }
+
+    public void writePreparedChunkFile(
+            Path snapshotFile,
+            String projectId,
+            Collection<ChunkSnapshotPayload> chunks,
+            Instant now
+    ) throws IOException {
+        this.writeFile(snapshotFile, this.materializePreparedSnapshot(projectId, chunks, now));
+    }
+
     private void writeCompressed(OutputStream output, SnapshotData snapshot) throws IOException {
         try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(new BufferedOutputStream(output)))) {
             data.writeInt(MAGIC);
@@ -122,6 +142,35 @@ public final class SnapshotWriter {
                 }
             }
         }
+    }
+
+    private SnapshotData materializePreparedSnapshot(
+            String projectId,
+            Collection<ChunkSnapshotPayload> chunks,
+            Instant now
+    ) {
+        List<ChunkSnapshotPayload> orderedChunks = List.copyOf(chunks == null ? List.<ChunkSnapshotPayload>of() : chunks);
+        int minBuildHeight = orderedChunks.isEmpty() ? 0 : orderedChunks.getFirst().minBuildHeight();
+        int maxBuildHeight = orderedChunks.isEmpty() ? 0 : orderedChunks.getFirst().maxBuildHeight();
+        List<SnapshotChunkData> chunkData = new ArrayList<>(orderedChunks.size());
+        for (ChunkSnapshotPayload chunk : orderedChunks) {
+            minBuildHeight = Math.min(minBuildHeight, chunk.minBuildHeight());
+            maxBuildHeight = Math.max(maxBuildHeight, chunk.maxBuildHeight());
+            chunkData.add(this.materializePreparedChunk(chunk));
+        }
+        return new SnapshotData(projectId, now, minBuildHeight, maxBuildHeight, chunkData);
+    }
+
+    private SnapshotChunkData materializePreparedChunk(ChunkSnapshotPayload chunk) {
+        List<SnapshotSectionData> sections = new ArrayList<>(chunk.sections().size());
+        for (ChunkSectionSnapshotPayload section : chunk.sections()) {
+            sections.add(new SnapshotSectionData(
+                    section.sectionY(),
+                    section.palette(),
+                    section.unpackPaletteIndexes()
+            ));
+        }
+        return new SnapshotChunkData(chunk.chunkX(), chunk.chunkZ(), sections, chunk.blockEntities());
     }
 
     private SnapshotChunkData captureChunk(
