@@ -5,6 +5,7 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -55,6 +56,8 @@ public final class HistoryCaptureManager {
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
+    private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
+    private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
     private final Map<String, TrackedChangeBuffer> activeBuffers = new HashMap<>();
     private final Map<String, CaptureSessionState> activeSessions = new HashMap<>();
     private final Map<String, CaptureSessionDiagnostics> sessionDiagnostics = new HashMap<>();
@@ -201,7 +204,11 @@ public final class HistoryCaptureManager {
                     this.dirtySessions.remove(projectId);
                     this.lastDraftFlushes.remove(projectId);
                     this.clearSessionDiagnostics(projectId);
-                    this.recoveryRepository.deleteDraft(trackedProject.layout());
+                    this.persistenceCoordinator.deleteDraft(
+                            trackedProject.layout(),
+                            projectId,
+                            trackedProject.project().name()
+                    );
                     LumaMod.LOGGER.info("Discarded empty active buffer for project {}", trackedProject.project().name());
                 } else {
                     this.dirtySessions.add(projectId);
@@ -240,7 +247,10 @@ public final class HistoryCaptureManager {
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         CaptureSessionState sessionState = this.activeSessions.get(projectId);
         if (trackedProject != null && sessionState != null) {
-            this.reconcileSession(server, trackedProject, sessionState);
+            this.reconcileSession(server, trackedProject, sessionState, true);
+        }
+        if (trackedProject != null) {
+            this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
         }
         TrackedChangeBuffer session = this.activeBuffers.remove(projectId);
         this.activeSessions.remove(projectId);
@@ -291,7 +301,10 @@ public final class HistoryCaptureManager {
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         CaptureSessionState sessionState = this.activeSessions.get(projectId);
         if (trackedProject != null && sessionState != null) {
-            this.reconcileSession(server, trackedProject, sessionState);
+            this.reconcileSession(server, trackedProject, sessionState, true);
+        }
+        if (trackedProject != null) {
+            this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
         }
         TrackedChangeBuffer session = this.activeBuffers.remove(projectId);
         this.activeSessions.remove(projectId);
@@ -335,7 +348,11 @@ public final class HistoryCaptureManager {
         this.clearSessionDiagnostics(projectId);
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         if (trackedProject != null) {
-            this.recoveryRepository.deleteDraft(trackedProject.layout());
+            this.persistenceCoordinator.deleteDraft(
+                    trackedProject.layout(),
+                    projectId,
+                    trackedProject.project().name()
+            );
             LumaMod.LOGGER.info("Discarded persisted draft for project {}", trackedProject.project().name());
         }
     }
@@ -393,26 +410,29 @@ public final class HistoryCaptureManager {
             try {
                 CaptureSessionState sessionState = this.activeSessions.get(projectId);
                 if (trackedProject != null && sessionState != null) {
-                    this.reconcileSession(server, trackedProject, sessionState);
+                    this.reconcileSession(server, trackedProject, sessionState, false);
+                    if (sessionState.hasPendingReconciliation()) {
+                        continue;
+                    }
                 }
                 if (!this.activeBuffers.containsKey(projectId) || session.isEmpty()) {
                     continue;
                 }
-                this.recoveryRepository.saveDraft(trackedProject.layout(), session.toDraft());
+                this.persistenceCoordinator.enqueueDraftFlush(
+                        trackedProject.layout(),
+                        projectId,
+                        trackedProject.project().name(),
+                        session.toDraft()
+                );
                 this.dirtySessions.remove(projectId);
                 this.lastDraftFlushes.put(projectId, now);
                 LumaDebugLog.log(
                         trackedProject.project(),
                         "capture",
-                        "Flushed live draft for project {} with {} pending changes after {}s idle",
+                        "Queued async live draft flush for project {} with {} pending changes after {}s idle",
                         trackedProject.project().name(),
                         session.size(),
                         Duration.between(session.updatedAt(), now).getSeconds()
-                );
-                LumaMod.LOGGER.info(
-                        "Flushed active draft for project {} with {} pending changes",
-                        trackedProject.project().name(),
-                        session.size()
                 );
             } catch (IOException exception) {
                 LumaMod.LOGGER.warn("Failed to flush active session for {}", projectId, exception);
@@ -585,21 +605,43 @@ public final class HistoryCaptureManager {
             );
             return;
         }
+        if (this.persistenceCoordinator.hasPendingBaselineWrite(trackedProject.project().id().toString(), chunk)) {
+            LumaDebugLog.log(
+                    trackedProject.project(),
+                    "capture",
+                    "Baseline chunk {}:{} already queued for project {}",
+                    chunk.x(),
+                    chunk.z(),
+                    trackedProject.project().name()
+            );
+            return;
+        }
 
-        this.baselineChunkRepository.captureIfMissing(
+        ChunkSnapshotPayload chunkSnapshot = this.chunkSnapshotCaptureService.captureLoadedChunk(
+                        level,
+                        chunk,
+                        pos,
+                        oldState,
+                        oldBlockEntity
+                )
+                .orElseThrow(() -> new IOException(
+                        "Chunk %d:%d is not available for baseline capture in %s".formatted(
+                                chunk.x(),
+                                chunk.z(),
+                                level.dimension().identifier()
+                        )
+                ));
+        this.persistenceCoordinator.enqueueBaselineWrite(
                 trackedProject.layout(),
                 trackedProject.project().id().toString(),
-                chunk,
-                level,
-                now,
-                pos,
-                oldState,
-                oldBlockEntity
+                trackedProject.project().name(),
+                chunkSnapshot,
+                now
         );
         LumaDebugLog.log(
                 trackedProject.project(),
                 "capture",
-                "Captured missing baseline chunk {}:{} for project {} from mutation at {}",
+                "Queued missing baseline chunk {}:{} for project {} from mutation at {}",
                 chunk.x(),
                 chunk.z(),
                 trackedProject.project().name(),
@@ -619,6 +661,9 @@ public final class HistoryCaptureManager {
         ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
         CaptureSessionState session = this.activeSessions.get(trackedProject.project().id().toString());
         if (session != null && session.hasBaselineChunk(chunk)) {
+            return true;
+        }
+        if (this.persistenceCoordinator.hasPendingBaselineWrite(trackedProject.project().id().toString(), chunk)) {
             return true;
         }
         if (this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
@@ -741,17 +786,31 @@ public final class HistoryCaptureManager {
     private void reconcileSession(
             MinecraftServer server,
             TrackedProject trackedProject,
-            CaptureSessionState session
+            CaptureSessionState session,
+            boolean finalDrain
     ) throws IOException {
         ServerLevel level = this.resolveProjectLevel(server, trackedProject.project());
         if (level == null) {
             return;
         }
-        SessionStabilizationService.ReconciliationResult result = this.stabilizationService.stabilizePendingChunks(
-                level,
-                trackedProject.project(),
-                session
-        );
+        SessionStabilizationService.ReconciliationResult result;
+        try {
+            result = this.stabilizationService.stabilizePendingChunks(
+                    level,
+                    trackedProject.project(),
+                    session,
+                    finalDrain
+            );
+        } catch (IllegalStateException exception) {
+            throw new IOException(
+                    "Failed to stabilize dirty chunks for project "
+                            + trackedProject.project().name()
+                            + ": "
+                            + exception.getMessage(),
+                    exception
+            );
+        }
+
         if (result.inFlight() || result.chunkCount() <= 0) {
             return;
         }
@@ -782,7 +841,11 @@ public final class HistoryCaptureManager {
             this.dirtySessions.remove(projectId);
             this.lastDraftFlushes.remove(projectId);
             this.clearSessionDiagnostics(projectId);
-            this.recoveryRepository.deleteDraft(trackedProject.layout());
+            this.persistenceCoordinator.deleteDraft(
+                    trackedProject.layout(),
+                    projectId,
+                    trackedProject.project().name()
+            );
             LumaMod.LOGGER.info("Discarded empty active buffer for project {} after reconciliation", trackedProject.project().name());
         }
     }
@@ -808,7 +871,9 @@ public final class HistoryCaptureManager {
     ) {
         int accepted = diagnostics.acceptedMutations();
         if (accepted <= STARTUP_CAPTURE_TRACE_LIMIT) {
-            LumaMod.LOGGER.info(
+            LumaDebugLog.log(
+                    project,
+                    "capture",
                     "Capture trace {}/{} for project {}: source={} sessionSource={} pos={} chunk={}:{} {} -> {} oldBe={} newBe={} pending={} delta={}",
                     accepted,
                     STARTUP_CAPTURE_TRACE_LIMIT,
@@ -826,7 +891,9 @@ public final class HistoryCaptureManager {
                     pendingAfter - pendingBefore
             );
             if (accepted == STARTUP_CAPTURE_TRACE_LIMIT) {
-                LumaMod.LOGGER.info(
+                LumaDebugLog.log(
+                        project,
+                        "capture",
                         "Capture trace limit reached for project {}. Further accepted mutations in this session will be summarized only at progress checkpoints.",
                         project.name()
                 );

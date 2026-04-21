@@ -76,8 +76,9 @@ Use Lumi if you want to:
 4. Whole-dimension sessions now keep a causal chunk envelope rooted in explicit builder edits. The root chunk defines a one-chunk halo envelope, and Lumi captures per-chunk baselines lazily when a chunk inside that envelope first needs stabilization.
 5. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
 6. `TrackedChangeBuffer` still merges explicit and targeted realtime changes immediately.
-7. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks against the current world and stores the final stabilized diff.
-8. Recovery draft data flushes on an interval.
+7. First-touch whole-dimension baseline capture now copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
+8. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks against the current world and stores the final stabilized diff.
+9. Recovery draft data still flushes on an interval, but the WAL append and compaction now run asynchronously on that same capture-maintenance executor.
 
 ### Save
 
@@ -98,6 +99,7 @@ Use Lumi if you want to:
 ## Runtime Rules
 
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
+- Recovery WAL writes, WAL compaction, and baseline chunk compression stay off the server-tick capture path.
 - One map operation is expected at a time per save.
 - Progress is exposed through operation state.
 - Lumi screens do not pause the game.
