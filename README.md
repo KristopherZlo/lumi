@@ -1,6 +1,10 @@
 # Lumi
 
 <p align="center">
+  <img alt="Lumi banner" src="lumi-banner.png" />
+</p>
+
+<p align="center">
   <strong>Project-oriented world history for Minecraft builders.</strong><br />
   A singleplayer-first Fabric mod for saving, comparing, restoring, and recovering structure work without exposing raw Git terminology in the UI.
 </p>
