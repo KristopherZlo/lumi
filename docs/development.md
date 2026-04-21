@@ -114,6 +114,7 @@ Current runtime history behavior:
 
 - `HistoryCaptureManager` records tracked block changes inside project bounds, including TNT ignition, explosions, falling-block start and landing changes, fluid spread, fire spread and burn-out, crop/sapling/stem growth, piston movement, and selected mob block mutations, while still excluding Lumi's own restore applications.
 - Automatic dimension project bootstrap is limited to explicit builder-driven sources. Ambient fluid, fire, growth, block-update, and mob mutations cannot create a workspace on world load by themselves.
+- New live capture sessions are also limited to explicit builder-driven sources. Secondary falling-block, fluid, fire, growth, piston, explosion, and mob mutations can extend an already active draft, but they do not start one by themselves when the player loads a world and stays idle.
 - Ambient spread/update sources only record inside chunks that are already tracked for the project. They do not expand the baseline chunk set during normal world-settling after login.
 - Changes are aggregated into a recovery draft and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.

@@ -11,6 +11,7 @@ Project data is stored inside the save folder.
 - Press `U` to open the project for the current dimension.
 - If that project does not exist yet, Lumi creates it.
 - Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
+- Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.
 - Use `Workspaces` in the header to move between dimensions.
 
 ## Legacy Manual Projects
@@ -51,6 +52,7 @@ Tracked history includes:
 
 Lumi does not record its own restore apply pass as normal history.
 Ambient fluid, fire, growth, block-update, and mob changes only continue inside chunks the project has already tracked, so loading a world does not bootstrap thousands of new chunk baselines by itself.
+Secondary effects such as falling gravel, fire spread, fluid spread, piston aftermath, and TNT/explosion fallout only join a draft after an explicit tracked action has already started that draft.
 
 For automatic dimension projects, the first node is `Initial`.
 

@@ -48,6 +48,25 @@ class HistoryCaptureManagerTest {
     }
 
     @Test
+    void shouldBootstrapSessionsOnlyFromExplicitSources() {
+        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.PLAYER));
+        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.ENTITY));
+        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXPLOSIVE));
+        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXTERNAL_TOOL));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXPLOSION));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.FLUID));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.FIRE));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.BLOCK_UPDATE));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.PISTON));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.FALLING_BLOCK));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.MOB));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.SYSTEM));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.RESTORE));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(null));
+    }
+
+    @Test
     void shouldExpandTrackedChunksOnlyFromBuilderDrivenSources() {
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.ENTITY));
