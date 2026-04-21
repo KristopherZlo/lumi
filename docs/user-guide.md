@@ -22,15 +22,24 @@ They are a fallback. The main flow is the menu UI.
 
 ## Main Screen
 
-The main project screen has three parts:
+The main project screen now leads with visual history cards instead of the technical graph.
 
-- composer at the top
-- version graph in the center
-- detail pane on the right
+From top to bottom, the primary flow is:
 
-Click a node in the graph to select a version.
+- save or amend unsaved changes
+- browse the branch history as large version cards
+- switch to another branch when needed
+- open the technical graph only from the `Advanced history graph` section
 
-The detail pane updates from that selection.
+Each version card is meant to answer the basic questions at a glance:
+
+- what this save is
+- when it was created
+- whether it is the latest save on that branch
+- whether it is the start of the branch
+- what changed, using block, chunk, and block-type counts
+
+Open `Details` only when you want the full preview or materials view.
 
 Lumi stores new versions as patches first.
 
