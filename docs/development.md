@@ -43,6 +43,24 @@ This now includes regression checks for:
 - recovery draft isolation while save/amend operations run
 - material delta summarization on large diffs
 
+Run server GameTests:
+
+```powershell
+.\scripts\run-test-client.ps1 -GradleTasks runGameTest
+```
+
+Run client GameTests:
+
+```powershell
+.\scripts\run-test-client.ps1 -GradleTasks runClientGameTest
+```
+
+CI can run the headless production client GameTest task:
+
+```powershell
+.\scripts\run-test-client.ps1 -GradleTasks runProductionClientGameTest
+```
+
 Enable verbose runtime tracing for debugging:
 
 - per workspace: `Settings -> Debug -> Debug logging`
