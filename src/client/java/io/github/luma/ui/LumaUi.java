@@ -36,7 +36,7 @@ public final class LumaUi {
     }
 
     public static LumaScrollContainer<FlowLayout> screenScroll(FlowLayout body) {
-        return screenScroll(Sizing.fill(100), Sizing.fill(100), body);
+        return screenScroll(Sizing.fill(100), Sizing.expand(100), body);
     }
 
     public static LumaScrollContainer<FlowLayout> screenScroll(
