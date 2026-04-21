@@ -8,7 +8,7 @@
     "OpenAI Codex"
   ],
   "contact": {},
-  "license": "All Rights Reserved",
+  "license": "GPL-3.0-only",
   "environment": "*",
   "entrypoints": {
     "main": [
