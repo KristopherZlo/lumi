@@ -84,6 +84,16 @@ public final class HistoryCaptureManager {
             Instant now = Instant.now();
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
             if (matchingProjects.isEmpty()) {
+                if (!allowsAutomaticProjectCreation(source)) {
+                    LumaDebugLog.log(
+                            "capture",
+                            "Skipped {} mutation at {} in {} because no tracked workspace exists and the source cannot bootstrap one",
+                            source,
+                            pos,
+                            level.dimension().identifier()
+                    );
+                    return;
+                }
                 this.projectService.ensureWorldProject(level, defaultActor(source));
                 this.invalidateProjectCache(level.getServer());
                 matchingProjects = this.matchingProjects(level, pos);
@@ -112,7 +122,9 @@ public final class HistoryCaptureManager {
                         oldState,
                         newState
                 );
-                this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, now);
+                if (!this.ensureTrackedChunk(trackedProject, level, pos, oldState, oldBlockEntity, source, now)) {
+                    continue;
+                }
 
                 String projectId = trackedProject.project().id().toString();
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
@@ -514,6 +526,36 @@ public final class HistoryCaptureManager {
         );
     }
 
+    private boolean ensureTrackedChunk(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            io.github.luma.domain.model.WorldMutationSource source,
+            Instant now
+    ) throws IOException {
+        ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
+        if (this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
+            return true;
+        }
+        if (!allowsTrackedChunkExpansion(source)) {
+            LumaDebugLog.log(
+                    trackedProject.project(),
+                    "capture",
+                    "Skipped {} mutation at {} because chunk {}:{} is not tracked yet and the source cannot expand tracking",
+                    source,
+                    pos,
+                    chunk.x(),
+                    chunk.z()
+            );
+            return false;
+        }
+
+        this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, now);
+        return true;
+    }
+
     private String cacheKey(MinecraftServer server) {
         return server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().toString();
     }
@@ -547,6 +589,50 @@ public final class HistoryCaptureManager {
                     MOB,
                     EXTERNAL_TOOL -> true;
             case RESTORE, SYSTEM -> false;
+        };
+    }
+
+    public static boolean allowsAutomaticProjectCreation(io.github.luma.domain.model.WorldMutationSource source) {
+        if (source == null) {
+            return false;
+        }
+        return switch (source) {
+            case PLAYER,
+                    ENTITY,
+                    EXPLOSIVE,
+                    EXTERNAL_TOOL -> true;
+            case EXPLOSION,
+                    FLUID,
+                    FIRE,
+                    GROWTH,
+                    BLOCK_UPDATE,
+                    PISTON,
+                    FALLING_BLOCK,
+                    MOB,
+                    RESTORE,
+                    SYSTEM -> false;
+        };
+    }
+
+    public static boolean allowsTrackedChunkExpansion(io.github.luma.domain.model.WorldMutationSource source) {
+        if (source == null) {
+            return false;
+        }
+        return switch (source) {
+            case PLAYER,
+                    ENTITY,
+                    EXPLOSION,
+                    PISTON,
+                    FALLING_BLOCK,
+                    EXPLOSIVE,
+                    EXTERNAL_TOOL -> true;
+            case FLUID,
+                    FIRE,
+                    GROWTH,
+                    BLOCK_UPDATE,
+                    MOB,
+                    RESTORE,
+                    SYSTEM -> false;
         };
     }
 
