@@ -127,6 +127,9 @@ public final class HistoryCaptureManager {
                 }
 
                 String projectId = trackedProject.project().id().toString();
+                if (!this.canCaptureIntoSession(trackedProject, source)) {
+                    continue;
+                }
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
                 buffer.recordChange(pos, oldState, newState, oldBlockEntity, newBlockEntity, now);
                 LumaDebugLog.log(
@@ -556,6 +559,28 @@ public final class HistoryCaptureManager {
         return true;
     }
 
+    private boolean canCaptureIntoSession(
+            TrackedProject trackedProject,
+            io.github.luma.domain.model.WorldMutationSource source
+    ) {
+        String projectId = trackedProject.project().id().toString();
+        if (this.activeBuffers.containsKey(projectId)) {
+            return true;
+        }
+        if (allowsSessionBootstrap(source)) {
+            return true;
+        }
+
+        LumaDebugLog.log(
+                trackedProject.project(),
+                "capture",
+                "Skipped {} mutation for project {} because no active session exists and the source cannot bootstrap capture",
+                source,
+                trackedProject.project().name()
+        );
+        return false;
+    }
+
     private String cacheKey(MinecraftServer server) {
         return server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().toString();
     }
@@ -593,6 +618,28 @@ public final class HistoryCaptureManager {
     }
 
     public static boolean allowsAutomaticProjectCreation(io.github.luma.domain.model.WorldMutationSource source) {
+        if (source == null) {
+            return false;
+        }
+        return switch (source) {
+            case PLAYER,
+                    ENTITY,
+                    EXPLOSIVE,
+                    EXTERNAL_TOOL -> true;
+            case EXPLOSION,
+                    FLUID,
+                    FIRE,
+                    GROWTH,
+                    BLOCK_UPDATE,
+                    PISTON,
+                    FALLING_BLOCK,
+                    MOB,
+                    RESTORE,
+                    SYSTEM -> false;
+        };
+    }
+
+    public static boolean allowsSessionBootstrap(io.github.luma.domain.model.WorldMutationSource source) {
         if (source == null) {
             return false;
         }
