@@ -2,7 +2,6 @@ package io.github.luma.mixin;
 
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
-import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -35,16 +34,6 @@ abstract class ServerGamePacketListenerMixin {
 
     @Inject(method = "handleSignedChatCommand", at = @At("RETURN"))
     private void luma$endSignedChatCommand(ServerboundChatCommandSignedPacket packet, CallbackInfo ci) {
-        this.luma$popPlayerSource();
-    }
-
-    @Inject(method = "handleCustomPayload", at = @At("HEAD"))
-    private void luma$beginCustomPayload(ServerboundCustomPayloadPacket packet, CallbackInfo ci) {
-        this.luma$pushPlayerSource();
-    }
-
-    @Inject(method = "handleCustomPayload", at = @At("RETURN"))
-    private void luma$endCustomPayload(ServerboundCustomPayloadPacket packet, CallbackInfo ci) {
         this.luma$popPlayerSource();
     }
 

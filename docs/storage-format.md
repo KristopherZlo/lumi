@@ -74,6 +74,7 @@ Stores the project metadata, including:
 Stores the full variant list. Each variant keeps its own head version id and base version id.
 
 Restore and amend workflows move variant heads by rewriting this file. Older detached version files are left on disk for safety even when they are no longer reachable from a live variant head.
+The client history view still lists those detached versions after a restore-style reset.
 
 ### `versions/*.json`
 
@@ -143,8 +144,9 @@ They are currently created:
 - for the initial version
 - for legacy migration saves
 - every configured snapshot interval
-- when the configured changed-volume threshold is exceeded
-- before restore, if safety snapshot is enabled and a draft exists
+- when the configured changed-volume threshold is exceeded for bounded projects
+
+Whole-dimension projects do not create volume-triggered snapshots. They rely on the metadata-backed `WORLD_ROOT`, patch replay, tracked baselines, and the configured snapshot interval.
 
 ### `previews/*.png`
 
@@ -163,6 +165,12 @@ Stores the current compacted recovery base snapshot in schema v3 binary format.
 Stores append-only recovery draft updates as an LZ4-compressed write-ahead log.
 
 The active in-memory `TrackedChangeBuffer` is periodically flushed into recovery storage instead of rewriting one large JSON file for every change. Once the WAL reaches the compaction threshold, the latest entry is rewritten into `draft.bin.lz4` and the WAL is removed.
+
+### `recovery/operation-draft.bin.lz4`
+
+Stores the draft currently being saved or amended.
+
+This file is separate from `draft.bin.lz4` and `draft.wal.lz4`. Live capture never resumes it. If the player edits blocks while a save is still running, those edits start a new recovery draft and are not merged into the in-progress version.
 
 ### `recovery/journal.json`
 

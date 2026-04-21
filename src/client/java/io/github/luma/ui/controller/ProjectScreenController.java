@@ -58,10 +58,7 @@ public final class ProjectScreenController {
             var server = ClientProjectAccess.requireSingleplayerServer(this.client);
             var project = this.projectService.loadProject(server, projectName);
             var loadedVariants = new ArrayList<>(this.projectService.loadVariants(server, projectName));
-            var loadedVersions = new ArrayList<>(this.versionLineageService.reachableVersions(
-                    this.projectService.loadVersions(server, projectName),
-                    loadedVariants
-            ));
+            var loadedVersions = new ArrayList<>(this.projectService.loadVersions(server, projectName));
             loadedVersions.sort(java.util.Comparator.comparing(io.github.luma.domain.model.ProjectVersion::createdAt).reversed());
             var loadedJournal = new ArrayList<>(this.recoveryService.loadJournal(server, projectName));
             loadedJournal.sort(java.util.Comparator.comparing(io.github.luma.domain.model.RecoveryJournalEntry::timestamp).reversed());

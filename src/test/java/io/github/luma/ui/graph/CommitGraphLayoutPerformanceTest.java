@@ -13,9 +13,27 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommitGraphLayoutPerformanceTest {
+
+    @Test
+    void commitGraphIncludesDetachedDescendantsAfterRestoreReset() {
+        Instant baseTime = Instant.parse("2026-04-21T00:00:00Z");
+        List<ProjectVersion> versions = List.of(
+                this.version("v0001", "main", "", baseTime),
+                this.version("v0002", "main", "v0001", baseTime.plusSeconds(1)),
+                this.version("v0003", "main", "v0002", baseTime.plusSeconds(2))
+        );
+        List<ProjectVariant> variants = List.of(new ProjectVariant("main", "main", "v0001", "v0001", true, baseTime));
+
+        List<String> graphVersionIds = CommitGraphLayout.build(versions, variants, "main").stream()
+                .map(node -> node.version().id())
+                .toList();
+
+        assertEquals(List.of("v0003", "v0002", "v0001"), graphVersionIds);
+    }
 
     @Test
     void commitGraphBuildHandlesLargeBranchHistoryWithinBudget() {
