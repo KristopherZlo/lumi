@@ -110,6 +110,7 @@ public final class SettingsScreen extends LumaScreen {
         buttons.child(UIComponents.button(Component.translatable("luma.action.save_settings"), button -> this.save()));
         actions.child(buttons);
         body.child(actions);
+        body.child(LumaUi.bottomSpacer());
     }
 
     @Override

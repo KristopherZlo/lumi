@@ -19,11 +19,13 @@ public final class PreviewService {
     private static final int PREVIEW_LIMIT = 96;
 
     public PreviewInfo capture(ProjectLayout layout, String versionId, Bounds3i bounds, ServerLevel level) throws IOException {
-        Files.createDirectories(layout.previewsDir());
+        return this.write(layout, versionId, this.sample(bounds, level));
+    }
 
+    public PreviewRenderData sample(Bounds3i bounds, ServerLevel level) {
         int width = Math.max(1, Math.min(PREVIEW_LIMIT, bounds.sizeX()));
         int depth = Math.max(1, Math.min(PREVIEW_LIMIT, bounds.sizeZ()));
-        BufferedImage image = new BufferedImage(width, depth, BufferedImage.TYPE_INT_ARGB);
+        int[] pixels = new int[width * depth];
 
         double stepX = (double) bounds.sizeX() / (double) width;
         double stepZ = (double) bounds.sizeZ() / (double) depth;
@@ -32,12 +34,25 @@ public final class PreviewService {
             for (int imageZ = 0; imageZ < depth; imageZ++) {
                 int worldX = bounds.min().x() + Math.min(bounds.sizeX() - 1, (int) Math.floor(imageX * stepX));
                 int worldZ = bounds.min().z() + Math.min(bounds.sizeZ() - 1, (int) Math.floor(imageZ * stepZ));
-                image.setRGB(imageX, imageZ, this.resolveTopColor(level, bounds, worldX, worldZ));
+                pixels[(imageZ * width) + imageX] = this.resolveTopColor(level, bounds, worldX, worldZ);
+            }
+        }
+
+        return new PreviewRenderData(width, depth, pixels);
+    }
+
+    public PreviewInfo write(ProjectLayout layout, String versionId, PreviewRenderData renderData) throws IOException {
+        Files.createDirectories(layout.previewsDir());
+
+        BufferedImage image = new BufferedImage(renderData.width(), renderData.depth(), BufferedImage.TYPE_INT_ARGB);
+        for (int imageX = 0; imageX < renderData.width(); imageX++) {
+            for (int imageZ = 0; imageZ < renderData.depth(); imageZ++) {
+                image.setRGB(imageX, imageZ, renderData.pixels()[(imageZ * renderData.width()) + imageX]);
             }
         }
 
         ImageIO.write(image, "png", layout.previewFile(versionId).toFile());
-        return new PreviewInfo(layout.previewFile(versionId).getFileName().toString(), width, depth);
+        return new PreviewInfo(layout.previewFile(versionId).getFileName().toString(), renderData.width(), renderData.depth());
     }
 
     private int resolveTopColor(ServerLevel level, Bounds3i bounds, int worldX, int worldZ) {
@@ -69,5 +84,8 @@ public final class PreviewService {
         }
 
         return 0xFF000000 | (red << 16) | (green << 8) | blue;
+    }
+
+    public record PreviewRenderData(int width, int depth, int[] pixels) {
     }
 }

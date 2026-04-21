@@ -149,24 +149,15 @@ public final class ProjectScreen extends LumaScreen {
         frame.child(titleRow);
         frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
 
-        FlowLayout body = LumaUi.screenBody();
-        this.bodyScroll = LumaUi.screenScroll(body);
-        frame.child(this.bodyScroll);
-
         if (this.state.project() == null) {
-            body.child(LumaUi.emptyState(
+            frame.child(LumaUi.emptyState(
                     Component.translatable("luma.project.unavailable"),
                     Component.translatable("luma.status.project_failed")
             ));
             return;
         }
 
-        body.child(this.pendingSection());
-        if (this.state.operationSnapshot() != null) {
-            body.child(this.operationSection());
-        }
-        body.child(this.workspaceMainSection());
-        body.child(this.diagnosticsSection());
+        frame.child(this.workspaceMainSection());
     }
 
     @Override
@@ -348,20 +339,26 @@ public final class ProjectScreen extends LumaScreen {
     }
 
     private FlowLayout workspaceMainSection() {
-        FlowLayout section = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        FlowLayout section = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fill(100));
         section.gap(8);
 
-        FlowLayout graphColumn = UIContainers.verticalFlow(Sizing.fill(62), Sizing.content());
-        graphColumn.gap(8);
-        graphColumn.child(this.branchesSection());
-        graphColumn.child(this.commitGraphSection());
+        FlowLayout primaryBody = LumaUi.screenBody();
+        this.bodyScroll = LumaUi.screenScroll(Sizing.fill(62), Sizing.fill(100), primaryBody);
+        primaryBody.child(this.pendingSection());
+        if (this.state.operationSnapshot() != null) {
+            primaryBody.child(this.operationSection());
+        }
+        primaryBody.child(this.branchesSection());
+        primaryBody.child(this.commitGraphSection());
+        primaryBody.child(this.diagnosticsSection());
+        primaryBody.child(LumaUi.bottomSpacer());
 
-        FlowLayout detailColumn = UIContainers.verticalFlow(Sizing.fill(38), Sizing.content());
-        detailColumn.gap(8);
-        detailColumn.child(this.detailsSection());
+        FlowLayout detailBody = LumaUi.screenBody();
+        detailBody.child(this.detailsSection());
+        detailBody.child(LumaUi.bottomSpacer());
 
-        section.child(graphColumn);
-        section.child(detailColumn);
+        section.child(this.bodyScroll);
+        section.child(LumaUi.screenScroll(Sizing.fill(38), Sizing.fill(100), detailBody));
         return section;
     }
 

@@ -35,6 +35,10 @@ public final class WorldOperationManager {
     private static final int MAX_BLOCKS_PER_TICK = 512;
     private static final long MIN_NANOS_PER_TICK = 1_000_000L;
     private static final long MAX_NANOS_PER_TICK = 3_000_000L;
+    private static final int RESTORE_MIN_BLOCKS_PER_TICK = 1024;
+    private static final int RESTORE_MAX_BLOCKS_PER_TICK = 4096;
+    private static final long RESTORE_MIN_NANOS_PER_TICK = 2_000_000L;
+    private static final long RESTORE_MAX_NANOS_PER_TICK = 8_000_000L;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
 
     private ExecutorService backgroundExecutor = createExecutor();
@@ -165,13 +169,23 @@ public final class WorldOperationManager {
 
     private int currentBlockBudget(ActiveOperation operation) {
         double fraction = operation.snapshot().progress().fraction();
-        return MIN_BLOCKS_PER_TICK + (int) Math.round((MAX_BLOCKS_PER_TICK - MIN_BLOCKS_PER_TICK) * fraction);
+        int minBudget = this.isRestoreOperation(operation) ? RESTORE_MIN_BLOCKS_PER_TICK : MIN_BLOCKS_PER_TICK;
+        int maxBudget = this.isRestoreOperation(operation) ? RESTORE_MAX_BLOCKS_PER_TICK : MAX_BLOCKS_PER_TICK;
+        return minBudget + (int) Math.round((maxBudget - minBudget) * fraction);
     }
 
     private long currentDeadline(ActiveOperation operation) {
         double fraction = operation.snapshot().progress().fraction();
-        long budget = MIN_NANOS_PER_TICK + Math.round((MAX_NANOS_PER_TICK - MIN_NANOS_PER_TICK) * fraction);
+        long minBudget = this.isRestoreOperation(operation) ? RESTORE_MIN_NANOS_PER_TICK : MIN_NANOS_PER_TICK;
+        long maxBudget = this.isRestoreOperation(operation) ? RESTORE_MAX_NANOS_PER_TICK : MAX_NANOS_PER_TICK;
+        long budget = minBudget + Math.round((maxBudget - minBudget) * fraction);
         return System.nanoTime() + budget;
+    }
+
+    private boolean isRestoreOperation(ActiveOperation operation) {
+        return operation != null
+                && operation.handle() != null
+                && "restore-version".equals(operation.handle().label());
     }
 
     private void ensureIdle(String serverKey) {

@@ -26,6 +26,8 @@ The commit graph is branch-aware and built from real `parentVersionId` links plu
 
 New versions are stored primarily as patches. Lumi creates checkpoint snapshots when the configured policy requires them.
 
+Tracked history is not limited to direct player block breaks and placements. Explosions and other world mutations that touch tracked workspace blocks are also captured, except for Lumi's own internal restore application.
+
 For automatic whole-dimension workspaces, the first visible history node is `Initial`. This is a metadata-backed `WORLD_ROOT` that records the world seed, game version, and generator context for that workspace.
 
 ## Restore behavior
@@ -33,6 +35,8 @@ For automatic whole-dimension workspaces, the first visible history node is `Ini
 Restore reconstructs the target state from the nearest checkpoint snapshot plus the patch chain after that snapshot.
 
 When the selected target is on the current active branch lineage, Lumi first tries a direct patch replay or rollback path. This keeps restore focused on tracked positions instead of expanding through checkpoint chunk payloads unnecessarily.
+
+After a successful restore, Lumi also resets the active branch head to the selected version. In practice this behaves like a builder-friendly `reset --hard`: if you restore an older version and keep building, the next save or amend continues from that restored point.
 
 When you restore `Initial`, Lumi restores only the chunks that the current workspace has already tracked. In the current implementation this uses the workspace baseline-chunk history for those tracked chunks; it does not rewind unrelated world state such as inventory, time, gamerules, or untouched chunks.
 
@@ -52,6 +56,8 @@ From the recovery screen you can:
 - Discard the draft.
 - Save the draft directly as a new version.
 
+Recovery does not create a hidden branch or duplicate world. It is only a stored copy of unsaved tracked changes from the interrupted session.
+
 The `Log` tab shows recovery and restore journal entries.
 
 ## Branches
@@ -67,6 +73,8 @@ Use the `Branches` section to:
 When you switch branches, Lumi restores that branch head into the world and future saves continue from that head only.
 
 If you only want to move the active branch without restoring a specific selected version, use `Checkout branch` from the version detail pane.
+
+If you have pending tracked changes on the current head and want to replace that head instead of adding another version on top, use `Amend head` from the composer area.
 
 ## Compare
 
@@ -85,10 +93,10 @@ Current compare behavior:
 ## Version details
 
 - `Preview` is the primary detail tab. It shows the generated top-down thumbnail for the selected version and can refresh the preview file.
-- `Materials` shows the per-block-id delta between the selected version and its parent.
+- `Materials` shows the per-block-id delta between the selected version and its parent, including block/item icons when an item representation exists.
 - The old sampled `Changes` view remains in code for future iteration, but it is currently hidden from the main details UI because it was too noisy to be useful.
 
-Preview generation is lightweight and asynchronous failure-safe in the sense that version saving does not fail if preview generation fails.
+Preview generation is lightweight and failure-safe in the sense that version saving does not fail if preview generation fails. Whole-dimension workspaces generate previews from the tracked chunk extent instead of requiring a manual bounded area.
 
 ## Settings
 

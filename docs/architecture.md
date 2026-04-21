@@ -37,7 +37,7 @@ Key services:
 
 - `ProjectService`: create, load, and update projects
 - `ProjectService`: also owns world-origin bootstrap and automatic `WORLD_ROOT` creation for dimension workspaces
-- `VersionService`: save tracked edits as versions and enforce snapshot policy
+- `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy
 - `RestoreService`: build restore plans, decode world-root baseline restores, and prepare chunk batches
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching
@@ -53,8 +53,8 @@ These services should express product rules, not raw Minecraft side effects or r
 
 Important adapters:
 
-- `HistoryCaptureManager`: captures player edits into per-project tracked buffers
-- `WorldMutationContext`: prevents restore and automation from being re-captured as player edits
+- `HistoryCaptureManager`: captures tracked player and world mutations into per-project buffers
+- `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
@@ -90,7 +90,7 @@ Responsibilities are split as follows:
 ## Capture flow
 
 1. A Minecraft mixin intercepts a block mutation.
-2. `WorldMutationContext` filters out non-player sources.
+2. `WorldMutationContext` filters out Lumi's internal `RESTORE` source only.
 3. `HistoryCaptureManager` finds matching projects for the block position.
 4. Whole-dimension workspaces capture baseline chunks on first touch.
 5. A per-project `TrackedChangeBuffer` merges the change by packed block position.
@@ -101,7 +101,7 @@ Important invariants:
 - the first observed old state is preserved
 - the latest new state wins
 - no-op edits are removed from the buffer
-- restore-originated mutations never re-enter player history
+- restore-originated mutations never re-enter tracked history
 
 ## Save flow
 
@@ -129,7 +129,7 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 7. Prepared placements are collapsed by final block position before tick-thread application.
 8. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
 9. Chunk commit order is fixed to section blocks -> block entities -> entity batch.
-10. Completion writes a recovery journal entry and leaves operation state available to the UI.
+10. Completion resets the active variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly for the UI.
 
 Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never happen on the tick-thread apply path.
 
@@ -155,7 +155,7 @@ Current guarantees:
 
 - only one world operation runs per world at a time
 - the world-operation executor is single-threaded and low priority
-- preview generation uses a separate low-priority executor
+- preview generation samples world state on the server thread and writes PNG output on a separate low-priority executor
 - operation progress is observable through `OperationSnapshot`
 - client HUD state is polled separately from screen rendering so non-pausing menus, the top-right diff overlay, and the action-bar progress bar keep updating while screens are open
 

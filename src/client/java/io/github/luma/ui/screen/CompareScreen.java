@@ -5,6 +5,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.LumaScrollContainer;
+import io.github.luma.ui.MaterialEntryView;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.CompareViewState;
@@ -100,12 +101,14 @@ public final class CompareScreen extends LumaScreen {
                     Component.translatable("luma.compare.empty_title"),
                     Component.translatable("luma.compare.empty")
             ));
+            body.child(LumaUi.bottomSpacer());
             return;
         }
 
         body.child(this.summarySection());
         body.child(this.changedBlocksSection());
         body.child(this.materialsSection());
+        body.child(LumaUi.bottomSpacer());
     }
 
     @Override
@@ -119,27 +122,34 @@ public final class CompareScreen extends LumaScreen {
                 Component.translatable("luma.compare.setup_help")
         );
 
+        FlowLayout inputs = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        inputs.gap(8);
+
         var leftBox = UIComponents.textBox(Sizing.fill(100), this.leftReference);
         leftBox.onChanged().subscribe(value -> this.leftReference = value);
-        section.child(LumaUi.formField(
+        FlowLayout leftField = LumaUi.formField(
                 Component.translatable("luma.compare.left"),
                 Component.translatable("luma.compare.left_help"),
                 leftBox
-        ));
+        );
+        leftField.sizing(Sizing.fill(50), Sizing.content());
+        inputs.child(leftField);
 
         var rightBox = UIComponents.textBox(Sizing.fill(100), this.rightReference);
         rightBox.onChanged().subscribe(value -> this.rightReference = value);
-        section.child(LumaUi.formField(
+        FlowLayout rightField = LumaUi.formField(
                 Component.translatable("luma.compare.right"),
                 Component.translatable("luma.compare.right_help"),
                 rightBox
-        ));
+        );
+        rightField.sizing(Sizing.fill(50), Sizing.content());
+        inputs.child(rightField);
+        section.child(inputs);
         if (!this.state.leftResolvedVersionId().isBlank() || !this.state.rightResolvedVersionId().isBlank()) {
-            section.child(LumaUi.insetSection(
+            section.child(LumaUi.chip(
                     Component.literal(this.displayResolved(this.state.leftResolvedVersionId())
                             + " -> "
-                            + this.displayResolved(this.state.rightResolvedVersionId())),
-                    null
+                            + this.displayResolved(this.state.rightResolvedVersionId()))
             ));
         }
 
@@ -256,11 +266,14 @@ public final class CompareScreen extends LumaScreen {
         int limit = Math.min(MATERIAL_LIMIT, this.state.materialDelta().size());
         for (int index = 0; index < limit; index++) {
             var entry = this.state.materialDelta().get(index);
-            section.child(LumaUi.caption(Component.translatable(
-                    "luma.compare.material_entry",
+            section.child(MaterialEntryView.row(
                     entry.blockId(),
-                    entry.delta()
-            )));
+                    Component.translatable(
+                            "luma.compare.material_entry",
+                            entry.blockId(),
+                            entry.delta()
+                    )
+            ));
         }
         return section;
     }

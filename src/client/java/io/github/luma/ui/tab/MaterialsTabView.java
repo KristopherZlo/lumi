@@ -1,5 +1,6 @@
 package io.github.luma.ui.tab;
 
+import io.github.luma.ui.MaterialEntryView;
 import io.github.luma.ui.state.ProjectViewState;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -34,13 +35,16 @@ public final class MaterialsTabView {
                 break;
             }
 
-            container.child(UIComponents.label(Component.translatable(
-                    "luma.materials.entry",
+            container.child(MaterialEntryView.row(
                     entry.blockId(),
-                    entry.leftCount(),
-                    entry.rightCount(),
-                    entry.delta()
-            )));
+                    Component.translatable(
+                            "luma.materials.entry",
+                            entry.blockId(),
+                            entry.leftCount(),
+                            entry.rightCount(),
+                            entry.delta()
+                    )
+            ));
         }
 
         if (state.materialDelta().size() > MATERIAL_LIMIT) {

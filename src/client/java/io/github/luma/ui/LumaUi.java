@@ -34,10 +34,22 @@ public final class LumaUi {
     }
 
     public static LumaScrollContainer<FlowLayout> screenScroll(FlowLayout body) {
-        LumaScrollContainer<FlowLayout> scroll = LumaScrollContainer.vertical(Sizing.fill(100), Sizing.fill(100), body);
+        return screenScroll(Sizing.fill(100), Sizing.fill(100), body);
+    }
+
+    public static LumaScrollContainer<FlowLayout> screenScroll(
+            Sizing horizontalSizing,
+            Sizing verticalSizing,
+            FlowLayout body
+    ) {
+        LumaScrollContainer<FlowLayout> scroll = LumaScrollContainer.vertical(horizontalSizing, verticalSizing, body);
         scroll.scrollbarThiccness(6);
         scroll.scrollStep(24);
         return scroll;
+    }
+
+    public static FlowLayout bottomSpacer() {
+        return UIContainers.verticalFlow(Sizing.fill(100), Sizing.fixed(18));
     }
 
     public static FlowLayout panel(Sizing horizontal, Sizing vertical) {

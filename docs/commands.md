@@ -56,6 +56,8 @@ Examples:
 
 If `version` is omitted, Lumi restores the current head of the active variant.
 
+After a successful restore, Lumi also resets the active variant head to the restored version.
+
 ## Variant commands
 
 ### List variants
@@ -126,4 +128,3 @@ Deletes the pending draft without applying it.
 - Commands currently target the local integrated server workflow.
 - Compare, preview refresh, project settings, and dashboard filters are currently menu-first features.
 - Recovery draft save-as-version is available from the Recovery screen, not from a command yet.
-

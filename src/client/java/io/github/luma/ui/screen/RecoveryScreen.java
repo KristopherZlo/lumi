@@ -77,6 +77,7 @@ public final class RecoveryScreen extends LumaScreen {
                 )
         );
         summary.child(LumaUi.caption(Component.translatable("luma.recovery.summary_help")));
+        summary.child(LumaUi.caption(Component.translatable("luma.recovery.summary_behavior")));
         body.child(summary);
 
         FlowLayout actions = LumaUi.sectionCard(
@@ -93,6 +94,8 @@ public final class RecoveryScreen extends LumaScreen {
             this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
         }));
         actions.child(primaryActions);
+        actions.child(LumaUi.caption(Component.translatable("luma.recovery.save_help")));
+        actions.child(LumaUi.caption(Component.translatable("luma.recovery.restore_help")));
 
         FlowLayout exitActions = LumaUi.actionRow();
         exitActions.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(this.parent, this.projectName)));
@@ -109,7 +112,9 @@ public final class RecoveryScreen extends LumaScreen {
             this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
         }));
         destructive.child(destructiveActions);
+        destructive.child(LumaUi.caption(Component.translatable("luma.recovery.discard_extra_help")));
         body.child(destructive);
+        body.child(LumaUi.bottomSpacer());
     }
 
     @Override

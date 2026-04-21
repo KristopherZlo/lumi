@@ -70,11 +70,11 @@ Current UX assumptions:
 
 Current runtime history behavior:
 
-- `HistoryCaptureManager` records block changes inside project bounds.
+- `HistoryCaptureManager` records tracked block changes inside project bounds, including world-driven mutations such as explosions, while still excluding Lumi's own restore applications.
 - Changes are aggregated into a recovery draft and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces.
-- `VersionService` stores new versions as patch-first history and inserts checkpoint snapshots by policy.
-- `RestoreService` prefers direct same-variant patch replay, uses tracked baseline chunks for `WORLD_ROOT`, and falls back to checkpoint snapshot plus patch chain when direct replay is not valid.
+- `VersionService` stores new versions as patch-first history, supports amend-on-head, and inserts checkpoint snapshots by policy.
+- `RestoreService` prefers direct same-variant patch replay, uses tracked baseline chunks for `WORLD_ROOT`, falls back to checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored version on success.
 - `VariantService` keeps one head pointer per variant.
 - `DiffService` reconstructs version-to-version changes from patch history.
 

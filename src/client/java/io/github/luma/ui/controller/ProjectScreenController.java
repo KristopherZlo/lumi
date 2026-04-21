@@ -15,6 +15,8 @@ import io.github.luma.integration.common.IntegrationStatusService;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.ui.state.ProjectTab;
 import io.github.luma.ui.state.ProjectViewState;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -67,9 +69,9 @@ public final class ProjectScreenController {
             var diff = selectedVersion != null
                     ? this.diffService.compareVersionToParent(server, projectName, selectedVersion.id())
                     : null;
-            var operationSnapshot = WorldOperationManager.getInstance()
+            var operationSnapshot = this.visibleOperationSnapshot(WorldOperationManager.getInstance()
                     .snapshot(server, project.id().toString())
-                    .orElse(null);
+                    .orElse(null));
             return new ProjectViewState(
                     project,
                     loadedVersions,
@@ -102,6 +104,18 @@ public final class ProjectScreenController {
                     "luma.status.project_failed"
             );
         }
+    }
+
+    private io.github.luma.domain.model.OperationSnapshot visibleOperationSnapshot(
+            io.github.luma.domain.model.OperationSnapshot snapshot
+    ) {
+        if (snapshot == null || !snapshot.terminal()) {
+            return snapshot;
+        }
+
+        return Duration.between(snapshot.updatedAt(), Instant.now()).compareTo(Duration.ofSeconds(5)) <= 0
+                ? snapshot
+                : null;
     }
 
     public boolean hasRecoveryDraft(String projectName) {

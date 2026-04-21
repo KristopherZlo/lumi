@@ -73,6 +73,8 @@ Stores the project metadata, including:
 
 Stores the full variant list. Each variant keeps its own head version id and base version id.
 
+Restore and amend workflows move variant heads by rewriting this file. Older detached version files are left on disk for safety even when they are no longer reachable from a live variant head.
+
 ### `versions/*.json`
 
 Stores one `ProjectVersion` record per saved version.
@@ -147,6 +149,8 @@ They are currently created:
 ### `previews/*.png`
 
 Preview images are lightweight top-down PNG files generated per version when preview generation is enabled.
+
+For whole-dimension workspaces, preview coverage is derived from the currently tracked chunk extent.
 
 Preview generation failure does not block version save.
 

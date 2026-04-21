@@ -1,7 +1,9 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ExternalSourceInfo;
@@ -181,9 +183,8 @@ public final class VersionService {
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         ProjectVersion version = this.versionRepository.load(layout, versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
-        PreviewInfo preview = project.tracksWholeDimension()
-                ? PreviewInfo.none()
-                : this.previewService.capture(layout, versionId, project.bounds(), level);
+        List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+        PreviewInfo preview = this.capturePreview(layout, versionId, this.resolvePreviewBounds(layout, project, versions, null, level), level);
         ProjectVersion updated = new ProjectVersion(
                 version.id(),
                 version.projectId(),
@@ -343,7 +344,7 @@ public final class VersionService {
                 patchMetadata.id()
         );
 
-        if (schedulePreview && project.settings().previewGenerationEnabled() && !project.tracksWholeDimension()) {
+        if (schedulePreview && project.settings().previewGenerationEnabled()) {
             CompletableFuture.runAsync(() -> this.tryRefreshPreview(layout, project, version, level), PREVIEW_EXECUTOR);
         }
 
@@ -406,7 +407,13 @@ public final class VersionService {
     private void tryRefreshPreview(ProjectLayout layout, BuildProject project, ProjectVersion version, ServerLevel level) {
         try {
             LumaMod.LOGGER.info("Starting async preview refresh for version {} in project {}", version.id(), project.name());
-            PreviewInfo preview = this.previewService.capture(layout, version.id(), project.bounds(), level);
+            List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+            PreviewInfo preview = this.capturePreview(
+                    layout,
+                    version.id(),
+                    this.resolvePreviewBounds(layout, project, versions, null, level),
+                    level
+            );
             this.versionRepository.save(layout, new ProjectVersion(
                     version.id(),
                     version.projectId(),
@@ -425,6 +432,47 @@ public final class VersionService {
             LumaMod.LOGGER.info("Completed async preview refresh for version {} in project {}", version.id(), project.name());
         } catch (Exception ignored) {
             LumaMod.LOGGER.warn("Preview refresh failed for version {} in project {}", version.id(), project.name(), ignored);
+        }
+    }
+
+    private PreviewInfo capturePreview(
+            ProjectLayout layout,
+            String versionId,
+            Bounds3i bounds,
+            ServerLevel level
+    ) throws IOException {
+        if (bounds == null) {
+            return PreviewInfo.none();
+        }
+
+        try {
+            PreviewService.PreviewRenderData renderData = this.samplePreviewOnServerThread(bounds, level);
+            return this.previewService.write(layout, versionId, renderData);
+        } catch (RuntimeException exception) {
+            if (exception.getCause() instanceof IOException ioException) {
+                throw ioException;
+            }
+            throw exception;
+        }
+    }
+
+    private PreviewService.PreviewRenderData samplePreviewOnServerThread(Bounds3i bounds, ServerLevel level) {
+        if (level.getServer().isSameThread()) {
+            return this.previewService.sample(bounds, level);
+        }
+
+        CompletableFuture<PreviewService.PreviewRenderData> future = new CompletableFuture<>();
+        level.getServer().execute(() -> {
+            try {
+                future.complete(this.previewService.sample(bounds, level));
+            } catch (Exception exception) {
+                future.completeExceptionally(exception);
+            }
+        });
+        try {
+            return future.join();
+        } catch (java.util.concurrent.CompletionException exception) {
+            throw exception;
         }
     }
 
@@ -512,7 +560,46 @@ public final class VersionService {
             }
         }
 
+        if (draft == null || draft.isEmpty()) {
+            return List.copyOf(chunks);
+        }
+
         return ChunkSelectionFactory.merge(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
+    }
+
+    private Bounds3i resolvePreviewBounds(
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            RecoveryDraft draft,
+            ServerLevel level
+    ) throws IOException {
+        if (!project.tracksWholeDimension()) {
+            return project.bounds();
+        }
+
+        List<ChunkPoint> chunks = this.collectSnapshotChunks(layout, project, versions, draft);
+        if (chunks.isEmpty()) {
+            return null;
+        }
+
+        int minChunkX = Integer.MAX_VALUE;
+        int maxChunkX = Integer.MIN_VALUE;
+        int minChunkZ = Integer.MAX_VALUE;
+        int maxChunkZ = Integer.MIN_VALUE;
+        for (ChunkPoint chunk : chunks) {
+            minChunkX = Math.min(minChunkX, chunk.x());
+            maxChunkX = Math.max(maxChunkX, chunk.x());
+            minChunkZ = Math.min(minChunkZ, chunk.z());
+            maxChunkZ = Math.max(maxChunkZ, chunk.z());
+        }
+
+        int minY = level.dimensionType().minY();
+        int maxY = minY + level.dimensionType().height() - 1;
+        return new Bounds3i(
+                new BlockPoint(minChunkX << 4, minY, minChunkZ << 4),
+                new BlockPoint((maxChunkX << 4) + 15, maxY, (maxChunkZ << 4) + 15)
+        );
     }
 
     private List<ProjectVariant> replaceVariant(List<ProjectVariant> variants, ProjectVariant updatedVariant) {

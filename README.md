@@ -7,9 +7,9 @@ The current milestone is **singleplayer-first**. It is designed and validated fo
 ## Current feature set
 
 - Create or reuse an automatic workspace for the current dimension from the dashboard.
-- Track block edits in the current workspace and store history as patch-first versions with checkpoint snapshots.
-- Save manual versions with messages from the History tab or `/lumi save`.
-- Restore a target version, with a safety checkpoint created from pending tracked edits when enabled.
+- Track block edits in the current workspace and store history as patch-first versions with checkpoint snapshots, including world-driven changes such as explosions inside tracked space.
+- Save manual versions with messages from the History tab or `/lumi save`, or amend the current head from the composer area.
+- Restore a target version, with a safety checkpoint created from pending tracked edits when enabled, and reset the active branch head to that restored state.
 - Recover interrupted tracked edits through the Recovery screen.
 - Create and switch named branches with independent heads.
 - Compare two versions, branch heads, or the current live world in the Compare screen, including a client-side highlight mode.
