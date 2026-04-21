@@ -73,8 +73,8 @@ Use Lumi if you want to:
 1. A mixin catches a block change.
 2. `HistoryCaptureManager` finds matching projects.
 3. Explicit builder-driven sources can bootstrap a dimension project on demand, but ambient world-settling sources do not.
-4. Secondary sources such as falling blocks, fluids, fire, growth, mob griefing, and block updates only append while a capture session is already active.
-5. Ambient spread/update sources only record inside chunks that the project has already tracked.
+4. Secondary sources such as falling blocks, fluids, fire, growth, mob griefing, and block updates only append while a capture session is already active and near that session's current chunk footprint.
+5. Accepted secondary effects can extend the tracked chunk set locally, but they do not attach unrelated far-away world settling to the same draft.
 6. `TrackedChangeBuffer` merges the change.
 7. Recovery draft data flushes on an interval.
 

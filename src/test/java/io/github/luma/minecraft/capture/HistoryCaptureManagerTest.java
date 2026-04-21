@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.WorldMutationSource;
 import org.junit.jupiter.api.Test;
 
@@ -71,18 +72,48 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.ENTITY));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXPLOSION));
+        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FLUID));
+        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FIRE));
+        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH));
+        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.BLOCK_UPDATE));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.PISTON));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK));
+        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.MOB));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXPLOSIVE));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXTERNAL_TOOL));
-        assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FLUID));
-        assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FIRE));
-        assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH));
-        assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.BLOCK_UPDATE));
-        assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.MOB));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.SYSTEM));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.RESTORE));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(null));
+    }
+
+    @Test
+    void shouldGateSecondarySourcesByActiveRegion() {
+        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.EXPLOSION));
+        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FLUID));
+        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FIRE));
+        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.GROWTH));
+        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.BLOCK_UPDATE));
+        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.PISTON));
+        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FALLING_BLOCK));
+        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.MOB));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.PLAYER));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.ENTITY));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.EXPLOSIVE));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.EXTERNAL_TOOL));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.SYSTEM));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.RESTORE));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(null));
+    }
+
+    @Test
+    void shouldMeasureChunkRadiusUsingSquareDistance() {
+        assertTrue(HistoryCaptureManager.isWithinChunkRadius(new ChunkPoint(1, 0), new ChunkPoint(1, 0), 0));
+        assertTrue(HistoryCaptureManager.isWithinChunkRadius(new ChunkPoint(1, 0), new ChunkPoint(3, 2), 2));
+        assertFalse(HistoryCaptureManager.isWithinChunkRadius(new ChunkPoint(1, 0), new ChunkPoint(4, 0), 2));
+        assertFalse(HistoryCaptureManager.isWithinChunkRadius(new ChunkPoint(1, 0), new ChunkPoint(3, 3), 1));
+        assertFalse(HistoryCaptureManager.isWithinChunkRadius(new ChunkPoint(1, 0), null, 2));
+        assertFalse(HistoryCaptureManager.isWithinChunkRadius(null, new ChunkPoint(3, 3), 2));
+        assertFalse(HistoryCaptureManager.isWithinChunkRadius(new ChunkPoint(1, 0), new ChunkPoint(1, 0), -1));
     }
 
     @Test

@@ -44,6 +44,7 @@ public final class HistoryCaptureManager {
 
     private static final HistoryCaptureManager INSTANCE = new HistoryCaptureManager();
     private static final Duration ACTIVE_DRAFT_FLUSH_INTERVAL = Duration.ofSeconds(3);
+    private static final int SECONDARY_SOURCE_JOIN_RADIUS = 2;
     private static final int STARTUP_CAPTURE_TRACE_LIMIT = 32;
     private static final int CAPTURE_SUMMARY_ENTRY_LIMIT = 4;
 
@@ -128,14 +129,13 @@ public final class HistoryCaptureManager {
                         oldState,
                         newState
                 );
+                if (!this.canCaptureIntoSession(trackedProject, source, pos)) {
+                    continue;
+                }
                 if (!this.ensureTrackedChunk(trackedProject, level, pos, oldState, oldBlockEntity, source, now)) {
                     continue;
                 }
-
                 String projectId = trackedProject.project().id().toString();
-                if (!this.canCaptureIntoSession(trackedProject, source)) {
-                    continue;
-                }
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
                 int pendingBefore = buffer.size();
                 buffer.recordChange(pos, oldState, newState, oldBlockEntity, newBlockEntity, now);
@@ -392,7 +392,9 @@ public final class HistoryCaptureManager {
     ) throws IOException {
         String projectId = trackedProject.project().id().toString();
         TrackedChangeBuffer existing = this.activeBuffers.get(projectId);
+        CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
         if (existing != null) {
+            diagnostics.seedFromBuffer(existing);
             return existing;
         }
 
@@ -421,7 +423,7 @@ public final class HistoryCaptureManager {
                 ));
 
         this.activeBuffers.put(projectId, buffer);
-        this.sessionDiagnostics.putIfAbsent(projectId, new CaptureSessionDiagnostics());
+        diagnostics.seedFromBuffer(buffer);
         LumaMod.LOGGER.info(
                 "Opened active buffer for project {} on variant {} from base {} using {} source",
                 trackedProject.project().name(),
@@ -578,21 +580,40 @@ public final class HistoryCaptureManager {
 
     private boolean canCaptureIntoSession(
             TrackedProject trackedProject,
-            io.github.luma.domain.model.WorldMutationSource source
+            io.github.luma.domain.model.WorldMutationSource source,
+            BlockPos pos
     ) {
         String projectId = trackedProject.project().id().toString();
         if (this.activeBuffers.containsKey(projectId)) {
-            return true;
+            if (!requiresActiveRegionMembership(source)) {
+                return true;
+            }
+            ChunkPoint chunk = ChunkPoint.from(pos);
+            CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
+            if (diagnostics.isWithinActiveRegion(chunk, SECONDARY_SOURCE_JOIN_RADIUS)) {
+                return true;
+            }
+            LumaDebugLog.log(
+                    trackedProject.project(),
+                    "capture",
+                    "Skipped {} mutation at {} for project {} because chunk {}:{} is outside the active session region",
+                    source,
+                    pos,
+                    trackedProject.project().name(),
+                    chunk.x(),
+                    chunk.z()
+            );
+            return false;
         }
         if (allowsSessionBootstrap(source)) {
             return true;
         }
-
         LumaDebugLog.log(
                 trackedProject.project(),
                 "capture",
-                "Skipped {} mutation for project {} because no active session exists and the source cannot bootstrap capture",
+                "Skipped {} mutation at {} for project {} because no active session exists and the source cannot bootstrap capture",
                 source,
+                pos,
                 trackedProject.project().name()
         );
         return false;
@@ -750,18 +771,47 @@ public final class HistoryCaptureManager {
             case PLAYER,
                     ENTITY,
                     EXPLOSION,
-                    PISTON,
-                    FALLING_BLOCK,
-                    EXPLOSIVE,
-                    EXTERNAL_TOOL -> true;
-            case FLUID,
+                    FLUID,
                     FIRE,
                     GROWTH,
                     BLOCK_UPDATE,
+                    PISTON,
+                    FALLING_BLOCK,
                     MOB,
+                    EXPLOSIVE,
+                    EXTERNAL_TOOL -> true;
+            case RESTORE, SYSTEM -> false;
+        };
+    }
+
+    static boolean requiresActiveRegionMembership(io.github.luma.domain.model.WorldMutationSource source) {
+        if (source == null) {
+            return false;
+        }
+        return switch (source) {
+            case EXPLOSION,
+                    FLUID,
+                    FIRE,
+                    GROWTH,
+                    BLOCK_UPDATE,
+                    PISTON,
+                    FALLING_BLOCK,
+                    MOB -> true;
+            case PLAYER,
+                    ENTITY,
+                    EXPLOSIVE,
+                    EXTERNAL_TOOL,
                     RESTORE,
                     SYSTEM -> false;
         };
+    }
+
+    static boolean isWithinChunkRadius(ChunkPoint first, ChunkPoint second, int radius) {
+        if (first == null || second == null || radius < 0) {
+            return false;
+        }
+        return Math.abs(first.x() - second.x()) <= radius
+                && Math.abs(first.z() - second.z()) <= radius;
     }
 
     public static String defaultActor(io.github.luma.domain.model.WorldMutationSource source) {
@@ -794,6 +844,7 @@ public final class HistoryCaptureManager {
     private static final class CaptureSessionDiagnostics {
 
         private int acceptedMutations;
+        private final Map<String, ChunkPoint> activeChunks = new LinkedHashMap<>();
         private final Map<String, Integer> sourceCounts = new LinkedHashMap<>();
         private final Map<String, Integer> transitionCounts = new LinkedHashMap<>();
         private BlockPos lastPos;
@@ -819,11 +870,39 @@ public final class HistoryCaptureManager {
             this.transitionCounts.merge(transitionKey, 1, Integer::sum);
             this.lastPos = pos == null ? null : pos.immutable();
             this.lastChunk = pos == null ? new ChunkPoint(0, 0) : new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
+            this.addActiveChunk(this.lastChunk);
             this.lastSource = sourceKey;
             this.lastOldBlockId = blockId(oldState);
             this.lastNewBlockId = blockId(newState);
             this.lastOldBlockEntity = oldBlockEntity;
             this.lastNewBlockEntity = newBlockEntity;
+        }
+
+        private void seedFromBuffer(TrackedChangeBuffer buffer) {
+            if (!this.activeChunks.isEmpty() || buffer == null || buffer.isEmpty()) {
+                return;
+            }
+            for (var change : buffer.orderedChanges()) {
+                this.addActiveChunk(ChunkPoint.from(change.pos()));
+            }
+        }
+
+        private boolean isWithinActiveRegion(ChunkPoint chunk, int radius) {
+            if (chunk == null || this.activeChunks.isEmpty()) {
+                return false;
+            }
+            for (int chunkX = chunk.x() - radius; chunkX <= chunk.x() + radius; chunkX++) {
+                for (int chunkZ = chunk.z() - radius; chunkZ <= chunk.z() + radius; chunkZ++) {
+                    if (this.activeChunks.containsKey(key(new ChunkPoint(chunkX, chunkZ)))) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private void addActiveChunk(ChunkPoint chunk) {
+            this.activeChunks.putIfAbsent(key(chunk), chunk);
         }
 
         private int acceptedMutations() {
@@ -877,6 +956,10 @@ public final class HistoryCaptureManager {
                     .map(entry -> entry.getKey() + "=" + entry.getValue())
                     .reduce((left, right) -> left + ", " + right)
                     .orElse("none");
+        }
+
+        private static String key(ChunkPoint chunk) {
+            return chunk.x() + ":" + chunk.z();
         }
     }
 }

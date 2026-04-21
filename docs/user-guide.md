@@ -51,8 +51,8 @@ Tracked history includes:
 - supported explosion edits
 
 Lumi does not record its own restore apply pass as normal history.
-Ambient fluid, fire, growth, block-update, and mob changes only continue inside chunks the project has already tracked, so loading a world does not bootstrap thousands of new chunk baselines by itself.
-Secondary effects such as falling gravel, fire spread, fluid spread, piston aftermath, and TNT/explosion fallout only join a draft after an explicit tracked action has already started that draft.
+Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
+Secondary effects such as falling gravel, fire spread, fluid spread, piston aftermath, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay near the chunks already touched by that same active session.
 
 For automatic dimension projects, the first node is `Initial`.
 
