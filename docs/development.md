@@ -67,6 +67,7 @@ Enable verbose runtime tracing for debugging:
 
 - per workspace: `Settings -> Debug -> Debug logging`
 - global JVM flag: `-Dlumi.debug=true`
+- accepted capture sessions also emit startup diagnostics at normal info level for the first 32 accepted mutations, then summarize top sources and block transitions at the usual pending-change checkpoints
 
 ## Repository layout
 
