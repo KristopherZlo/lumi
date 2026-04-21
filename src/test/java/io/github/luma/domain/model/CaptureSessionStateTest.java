@@ -47,6 +47,32 @@ class CaptureSessionStateTest {
     }
 
     @Test
+    void currentChunkChangesReflectLiveBufferStateAfterSessionStart() {
+        Instant now = Instant.parse("2026-04-20T10:15:30Z");
+        TrackedChangeBuffer buffer = buffer();
+        CaptureSessionState state = CaptureSessionState.create(buffer);
+        ChunkPoint chunk = new ChunkPoint(0, 0);
+
+        buffer.addChange(new StoredBlockChange(
+                new BlockPoint(1, 70, 1),
+                payload("minecraft:stone"),
+                payload("minecraft:dirt")
+        ), now);
+        buffer.addChange(new StoredBlockChange(
+                new BlockPoint(1, 70, 1),
+                payload("minecraft:dirt"),
+                payload("minecraft:gold_block")
+        ), now.plusSeconds(1));
+
+        assertTrue(state.startingChunkChanges(List.of(chunk)).isEmpty());
+
+        List<StoredBlockChange> currentChanges = state.currentChunkChanges(List.of(chunk));
+        assertEquals(1, currentChanges.size());
+        assertEquals("minecraft:stone", currentChanges.getFirst().oldValue().blockId());
+        assertEquals("minecraft:gold_block", currentChanges.getFirst().newValue().blockId());
+    }
+
+    @Test
     void reconciliationDrainAndTrackedFallingEntitiesRemainCoalesced() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
         state.addRootChunk(new ChunkPoint(0, 0));

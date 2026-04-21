@@ -169,6 +169,28 @@ public final class CaptureSessionState {
         return List.copyOf(changes);
     }
 
+    public List<StoredBlockChange> currentChunkChanges(Collection<ChunkPoint> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<ChunkPoint> requestedChunks = new LinkedHashSet<>();
+        for (ChunkPoint chunk : chunks) {
+            if (chunk != null) {
+                requestedChunks.add(chunk);
+            }
+        }
+        if (requestedChunks.isEmpty()) {
+            return List.of();
+        }
+        List<StoredBlockChange> changes = new ArrayList<>();
+        for (StoredBlockChange change : this.buffer.orderedChanges()) {
+            if (requestedChunks.contains(ChunkPoint.from(change.pos()))) {
+                changes.add(change);
+            }
+        }
+        return List.copyOf(changes);
+    }
+
     public boolean trackFallingEntity(UUID entityId) {
         return entityId != null && this.trackedFallingEntities.add(entityId);
     }
