@@ -146,7 +146,7 @@ public final class HistoryCaptureManager {
                 }
                 ChunkPoint chunk = ChunkPoint.from(pos);
                 if (this.isExplicitRootSource(source)) {
-                    this.captureSessionEnvelopeBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
+                    this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
                     session.addRootChunk(chunk);
                 } else if (this.usesDeferredStabilization(trackedProject.project(), source)) {
                     if (!session.isWithinStabilizationEnvelope(chunk)) {
@@ -162,12 +162,13 @@ public final class HistoryCaptureManager {
                         );
                         continue;
                     }
-                    session.markEnvelopeChunkDirty(chunk);
+                    this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
+                    session.markDirtyChunk(chunk);
                     this.dirtySessions.add(projectId);
                     LumaDebugLog.log(
-                            trackedProject.project(),
-                            "capture",
-                            "Marked chunk {}:{} dirty for deferred {} stabilization in project {}",
+                        trackedProject.project(),
+                        "capture",
+                        "Marked chunk {}:{} dirty for deferred {} stabilization in project {}",
                             chunk.x(),
                             chunk.z(),
                             source,
@@ -216,15 +217,11 @@ public final class HistoryCaptureManager {
     }
 
     public Optional<RecoveryDraft> snapshotDraft(MinecraftServer server, String projectId) throws IOException {
-        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
-        CaptureSessionState sessionState = this.activeSessions.get(projectId);
         TrackedChangeBuffer buffer = this.activeBuffers.get(projectId);
         if (buffer != null) {
-            if (trackedProject != null && sessionState != null) {
-                this.reconcileSession(server, trackedProject, sessionState);
-            }
             return buffer.isEmpty() ? Optional.empty() : Optional.of(buffer.toDraft());
         }
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         if (trackedProject == null) {
             return Optional.empty();
         }
@@ -716,37 +713,29 @@ public final class HistoryCaptureManager {
                 || source == io.github.luma.domain.model.WorldMutationSource.FALLING_BLOCK);
     }
 
-    private void captureSessionEnvelopeBaseline(
+    private void captureSessionChunkBaseline(
             TrackedProject trackedProject,
             ServerLevel level,
             CaptureSessionState session,
-            ChunkPoint rootChunk,
+            ChunkPoint chunk,
             BlockPos changedPos,
             BlockState oldState,
             CompoundTag oldBlockEntity
     ) {
-        for (int offsetX = -CaptureSessionState.STABILIZATION_HALO_RADIUS; offsetX <= CaptureSessionState.STABILIZATION_HALO_RADIUS; offsetX++) {
-            for (int offsetZ = -CaptureSessionState.STABILIZATION_HALO_RADIUS; offsetZ <= CaptureSessionState.STABILIZATION_HALO_RADIUS; offsetZ++) {
-                ChunkPoint chunk = new ChunkPoint(rootChunk.x() + offsetX, rootChunk.z() + offsetZ);
-                if (session.hasBaselineChunk(chunk)) {
-                    continue;
-                }
-                BlockPos overridePos = chunk.equals(rootChunk) ? changedPos : null;
-                BlockState overrideState = chunk.equals(rootChunk) ? oldState : null;
-                CompoundTag overrideTag = chunk.equals(rootChunk) ? oldBlockEntity : null;
-                session.captureBaselineChunk(
-                        chunk,
-                        this.stabilizationService.captureBaselineChunkState(
-                                level,
-                                trackedProject.project(),
-                                chunk,
-                                overridePos,
-                                overrideState,
-                                overrideTag
-                        )
-                );
-            }
+        if (session.hasBaselineChunk(chunk)) {
+            return;
         }
+        session.captureBaselineChunk(
+                chunk,
+                this.stabilizationService.captureBaselineChunkState(
+                        level,
+                        trackedProject.project(),
+                        chunk,
+                        changedPos,
+                        oldState,
+                        oldBlockEntity
+                )
+        );
     }
 
     private void reconcileSession(

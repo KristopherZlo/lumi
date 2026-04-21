@@ -211,13 +211,15 @@ public final class RecoveryRepository {
             output.writeLong(draft.updatedAt().toEpochMilli());
             output.writeInt(draft.changes().size());
             for (StoredBlockChange change : draft.changes()) {
+                StatePayload oldValue = this.normalizePayload(change.oldValue());
+                StatePayload newValue = this.normalizePayload(change.newValue());
                 output.writeInt(change.pos().x());
                 output.writeInt(change.pos().y());
                 output.writeInt(change.pos().z());
-                StorageIo.writeCompound(output, change.oldValue().stateTag());
-                StorageIo.writeNullableCompound(output, change.oldValue().blockEntityTag());
-                StorageIo.writeCompound(output, change.newValue().stateTag());
-                StorageIo.writeNullableCompound(output, change.newValue().blockEntityTag());
+                StorageIo.writeCompound(output, oldValue.stateTag());
+                StorageIo.writeNullableCompound(output, oldValue.blockEntityTag());
+                StorageIo.writeCompound(output, newValue.stateTag());
+                StorageIo.writeNullableCompound(output, newValue.blockEntityTag());
             }
         }
         return buffer.toByteArray();
@@ -256,5 +258,9 @@ public final class RecoveryRepository {
 
     private static String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private StatePayload normalizePayload(StatePayload payload) {
+        return payload == null ? StatePayload.air() : payload;
     }
 }

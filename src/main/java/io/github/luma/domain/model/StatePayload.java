@@ -10,11 +10,20 @@ public record StatePayload(
         CompoundTag blockEntityTag
 ) {
 
+    private static final CompoundTag AIR_STATE_TAG = createAirStateTag();
+
     public static StatePayload capture(BlockState state, CompoundTag blockEntityTag) {
+        if (state == null) {
+            return new StatePayload(AIR_STATE_TAG.copy(), null);
+        }
         return new StatePayload(
                 NbtUtils.writeBlockState(state),
                 blockEntityTag == null ? null : blockEntityTag.copy()
         );
+    }
+
+    public static StatePayload air() {
+        return new StatePayload(AIR_STATE_TAG.copy(), null);
     }
 
     public String blockId() {
@@ -42,5 +51,11 @@ public record StatePayload(
         }
         return Objects.equals(this.stateTag, other.stateTag)
                 && Objects.equals(this.blockEntityTag, other.blockEntityTag);
+    }
+
+    private static CompoundTag createAirStateTag() {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", "minecraft:air");
+        return tag;
     }
 }

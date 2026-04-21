@@ -116,7 +116,7 @@ Current runtime history behavior:
 
 - `HistoryCaptureManager` still records explicit tracked block changes inside project bounds, including TNT ignition, explosions, piston movement, and selected mob block mutations, while still excluding Lumi's own restore applications.
 - Automatic dimension project bootstrap is limited to explicit builder-driven sources. Ambient fluid, fire, growth, block-update, and mob mutations cannot create a workspace on world load by themselves.
-- New live capture sessions are also limited to explicit builder-driven sources. Whole-dimension sessions now seed a causal chunk envelope from those root edits and capture a session-start baseline for the root chunk plus a one-chunk halo.
+- New live capture sessions are also limited to explicit builder-driven sources. Whole-dimension sessions now seed a causal chunk envelope from those root edits, then capture per-chunk session baselines lazily only when a chunk inside that envelope first needs stabilization.
 - For whole-dimension workspaces, fluid spread and falling blocks no longer append directly into the draft. They only re-mark chunks inside that causal envelope as dirty, and `SessionStabilizationService` later rebuilds the final chunk diff from the session baseline plus current live world state.
 - Secondary explosion, piston, fire, growth, block-update, and mob sources are still gated by the active session envelope so one explicit edit does not pull unrelated far-away cave settling into the same draft.
 - Changes are aggregated into a recovery draft and journaled while the session is active.

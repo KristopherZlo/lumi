@@ -97,7 +97,7 @@ Responsibilities are split as follows:
 1. A Minecraft mixin intercepts a block mutation.
 2. `WorldMutationContext` accepts only explicit player, explosive, explosion, falling-block, selected mob, and other targeted mutation scopes.
 3. `HistoryCaptureManager` finds matching projects for the block position.
-4. Explicit root mutations capture a session-local baseline for the touched chunk plus a one-chunk halo.
+4. Explicit root mutations define a session-local causal envelope. Chunk baselines inside that envelope are captured lazily when those chunks first need stabilization.
 5. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position.
 6. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
 7. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft.

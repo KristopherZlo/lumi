@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CaptureSessionStateTest {
 
     @Test
-    void rootChunksExpandDirtyEnvelopeByOneChunkHalo() {
+    void rootChunksDefineEnvelopeWithoutImmediateDirtyWork() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
 
         assertTrue(state.addRootChunk(new ChunkPoint(10, -4)));
@@ -20,8 +20,8 @@ class CaptureSessionStateTest {
         assertEquals(List.of(new ChunkPoint(10, -4)), state.rootChunks());
         assertTrue(state.isWithinStabilizationEnvelope(new ChunkPoint(11, -3)));
         assertFalse(state.isWithinStabilizationEnvelope(new ChunkPoint(12, -4)));
-        assertEquals(9, state.dirtyChunks().size());
-        assertTrue(state.hasPendingReconciliation());
+        assertTrue(state.dirtyChunks().isEmpty());
+        assertFalse(state.hasPendingReconciliation());
     }
 
     @Test
@@ -61,7 +61,7 @@ class CaptureSessionStateTest {
         assertFalse(state.beginReconciliation());
 
         List<ChunkPoint> drained = state.drainPendingReconcileChunks();
-        assertEquals(12, drained.size());
+        assertEquals(2, drained.size());
 
         state.finishReconciliation(drained);
         assertFalse(state.reconciliationInFlight());

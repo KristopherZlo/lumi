@@ -71,6 +71,30 @@ class RecoveryRepositoryTest {
         assertTrue(this.repository.loadDraft(layout).isPresent());
     }
 
+    @Test
+    void serializesAirPayloadWhenRecoveryDraftContainsRemoval() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryDraft removalDraft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                Instant.parse("2026-04-20T10:00:00Z"),
+                Instant.parse("2026-04-20T10:00:30Z"),
+                List.of(new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:stone"),
+                        StatePayload.air()
+                ))
+        );
+
+        this.repository.saveDraft(layout, removalDraft);
+
+        RecoveryDraft restored = this.repository.loadDraft(layout).orElseThrow();
+        assertEquals("minecraft:air", restored.changes().getFirst().newValue().blockId());
+    }
+
     private static RecoveryDraft draft(String blockId, Instant updatedAt) {
         return new RecoveryDraft(
                 "project",
