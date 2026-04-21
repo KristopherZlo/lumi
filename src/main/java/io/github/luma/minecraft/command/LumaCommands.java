@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import io.github.luma.domain.model.ProjectArchiveExportResult;
 import io.github.luma.domain.model.ProjectArchiveImportResult;
 import io.github.luma.domain.service.ProjectArchiveService;
+import io.github.luma.domain.service.ProjectCleanupService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
@@ -23,6 +24,7 @@ public final class LumaCommands {
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectArchiveService projectArchiveService = new ProjectArchiveService();
+    private final ProjectCleanupService projectCleanupService = new ProjectCleanupService();
     private final VersionService versionService = new VersionService();
     private final RestoreService restoreService = new RestoreService();
     private final VariantService variantService = new VariantService();
@@ -147,6 +149,20 @@ public final class LumaCommands {
                         )))));
         root.then(archive);
 
+        root.then(Commands.literal("cleanup")
+                .then(Commands.literal("inspect")
+                        .then(Commands.argument("project", StringArgumentType.string())
+                                .executes(context -> this.execute(context.getSource(), source -> this.inspectCleanup(
+                                        source,
+                                        StringArgumentType.getString(context, "project")
+                                )))))
+                .then(Commands.literal("apply")
+                        .then(Commands.argument("project", StringArgumentType.string())
+                                .executes(context -> this.execute(context.getSource(), source -> this.applyCleanup(
+                                        source,
+                                        StringArgumentType.getString(context, "project")
+                                ))))));
+
         dispatcher.register(root);
     }
 
@@ -252,6 +268,24 @@ public final class LumaCommands {
         return result.manifest().entries().size();
     }
 
+    private int inspectCleanup(CommandSourceStack source, String projectName) throws IOException {
+        var report = this.projectCleanupService.inspect(source.getServer(), projectName);
+        source.sendSuccess(() -> Component.literal(
+                "Cleanup dry run for " + projectName + ": " + report.candidates().size()
+                        + " files, " + report.reclaimedBytes() + " bytes" + this.warningSuffix(report.warnings())
+        ), false);
+        return report.candidates().size();
+    }
+
+    private int applyCleanup(CommandSourceStack source, String projectName) throws IOException {
+        var report = this.projectCleanupService.apply(source.getServer(), projectName);
+        source.sendSuccess(() -> Component.literal(
+                "Cleanup removed " + report.candidates().size() + " files from " + projectName
+                        + " and reclaimed " + report.reclaimedBytes() + " bytes" + this.warningSuffix(report.warnings())
+        ), true);
+        return report.candidates().size();
+    }
+
     private int execute(CommandSourceStack source, IoAction action) {
         try {
             return action.run(source);
@@ -264,5 +298,12 @@ public final class LumaCommands {
     @FunctionalInterface
     private interface IoAction {
         int run(CommandSourceStack source) throws Exception;
+    }
+
+    private String warningSuffix(java.util.List<String> warnings) {
+        if (warnings == null || warnings.isEmpty()) {
+            return "";
+        }
+        return " (" + String.join("; ", warnings) + ")";
     }
 }

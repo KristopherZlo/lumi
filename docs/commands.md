@@ -157,8 +157,28 @@ Examples:
 
 Imports the archive into the current world's Lumi project storage. Relative paths resolve from `<save>/lumi/exports/`.
 
+## Cleanup commands
+
+### Inspect cleanup candidates
+
+```mcfunction
+/lumi cleanup inspect <project>
+```
+
+Shows a dry-run summary for orphaned preview files, unreferenced snapshots, disposable cache files outside `baseline-chunks`, and stale operation drafts.
+
+### Apply cleanup
+
+```mcfunction
+/lumi cleanup apply <project>
+```
+
+Deletes the candidates from the dry-run set.
+
+If the project has an active Lumi world operation, the cleanup flow keeps `recovery/operation-draft.bin.lz4` and reports that skip in the command response.
+
 ## Notes
 
 - Commands currently target the local integrated server workflow.
-- Compare, preview refresh, project settings, cleanup, and dashboard filters are currently menu-first or command-first features.
+- Compare, preview refresh, project settings, import/export, cleanup, and dashboard filters are currently menu-first or command-first features.
 - Recovery draft save-as-version is available from the Recovery screen, not from a command yet.

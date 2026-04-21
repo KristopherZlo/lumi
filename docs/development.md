@@ -42,6 +42,7 @@ This now includes regression checks for:
 - detached commit visibility after a restore-style reset
 - recovery draft isolation while save/amend operations run
 - zip archive import/export for project history, with previews optional and recovery drafts excluded
+- conservative cleanup flow for orphaned snapshots/previews/cache and stale operation drafts
 - material delta summarization on large diffs
 
 Run server GameTests:
@@ -115,6 +116,7 @@ Current runtime history behavior:
 - Changes are aggregated into a recovery draft and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `ProjectArchiveService` owns command-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
+- `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
 - `RestoreService` prefers direct same-variant patch replay, including `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored version on success without deleting detached versions.
 - `VariantService` keeps one head pointer per variant.

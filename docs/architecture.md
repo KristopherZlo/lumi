@@ -38,6 +38,7 @@ Key services:
 - `ProjectService`: create, load, and update projects
 - `ProjectService`: also owns world-origin bootstrap and automatic `WORLD_ROOT` creation for dimension workspaces
 - `ProjectArchiveService`: export stable project history to zip archives and import it back into project storage
+- `ProjectCleanupService`: compute safe cleanup candidates from reachable history metadata and active operation state
 - `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy
 - `RestoreService`: build restore plans, decode world-root baseline restores, and prepare chunk batches
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
@@ -71,6 +72,7 @@ Important boundaries:
 - metadata repositories read and write lightweight manifests
 - payload repositories read and write compressed binary history data
 - `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export
+- `ProjectCleanupRepository` owns file scanning and deletion for conservative storage cleanup
 - `StorageIo` owns low-level atomic-write and NBT binary helpers
 
 ### Client UI layer

@@ -167,6 +167,8 @@ For whole-dimension workspaces, preview coverage is derived from the currently t
 
 Preview generation failure does not block version save.
 
+Cleanup may remove preview PNGs that are no longer referenced by any version manifest.
+
 ### `recovery/draft.bin.lz4`
 
 Stores the current compacted recovery base snapshot in schema v3 binary format.
@@ -183,6 +185,8 @@ Stores the draft currently being saved or amended.
 
 This file is separate from `draft.bin.lz4` and `draft.wal.lz4`. Live capture never resumes it. If the player edits blocks while a save is still running, those edits start a new recovery draft and are not merged into the in-progress version.
 
+Maintenance cleanup may delete this file only when no Lumi world operation is active for the project.
+
 ### `recovery/journal.json`
 
 Stores recovery, restore, migration, and other workflow events shown in the Log tab.
@@ -192,6 +196,7 @@ Stores recovery, restore, migration, and other workflow events shown in the Log 
 Reserved for future cache artifacts and rebuildable derived data.
 
 The `cache/baseline-chunks/` subtree is not rebuildable without touching the live world. It is part of archive export/import and must not be treated as disposable cache data by maintenance workflows.
+Other cache files are treated as disposable cleanup candidates.
 
 ### `locks/`
 
@@ -222,3 +227,11 @@ Project import/export uses a zip archive with:
 - optional `project/recovery/journal.json`
 
 Recovery draft payloads are intentionally excluded from archives, so export/import remains focused on stable project history rather than live unsaved state.
+
+## Cleanup policy
+
+Current cleanup is conservative and command-driven:
+
+- dry-run first via `/lumi cleanup inspect`
+- delete only unreferenced snapshot payloads, orphaned preview PNGs, disposable cache files outside `baseline-chunks`, and stale `operation-draft`
+- never delete baseline chunks or files still referenced by version manifests
