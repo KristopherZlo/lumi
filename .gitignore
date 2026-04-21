@@ -3,25 +3,39 @@ build/
 run/
 out/
 logs/
+bin/
 
 *.log
 *.tmp
 *.class
+hs_err_pid*
+replay_pid*
 
 .idea/
+/.vscode/
 *.iml
 *.ipr
 *.iws
-
 .project
 .classpath
 .settings/
 
-bin/
-/.vscode/
-
-hs_err_pid*
-replay_pid*
-
 Thumbs.db
 Desktop.ini
+
+# Local notes and AI instruction files
+*.md
+**/*.md
+!README.md
+!docs/*.md
+!docs/**/*.md
+
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+COPILOT.md
+.github/copilot-instructions.md
+.cursorrules
+.cursor/
+.windsurfrules
+.windsurf/
