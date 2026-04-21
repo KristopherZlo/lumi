@@ -37,7 +37,9 @@ Checkpoint snapshots are added by policy.
 Tracked history includes:
 
 - player block edits
-- supported entity edits
+- supported falling-block edits
+- supported mob edits
+- TNT ignition
 - supported explosion edits
 
 Lumi does not record its own restore apply pass as normal history.
