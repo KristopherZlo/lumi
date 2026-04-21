@@ -135,7 +135,7 @@ public final class CompareScreen extends LumaScreen {
                 Component.translatable("luma.compare.left_help"),
                 leftBox
         );
-        leftField.sizing(Sizing.fill(narrow ? 100 : 50), Sizing.content());
+        leftField.sizing(narrow ? Sizing.fill(100) : Sizing.expand(50), Sizing.content());
         inputs.child(leftField);
 
         var rightBox = UIComponents.textBox(Sizing.fill(100), this.rightReference);
@@ -145,7 +145,7 @@ public final class CompareScreen extends LumaScreen {
                 Component.translatable("luma.compare.right_help"),
                 rightBox
         );
-        rightField.sizing(Sizing.fill(narrow ? 100 : 50), Sizing.content());
+        rightField.sizing(narrow ? Sizing.fill(100) : Sizing.expand(50), Sizing.content());
         inputs.child(rightField);
         section.child(inputs);
         if (!this.state.leftResolvedVersionId().isBlank() || !this.state.rightResolvedVersionId().isBlank()) {

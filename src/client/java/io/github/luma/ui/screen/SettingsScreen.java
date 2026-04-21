@@ -6,7 +6,6 @@ import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.controller.SettingsScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
-import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -258,14 +257,14 @@ public final class SettingsScreen extends LumaScreen {
         return field;
     }
 
-    private ButtonComponent toggleControl(boolean value, java.util.function.Consumer<Boolean> onToggle) {
-        return UIComponents.button(
-                Component.translatable(value ? "luma.common.enabled" : "luma.common.disabled"),
-                button -> {
-                    onToggle.accept(!value);
-                    this.rebuild();
-                }
-        );
+    private io.wispforest.owo.ui.core.UIComponent toggleControl(
+            boolean value,
+            java.util.function.Consumer<Boolean> onToggle
+    ) {
+        var checkbox = UIComponents.checkbox(Component.literal(""));
+        checkbox.checked(value);
+        checkbox.onChanged(onToggle::accept);
+        return checkbox;
     }
 
     private io.wispforest.owo.ui.component.TextBoxComponent numberInput(

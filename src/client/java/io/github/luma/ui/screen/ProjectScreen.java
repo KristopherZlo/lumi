@@ -347,11 +347,11 @@ public final class ProjectScreen extends LumaScreen {
 
     private FlowLayout workspaceMainSection() {
         if (this.usesSingleColumnWorkspace()) {
-            FlowLayout section = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
+            FlowLayout section = UIContainers.verticalFlow(Sizing.fill(100), Sizing.expand(100));
             section.gap(8);
 
             FlowLayout body = LumaUi.screenBody();
-            this.bodyScroll = LumaUi.screenScroll(Sizing.fill(100), Sizing.fill(100), body);
+            this.bodyScroll = LumaUi.screenScroll(Sizing.fill(100), Sizing.expand(100), body);
             this.populatePrimaryBody(body);
             this.populateDetailBody(body);
             body.child(LumaUi.bottomSpacer());
@@ -359,11 +359,11 @@ public final class ProjectScreen extends LumaScreen {
             return section;
         }
 
-        FlowLayout section = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fill(100));
+        FlowLayout section = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.expand(100));
         section.gap(8);
 
         FlowLayout primaryBody = LumaUi.screenBody();
-        this.bodyScroll = LumaUi.screenScroll(Sizing.fill(62), Sizing.fill(100), primaryBody);
+        this.bodyScroll = LumaUi.screenScroll(Sizing.expand(62), Sizing.fill(100), primaryBody);
         this.populatePrimaryBody(primaryBody);
         primaryBody.child(LumaUi.bottomSpacer());
 
@@ -372,7 +372,7 @@ public final class ProjectScreen extends LumaScreen {
         detailBody.child(LumaUi.bottomSpacer());
 
         section.child(this.bodyScroll);
-        section.child(LumaUi.screenScroll(Sizing.fill(38), Sizing.fill(100), detailBody));
+        section.child(LumaUi.screenScroll(Sizing.expand(38), Sizing.fill(100), detailBody));
         return section;
     }
 
