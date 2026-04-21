@@ -42,6 +42,10 @@ Tracked history includes:
 - supported falling-block edits
 - supported mob edits
 - TNT ignition
+- fluid spread
+- fire spread and burn-out
+- crop, sapling, and stem growth
+- piston movement
 - supported explosion edits
 
 Lumi does not record its own restore apply pass as normal history.
