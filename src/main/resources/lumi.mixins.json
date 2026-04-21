@@ -3,7 +3,10 @@
   "package": "io.github.luma.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "LevelExplosionMixin",
     "LevelSetBlockMixin",
+    "ServerLevelEntityTickMixin",
+    "ServerLevelExplosionMixin",
     "ServerGamePacketListenerMixin",
     "ServerPlayerGameModeMixin"
   ],

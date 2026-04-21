@@ -10,15 +10,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class HistoryCaptureManagerTest {
 
     @Test
-    void shouldCaptureAllNonRestoreSources() {
+    void shouldCaptureOnlyExplicitMutationSources() {
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.PLAYER));
-        assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.SYSTEM));
+        assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.ENTITY));
+        assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.EXPLOSION));
+        assertFalse(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.SYSTEM));
         assertFalse(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.RESTORE));
     }
 
     @Test
-    void defaultActorUsesWorldLabelForNonPlayerMutations() {
+    void defaultActorReflectsMutationSource() {
         assertEquals("player", HistoryCaptureManager.defaultActor(WorldMutationSource.PLAYER));
+        assertEquals("entity", HistoryCaptureManager.defaultActor(WorldMutationSource.ENTITY));
+        assertEquals("explosion", HistoryCaptureManager.defaultActor(WorldMutationSource.EXPLOSION));
         assertEquals("world", HistoryCaptureManager.defaultActor(WorldMutationSource.SYSTEM));
     }
 }

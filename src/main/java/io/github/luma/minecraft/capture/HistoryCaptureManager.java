@@ -417,11 +417,22 @@ public final class HistoryCaptureManager {
     }
 
     public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
-        return source != null && source != io.github.luma.domain.model.WorldMutationSource.RESTORE;
+        return source == io.github.luma.domain.model.WorldMutationSource.PLAYER
+                || source == io.github.luma.domain.model.WorldMutationSource.ENTITY
+                || source == io.github.luma.domain.model.WorldMutationSource.EXPLOSION;
     }
 
     public static String defaultActor(io.github.luma.domain.model.WorldMutationSource source) {
-        return source == io.github.luma.domain.model.WorldMutationSource.PLAYER ? "player" : "world";
+        if (source == io.github.luma.domain.model.WorldMutationSource.PLAYER) {
+            return "player";
+        }
+        if (source == io.github.luma.domain.model.WorldMutationSource.ENTITY) {
+            return "entity";
+        }
+        if (source == io.github.luma.domain.model.WorldMutationSource.EXPLOSION) {
+            return "explosion";
+        }
+        return "world";
     }
 
     private record TrackedProject(ProjectLayout layout, BuildProject project, List<ProjectVariant> variants) {
