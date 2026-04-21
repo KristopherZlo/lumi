@@ -68,6 +68,7 @@ Enable verbose runtime tracing for debugging:
 - per workspace: `Settings -> Debug -> Debug logging`
 - global JVM flag: `-Dlumi.debug=true`
 - accepted capture sessions also emit startup diagnostics at normal info level for the first 32 accepted mutations, then summarize top sources and block transitions at the usual pending-change checkpoints
+- whole-dimension stabilization now logs dirty-chunk reconcile summaries before draft flush/save/freeze, so startup diagnostics and reconcile summaries should be inspected together when ambient fallout looks suspicious
 
 ## Repository layout
 
@@ -113,11 +114,11 @@ Current UX assumptions:
 
 Current runtime history behavior:
 
-- `HistoryCaptureManager` records tracked block changes inside project bounds, including TNT ignition, explosions, falling-block start and landing changes, fluid spread, fire spread and burn-out, crop/sapling/stem growth, piston movement, and selected mob block mutations, while still excluding Lumi's own restore applications.
+- `HistoryCaptureManager` still records explicit tracked block changes inside project bounds, including TNT ignition, explosions, piston movement, and selected mob block mutations, while still excluding Lumi's own restore applications.
 - Automatic dimension project bootstrap is limited to explicit builder-driven sources. Ambient fluid, fire, growth, block-update, and mob mutations cannot create a workspace on world load by themselves.
-- New live capture sessions are also limited to explicit builder-driven sources. Secondary falling-block, fluid, fire, growth, piston, explosion, and mob mutations can extend an already active draft, but they do not start one by themselves when the player loads a world and stays idle.
-- Secondary spread/update sources are also gated by the active session footprint. They only join when their chunk stays near the chunks already accepted into that session, which prevents one explicit edit from pulling unrelated far-away cave fluids or falling gravel into the same draft.
-- Accepted secondary spread/update sources may expand the tracked chunk set locally when they stay inside that active footprint.
+- New live capture sessions are also limited to explicit builder-driven sources. Whole-dimension sessions now seed a causal chunk envelope from those root edits and capture a session-start baseline for the root chunk plus a one-chunk halo.
+- For whole-dimension workspaces, fluid spread and falling blocks no longer append directly into the draft. They only re-mark chunks inside that causal envelope as dirty, and `SessionStabilizationService` later rebuilds the final chunk diff from the session baseline plus current live world state.
+- Secondary explosion, piston, fire, growth, block-update, and mob sources are still gated by the active session envelope so one explicit edit does not pull unrelated far-away cave settling into the same draft.
 - Changes are aggregated into a recovery draft and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `ProjectArchiveService` owns command-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
