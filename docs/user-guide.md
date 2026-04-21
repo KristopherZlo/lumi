@@ -74,6 +74,9 @@ If you restore `Initial`, Lumi restores only chunks that the current project has
 
 It does not roll back unrelated game state like inventory, time, gamerules, or untouched chunks.
 
+Before an `Initial` restore starts, Lumi shows the planned mode, branch, base version, target version, and affected chunk count in a confirmation block above the scrollable workspace panes.
+If the stored generator or datapack fingerprint no longer matches the world, automatic generator regeneration is blocked and Lumi stays on the safer history/baseline path.
+
 Runtime rules:
 
 - restore runs under the internal `RESTORE` source

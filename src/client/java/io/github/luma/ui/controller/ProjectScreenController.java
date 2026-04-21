@@ -180,6 +180,19 @@ public final class ProjectScreenController {
         }
     }
 
+    public io.github.luma.domain.model.RestorePlanSummary restorePlanSummary(String projectName, String versionId) {
+        try {
+            return this.restoreService.summarizeRestorePlan(
+                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
+                    projectName,
+                    versionId
+            );
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Restore plan summary failed for project {} version {}", projectName, versionId, exception);
+            return null;
+        }
+    }
+
     public String createVariant(String projectName, String variantName, String fromVersionId) {
         try {
             this.variantService.createVariant(
