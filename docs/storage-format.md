@@ -47,14 +47,18 @@ Stores the world-level origin manifest shared by all automatic dimension workspa
 
 Important fields:
 
+- schema version
 - level name
 - Minecraft version
 - data version
 - world seed
-- per-dimension generator identity, biome source identity, and sea level
+- `createdWithLumi`
+- datapack fingerprint
+- per-dimension generator identity, biome source identity, sea level, and generator fingerprint
 - timestamps
 
 Automatic dimension workspaces use this manifest to define the meaning of the `WORLD_ROOT` / `Initial` history node.
+Legacy manifests without `createdWithLumi` are treated as `createdWithLumi = false`, so automatic generator-based restore strategies stay disabled unless the world was positively marked by Lumi.
 
 ### `project.json`
 

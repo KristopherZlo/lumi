@@ -135,6 +135,8 @@ The compare screen keeps manual `From` and `To` fields.
 It also has presets for common flows like parent, selected version, and active head.
 
 `Highlight in world` turns on a client-side overlay for changed positions.
+The overlay is drawn through blocks by default.
+Press `H` to hide or show the current overlay without rebuilding the comparison.
 
 The overlay gives priority to changes near the camera.
 
@@ -180,5 +182,8 @@ Shared origin metadata is stored in:
 ```text
 <save>/lumi/world-origin.json
 ```
+
+The origin manifest records the world seed, selected datapacks, and per-dimension generator fingerprints.
+Old manifests without a Lumi creation marker are treated conservatively and are not eligible for automatic generator regeneration.
 
 See [storage-format.md](storage-format.md) for the full layout.

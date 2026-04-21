@@ -530,22 +530,45 @@ public final class HistoryCaptureManager {
     }
 
     public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
-        return source == io.github.luma.domain.model.WorldMutationSource.PLAYER
-                || source == io.github.luma.domain.model.WorldMutationSource.ENTITY
-                || source == io.github.luma.domain.model.WorldMutationSource.EXPLOSION;
+        if (source == null) {
+            return false;
+        }
+        return switch (source) {
+            case PLAYER,
+                    ENTITY,
+                    EXPLOSION,
+                    FLUID,
+                    FIRE,
+                    GROWTH,
+                    BLOCK_UPDATE,
+                    PISTON,
+                    FALLING_BLOCK,
+                    EXPLOSIVE,
+                    MOB,
+                    EXTERNAL_TOOL -> true;
+            case RESTORE, SYSTEM -> false;
+        };
     }
 
     public static String defaultActor(io.github.luma.domain.model.WorldMutationSource source) {
-        if (source == io.github.luma.domain.model.WorldMutationSource.PLAYER) {
-            return "player";
+        if (source == null) {
+            return "world";
         }
-        if (source == io.github.luma.domain.model.WorldMutationSource.ENTITY) {
-            return "entity";
-        }
-        if (source == io.github.luma.domain.model.WorldMutationSource.EXPLOSION) {
-            return "explosion";
-        }
-        return "world";
+        return switch (source) {
+            case PLAYER -> "player";
+            case ENTITY -> "entity";
+            case EXPLOSION -> "explosion";
+            case FLUID -> "fluid";
+            case FIRE -> "fire";
+            case GROWTH -> "growth";
+            case BLOCK_UPDATE -> "block-update";
+            case PISTON -> "piston";
+            case FALLING_BLOCK -> "falling-block";
+            case EXPLOSIVE -> "explosive";
+            case MOB -> "mob";
+            case EXTERNAL_TOOL -> "external-tool";
+            case RESTORE, SYSTEM -> "world";
+        };
     }
 
     private record TrackedProject(ProjectLayout layout, BuildProject project, List<ProjectVariant> variants) {

@@ -11,10 +11,13 @@ import java.util.Map;
  * regeneration context for tracked chunks.
  */
 public record WorldOriginInfo(
+        int schemaVersion,
         String levelName,
         String minecraftVersion,
         int dataVersion,
         long seed,
+        boolean createdWithLumi,
+        String datapackFingerprint,
         Map<String, DimensionOrigin> dimensions,
         Instant createdAt,
         Instant updatedAt
@@ -24,7 +27,8 @@ public record WorldOriginInfo(
             String dimensionId,
             String generatorType,
             String biomeSourceType,
-            int seaLevel
+            int seaLevel,
+            String generatorFingerprint
     ) {
     }
 }

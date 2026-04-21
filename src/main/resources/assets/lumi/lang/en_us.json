@@ -1,6 +1,7 @@
 {
   "key.category.lumi.general": "Lumi",
   "key.lumi.open_dashboard": "Open current workspace",
+  "key.lumi.toggle_compare_overlay": "Show or hide compare highlight",
 
   "luma.common.yes": "Yes",
   "luma.common.no": "No",
@@ -23,6 +24,7 @@
   "luma.action.clear_overlay": "Hide highlight",
   "luma.action.highlight_compare": "Highlight in world",
   "luma.action.hide_highlight": "Hide highlight",
+  "luma.action.show_highlight": "Show highlight",
   "luma.action.compare_with_parent": "Parent -> selected",
   "luma.action.compare_with_current": "Compare to current world",
   "luma.action.recovery": "Recovery",
@@ -354,6 +356,7 @@
   "luma.status.compare_ready": "Compare view ready.",
   "luma.status.compare_failed": "Compare operation failed.",
   "luma.status.compare_overlay_enabled": "World highlight enabled.",
+  "luma.status.compare_overlay_hidden": "World highlight hidden.",
   "luma.status.compare_overlay_cleared": "World highlight cleared.",
   "luma.project.operation_title": "Background operation",
   "luma.project.operation_percent_label": "Overall",

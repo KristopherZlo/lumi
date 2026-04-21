@@ -175,6 +175,15 @@ public final class CompareScreenController {
         return "luma.status.compare_overlay_cleared";
     }
 
+    public String toggleOverlayVisibility() {
+        if (!CompareOverlayRenderer.hasData()) {
+            return "luma.status.compare_failed";
+        }
+        return CompareOverlayRenderer.toggleVisibility()
+                ? "luma.status.compare_overlay_enabled"
+                : "luma.status.compare_overlay_hidden";
+    }
+
     private String resolveReference(List<ProjectVersion> versions, List<ProjectVariant> variants, String reference) {
         if (reference == null || reference.isBlank()) {
             return "";

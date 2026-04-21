@@ -4,6 +4,15 @@ public enum WorldMutationSource {
     PLAYER,
     ENTITY,
     EXPLOSION,
+    FLUID,
+    FIRE,
+    GROWTH,
+    BLOCK_UPDATE,
+    PISTON,
+    FALLING_BLOCK,
+    EXPLOSIVE,
+    MOB,
+    EXTERNAL_TOOL,
     RESTORE,
     SYSTEM
 }

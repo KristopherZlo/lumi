@@ -83,7 +83,7 @@ Responsibilities are split as follows:
 - tab builders keep larger screen sections isolated
 - `LumaScreen` ensures Lumi screens never pause the game
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
-- `CompareOverlayRenderer` renders a client-side compare overlay that prioritizes the nearest changed blocks to the current camera position
+- `CompareOverlayRenderer` renders a client-side compare overlay through blocks, keeps diff data separate from visibility, and prioritizes the nearest changed blocks to the current camera position
 
 ## Core runtime flows
 
@@ -168,7 +168,7 @@ The current durable history format is schema v3.
 
 Main files:
 
-- `world-origin.json`: shared world seed/version/generator manifest for all dimension workspaces
+- `world-origin.json`: shared world seed/version/datapack/generator manifest for all dimension workspaces
 - `versions/*.json`: version manifests
 - `patches/<patchId>.meta.json`: patch metadata and chunk index
 - `patches/<patchId>.bin.lz4`: patch payload

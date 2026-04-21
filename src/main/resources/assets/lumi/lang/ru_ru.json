@@ -1,6 +1,7 @@
 {
   "key.category.lumi.general": "Lumi",
   "key.lumi.open_dashboard": "Открыть текущее рабочее пространство",
+  "key.lumi.toggle_compare_overlay": "Show or hide compare highlight",
 
   "luma.common.yes": "Да",
   "luma.common.no": "Нет",
@@ -23,6 +24,7 @@
   "luma.action.clear_overlay": "Скрыть подсветку",
   "luma.action.highlight_compare": "Подсветить в мире",
   "luma.action.hide_highlight": "Скрыть подсветку",
+  "luma.action.show_highlight": "Show highlight",
   "luma.action.compare_with_parent": "Родитель -> версия",
   "luma.action.compare_with_current": "Сравнить с текущим миром",
   "luma.action.recovery": "Восстановление",
@@ -354,6 +356,7 @@
   "luma.status.compare_ready": "Экран сравнения готов.",
   "luma.status.compare_failed": "Сравнение завершилось ошибкой.",
   "luma.status.compare_overlay_enabled": "Подсветка в мире включена.",
+  "luma.status.compare_overlay_hidden": "World highlight hidden.",
   "luma.status.compare_overlay_cleared": "Подсветка в мире очищена."
   ,
   "luma.project.operation_title": "Фоновая операция",
