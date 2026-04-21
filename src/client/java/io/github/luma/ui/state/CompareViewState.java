@@ -16,6 +16,7 @@ public record CompareViewState(
         String rightResolvedVersionId,
         VersionDiff diff,
         List<MaterialDeltaEntry> materialDelta,
-        String status
+        String status,
+        boolean debugEnabled
 ) {
 }

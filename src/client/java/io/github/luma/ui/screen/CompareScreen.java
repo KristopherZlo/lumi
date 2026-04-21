@@ -43,7 +43,8 @@ public final class CompareScreen extends LumaScreen {
             "",
             null,
             List.of(),
-            "luma.status.compare_ready"
+            "luma.status.compare_ready",
+            false
     );
     private String leftReference;
     private String rightReference;

@@ -13,7 +13,8 @@ public record WorkspaceHudSnapshot(
         String workspaceLabel,
         String activeVariantId,
         PendingChangeSummary pendingChanges,
-        OperationSnapshot operationSnapshot
+        OperationSnapshot operationSnapshot,
+        boolean debugEnabled
 ) {
 
     public int plusCount() {

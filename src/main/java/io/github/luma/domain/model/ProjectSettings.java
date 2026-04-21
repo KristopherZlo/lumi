@@ -7,11 +7,12 @@ public record ProjectSettings(
         int snapshotEveryVersions,
         double snapshotVolumeThreshold,
         boolean safetySnapshotBeforeRestore,
-        boolean previewGenerationEnabled
+        boolean previewGenerationEnabled,
+        boolean debugLoggingEnabled
 ) {
 
     public static ProjectSettings defaults() {
-        return new ProjectSettings(false, 10, 5, 10, 0.20D, true, true);
+        return new ProjectSettings(false, 10, 5, 10, 0.20D, true, true, false);
     }
 
     public static ProjectSettings sanitize(ProjectSettings settings) {
@@ -26,7 +27,8 @@ public record ProjectSettings(
                 settings.snapshotEveryVersions() <= 0 ? 10 : settings.snapshotEveryVersions(),
                 settings.snapshotVolumeThreshold() <= 0.0D ? 0.20D : settings.snapshotVolumeThreshold(),
                 settings.safetySnapshotBeforeRestore(),
-                settings.previewGenerationEnabled()
+                settings.previewGenerationEnabled(),
+                settings.debugLoggingEnabled()
         );
     }
 }

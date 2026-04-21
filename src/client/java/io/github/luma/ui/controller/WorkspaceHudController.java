@@ -5,6 +5,7 @@ import io.github.luma.domain.model.WorkspaceHudSnapshot;
 import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ServerLevel;
@@ -43,7 +44,8 @@ public final class WorkspaceHudController {
                     project.name() + " | " + project.activeVariantId(),
                     project.activeVariantId(),
                     pending,
-                    operationSnapshot
+                    operationSnapshot,
+                    LumaDebugLog.enabled(project)
             );
         } catch (Exception exception) {
             return null;

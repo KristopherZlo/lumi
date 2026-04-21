@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.LumaMod;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ProjectVariant;
@@ -89,12 +90,43 @@ public final class HistoryCaptureManager {
                 LumaMod.LOGGER.info("Created world workspace automatically for dimension {}", level.dimension().identifier());
             }
 
+            if (matchingProjects.isEmpty()) {
+                LumaDebugLog.log(
+                        "capture",
+                        "Skipped mutation at {} in {} because no tracked workspace matched source={}",
+                        pos,
+                        level.dimension().identifier(),
+                        source
+                );
+            }
+
             for (TrackedProject trackedProject : matchingProjects) {
+                LumaDebugLog.log(
+                        trackedProject.project(),
+                        "capture",
+                        "Recording {} mutation for project {} at {} in {}: {} -> {}",
+                        source,
+                        trackedProject.project().name(),
+                        pos,
+                        level.dimension().identifier(),
+                        oldState,
+                        newState
+                );
                 this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, now);
 
                 String projectId = trackedProject.project().id().toString();
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
                 buffer.recordChange(pos, oldState, newState, oldBlockEntity, newBlockEntity, now);
+                LumaDebugLog.log(
+                        trackedProject.project(),
+                        "capture",
+                        "Tracked buffer {} for project {} now has {} pending changes on variant {} from base {}",
+                        buffer.id(),
+                        trackedProject.project().name(),
+                        buffer.size(),
+                        buffer.variantId(),
+                        buffer.baseVersionId()
+                );
                 this.logBufferProgress(trackedProject.project(), buffer);
                 if (buffer.isEmpty()) {
                     this.activeBuffers.remove(projectId);
@@ -145,12 +177,26 @@ public final class HistoryCaptureManager {
             if (trackedProject == null) {
                 return Optional.empty();
             }
+            LumaDebugLog.log(
+                    trackedProject.project(),
+                    "capture",
+                    "Freezing project {} without active buffer; loading persisted draft fallback",
+                    trackedProject.project().name()
+            );
             return this.recoveryRepository.loadDraft(trackedProject.layout())
                     .map(draft -> TrackedChangeBuffer.fromDraft(UUID.randomUUID().toString(), draft));
         }
 
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         if (trackedProject != null && !session.isEmpty()) {
+            LumaDebugLog.log(
+                    trackedProject.project(),
+                    "capture",
+                    "Freezing active buffer {} for project {} with {} pending changes",
+                    session.id(),
+                    trackedProject.project().name(),
+                    session.size()
+            );
             this.recoveryRepository.saveDraft(trackedProject.layout(), session.toDraft());
             LumaMod.LOGGER.info(
                     "Persisted active buffer for project {} with {} pending changes",
@@ -174,6 +220,17 @@ public final class HistoryCaptureManager {
         this.lastDraftFlushes.remove(projectId);
         if (session != null) {
             LumaMod.LOGGER.info("Consumed in-memory buffer for project {} with {} pending changes", projectId, session.size());
+            TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+            if (trackedProject != null) {
+                LumaDebugLog.log(
+                        trackedProject.project(),
+                        "capture",
+                        "Consumed in-memory buffer {} for project {} with {} pending changes",
+                        session.id(),
+                        trackedProject.project().name(),
+                        session.size()
+                );
+            }
             return session.isEmpty() ? Optional.empty() : Optional.of(session);
         }
 
@@ -181,6 +238,12 @@ public final class HistoryCaptureManager {
         if (trackedProject == null) {
             return Optional.empty();
         }
+        LumaDebugLog.log(
+                trackedProject.project(),
+                "capture",
+                "No live buffer for project {}. Loading persisted draft for save/amend.",
+                trackedProject.project().name()
+        );
         return this.recoveryRepository.loadDraft(trackedProject.layout())
                 .map(draft -> TrackedChangeBuffer.fromDraft(UUID.randomUUID().toString(), draft))
                 .filter(buffer -> !buffer.isEmpty());
@@ -218,6 +281,17 @@ public final class HistoryCaptureManager {
             TrackedChangeBuffer session = entry.getValue();
             int idleSeconds = idleThresholds.getOrDefault(projectId, 5);
             if (Duration.between(session.updatedAt(), now).getSeconds() >= idleSeconds) {
+                TrackedProject trackedProject = trackedProjects.get(projectId);
+                if (trackedProject != null) {
+                    LumaDebugLog.log(
+                            trackedProject.project(),
+                            "capture",
+                            "Idle timeout reached for project {} after {}s with {} pending changes",
+                            trackedProject.project().name(),
+                            idleSeconds,
+                            session.size()
+                    );
+                }
                 sessionsToFinalize.add(projectId);
                 continue;
             }
@@ -240,6 +314,14 @@ public final class HistoryCaptureManager {
                 this.recoveryRepository.saveDraft(trackedProject.layout(), session.toDraft());
                 this.dirtySessions.remove(projectId);
                 this.lastDraftFlushes.put(projectId, now);
+                LumaDebugLog.log(
+                        trackedProject.project(),
+                        "capture",
+                        "Flushed live draft for project {} with {} pending changes after {}s idle",
+                        trackedProject.project().name(),
+                        session.size(),
+                        Duration.between(session.updatedAt(), now).getSeconds()
+                );
                 LumaMod.LOGGER.info(
                         "Flushed active draft for project {} with {} pending changes",
                         trackedProject.project().name(),
@@ -290,6 +372,10 @@ public final class HistoryCaptureManager {
                 .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + trackedProject.project().name()));
 
         Optional<RecoveryDraft> draft = this.recoveryRepository.loadDraft(trackedProject.layout());
+        boolean resumedDraft = draft
+                .filter(candidate -> projectId.equals(candidate.projectId()))
+                .filter(candidate -> activeVariant.id().equals(candidate.variantId()))
+                .isPresent();
         TrackedChangeBuffer buffer = draft
                 .filter(candidate -> projectId.equals(candidate.projectId()))
                 .filter(candidate -> activeVariant.id().equals(candidate.variantId()))
@@ -310,6 +396,16 @@ public final class HistoryCaptureManager {
                 trackedProject.project().name(),
                 activeVariant.id(),
                 activeVariant.headVersionId()
+        );
+        LumaDebugLog.log(
+                trackedProject.project(),
+                "capture",
+                "Opened buffer {} for project {} on variant {} from base {} using {}",
+                buffer.id(),
+                trackedProject.project().name(),
+                activeVariant.id(),
+                activeVariant.headVersionId(),
+                resumedDraft ? "persisted draft" : "new session"
         );
         return buffer;
     }
@@ -386,6 +482,14 @@ public final class HistoryCaptureManager {
     ) throws IOException {
         ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
         if (this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
+            LumaDebugLog.log(
+                    trackedProject.project(),
+                    "capture",
+                    "Baseline chunk {}:{} already captured for project {}",
+                    chunk.x(),
+                    chunk.z(),
+                    trackedProject.project().name()
+            );
             return;
         }
 
@@ -398,6 +502,15 @@ public final class HistoryCaptureManager {
                 pos,
                 oldState,
                 oldBlockEntity
+        );
+        LumaDebugLog.log(
+                trackedProject.project(),
+                "capture",
+                "Captured missing baseline chunk {}:{} for project {} from mutation at {}",
+                chunk.x(),
+                chunk.z(),
+                trackedProject.project().name(),
+                pos
         );
     }
 

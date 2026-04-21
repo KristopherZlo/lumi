@@ -31,6 +31,7 @@ public final class SettingsScreen extends LumaScreen {
     private boolean autoVersionsEnabled;
     private boolean safetySnapshotBeforeRestore;
     private boolean previewGenerationEnabled;
+    private boolean debugLoggingEnabled;
     private boolean favorite;
     private boolean archived;
     private String autoVersionMinutes = "10";
@@ -60,6 +61,7 @@ public final class SettingsScreen extends LumaScreen {
             this.autoVersionsEnabled = project.settings().autoVersionsEnabled();
             this.safetySnapshotBeforeRestore = project.settings().safetySnapshotBeforeRestore();
             this.previewGenerationEnabled = project.settings().previewGenerationEnabled();
+            this.debugLoggingEnabled = project.settings().debugLoggingEnabled();
             this.favorite = project.favorite();
             this.archived = project.archived();
             this.autoVersionMinutes = Integer.toString(project.settings().autoVersionMinutes());
@@ -99,6 +101,7 @@ public final class SettingsScreen extends LumaScreen {
         body.child(this.automationSection());
         body.child(this.snapshotSection());
         body.child(this.previewSection());
+        body.child(this.debugSection());
         body.child(this.projectStateSection());
         body.child(this.diagnosticsSection(integrity));
 
@@ -181,6 +184,20 @@ public final class SettingsScreen extends LumaScreen {
                 Component.translatable("luma.settings.preview_generation"),
                 Component.translatable("luma.settings.preview_generation_help"),
                 this.toggleControl(this.previewGenerationEnabled, value -> this.previewGenerationEnabled = value),
+                ""
+        ));
+        return section;
+    }
+
+    private FlowLayout debugSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.settings.debug_title"),
+                Component.translatable("luma.settings.debug_help")
+        );
+        section.child(this.fieldWithError(
+                Component.translatable("luma.settings.debug_logging"),
+                Component.translatable("luma.settings.debug_logging_help"),
+                this.toggleControl(this.debugLoggingEnabled, value -> this.debugLoggingEnabled = value),
                 ""
         ));
         return section;
@@ -286,7 +303,8 @@ public final class SettingsScreen extends LumaScreen {
                         parsedSnapshotEveryVersions,
                         parsedSnapshotVolumeThreshold,
                         this.safetySnapshotBeforeRestore,
-                        this.previewGenerationEnabled
+                        this.previewGenerationEnabled,
+                        this.debugLoggingEnabled
                 ),
                 this.favorite,
                 this.archived

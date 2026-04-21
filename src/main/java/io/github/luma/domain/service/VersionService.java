@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.Bounds3i;
@@ -73,14 +74,23 @@ public final class VersionService {
         BuildProject project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
-        RecoveryDraft draft = HistoryCaptureManager.getInstance()
-                .consumeSession(level.getServer(), project.id().toString())
-                .map(TrackedChangeBuffer::toDraft)
+        Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
+                .consumeSession(level.getServer(), project.id().toString());
+        Optional<RecoveryDraft> liveDraft = liveSession.map(TrackedChangeBuffer::toDraft);
+        RecoveryDraft draft = liveDraft
                 .or(() -> persistedDraft)
                 .orElseThrow(() -> new IllegalArgumentException("No pending tracked changes for " + projectName));
         if (draft.isEmpty()) {
             throw new IllegalArgumentException("No pending tracked changes for " + projectName);
         }
+        LumaDebugLog.log(
+                project,
+                "save",
+                "Starting amend for project {} from {} with {} pending changes",
+                project.name(),
+                liveDraft.isPresent() ? "live buffer" : "persisted draft",
+                draft.changes().size()
+        );
 
         // Preserve the live draft shape as the fallback if amend preparation fails.
         this.recoveryRepository.saveDraft(layout, draft);
@@ -90,6 +100,7 @@ public final class VersionService {
                 project.id().toString(),
                 "amend-version",
                 "blocks",
+                LumaDebugLog.enabled(project),
                 progressSink -> {
                     List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
                     ProjectVariant activeVariant = variants.stream()
@@ -106,6 +117,15 @@ public final class VersionService {
                     if (amendedDraft.isEmpty()) {
                         throw new IllegalArgumentException("Amend would produce an empty version");
                     }
+                    LumaDebugLog.log(
+                            project,
+                            "save",
+                            "Amending head {} on variant {} for project {}: headChanges + draftChanges -> {} merged changes",
+                            headVersion.id(),
+                            activeVariant.id(),
+                            project.name(),
+                            amendedDraft.changes().size()
+                    );
 
                     String amendMessage = message == null || message.isBlank() ? "Amended version" : message;
                     ProjectVersion amendedVersion = this.writeVersion(
@@ -149,9 +169,10 @@ public final class VersionService {
         BuildProject project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
-        RecoveryDraft draft = HistoryCaptureManager.getInstance()
-                .consumeSession(level.getServer(), project.id().toString())
-                .map(TrackedChangeBuffer::toDraft)
+        Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
+                .consumeSession(level.getServer(), project.id().toString());
+        Optional<RecoveryDraft> liveDraft = liveSession.map(TrackedChangeBuffer::toDraft);
+        RecoveryDraft draft = liveDraft
                 .or(() -> persistedDraft)
                 .orElseThrow(() -> new IllegalArgumentException("No pending tracked changes for " + projectName));
         if (draft.isEmpty()) {
@@ -164,6 +185,15 @@ public final class VersionService {
                 draft.variantId(),
                 draft.changes().size()
         );
+        LumaDebugLog.log(
+                project,
+                "save",
+                "Starting save for project {} using {} with {} pending changes on variant {}",
+                project.name(),
+                liveDraft.isPresent() ? "live buffer" : "persisted draft",
+                draft.changes().size(),
+                draft.variantId()
+        );
 
         // Keep a durable fallback until the async save fully commits.
         this.recoveryRepository.saveDraft(layout, draft);
@@ -173,6 +203,7 @@ public final class VersionService {
                 project.id().toString(),
                 "save-version",
                 "blocks",
+                LumaDebugLog.enabled(project),
                 progressSink -> this.writeVersion(level, layout, project, draft, message, author, versionKind, true, progressSink)
         );
     }
@@ -253,6 +284,16 @@ public final class VersionService {
         String parentVersionId = parentVersionIdOverride == null || parentVersionIdOverride.isBlank()
                 ? activeVariant.headVersionId()
                 : parentVersionIdOverride;
+        LumaDebugLog.log(
+                project,
+                "save",
+                "Preparing writeVersion for project {} variant {} parent={} kind={} schedulePreview={}",
+                project.name(),
+                activeVariant.id(),
+                parentVersionId,
+                versionKind,
+                schedulePreview
+        );
 
         int nextIndex = versions.size() + 1;
         Instant now = Instant.now();
@@ -290,11 +331,20 @@ public final class VersionService {
         if (createSnapshot) {
             snapshotId = ProjectService.snapshotId(nextIndex);
             progressSink.update(OperationStage.WRITING, draft.changes().size(), draft.changes().size(), "Capturing snapshot");
+            List<ChunkPoint> snapshotChunks = this.collectSnapshotChunks(layout, project, versions, draft);
+            LumaDebugLog.log(
+                    project,
+                    "save",
+                    "Capturing snapshot {} for version {} across {} tracked chunks",
+                    snapshotId,
+                    versionId,
+                    snapshotChunks.size()
+            );
             this.snapshotWriter.capture(
                     layout,
                     project.id().toString(),
                     snapshotId,
-                    this.collectSnapshotChunks(layout, project, versions, draft),
+                    snapshotChunks,
                     level,
                     now
             );
@@ -345,6 +395,7 @@ public final class VersionService {
         );
 
         if (schedulePreview && project.settings().previewGenerationEnabled()) {
+            LumaDebugLog.log(project, "preview", "Scheduling async preview refresh for version {}", version.id());
             CompletableFuture.runAsync(() -> this.tryRefreshPreview(layout, project, version, level), PREVIEW_EXECUTOR);
         }
 
@@ -380,6 +431,15 @@ public final class VersionService {
     ) throws IOException {
         List<StoredBlockChange> headChanges = this.loadPatchChanges(layout, headVersion.patchIds());
         List<StoredBlockChange> mergedChanges = mergeChanges(headChanges, draft.changes());
+        LumaDebugLog.log(
+                project,
+                "save",
+                "Merged amend draft for project {}: head={} changes, overlay={} changes, merged={}",
+                project.name(),
+                headChanges.size(),
+                draft.changes().size(),
+                mergedChanges.size()
+        );
         return new RecoveryDraft(
                 project.id().toString(),
                 activeVariant.id(),
@@ -407,6 +467,7 @@ public final class VersionService {
     private void tryRefreshPreview(ProjectLayout layout, BuildProject project, ProjectVersion version, ServerLevel level) {
         try {
             LumaMod.LOGGER.info("Starting async preview refresh for version {} in project {}", version.id(), project.name());
+            LumaDebugLog.log(project, "preview", "Refreshing preview for version {}", version.id());
             List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
             PreviewInfo preview = this.capturePreview(
                     layout,
@@ -430,6 +491,7 @@ public final class VersionService {
                     version.createdAt()
             ));
             LumaMod.LOGGER.info("Completed async preview refresh for version {} in project {}", version.id(), project.name());
+            LumaDebugLog.log(project, "preview", "Stored preview metadata for version {} at {}", version.id(), preview.fileName());
         } catch (Exception ignored) {
             LumaMod.LOGGER.warn("Preview refresh failed for version {} in project {}", version.id(), project.name(), ignored);
         }
@@ -442,10 +504,12 @@ public final class VersionService {
             ServerLevel level
     ) throws IOException {
         if (bounds == null) {
+            LumaDebugLog.log("preview", "Skipped preview capture for version {} because bounds are unavailable", versionId);
             return PreviewInfo.none();
         }
 
         try {
+            LumaDebugLog.log("preview", "Capturing preview for version {} with bounds {}", versionId, bounds);
             PreviewService.PreviewRenderData renderData = this.samplePreviewOnServerThread(bounds, level);
             return this.previewService.write(layout, versionId, renderData);
         } catch (RuntimeException exception) {
@@ -487,15 +551,45 @@ public final class VersionService {
     ) throws IOException {
         VersionKind effectiveKind = project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind;
         if (effectiveKind == VersionKind.INITIAL || effectiveKind == VersionKind.LEGACY || effectiveKind == VersionKind.RESTORE) {
+            LumaDebugLog.log(
+                    project,
+                    "save",
+                    "Snapshot required for project {} because version kind is {}",
+                    project.name(),
+                    effectiveKind
+            );
             return true;
         }
         if (versions.isEmpty()) {
+            LumaDebugLog.log(project, "save", "Snapshot required for project {} because no versions exist yet", project.name());
             return true;
         }
-        if (this.versionsSinceSnapshot(versions, activeVariant.headVersionId()) >= project.settings().snapshotEveryVersions()) {
+        int versionsSinceSnapshot = this.versionsSinceSnapshot(versions, activeVariant.headVersionId());
+        if (versionsSinceSnapshot >= project.settings().snapshotEveryVersions()) {
+            LumaDebugLog.log(
+                    project,
+                    "save",
+                    "Snapshot required for project {} because versionsSinceSnapshot={} reached limit={}",
+                    project.name(),
+                    versionsSinceSnapshot,
+                    project.settings().snapshotEveryVersions()
+            );
             return true;
         }
-        return this.exceedsSnapshotVolumeThreshold(project, layout, draft, stats);
+        boolean exceedsThreshold = this.exceedsSnapshotVolumeThreshold(project, layout, draft, stats);
+        LumaDebugLog.log(
+                project,
+                "save",
+                "Snapshot threshold check for project {}: versionsSinceSnapshot={} limit={} changedBlocks={} changedChunks={} threshold={} exceeded={}",
+                project.name(),
+                versionsSinceSnapshot,
+                project.settings().snapshotEveryVersions(),
+                stats.changedBlocks(),
+                stats.changedChunks(),
+                project.settings().snapshotVolumeThreshold(),
+                exceedsThreshold
+        );
+        return exceedsThreshold;
     }
 
     private int versionsSinceSnapshot(List<ProjectVersion> versions, String headVersionId) {
@@ -527,14 +621,34 @@ public final class VersionService {
         double threshold = project.settings().snapshotVolumeThreshold();
         if (!project.tracksWholeDimension()) {
             long volume = Math.max(1L, project.bounds().volume());
-            return (double) stats.changedBlocks() / (double) volume >= threshold;
+            double fraction = (double) stats.changedBlocks() / (double) volume;
+            LumaDebugLog.log(
+                    project,
+                    "save",
+                    "Bounded snapshot volume check for project {}: changedBlocks={} volume={} fraction={}",
+                    project.name(),
+                    stats.changedBlocks(),
+                    volume,
+                    fraction
+            );
+            return fraction >= threshold;
         }
 
         List<ChunkPoint> knownChunks = new ArrayList<>(this.baselineChunkRepository.listChunks(layout));
         knownChunks = ChunkSelectionFactory.merge(knownChunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
         int knownChunkCount = Math.max(1, knownChunks.size());
         int changedChunkCount = ChunkSelectionFactory.fromStoredChanges(draft.changes()).size();
-        return (double) changedChunkCount / (double) knownChunkCount >= threshold;
+        double fraction = (double) changedChunkCount / (double) knownChunkCount;
+        LumaDebugLog.log(
+                project,
+                "save",
+                "Whole-dimension snapshot volume check for project {}: changedChunks={} knownChunks={} fraction={}",
+                project.name(),
+                changedChunkCount,
+                knownChunkCount,
+                fraction
+        );
+        return fraction >= threshold;
     }
 
     private List<ChunkPoint> collectSnapshotChunks(
@@ -561,10 +675,20 @@ public final class VersionService {
         }
 
         if (draft == null || draft.isEmpty()) {
+            LumaDebugLog.log(project, "save", "Collected {} snapshot chunks for project {} without live draft", chunks.size(), project.name());
             return List.copyOf(chunks);
         }
 
-        return ChunkSelectionFactory.merge(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
+        List<ChunkPoint> merged = ChunkSelectionFactory.merge(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
+        LumaDebugLog.log(
+                project,
+                "save",
+                "Collected {} snapshot chunks for project {} including {} draft changes",
+                merged.size(),
+                project.name(),
+                draft.changes().size()
+        );
+        return merged;
     }
 
     private Bounds3i resolvePreviewBounds(
@@ -596,10 +720,19 @@ public final class VersionService {
 
         int minY = level.dimensionType().minY();
         int maxY = minY + level.dimensionType().height() - 1;
-        return new Bounds3i(
+        Bounds3i bounds = new Bounds3i(
                 new BlockPoint(minChunkX << 4, minY, minChunkZ << 4),
                 new BlockPoint((maxChunkX << 4) + 15, maxY, (maxChunkZ << 4) + 15)
         );
+        LumaDebugLog.log(
+                project,
+                "preview",
+                "Resolved preview bounds for project {} from {} chunks: {}",
+                project.name(),
+                chunks.size(),
+                bounds
+        );
+        return bounds;
     }
 
     private List<ProjectVariant> replaceVariant(List<ProjectVariant> variants, ProjectVariant updatedVariant) {

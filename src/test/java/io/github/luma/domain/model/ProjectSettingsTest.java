@@ -19,6 +19,7 @@ class ProjectSettingsTest {
         assertEquals(0.20D, settings.snapshotVolumeThreshold());
         assertTrue(settings.safetySnapshotBeforeRestore());
         assertTrue(settings.previewGenerationEnabled());
+        assertFalse(settings.debugLoggingEnabled());
     }
 
     @Test
@@ -30,7 +31,8 @@ class ProjectSettingsTest {
                 0,
                 -3.0D,
                 false,
-                false
+                false,
+                true
         ));
 
         assertTrue(settings.autoVersionsEnabled());
@@ -40,5 +42,6 @@ class ProjectSettingsTest {
         assertEquals(0.20D, settings.snapshotVolumeThreshold());
         assertFalse(settings.safetySnapshotBeforeRestore());
         assertFalse(settings.previewGenerationEnabled());
+        assertTrue(settings.debugLoggingEnabled());
     }
 }

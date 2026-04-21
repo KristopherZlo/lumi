@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.world;
 
 import io.github.luma.LumaMod;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationProgress;
 import io.github.luma.domain.model.OperationSnapshot;
@@ -79,6 +80,7 @@ public final class WorldOperationManager {
             String projectId,
             String label,
             String unitLabel,
+            boolean debugEnabled,
             BackgroundWork work
     ) {
         String serverKey = this.serverKey(level.getServer());
@@ -86,12 +88,19 @@ public final class WorldOperationManager {
             this.ensureIdle(serverKey);
             BackgroundActiveOperation operation = new BackgroundActiveOperation(
                     level,
-                    new OperationHandle(UUID.randomUUID().toString(), projectId, label, Instant.now()),
+                    new OperationHandle(UUID.randomUUID().toString(), projectId, label, Instant.now(), debugEnabled),
                     unitLabel,
                     work
             );
             this.activeOperations.put(serverKey, operation);
             LumaMod.LOGGER.info(
+                    "Queued background operation {} for project {}",
+                    operation.handle().label(),
+                    projectId
+            );
+            LumaDebugLog.log(
+                    operation.handle(),
+                    "world-op",
                     "Queued background operation {} for project {}",
                     operation.handle().label(),
                     projectId
@@ -105,6 +114,7 @@ public final class WorldOperationManager {
             String projectId,
             String label,
             String unitLabel,
+            boolean debugEnabled,
             PreparedApplyWork work
     ) {
         String serverKey = this.serverKey(level.getServer());
@@ -112,12 +122,19 @@ public final class WorldOperationManager {
             this.ensureIdle(serverKey);
             PreparedApplyActiveOperation operation = new PreparedApplyActiveOperation(
                     level,
-                    new OperationHandle(UUID.randomUUID().toString(), projectId, label, Instant.now()),
+                    new OperationHandle(UUID.randomUUID().toString(), projectId, label, Instant.now(), debugEnabled),
                     unitLabel,
                     work
             );
             this.activeOperations.put(serverKey, operation);
             LumaMod.LOGGER.info(
+                    "Queued prepared apply operation {} for project {}",
+                    operation.handle().label(),
+                    projectId
+            );
+            LumaDebugLog.log(
+                    operation.handle(),
+                    "world-op",
                     "Queued prepared apply operation {} for project {}",
                     operation.handle().label(),
                     projectId
@@ -143,7 +160,9 @@ public final class WorldOperationManager {
         }
 
         try {
-            if (operation.advance(this.currentBlockBudget(operation), this.currentDeadline(operation))) {
+            int maxBlocks = this.currentBlockBudget(operation);
+            long deadlineNanos = this.currentDeadline(operation);
+            if (operation.advance(maxBlocks, deadlineNanos)) {
                 this.complete(server, operation);
             }
         } catch (Exception exception) {
@@ -274,6 +293,14 @@ public final class WorldOperationManager {
                     Instant.now()
             );
             this.lastLoggedStage = OperationStage.QUEUED;
+            LumaDebugLog.log(
+                    this.handle,
+                    "world-op",
+                    "Created operation {} for project {} with unit={}",
+                    this.handle.label(),
+                    this.handle.projectId(),
+                    this.unitLabel
+            );
         }
 
         protected ServerLevel level() {
@@ -319,6 +346,14 @@ public final class WorldOperationManager {
                     this.handle.projectId(),
                     java.time.Duration.between(this.handle.startedAt(), Instant.now()).toMillis()
             );
+            LumaDebugLog.log(
+                    this.handle,
+                    "world-op",
+                    "Completed operation {} with detail='{}' and progress {}",
+                    this.handle.label(),
+                    detail,
+                    this.snapshot.progress()
+            );
         }
 
         protected void fail(Exception exception) {
@@ -335,6 +370,13 @@ public final class WorldOperationManager {
                     this.handle.projectId(),
                     java.time.Duration.between(this.handle.startedAt(), Instant.now()).toMillis(),
                     exception
+            );
+            LumaDebugLog.log(
+                    this.handle,
+                    "world-op",
+                    "Failed operation {} with detail='{}'",
+                    this.handle.label(),
+                    this.snapshot.detail()
             );
         }
 
@@ -380,6 +422,7 @@ public final class WorldOperationManager {
             super(level, handle, unitLabel);
             this.future = CompletableFuture.runAsync(() -> {
                 try {
+                    LumaDebugLog.log(this.handle(), "world-op", "Background worker thread started for {}", this.handle().label());
                     this.progressSink().update(OperationStage.PREPARING, 0, 0, "Starting");
                     work.run(this.progressSink());
                     this.complete("Completed");
@@ -455,6 +498,14 @@ public final class WorldOperationManager {
 
                 this.dispatcher = new GlobalDispatcher();
                 this.dispatcher.enqueue(this.prepared.localQueue());
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op",
+                        "Prepared operation {} loaded {} placements across {} ready chunk batches",
+                        this.handle().label(),
+                        this.prepared.totalPlacements(),
+                        this.prepared.localQueue().completedCount()
+                );
                 this.progressSink().update(
                         OperationStage.APPLYING,
                         0,
@@ -481,6 +532,15 @@ public final class WorldOperationManager {
                     this.blockEntitiesApplied = false;
                     this.entitiesApplied = false;
                     this.currentBatch = this.prepared.batchProcessor().processSet(this.currentBatch);
+                    LumaDebugLog.log(
+                            this.handle(),
+                            "world-op",
+                            "Applying chunk batch {}:{} with {} placements across {} sections",
+                            this.currentBatch.chunk().x(),
+                            this.currentBatch.chunk().z(),
+                            this.currentBatch.totalPlacements(),
+                            this.currentSections.size()
+                    );
                 }
 
                 WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
@@ -507,6 +567,14 @@ public final class WorldOperationManager {
                                 : "Applying chunk " + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
                 );
                 if (this.currentBatch != null && this.currentBatchFinished()) {
+                    LumaDebugLog.log(
+                            this.handle(),
+                            "world-op",
+                            "Finished chunk batch {}:{} after applying {} total placements so far",
+                            this.currentBatch.chunk().x(),
+                            this.currentBatch.chunk().z(),
+                            this.appliedBlocks
+                    );
                     this.prepared.historyStore().record(this.currentBatch);
                     this.prepared.batchProcessor().postProcessSet(this.currentBatch);
                     this.currentBatch = null;
@@ -520,6 +588,13 @@ public final class WorldOperationManager {
                         this.appliedBlocks,
                         this.prepared.totalPlacements(),
                         "Finalizing"
+                );
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op",
+                        "Finalizing prepared operation {} after {} applied placements",
+                        this.handle().label(),
+                        this.appliedBlocks
                 );
                 this.prepared.onComplete().run();
                 this.complete("Completed");

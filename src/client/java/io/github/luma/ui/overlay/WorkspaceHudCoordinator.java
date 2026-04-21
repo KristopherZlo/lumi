@@ -1,6 +1,7 @@
 package io.github.luma.ui.overlay;
 
 import io.github.luma.LumaMod;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.WorkspaceHudSnapshot;
@@ -29,6 +30,7 @@ public final class WorkspaceHudCoordinator {
     private OperationSnapshot activeOperation;
     private OperationSnapshot retainedTerminalOperation;
     private String retainedTerminalFingerprint = "";
+    private String lastLoggedActionbarFingerprint = "";
     private int retainedTerminalTicks = 0;
     private int refreshCooldown = 0;
     private boolean actionbarOwned = false;
@@ -58,11 +60,38 @@ public final class WorkspaceHudCoordinator {
         if (this.refreshCooldown <= 0 || this.workspaceSnapshot == null) {
             this.workspaceSnapshot = this.controller.loadCurrentWorkspaceSnapshot();
             this.refreshCooldown = REFRESH_INTERVAL_TICKS;
+            if (this.workspaceSnapshot != null && this.workspaceSnapshot.debugEnabled()) {
+                LumaDebugLog.log(
+                        "hud",
+                        "Refreshed HUD snapshot for {} branch={} pending(+{}, -{}) operation={}",
+                        this.workspaceSnapshot.projectName(),
+                        this.workspaceSnapshot.activeVariantId(),
+                        this.workspaceSnapshot.plusCount(),
+                        this.workspaceSnapshot.minusCount(),
+                        this.workspaceSnapshot.operationSnapshot() == null
+                                ? "none"
+                                : this.workspaceSnapshot.operationSnapshot().stage()
+                );
+            }
         }
 
         OperationSnapshot current = this.workspaceSnapshot == null ? null : this.workspaceSnapshot.operationSnapshot();
         if (current != null && !current.terminal()) {
             this.activeOperation = current;
+            if (LumaDebugLog.enabled(current)) {
+                String actionbarFingerprint = this.actionbarFingerprint(current);
+                if (!actionbarFingerprint.equals(this.lastLoggedActionbarFingerprint)) {
+                    this.lastLoggedActionbarFingerprint = actionbarFingerprint;
+                    LumaDebugLog.log(
+                            current.handle(),
+                            "hud",
+                            "HUD actionbar updated for {} at stage={} summary={}",
+                            current.handle().label(),
+                            current.stage(),
+                            OperationProgressPresenter.progressSummary(current)
+                    );
+                }
+            }
             this.updateActionbar(client, current);
             return;
         }
@@ -74,6 +103,16 @@ public final class WorkspaceHudCoordinator {
                 this.retainedTerminalFingerprint = fingerprint;
                 this.retainedTerminalOperation = current;
                 this.retainedTerminalTicks = TERMINAL_DISPLAY_TICKS;
+                if (LumaDebugLog.enabled(current)) {
+                    LumaDebugLog.log(
+                            current.handle(),
+                            "hud",
+                            "Retaining terminal operation {} stage={} for {} ticks",
+                            current.handle().label(),
+                            current.stage(),
+                            TERMINAL_DISPLAY_TICKS
+                    );
+                }
             }
         }
 
@@ -94,6 +133,7 @@ public final class WorkspaceHudCoordinator {
         this.activeOperation = null;
         this.retainedTerminalOperation = null;
         this.retainedTerminalFingerprint = "";
+        this.lastLoggedActionbarFingerprint = "";
         this.retainedTerminalTicks = 0;
         this.refreshCooldown = 0;
         this.actionbarOwned = false;
@@ -151,6 +191,16 @@ public final class WorkspaceHudCoordinator {
 
     private String fingerprint(OperationSnapshot snapshot) {
         return snapshot.handle().id() + ":" + snapshot.updatedAt();
+    }
+
+    private String actionbarFingerprint(OperationSnapshot snapshot) {
+        return snapshot.handle().id()
+                + ":"
+                + snapshot.stage()
+                + ":"
+                + snapshot.updatedAt()
+                + ":"
+                + OperationProgressPresenter.displayPercent(snapshot);
     }
 
     private String humanLabel(String label) {
