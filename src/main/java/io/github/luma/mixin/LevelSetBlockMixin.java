@@ -28,7 +28,7 @@ abstract class LevelSetBlockMixin {
         if (!(level instanceof ServerLevel serverLevel)) {
             return;
         }
-        if (WorldMutationContext.currentSource() != io.github.luma.domain.model.WorldMutationSource.PLAYER) {
+        if (!HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource())) {
             return;
         }
 
@@ -44,7 +44,7 @@ abstract class LevelSetBlockMixin {
         if (!(level instanceof ServerLevel serverLevel)) {
             return;
         }
-        if (WorldMutationContext.currentSource() != io.github.luma.domain.model.WorldMutationSource.PLAYER) {
+        if (!HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource())) {
             return;
         }
 

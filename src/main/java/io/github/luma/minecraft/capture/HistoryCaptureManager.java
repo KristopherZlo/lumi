@@ -30,7 +30,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Captures player-driven world edits into project-scoped tracked buffers.
+ * Captures tracked world edits into project-scoped tracked buffers.
  *
  * <p>This manager owns the active in-memory capture sessions, baseline chunk
  * capture for whole-dimension workspaces, periodic recovery draft flushing, and
@@ -59,7 +59,8 @@ public final class HistoryCaptureManager {
     }
 
     /**
-     * Records one block mutation when the current mutation source is a player.
+     * Records one block mutation for any tracked source except internal restore
+     * application.
      *
      * <p>The manager resolves matching projects, creates a world workspace on
      * demand if none exist, captures baseline chunk state when required, and
@@ -73,7 +74,8 @@ public final class HistoryCaptureManager {
             CompoundTag oldBlockEntity,
             CompoundTag newBlockEntity
     ) {
-        if (WorldMutationContext.currentSource() != io.github.luma.domain.model.WorldMutationSource.PLAYER) {
+        io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
+        if (!shouldCaptureMutation(source)) {
             return;
         }
 
@@ -81,7 +83,7 @@ public final class HistoryCaptureManager {
             Instant now = Instant.now();
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
             if (matchingProjects.isEmpty()) {
-                this.projectService.ensureWorldProject(level, "player");
+                this.projectService.ensureWorldProject(level, defaultActor(source));
                 this.invalidateProjectCache(level.getServer());
                 matchingProjects = this.matchingProjects(level, pos);
                 LumaMod.LOGGER.info("Created world workspace automatically for dimension {}", level.dimension().identifier());
@@ -91,7 +93,7 @@ public final class HistoryCaptureManager {
                 this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, now);
 
                 String projectId = trackedProject.project().id().toString();
-                TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, now);
+                TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
                 buffer.recordChange(pos, oldState, newState, oldBlockEntity, newBlockEntity, now);
                 this.logBufferProgress(trackedProject.project(), buffer);
                 if (buffer.isEmpty()) {
@@ -271,7 +273,11 @@ public final class HistoryCaptureManager {
         this.projectCaches.remove(this.cacheKey(server));
     }
 
-    private TrackedChangeBuffer getOrCreateBuffer(TrackedProject trackedProject, Instant now) throws IOException {
+    private TrackedChangeBuffer getOrCreateBuffer(
+            TrackedProject trackedProject,
+            io.github.luma.domain.model.WorldMutationSource source,
+            Instant now
+    ) throws IOException {
         String projectId = trackedProject.project().id().toString();
         TrackedChangeBuffer existing = this.activeBuffers.get(projectId);
         if (existing != null) {
@@ -293,8 +299,8 @@ public final class HistoryCaptureManager {
                         projectId,
                         activeVariant.id(),
                         activeVariant.headVersionId(),
-                        "player",
-                        io.github.luma.domain.model.WorldMutationSource.PLAYER,
+                        defaultActor(source),
+                        source,
                         now
                 ));
 
@@ -408,6 +414,14 @@ public final class HistoryCaptureManager {
                     project.name()
             );
         }
+    }
+
+    public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
+        return source != null && source != io.github.luma.domain.model.WorldMutationSource.RESTORE;
+    }
+
+    public static String defaultActor(io.github.luma.domain.model.WorldMutationSource source) {
+        return source == io.github.luma.domain.model.WorldMutationSource.PLAYER ? "player" : "world";
     }
 
     private record TrackedProject(ProjectLayout layout, BuildProject project, List<ProjectVariant> variants) {
