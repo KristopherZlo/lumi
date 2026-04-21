@@ -7,4 +7,13 @@ public record ProjectCleanupPolicy(
         Set<String> referencedPreviewFiles,
         boolean deleteOperationDraft
 ) {
+
+    public ProjectCleanupPolicy {
+        referencedSnapshotFiles = referencedSnapshotFiles == null
+                ? Set.of()
+                : Set.copyOf(referencedSnapshotFiles);
+        referencedPreviewFiles = referencedPreviewFiles == null
+                ? Set.of()
+                : Set.copyOf(referencedPreviewFiles);
+    }
 }
