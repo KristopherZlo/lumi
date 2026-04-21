@@ -50,6 +50,27 @@ class RecoveryRepositoryTest {
         assertTrue(this.repository.loadDraft(layout).isEmpty());
     }
 
+    @Test
+    void operationDraftDoesNotReplaceLiveRecoveryDraft() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryDraft liveDraft = draft("minecraft:gold_block", Instant.parse("2026-04-20T10:00:00Z"));
+        RecoveryDraft operationDraft = draft("minecraft:diamond_block", Instant.parse("2026-04-20T10:05:00Z"));
+
+        this.repository.saveDraft(layout, liveDraft);
+        this.repository.saveOperationDraft(layout, operationDraft);
+
+        assertEquals("minecraft:gold_block", this.repository.loadDraft(layout).orElseThrow().changes().getFirst().newValue().blockId());
+        assertEquals(
+                "minecraft:diamond_block",
+                this.repository.loadOperationDraft(layout).orElseThrow().changes().getFirst().newValue().blockId()
+        );
+
+        this.repository.deleteOperationDraft(layout);
+
+        assertTrue(this.repository.loadOperationDraft(layout).isEmpty());
+        assertTrue(this.repository.loadDraft(layout).isPresent());
+    }
+
     private static RecoveryDraft draft(String blockId, Instant updatedAt) {
         return new RecoveryDraft(
                 "project",

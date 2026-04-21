@@ -1,5 +1,6 @@
 package io.github.luma.ui.overlay;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.luma.debug.LumaDebugLog;
@@ -16,6 +17,7 @@ import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.shapes.Shapes;
+import org.lwjgl.glfw.GLFW;
 
 public final class CompareOverlayRenderer {
 
@@ -67,8 +69,9 @@ public final class CompareOverlayRenderer {
 
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
         PoseStack matrices = context.matrices();
-        VertexConsumer fillConsumer = context.consumers().getBuffer(RenderTypes.debugFilledBox());
-        VertexConsumer lineConsumer = context.consumers().getBuffer(RenderTypes.linesTranslucent());
+        boolean xrayMode = xrayRequested();
+        VertexConsumer fillConsumer = context.consumers().getBuffer(xrayMode ? RenderTypes.debugFilledBox() : RenderTypes.debugQuads());
+        VertexConsumer lineConsumer = context.consumers().getBuffer(xrayMode ? RenderTypes.linesTranslucent() : RenderTypes.lines());
         for (DiffBlockEntry entry : state.visibleEntries(camera.x, camera.y, camera.z)) {
             ColorChannels color = ColorChannels.of(entry.changeType());
             float minX = (float) (entry.pos().x() - camera.x) + INSET;
@@ -90,6 +93,16 @@ public final class CompareOverlayRenderer {
                     OUTLINE_ALPHA
             );
         }
+    }
+
+    private static boolean xrayRequested() {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getWindow() == null) {
+            return false;
+        }
+        var window = client.getWindow();
+        return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
+                || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
     }
 
     private static void renderFilledBox(

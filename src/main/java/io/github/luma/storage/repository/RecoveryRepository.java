@@ -73,6 +73,32 @@ public final class RecoveryRepository {
         }
     }
 
+    public void saveOperationDraft(ProjectLayout layout, RecoveryDraft draft) throws IOException {
+        this.writeBase(layout.recoveryOperationDraftFile(), draft);
+        LumaMod.LOGGER.info(
+                "Saved operation draft for project storage {} with {} changes",
+                layout.root().getFileName(),
+                draft.changes().size()
+        );
+    }
+
+    public Optional<RecoveryDraft> loadOperationDraft(ProjectLayout layout) throws IOException {
+        try {
+            if (!Files.exists(layout.recoveryOperationDraftFile())) {
+                return Optional.empty();
+            }
+            return Optional.of(this.readSingleEntry(layout.recoveryOperationDraftFile()));
+        } catch (IOException exception) {
+            StorageIo.quarantineCorruptedFile(layout.recoveryOperationDraftFile(), exception);
+            return Optional.empty();
+        }
+    }
+
+    public void deleteOperationDraft(ProjectLayout layout) throws IOException {
+        Files.deleteIfExists(layout.recoveryOperationDraftFile());
+        LumaMod.LOGGER.info("Deleted operation draft storage for {}", layout.root().getFileName());
+    }
+
     public void deleteDraft(ProjectLayout layout) throws IOException {
         Files.deleteIfExists(layout.recoveryBaseFile());
         Files.deleteIfExists(layout.recoveryWalFile());

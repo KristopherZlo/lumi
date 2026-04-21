@@ -1,8 +1,14 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.ChangeStats;
+import io.github.luma.domain.model.ExternalSourceInfo;
+import io.github.luma.domain.model.PreviewInfo;
+import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.VersionKind;
+import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
@@ -41,6 +47,18 @@ class VersionServiceTest {
         assertTrue(merged.isEmpty());
     }
 
+    @Test
+    void versionsSinceSnapshotTreatsWorldRootAsAnchor() {
+        VersionService service = new VersionService();
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "", "", VersionKind.WORLD_ROOT),
+                version("v0002", "v0001", "", VersionKind.MANUAL),
+                version("v0003", "v0002", "", VersionKind.MANUAL)
+        );
+
+        assertEquals(2, service.versionsSinceSnapshot(versions, "v0003"));
+    }
+
     private static StoredBlockChange change(int x, String leftBlockId, String rightBlockId) {
         return new StoredBlockChange(
                 new BlockPoint(x, 64, x),
@@ -53,5 +71,23 @@ class VersionServiceTest {
         CompoundTag state = new CompoundTag();
         state.putString("Name", blockId);
         return new StatePayload(state, null);
+    }
+
+    private static ProjectVersion version(String id, String parentId, String snapshotId, VersionKind versionKind) {
+        return new ProjectVersion(
+                id,
+                "project",
+                "main",
+                parentId,
+                snapshotId,
+                List.of(),
+                versionKind,
+                "tester",
+                id,
+                ChangeStats.empty(),
+                PreviewInfo.none(),
+                ExternalSourceInfo.manual(),
+                Instant.parse("2026-04-21T00:00:00Z")
+        );
     }
 }

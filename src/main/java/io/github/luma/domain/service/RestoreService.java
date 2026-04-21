@@ -147,21 +147,22 @@ public final class RestoreService {
                         );
                     }
 
-                    Optional<List<PreparedChunkBatch>> prepared = version.versionKind() == VersionKind.WORLD_ROOT
-                            ? Optional.of(this.decodeWorldRootRestore(layout, project, level, progressSink))
-                            : this.tryDecodeDirectRestore(
-                                    layout,
-                                    project,
-                                    versions,
-                                    variants,
-                                    version,
-                                    pendingDraft,
-                                    level,
-                                    progressSink
-                            );
+                    Optional<List<PreparedChunkBatch>> prepared = this.tryDecodeDirectRestore(
+                            layout,
+                            project,
+                            versions,
+                            variants,
+                            version,
+                            pendingDraft,
+                            level,
+                            progressSink
+                    );
 
                     List<PreparedChunkBatch> batches = prepared.orElseGet(() -> {
                                 try {
+                                    if (version.versionKind() == VersionKind.WORLD_ROOT) {
+                                        return this.decodeWorldRootRestore(layout, project, level, progressSink);
+                                    }
                                     progressSink.update(OperationStage.PREPARING, 0, 1, "Planning restore");
                                     RestorePlan plan = this.buildPlan(layout, project, versions, version);
                                     LumaMod.LOGGER.info(

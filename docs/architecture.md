@@ -53,7 +53,7 @@ These services should express product rules, not raw Minecraft side effects or r
 
 Important adapters:
 
-- `HistoryCaptureManager`: captures tracked player and world mutations into per-project buffers
+- `HistoryCaptureManager`: captures tracked player actions, explosions, and selected block-changing entity mutations into per-project buffers
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime
@@ -90,7 +90,7 @@ Responsibilities are split as follows:
 ## Capture flow
 
 1. A Minecraft mixin intercepts a block mutation.
-2. `WorldMutationContext` filters out Lumi's internal `RESTORE` source only.
+2. `WorldMutationContext` accepts only explicit player, explosion, Enderman, and falling-block mutation scopes.
 3. `HistoryCaptureManager` finds matching projects for the block position.
 4. Whole-dimension workspaces capture baseline chunks on first touch.
 5. A per-project `TrackedChangeBuffer` merges the change by packed block position.
@@ -107,11 +107,11 @@ Important invariants:
 
 1. UI or commands call `VersionService.startSaveVersion(...)`.
 2. The live in-memory buffer is consumed first; persisted recovery storage is only a fallback.
-3. The draft is persisted once as a durable fallback while async save work runs.
+3. The draft is moved into isolated operation-draft storage while async save work runs.
 4. `WorldOperationManager` executes background preparation off the tick thread.
 5. `PatchDataRepository` writes the binary patch payload.
 6. `PatchMetaRepository` writes the lightweight patch index.
-7. `VersionService` evaluates snapshot policy and optionally asks `SnapshotWriter` for a checkpoint snapshot.
+7. `VersionService` evaluates snapshot policy and optionally asks `SnapshotWriter` for a checkpoint snapshot. Whole-dimension projects use root/cadence checkpoints, not per-save volume snapshots.
 8. `VersionRepository` writes the final version manifest only after payload files exist.
 9. Preview generation runs later on a separate low-priority executor.
 
@@ -121,15 +121,16 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 
 1. UI calls `RestoreService.restore(...)`.
 2. Active capture is frozen and an optional safety checkpoint is written first.
-3. When the target lies on the current active variant lineage, `RestoreService` prefers a direct patch replay path:
+3. When the target lies on the current active variant lineage, `RestoreService` prefers a direct patch replay path, including restores to `WORLD_ROOT`:
    reverse patch application for ancestor restores, forward patch application for descendant restores, plus rollback of any pending draft.
-4. If the target is `WORLD_ROOT`, restore decodes only tracked baseline chunks for the current workspace.
-5. If direct replay is not valid, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
+4. If direct replay is not valid and the target is `WORLD_ROOT`, restore falls back to tracked baseline chunks for the current workspace.
+5. If direct replay is not valid for a normal version, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
 6. Baseline gaps are added only for the snapshot-based whole-dimension fallback path.
 7. Prepared placements are collapsed by final block position before tick-thread application.
 8. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
 9. Chunk commit order is fixed to section blocks -> block entities -> entity batch.
-10. Completion resets the active variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly for the UI.
+10. Completion resets the active variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly.
+11. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
 
 Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never happen on the tick-thread apply path.
 
@@ -142,6 +143,7 @@ Current strategy:
 - active sessions live in memory as `TrackedChangeBuffer`
 - periodic flushes append to `recovery/draft.wal.lz4`
 - compaction rewrites the latest state into `recovery/draft.bin.lz4`
+- in-progress save/amend drafts move to `recovery/operation-draft.bin.lz4` so new edits can start a separate live draft
 - restore/save recovery actions reuse the same operation model as save and restore
 
 ## Threading model
@@ -172,6 +174,7 @@ Main files:
 - `snapshots/<snapshotId>.bin.lz4`: checkpoint snapshot payload
 - `recovery/draft.bin.lz4`: compacted recovery base
 - `recovery/draft.wal.lz4`: append-only recovery log
+- `recovery/operation-draft.bin.lz4`: isolated save/amend draft fallback
 - `recovery/journal.json`: user-facing workflow log
 
 See [storage-format.md](storage-format.md) for the exact layout.
@@ -203,6 +206,7 @@ The current test suite is organized around:
 - repository round-trips for patch, snapshot, and recovery storage
 - service-level diff and history policy behavior
 - project layout and storage path invariants
+- recovery draft isolation between live capture and save/amend operations
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
 
 When extending history or storage behavior, update both tests and documentation in the same change.
