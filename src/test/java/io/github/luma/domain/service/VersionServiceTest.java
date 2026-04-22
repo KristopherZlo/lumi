@@ -63,7 +63,7 @@ class VersionServiceTest {
 
     @Test
     void chunkBoundsWrapExactTouchedChunkSpan() {
-        Bounds3i bounds = VersionService.chunkBounds(
+        Bounds3i bounds = PreviewBoundsResolver.chunkBounds(
                 List.of(new ChunkPoint(10, 20), new ChunkPoint(11, 22)),
                 -64,
                 319

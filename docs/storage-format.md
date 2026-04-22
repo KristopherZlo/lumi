@@ -164,7 +164,7 @@ Whole-dimension projects do not create volume-triggered snapshots. They rely on 
 
 Preview images are textured isometric PNG files generated on the client per version when preview generation is enabled.
 
-For whole-dimension workspaces, preview coverage is derived from the touched chunks of the specific save and then auto-framed to the visible structure inside that area.
+Preview coverage is resolved from the actual changed block positions first, with a small context padding around that span. If precise change positions are unavailable, Lumi falls back to the touched chunk span for that save.
 
 Preview generation failure does not block version save.
 
@@ -178,7 +178,7 @@ Important fields:
 
 - `versionId`
 - `dimensionId`
-- `bounds`
+- `bounds`, usually tightened to the changed block span with safe padding
 - `requestedAt`
 
 These files let server-side save and refresh workflows queue preview work without trying to render textured images on the server thread or background server executors.
