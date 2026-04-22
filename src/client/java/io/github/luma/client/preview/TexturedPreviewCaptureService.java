@@ -21,6 +21,7 @@ import org.joml.Matrix4fStack;
 final class TexturedPreviewCaptureService implements AutoCloseable {
 
     private final PreviewFramingCalculator framingCalculator = new PreviewFramingCalculator();
+    private final PreviewImageCropper imageCropper = new PreviewImageCropper();
     private final CachedOrthoProjectionMatrixBuffer projectionMatrixBuffer = new CachedOrthoProjectionMatrixBuffer(
             "Lumi Preview",
             -1000.0F,
@@ -77,12 +78,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
             RenderSystem.restoreProjectionMatrix();
         }
 
-        return new PendingPreviewCapture(
-                renderTarget,
-                this.readPixels(renderTarget),
-                framing.resolution(),
-                framing.resolution()
-        );
+        return new PendingPreviewCapture(renderTarget, this.readPixels(renderTarget).thenApply(this.imageCropper::crop));
     }
 
     private CompletableFuture<NativeImage> readPixels(RenderTarget renderTarget) {
@@ -119,9 +115,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
 
     record PendingPreviewCapture(
             TextureTarget renderTarget,
-            CompletableFuture<NativeImage> imageFuture,
-            int width,
-            int height
+            CompletableFuture<PreviewImageCropper.CapturedPreviewImage> imageFuture
     ) {
     }
 }

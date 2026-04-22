@@ -194,7 +194,7 @@ Open a save card to reach the save details screen.
 The save details screen shows:
 
 - the save name
-- isometric preview
+- isometric preview with automatic empty-margin trimming
 - time
 - variant
 - change summary

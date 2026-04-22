@@ -7,7 +7,7 @@ import org.joml.Vector3f;
 final class PreviewFramingCalculator {
 
     static final float ISO_PITCH_RADIANS = (float) Math.toRadians(35.2643897D);
-    static final float ISO_YAW_RADIANS = (float) Math.toRadians(45.0D);
+    static final float ISO_YAW_RADIANS = (float) Math.toRadians(-45.0D);
     private static final float FRAME_MARGIN = 0.14F;
     private static final int MIN_RESOLUTION = 512;
     private static final int MAX_RESOLUTION = 1536;

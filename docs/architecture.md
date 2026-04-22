@@ -89,7 +89,7 @@ Responsibilities are split as follows:
 - screens keep transient UI state and rendering
 - controllers invoke services and translate failures into status keys
 - view-state records provide immutable inputs to the rendering layer
-- `PreviewCaptureCoordinator` watches pending preview requests for the current dimension and runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder
+- `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
 - tab builders keep larger screen sections isolated
 - the project home screen now focuses on `Build`, `Save`, `History`, and `Restore` first, with advanced tools behind progressive disclosure
 - dedicated screens isolate `Save`, `Save details`, `Variants`, `Compare`, `Recovered work`, and `Settings` so the main project screen no longer tries to carry every workflow at once
