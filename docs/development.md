@@ -188,6 +188,7 @@ The current repo also ships that policy in [commit-policy.md](commit-policy.md).
 - Keep the mod usable through menus first. Commands are fallback tools.
 - Preserve the singleplayer-first assumption unless a change explicitly expands runtime scope.
 - When touching storage, prefer forward-only adjustments with simple legacy handling for the current local format.
+- Preview generation now has a split responsibility: the server can queue preview capture requests in storage, while the client render path fulfills them later.
 - Apply OOP and SOLID consistently. Favor small, focused collaborators with explicit responsibilities over utility-heavy procedural code.
 - Keep business rules in domain services and models, Minecraft-specific side effects in adapter layers, and file I/O inside repositories.
 - Treat documentation as part of the implementation. If a change alters data flow, storage, or user-visible behavior, update the docs before the work is considered done.

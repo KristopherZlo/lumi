@@ -40,6 +40,7 @@ Current project layout:
   patches/
   snapshots/
   previews/
+  preview-requests/
   recovery/
   cache/
   locks/
@@ -168,6 +169,19 @@ For whole-dimension workspaces, preview coverage is derived from the touched chu
 Preview generation failure does not block version save.
 
 Cleanup may remove preview PNGs that are no longer referenced by any version manifest.
+
+### `preview-requests/<versionId>.json`
+
+Stores lightweight pending preview capture jobs for the client renderer.
+
+Important fields:
+
+- `versionId`
+- `dimensionId`
+- `bounds`
+- `requestedAt`
+
+These files let server-side save and refresh workflows queue preview work without trying to render textured images on the server thread or background server executors.
 
 ### `recovery/draft.bin.lz4`
 
