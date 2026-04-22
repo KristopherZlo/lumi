@@ -12,7 +12,7 @@ Project data is stored inside the save folder.
 - If that project does not exist yet, Lumi creates it.
 - Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
 - Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.
-- Use `Workspaces` in the header to move between dimensions.
+- Use `Projects` in the header to move between dimensions.
 
 ## Legacy Manual Projects
 
@@ -22,30 +22,49 @@ They are a fallback. The main flow is the menu UI.
 
 ## Main Screen
 
-The main project screen now leads with visual history cards instead of the technical graph.
+The main project screen is now a home screen first and a history screen second.
 
-From top to bottom, the primary flow is:
+The first block is `Build`.
 
-- save or amend unsaved changes
-- browse the branch history as large version cards
-- switch to another branch when needed
-- open the technical graph only from the `Advanced history graph` section
+It is meant to answer these questions in a few seconds:
 
-Each version card is meant to answer the basic questions at a glance:
+- where you are
+- whether anything changed
+- how to save right now
+- how to restore the latest save
+- how to open variants
 
-- what this save is
-- when it was created
-- whether it is the latest save on that branch
-- whether it is the start of the branch
-- what changed, using block, chunk, and block-type counts
+The build block shows:
 
-Open `Details` only when you want the full preview or materials view.
+- the current dimension
+- the current variant
+- whether the build is clean or has unsaved changes
+- added, removed, and changed block counts when a draft exists
+
+The primary action is `Save`.
+
+Secondary actions stay short:
+
+- `Compare to current build`
+- `Variants`
+- `Restore last save`
+
+Below that, `History` shows recent save cards for the selected variant.
+
+Each card keeps only the essentials visible:
+
+- save name
+- time
+- small preview
+- simple changed-block summary
+- `Open`
+- `Restore`
+
+Rare tools like the technical graph, diagnostics, and recovery log now stay under `More`.
 
 Lumi stores new versions as patches first.
 
 Checkpoint snapshots are added by policy.
-
-On narrower screens the project menu switches to a single scroll column, so history, diagnostics, and details stack instead of being squeezed into two panes.
 
 Tracked history includes:
 
@@ -70,11 +89,16 @@ That node is a metadata-backed `WORLD_ROOT`.
 
 ## Save And Amend
 
-Use the composer to save a new version.
+Open the `Save` screen from the main action on the project home screen.
 
-Write a message. Then save.
+The save screen is intentionally small:
 
-If you want to replace the current head instead of adding a new version on top, use `Amend head`.
+- `Save name`
+- suggestion buttons for common builder notes
+- `Save`
+- `Cancel`
+
+If you need the advanced rewrite flow, open `More` and use `Replace latest save`.
 
 ## Restore
 
@@ -111,53 +135,49 @@ If the game stops before you save them as a version, Lumi shows the recovery scr
 
 From that screen you can:
 
-- restore the draft into the map
-- discard the draft
-- save the draft as a new version
-
-The recovery screen also shows the current branch, the draft base version, the current head version, and how many chunks the draft touches before you choose an action.
+- restore the recovered work into the world
+- delete the recovered work
+- save the recovered work as a new save
 
 Recovery is only a stored copy of unsaved changes.
 
 It does not create a hidden variant.
 
-The `Log` tab shows recovery and restore journal entries.
+More technical recovery details are still available, but they are hidden behind `More`.
 
 ## Variants
 
 Variants are separate version heads inside one project.
 
-Use the `Branches` section to:
+Use the `Variants` screen to:
 
 - see the active variant
-- create a new variant from the selected version
-- create a new variant from the active head
+- create a new variant from the current latest save
+- create a new variant from a specific save
 - switch the active variant
+- compare a variant against the current build
 
 When you switch variants, Lumi restores that variant head into the map.
 
 Future saves continue from that head.
 
-If you want to move to a variant from the details pane, use `Checkout branch`.
-
 ## Compare
 
-Open `Compare` from a version card or from version details.
+Open `Compare` from the main project screen, a save details screen, or the variants screen.
 
 You can compare:
 
-- two version ids
-- two variant ids
-- a saved version against the current game state
+- two saves
+- two variants
+- a saved version against the current build
 
 Current compare output includes:
 
-- changed block count
-- changed chunk count
-- sample of changed positions
+- added, removed, and changed counts
 - material delta
+- sample of changed positions
 
-The compare screen keeps manual `From` and `To` fields.
+The compare screen keeps manual `From` and `To` fields, but the primary output is visual and action-oriented.
 
 It also has presets for common flows like parent, selected version, and active head.
 
@@ -169,17 +189,23 @@ The overlay gives priority to changes near the camera.
 
 ## Version Details
 
-`Preview` is the main detail tab.
+Open a save card to reach the save details screen.
 
-It shows the generated top-down thumbnail for the selected version.
+The save details screen shows:
 
-You can also refresh the preview file there.
+- the save name
+- preview
+- time
+- variant
+- change summary
 
-`Materials` shows the block-id delta between the selected version and its parent.
+Primary actions stay focused:
 
-If an item form exists, Lumi shows its icon.
+- `Restore`
+- `Compare to current build`
+- `Compare to previous save`
 
-The old sampled `Changes` view is still in code, but hidden in the main UI for now.
+Advanced actions like refresh preview, replace latest save, create variant from this save, and raw info stay under `More`.
 
 ## Settings
 

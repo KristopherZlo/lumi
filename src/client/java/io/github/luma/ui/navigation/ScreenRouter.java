@@ -4,7 +4,10 @@ import io.github.luma.ui.screen.CreateProjectScreen;
 import io.github.luma.ui.screen.DashboardScreen;
 import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.RecoveryScreen;
+import io.github.luma.ui.screen.SaveDetailsScreen;
+import io.github.luma.ui.screen.SaveScreen;
 import io.github.luma.ui.screen.SettingsScreen;
+import io.github.luma.ui.screen.VariantsScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 
@@ -44,8 +47,28 @@ public final class ScreenRouter {
         this.client.setScreen(new RecoveryScreen(parent, projectName));
     }
 
+    public void openSave(Screen parent, String projectName) {
+        this.client.setScreen(new SaveScreen(parent, projectName));
+    }
+
+    public void openSave(Screen parent, String projectName, String initialMessage, boolean showMoreOptions) {
+        this.client.setScreen(new SaveScreen(parent, projectName, initialMessage, showMoreOptions));
+    }
+
+    public void openSaveDetails(Screen parent, String projectName, String versionId) {
+        this.client.setScreen(new SaveDetailsScreen(parent, projectName, versionId));
+    }
+
     public void openSettings(Screen parent, String projectName) {
         this.client.setScreen(new SettingsScreen(parent, projectName));
+    }
+
+    public void openVariants(Screen parent, String projectName) {
+        this.client.setScreen(new VariantsScreen(parent, projectName));
+    }
+
+    public void openVariants(Screen parent, String projectName, String baseVersionId) {
+        this.client.setScreen(new VariantsScreen(parent, projectName, baseVersionId));
     }
 
     public void openCompare(Screen parent, String projectName, String leftReference, String rightReference) {

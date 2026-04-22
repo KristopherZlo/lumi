@@ -88,6 +88,8 @@ Responsibilities are split as follows:
 - controllers invoke services and translate failures into status keys
 - view-state records provide immutable inputs to the rendering layer
 - tab builders keep larger screen sections isolated
+- the project home screen now focuses on `Build`, `Save`, `History`, and `Restore` first, with advanced tools behind progressive disclosure
+- dedicated screens isolate `Save`, `Save details`, `Variants`, `Compare`, `Recovered work`, and `Settings` so the main project screen no longer tries to carry every workflow at once
 - `LumaScreen` ensures Lumi screens never pause the game
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
 - `CompareOverlayRenderer` renders a client-side compare overlay through blocks, keeps diff data separate from visibility, and prioritizes the nearest changed blocks to the current camera position
