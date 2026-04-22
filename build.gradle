@@ -122,6 +122,9 @@ dependencies {
     implementation "org.lz4:lz4-java:${project.lz4_version}"
     include "org.lz4:lz4-java:${project.lz4_version}"
 
+    modImplementation "io.wispforest:worldmesher:0.4.7+1.21.4"
+    include "io.wispforest:worldmesher:0.4.7+1.21.4"
+
     testClientMods "maven.modrinth:fabric-api:${project.fabric_api_version}"
     testClientMods "maven.modrinth:fabric-language-kotlin:${testClientModVersions.fabricLanguageKotlin}"
     testClientMods "maven.modrinth:yacl:${testClientModVersions.yacl}"
