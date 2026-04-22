@@ -257,7 +257,7 @@
   "luma.preview.missing_file": "The preview metadata exists, but the preview file is missing.",
   "luma.preview.load_failed": "The preview file could not be loaded on the client.",
   "luma.preview.path": "Preview file: %s",
-  "luma.preview.refresh_help": "Refresh preview captures a new isometric snapshot for this save area.",
+  "luma.preview.refresh_help": "Refresh preview queues a new textured isometric capture for this save area.",
 
   "luma.materials.no_version": "Select a version to inspect the material delta.",
   "luma.materials.empty": "No material delta is available for the selected version.",
@@ -357,6 +357,7 @@
   "luma.status.variant_created": "Variant created.",
   "luma.status.variant_switched": "Variant switched.",
   "luma.status.preview_refreshed": "Preview refreshed.",
+  "luma.status.preview_requested": "Preview refresh queued.",
   "luma.status.recovery_ready": "Recovery actions are available.",
   "luma.status.draft_restored": "Recovery draft reapplied.",
   "luma.status.draft_restore_started": "Recovery draft restore started. Lumi is applying blocks in the background.",

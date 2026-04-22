@@ -44,7 +44,7 @@ Key services:
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching
 - `DiffService`: reconstruct version or live-world differences using structured state payload comparison before formatting UI-facing diff entries
-- `PreviewService`: generate non-blocking isometric preview images
+- `PreviewCaptureRequestService`: queue preview capture jobs without blocking save durability
 - `PreviewCaptureRequestRepository`: persist preview capture requests so the server can queue work and the client can render later
 - `ProjectIntegrityService`: validate storage consistency
 
@@ -89,6 +89,7 @@ Responsibilities are split as follows:
 - screens keep transient UI state and rendering
 - controllers invoke services and translate failures into status keys
 - view-state records provide immutable inputs to the rendering layer
+- `PreviewCaptureCoordinator` watches pending preview requests for the current dimension and runs the textured off-screen renderer on the client render thread
 - tab builders keep larger screen sections isolated
 - the project home screen now focuses on `Build`, `Save`, `History`, and `Restore` first, with advanced tools behind progressive disclosure
 - dedicated screens isolate `Save`, `Save details`, `Variants`, `Compare`, `Recovered work`, and `Settings` so the main project screen no longer tries to carry every workflow at once
@@ -126,7 +127,8 @@ Important invariants:
 6. `PatchMetaRepository` writes the lightweight patch index.
 7. `VersionService` evaluates snapshot policy and optionally asks `SnapshotWriter` for a checkpoint snapshot. Whole-dimension projects use root/cadence checkpoints, not per-save volume snapshots.
 8. `VersionRepository` writes the final version manifest only after payload files exist.
-9. Preview generation runs later on a separate low-priority executor.
+9. Preview generation stores a lightweight request after save durability completes.
+10. The client preview coordinator later builds a `WorldMesh`, renders a textured isometric frame into an off-screen target, and writes the PNG plus preview metadata.
 
 For automatic dimension workspaces, the history chain starts with a metadata-backed `WORLD_ROOT` version. It records the world origin context instead of a normal patch/snapshot payload.
 
@@ -175,7 +177,7 @@ Current guarantees:
 
 - only one world operation runs per world at a time
 - the world-operation executor is single-threaded and low priority
-- preview generation samples world state on the server thread, auto-frames touched save chunks to visible structure, and writes PNG output on a separate low-priority executor
+- preview generation no longer samples or rasterizes on the server; the server only queues request metadata and the client later performs the textured off-screen render
 - operation progress is observable through `OperationSnapshot`
 - client HUD state is polled separately from screen rendering so non-pausing menus, the top-right diff overlay, and the action-bar progress bar keep updating while screens are open
 

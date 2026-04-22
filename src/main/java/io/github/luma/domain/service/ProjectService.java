@@ -46,7 +46,7 @@ public final class ProjectService {
     private final VersionRepository versionRepository = new VersionRepository();
     private final SnapshotWriter snapshotWriter = new SnapshotWriter();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
-    private final PreviewService previewService = new PreviewService();
+    private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
 
     public List<BuildProject> listProjects(MinecraftServer server) throws IOException {
@@ -142,14 +142,6 @@ public final class ProjectService {
         );
         this.projectRepository.save(layout, project);
         this.variantRepository.save(layout, List.of(ProjectVariant.main(versionId, now)));
-        PreviewInfo preview = PreviewInfo.none();
-        if (project.settings().previewGenerationEnabled()) {
-            try {
-                preview = this.previewService.capture(layout, versionId, bounds, level);
-            } catch (Exception ignored) {
-                preview = PreviewInfo.none();
-            }
-        }
         this.versionRepository.save(layout, new ProjectVersion(
                 versionId,
                 project.id().toString(),
@@ -161,10 +153,13 @@ public final class ProjectService {
                 author,
                 "Initial version",
                 ChangeStats.empty(),
-                preview,
+                PreviewInfo.none(),
                 ExternalSourceInfo.manual(),
                 now
         ));
+        if (project.settings().previewGenerationEnabled()) {
+            this.previewCaptureRequestService.queue(layout, versionId, project.dimensionId(), bounds);
+        }
         this.recoveryRepository.appendJournalEntry(layout, new io.github.luma.domain.model.RecoveryJournalEntry(
                 now,
                 "project-created",
