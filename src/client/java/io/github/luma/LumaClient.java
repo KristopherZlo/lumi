@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.client.preview.PreviewCaptureCoordinator;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -50,6 +51,7 @@ public final class LumaClient implements ClientModInitializer {
 
     private void onEndTick(Minecraft client) {
         WorkspaceHudCoordinator.getInstance().tick(client);
+        PreviewCaptureCoordinator.getInstance().tick(client);
         while (this.toggleCompareOverlayKey.consumeClick()) {
             CompareOverlayRenderer.toggleVisibility();
         }
