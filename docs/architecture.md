@@ -95,7 +95,7 @@ Responsibilities are split as follows:
 - dedicated screens isolate `Save`, `Save details`, `Variants`, `Compare`, `Recovered work`, and `Settings` so the main project screen no longer tries to carry every workflow at once
 - `LumaScreen` ensures Lumi screens never pause the game
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
-- `CompareOverlayRenderer` renders a client-side compare overlay through blocks, keeps diff data separate from visibility, and prioritizes the nearest changed blocks to the current camera position
+- `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, and prioritizes the nearest changed blocks to the current camera position
 
 ## Core runtime flows
 
