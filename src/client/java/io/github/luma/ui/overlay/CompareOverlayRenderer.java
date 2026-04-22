@@ -9,11 +9,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShapeRenderer;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.shapes.Shapes;
 
@@ -24,6 +24,7 @@ public final class CompareOverlayRenderer {
     private static final float OUTLINE_ALPHA = 0.9F;
     private static final float INSET = 0.002F;
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
+    private static final AtomicBoolean XRAY_ENABLED = new AtomicBoolean(false);
 
     private CompareOverlayRenderer() {
     }
@@ -94,16 +95,39 @@ public final class CompareOverlayRenderer {
         }
     }
 
+    public static void setXrayEnabled(boolean enabled) {
+        boolean changed = XRAY_ENABLED.getAndSet(enabled) != enabled;
+        if (!changed) {
+            return;
+        }
+
+        OverlayState state = ACTIVE_STATE.get();
+        if (state != null && (state.debugEnabled() || LumaDebugLog.globalEnabled())) {
+            LumaDebugLog.log(
+                    "compare-overlay",
+                    "{} compare overlay x-ray {} -> {}",
+                    enabled ? "Enabled" : "Disabled",
+                    state.leftVersionId(),
+                    state.rightVersionId()
+            );
+        }
+    }
+
+    static boolean xrayEnabled() {
+        return XRAY_ENABLED.get();
+    }
+
     public static void render(WorldRenderContext context) {
         OverlayState state = ACTIVE_STATE.get();
         if (state == null || !state.visible() || state.changedBlocks().isEmpty()) {
             return;
         }
 
+        boolean xrayEnabled = XRAY_ENABLED.get();
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
         PoseStack matrices = context.matrices();
-        VertexConsumer fillConsumer = context.consumers().getBuffer(RenderTypes.debugFilledBox());
-        VertexConsumer lineConsumer = context.consumers().getBuffer(RenderTypes.linesTranslucent());
+        VertexConsumer fillConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.fill(xrayEnabled));
+        VertexConsumer lineConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.outline(xrayEnabled));
         for (DiffBlockEntry entry : state.visibleEntries(camera.x, camera.y, camera.z)) {
             ColorChannels color = ColorChannels.of(entry.changeType());
             float minX = (float) (entry.pos().x() - camera.x) + INSET;

@@ -182,8 +182,8 @@ The compare screen keeps manual `From` and `To` fields, but the primary output i
 It also has presets for common flows like parent, selected version, and active head.
 
 `Highlight in world` turns on a client-side overlay for changed positions.
-The overlay is drawn through blocks by default.
 Press `H` to hide or show the current overlay without rebuilding the comparison.
+Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
 
 The overlay gives priority to changes near the camera.
 

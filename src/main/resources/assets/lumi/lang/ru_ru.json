@@ -2,6 +2,7 @@
   "key.category.lumi.general": "Lumi",
   "key.lumi.open_dashboard": "Открыть текущее рабочее пространство",
   "key.lumi.toggle_compare_overlay": "Show or hide compare highlight",
+  "key.lumi.compare_overlay_xray": "Просвечивать подсветку сравнения через блоки",
 
   "luma.common.yes": "Да",
   "luma.common.no": "Нет",

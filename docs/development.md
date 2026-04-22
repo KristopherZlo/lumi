@@ -107,6 +107,7 @@ Current UX assumptions:
 
 - pressing `U` opens the current dimension workspace directly
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
+- holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - the dashboard is now secondary navigation from the workspace header
 - the workspace home screen is product-first: current build state, save, restore last save, variants, then recent saves
 - low-frequency tools such as technical graph, diagnostics, and raw info live behind `More`

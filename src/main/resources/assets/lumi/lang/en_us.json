@@ -2,6 +2,7 @@
   "key.category.lumi.general": "Lumi",
   "key.lumi.open_dashboard": "Open current workspace",
   "key.lumi.toggle_compare_overlay": "Show or hide compare highlight",
+  "key.lumi.compare_overlay_xray": "See compare highlight through blocks",
 
   "luma.common.yes": "Yes",
   "luma.common.no": "No",
