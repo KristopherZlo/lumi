@@ -26,7 +26,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
             "Lumi Preview",
             -1000.0F,
             1000.0F,
-            true
+            false
     );
 
     PendingPreviewCapture capture(Minecraft client, Bounds3i bounds, PreviewRenderMesh mesh) {
@@ -60,7 +60,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
             float pixelScale = framing.scale() * halfResolution;
             modelViewStack.translate(
                     halfResolution + framing.offsetX() * halfResolution,
-                    halfResolution - framing.offsetY() * halfResolution,
+                    halfResolution + framing.offsetY() * halfResolution,
                     0.0F
             );
             modelViewStack.scale(pixelScale, pixelScale, pixelScale);
