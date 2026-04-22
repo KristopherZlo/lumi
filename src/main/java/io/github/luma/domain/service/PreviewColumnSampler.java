@@ -5,12 +5,14 @@ import io.github.luma.domain.model.Bounds3i;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
 
 final class PreviewColumnSampler {
 
     private static final int HORIZONTAL_PADDING = 1;
+    private static final int FLOOR_PADDING = 1;
     private static final int TOP_PADDING = 1;
 
     PreviewScene sample(Bounds3i candidateBounds, BlockGetter blocks) {
@@ -29,40 +31,20 @@ final class PreviewColumnSampler {
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int worldX = candidateBounds.min().x(); worldX <= candidateBounds.max().x(); worldX++) {
             for (int worldZ = candidateBounds.min().z(); worldZ <= candidateBounds.max().z(); worldZ++) {
-                int topY = Integer.MIN_VALUE;
-                BlockState topState = null;
-                for (int worldY = candidateBounds.max().y(); worldY >= candidateBounds.min().y(); worldY--) {
-                    cursor.set(worldX, worldY, worldZ);
-                    BlockState state = blocks.getBlockState(cursor);
-                    if (!state.isAir()) {
-                        topY = worldY;
-                        topState = state;
-                        break;
-                    }
-                }
-
-                if (topY == Integer.MIN_VALUE || topState == null) {
+                PreviewSurface surface = this.resolveSurface(candidateBounds, blocks, cursor, worldX, worldZ);
+                if (surface == null) {
                     continue;
                 }
 
-                int bottomY = topY;
-                for (int worldY = candidateBounds.min().y(); worldY < topY; worldY++) {
-                    cursor.set(worldX, worldY, worldZ);
-                    if (!blocks.getBlockState(cursor).isAir()) {
-                        bottomY = worldY;
-                        break;
-                    }
-                }
-
-                PreviewColumn column = new PreviewColumn(worldX, worldZ, bottomY, topY, topState);
+                PreviewColumn column = new PreviewColumn(worldX, worldZ, surface.y(), surface.state());
                 sampled[index(width, worldX - candidateBounds.min().x(), worldZ - candidateBounds.min().z())] = column;
                 hasBlocks = true;
 
                 minX = Math.min(minX, worldX);
-                minY = Math.min(minY, bottomY);
+                minY = Math.min(minY, surface.y());
                 minZ = Math.min(minZ, worldZ);
                 maxX = Math.max(maxX, worldX);
-                maxY = Math.max(maxY, topY);
+                maxY = Math.max(maxY, surface.y());
                 maxZ = Math.max(maxZ, worldZ);
             }
         }
@@ -85,7 +67,7 @@ final class PreviewColumnSampler {
         return new Bounds3i(
                 new BlockPoint(
                         Math.max(candidateBounds.min().x(), minX - HORIZONTAL_PADDING),
-                        minY,
+                        Math.max(candidateBounds.min().y(), minY - FLOOR_PADDING),
                         Math.max(candidateBounds.min().z(), minZ - HORIZONTAL_PADDING)
                 ),
                 new BlockPoint(
@@ -112,6 +94,40 @@ final class PreviewColumnSampler {
             framed[index(frameBounds.sizeX(), relativeX, relativeZ)] = column;
         }
         return framed;
+    }
+
+    private PreviewSurface resolveSurface(
+            Bounds3i candidateBounds,
+            BlockGetter blocks,
+            BlockPos.MutableBlockPos cursor,
+            int worldX,
+            int worldZ
+    ) {
+        PreviewSurface fallback = null;
+        for (int worldY = candidateBounds.max().y(); worldY >= candidateBounds.min().y(); worldY--) {
+            cursor.set(worldX, worldY, worldZ);
+            BlockState state = blocks.getBlockState(cursor);
+            if (state.isAir()) {
+                continue;
+            }
+
+            PreviewSurface surface = new PreviewSurface(worldY, state);
+            if (fallback == null) {
+                fallback = surface;
+            }
+            if (this.isPreferredSurface(state)) {
+                return surface;
+            }
+        }
+        return fallback;
+    }
+
+    private boolean isPreferredSurface(BlockState state) {
+        return state.isSolidRender()
+                && !state.is(BlockTags.LEAVES)
+                && !state.is(BlockTags.CLIMBABLE)
+                && !state.is(BlockTags.FLOWERS)
+                && !state.is(BlockTags.REPLACEABLE);
     }
 
     private static int index(int width, int x, int z) {
@@ -148,8 +164,10 @@ record PreviewScene(
 record PreviewColumn(
         int worldX,
         int worldZ,
-        int bottomY,
         int topY,
         BlockState topState
 ) {
+}
+
+record PreviewSurface(int y, BlockState state) {
 }

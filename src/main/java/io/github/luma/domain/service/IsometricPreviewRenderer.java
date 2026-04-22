@@ -109,6 +109,7 @@ final class IsometricPreviewRenderer {
         int relativeX = column.worldX() - bounds.min().x();
         int relativeZ = column.worldZ() - bounds.min().z();
         int relativeTopY = column.topY() - bounds.min().y();
+        int sceneFloorY = bounds.min().y();
 
         int centerX = originX + ((relativeX - relativeZ) * halfTileWidth);
         int topY = originY + ((relativeX + relativeZ) * halfTileHeight) - (relativeTopY * blockHeight);
@@ -125,8 +126,8 @@ final class IsometricPreviewRenderer {
 
         PreviewColumn southNeighbor = scene.columnAt(relativeX, relativeZ + 1);
         int southBaseY = southNeighbor == null
-                ? column.bottomY()
-                : Math.max(column.bottomY(), southNeighbor.topY() + 1);
+                ? sceneFloorY
+                : Math.max(sceneFloorY, southNeighbor.topY() + 1);
         int southHeight = column.topY() - southBaseY + 1;
         if (southHeight > 0) {
             int sideHeight = southHeight * blockHeight;
@@ -143,8 +144,8 @@ final class IsometricPreviewRenderer {
 
         PreviewColumn eastNeighbor = scene.columnAt(relativeX + 1, relativeZ);
         int eastBaseY = eastNeighbor == null
-                ? column.bottomY()
-                : Math.max(column.bottomY(), eastNeighbor.topY() + 1);
+                ? sceneFloorY
+                : Math.max(sceneFloorY, eastNeighbor.topY() + 1);
         int eastHeight = column.topY() - eastBaseY + 1;
         if (eastHeight > 0) {
             int sideHeight = eastHeight * blockHeight;

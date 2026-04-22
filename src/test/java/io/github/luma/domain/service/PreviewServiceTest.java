@@ -16,6 +16,7 @@ import net.minecraft.world.level.material.FluidState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PreviewServiceTest {
@@ -62,6 +63,42 @@ class PreviewServiceTest {
         assertTrue(render.width() > 1);
         assertTrue(render.height() > 1);
         assertTrue(countOpaque(render) > 0);
+    }
+
+    @Test
+    void samplerPrefersSolidSurfaceBelowLeafCover() {
+        PreviewColumnSampler sampler = new PreviewColumnSampler();
+        FakeBlockGetter blocks = new FakeBlockGetter(40, 48);
+        blocks.set(0, 64, 0, Blocks.GRASS_BLOCK.defaultBlockState());
+        blocks.set(0, 65, 0, Blocks.OAK_LEAVES.defaultBlockState());
+        blocks.set(0, 66, 0, Blocks.OAK_LEAVES.defaultBlockState());
+
+        PreviewScene scene = sampler.sample(
+                new Bounds3i(new BlockPoint(0, 40, 0), new BlockPoint(0, 80, 0)),
+                blocks
+        );
+
+        PreviewColumn column = scene.columnAt(0, 0);
+        assertEquals(Blocks.GRASS_BLOCK, column.topState().getBlock());
+        assertEquals(64, column.topY());
+        assertEquals(63, scene.frameBounds().min().y());
+    }
+
+    @Test
+    void sampleDoesNotStretchSingleSurfaceColumnToDeepTerrainBase() {
+        PreviewService service = new PreviewService();
+        FakeBlockGetter blocks = new FakeBlockGetter(-32, 160);
+        for (int y = -16; y <= 63; y++) {
+            blocks.set(0, y, 0, Blocks.STONE.defaultBlockState());
+        }
+        blocks.set(0, 64, 0, Blocks.GRASS_BLOCK.defaultBlockState());
+
+        PreviewRenderData render = service.sample(
+                new Bounds3i(new BlockPoint(0, -32, 0), new BlockPoint(0, 96, 0)),
+                blocks
+        );
+
+        assertTrue(render.height() < 48);
     }
 
     private static boolean containsColor(PreviewRenderData render, int rgb) {
