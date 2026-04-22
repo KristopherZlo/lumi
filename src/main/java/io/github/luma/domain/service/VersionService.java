@@ -56,6 +56,7 @@ public final class VersionService {
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
+    private final PreviewBoundsResolver previewBoundsResolver = new PreviewBoundsResolver();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
@@ -238,7 +239,7 @@ public final class VersionService {
         ProjectVersion version = this.versionRepository.load(layout, versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-        Bounds3i bounds = this.resolvePreviewBounds(layout, project, versions, version, null, level);
+        Bounds3i bounds = this.previewBoundsResolver.resolve(layout, project, versions, version, null, level);
         this.previewCaptureRequestService.queue(layout, versionId, project.dimensionId(), bounds);
         return version;
     }
@@ -402,7 +403,7 @@ public final class VersionService {
         );
 
         if (schedulePreview && project.settings().previewGenerationEnabled()) {
-            Bounds3i bounds = this.resolvePreviewBounds(layout, project, versions, version, draft, level);
+            Bounds3i bounds = this.previewBoundsResolver.resolve(layout, project, versions, version, draft, level);
             this.previewCaptureRequestService.queue(layout, version.id(), project.dimensionId(), bounds);
             LumaDebugLog.log(project, "preview", "Queued preview capture request for version {} with bounds {}", version.id(), bounds);
         }
@@ -693,91 +694,6 @@ public final class VersionService {
                 draft.changes().size()
         );
         return merged;
-    }
-
-    private Bounds3i resolvePreviewBounds(
-            ProjectLayout layout,
-            BuildProject project,
-            List<ProjectVersion> versions,
-            ProjectVersion version,
-            RecoveryDraft draft,
-            ServerLevel level
-    ) throws IOException {
-        List<ChunkPoint> chunks = this.resolvePreviewChunks(layout, project, versions, version, draft);
-        if (chunks.isEmpty()) {
-            if (!project.tracksWholeDimension()) {
-                return project.bounds();
-            }
-            return null;
-        }
-
-        Bounds3i bounds = chunkBounds(
-                chunks,
-                level.dimensionType().minY(),
-                level.dimensionType().minY() + level.dimensionType().height() - 1
-        );
-        LumaDebugLog.log(
-                project,
-                "preview",
-                "Resolved preview bounds for project {} from {} chunks: {}",
-                project.name(),
-                chunks.size(),
-                bounds
-        );
-        return bounds;
-    }
-
-    private List<ChunkPoint> resolvePreviewChunks(
-            ProjectLayout layout,
-            BuildProject project,
-            List<ProjectVersion> versions,
-            ProjectVersion version,
-            RecoveryDraft draft
-    ) throws IOException {
-        if (draft != null && !draft.isEmpty()) {
-            return ChunkSelectionFactory.fromStoredChanges(draft.changes());
-        }
-
-        if (version != null && version.patchIds() != null && !version.patchIds().isEmpty()) {
-            Map<String, ChunkPoint> chunks = new HashMap<>();
-            for (String patchId : version.patchIds()) {
-                Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
-                if (metadata.isEmpty()) {
-                    continue;
-                }
-                for (var chunk : metadata.get().chunks()) {
-                    ChunkPoint chunkPoint = chunk.chunk();
-                    chunks.putIfAbsent(chunkPoint.x() + ":" + chunkPoint.z(), chunkPoint);
-                }
-            }
-            if (!chunks.isEmpty()) {
-                return List.copyOf(chunks.values());
-            }
-        }
-
-        if (!project.tracksWholeDimension()) {
-            return ChunkSelectionFactory.fromBounds(project.bounds());
-        }
-
-        return this.collectSnapshotChunks(layout, project, versions, draft);
-    }
-
-    static Bounds3i chunkBounds(List<ChunkPoint> chunks, int minY, int maxY) {
-        int minChunkX = Integer.MAX_VALUE;
-        int maxChunkX = Integer.MIN_VALUE;
-        int minChunkZ = Integer.MAX_VALUE;
-        int maxChunkZ = Integer.MIN_VALUE;
-        for (ChunkPoint chunk : chunks) {
-            minChunkX = Math.min(minChunkX, chunk.x());
-            maxChunkX = Math.max(maxChunkX, chunk.x());
-            minChunkZ = Math.min(minChunkZ, chunk.z());
-            maxChunkZ = Math.max(maxChunkZ, chunk.z());
-        }
-
-        return new Bounds3i(
-                new BlockPoint(minChunkX << 4, minY, minChunkZ << 4),
-                new BlockPoint((maxChunkX << 4) + 15, maxY, (maxChunkZ << 4) + 15)
-        );
     }
 
     private List<ProjectVariant> replaceVariant(List<ProjectVariant> variants, ProjectVariant updatedVariant) {
