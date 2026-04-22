@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
@@ -20,9 +21,10 @@ import net.minecraft.world.phys.shapes.Shapes;
 public final class CompareOverlayRenderer {
 
     private static final int MAX_RENDERED_BLOCKS = 2048;
-    private static final float FILL_ALPHA = 72.0F;
+    private static final float FILL_ALPHA = 48.0F;
     private static final float OUTLINE_ALPHA = 0.9F;
     private static final float INSET = 0.002F;
+    private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
     private static final AtomicBoolean XRAY_ENABLED = new AtomicBoolean(false);
 
@@ -128,7 +130,8 @@ public final class CompareOverlayRenderer {
         PoseStack matrices = context.matrices();
         VertexConsumer fillConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.fill(xrayEnabled));
         VertexConsumer lineConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.outline(xrayEnabled));
-        for (DiffBlockEntry entry : state.visibleEntries(camera.x, camera.y, camera.z)) {
+        for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : state.visibleSurfaceBlocks(camera.x, camera.y, camera.z)) {
+            DiffBlockEntry entry = surfaceBlock.entry();
             ColorChannels color = ColorChannels.of(entry.changeType());
             float minX = (float) (entry.pos().x() - camera.x) + INSET;
             float minY = (float) (entry.pos().y() - camera.y) + INSET;
@@ -137,7 +140,7 @@ public final class CompareOverlayRenderer {
             float maxY = minY + 1.0F - (INSET * 2.0F);
             float maxZ = minZ + 1.0F - (INSET * 2.0F);
 
-            renderFilledBox(matrices, fillConsumer, minX, minY, minZ, maxX, maxY, maxZ, color, FILL_ALPHA);
+            renderFilledBox(matrices, fillConsumer, minX, minY, minZ, maxX, maxY, maxZ, surfaceBlock, color, FILL_ALPHA);
             ShapeRenderer.renderShape(
                     matrices,
                     lineConsumer,
@@ -160,18 +163,31 @@ public final class CompareOverlayRenderer {
             float maxX,
             float maxY,
             float maxZ,
+            CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock,
             ColorChannels color,
             float alpha
     ) {
         PoseStack.Pose pose = matrices.last();
         int alphaChannel = Math.round(alpha);
 
-        addQuad(pose, consumer, color, alphaChannel, minX, minY, minZ, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ);
-        addQuad(pose, consumer, color, alphaChannel, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
-        addQuad(pose, consumer, color, alphaChannel, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
-        addQuad(pose, consumer, color, alphaChannel, maxX, minY, minZ, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ);
-        addQuad(pose, consumer, color, alphaChannel, minX, minY, minZ, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ);
-        addQuad(pose, consumer, color, alphaChannel, minX, maxY, minZ, maxX, maxY, minZ, maxX, maxY, maxZ, minX, maxY, maxZ);
+        if (surfaceBlock.northExposed()) {
+            addQuad(pose, consumer, color, alphaChannel, minX, minY, minZ, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ);
+        }
+        if (surfaceBlock.southExposed()) {
+            addQuad(pose, consumer, color, alphaChannel, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+        }
+        if (surfaceBlock.westExposed()) {
+            addQuad(pose, consumer, color, alphaChannel, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+        }
+        if (surfaceBlock.eastExposed()) {
+            addQuad(pose, consumer, color, alphaChannel, maxX, minY, minZ, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ);
+        }
+        if (surfaceBlock.downExposed()) {
+            addQuad(pose, consumer, color, alphaChannel, minX, minY, minZ, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ);
+        }
+        if (surfaceBlock.upExposed()) {
+            addQuad(pose, consumer, color, alphaChannel, minX, maxY, minZ, maxX, maxY, minZ, maxX, maxY, maxZ, minX, maxY, maxZ);
+        }
     }
 
     private static void addQuad(
@@ -261,12 +277,13 @@ public final class CompareOverlayRenderer {
         private final String leftVersionId;
         private final String rightVersionId;
         private final List<DiffBlockEntry> changedBlocks;
+        private final Set<Long> changedBlockPositions;
         private final boolean debugEnabled;
         private final boolean visible;
         private int cachedCameraBlockX = Integer.MIN_VALUE;
         private int cachedCameraBlockY = Integer.MIN_VALUE;
         private int cachedCameraBlockZ = Integer.MIN_VALUE;
-        private List<DiffBlockEntry> cachedVisibleEntries = List.of();
+        private List<CompareOverlaySurfaceResolver.SurfaceBlock> cachedVisibleSurfaceBlocks = List.of();
 
         private OverlayState(
                 String leftVersionId,
@@ -275,9 +292,28 @@ public final class CompareOverlayRenderer {
                 boolean debugEnabled,
                 boolean visible
         ) {
+            this(
+                    leftVersionId,
+                    rightVersionId,
+                    changedBlocks,
+                    SURFACE_RESOLVER.indexPositions(changedBlocks),
+                    debugEnabled,
+                    visible
+            );
+        }
+
+        private OverlayState(
+                String leftVersionId,
+                String rightVersionId,
+                List<DiffBlockEntry> changedBlocks,
+                Set<Long> changedBlockPositions,
+                boolean debugEnabled,
+                boolean visible
+        ) {
             this.leftVersionId = leftVersionId;
             this.rightVersionId = rightVersionId;
             this.changedBlocks = List.copyOf(changedBlocks);
+            this.changedBlockPositions = changedBlockPositions;
             this.debugEnabled = debugEnabled;
             this.visible = visible;
         }
@@ -303,13 +339,14 @@ public final class CompareOverlayRenderer {
                     this.leftVersionId,
                     this.rightVersionId,
                     this.changedBlocks,
+                    this.changedBlockPositions,
                     this.debugEnabled,
                     nextVisible
             );
             replacement.cachedCameraBlockX = this.cachedCameraBlockX;
             replacement.cachedCameraBlockY = this.cachedCameraBlockY;
             replacement.cachedCameraBlockZ = this.cachedCameraBlockZ;
-            replacement.cachedVisibleEntries = this.cachedVisibleEntries;
+            replacement.cachedVisibleSurfaceBlocks = this.cachedVisibleSurfaceBlocks;
             return replacement;
         }
 
@@ -317,36 +354,42 @@ public final class CompareOverlayRenderer {
             return this.changedBlocks;
         }
 
-        private synchronized List<DiffBlockEntry> visibleEntries(double cameraX, double cameraY, double cameraZ) {
+        private synchronized List<CompareOverlaySurfaceResolver.SurfaceBlock> visibleSurfaceBlocks(
+                double cameraX,
+                double cameraY,
+                double cameraZ
+        ) {
             int cameraBlockX = Mth.floor(cameraX);
             int cameraBlockY = Mth.floor(cameraY);
             int cameraBlockZ = Mth.floor(cameraZ);
             if (cameraBlockX == this.cachedCameraBlockX
                     && cameraBlockY == this.cachedCameraBlockY
                     && cameraBlockZ == this.cachedCameraBlockZ) {
-                return this.cachedVisibleEntries;
+                return this.cachedVisibleSurfaceBlocks;
             }
 
             this.cachedCameraBlockX = cameraBlockX;
             this.cachedCameraBlockY = cameraBlockY;
             this.cachedCameraBlockZ = cameraBlockZ;
             long startedAt = System.nanoTime();
-            this.cachedVisibleEntries = selectNearestEntries(this.changedBlocks, cameraX, cameraY, cameraZ);
+            List<DiffBlockEntry> nearestEntries = selectNearestEntries(this.changedBlocks, cameraX, cameraY, cameraZ);
+            this.cachedVisibleSurfaceBlocks = SURFACE_RESOLVER.resolve(nearestEntries, this.changedBlockPositions);
             if (this.debugEnabled) {
                 LumaDebugLog.log(
                         "compare-overlay",
-                        "Rebuilt visible overlay cache for {} -> {} at {}:{}:{}: total={} visible={} in {} us",
+                        "Rebuilt visible overlay cache for {} -> {} at {}:{}:{}: total={} selected={} rendered={} in {} us",
                         this.leftVersionId,
                         this.rightVersionId,
                         cameraBlockX,
                         cameraBlockY,
                         cameraBlockZ,
                         this.changedBlocks.size(),
-                        this.cachedVisibleEntries.size(),
+                        nearestEntries.size(),
+                        this.cachedVisibleSurfaceBlocks.size(),
                         (System.nanoTime() - startedAt) / 1_000L
                 );
             }
-            return this.cachedVisibleEntries;
+            return this.cachedVisibleSurfaceBlocks;
         }
     }
 }

@@ -184,6 +184,7 @@ It also has presets for common flows like parent, selected version, and active h
 `Highlight in world` turns on a client-side overlay for changed positions.
 Press `H` to hide or show the current overlay without rebuilding the comparison.
 Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
+Dense diff regions render as an exposed translucent shell, so nearby changes stay readable instead of stacking into a solid color slab.
 
 The overlay gives priority to changes near the camera.
 
