@@ -62,7 +62,7 @@ Use Lumi if you want to:
 - compare against parent, other versions, branch heads, or live game state
 - hard restore that moves the active variant head
 - recovery drafts with WAL compaction
-- auto-framed isometric preview images and version metadata
+- client-rendered textured isometric preview images auto-framed from touched chunks
 - material delta summaries and integrity checks
 - zip import/export for project history
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
@@ -87,7 +87,8 @@ Use Lumi if you want to:
 1. `VersionService` consumes the active draft.
 2. Patch payloads are prepared off-thread.
 3. Metadata is written after payload files exist.
-4. Preview generation runs later on a low-priority executor.
+4. Preview generation queues a lightweight request in project storage.
+5. The client later fulfills that request with a textured isometric off-screen render and updates the version metadata.
 
 ### Restore
 
@@ -167,6 +168,7 @@ Main libraries:
 - `owo-lib`
 - `cloth-config`
 - `lz4-java`
+- `worldmesher`
 
 Build output is one mod jar.
 

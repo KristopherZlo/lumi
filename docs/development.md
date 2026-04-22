@@ -127,6 +127,7 @@ Current runtime history behavior:
 - `ProjectArchiveService` owns command-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
 - `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
+- Preview generation now queues lightweight request files on the server side and fulfills them later through the client-side `PreviewCaptureCoordinator`.
 - `RestoreService` prefers direct same-variant patch replay, including `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored version on success without deleting detached versions.
 - `VariantService` keeps one head pointer per variant.
 - `DiffService` reconstructs version-to-version changes from patch history.
@@ -153,6 +154,7 @@ Current world-apply runtime types:
 
 - Lumi is shipped as one distributable mod jar.
 - Support libraries used by the mod are included through Loom jar-in-jar configuration.
+- The textured preview path currently depends on `worldmesher`, which is bundled through the same jar-in-jar flow.
 - Fabric API remains an external required mod.
 
 ## Storage references

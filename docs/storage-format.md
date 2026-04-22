@@ -162,7 +162,7 @@ Whole-dimension projects do not create volume-triggered snapshots. They rely on 
 
 ### `previews/*.png`
 
-Preview images are lightweight isometric PNG files generated per version when preview generation is enabled.
+Preview images are textured isometric PNG files generated on the client per version when preview generation is enabled.
 
 For whole-dimension workspaces, preview coverage is derived from the touched chunks of the specific save and then auto-framed to the visible structure inside that area.
 

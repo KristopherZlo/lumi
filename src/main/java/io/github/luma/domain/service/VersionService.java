@@ -36,10 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -47,11 +43,9 @@ import net.minecraft.server.level.ServerLevel;
  *
  * <p>The service consumes the live tracked buffer, writes the patch-first v3
  * history payloads, applies snapshot policy, finalizes version manifests, and
- * schedules optional preview generation outside the critical durability path.
+ * queues optional preview capture requests outside the critical durability path.
  */
 public final class VersionService {
-
-    private static final ExecutorService PREVIEW_EXECUTOR = Executors.newSingleThreadExecutor(new PreviewThreadFactory());
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -61,7 +55,7 @@ public final class VersionService {
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
-    private final PreviewService previewService = new PreviewService();
+    private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
@@ -244,29 +238,9 @@ public final class VersionService {
         ProjectVersion version = this.versionRepository.load(layout, versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-        PreviewInfo preview = this.capturePreview(
-                layout,
-                versionId,
-                this.resolvePreviewBounds(layout, project, versions, version, null, level),
-                level
-        );
-        ProjectVersion updated = new ProjectVersion(
-                version.id(),
-                version.projectId(),
-                version.variantId(),
-                version.parentVersionId(),
-                version.snapshotId(),
-                version.patchIds(),
-                version.versionKind(),
-                version.author(),
-                version.message(),
-                version.stats(),
-                preview,
-                version.sourceInfo(),
-                version.createdAt()
-        );
-        this.versionRepository.save(layout, updated);
-        return updated;
+        Bounds3i bounds = this.resolvePreviewBounds(layout, project, versions, version, null, level);
+        this.previewCaptureRequestService.queue(layout, versionId, project.dimensionId(), bounds);
+        return version;
     }
 
     ProjectVersion writeVersion(
@@ -428,8 +402,9 @@ public final class VersionService {
         );
 
         if (schedulePreview && project.settings().previewGenerationEnabled()) {
-            LumaDebugLog.log(project, "preview", "Scheduling async preview refresh for version {}", version.id());
-            CompletableFuture.runAsync(() -> this.tryRefreshPreview(layout, project, version, level), PREVIEW_EXECUTOR);
+            Bounds3i bounds = this.resolvePreviewBounds(layout, project, versions, version, draft, level);
+            this.previewCaptureRequestService.queue(layout, version.id(), project.dimensionId(), bounds);
+            LumaDebugLog.log(project, "preview", "Queued preview capture request for version {} with bounds {}", version.id(), bounds);
         }
 
         return version;
@@ -557,82 +532,6 @@ public final class VersionService {
             changes.addAll(this.patchDataRepository.loadChanges(layout, metadata.get()));
         }
         return changes;
-    }
-
-    private void tryRefreshPreview(ProjectLayout layout, BuildProject project, ProjectVersion version, ServerLevel level) {
-        try {
-            LumaMod.LOGGER.info("Starting async preview refresh for version {} in project {}", version.id(), project.name());
-            LumaDebugLog.log(project, "preview", "Refreshing preview for version {}", version.id());
-            List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-            PreviewInfo preview = this.capturePreview(
-                    layout,
-                    version.id(),
-                    this.resolvePreviewBounds(layout, project, versions, version, null, level),
-                    level
-            );
-            this.versionRepository.save(layout, new ProjectVersion(
-                    version.id(),
-                    version.projectId(),
-                    version.variantId(),
-                    version.parentVersionId(),
-                    version.snapshotId(),
-                    version.patchIds(),
-                    version.versionKind(),
-                    version.author(),
-                    version.message(),
-                    version.stats(),
-                    preview,
-                    version.sourceInfo(),
-                    version.createdAt()
-            ));
-            LumaMod.LOGGER.info("Completed async preview refresh for version {} in project {}", version.id(), project.name());
-            LumaDebugLog.log(project, "preview", "Stored preview metadata for version {} at {}", version.id(), preview.fileName());
-        } catch (Exception ignored) {
-            LumaMod.LOGGER.warn("Preview refresh failed for version {} in project {}", version.id(), project.name(), ignored);
-        }
-    }
-
-    private PreviewInfo capturePreview(
-            ProjectLayout layout,
-            String versionId,
-            Bounds3i bounds,
-            ServerLevel level
-    ) throws IOException {
-        if (bounds == null) {
-            LumaDebugLog.log("preview", "Skipped preview capture for version {} because bounds are unavailable", versionId);
-            return PreviewInfo.none();
-        }
-
-        try {
-            LumaDebugLog.log("preview", "Capturing preview for version {} with bounds {}", versionId, bounds);
-            PreviewService.PreviewRenderData renderData = this.samplePreviewOnServerThread(bounds, level);
-            return this.previewService.write(layout, versionId, renderData);
-        } catch (RuntimeException exception) {
-            if (exception.getCause() instanceof IOException ioException) {
-                throw ioException;
-            }
-            throw exception;
-        }
-    }
-
-    private PreviewService.PreviewRenderData samplePreviewOnServerThread(Bounds3i bounds, ServerLevel level) {
-        if (level.getServer().isSameThread()) {
-            return this.previewService.sample(bounds, level);
-        }
-
-        CompletableFuture<PreviewService.PreviewRenderData> future = new CompletableFuture<>();
-        level.getServer().execute(() -> {
-            try {
-                future.complete(this.previewService.sample(bounds, level));
-            } catch (Exception exception) {
-                future.completeExceptionally(exception);
-            }
-        });
-        try {
-            return future.join();
-        } catch (java.util.concurrent.CompletionException exception) {
-            throw exception;
-        }
     }
 
     private boolean shouldCreateSnapshot(
@@ -922,16 +821,4 @@ public final class VersionService {
         };
     }
 
-    private static final class PreviewThreadFactory implements ThreadFactory {
-
-        private int nextIndex = 1;
-
-        @Override
-        public synchronized Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "Lumi-Preview-" + this.nextIndex++);
-            thread.setDaemon(true);
-            thread.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 2));
-            return thread;
-        }
-    }
 }

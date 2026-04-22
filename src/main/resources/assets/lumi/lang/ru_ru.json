@@ -257,7 +257,7 @@
   "luma.preview.missing_file": "Метаданные превью есть, но сам файл отсутствует.",
   "luma.preview.load_failed": "Клиент не смог загрузить файл превью.",
   "luma.preview.path": "Файл превью: %s",
-  "luma.preview.refresh_help": "Обновление превью заново снимает изометрическое изображение для области этого сохранения.",
+  "luma.preview.refresh_help": "Обновление превью ставит в очередь новый текстурный изометрический снимок для области этого сохранения.",
 
   "luma.materials.no_version": "Выберите версию, чтобы посмотреть дельту материалов.",
   "luma.materials.empty": "Для выбранной версии нет дельты материалов.",
@@ -357,6 +357,7 @@
   "luma.status.variant_created": "Ветка создана.",
   "luma.status.variant_switched": "Ветка переключена.",
   "luma.status.preview_refreshed": "Превью обновлено.",
+  "luma.status.preview_requested": "Обновление превью поставлено в очередь.",
   "luma.status.recovery_ready": "Доступны действия восстановления.",
   "luma.status.draft_restored": "Recovery-черновик снова применён.",
   "luma.status.draft_restore_started": "Восстановление recovery-черновика запущено. Lumi применяет блоки в фоне.",

@@ -234,7 +234,7 @@ public final class ProjectScreenController {
                     projectName,
                     versionId
             );
-            return "luma.status.preview_refreshed";
+            return "luma.status.preview_requested";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Preview refresh failed for project {} version {}", projectName, versionId, exception);
             return "luma.status.operation_failed";
