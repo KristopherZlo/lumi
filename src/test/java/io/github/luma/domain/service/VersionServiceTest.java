@@ -2,7 +2,9 @@ package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChangeStats;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ExternalSourceInfo;
+import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.StatePayload;
@@ -57,6 +59,18 @@ class VersionServiceTest {
         );
 
         assertEquals(2, service.versionsSinceSnapshot(versions, "v0003"));
+    }
+
+    @Test
+    void chunkBoundsWrapExactTouchedChunkSpan() {
+        Bounds3i bounds = VersionService.chunkBounds(
+                List.of(new ChunkPoint(10, 20), new ChunkPoint(11, 22)),
+                -64,
+                319
+        );
+
+        assertEquals(new BlockPoint(160, -64, 320), bounds.min());
+        assertEquals(new BlockPoint(191, 319, 367), bounds.max());
     }
 
     private static StoredBlockChange change(int x, String leftBlockId, String rightBlockId) {

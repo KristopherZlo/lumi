@@ -252,12 +252,12 @@
 
   "luma.preview.no_version": "Select a version to inspect its preview.",
   "luma.preview.summary": "Preview for %s | %s x %s",
-  "luma.preview.help": "Top-down thumbnail for the selected version. Use it to quickly confirm you picked the right save before compare or restore.",
+  "luma.preview.help": "Isometric snapshot for the selected save. Lumi auto-frames the touched area so you can recognize the build before compare or restore.",
   "luma.preview.unavailable": "This version does not have a generated preview yet.",
   "luma.preview.missing_file": "The preview metadata exists, but the preview file is missing.",
   "luma.preview.load_failed": "The preview file could not be loaded on the client.",
   "luma.preview.path": "Preview file: %s",
-  "luma.preview.refresh_help": "Refresh preview rebuilds the thumbnail from the saved version data.",
+  "luma.preview.refresh_help": "Refresh preview captures a new isometric snapshot for this save area.",
 
   "luma.materials.no_version": "Select a version to inspect the material delta.",
   "luma.materials.empty": "No material delta is available for the selected version.",
@@ -315,7 +315,7 @@
   "luma.settings.safety_snapshot": "Safety snapshot before restore",
   "luma.settings.safety_snapshot_help": "Store the current draft as a checkpoint before restoring an older version.",
   "luma.settings.preview_generation": "Preview generation",
-  "luma.settings.preview_generation_help": "Create preview images when versions are saved.",
+  "luma.settings.preview_generation_help": "Create isometric preview images when saves are made.",
   "luma.settings.auto_minutes": "Auto version interval (minutes)",
   "luma.settings.auto_minutes_help": "How often Lumi may create an automatic version.",
   "luma.settings.idle_seconds": "Idle timeout (seconds)",

@@ -244,7 +244,12 @@ public final class VersionService {
         ProjectVersion version = this.versionRepository.load(layout, versionId)
                 .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-        PreviewInfo preview = this.capturePreview(layout, versionId, this.resolvePreviewBounds(layout, project, versions, null, level), level);
+        PreviewInfo preview = this.capturePreview(
+                layout,
+                versionId,
+                this.resolvePreviewBounds(layout, project, versions, version, null, level),
+                level
+        );
         ProjectVersion updated = new ProjectVersion(
                 version.id(),
                 version.projectId(),
@@ -562,7 +567,7 @@ public final class VersionService {
             PreviewInfo preview = this.capturePreview(
                     layout,
                     version.id(),
-                    this.resolvePreviewBounds(layout, project, versions, null, level),
+                    this.resolvePreviewBounds(layout, project, versions, version, null, level),
                     level
             );
             this.versionRepository.save(layout, new ProjectVersion(
@@ -795,18 +800,70 @@ public final class VersionService {
             ProjectLayout layout,
             BuildProject project,
             List<ProjectVersion> versions,
+            ProjectVersion version,
             RecoveryDraft draft,
             ServerLevel level
     ) throws IOException {
-        if (!project.tracksWholeDimension()) {
-            return project.bounds();
-        }
-
-        List<ChunkPoint> chunks = this.collectSnapshotChunks(layout, project, versions, draft);
+        List<ChunkPoint> chunks = this.resolvePreviewChunks(layout, project, versions, version, draft);
         if (chunks.isEmpty()) {
+            if (!project.tracksWholeDimension()) {
+                return project.bounds();
+            }
             return null;
         }
 
+        Bounds3i bounds = chunkBounds(
+                chunks,
+                level.dimensionType().minY(),
+                level.dimensionType().minY() + level.dimensionType().height() - 1
+        );
+        LumaDebugLog.log(
+                project,
+                "preview",
+                "Resolved preview bounds for project {} from {} chunks: {}",
+                project.name(),
+                chunks.size(),
+                bounds
+        );
+        return bounds;
+    }
+
+    private List<ChunkPoint> resolvePreviewChunks(
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            ProjectVersion version,
+            RecoveryDraft draft
+    ) throws IOException {
+        if (draft != null && !draft.isEmpty()) {
+            return ChunkSelectionFactory.fromStoredChanges(draft.changes());
+        }
+
+        if (version != null && version.patchIds() != null && !version.patchIds().isEmpty()) {
+            Map<String, ChunkPoint> chunks = new HashMap<>();
+            for (String patchId : version.patchIds()) {
+                Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
+                if (metadata.isEmpty()) {
+                    continue;
+                }
+                for (var chunk : metadata.get().chunks()) {
+                    ChunkPoint chunkPoint = chunk.chunk();
+                    chunks.putIfAbsent(chunkPoint.x() + ":" + chunkPoint.z(), chunkPoint);
+                }
+            }
+            if (!chunks.isEmpty()) {
+                return List.copyOf(chunks.values());
+            }
+        }
+
+        if (!project.tracksWholeDimension()) {
+            return ChunkSelectionFactory.fromBounds(project.bounds());
+        }
+
+        return this.collectSnapshotChunks(layout, project, versions, draft);
+    }
+
+    static Bounds3i chunkBounds(List<ChunkPoint> chunks, int minY, int maxY) {
         int minChunkX = Integer.MAX_VALUE;
         int maxChunkX = Integer.MIN_VALUE;
         int minChunkZ = Integer.MAX_VALUE;
@@ -818,21 +875,10 @@ public final class VersionService {
             maxChunkZ = Math.max(maxChunkZ, chunk.z());
         }
 
-        int minY = level.dimensionType().minY();
-        int maxY = minY + level.dimensionType().height() - 1;
-        Bounds3i bounds = new Bounds3i(
+        return new Bounds3i(
                 new BlockPoint(minChunkX << 4, minY, minChunkZ << 4),
                 new BlockPoint((maxChunkX << 4) + 15, maxY, (maxChunkZ << 4) + 15)
         );
-        LumaDebugLog.log(
-                project,
-                "preview",
-                "Resolved preview bounds for project {} from {} chunks: {}",
-                project.name(),
-                chunks.size(),
-                bounds
-        );
-        return bounds;
     }
 
     private List<ProjectVariant> replaceVariant(List<ProjectVariant> variants, ProjectVariant updatedVariant) {

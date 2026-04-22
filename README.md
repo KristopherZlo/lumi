@@ -58,11 +58,11 @@ Use Lumi if you want to:
 - home-first UI built around `Build`, `Save`, `History`, and `Restore`
 - patch-first history with checkpoint snapshots
 - dedicated save screen with optional `Replace latest save`
-- save details screen with preview, compare, restore, and variant actions
+- save details screen with isometric preview, compare, restore, and variant actions
 - compare against parent, other versions, branch heads, or live game state
 - hard restore that moves the active variant head
 - recovery drafts with WAL compaction
-- preview images and version metadata
+- auto-framed isometric preview images and version metadata
 - material delta summaries and integrity checks
 - zip import/export for project history
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
