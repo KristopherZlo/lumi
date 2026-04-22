@@ -1,12 +1,14 @@
 package io.github.luma.ui.screen;
 
 import io.github.luma.domain.model.ChangeType;
-import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
-import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.LumaScrollContainer;
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.MaterialEntryView;
+import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.CompareScreenController;
+import io.github.luma.ui.controller.ProjectScreenController;
+import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.CompareViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
@@ -32,6 +34,8 @@ public final class CompareScreen extends LumaScreen {
     private final String contextVersionId;
     private final Minecraft client = Minecraft.getInstance();
     private final CompareScreenController controller = new CompareScreenController();
+    private final ProjectScreenController projectController = new ProjectScreenController();
+    private final ScreenRouter router = new ScreenRouter();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private CompareViewState state = new CompareViewState(
             List.of(),
@@ -49,6 +53,7 @@ public final class CompareScreen extends LumaScreen {
     private String leftReference;
     private String rightReference;
     private String status = "luma.status.compare_ready";
+    private boolean showMoreDetails = false;
 
     public CompareScreen(Screen parent, String projectName, String leftReference, String rightReference) {
         this(parent, projectName, leftReference, rightReference, "");
@@ -81,14 +86,13 @@ public final class CompareScreen extends LumaScreen {
 
         FlowLayout header = LumaUi.actionRow();
         header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        header.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
+                this.parent,
+                this.projectName
+        )));
         frame.child(header);
 
-        FlowLayout titleRow = LumaUi.actionRow();
-        titleRow.child(LumaUi.value(Component.translatable("luma.screen.compare.title", this.projectName)));
-        if (!this.state.activeVariantId().isBlank()) {
-            titleRow.child(LumaUi.chip(Component.translatable("luma.dashboard.active_branch", this.state.activeVariantId())));
-        }
-        frame.child(titleRow);
+        frame.child(LumaUi.value(this.compareTitle()));
         frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
 
         FlowLayout body = LumaUi.screenBody();
@@ -106,8 +110,9 @@ public final class CompareScreen extends LumaScreen {
         }
 
         body.child(this.summarySection());
-        body.child(this.changedBlocksSection());
         body.child(this.materialsSection());
+        body.child(this.positionsSection());
+        body.child(this.moreDetailsSection());
         body.child(LumaUi.bottomSpacer());
     }
 
@@ -148,26 +153,6 @@ public final class CompareScreen extends LumaScreen {
         rightField.sizing(narrow ? Sizing.fill(100) : Sizing.expand(50), Sizing.content());
         inputs.child(rightField);
         section.child(inputs);
-        if (!this.state.leftResolvedVersionId().isBlank() || !this.state.rightResolvedVersionId().isBlank()) {
-            section.child(LumaUi.chip(
-                    Component.literal(this.displayResolved(this.state.leftResolvedVersionId())
-                            + " -> "
-                            + this.displayResolved(this.state.rightResolvedVersionId()))
-            ));
-        }
-
-        if (!this.state.variants().isEmpty()) {
-            section.child(LumaUi.caption(Component.translatable(
-                    "luma.compare.variants_hint",
-                    String.join(", ", this.state.variants().stream().map(ProjectVariant::id).toList())
-            )));
-        }
-
-        FlowLayout presets = this.quickPresetRow();
-        if (!presets.children().isEmpty()) {
-            section.child(LumaUi.caption(Component.translatable("luma.compare.preset_help")));
-            section.child(presets);
-        }
 
         FlowLayout actions = LumaUi.actionRow();
         actions.child(UIComponents.button(Component.translatable("luma.action.compare"), button -> {
@@ -175,88 +160,60 @@ public final class CompareScreen extends LumaScreen {
             this.rebuild();
         }));
         section.child(actions);
+
+        FlowLayout presets = this.quickPresetRow();
+        if (!presets.children().isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.compare.preset_help")));
+            section.child(presets);
+        }
         return section;
     }
 
     private FlowLayout summarySection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.compare.result_title"),
-                Component.translatable("luma.compare.summary",
-                        this.displayResolved(this.state.leftResolvedVersionId()),
-                        this.displayResolved(this.state.rightResolvedVersionId()),
-                        this.state.diff().changedBlockCount(),
-                        this.state.diff().changedChunks())
+                this.compareTitle(),
+                Component.translatable(
+                        "luma.compare.summary_short",
+                        this.state.diff().changedBlockCount()
+                )
         );
 
         FlowLayout stats = LumaUi.actionRow();
         stats.child(LumaUi.statChip(
-                Component.translatable("luma.history.commit_blocks"),
-                Component.literal(Integer.toString(this.state.diff().changedBlockCount()))
-        ));
-        stats.child(LumaUi.statChip(
-                Component.translatable("luma.history.commit_chunks"),
-                Component.literal(Integer.toString(this.state.diff().changedChunks()))
-        ));
-        stats.child(LumaUi.statChip(
                 Component.translatable("luma.change_type.added"),
-                Component.literal(Integer.toString(this.changeCount(ChangeType.ADDED)))
+                Component.literal(Integer.toString(ProjectUiSupport.changeCount(this.state.diff(), ChangeType.ADDED)))
         ));
         stats.child(LumaUi.statChip(
                 Component.translatable("luma.change_type.removed"),
-                Component.literal(Integer.toString(this.changeCount(ChangeType.REMOVED)))
+                Component.literal(Integer.toString(ProjectUiSupport.changeCount(this.state.diff(), ChangeType.REMOVED)))
         ));
         stats.child(LumaUi.statChip(
                 Component.translatable("luma.change_type.changed"),
-                Component.literal(Integer.toString(this.changeCount(ChangeType.CHANGED)))
+                Component.literal(Integer.toString(ProjectUiSupport.changeCount(this.state.diff(), ChangeType.CHANGED)))
         ));
         section.child(stats);
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent overlayButton = UIComponents.button(
-                this.overlayButtonLabel(),
-                button -> {
-                    this.status = CompareOverlayRenderer.hasData()
-                            ? this.controller.toggleOverlayVisibility()
-                            : this.controller.showOverlay(this.state);
-                    this.rebuild();
-                }
-        );
+        ButtonComponent overlayButton = UIComponents.button(this.overlayButtonLabel(), button -> {
+            this.status = CompareOverlayRenderer.hasData()
+                    ? this.controller.toggleOverlayVisibility()
+                    : this.controller.showOverlay(this.state);
+            this.rebuild();
+        });
         overlayButton.active(!this.state.diff().changedBlocks().isEmpty() || CompareOverlayRenderer.hasData());
         actions.child(overlayButton);
+
+        ButtonComponent restoreButton = UIComponents.button(Component.translatable("luma.action.restore"), button -> this.restoreComparedSave());
+        restoreButton.active(this.restorableVersion() != null);
+        actions.child(restoreButton);
+
+        actions.child(UIComponents.button(Component.translatable(
+                this.showMoreDetails ? "luma.action.hide_tools" : "luma.compare.more_details"
+        ), button -> {
+            this.showMoreDetails = !this.showMoreDetails;
+            this.rebuild();
+        }));
         section.child(actions);
-        return section;
-    }
-
-    private Component overlayButtonLabel() {
-        if (!CompareOverlayRenderer.hasData()) {
-            return Component.translatable("luma.action.highlight_compare");
-        }
-        return Component.translatable(CompareOverlayRenderer.visible()
-                ? "luma.action.hide_highlight"
-                : "luma.action.show_highlight");
-    }
-
-    private FlowLayout changedBlocksSection() {
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.compare.blocks_title"),
-                Component.translatable("luma.compare.blocks_help", Math.min(BLOCK_LIMIT, this.state.diff().changedBlocks().size()))
-        );
-
-        int limit = Math.min(BLOCK_LIMIT, this.state.diff().changedBlocks().size());
-        for (int index = 0; index < limit; index++) {
-            var entry = this.state.diff().changedBlocks().get(index);
-            section.child(LumaUi.caption(Component.translatable(
-                    "luma.compare.block_entry",
-                    entry.pos().x(),
-                    entry.pos().y(),
-                    entry.pos().z(),
-                    Component.translatable(this.changeTypeKey(entry.changeType()))
-            )));
-        }
-
-        if (this.state.diff().changedBlocks().isEmpty()) {
-            section.child(LumaUi.caption(Component.translatable("luma.changes.empty")));
-        }
         return section;
     }
 
@@ -284,6 +241,74 @@ public final class CompareScreen extends LumaScreen {
             ));
         }
         return section;
+    }
+
+    private FlowLayout positionsSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.compare.blocks_title"),
+                Component.translatable("luma.compare.blocks_help", Math.min(BLOCK_LIMIT, this.state.diff().changedBlocks().size()))
+        );
+
+        int limit = Math.min(BLOCK_LIMIT, this.state.diff().changedBlocks().size());
+        for (int index = 0; index < limit; index++) {
+            var entry = this.state.diff().changedBlocks().get(index);
+            section.child(LumaUi.caption(Component.translatable(
+                    "luma.compare.block_entry",
+                    entry.pos().x(),
+                    entry.pos().y(),
+                    entry.pos().z(),
+                    Component.translatable(this.changeTypeKey(entry.changeType()))
+            )));
+        }
+        if (limit == 0) {
+            section.child(LumaUi.caption(Component.translatable("luma.changes.empty")));
+        }
+        return section;
+    }
+
+    private FlowLayout moreDetailsSection() {
+        if (!this.showMoreDetails) {
+            return LumaUi.sectionCard(
+                    Component.translatable("luma.compare.more_title"),
+                    Component.translatable("luma.compare.more_help")
+            );
+        }
+
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.compare.more_title"),
+                Component.translatable("luma.compare.more_help")
+        );
+        section.child(LumaUi.caption(Component.translatable(
+                "luma.compare.summary",
+                this.displayResolved(this.state.leftResolvedVersionId()),
+                this.displayResolved(this.state.rightResolvedVersionId()),
+                this.state.diff().changedBlockCount(),
+                this.state.diff().changedChunks()
+        )));
+        section.child(LumaUi.caption(Component.translatable("luma.compare.left_resolved", this.displayResolved(this.state.leftResolvedVersionId()))));
+        section.child(LumaUi.caption(Component.translatable("luma.compare.right_resolved", this.displayResolved(this.state.rightResolvedVersionId()))));
+        section.child(LumaUi.caption(Component.translatable("luma.compare.raw_chunks", this.state.diff().changedChunks())));
+        return section;
+    }
+
+    private Component compareTitle() {
+        if (this.state.diff() == null) {
+            return Component.translatable("luma.screen.compare.title", this.projectName);
+        }
+        return Component.translatable(
+                "luma.compare.title_with_refs",
+                this.displayResolved(this.state.leftResolvedVersionId()),
+                this.displayResolved(this.state.rightResolvedVersionId())
+        );
+    }
+
+    private Component overlayButtonLabel() {
+        if (!CompareOverlayRenderer.hasData()) {
+            return Component.translatable("luma.action.highlight_compare");
+        }
+        return Component.translatable(CompareOverlayRenderer.visible()
+                ? "luma.action.hide_highlight"
+                : "luma.action.show_highlight");
     }
 
     private FlowLayout quickPresetRow() {
@@ -326,6 +351,38 @@ public final class CompareScreen extends LumaScreen {
         return button;
     }
 
+    private void restoreComparedSave() {
+        ProjectVersion version = this.restorableVersion();
+        if (version == null) {
+            return;
+        }
+
+        if (version.versionKind() == io.github.luma.domain.model.VersionKind.INITIAL
+                || version.versionKind() == io.github.luma.domain.model.VersionKind.WORLD_ROOT) {
+            this.router.openSaveDetails(this, this.projectName, version.id());
+            return;
+        }
+
+        String result = this.projectController.restoreVersion(this.projectName, version.id());
+        this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
+    }
+
+    private ProjectVersion restorableVersion() {
+        if (CompareScreenController.CURRENT_WORLD_REFERENCE.equals(this.state.rightResolvedVersionId())) {
+            return this.versionFor(this.state.leftResolvedVersionId());
+        }
+        return this.versionFor(this.state.rightResolvedVersionId());
+    }
+
+    private ProjectVersion versionFor(String versionId) {
+        for (ProjectVersion version : this.state.versions()) {
+            if (version.id().equals(versionId)) {
+                return version;
+            }
+        }
+        return null;
+    }
+
     private String selectedVersionId() {
         if (this.state.rightResolvedVersionId() != null
                 && !this.state.rightResolvedVersionId().isBlank()
@@ -348,7 +405,7 @@ public final class CompareScreen extends LumaScreen {
     }
 
     private String activeHeadVersionId() {
-        for (ProjectVariant variant : this.state.variants()) {
+        for (var variant : this.state.variants()) {
             if (variant.id().equals(this.state.activeVariantId())) {
                 return variant.headVersionId();
             }
@@ -364,16 +421,6 @@ public final class CompareScreen extends LumaScreen {
             return Component.translatable("luma.compare.current_world_label").getString();
         }
         return resolvedReference;
-    }
-
-    private int changeCount(ChangeType type) {
-        int count = 0;
-        for (var entry : this.state.diff().changedBlocks()) {
-            if (entry.changeType() == type) {
-                count += 1;
-            }
-        }
-        return count;
     }
 
     private String changeTypeKey(ChangeType type) {

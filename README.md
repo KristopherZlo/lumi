@@ -20,7 +20,7 @@ Lumi is a Fabric mod for Minecraft `1.21.11`.
 
 It gives builders version control for a build area.
 
-You can save versions, branch ideas, compare states, restore old states, and recover pending edits after a crash.
+You can save builds, compare changes, restore earlier states, try alternate variants, and recover pending edits after a crash.
 
 The mod uses builder terms:
 
@@ -55,8 +55,10 @@ Use Lumi if you want to:
 ## Current Features
 
 - automatic dimension projects
+- home-first UI built around `Build`, `Save`, `History`, and `Restore`
 - patch-first history with checkpoint snapshots
-- manual save and amend-on-head
+- dedicated save screen with optional `Replace latest save`
+- save details screen with preview, compare, restore, and variant actions
 - compare against parent, other versions, branch heads, or live game state
 - hard restore that moves the active variant head
 - recovery drafts with WAL compaction
@@ -199,8 +201,9 @@ Artifacts go to `build/libs/`.
 2. Press `U`.
 3. Open or create the project for the current dimension.
 4. Build in the tracked area.
-5. Save a version from the History tab.
-6. Use Compare, Restore, Variants, Recovery, and Settings as needed.
+5. Use the main `Save` action when you want a safe restore point.
+6. Open a save when you want details, compare, restore, or create a new variant from it.
+7. Use `Variants`, `Recovered work`, and `Settings` as needed.
 
 ## Scope
 
