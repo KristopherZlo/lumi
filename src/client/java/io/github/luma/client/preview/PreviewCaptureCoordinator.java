@@ -12,9 +12,9 @@ import io.github.luma.domain.service.ProjectService;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PreviewCaptureRequestRepository;
 import io.github.luma.storage.repository.VersionRepository;
-import io.wispforest.worldmesher.WorldMesh;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,6 +30,7 @@ public final class PreviewCaptureCoordinator {
     private final PreviewCaptureRequestRepository requestRepository = new PreviewCaptureRequestRepository();
     private final PreviewCaptureRequestService requestService = new PreviewCaptureRequestService();
     private final VersionRepository versionRepository = new VersionRepository();
+    private final PreviewRenderMeshBuilder meshBuilder = new PreviewRenderMeshBuilder();
     private final TexturedPreviewCaptureService captureService = new TexturedPreviewCaptureService();
 
     private ActiveCapture activeCapture;
@@ -87,16 +88,16 @@ public final class PreviewCaptureCoordinator {
         }
 
         try {
-            capture.buildFuture().join();
+            PreviewRenderMesh mesh = capture.mesh();
+            if (mesh == null) {
+                mesh = capture.buildFuture().join();
+                capture = capture.withMesh(mesh);
+            }
             if (client.level == null || !client.level.dimension().identifier().toString().equals(capture.project().dimensionId())) {
                 this.completeCapture(capture, false);
                 return;
             }
-            if (!capture.mesh().canRender()) {
-                throw new IllegalStateException("Preview mesh finished building but is not renderable");
-            }
-
-            this.activeCapture = capture.withPendingCapture(this.captureService.capture(capture.request().bounds(), capture.mesh()));
+            this.activeCapture = capture.withPendingCapture(this.captureService.capture(client, capture.request().bounds(), mesh));
         } catch (Exception exception) {
             LumaMod.LOGGER.warn(
                     "Failed to render textured preview for version {} in project {}",
@@ -169,13 +170,8 @@ public final class PreviewCaptureCoordinator {
                         continue;
                     }
 
-                    WorldMesh mesh = new WorldMesh.Builder(
-                            client.level,
-                            request.bounds().min().toBlockPos(),
-                            request.bounds().max().toBlockPos()
-                    ).useGlobalNeighbors().build();
-                    CompletableFuture<Void> buildFuture = mesh.scheduleRebuild(BUILD_EXECUTOR);
-                    this.activeCapture = new ActiveCapture(project, layout, request, mesh, buildFuture, null);
+                    CompletableFuture<PreviewRenderMesh> buildFuture = this.meshBuilder.scheduleBuild(client.level, request.bounds(), BUILD_EXECUTOR);
+                    this.activeCapture = new ActiveCapture(project, layout, request, buildFuture, null, null);
                     LumaMod.LOGGER.info("Queued client preview render for version {} in project {}", request.versionId(), project.name());
                     LumaDebugLog.log(project, "preview", "Building textured preview mesh for version {} with bounds {}", request.versionId(), request.bounds());
                     return;
@@ -195,24 +191,55 @@ public final class PreviewCaptureCoordinator {
     }
 
     private void completeCapture(ActiveCapture capture, boolean success) {
-        capture.mesh().reset();
         if (capture.pendingCapture() != null) {
             capture.pendingCapture().renderTarget().destroyBuffers();
         }
+        this.closeMesh(capture);
         this.activeCapture = null;
         this.scanCooldownTicks = success ? 20 : 40;
+    }
+
+    private void closeMesh(ActiveCapture capture) {
+        PreviewRenderMesh mesh = capture.mesh();
+        if (mesh != null) {
+            mesh.close();
+            return;
+        }
+
+        if (!capture.buildFuture().isDone()) {
+            capture.buildFuture().whenComplete((builtMesh, throwable) -> {
+                if (builtMesh != null) {
+                    builtMesh.close();
+                }
+            });
+            capture.buildFuture().cancel(true);
+            return;
+        }
+
+        try {
+            PreviewRenderMesh builtMesh = capture.buildFuture().join();
+            if (builtMesh != null) {
+                builtMesh.close();
+            }
+        } catch (CancellationException ignored) {
+        } catch (Exception ignored) {
+        }
     }
 
     private record ActiveCapture(
             BuildProject project,
             ProjectLayout layout,
             io.github.luma.domain.model.PreviewCaptureRequest request,
-            WorldMesh mesh,
-            CompletableFuture<Void> buildFuture,
+            CompletableFuture<PreviewRenderMesh> buildFuture,
+            PreviewRenderMesh mesh,
             TexturedPreviewCaptureService.PendingPreviewCapture pendingCapture
     ) {
+        private ActiveCapture withMesh(PreviewRenderMesh mesh) {
+            return new ActiveCapture(this.project, this.layout, this.request, this.buildFuture, mesh, this.pendingCapture);
+        }
+
         private ActiveCapture withPendingCapture(TexturedPreviewCaptureService.PendingPreviewCapture pendingCapture) {
-            return new ActiveCapture(this.project, this.layout, this.request, this.mesh, this.buildFuture, pendingCapture);
+            return new ActiveCapture(this.project, this.layout, this.request, this.buildFuture, this.mesh, pendingCapture);
         }
     }
 

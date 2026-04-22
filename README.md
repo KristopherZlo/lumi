@@ -62,7 +62,7 @@ Use Lumi if you want to:
 - compare against parent, other versions, branch heads, or live game state
 - hard restore that moves the active variant head
 - recovery drafts with WAL compaction
-- client-rendered textured isometric preview images auto-framed from touched chunks
+- client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
 - material delta summaries and integrity checks
 - zip import/export for project history
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
@@ -168,7 +168,6 @@ Main libraries:
 - `owo-lib`
 - `cloth-config`
 - `lz4-java`
-- `worldmesher`
 
 Build output is one mod jar.
 
