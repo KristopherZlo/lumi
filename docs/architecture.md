@@ -44,7 +44,7 @@ Key services:
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching
 - `DiffService`: reconstruct version or live-world differences using structured state payload comparison before formatting UI-facing diff entries
-- `PreviewService`: generate non-blocking preview images
+- `PreviewService`: generate non-blocking isometric preview images
 - `ProjectIntegrityService`: validate storage consistency
 
 These services should express product rules, not raw Minecraft side effects or raw file layouts.
@@ -173,7 +173,7 @@ Current guarantees:
 
 - only one world operation runs per world at a time
 - the world-operation executor is single-threaded and low priority
-- preview generation samples world state on the server thread and writes PNG output on a separate low-priority executor
+- preview generation samples world state on the server thread, auto-frames touched save chunks to visible structure, and writes PNG output on a separate low-priority executor
 - operation progress is observable through `OperationSnapshot`
 - client HUD state is polled separately from screen rendering so non-pausing menus, the top-right diff overlay, and the action-bar progress bar keep updating while screens are open
 

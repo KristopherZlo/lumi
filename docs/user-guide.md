@@ -55,7 +55,7 @@ Each card keeps only the essentials visible:
 
 - save name
 - time
-- small preview
+- small isometric preview
 - simple changed-block summary
 - `Open`
 - `Restore`
@@ -194,7 +194,7 @@ Open a save card to reach the save details screen.
 The save details screen shows:
 
 - the save name
-- preview
+- isometric preview
 - time
 - variant
 - change summary
