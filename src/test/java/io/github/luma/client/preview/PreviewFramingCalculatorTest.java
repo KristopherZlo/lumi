@@ -2,6 +2,7 @@ package io.github.luma.client.preview;
 
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
+import org.joml.Vector3f;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,5 +37,15 @@ class PreviewFramingCalculatorTest {
 
         assertEquals(512, small.resolution());
         assertTrue(large.resolution() > small.resolution());
+    }
+
+    @Test
+    void keepsXAxisAndZAxisInLegacyIsometricDirection() {
+        Vector3f positiveX = new Vector3f(1.0F, 0.0F, 0.0F).mulPosition(PreviewFramingCalculator.rotationMatrix());
+        Vector3f positiveZ = new Vector3f(0.0F, 0.0F, 1.0F).mulPosition(PreviewFramingCalculator.rotationMatrix());
+
+        assertTrue(positiveX.x() > 0.0F);
+        assertTrue(positiveZ.x() < 0.0F);
+        assertEquals(Math.abs(positiveX.x()), Math.abs(positiveZ.x()), 0.0001F);
     }
 }

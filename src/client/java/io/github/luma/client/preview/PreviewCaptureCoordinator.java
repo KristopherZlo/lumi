@@ -1,7 +1,6 @@
 package io.github.luma.client.preview;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.platform.NativeImage;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BuildProject;
@@ -115,9 +114,9 @@ public final class PreviewCaptureCoordinator {
             return;
         }
 
-        try (NativeImage image = capture.pendingCapture().imageFuture().join()) {
+        try (PreviewImageCropper.CapturedPreviewImage image = capture.pendingCapture().imageFuture().join()) {
             Files.createDirectories(capture.layout().previewsDir());
-            image.writeToFile(capture.layout().previewFile(capture.request().versionId()));
+            image.image().writeToFile(capture.layout().previewFile(capture.request().versionId()));
 
             ProjectVersion version = this.versionRepository.load(capture.layout(), capture.request().versionId())
                     .orElseThrow(() -> new IllegalArgumentException("Version not found: " + capture.request().versionId()));
@@ -134,8 +133,8 @@ public final class PreviewCaptureCoordinator {
                     version.stats(),
                     new PreviewInfo(
                             capture.layout().previewFile(version.id()).getFileName().toString(),
-                            capture.pendingCapture().width(),
-                            capture.pendingCapture().height()
+                            image.width(),
+                            image.height()
                     ),
                     version.sourceInfo(),
                     version.createdAt()
