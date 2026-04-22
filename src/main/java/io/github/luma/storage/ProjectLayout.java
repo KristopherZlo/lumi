@@ -43,6 +43,10 @@ public record ProjectLayout(Path root) {
         return this.root.resolve("previews");
     }
 
+    public Path previewRequestsDir() {
+        return this.root.resolve("preview-requests");
+    }
+
     public Path recoveryDir() {
         return this.root.resolve("recovery");
     }
@@ -81,6 +85,10 @@ public record ProjectLayout(Path root) {
 
     public Path previewFile(String versionId) {
         return this.previewsDir().resolve(versionId + ".png");
+    }
+
+    public Path previewRequestFile(String versionId) {
+        return this.previewRequestsDir().resolve(versionId + ".json");
     }
 
     public Path snapshotFile(String snapshotId) {

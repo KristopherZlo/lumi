@@ -45,6 +45,7 @@ Key services:
 - `VariantService`: branch creation and branch switching
 - `DiffService`: reconstruct version or live-world differences using structured state payload comparison before formatting UI-facing diff entries
 - `PreviewService`: generate non-blocking isometric preview images
+- `PreviewCaptureRequestRepository`: persist preview capture requests so the server can queue work and the client can render later
 - `ProjectIntegrityService`: validate storage consistency
 
 These services should express product rules, not raw Minecraft side effects or raw file layouts.
@@ -74,6 +75,7 @@ Important boundaries:
 - `ProjectLayout` is the single source of truth for project-relative paths
 - metadata repositories read and write lightweight manifests
 - payload repositories read and write compressed binary history data
+- preview request repositories persist lightweight capture jobs for the client renderer
 - `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export
 - `ProjectCleanupRepository` owns file scanning and deletion for conservative storage cleanup
 - `StorageIo` owns low-level atomic-write and NBT binary helpers
@@ -189,6 +191,7 @@ Main files:
 - `patches/<patchId>.meta.json`: patch metadata and chunk index
 - `patches/<patchId>.bin.lz4`: patch payload
 - `snapshots/<snapshotId>.bin.lz4`: checkpoint snapshot payload
+- `preview-requests/<versionId>.json`: queued client-side preview capture jobs
 - `recovery/draft.bin.lz4`: compacted recovery base
 - `recovery/draft.wal.lz4`: append-only recovery log
 - `recovery/operation-draft.bin.lz4`: isolated save/amend draft fallback

@@ -142,6 +142,7 @@ Main files:
 - `patches/*.bin.lz4`
 - `snapshots/*.bin.lz4`
 - `previews/*.png`
+- `preview-requests/*.json`
 - `recovery/draft.bin.lz4`
 - `recovery/draft.wal.lz4`
 - `recovery/journal.json`
