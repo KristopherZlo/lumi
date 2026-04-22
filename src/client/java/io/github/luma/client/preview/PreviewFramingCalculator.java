@@ -6,21 +6,19 @@ import org.joml.Vector3f;
 
 final class PreviewFramingCalculator {
 
-    private static final float ISO_PITCH_RADIANS = (float) Math.toRadians(35.2643897D);
-    private static final float ISO_YAW_RADIANS = (float) Math.toRadians(45.0D);
+    static final float ISO_PITCH_RADIANS = (float) Math.toRadians(35.2643897D);
+    static final float ISO_YAW_RADIANS = (float) Math.toRadians(45.0D);
     private static final float FRAME_MARGIN = 0.14F;
-    private static final int MIN_RESOLUTION = 384;
-    private static final int MAX_RESOLUTION = 1024;
-    private static final int PIXELS_PER_BLOCK = 12;
+    private static final int MIN_RESOLUTION = 512;
+    private static final int MAX_RESOLUTION = 1536;
+    private static final int PIXELS_PER_BLOCK = 18;
 
     PreviewFraming calculate(Bounds3i bounds) {
         float halfX = bounds.sizeX() / 2.0F;
         float halfY = bounds.sizeY() / 2.0F;
         float halfZ = bounds.sizeZ() / 2.0F;
 
-        Matrix4f rotation = new Matrix4f()
-                .rotateX(ISO_PITCH_RADIANS)
-                .rotateY(ISO_YAW_RADIANS);
+        Matrix4f rotation = rotationMatrix();
 
         float minX = Float.POSITIVE_INFINITY;
         float maxX = Float.NEGATIVE_INFINITY;
@@ -53,6 +51,12 @@ final class PreviewFramingCalculator {
         int resolution = clamp(dominantSpan * PIXELS_PER_BLOCK, MIN_RESOLUTION, MAX_RESOLUTION);
 
         return new PreviewFraming(resolution, scale, offsetX, offsetY, halfX, halfY, halfZ);
+    }
+
+    static Matrix4f rotationMatrix() {
+        return new Matrix4f()
+                .rotateX(ISO_PITCH_RADIANS)
+                .rotateY(ISO_YAW_RADIANS);
     }
 
     private static int clamp(int value, int min, int max) {

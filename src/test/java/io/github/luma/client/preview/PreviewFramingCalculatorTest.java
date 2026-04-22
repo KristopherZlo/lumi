@@ -34,7 +34,7 @@ class PreviewFramingCalculatorTest {
                 new BlockPoint(63, 127, 63)
         ));
 
-        assertEquals(384, small.resolution());
+        assertEquals(512, small.resolution());
         assertTrue(large.resolution() > small.resolution());
     }
 }

@@ -154,7 +154,7 @@ Current world-apply runtime types:
 
 - Lumi is shipped as one distributable mod jar.
 - Support libraries used by the mod are included through Loom jar-in-jar configuration.
-- The textured preview path currently depends on `worldmesher`, which is bundled through the same jar-in-jar flow.
+- The textured preview path now uses Lumi's own layered client mesh builder on top of the `1.21.11` render APIs instead of an external meshing runtime dependency.
 - Fabric API remains an external required mod.
 
 ## Storage references

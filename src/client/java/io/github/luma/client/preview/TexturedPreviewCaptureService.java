@@ -2,25 +2,23 @@ package io.github.luma.client.preview;
 
 import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
+import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import io.github.luma.domain.model.Bounds3i;
-import io.wispforest.worldmesher.WorldMesh;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.CachedOrthoProjectionMatrixBuffer;
+import org.joml.Matrix4fStack;
 
 final class TexturedPreviewCaptureService implements AutoCloseable {
-
-    private static final float ISO_PITCH_DEGREES = 35.2643897F;
-    private static final float ISO_YAW_DEGREES = 45.0F;
 
     private final PreviewFramingCalculator framingCalculator = new PreviewFramingCalculator();
     private final CachedOrthoProjectionMatrixBuffer projectionMatrixBuffer = new CachedOrthoProjectionMatrixBuffer(
@@ -30,7 +28,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
             true
     );
 
-    PendingPreviewCapture capture(Bounds3i bounds, WorldMesh mesh) {
+    PendingPreviewCapture capture(Minecraft client, Bounds3i bounds, PreviewRenderMesh mesh) {
         PreviewFramingCalculator.PreviewFraming framing = this.framingCalculator.calculate(bounds);
         TextureTarget renderTarget = new TextureTarget("Lumi Preview", framing.resolution(), framing.resolution(), true);
 
@@ -43,28 +41,39 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
         RenderSystem.backupProjectionMatrix();
         RenderSystem.setProjectionMatrix(this.projectionMatrixBuffer.getBuffer(framing.resolution(), framing.resolution()), ProjectionType.ORTHOGRAPHIC);
 
+        Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+        modelViewStack.pushMatrix();
+        modelViewStack.identity();
+
         GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
         GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
+        GpuBufferSlice previousLights = RenderSystem.getShaderLights();
         RenderSystem.outputColorTextureOverride = colorTextureView;
         RenderSystem.outputDepthTextureOverride = depthTextureView;
 
         try {
-            PoseStack poseStack = new PoseStack();
+            client.gameRenderer.lightTexture().updateLightTexture(1.0F);
+            client.gameRenderer.getLighting().setupFor(Lighting.Entry.LEVEL);
+
             float halfResolution = framing.resolution() * 0.5F;
             float pixelScale = framing.scale() * halfResolution;
-            poseStack.translate(
+            modelViewStack.translate(
                     halfResolution + framing.offsetX() * halfResolution,
                     halfResolution - framing.offsetY() * halfResolution,
                     0.0F
             );
-            poseStack.scale(pixelScale, pixelScale, -pixelScale);
-            poseStack.mulPose(Axis.XP.rotationDegrees(ISO_PITCH_DEGREES));
-            poseStack.mulPose(Axis.YP.rotationDegrees(ISO_YAW_DEGREES));
-            poseStack.translate(-framing.halfX(), -framing.halfY(), -framing.halfZ());
-            mesh.render(poseStack);
+            modelViewStack.scale(pixelScale, pixelScale, pixelScale);
+            modelViewStack.rotateX(PreviewFramingCalculator.ISO_PITCH_RADIANS);
+            modelViewStack.rotateY(PreviewFramingCalculator.ISO_YAW_RADIANS);
+            modelViewStack.translate(-framing.halfX(), -framing.halfY(), -framing.halfZ());
+            mesh.render();
         } finally {
             RenderSystem.outputColorTextureOverride = previousColor;
             RenderSystem.outputDepthTextureOverride = previousDepth;
+            if (previousLights != null) {
+                RenderSystem.setShaderLights(previousLights);
+            }
+            modelViewStack.popMatrix();
             RenderSystem.restoreProjectionMatrix();
         }
 
