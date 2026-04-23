@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -61,6 +62,15 @@ public final class ProjectService {
     public BuildProject loadProject(MinecraftServer server, String projectName) throws IOException {
         return this.projectRepository.load(this.resolveLayout(server, projectName))
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+    }
+
+    public Optional<BuildProject> findWorldProject(ServerLevel level) throws IOException {
+        String dimensionId = level.dimension().identifier().toString();
+        return this.projectRepository.loadAll(this.projectsRoot(level.getServer())).stream()
+                .filter(project -> !project.archived())
+                .filter(BuildProject::tracksWholeDimension)
+                .filter(project -> dimensionId.equals(project.dimensionId()))
+                .findFirst();
     }
 
     /**

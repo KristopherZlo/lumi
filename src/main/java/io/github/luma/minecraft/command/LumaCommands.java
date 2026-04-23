@@ -12,6 +12,7 @@ import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
+import io.github.luma.minecraft.access.LumaAccessControl;
 import java.io.IOException;
 import java.util.stream.Collectors;
 import net.minecraft.commands.CommandSourceStack;
@@ -29,9 +30,11 @@ public final class LumaCommands {
     private final RestoreService restoreService = new RestoreService();
     private final VariantService variantService = new VariantService();
     private final RecoveryService recoveryService = new RecoveryService();
+    private final LumaAccessControl accessControl = LumaAccessControl.getInstance();
 
     public void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        var root = Commands.literal("lumi");
+        var root = Commands.literal("lumi")
+                .requires(this.accessControl::canUse);
 
         root.then(Commands.literal("list")
                 .executes(context -> this.execute(context.getSource(), this::listProjects)));

@@ -3,12 +3,13 @@ package io.github.luma.minecraft.capture;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.UUID;
 
 public final class WorldMutationContext {
 
-    private static final ThreadLocal<Deque<WorldMutationSource>> SOURCE_STACK = ThreadLocal.withInitial(() -> {
-        Deque<WorldMutationSource> stack = new ArrayDeque<>();
-        stack.push(WorldMutationSource.SYSTEM);
+    private static final ThreadLocal<Deque<Frame>> SOURCE_STACK = ThreadLocal.withInitial(() -> {
+        Deque<Frame> stack = new ArrayDeque<>();
+        stack.push(Frame.system());
         return stack;
     });
 
@@ -16,20 +17,47 @@ public final class WorldMutationContext {
     }
 
     public static WorldMutationSource currentSource() {
-        return SOURCE_STACK.get().peek();
+        return currentFrame().source();
+    }
+
+    public static String currentActor() {
+        return currentFrame().actor();
+    }
+
+    public static String currentActionId() {
+        return currentFrame().actionId();
+    }
+
+    public static boolean currentAccessAllowed() {
+        return currentFrame().accessAllowed();
     }
 
     public static void pushSource(WorldMutationSource source) {
-        SOURCE_STACK.get().push(source);
+        Frame parent = currentFrame();
+        SOURCE_STACK.get().push(new Frame(
+                source == null ? WorldMutationSource.SYSTEM : source,
+                parent.actor(),
+                parent.actionId(),
+                parent.accessAllowed()
+        ));
+    }
+
+    public static void pushPlayerSource(WorldMutationSource source, String actor, boolean accessAllowed) {
+        SOURCE_STACK.get().push(new Frame(
+                source == null ? WorldMutationSource.PLAYER : source,
+                actor == null || actor.isBlank() ? "player" : actor,
+                UUID.randomUUID().toString(),
+                accessAllowed
+        ));
     }
 
     public static void popSource() {
-        Deque<WorldMutationSource> stack = SOURCE_STACK.get();
+        Deque<Frame> stack = SOURCE_STACK.get();
         if (stack.size() > 1) {
             stack.pop();
         } else {
             stack.clear();
-            stack.push(WorldMutationSource.SYSTEM);
+            stack.push(Frame.system());
         }
     }
 
@@ -39,6 +67,23 @@ public final class WorldMutationContext {
             runnable.run();
         } finally {
             popSource();
+        }
+    }
+
+    private static Frame currentFrame() {
+        Frame frame = SOURCE_STACK.get().peek();
+        return frame == null ? Frame.system() : frame;
+    }
+
+    private record Frame(
+            WorldMutationSource source,
+            String actor,
+            String actionId,
+            boolean accessAllowed
+    ) {
+
+        private static Frame system() {
+            return new Frame(WorldMutationSource.SYSTEM, "world", "", false);
         }
     }
 }
