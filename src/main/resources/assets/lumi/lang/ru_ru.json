@@ -475,7 +475,7 @@
   "luma.share.merge_help": "Выбери локальный вариант, проверь пересечение и сливай только когда конфликтов нет.",
   "luma.share.target_variant": "Слить в: %s",
   "luma.share.imported_empty": "Для этого проекта пока нет импортированных пакетов истории.",
-  "luma.share.imported_entry": "Вариант: %s | head: %s | импорт: %s",
+  "luma.share.imported_entry": "Вариант: %s | импорт: %s",
   "luma.share.merge_review_title": "Слить %s в %s",
   "luma.share.merge_ancestor": "Общая база: %s",
   "luma.share.source_changes": "Импорт",

@@ -474,7 +474,7 @@
   "luma.share.merge_help": "Choose the local target variant, review overlap, and merge only when the package does not conflict.",
   "luma.share.target_variant": "Merge into: %s",
   "luma.share.imported_empty": "No imported history packages are available for this project yet.",
-  "luma.share.imported_entry": "Variant: %s | head: %s | imported: %s",
+  "luma.share.imported_entry": "Variant: %s | imported: %s",
   "luma.share.merge_review_title": "Merge %s into %s",
   "luma.share.merge_ancestor": "Shared base save: %s",
   "luma.share.source_changes": "Imported",
