@@ -42,6 +42,7 @@ This now includes regression checks for:
 - detached commit visibility after a restore-style reset
 - recovery draft isolation while save/amend operations run
 - zip archive import/export for project history, with previews optional and recovery drafts excluded
+- variant-scoped history package export/import plus imported-variant merge planning
 - conservative cleanup flow for orphaned snapshots/previews/cache and stale operation drafts
 - material delta summarization on large diffs
 
@@ -112,6 +113,7 @@ Current UX assumptions:
 - the workspace home screen is product-first: current build state, save, restore last save, variants, then recent saves
 - low-frequency tools such as technical graph, diagnostics, and raw info live behind `More`
 - save composition, save details, and variant management now have dedicated screens instead of sharing one overloaded project page
+- the advanced share and merge flow currently lives inside `VariantsScreen`, where review-project imports and merge conflict review stay off the main home screen
 
 ## History architecture
 
@@ -126,11 +128,13 @@ Current runtime history behavior:
 - Changes are aggregated into an in-memory recovery draft immediately, then flushed asynchronously through the capture-maintenance executor and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `ProjectArchiveService` owns command-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
+- `HistoryShareService` builds the first `Share` MVP on top of the same archive format by exporting one variant lineage and importing it back as a review project.
 - `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
 - Preview generation now queues lightweight request files on the server side and fulfills them later through the client-side `PreviewCaptureCoordinator`.
 - `RestoreService` prefers direct same-variant patch replay, including `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored version on success without deleting detached versions.
 - `VariantService` keeps one head pointer per variant.
+- `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, detecting block conflicts, and delegating merged version persistence to `VersionService`.
 - `DiffService` reconstructs version-to-version changes from patch history.
 
 The current history pipeline is intentionally split into:

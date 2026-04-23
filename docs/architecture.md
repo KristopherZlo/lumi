@@ -38,11 +38,13 @@ Key services:
 - `ProjectService`: create, load, and update projects
 - `ProjectService`: also owns world-origin bootstrap and automatic `WORLD_ROOT` creation for dimension workspaces
 - `ProjectArchiveService`: export stable project history to zip archives and import it back into project storage
+- `HistoryShareService`: export variant-scoped history packages and import them back as review projects for the same project lineage
 - `ProjectCleanupService`: compute safe cleanup candidates from reachable history metadata and active operation state
 - `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy
 - `RestoreService`: build restore plans, decode world-root baseline restores, and prepare chunk batches
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching
+- `VariantMergeService`: compare imported variant lineage against a local target variant, detect block-level conflicts, and write merged saves through the normal patch-first history path
 - `DiffService`: reconstruct version or live-world differences using structured state payload comparison before formatting UI-facing diff entries
 - `PreviewCaptureRequestService`: queue preview capture jobs without blocking save durability
 - `PreviewCaptureRequestRepository`: persist preview capture requests so the server can queue work and the client can render later
@@ -96,6 +98,7 @@ Responsibilities are split as follows:
 - `LumaScreen` ensures Lumi screens never pause the game
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, prioritizes the nearest changed blocks to the current camera position, and renders only exposed overlay faces so translucent fill does not self-stack through dense diff volumes
+- `VariantsScreen` now carries the advanced `Share & Merge` flow: export a variant package, import it as a review project, review merge conflicts, and apply a merged save without cluttering the home screen
 
 ## Core runtime flows
 
