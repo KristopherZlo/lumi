@@ -52,7 +52,7 @@ public final class FakeRestoreService {
                 DEFAULT_TOTAL_REPLACEMENTS,
                 0
         );
-        player.sendMessage(Text.translatable("gbreakdev.restore.started", this.activeOperation.targetLabel()), false);
+        player.sendMessage(Text.translatable("gbreakdev.restore.started", this.activeOperation.targetLabel()), true);
         return true;
     }
 
@@ -81,7 +81,7 @@ public final class FakeRestoreService {
         }
 
         if (replacedThisTick == 0) {
-            player.sendMessage(Text.translatable("gbreakdev.restore.completed", this.activeOperation.targetLabel()), false);
+            player.sendMessage(Text.translatable("gbreakdev.restore.completed", this.activeOperation.targetLabel()), true);
             this.activeOperation = null;
             return;
         }
@@ -95,7 +95,7 @@ public final class FakeRestoreService {
         ), true);
 
         if (this.activeOperation.complete()) {
-            player.sendMessage(Text.translatable("gbreakdev.restore.completed", this.activeOperation.targetLabel()), false);
+            player.sendMessage(Text.translatable("gbreakdev.restore.completed", this.activeOperation.targetLabel()), true);
             this.activeOperation = null;
         }
     }

@@ -54,8 +54,6 @@ public final class GBreakCommand {
             source.sendError(Text.translatable("gbreakdev.restore.command_busy"));
             return 0;
         }
-
-        source.sendFeedback(() -> Text.translatable("gbreakdev.restore.command_started", target), false);
         return 1;
     }
 

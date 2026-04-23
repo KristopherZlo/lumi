@@ -66,12 +66,8 @@ public final class LumiDemoProjectScreen extends LumiDemoScreen {
     private FlowLayout headerSection() {
         FlowLayout header = LumiDemoUi.actionRow();
         header.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.back"), button -> this.closeScreen()));
-        header.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.projects"), button -> this.closePlaceholderAction(
-                "gbreakdev.ui.action.projects"
-        )));
-        header.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.settings"), button -> this.closePlaceholderAction(
-                "gbreakdev.ui.action.settings"
-        )));
+        header.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.projects"), button -> this.closeActionScreen()));
+        header.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.settings"), button -> this.closeActionScreen()));
         return header;
     }
 
@@ -97,13 +93,9 @@ public final class LumiDemoProjectScreen extends LumiDemoScreen {
         section.child(stats);
 
         FlowLayout actions = LumiDemoUi.actionRow();
-        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.save"), button -> this.closePlaceholderAction(
-                "gbreakdev.ui.action.save"
-        )));
-        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.compare"), button -> this.closePlaceholderAction(
-                "gbreakdev.ui.action.compare"
-        )));
-        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.restore_last_save"), button -> this.triggerFakeRestore(
+        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.save"), button -> this.closeActionScreen()));
+        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.compare"), button -> this.closeActionScreen()));
+        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.restore_last_save"), button -> this.triggerRestore(
                 this.state.commits().getFirst().id()
         )));
         section.child(actions);
@@ -156,13 +148,9 @@ public final class LumiDemoProjectScreen extends LumiDemoScreen {
         card.child(text);
 
         FlowLayout actions = LumiDemoUi.actionRow();
-        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.open"), button -> this.closePlaceholderAction(
-                "gbreakdev.ui.action.open"
-        )));
-        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.compare"), button -> this.closePlaceholderAction(
-                "gbreakdev.ui.action.compare"
-        )));
-        ButtonComponent restoreButton = UIComponents.button(Text.translatable("gbreakdev.ui.action.restore"), button -> this.triggerFakeRestore(
+        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.open"), button -> this.closeActionScreen()));
+        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.compare"), button -> this.closeActionScreen()));
+        ButtonComponent restoreButton = UIComponents.button(Text.translatable("gbreakdev.ui.action.restore"), button -> this.triggerRestore(
                 commit.id()
         ));
         actions.child(restoreButton);
@@ -178,30 +166,18 @@ public final class LumiDemoProjectScreen extends LumiDemoScreen {
         section.child(LumiDemoUi.caption(Text.translatable("gbreakdev.ui.section.more_detail")));
 
         FlowLayout actions = LumiDemoUi.actionRow();
-        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.recovery"), button -> this.closePlaceholderAction(
-                "gbreakdev.ui.action.recovery"
-        )));
-        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.variants"), button -> this.closePlaceholderAction(
-                "gbreakdev.ui.action.variants"
-        )));
-        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.settings"), button -> this.closePlaceholderAction(
-                "gbreakdev.ui.action.settings"
-        )));
+        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.recovery"), button -> this.closeActionScreen()));
+        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.variants"), button -> this.closeActionScreen()));
+        actions.child(UIComponents.button(Text.translatable("gbreakdev.ui.action.settings"), button -> this.closeActionScreen()));
         section.child(actions);
         return section;
     }
 
-    private void closePlaceholderAction(String actionKey) {
+    private void closeActionScreen() {
         this.closeScreen();
-        if (this.client.player != null) {
-            this.client.player.sendMessage(Text.translatable(
-                    "gbreakdev.ui.placeholder_action",
-                    Text.translatable(actionKey)
-            ), true);
-        }
     }
 
-    private void triggerFakeRestore(String targetCommitId) {
+    private void triggerRestore(String targetCommitId) {
         this.closeScreen();
         ClientPlayNetworkHandler networkHandler = this.client.getNetworkHandler();
         if (networkHandler == null) {
