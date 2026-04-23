@@ -22,6 +22,8 @@ It gives builders version control for a build area.
 
 You can save builds, compare changes, restore earlier states, try alternate variants, share a portable history package, merge imported ideas back into a local variant, and recover pending edits after a crash.
 
+Lumi only activates for players with operator-level permissions or when cheats are enabled in the world.
+
 The mod uses builder terms:
 
 - `project`
@@ -61,6 +63,7 @@ Use Lumi if you want to:
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, compare, restore, and variant actions
 - compare against parent, other versions, branch heads, or live game state
+- live undo and redo for the last tracked builder actions with default `Alt+Z` / `Alt+Y` bindings
 - hard restore that moves the active variant head
 - recovery drafts with WAL compaction
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
@@ -69,6 +72,7 @@ Use Lumi if you want to:
 - imported review projects plus conflict-zone merge review for shared variants
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
+- temporary `Alt` overlay for the latest 10 tracked actions when compare highlight is not active
 
 ## How It Works
 
@@ -204,12 +208,15 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 ## Quick Start
 
 1. Open a local singleplayer save.
-2. Press `U`.
-3. Open or create the project for the current dimension.
-4. Build in the tracked area.
-5. Use the main `Save` action when you want a safe restore point.
-6. Open a save when you want details, compare, restore, or create a new variant from it.
-7. Use `Variants`, `Recovered work`, and `Settings` as needed.
+2. Make sure cheats are enabled or the player has operator-level permissions.
+3. Press `U`.
+4. Open or create the project for the current dimension.
+5. Build in the tracked area.
+6. Use `Alt+Z` / `Alt+Y` to undo or redo the latest tracked Lumi action.
+7. Hold `Alt` to preview the latest 10 tracked actions when the compare overlay is not active.
+8. Use the main `Save` action when you want a safe restore point.
+9. Open a save when you want details, compare, restore, or create a new variant from it.
+10. Use `Variants`, `Recovered work`, and `Settings` as needed.
 
 ## Scope
 
