@@ -2,7 +2,12 @@ package io.github.luma.domain.service;
 
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.MergeConflictResolution;
+import io.github.luma.domain.model.MergeConflictZone;
+import io.github.luma.domain.model.MergeConflictZoneResolution;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.ProjectVariant;
@@ -11,6 +16,7 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.VariantMergeApplyRequest;
 import io.github.luma.domain.model.VariantMergePlan;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
@@ -25,7 +31,9 @@ import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.ArrayDeque;
+import java.util.Comparator;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -71,21 +79,44 @@ public final class VariantMergeService {
             String targetVariantId,
             String author
     ) throws IOException {
-        ProjectLayout targetLayout = this.projectService.resolveLayout(level.getServer(), targetProjectName);
-        ProjectLayout sourceLayout = this.projectService.resolveLayout(level.getServer(), sourceProjectName);
+        return this.startMerge(
+                level,
+                new VariantMergeApplyRequest(
+                        targetProjectName,
+                        sourceProjectName,
+                        sourceVariantId,
+                        targetVariantId,
+                        List.of()
+                ),
+                author
+        );
+    }
+
+    public OperationHandle startMerge(
+            ServerLevel level,
+            VariantMergeApplyRequest request,
+            String author
+    ) throws IOException {
+        ProjectLayout targetLayout = this.projectService.resolveLayout(level.getServer(), request.targetProjectName());
+        ProjectLayout sourceLayout = this.projectService.resolveLayout(level.getServer(), request.sourceProjectName());
         BuildProject targetProject = this.projectRepository.load(targetLayout)
-                .orElseThrow(() -> new IllegalArgumentException("Target project metadata is missing for " + targetProjectName));
+                .orElseThrow(() -> new IllegalArgumentException("Target project metadata is missing for " + request.targetProjectName()));
         BuildProject sourceProject = this.projectRepository.load(sourceLayout)
-                .orElseThrow(() -> new IllegalArgumentException("Source project metadata is missing for " + sourceProjectName));
+                .orElseThrow(() -> new IllegalArgumentException("Source project metadata is missing for " + request.sourceProjectName()));
         if (this.worldOperationManager.hasActiveOperation(level.getServer())) {
             throw new IllegalStateException("Another world operation is already running");
         }
 
-        VariantMergePlan plan = this.planMerge(targetLayout, targetProject, targetVariantId, sourceLayout, sourceProject, sourceVariantId);
-        if (plan.hasConflicts()) {
-            throw new IllegalArgumentException("Merge conflicts must be resolved before applying the merge");
-        }
-        if (plan.mergeChanges().isEmpty()) {
+        VariantMergePlan plan = this.planMerge(
+                targetLayout,
+                targetProject,
+                request.targetVariantId(),
+                sourceLayout,
+                sourceProject,
+                request.sourceVariantId()
+        );
+        List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, request.conflictResolutions());
+        if (mergeChanges.isEmpty()) {
             throw new IllegalArgumentException("Imported variant does not add any new changes");
         }
 
@@ -96,7 +127,7 @@ public final class VariantMergeService {
                 "blocks",
                 LumaDebugLog.enabled(targetProject),
                 progressSink -> {
-                    progressSink.update(OperationStage.PREPARING, 0, plan.mergeChanges().size(), "Preparing merge");
+                    progressSink.update(OperationStage.PREPARING, 0, mergeChanges.size(), "Preparing merge");
                     RecoveryDraft draft = new RecoveryDraft(
                             targetProject.id().toString(),
                             plan.targetVariantId(),
@@ -105,14 +136,14 @@ public final class VariantMergeService {
                             WorldMutationSource.SYSTEM,
                             Instant.now(),
                             Instant.now(),
-                            plan.mergeChanges()
+                            mergeChanges
                     );
                     ProjectVersion mergedVersion = this.versionService.writeVersion(
                             level,
                             targetLayout,
                             targetProject,
                             draft,
-                            "Merged " + sourceVariantId + " from " + sourceProjectName,
+                            "Merged " + request.sourceVariantId() + " from " + request.sourceProjectName(),
                             author,
                             VersionKind.MANUAL,
                             true,
@@ -122,9 +153,9 @@ public final class VariantMergeService {
                     this.recoveryRepository.appendJournalEntry(targetLayout, new RecoveryJournalEntry(
                             Instant.now(),
                             "variant-merged",
-                            "Merged variant " + sourceVariantId + " from " + sourceProjectName,
+                            "Merged variant " + request.sourceVariantId() + " from " + request.sourceProjectName(),
                             mergedVersion.id(),
-                            targetVariantId
+                            request.targetVariantId()
                     ));
                 }
         );
@@ -157,7 +188,7 @@ public final class VariantMergeService {
         Map<BlockPoint, StateAccumulator> sourceStates = this.collectStates(sourceLayout, sourceVersionMap, ancestorVersionId, sourceVariant.headVersionId());
 
         List<StoredBlockChange> mergeChanges = new ArrayList<>();
-        LinkedHashSet<BlockPoint> conflictPositions = new LinkedHashSet<>();
+        LinkedHashMap<BlockPoint, StoredBlockChange> conflictChanges = new LinkedHashMap<>();
         LinkedHashSet<BlockPoint> allPositions = new LinkedHashSet<>();
         allPositions.addAll(targetStates.keySet());
         allPositions.addAll(sourceStates.keySet());
@@ -171,7 +202,7 @@ public final class VariantMergeService {
                 continue;
             }
             if (targetChanged && !this.statesEqual(targetFinal, sourceFinal)) {
-                conflictPositions.add(pos);
+                conflictChanges.put(pos, new StoredBlockChange(pos, targetFinal, sourceFinal));
                 continue;
             }
             if (!this.statesEqual(targetFinal, sourceFinal)) {
@@ -190,8 +221,39 @@ public final class VariantMergeService {
                 sourceStates.size(),
                 targetStates.size(),
                 List.copyOf(mergeChanges),
-                List.copyOf(conflictPositions)
+                this.buildConflictZones(conflictChanges.values())
         );
+    }
+
+    List<StoredBlockChange> resolveMergeChanges(
+            VariantMergePlan plan,
+            List<MergeConflictZoneResolution> conflictResolutions
+    ) {
+        List<StoredBlockChange> resolved = new ArrayList<>(plan.mergeChanges());
+        if (!plan.hasConflicts()) {
+            return List.copyOf(resolved);
+        }
+
+        Map<String, MergeConflictResolution> resolutionMap = new LinkedHashMap<>();
+        if (conflictResolutions != null) {
+            for (MergeConflictZoneResolution resolution : conflictResolutions) {
+                if (resolution == null || resolution.zoneId() == null || resolution.zoneId().isBlank()) {
+                    continue;
+                }
+                resolutionMap.put(resolution.zoneId(), resolution.resolution());
+            }
+        }
+
+        for (MergeConflictZone zone : plan.conflictZones()) {
+            MergeConflictResolution resolution = resolutionMap.get(zone.id());
+            if (resolution == null) {
+                throw new IllegalArgumentException("Merge conflicts must be resolved before applying the merge");
+            }
+            if (resolution == MergeConflictResolution.USE_IMPORTED) {
+                resolved.addAll(zone.importedChanges());
+            }
+        }
+        return List.copyOf(resolved);
     }
 
     private void validateCompatibility(BuildProject targetProject, BuildProject sourceProject) {
@@ -234,6 +296,67 @@ public final class VariantMergeService {
             versionMap.put(version.id(), version);
         }
         return versionMap;
+    }
+
+    private List<MergeConflictZone> buildConflictZones(java.util.Collection<StoredBlockChange> conflictingChanges) {
+        if (conflictingChanges.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, List<StoredBlockChange>> changesByChunk = new LinkedHashMap<>();
+        Map<Long, ChunkPoint> chunkPoints = new LinkedHashMap<>();
+        for (StoredBlockChange change : conflictingChanges) {
+            ChunkPoint chunk = ChunkPoint.from(change.pos());
+            long chunkKey = this.chunkKey(chunk);
+            changesByChunk.computeIfAbsent(chunkKey, ignored -> new ArrayList<>()).add(change);
+            chunkPoints.putIfAbsent(chunkKey, chunk);
+        }
+
+        List<Long> sortedChunkKeys = new ArrayList<>(changesByChunk.keySet());
+        sortedChunkKeys.sort(Comparator.naturalOrder());
+        Set<Long> unvisited = new LinkedHashSet<>(sortedChunkKeys);
+        List<MergeConflictZone> zones = new ArrayList<>();
+        int zoneIndex = 1;
+        while (!unvisited.isEmpty()) {
+            long startKey = unvisited.iterator().next();
+            unvisited.remove(startKey);
+
+            Deque<Long> frontier = new ArrayDeque<>();
+            frontier.add(startKey);
+            LinkedHashSet<Long> zoneChunkKeys = new LinkedHashSet<>();
+            List<StoredBlockChange> zoneChanges = new ArrayList<>();
+            while (!frontier.isEmpty()) {
+                long currentKey = frontier.removeFirst();
+                zoneChunkKeys.add(currentKey);
+                zoneChanges.addAll(changesByChunk.getOrDefault(currentKey, List.of()));
+
+                ChunkPoint chunk = chunkPoints.get(currentKey);
+                for (long neighborKey : this.neighborChunkKeys(chunk)) {
+                    if (unvisited.remove(neighborKey)) {
+                        frontier.addLast(neighborKey);
+                    }
+                }
+            }
+
+            List<ChunkPoint> chunks = zoneChunkKeys.stream()
+                    .map(chunkPoints::get)
+                    .sorted(Comparator.comparingInt(ChunkPoint::x).thenComparingInt(ChunkPoint::z))
+                    .toList();
+            List<StoredBlockChange> sortedZoneChanges = zoneChanges.stream()
+                    .sorted(Comparator
+                            .comparingInt((StoredBlockChange change) -> change.pos().x())
+                            .thenComparingInt(change -> change.pos().y())
+                            .thenComparingInt(change -> change.pos().z()))
+                    .toList();
+            zones.add(new MergeConflictZone(
+                    "zone-" + zoneIndex,
+                    chunks,
+                    this.bounds(sortedZoneChanges),
+                    sortedZoneChanges
+            ));
+            zoneIndex += 1;
+        }
+        return List.copyOf(zones);
     }
 
     private Map<BlockPoint, StateAccumulator> collectStates(
@@ -303,6 +426,38 @@ public final class VariantMergeService {
             return false;
         }
         return left.equalsState(right);
+    }
+
+    private Bounds3i bounds(List<StoredBlockChange> changes) {
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (StoredBlockChange change : changes) {
+            BlockPoint pos = change.pos();
+            minX = Math.min(minX, pos.x());
+            minY = Math.min(minY, pos.y());
+            minZ = Math.min(minZ, pos.z());
+            maxX = Math.max(maxX, pos.x());
+            maxY = Math.max(maxY, pos.y());
+            maxZ = Math.max(maxZ, pos.z());
+        }
+        return new Bounds3i(new BlockPoint(minX, minY, minZ), new BlockPoint(maxX, maxY, maxZ));
+    }
+
+    private List<Long> neighborChunkKeys(ChunkPoint chunk) {
+        return List.of(
+                this.chunkKey(new ChunkPoint(chunk.x() - 1, chunk.z())),
+                this.chunkKey(new ChunkPoint(chunk.x() + 1, chunk.z())),
+                this.chunkKey(new ChunkPoint(chunk.x(), chunk.z() - 1)),
+                this.chunkKey(new ChunkPoint(chunk.x(), chunk.z() + 1))
+        );
+    }
+
+    private long chunkKey(ChunkPoint chunk) {
+        return (((long) chunk.x()) << 32) ^ (((long) chunk.z()) & 0xffffffffL);
     }
 
     private record StateAccumulator(StatePayload initialState, StatePayload finalState) {
