@@ -1,15 +1,11 @@
 package io.github.luma.ui.screen;
 
-import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.controller.DashboardScreenController;
-import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.state.DashboardProjectItem;
 import io.github.luma.ui.state.DashboardViewState;
-import io.github.luma.ui.state.ProjectTab;
-import io.github.luma.ui.state.ProjectViewState;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -27,25 +23,9 @@ public final class DashboardScreen extends LumaScreen {
     private final Screen parent;
     private final Minecraft client = Minecraft.getInstance();
     private final DashboardScreenController controller = new DashboardScreenController();
-    private final ProjectScreenController projectController = new ProjectScreenController();
     private final ScreenRouter router = new ScreenRouter();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private DashboardViewState state = new DashboardViewState(List.of(), "luma.status.dashboard_ready");
-    private ProjectViewState workspaceState = new ProjectViewState(
-            null,
-            List.of(),
-            List.of(),
-            List.of(),
-            null,
-            null,
-            null,
-            List.of(),
-            List.of(),
-            null,
-            new io.github.luma.domain.model.ProjectIntegrityReport(true, List.of(), List.of()),
-            ProjectTab.HISTORY,
-            "luma.status.project_ready"
-    );
 
     public DashboardScreen(Screen parent) {
         super(Component.translatable("luma.screen.dashboard.title"));
@@ -61,9 +41,6 @@ public final class DashboardScreen extends LumaScreen {
     protected void build(FlowLayout root) {
         this.state = this.controller.loadState(this.state.status());
         DashboardProjectItem workspaceItem = this.primaryWorkspace(this.workspaceProjects());
-        if (workspaceItem != null) {
-            this.workspaceState = this.projectController.loadState(workspaceItem.name(), ProjectTab.HISTORY, "", "luma.status.project_ready");
-        }
 
         root.surface(Surface.BLANK);
         root.padding(Insets.of(10));
@@ -87,7 +64,7 @@ public final class DashboardScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         frame.child(this.bodyScroll);
 
-        if (workspaceItem == null || this.workspaceState.project() == null) {
+        if (workspaceItem == null) {
             body.child(LumaUi.emptyState(
                     Component.translatable("luma.dashboard.empty_title"),
                     Component.translatable("luma.dashboard.empty")
@@ -95,8 +72,7 @@ public final class DashboardScreen extends LumaScreen {
             return;
         }
 
-        PendingChangeSummary pending = this.projectController.summarizePending(this.workspaceState.recoveryDraft());
-        body.child(this.workspaceLauncherCard(workspaceItem, pending));
+        body.child(this.workspaceLauncherCard(workspaceItem));
 
         List<DashboardProjectItem> extras = this.workspaceProjects().stream()
                 .filter(item -> !item.name().equals(workspaceItem.name()))
@@ -111,7 +87,7 @@ public final class DashboardScreen extends LumaScreen {
         this.client.setScreen(this.parent);
     }
 
-    private FlowLayout workspaceLauncherCard(DashboardProjectItem item, PendingChangeSummary pending) {
+    private FlowLayout workspaceLauncherCard(DashboardProjectItem item) {
         FlowLayout card = LumaUi.sectionCard(
                 Component.translatable("luma.dashboard.workspace_section"),
                 Component.translatable("luma.dashboard.workspace_help")
@@ -136,12 +112,12 @@ public final class DashboardScreen extends LumaScreen {
 
         if (item.hasDraft()) {
             card.child(LumaUi.accent(Component.translatable("luma.dashboard.workspace_recovery", item.draftChangeCount())));
-        } else if (pending.isEmpty()) {
+        } else if (item.draftChangeCount() <= 0) {
             card.child(LumaUi.caption(Component.translatable("luma.dashboard.pending_clean")));
         } else {
             card.child(LumaUi.caption(Component.translatable(
-                    "luma.dashboard.workspace_pending",
-                    pending.addedBlocks() + pending.removedBlocks() + pending.changedBlocks()
+                "luma.dashboard.workspace_pending",
+                    item.draftChangeCount()
             )));
         }
 
