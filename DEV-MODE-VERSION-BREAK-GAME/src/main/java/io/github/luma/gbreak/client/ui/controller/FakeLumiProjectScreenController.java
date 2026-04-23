@@ -21,7 +21,7 @@ public final class FakeLumiProjectScreenController {
                 "DEV-MODE-VERSION-BREAK-GAME",
                 this.dimensionName(client == null ? null : client.world),
                 "corrupt-preview",
-                "Demo mode: action buttons only close the Lumi screen. Restore also starts a fake glass rollback.",
+                "Project loaded. Restore, compare, and history tools are available.",
                 14,
                 3,
                 9,
