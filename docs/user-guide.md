@@ -32,7 +32,7 @@ It is meant to answer these questions in a few seconds:
 - whether anything changed
 - how to save right now
 - how to restore the latest save
-- how to open variants
+- how to open variants or share history
 
 The build block shows:
 
@@ -45,9 +45,10 @@ The primary action is `Save`.
 
 Secondary actions stay short:
 
-- `Compare to current build`
-- `Variants`
 - `Restore last save`
+- `Variants`
+- `Share`
+- `History`
 
 Below that, `History` shows recent save cards for the selected variant.
 
@@ -58,6 +59,7 @@ Each card keeps only the essentials visible:
 - small isometric preview
 - simple changed-block summary
 - `Open`
+- `Compare to current build`
 - `Restore`
 
 Rare tools like the technical graph, diagnostics, and recovery log now stay under `More`.
@@ -156,15 +158,36 @@ Use the `Variants` screen to:
 - create a new variant from a specific save
 - switch the active variant
 - compare a variant against the current build
-- export one variant as a history package
-- import a shared package as a review project
-- review and merge an imported variant into a local variant
 
 When you switch variants, Lumi restores that variant head into the map.
 
 Future saves continue from that head.
 
-Shared packages are the current `Share` MVP. Lumi exports one variant as a zip package, imports it back as a separate review project for that same project lineage, then lets you review merge conflicts before writing a merged save into the local target variant.
+## Share
+
+`Share` is the current merge-and-share MVP.
+
+Use the `Share` screen to:
+
+- import a shared package as a review project
+- review imported packages without leaving the current project
+- export one local variant as a history package
+- merge an imported variant into a local target variant
+
+Import comes first on the screen because it is the usual starting point.
+
+After a package is imported, Lumi keeps you on `Share`, selects that imported review project, and builds a merge review against the current active local variant automatically.
+
+Merge conflicts are grouped into conflict zones instead of one long raw block list.
+
+For each zone you can:
+
+- keep local
+- use imported
+- skip for now
+- show that zone in world
+
+Lumi only enables `Apply merge` when every conflict zone has a decision and the result would still bring in at least one imported change.
 
 ## Compare
 
