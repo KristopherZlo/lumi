@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "gbreakdev",
+  "version": "${version}",
+  "name": "GBreak Dev",
+  "description": "Dev-only Fabric mod that forces artificial game-breaking bugs for Lumi video capture.",
+  "authors": [
+    "Codex"
+  ],
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "io.github.luma.gbreak.GBreakDevMod"
+    ],
+    "client": [
+      "io.github.luma.gbreak.client.GBreakDevClient"
+    ]
+  },
+  "mixins": [
+    "gbreak.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "fabric-api": "*",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "owo": ">=0.13.0"
+  }
+}
