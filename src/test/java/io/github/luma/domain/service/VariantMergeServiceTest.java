@@ -5,6 +5,8 @@ import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ExternalSourceInfo;
+import io.github.luma.domain.model.MergeConflictResolution;
+import io.github.luma.domain.model.MergeConflictZoneResolution;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.StatePayload;
@@ -21,6 +23,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.Assertions;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -82,10 +85,91 @@ class VariantMergeServiceTest {
         );
 
         assertTrue(plan.hasConflicts());
+        assertEquals(1, plan.conflictZones().size());
         assertEquals(1, plan.conflictPositions().size());
-        assertEquals(new BlockPoint(4, 65, 4), plan.conflictPositions().getFirst());
+        assertEquals(new BlockPoint(4, 65, 4), plan.conflictZones().getFirst().positions().getFirst());
         assertEquals(1, plan.conflictChunkCount());
         assertTrue(plan.mergeChanges().isEmpty());
+    }
+
+    @Test
+    void planMergeGroupsNeighboringConflictChunksIntoStableZones() throws Exception {
+        UUID projectId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        ProjectLayout targetLayout = this.seedProject(layout(this.tempDir.resolve("tower-zones.mbp")), projectId, "Tower", List.of(
+                new ProjectVariant("main", "main", "v0001", "v0002", true, instant(0))
+        ));
+        ProjectLayout sourceLayout = this.seedProject(layout(this.tempDir.resolve("tower-zones-shared.mbp")), projectId, "Tower Shared", List.of(
+                new ProjectVariant("roof-pass", "Roof pass", "v0001", "v0003", true, instant(60))
+        ));
+        this.writeVersion(targetLayout, projectId, "v0001", "main", "", List.of());
+        this.writeVersion(targetLayout, projectId, "v0002", "main", "v0001", List.of(
+                new StoredBlockChange(new BlockPoint(4, 65, 4), state("minecraft:air"), state("minecraft:stone")),
+                new StoredBlockChange(new BlockPoint(20, 65, 4), state("minecraft:air"), state("minecraft:stone")),
+                new StoredBlockChange(new BlockPoint(80, 65, 80), state("minecraft:air"), state("minecraft:stone"))
+        ));
+        this.writeVersion(sourceLayout, projectId, "v0001", "main", "", List.of());
+        this.writeVersion(sourceLayout, projectId, "v0003", "roof-pass", "v0001", List.of(
+                new StoredBlockChange(new BlockPoint(4, 65, 4), state("minecraft:air"), state("minecraft:glass")),
+                new StoredBlockChange(new BlockPoint(20, 65, 4), state("minecraft:air"), state("minecraft:glass")),
+                new StoredBlockChange(new BlockPoint(80, 65, 80), state("minecraft:air"), state("minecraft:glass"))
+        ));
+
+        BuildProject targetProject = this.projectRepository.load(targetLayout).orElseThrow();
+        BuildProject sourceProject = this.projectRepository.load(sourceLayout).orElseThrow();
+        VariantMergePlan plan = this.variantMergeService.planMerge(
+                targetLayout,
+                targetProject,
+                "main",
+                sourceLayout,
+                sourceProject,
+                "roof-pass"
+        );
+
+        assertEquals(2, plan.conflictZones().size());
+        assertEquals(2, plan.conflictZones().getFirst().chunkCount());
+        assertEquals(2, plan.conflictZones().getFirst().blockCount());
+        assertEquals(new BlockPoint(4, 65, 4), plan.conflictZones().getFirst().bounds().min());
+        assertEquals(new BlockPoint(20, 65, 4), plan.conflictZones().getFirst().bounds().max());
+        assertEquals(1, plan.conflictZones().get(1).chunkCount());
+        assertEquals(new BlockPoint(80, 65, 80), plan.conflictZones().get(1).positions().getFirst());
+    }
+
+    @Test
+    void resolveMergeChangesUsesConflictResolutionsPerZone() throws Exception {
+        UUID projectId = UUID.fromString("55555555-5555-5555-5555-555555555555");
+        ProjectLayout targetLayout = this.seedTargetProject(this.tempDir.resolve("tower-resolve.mbp"), projectId, false);
+        ProjectLayout sourceLayout = this.seedProject(layout(this.tempDir.resolve("tower-resolve-shared.mbp")), projectId, "Tower Shared", List.of(
+                new ProjectVariant("roof-pass", "Roof pass", "v0001", "v0003", true, instant(60))
+        ));
+        this.writeVersion(sourceLayout, projectId, "v0001", "main", "", List.of());
+        this.writeVersion(sourceLayout, projectId, "v0003", "roof-pass", "v0001", List.of(
+                new StoredBlockChange(new BlockPoint(8, 65, 8), state("minecraft:air"), state("minecraft:oak_planks")),
+                new StoredBlockChange(new BlockPoint(4, 65, 4), state("minecraft:air"), state("minecraft:glass"))
+        ));
+        this.writeVersion(targetLayout, projectId, "v0002", "main", "v0001", List.of(
+                new StoredBlockChange(new BlockPoint(4, 65, 4), state("minecraft:air"), state("minecraft:stone"))
+        ));
+
+        BuildProject targetProject = this.projectRepository.load(targetLayout).orElseThrow();
+        BuildProject sourceProject = this.projectRepository.load(sourceLayout).orElseThrow();
+        VariantMergePlan plan = this.variantMergeService.planMerge(
+                targetLayout,
+                targetProject,
+                "main",
+                sourceLayout,
+                sourceProject,
+                "roof-pass"
+        );
+
+        assertEquals(1, plan.mergeChanges().size());
+        assertEquals(1, plan.conflictZones().size());
+        assertEquals(1, this.variantMergeService.resolveMergeChanges(plan, List.of(
+                new MergeConflictZoneResolution(plan.conflictZones().getFirst().id(), MergeConflictResolution.KEEP_LOCAL)
+        )).size());
+        assertEquals(2, this.variantMergeService.resolveMergeChanges(plan, List.of(
+                new MergeConflictZoneResolution(plan.conflictZones().getFirst().id(), MergeConflictResolution.USE_IMPORTED)
+        )).size());
+        Assertions.assertThrows(IllegalArgumentException.class, () -> this.variantMergeService.resolveMergeChanges(plan, List.of()));
     }
 
     private ProjectLayout seedTargetProject(Path root, UUID projectId, boolean conflict) throws Exception {
