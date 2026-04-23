@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.HistoryPackageImportResult;
+import io.github.luma.domain.model.ImportedHistoryProjectSummary;
 import io.github.luma.domain.model.ProjectArchiveExportResult;
 import io.github.luma.domain.model.ProjectArchiveManifest;
 import io.github.luma.domain.model.ProjectVariant;
@@ -135,6 +136,33 @@ public final class HistoryShareService {
         } finally {
             this.deleteTree(tempProjectsRoot);
         }
+    }
+
+    public List<ImportedHistoryProjectSummary> listImportedProjects(MinecraftServer server, String targetProjectName) throws IOException {
+        BuildProject targetProject = this.projectService.loadProject(server, targetProjectName);
+        List<ImportedHistoryProjectSummary> importedProjects = new java.util.ArrayList<>();
+        for (BuildProject candidate : this.projectService.listProjects(server)) {
+            if (!candidate.id().equals(targetProject.id()) || candidate.name().equals(targetProject.name())) {
+                continue;
+            }
+            ProjectLayout layout = this.projectService.resolveLayout(server, candidate.name());
+            ProjectVariant variant = this.variantRepository.loadAll(layout).stream()
+                    .filter(item -> item.id().equals(candidate.activeVariantId()))
+                    .findFirst()
+                    .orElse(null);
+            if (variant == null) {
+                continue;
+            }
+            importedProjects.add(new ImportedHistoryProjectSummary(
+                    candidate.name(),
+                    variant.id(),
+                    variant.name(),
+                    variant.headVersionId(),
+                    candidate.updatedAt()
+            ));
+        }
+        importedProjects.sort(Comparator.comparing(ImportedHistoryProjectSummary::updatedAt).reversed());
+        return List.copyOf(importedProjects);
     }
 
     private String archiveFileName(String projectName, String variantName, Instant now) {
