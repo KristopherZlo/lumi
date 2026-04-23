@@ -156,10 +156,15 @@ Use the `Variants` screen to:
 - create a new variant from a specific save
 - switch the active variant
 - compare a variant against the current build
+- export one variant as a history package
+- import a shared package as a review project
+- review and merge an imported variant into a local variant
 
 When you switch variants, Lumi restores that variant head into the map.
 
 Future saves continue from that head.
+
+Shared packages are the current `Share` MVP. Lumi exports one variant as a zip package, imports it back as a separate review project for that same project lineage, then lets you review merge conflicts before writing a merged save into the local target variant.
 
 ## Compare
 
