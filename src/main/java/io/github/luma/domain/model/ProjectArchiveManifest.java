@@ -5,6 +5,7 @@ import java.util.List;
 
 public record ProjectArchiveManifest(
         int schemaVersion,
+        ProjectArchiveScope scope,
         String projectName,
         String projectFolderName,
         String projectId,
@@ -13,5 +14,9 @@ public record ProjectArchiveManifest(
         List<ProjectArchiveEntry> entries
 ) {
 
-    public static final int CURRENT_SCHEMA_VERSION = 1;
+    public static final int CURRENT_SCHEMA_VERSION = 2;
+
+    public ProjectArchiveScope scopeOrDefault() {
+        return this.scope == null ? ProjectArchiveScope.project() : this.scope;
+    }
 }

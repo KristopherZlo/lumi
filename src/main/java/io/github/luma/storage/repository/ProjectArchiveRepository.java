@@ -4,6 +4,9 @@ import com.google.gson.JsonSyntaxException;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ProjectArchiveEntry;
 import io.github.luma.domain.model.ProjectArchiveManifest;
+import io.github.luma.domain.model.ProjectArchiveScope;
+import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.storage.GsonProvider;
 import io.github.luma.storage.ProjectLayout;
 import java.io.IOException;
@@ -17,6 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +44,44 @@ public final class ProjectArchiveRepository {
         List<ProjectArchiveEntry> entries = this.collectEntries(layout, includePreviews);
         ProjectArchiveManifest manifest = new ProjectArchiveManifest(
                 ProjectArchiveManifest.CURRENT_SCHEMA_VERSION,
+                ProjectArchiveScope.project(),
+                project.name(),
+                layout.root().getFileName().toString(),
+                project.id().toString(),
+                Instant.now(),
+                includePreviews,
+                entries
+        );
+
+        StorageIo.writeAtomically(archiveFile, output -> {
+            try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
+                zip.putNextEntry(new ZipEntry(MANIFEST_ENTRY));
+                OutputStreamWriter writer = new OutputStreamWriter(zip, StandardCharsets.UTF_8);
+                GsonProvider.compactGson().toJson(manifest, writer);
+                writer.flush();
+                zip.closeEntry();
+                for (ProjectArchiveEntry entry : entries) {
+                    zip.putNextEntry(new ZipEntry(entry.path()));
+                    Files.copy(this.resolveSource(layout, entry.path()), zip);
+                    zip.closeEntry();
+                }
+            }
+        });
+        return manifest;
+    }
+
+    public ProjectArchiveManifest exportVariantArchive(
+            ProjectLayout layout,
+            BuildProject project,
+            ProjectVariant variant,
+            List<ProjectVersion> versions,
+            Path archiveFile,
+            boolean includePreviews
+    ) throws IOException {
+        List<ProjectArchiveEntry> entries = this.collectVariantEntries(layout, variant, versions, includePreviews);
+        ProjectArchiveManifest manifest = new ProjectArchiveManifest(
+                ProjectArchiveManifest.CURRENT_SCHEMA_VERSION,
+                ProjectArchiveScope.variant(variant),
                 project.name(),
                 layout.root().getFileName().toString(),
                 project.id().toString(),
@@ -158,6 +200,44 @@ public final class ProjectArchiveRepository {
         return List.copyOf(entries);
     }
 
+    private List<ProjectArchiveEntry> collectVariantEntries(
+            ProjectLayout layout,
+            ProjectVariant variant,
+            List<ProjectVersion> versions,
+            boolean includePreviews
+    ) throws IOException {
+        Map<String, ProjectVersion> versionMap = new LinkedHashMap<>();
+        for (ProjectVersion version : versions) {
+            versionMap.put(version.id(), version);
+        }
+
+        LinkedHashMap<String, ProjectArchiveEntry> entries = new LinkedHashMap<>();
+        this.putEntry(entries, this.requiredEntry(layout.projectFile(), PROJECT_PREFIX + "project.json"));
+        this.putEntry(entries, this.requiredEntry(layout.variantsFile(), PROJECT_PREFIX + "variants.json"));
+        for (ProjectVersion version : this.lineageVersions(versionMap, variant.headVersionId())) {
+            this.putEntry(entries, this.requiredEntry(layout.versionFile(version.id()), PROJECT_PREFIX + "versions/" + version.id() + ".json"));
+            for (String patchId : version.patchIds()) {
+                this.putEntry(entries, this.requiredEntry(layout.patchMetaFile(patchId), PROJECT_PREFIX + "patches/" + patchId + ".meta.json"));
+                this.putEntry(entries, this.requiredEntry(layout.patchDataFile(patchId), PROJECT_PREFIX + "patches/" + patchId + ".bin.lz4"));
+            }
+            if (version.snapshotId() != null && !version.snapshotId().isBlank()) {
+                this.putEntry(entries, this.requiredEntry(layout.snapshotFile(version.snapshotId()), PROJECT_PREFIX + "snapshots/" + version.snapshotId() + ".bin.lz4"));
+            }
+            if (includePreviews && version.preview() != null && version.preview().fileName() != null && !version.preview().fileName().isBlank()) {
+                Path previewFile = layout.previewFile(version.id());
+                if (Files.exists(previewFile)) {
+                    this.putEntry(entries, this.optionalEntry(previewFile, PROJECT_PREFIX + "previews/" + previewFile.getFileName()));
+                }
+            }
+        }
+        this.collectDirectoryEntries(layout.cacheDir().resolve("baseline-chunks"), BASELINE_PREFIX, entries);
+        Path journalFile = layout.recoveryJournalFile();
+        if (Files.exists(journalFile)) {
+            this.putEntry(entries, this.optionalEntry(journalFile, PROJECT_PREFIX + "recovery/journal.json"));
+        }
+        return List.copyOf(entries.values());
+    }
+
     private void collectDirectoryEntries(Path directory, String prefix, List<ProjectArchiveEntry> entries) throws IOException {
         if (!Files.exists(directory)) {
             return;
@@ -166,6 +246,18 @@ public final class ProjectArchiveRepository {
             for (Path file : stream.filter(Files::isRegularFile).sorted().toList()) {
                 String relative = directory.relativize(file).toString().replace('\\', '/');
                 entries.add(this.optionalEntry(file, prefix + relative));
+            }
+        }
+    }
+
+    private void collectDirectoryEntries(Path directory, String prefix, Map<String, ProjectArchiveEntry> entries) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
+        }
+        try (var stream = Files.walk(directory)) {
+            for (Path file : stream.filter(Files::isRegularFile).sorted().toList()) {
+                String relative = directory.relativize(file).toString().replace('\\', '/');
+                this.putEntry(entries, this.optionalEntry(file, prefix + relative));
             }
         }
     }
@@ -183,6 +275,10 @@ public final class ProjectArchiveRepository {
 
     private Path resolveSource(ProjectLayout layout, String archivePath) {
         return layout.root().resolve(this.projectRelativePath(archivePath));
+    }
+
+    private void putEntry(Map<String, ProjectArchiveEntry> entries, ProjectArchiveEntry entry) {
+        entries.putIfAbsent(entry.path(), entry);
     }
 
     private String projectRelativePath(String archivePath) {
@@ -212,6 +308,19 @@ public final class ProjectArchiveRepository {
         Map<String, ZipEntry> entries = new HashMap<>();
         zip.stream().forEach(entry -> entries.put(entry.getName(), entry));
         return entries;
+    }
+
+    private List<ProjectVersion> lineageVersions(Map<String, ProjectVersion> versionMap, String headVersionId) {
+        List<ProjectVersion> reversed = new ArrayList<>();
+        ProjectVersion cursor = headVersionId == null || headVersionId.isBlank() ? null : versionMap.get(headVersionId);
+        while (cursor != null) {
+            reversed.add(cursor);
+            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
+                    ? null
+                    : versionMap.get(cursor.parentVersionId());
+        }
+        reversed.sort(Comparator.comparing(ProjectVersion::createdAt));
+        return List.copyOf(reversed);
     }
 
     private void deleteTree(Path root) throws IOException {
