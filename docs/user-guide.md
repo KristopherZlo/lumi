@@ -213,10 +213,11 @@ The compare screen keeps manual `From` and `To` fields, but the primary output i
 
 It also has presets for common flows like parent, selected version, and active head.
 
-`Highlight in world` turns on a client-side overlay for changed positions.
+Running `Compare` now turns on the client-side world highlight for the resolved diff immediately.
 Press `H` to hide or show the current overlay without rebuilding the comparison.
 Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
 Dense diff regions render as an exposed translucent shell, so nearby changes stay readable instead of stacking into a solid color slab.
+If one side of the comparison is the `current` build, that active highlight refreshes automatically while you keep editing.
 If compare highlight is not active, holding `Alt` shows the latest 10 tracked Lumi actions instead, fading from the newest action to older ones.
 
 The overlay gives priority to changes near the camera.

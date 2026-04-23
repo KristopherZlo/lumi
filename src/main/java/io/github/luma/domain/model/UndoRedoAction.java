@@ -1,10 +1,12 @@
 package io.github.luma.domain.model;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
 import net.minecraft.core.BlockPos;
 
 /**
@@ -67,6 +69,36 @@ public final class UndoRedoAction {
             this.changes.put(key, merged);
         }
         this.updatedAt = now;
+    }
+
+    public boolean canAbsorbRelatedChange(
+            String dimensionId,
+            StoredBlockChange change,
+            Instant now,
+            Duration maxIdle,
+            int chunkRadius
+    ) {
+        if (change == null || change.isNoOp() || now == null || maxIdle == null || this.changes.isEmpty()) {
+            return false;
+        }
+        if (!Objects.equals(this.dimensionId, dimensionId)) {
+            return false;
+        }
+        if (Duration.between(this.updatedAt, now).compareTo(maxIdle) > 0) {
+            return false;
+        }
+
+        int targetChunkX = change.pos().x() >> 4;
+        int targetChunkZ = change.pos().z() >> 4;
+        for (StoredBlockChange existing : this.changes.values()) {
+            int chunkX = existing.pos().x() >> 4;
+            int chunkZ = existing.pos().z() >> 4;
+            if (Math.abs(chunkX - targetChunkX) <= chunkRadius
+                    && Math.abs(chunkZ - targetChunkZ) <= chunkRadius) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean isEmpty() {

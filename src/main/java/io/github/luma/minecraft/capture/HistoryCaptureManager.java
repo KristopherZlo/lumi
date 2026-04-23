@@ -48,6 +48,7 @@ public final class HistoryCaptureManager {
 
     private static final HistoryCaptureManager INSTANCE = new HistoryCaptureManager();
     private static final Duration ACTIVE_DRAFT_FLUSH_INTERVAL = Duration.ofSeconds(3);
+    private static final Duration SECONDARY_ACTION_JOIN_WINDOW = Duration.ofSeconds(10);
     private static final int SECONDARY_SOURCE_JOIN_RADIUS = 2;
     private static final int STARTUP_CAPTURE_TRACE_LIMIT = 32;
     private static final int CAPTURE_SUMMARY_ENTRY_LIMIT = 4;
@@ -540,17 +541,31 @@ public final class HistoryCaptureManager {
         if (change == null || change.isNoOp()) {
             return;
         }
-        if (!WorldMutationContext.currentAccessAllowed() || WorldMutationContext.currentActionId().isBlank()) {
+
+        String actionId = WorldMutationContext.currentActionId();
+        if (WorldMutationContext.currentAccessAllowed() && !actionId.isBlank()) {
+            UndoRedoHistoryManager.getInstance().recordChange(
+                    trackedProject.project().id().toString(),
+                    level.dimension().identifier().toString(),
+                    actionId,
+                    WorldMutationContext.currentActor(),
+                    change,
+                    now
+            );
             return;
         }
 
-        UndoRedoHistoryManager.getInstance().recordChange(
+        if (this.isExplicitRootSource(WorldMutationContext.currentSource())) {
+            return;
+        }
+
+        UndoRedoHistoryManager.getInstance().recordRelatedChange(
                 trackedProject.project().id().toString(),
                 level.dimension().identifier().toString(),
-                WorldMutationContext.currentActionId(),
-                WorldMutationContext.currentActor(),
                 change,
-                now
+                now,
+                SECONDARY_ACTION_JOIN_WINDOW,
+                SECONDARY_SOURCE_JOIN_RADIUS
         );
     }
 

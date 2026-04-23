@@ -20,6 +20,7 @@ import net.minecraft.world.phys.shapes.Shapes;
 
 public final class CompareOverlayRenderer {
 
+    private static final String CURRENT_WORLD_REFERENCE = "current";
     private static final int MAX_RENDERED_BLOCKS = 2048;
     private static final float FILL_ALPHA = 48.0F;
     private static final float OUTLINE_ALPHA = 0.9F;
@@ -32,9 +33,19 @@ public final class CompareOverlayRenderer {
     }
 
     public static void show(String leftVersionId, String rightVersionId, List<DiffBlockEntry> changedBlocks, boolean debugEnabled) {
+        show("", leftVersionId, rightVersionId, changedBlocks, debugEnabled);
+    }
+
+    public static void show(
+            String projectName,
+            String leftVersionId,
+            String rightVersionId,
+            List<DiffBlockEntry> changedBlocks,
+            boolean debugEnabled
+    ) {
         boolean resolvedDebug = debugEnabled || LumaDebugLog.globalEnabled();
         List<DiffBlockEntry> resolvedBlocks = changedBlocks == null ? List.of() : List.copyOf(changedBlocks);
-        ACTIVE_STATE.set(new OverlayState(leftVersionId, rightVersionId, resolvedBlocks, resolvedDebug, true));
+        ACTIVE_STATE.set(new OverlayState(projectName, leftVersionId, rightVersionId, resolvedBlocks, resolvedDebug, true));
         if (debugEnabled || LumaDebugLog.globalEnabled()) {
             LumaDebugLog.log(
                     "compare-overlay",
@@ -70,6 +81,43 @@ public final class CompareOverlayRenderer {
 
     public static boolean visible() {
         return active();
+    }
+
+    public static RefreshRequest refreshRequest() {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null
+                ? null
+                : new RefreshRequest(
+                        state.projectName(),
+                        state.leftVersionId(),
+                        state.rightVersionId(),
+                        state.debugEnabled(),
+                        state.visible()
+                );
+    }
+
+    public static void refresh(
+            String projectName,
+            String leftVersionId,
+            String rightVersionId,
+            List<DiffBlockEntry> changedBlocks,
+            boolean debugEnabled
+    ) {
+        OverlayState current = ACTIVE_STATE.get();
+        if (current == null) {
+            show(projectName, leftVersionId, rightVersionId, changedBlocks, debugEnabled);
+            return;
+        }
+
+        boolean resolvedDebug = debugEnabled || current.debugEnabled() || LumaDebugLog.globalEnabled();
+        ACTIVE_STATE.set(new OverlayState(
+                projectName,
+                leftVersionId,
+                rightVersionId,
+                changedBlocks == null ? List.of() : List.copyOf(changedBlocks),
+                resolvedDebug,
+                current.visible()
+        ));
     }
 
     public static boolean toggleVisibility() {
@@ -117,6 +165,11 @@ public final class CompareOverlayRenderer {
 
     static boolean xrayEnabled() {
         return XRAY_ENABLED.get();
+    }
+
+    static int changedBlockCount() {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null ? 0 : state.changedBlocks().size();
     }
 
     public static void render(WorldRenderContext context) {
@@ -272,8 +325,23 @@ public final class CompareOverlayRenderer {
     private record RankedEntry(DiffBlockEntry entry, double distanceSquared) {
     }
 
+    public record RefreshRequest(
+            String projectName,
+            String leftVersionId,
+            String rightVersionId,
+            boolean debugEnabled,
+            boolean visible
+    ) {
+
+        public boolean involvesCurrentWorld() {
+            return CURRENT_WORLD_REFERENCE.equals(this.leftVersionId)
+                    || CURRENT_WORLD_REFERENCE.equals(this.rightVersionId);
+        }
+    }
+
     private static final class OverlayState {
 
+        private final String projectName;
         private final String leftVersionId;
         private final String rightVersionId;
         private final List<DiffBlockEntry> changedBlocks;
@@ -286,6 +354,7 @@ public final class CompareOverlayRenderer {
         private List<CompareOverlaySurfaceResolver.SurfaceBlock> cachedVisibleSurfaceBlocks = List.of();
 
         private OverlayState(
+                String projectName,
                 String leftVersionId,
                 String rightVersionId,
                 List<DiffBlockEntry> changedBlocks,
@@ -293,6 +362,7 @@ public final class CompareOverlayRenderer {
                 boolean visible
         ) {
             this(
+                    projectName,
                     leftVersionId,
                     rightVersionId,
                     changedBlocks,
@@ -303,6 +373,7 @@ public final class CompareOverlayRenderer {
         }
 
         private OverlayState(
+                String projectName,
                 String leftVersionId,
                 String rightVersionId,
                 List<DiffBlockEntry> changedBlocks,
@@ -310,12 +381,17 @@ public final class CompareOverlayRenderer {
                 boolean debugEnabled,
                 boolean visible
         ) {
+            this.projectName = projectName == null ? "" : projectName;
             this.leftVersionId = leftVersionId;
             this.rightVersionId = rightVersionId;
             this.changedBlocks = List.copyOf(changedBlocks);
             this.changedBlockPositions = changedBlockPositions;
             this.debugEnabled = debugEnabled;
             this.visible = visible;
+        }
+
+        private String projectName() {
+            return this.projectName;
         }
 
         private String leftVersionId() {
@@ -336,6 +412,7 @@ public final class CompareOverlayRenderer {
 
         private synchronized OverlayState withVisible(boolean nextVisible) {
             OverlayState replacement = new OverlayState(
+                    this.projectName,
                     this.leftVersionId,
                     this.rightVersionId,
                     this.changedBlocks,
