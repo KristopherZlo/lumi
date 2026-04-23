@@ -2,6 +2,8 @@
 
 Commands are the fallback interface for Lumi. The menu flow is the primary UX, but the core mandatory workflow is also available from commands.
 
+All `/lumi` commands now require an operator-level player permission set. In singleplayer, that means cheats must be enabled for the world.
+
 ## Project commands
 
 ### List projects

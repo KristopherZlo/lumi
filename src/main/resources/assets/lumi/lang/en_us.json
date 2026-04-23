@@ -1,5 +1,7 @@
 {
   "key.category.lumi.general": "Lumi",
+  "key.lumi.undo": "Undo last Lumi action",
+  "key.lumi.redo": "Redo last Lumi action",
   "key.lumi.open_dashboard": "Open current workspace",
   "key.lumi.toggle_compare_overlay": "Show or hide compare highlight",
   "key.lumi.compare_overlay_xray": "See compare highlight through blocks",
@@ -347,6 +349,7 @@
   "luma.settings.error_positive_decimal": "Enter a number greater than zero.",
 
   "luma.status.singleplayer_only": "This workflow is currently supported in local singleplayer only.",
+  "luma.status.admin_required": "Lumi requires operator rights or cheats enabled in this world.",
   "luma.status.dashboard_ready": "Dashboard loaded.",
   "luma.status.dashboard_failed": "Dashboard could not be loaded.",
   "luma.status.project_ready": "Project loaded.",
@@ -355,6 +358,10 @@
   "luma.status.version_saved": "Version saved.",
   "luma.status.version_restored": "Version restored.",
   "luma.status.restore_started": "Restore started. Lumi is applying blocks in the background.",
+  "luma.status.undo_started": "Undo started. Lumi is rolling back the latest tracked action.",
+  "luma.status.redo_started": "Redo started. Lumi is replaying the latest tracked action.",
+  "luma.status.undo_unavailable": "There is no tracked Lumi action to undo here.",
+  "luma.status.redo_unavailable": "There is no tracked Lumi action to redo here.",
   "luma.status.initial_restore_confirmation_required": "Confirm restore to Initial before Lumi changes the world.",
   "luma.status.variant_created": "Variant created.",
   "luma.status.variant_switched": "Variant switched.",

@@ -28,6 +28,7 @@ Important model groups:
 - user-visible summaries: `ChangeStats`, `PendingChangeSummary`, `VersionDiff`, `MaterialDeltaEntry`
 - operation state: `OperationHandle`, `OperationProgress`, `OperationSnapshot`, `OperationStage`, `WorkspaceHudSnapshot`
 - mutable capture runtime: `TrackedChangeBuffer`, `CaptureSessionState`
+- mutable live action runtime: `UndoRedoAction`, `UndoRedoActionStack`
 
 ### Domain service layer
 
@@ -59,10 +60,12 @@ These services should express product rules, not raw Minecraft side effects or r
 Important adapters:
 
 - `HistoryCaptureManager`: captures explicit tracked actions immediately, keeps per-project causal envelopes, and drains dirty-chunk stabilization before drafts are persisted or consumed
+- `UndoRedoHistoryManager`: keeps the in-memory per-project action stack that powers live undo/redo and the temporary recent-action overlay
 - `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
 - `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
+- `LumaAccessControl`: centralizes the operator/cheats gate for commands, UI entry points, and tracked world actions
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
@@ -100,6 +103,7 @@ Responsibilities are split as follows:
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
 - project-facing screens poll lightweight operation snapshots every 10 client ticks so conflicting mutation buttons unlock as soon as the operation becomes terminal, while status text can stay visible briefly
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, prioritizes the nearest changed blocks to the current camera position, and renders only exposed overlay faces so translucent fill does not self-stack through dense diff volumes
+- `RecentChangesOverlayRenderer` renders the latest tracked Lumi actions when `Alt` is held and the compare overlay is not active
 - `ShareScreen` now carries the advanced `Share & Merge` flow: import and export history packages, review imported packages, resolve merge conflict zones, and apply a merged save without cluttering the home or variants screens
 
 ## Core runtime flows
@@ -114,6 +118,7 @@ Responsibilities are split as follows:
 6. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
 7. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft.
 8. Idle or dirty sessions are flushed into recovery storage.
+9. Authorized player-root actions also append into the in-memory undo/redo stack so Lumi can replay them backward or forward without using the tick-thread decode path.
 
 Important invariants:
 
@@ -121,6 +126,7 @@ Important invariants:
 - the latest new state wins
 - no-op edits are removed from the buffer
 - restore-originated mutations never re-enter tracked history
+- undo/redo reuses prepared world operations and then adjusts the pending draft separately, so internal replay does not create duplicate capture events
 
 ## Save flow
 

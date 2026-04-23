@@ -112,8 +112,11 @@ Controllers own service access and loading logic. Screens keep transient UI stat
 Current UX assumptions:
 
 - pressing `U` opens the current dimension workspace directly
+- pressing `Alt+Z` starts undo for the latest tracked Lumi action in the current dimension workspace
+- pressing `Alt+Y` starts redo for the latest tracked Lumi action in the current dimension workspace
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
 - holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
+- holding `Alt` while compare highlight is inactive shows the latest 10 tracked Lumi actions with a fading temporary overlay
 - the dashboard is now secondary navigation from the workspace header
 - the workspace home screen is product-first: current build state, save, restore last save, `History / Variants / Share`, then recent saves
 - low-frequency tools such as technical graph, diagnostics, and raw info live behind `More`
@@ -124,7 +127,9 @@ Current UX assumptions:
 Current runtime history behavior:
 
 - `HistoryCaptureManager` still records explicit tracked block changes inside project bounds, including TNT ignition, explosions, piston movement, and selected mob block mutations, while still excluding Lumi's own restore applications.
+- Authorized player-root actions are mirrored into `UndoRedoHistoryManager`, which keeps a bounded per-project action stack for live undo/redo and the recent-action overlay.
 - Automatic dimension project bootstrap is limited to explicit builder-driven sources. Ambient fluid, fire, growth, block-update, and mob mutations cannot create a workspace on world load by themselves.
+- Client controllers and commands now require an operator-level permission set. In singleplayer, the practical requirement is cheats enabled for the world owner.
 - New live capture sessions are also limited to explicit builder-driven sources. Whole-dimension sessions now seed a causal chunk envelope from those root edits, then capture per-chunk session baselines lazily as compact chunk snapshot payloads only when a chunk inside that envelope first needs stabilization.
 - First-touch whole-dimension tracking no longer samples the live world block-by-block. The server thread copies loaded chunk section palettes and real block-entity tags once, queues async baseline persistence, and returns to normal capture immediately.
 - For whole-dimension workspaces, fluid spread and falling blocks no longer append directly into the draft. They only re-mark chunks inside that causal envelope as dirty, and `SessionStabilizationService` later rebuilds the final chunk diff by comparing compact chunk snapshots instead of walking the world through `level.getBlockState()`.
