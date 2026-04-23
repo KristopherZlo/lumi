@@ -185,6 +185,8 @@ Run client:
 .\gradlew.bat runClient
 ```
 
+Dev launch tasks automatically remove packaged `lumi-*.jar` and legacy `luma-*.jar` copies from the local `run/*/mods` folders so Loom only loads the compiled source-set output.
+
 Run test client:
 
 ```powershell
@@ -197,7 +199,7 @@ Run tests:
 .\gradlew.bat test
 ```
 
-Artifacts go to `build/libs/`.
+Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` artifacts so the folder only keeps the current `lumi-*` outputs.
 
 ## Quick Start
 

@@ -79,6 +79,54 @@ configurations.named('testRuntimeOnly') {
     extendsFrom configurations.clientRuntimeOnly
 }
 
+def legacyArtifactPatterns = ['luma-*.jar', 'luma-*.pom', 'luma-*.module']
+def devRuntimeSelfModPatterns = ['luma-*.jar', 'lumi-*.jar']
+
+def deleteMatchingFiles = { File directory, Collection<String> includes ->
+    if (!directory.exists()) {
+        return []
+    }
+
+    def matchingFiles = fileTree(directory) {
+        includes.each { include(it) }
+    }.files.toList()
+
+    if (!matchingFiles.isEmpty()) {
+        delete(matchingFiles)
+    }
+
+    return matchingFiles
+}
+
+def purgeLegacyArtifacts = tasks.register('purgeLegacyArtifacts') {
+    group = 'build setup'
+    description = 'Removes stale legacy Luma build artifacts after the Lumi rename.'
+
+    doLast {
+        def removedFiles = deleteMatchingFiles(layout.buildDirectory.dir('libs').get().asFile, legacyArtifactPatterns)
+        removedFiles.each { file ->
+            logger.lifecycle("Removed stale legacy artifact {}", file)
+        }
+    }
+}
+
+def purgeDevRuntimeSelfMods = tasks.register('purgeDevRuntimeSelfMods') {
+    group = 'fabric'
+    description = 'Removes packaged Lumi or legacy Luma jars from dev run mods folders before launch.'
+
+    doLast {
+        [
+                layout.projectDirectory.dir('run/mods').asFile,
+                layout.projectDirectory.dir('run/test-client/mods').asFile
+        ].each { directory ->
+            def removedFiles = deleteMatchingFiles(directory, devRuntimeSelfModPatterns)
+            removedFiles.each { file ->
+                logger.lifecycle("Removed packaged self-mod from dev run directory {}", file)
+            }
+        }
+    }
+}
+
 def testClientModVersions = [
         sodium               : 'mc1.21.11-0.8.7-fabric',
         ferriteCore          : '8.2.0-fabric',
@@ -192,10 +240,20 @@ tasks.named('runTestClient').configure {
     dependsOn(tasks.named('installTestClientMods'))
 }
 
+tasks.matching { it.name in ['jar', 'sourcesJar', 'remapJar', 'remapSourcesJar'] }.configureEach {
+    dependsOn(purgeLegacyArtifacts)
+}
+
 tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
     jvmArgs.add('-Dfabric.client.gametest')
     jvmArgs.add('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
     useXVFB = true
+}
+
+['runClient', 'runTestClient', 'runGameTest', 'runClientGameTest', 'runProductionClientGameTest'].each { taskName ->
+    tasks.named(taskName).configure {
+        dependsOn(purgeDevRuntimeSelfMods)
+    }
 }
 
 def targetJavaVersion = 21

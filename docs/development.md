@@ -21,6 +21,8 @@ Run the normal client dev profile:
 .\gradlew.bat runClient
 ```
 
+`runClient`, `runTestClient`, and the GameTest launch tasks now remove packaged `lumi-*.jar` and legacy `luma-*.jar` copies from `run/*/mods` before launch. This keeps Loom's dev runtime on the compiled source sets and avoids duplicate self-mod loads after the `luma -> lumi` rename.
+
 Run the dedicated test client profile:
 
 ```powershell
@@ -164,6 +166,7 @@ Current world-apply runtime types:
 - Support libraries used by the mod are included through Loom jar-in-jar configuration.
 - The textured preview path now uses Lumi's own layered client mesh builder on top of the `1.21.11` render APIs instead of an external meshing runtime dependency.
 - Fabric API remains an external required mod.
+- Packaging tasks prune stale legacy `luma-*` outputs from `build/libs` before writing the current `lumi-*` artifacts.
 
 ## Storage references
 
