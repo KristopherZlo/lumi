@@ -8,6 +8,8 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.storage.ProjectLayout;
@@ -89,12 +91,17 @@ public final class HistoryCaptureManager {
             CompoundTag newBlockEntity
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (!shouldCaptureMutation(source)) {
+        if (!shouldCaptureMutation(source) || !this.canUseMutationSource(source)) {
             return;
         }
 
         try {
             Instant now = Instant.now();
+            StoredBlockChange capturedChange = new StoredBlockChange(
+                    io.github.luma.domain.model.BlockPoint.from(pos),
+                    StatePayload.capture(oldState, oldBlockEntity),
+                    StatePayload.capture(newState, newBlockEntity)
+            );
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
             if (matchingProjects.isEmpty()) {
                 if (!allowsAutomaticProjectCreation(source)) {
@@ -182,7 +189,8 @@ public final class HistoryCaptureManager {
                     session.markEnvelopeChunkDirty(chunk);
                 }
                 int pendingBefore = buffer.size();
-                buffer.recordChange(pos, oldState, newState, oldBlockEntity, newBlockEntity, now);
+                buffer.addChange(capturedChange, now);
+                this.recordUndoRedoAction(trackedProject, level, capturedChange, now);
                 int pendingAfter = buffer.size();
                 CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
                 diagnostics.record(source, pos, oldState, newState, oldBlockEntity != null, newBlockEntity != null);
@@ -216,6 +224,63 @@ public final class HistoryCaptureManager {
             }
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Failed to capture block change at {} in {}", pos, level.dimension().identifier(), exception);
+        }
+    }
+
+    /**
+     * Reconciles the pending version draft after an internal undo/redo world
+     * operation has already applied the same state transition to the world.
+     */
+    public void applyUndoRedoAdjustments(
+            MinecraftServer server,
+            String projectId,
+            List<StoredBlockChange> changes,
+            String actor,
+            Instant now
+    ) throws IOException {
+        if (changes == null || changes.isEmpty()) {
+            return;
+        }
+
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        if (trackedProject == null) {
+            return;
+        }
+
+        TrackedChangeBuffer buffer = this.getOrCreateBuffer(
+                trackedProject,
+                io.github.luma.domain.model.WorldMutationSource.PLAYER,
+                now
+        );
+        CaptureSessionState session = this.activeSessions.get(projectId);
+        for (StoredBlockChange change : changes) {
+            buffer.addChange(change, now);
+            if (session != null) {
+                session.addRootChunk(ChunkPoint.from(change.pos()));
+            }
+        }
+
+        if (buffer.isEmpty()) {
+            this.activeBuffers.remove(projectId);
+            this.activeSessions.remove(projectId);
+            this.dirtySessions.remove(projectId);
+            this.lastDraftFlushes.remove(projectId);
+            this.clearSessionDiagnostics(projectId);
+            this.persistenceCoordinator.deleteDraft(
+                    trackedProject.layout(),
+                    projectId,
+                    trackedProject.project().name()
+            );
+            LumaMod.LOGGER.info("Discarded empty active buffer for project {} after undo/redo", trackedProject.project().name());
+        } else {
+            this.dirtySessions.add(projectId);
+            LumaMod.LOGGER.info(
+                    "Adjusted pending buffer for project {} after undo/redo by {} with {} changes; pending={}",
+                    trackedProject.project().name(),
+                    actor == null || actor.isBlank() ? "player" : actor,
+                    changes.size(),
+                    buffer.size()
+            );
         }
     }
 
@@ -460,6 +525,33 @@ public final class HistoryCaptureManager {
 
     public void invalidateProjectCache(MinecraftServer server) {
         this.projectCaches.remove(this.cacheKey(server));
+    }
+
+    private boolean canUseMutationSource(io.github.luma.domain.model.WorldMutationSource source) {
+        return !this.isExplicitRootSource(source) || WorldMutationContext.currentAccessAllowed();
+    }
+
+    private void recordUndoRedoAction(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            StoredBlockChange change,
+            Instant now
+    ) {
+        if (change == null || change.isNoOp()) {
+            return;
+        }
+        if (!WorldMutationContext.currentAccessAllowed() || WorldMutationContext.currentActionId().isBlank()) {
+            return;
+        }
+
+        UndoRedoHistoryManager.getInstance().recordChange(
+                trackedProject.project().id().toString(),
+                level.dimension().identifier().toString(),
+                WorldMutationContext.currentActionId(),
+                WorldMutationContext.currentActor(),
+                change,
+                now
+        );
     }
 
     private TrackedChangeBuffer getOrCreateBuffer(

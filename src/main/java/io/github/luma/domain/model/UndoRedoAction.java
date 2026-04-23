@@ -1,0 +1,125 @@
+package io.github.luma.domain.model;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import net.minecraft.core.BlockPos;
+
+/**
+ * One temporal player action that can be applied backward or forward.
+ */
+public final class UndoRedoAction {
+
+    private final String id;
+    private final String actor;
+    private final String projectId;
+    private final String dimensionId;
+    private final Instant startedAt;
+    private Instant updatedAt;
+    private final LinkedHashMap<Long, StoredBlockChange> changes = new LinkedHashMap<>();
+
+    public UndoRedoAction(
+            String id,
+            String actor,
+            String projectId,
+            String dimensionId,
+            Instant startedAt,
+            Instant updatedAt
+    ) {
+        this.id = id;
+        this.actor = actor == null || actor.isBlank() ? "player" : actor;
+        this.projectId = projectId;
+        this.dimensionId = dimensionId;
+        this.startedAt = startedAt;
+        this.updatedAt = updatedAt;
+    }
+
+    public UndoRedoAction copy() {
+        UndoRedoAction copy = new UndoRedoAction(
+                this.id,
+                this.actor,
+                this.projectId,
+                this.dimensionId,
+                this.startedAt,
+                this.updatedAt
+        );
+        for (StoredBlockChange change : this.changes.values()) {
+            copy.changes.put(key(change), change);
+        }
+        return copy;
+    }
+
+    public void recordChange(StoredBlockChange change, Instant now) {
+        if (change == null) {
+            return;
+        }
+
+        long key = key(change);
+        StoredBlockChange current = this.changes.get(key);
+        StoredBlockChange merged = current == null
+                ? change
+                : current.withLatestState(change.newValue());
+        if (merged.isNoOp()) {
+            this.changes.remove(key);
+        } else {
+            this.changes.put(key, merged);
+        }
+        this.updatedAt = now;
+    }
+
+    public boolean isEmpty() {
+        return this.changes.isEmpty();
+    }
+
+    public int size() {
+        return this.changes.size();
+    }
+
+    public List<StoredBlockChange> redoChanges() {
+        return List.copyOf(this.changes.values());
+    }
+
+    public List<StoredBlockChange> undoChanges() {
+        List<StoredBlockChange> ordered = new ArrayList<>(this.changes.values());
+        Collections.reverse(ordered);
+        return List.copyOf(ordered);
+    }
+
+    public List<StoredBlockChange> inverseChanges() {
+        List<StoredBlockChange> inverse = new ArrayList<>();
+        for (StoredBlockChange change : this.undoChanges()) {
+            inverse.add(new StoredBlockChange(change.pos(), change.newValue(), change.oldValue()));
+        }
+        return List.copyOf(inverse);
+    }
+
+    public String id() {
+        return this.id;
+    }
+
+    public String actor() {
+        return this.actor;
+    }
+
+    public String projectId() {
+        return this.projectId;
+    }
+
+    public String dimensionId() {
+        return this.dimensionId;
+    }
+
+    public Instant startedAt() {
+        return this.startedAt;
+    }
+
+    public Instant updatedAt() {
+        return this.updatedAt;
+    }
+
+    private static long key(StoredBlockChange change) {
+        return BlockPos.asLong(change.pos().x(), change.pos().y(), change.pos().z());
+    }
+}
