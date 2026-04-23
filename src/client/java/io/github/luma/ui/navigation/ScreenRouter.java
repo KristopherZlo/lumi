@@ -7,6 +7,7 @@ import io.github.luma.ui.screen.RecoveryScreen;
 import io.github.luma.ui.screen.SaveDetailsScreen;
 import io.github.luma.ui.screen.SaveScreen;
 import io.github.luma.ui.screen.SettingsScreen;
+import io.github.luma.ui.screen.ShareScreen;
 import io.github.luma.ui.screen.VariantsScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -69,6 +70,10 @@ public final class ScreenRouter {
 
     public void openVariants(Screen parent, String projectName, String baseVersionId) {
         this.client.setScreen(new VariantsScreen(parent, projectName, baseVersionId));
+    }
+
+    public void openShare(Screen parent, String projectName) {
+        this.client.setScreen(new ShareScreen(parent, projectName));
     }
 
     public void openCompare(Screen parent, String projectName, String leftReference, String rightReference) {

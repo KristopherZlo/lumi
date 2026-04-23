@@ -204,6 +204,10 @@ public final class ProjectScreen extends LumaScreen {
                 this,
                 this.projectName
         )));
+        navigation.child(UIComponents.button(Component.translatable("luma.tab.share"), button -> this.router.openShare(
+                this,
+                this.projectName
+        )));
         section.child(navigation);
 
         if (this.state.hasRecoveryDraft()) {

@@ -42,9 +42,10 @@ This now includes regression checks for:
 - detached commit visibility after a restore-style reset
 - recovery draft isolation while save/amend operations run
 - zip archive import/export for project history, with previews optional and recovery drafts excluded
-- variant-scoped history package export/import plus imported-variant merge planning
+- variant-scoped history package export/import plus imported-variant merge planning with conflict zones and per-zone resolutions
 - conservative cleanup flow for orphaned snapshots/previews/cache and stale operation drafts
 - material delta summarization on large diffs
+- lightweight home, variants, and share controller loading plus operation-state normalization
 
 Run server GameTests:
 
@@ -98,11 +99,13 @@ The current menu flow is centered around:
 - `SaveScreen`
 - `SaveDetailsScreen`
 - `VariantsScreen`
+- `ShareScreen`
 - `RecoveryScreen`
 - `CompareScreen`
 - `SettingsScreen`
 
 Controllers own service access and loading logic. Screens keep transient UI state. `LumaScreen` is the shared non-pausing base class for in-world menus. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
+`ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen.
 
 Current UX assumptions:
 
@@ -110,10 +113,9 @@ Current UX assumptions:
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
 - holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - the dashboard is now secondary navigation from the workspace header
-- the workspace home screen is product-first: current build state, save, restore last save, variants, then recent saves
+- the workspace home screen is product-first: current build state, save, restore last save, `History / Variants / Share`, then recent saves
 - low-frequency tools such as technical graph, diagnostics, and raw info live behind `More`
-- save composition, save details, and variant management now have dedicated screens instead of sharing one overloaded project page
-- the advanced share and merge flow currently lives inside `VariantsScreen`, where review-project imports and merge conflict review stay off the main home screen
+- save composition, save details, variant management, and share/merge review now have dedicated screens instead of sharing one overloaded project page
 
 ## History architecture
 
@@ -129,12 +131,13 @@ Current runtime history behavior:
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `ProjectArchiveService` owns command-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
 - `HistoryShareService` builds the first `Share` MVP on top of the same archive format by exporting one variant lineage and importing it back as a review project.
+- `ShareScreenController` keeps history package import/export separate from the main home and variants screens, and only asks `VariantMergeService` for a merge preview when the user explicitly reviews one imported package.
 - `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
 - Preview generation now queues lightweight request files on the server side and fulfills them later through the client-side `PreviewCaptureCoordinator`.
 - `RestoreService` prefers direct same-variant patch replay, including `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored version on success without deleting detached versions.
 - `VariantService` keeps one head pointer per variant.
-- `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, detecting block conflicts, and delegating merged version persistence to `VersionService`.
+- `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, and delegating merged version persistence to `VersionService`.
 - `DiffService` reconstructs version-to-version changes from patch history.
 
 The current history pipeline is intentionally split into:

@@ -145,6 +145,10 @@ public final class VariantsScreen extends LumaScreen {
         ButtonComponent variantsButton = UIComponents.button(Component.translatable("luma.tab.variants"), button -> this.refresh("luma.status.project_ready"));
         variantsButton.active(false);
         navigation.child(variantsButton);
+        navigation.child(UIComponents.button(Component.translatable("luma.tab.share"), button -> this.router.openShare(
+                this,
+                this.projectName
+        )));
         section.child(navigation);
 
         if (this.state.operationSnapshot() != null) {

@@ -44,7 +44,7 @@ Key services:
 - `RestoreService`: build restore plans, decode world-root baseline restores, and prepare chunk batches
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching
-- `VariantMergeService`: compare imported variant lineage against a local target variant, detect block-level conflicts, and write merged saves through the normal patch-first history path
+- `VariantMergeService`: compare imported variant lineage against a local target variant, group overlapping conflicts into chunk-connected zones, and write merged saves through the normal patch-first history path
 - `DiffService`: reconstruct version or live-world differences using structured state payload comparison before formatting UI-facing diff entries
 - `PreviewCaptureRequestService`: queue preview capture jobs without blocking save durability
 - `PreviewCaptureRequestRepository`: persist preview capture requests so the server can queue work and the client can render later
@@ -91,14 +91,16 @@ Responsibilities are split as follows:
 - screens keep transient UI state and rendering
 - controllers invoke services and translate failures into status keys
 - view-state records provide immutable inputs to the rendering layer
+- lightweight summary controllers keep `ProjectScreen`, `VariantsScreen`, and `ShareScreen` fast by avoiding diff, material, and merge-preview work on open
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
 - tab builders keep larger screen sections isolated
 - the project home screen now focuses on `Build`, `Save`, `History`, and `Restore` first, with advanced tools behind progressive disclosure
-- dedicated screens isolate `Save`, `Save details`, `Variants`, `Compare`, `Recovered work`, and `Settings` so the main project screen no longer tries to carry every workflow at once
+- dedicated screens isolate `Save`, `Save details`, `Variants`, `Share`, `Compare`, `Recovered work`, and `Settings` so the main project screen no longer tries to carry every workflow at once
 - `LumaScreen` ensures Lumi screens never pause the game
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
+- project-facing screens poll lightweight operation snapshots every 10 client ticks so conflicting mutation buttons unlock as soon as the operation becomes terminal, while status text can stay visible briefly
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, prioritizes the nearest changed blocks to the current camera position, and renders only exposed overlay faces so translucent fill does not self-stack through dense diff volumes
-- `VariantsScreen` now carries the advanced `Share & Merge` flow: export a variant package, import it as a review project, review merge conflicts, and apply a merged save without cluttering the home screen
+- `ShareScreen` now carries the advanced `Share & Merge` flow: import and export history packages, review imported packages, resolve merge conflict zones, and apply a merged save without cluttering the home or variants screens
 
 ## Core runtime flows
 

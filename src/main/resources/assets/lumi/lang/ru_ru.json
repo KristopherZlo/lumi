@@ -491,4 +491,21 @@
   "luma.status.merge_conflicts_found": "Найдены конфликты слияния. Сначала проверь пересечение.",
   "luma.status.merge_no_changes": "Из этого импортированного варианта нечего сливать.",
   "luma.status.merge_started": "Слияние запущено. Lumi записывает слитую версию в фоне."
+  ,
+  "luma.tab.share": "Share",
+  "luma.screen.share.title": "Share: %s",
+  "luma.action.keep_local": "Оставить локальное",
+  "luma.action.use_imported": "Взять импортированное",
+  "luma.action.skip_for_now": "Пока пропустить",
+  "luma.share.packages_title": "Импортированные пакеты",
+  "luma.share.packages_help": "Здесь можно просмотреть импортированные пакеты истории и потом слить их в локальный вариант.",
+  "luma.share.merge_unresolved_help": "Выбери решение для каждой конфликтной зоны, прежде чем применять слияние.",
+  "luma.share.merge_ready": "Готово к слиянию: %s импортированных изменений блоков.",
+  "luma.share.zone_title": "Конфликтная зона %s",
+  "luma.share.zone_summary": "%s чанков | %s конфликтных блоков",
+  "luma.share.zone_bounds": "Границы: (%s, %s, %s) -> (%s, %s, %s)",
+  "luma.share.zone_position": "Изменение в (%s, %s, %s)",
+  "luma.share.zone_status_unresolved": "Проверить позже",
+  "luma.share.zone_status_keep_local": "Оставить локальные изменения",
+  "luma.share.zone_status_use_imported": "Взять импортированные изменения"
 }

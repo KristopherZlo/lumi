@@ -56,6 +56,7 @@ Use Lumi if you want to:
 
 - automatic dimension projects
 - home-first UI built around `Build`, `Save`, `History`, and `Restore`
+- lightweight `History / Variants / Share` navigation with live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, compare, restore, and variant actions
@@ -65,7 +66,7 @@ Use Lumi if you want to:
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
 - material delta summaries and integrity checks
 - zip import/export for project history, including variant-scoped share packages
-- imported review projects plus block-level merge conflict detection for shared variants
+- imported review projects plus conflict-zone merge review for shared variants
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
 
