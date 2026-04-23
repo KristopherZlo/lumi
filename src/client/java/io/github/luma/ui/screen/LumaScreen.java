@@ -18,7 +18,16 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
+    public void tick() {
+        super.tick();
+        this.onLumaTick();
+    }
+
+    @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    protected void onLumaTick() {
     }
 }
