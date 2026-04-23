@@ -11,10 +11,12 @@ import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.CompareViewState;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import net.minecraft.client.Minecraft;
+import net.minecraft.server.MinecraftServer;
 
 public final class CompareScreenController {
 
@@ -101,18 +103,7 @@ public final class CompareScreenController {
                     variants.size()
             );
 
-            VersionDiff diff;
-            if (resolvedLeft.isBlank() || resolvedRight.isBlank() || (
-                    CURRENT_WORLD_REFERENCE.equals(resolvedLeft) && CURRENT_WORLD_REFERENCE.equals(resolvedRight)
-            )) {
-                diff = null;
-            } else if (CURRENT_WORLD_REFERENCE.equals(resolvedRight)) {
-                diff = this.diffService.compareVersionToCurrentState(server, projectName, resolvedLeft);
-            } else if (CURRENT_WORLD_REFERENCE.equals(resolvedLeft)) {
-                diff = this.invert(this.diffService.compareVersionToCurrentState(server, projectName, resolvedRight));
-            } else {
-                diff = this.diffService.compareVersions(server, projectName, resolvedLeft, resolvedRight);
-            }
+            VersionDiff diff = this.buildDiff(server, projectName, resolvedLeft, resolvedRight);
             List<MaterialDeltaEntry> materialDelta = diff == null ? List.of() : this.materialDeltaService.summarize(diff);
             if (diff != null) {
                 LumaDebugLog.log(
@@ -156,12 +147,36 @@ public final class CompareScreenController {
         }
     }
 
-    public String showOverlay(CompareViewState state) {
+    public VersionDiff buildDiff(
+            MinecraftServer server,
+            String projectName,
+            String resolvedLeft,
+            String resolvedRight
+    ) throws IOException {
+        if (resolvedLeft == null || resolvedRight == null) {
+            return null;
+        }
+        if (resolvedLeft.isBlank() || resolvedRight.isBlank() || (
+                CURRENT_WORLD_REFERENCE.equals(resolvedLeft) && CURRENT_WORLD_REFERENCE.equals(resolvedRight)
+        )) {
+            return null;
+        }
+        if (CURRENT_WORLD_REFERENCE.equals(resolvedRight)) {
+            return this.diffService.compareVersionToCurrentState(server, projectName, resolvedLeft);
+        }
+        if (CURRENT_WORLD_REFERENCE.equals(resolvedLeft)) {
+            return this.invert(this.diffService.compareVersionToCurrentState(server, projectName, resolvedRight));
+        }
+        return this.diffService.compareVersions(server, projectName, resolvedLeft, resolvedRight);
+    }
+
+    public String showOverlay(String projectName, CompareViewState state) {
         if (state.diff() == null) {
             return "luma.status.compare_failed";
         }
 
         CompareOverlayRenderer.show(
+                projectName,
                 state.leftResolvedVersionId(),
                 state.rightResolvedVersionId(),
                 state.diff().changedBlocks(),

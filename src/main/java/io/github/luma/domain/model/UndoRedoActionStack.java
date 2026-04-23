@@ -1,5 +1,6 @@
 package io.github.luma.domain.model;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -46,16 +47,22 @@ public final class UndoRedoActionStack {
             this.trimUndoStack();
         }
 
-        int before = action.size();
-        action.recordChange(change, now);
-        if (action.isEmpty()) {
-            this.undoStack.remove(action);
+        return this.recordIntoAction(action, change, now);
+    }
+
+    public long recordRelatedChange(
+            String dimensionId,
+            StoredBlockChange change,
+            Instant now,
+            Duration maxIdle,
+            int chunkRadius
+    ) {
+        UndoRedoAction action = this.undoStack.peekFirst();
+        if (action == null || !action.canAbsorbRelatedChange(dimensionId, change, now, maxIdle, chunkRadius)) {
+            return this.revision;
         }
-        if (before != action.size() || !action.isEmpty()) {
-            this.redoStack.clear();
-            this.revision += 1;
-        }
-        return this.revision;
+
+        return this.recordIntoAction(action, change, now);
     }
 
     public Selection selectUndo() {
@@ -69,12 +76,12 @@ public final class UndoRedoActionStack {
     }
 
     public void completeUndo(Selection selection) {
-        if (selection == null) {
+        if (selection == null || this.revision != selection.revision()) {
             return;
         }
 
         UndoRedoAction removed = this.removeById(this.undoStack, selection.action().id());
-        if (removed == null || this.revision != selection.revision()) {
+        if (removed == null) {
             return;
         }
 
@@ -84,12 +91,12 @@ public final class UndoRedoActionStack {
     }
 
     public void completeRedo(Selection selection) {
-        if (selection == null) {
+        if (selection == null || this.revision != selection.revision()) {
             return;
         }
 
         UndoRedoAction removed = this.removeById(this.redoStack, selection.action().id());
-        if (removed == null || this.revision != selection.revision()) {
+        if (removed == null) {
             return;
         }
 
@@ -129,6 +136,19 @@ public final class UndoRedoActionStack {
         this.undoStack.clear();
         this.redoStack.clear();
         this.revision += 1;
+    }
+
+    private long recordIntoAction(UndoRedoAction action, StoredBlockChange change, Instant now) {
+        int before = action.size();
+        action.recordChange(change, now);
+        if (action.isEmpty()) {
+            this.undoStack.remove(action);
+        }
+        if (before != action.size() || !action.isEmpty()) {
+            this.redoStack.clear();
+            this.revision += 1;
+        }
+        return this.revision;
     }
 
     private UndoRedoAction removeById(Deque<UndoRedoAction> stack, String actionId) {

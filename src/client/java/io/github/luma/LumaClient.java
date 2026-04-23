@@ -13,6 +13,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
+import io.github.luma.ui.overlay.CompareOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayRenderer;
 import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
@@ -84,6 +85,7 @@ public final class LumaClient implements ClientModInitializer {
         WorkspaceHudCoordinator.getInstance().tick(client);
         PreviewCaptureCoordinator.getInstance().tick(client);
         CompareOverlayRenderer.setXrayEnabled(this.compareOverlayXrayKey.isDown());
+        CompareOverlayCoordinator.getInstance().tick(client);
         RecentChangesOverlayCoordinator.getInstance().tick(client, altHeld);
         while (this.toggleCompareOverlayKey.consumeClick()) {
             CompareOverlayRenderer.toggleVisibility();

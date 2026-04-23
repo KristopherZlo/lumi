@@ -1,6 +1,7 @@
 package io.github.luma.domain.model;
 
 import java.time.Instant;
+import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
@@ -56,6 +57,39 @@ class UndoRedoActionStackTest {
 
         assertFalse(stack.canRedo());
         assertEquals("action-2", stack.recentUndoActions(1).getFirst().id());
+    }
+
+    @Test
+    void relatedChangesJoinLatestActionInsideJoinWindow() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+
+        stack.recordRelatedChange(
+                "minecraft:overworld",
+                change(18, "minecraft:air", "minecraft:water"),
+                NOW.plusSeconds(5),
+                java.time.Duration.ofSeconds(10),
+                2
+        );
+
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
+        assertNotNull(selection);
+        assertEquals("action-1", selection.action().id());
+        assertEquals(2, selection.action().size());
+    }
+
+    @Test
+    void staleSelectionDoesNotDropUndoHistory() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+
+        UndoRedoActionStack.Selection staleSelection = stack.selectUndo();
+        stack.recordChange("action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
+        stack.completeUndo(staleSelection);
+
+        assertTrue(stack.canUndo());
+        assertFalse(stack.canRedo());
+        assertEquals(List.of("action-2", "action-1"), stack.recentUndoActions(2).stream().map(UndoRedoAction::id).toList());
     }
 
     private static StoredBlockChange change(int x, String oldBlock, String newBlock) {

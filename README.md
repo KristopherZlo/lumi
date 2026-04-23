@@ -64,6 +64,7 @@ Use Lumi if you want to:
 - save details screen with isometric preview, compare, restore, and variant actions
 - compare against parent, other versions, branch heads, or live game state
 - live undo and redo for the last tracked builder actions with default `Alt+Z` / `Alt+Y` bindings
+- short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit
 - hard restore that moves the active variant head
 - recovery drafts with WAL compaction
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
@@ -214,6 +215,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 5. Build in the tracked area.
 6. Use `Alt+Z` / `Alt+Y` to undo or redo the latest tracked Lumi action.
 7. Hold `Alt` to preview the latest 10 tracked actions when the compare overlay is not active.
+   Compare against `current` now enables the world highlight immediately and refreshes it automatically while you keep editing.
 8. Use the main `Save` action when you want a safe restore point.
 9. Open a save when you want details, compare, restore, or create a new variant from it.
 10. Use `Variants`, `Recovered work`, and `Settings` as needed.

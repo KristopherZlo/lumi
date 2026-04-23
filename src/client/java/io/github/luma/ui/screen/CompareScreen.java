@@ -156,8 +156,7 @@ public final class CompareScreen extends LumaScreen {
 
         FlowLayout actions = LumaUi.actionRow();
         actions.child(UIComponents.button(Component.translatable("luma.action.compare"), button -> {
-            this.status = "luma.status.compare_ready";
-            this.rebuild();
+            this.runCompare();
         }));
         section.child(actions);
 
@@ -197,7 +196,7 @@ public final class CompareScreen extends LumaScreen {
         ButtonComponent overlayButton = UIComponents.button(this.overlayButtonLabel(), button -> {
             this.status = CompareOverlayRenderer.hasData()
                     ? this.controller.toggleOverlayVisibility()
-                    : this.controller.showOverlay(this.state);
+                    : this.controller.showOverlay(this.projectName, this.state);
             this.rebuild();
         });
         overlayButton.active(!this.state.diff().changedBlocks().isEmpty() || CompareOverlayRenderer.hasData());
@@ -437,6 +436,24 @@ public final class CompareScreen extends LumaScreen {
         this.build(this.uiAdapter.rootComponent);
         this.uiAdapter.inflateAndMount();
         this.restoreScroll(scrollProgress);
+    }
+
+    private void runCompare() {
+        CompareViewState comparedState = this.controller.loadState(
+                this.projectName,
+                this.leftReference,
+                this.rightReference,
+                "luma.status.compare_ready"
+        );
+        if (comparedState.diff() == null) {
+            CompareOverlayRenderer.clear();
+            this.status = comparedState.status();
+            this.rebuild();
+            return;
+        }
+
+        this.status = this.controller.showOverlay(this.projectName, comparedState);
+        this.rebuild();
     }
 
     private double currentScrollProgress() {

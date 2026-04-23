@@ -7,7 +7,9 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CompareOverlayRendererStateTest {
@@ -34,6 +36,26 @@ class CompareOverlayRendererStateTest {
 
         assertTrue(CompareOverlayRenderer.visible());
         assertFalse(CompareOverlayRenderer.xrayEnabled());
+    }
+
+    @Test
+    void currentWorldOverlayRefreshKeepsVisibilityAndUpdatesTrackedDiff() {
+        CompareOverlayRenderer.show("build-project", "v0001", "current", List.of(sampleEntry()), false);
+
+        CompareOverlayRenderer.RefreshRequest request = CompareOverlayRenderer.refreshRequest();
+        assertNotNull(request);
+        assertTrue(request.involvesCurrentWorld());
+        assertTrue(request.visible());
+        assertEquals("build-project", request.projectName());
+        assertEquals(1, CompareOverlayRenderer.changedBlockCount());
+
+        CompareOverlayRenderer.refresh("build-project", "v0001", "current", List.of(
+                sampleEntry(),
+                new DiffBlockEntry(new BlockPoint(11, 64, 10), "minecraft:air", "minecraft:glass", ChangeType.ADDED)
+        ), false);
+
+        assertTrue(CompareOverlayRenderer.visible());
+        assertEquals(2, CompareOverlayRenderer.changedBlockCount());
     }
 
     private static DiffBlockEntry sampleEntry() {

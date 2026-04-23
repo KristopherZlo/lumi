@@ -114,7 +114,10 @@ Current UX assumptions:
 - pressing `U` opens the current dimension workspace directly
 - pressing `Alt+Z` starts undo for the latest tracked Lumi action in the current dimension workspace
 - pressing `Alt+Y` starts redo for the latest tracked Lumi action in the current dimension workspace
+- nearby short-lived secondary fallout can join the latest tracked undo/redo action instead of disappearing from the live action stack
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
+- pressing `Compare` enables the world highlight immediately for the resolved diff
+- comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present
 - holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - holding `Alt` while compare highlight is inactive shows the latest 10 tracked Lumi actions with a fading temporary overlay
 - the dashboard is now secondary navigation from the workspace header
