@@ -19,4 +19,12 @@ final class RestoreFadeAlphaCurveTest {
         assertTrue(middle > end);
         assertEquals(0, end);
     }
+
+    @Test
+    void honorsConfiguredDuration() {
+        RestoreFadeAlphaCurve curve = new RestoreFadeAlphaCurve();
+
+        assertEquals(0, curve.alpha(40, 40));
+        assertTrue(curve.alpha(40, 120) > 0);
+    }
 }

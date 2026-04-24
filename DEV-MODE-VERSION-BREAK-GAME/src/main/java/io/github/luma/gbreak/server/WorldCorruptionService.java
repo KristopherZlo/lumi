@@ -36,6 +36,7 @@ public final class WorldCorruptionService {
     private final CorruptionParticleService particleService = new CorruptionParticleService();
     private final CorruptionRestoreFadeNotifier restoreFadeNotifier = new CorruptionRestoreFadeNotifier();
     private final CorruptionRestoreCadence restoreCadence = new CorruptionRestoreCadence();
+    private final CorruptionRestoreWaveProgress restoreWaveProgress = new CorruptionRestoreWaveProgress();
 
     private UUID targetPlayerId;
     private CorruptionOrigin corruptionOrigin;
@@ -67,6 +68,7 @@ public final class WorldCorruptionService {
         this.corruptionQueue.reset();
         this.timeJitterService.reset();
         this.restoreCadence.reset();
+        this.restoreWaveProgress.reset();
         this.rebuildRestoreQueue();
         this.risingEntityService.clear();
         this.risingGroundBlockService.clear();
@@ -120,6 +122,7 @@ public final class WorldCorruptionService {
         this.risingGroundBlockService.clear();
         this.skyDisplayService.clear();
         this.restoreCadence.reset();
+        this.restoreWaveProgress.reset();
         this.rebuildRestoreQueue();
         this.restoreBatch(server, Integer.MAX_VALUE);
     }
@@ -226,15 +229,27 @@ public final class WorldCorruptionService {
 
     private void restoreQueuedBatch(MinecraftServer server) {
         if (this.restoreCadence.shouldRestoreNow(this.settings.cleanupIntervalTicks())) {
-            this.restoreBatch(server, this.settings.restoreBatchSize());
+            long allowedDistanceSquared = this.restoreWaveProgress.advanceAndAllowedDistanceSquared(
+                    this.settings.cleanupSpreadBlocksPerStep()
+            );
+            this.restoreBatch(server, this.settings.restoreBatchSize(), allowedDistanceSquared);
         }
     }
 
     private void restoreBatch(MinecraftServer server, int limit) {
+        this.restoreBatch(server, limit, Long.MAX_VALUE);
+    }
+
+    private void restoreBatch(MinecraftServer server, int limit, long allowedDistanceSquared) {
         int restored = 0;
         Map<ServerWorld, List<BlockPos>> restoredPositions = new LinkedHashMap<>();
         while (!this.restoreQueue.isEmpty() && restored < limit) {
-            RestorableBlock block = this.restoreQueue.removeFirst();
+            RestorableBlock block = this.restoreQueue.peekFirst();
+            if (this.restoreDistanceSquared(block.key()) > allowedDistanceSquared) {
+                break;
+            }
+
+            block = this.restoreQueue.removeFirst();
             ServerWorld world = server.getWorld(block.key().worldKey());
             if (world != null && world.isInBuildLimit(block.key().pos())) {
                 world.setBlockState(block.key().pos(), block.originalState(), UPDATE_FLAGS);

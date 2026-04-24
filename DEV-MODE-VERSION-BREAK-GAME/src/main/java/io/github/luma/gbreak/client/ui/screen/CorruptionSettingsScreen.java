@@ -20,9 +20,10 @@ import net.minecraft.util.math.BlockPos;
 public final class CorruptionSettingsScreen extends Screen {
 
     private static final int PANEL_WIDTH = 560;
-    private static final int PANEL_HEIGHT = 304;
+    private static final int PANEL_HEIGHT = 356;
     private static final int SLIDER_WIDTH = 288;
     private static final int SLIDER_HEIGHT = 20;
+    private static final int SLIDER_STEP = 22;
     private static final int PREVIEW_LEFT_OFFSET = 332;
     private static final int PREVIEW_TOP_OFFSET = 48;
     private static final int PREVIEW_SIZE = 188;
@@ -50,7 +51,7 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::noiseDensityPercent,
                 this.settings::setNoiseDensityPercent
         ));
-        y += 24;
+        y += SLIDER_STEP;
         this.addDrawableChild(new IntSettingSlider(
                 sliderX,
                 y,
@@ -61,7 +62,7 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::applyBatchSize,
                 this.settings::setApplyBatchSize
         ));
-        y += 24;
+        y += SLIDER_STEP;
         this.addDrawableChild(new IntSettingSlider(
                 sliderX,
                 y,
@@ -72,7 +73,7 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::restoreBatchSize,
                 this.settings::setRestoreBatchSize
         ));
-        y += 24;
+        y += SLIDER_STEP;
         this.addDrawableChild(new IntSettingSlider(
                 sliderX,
                 y,
@@ -83,7 +84,29 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::cleanupIntervalTicks,
                 this.settings::setCleanupIntervalTicks
         ));
-        y += 24;
+        y += SLIDER_STEP;
+        this.addDrawableChild(new IntSettingSlider(
+                sliderX,
+                y,
+                SLIDER_WIDTH,
+                "Cleanup spread speed",
+                1,
+                32,
+                this.settings::cleanupSpreadBlocksPerStep,
+                this.settings::setCleanupSpreadBlocksPerStep
+        ));
+        y += SLIDER_STEP;
+        this.addDrawableChild(new IntSettingSlider(
+                sliderX,
+                y,
+                SLIDER_WIDTH,
+                "White fade ticks",
+                20,
+                240,
+                this.settings::restoreFadeDurationTicks,
+                this.settings::setRestoreFadeDurationTicks
+        ));
+        y += SLIDER_STEP;
         this.addDrawableChild(new IntSettingSlider(
                 sliderX,
                 y,
@@ -94,7 +117,7 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::renderRadiusPercent,
                 this.settings::setRenderRadiusPercent
         ));
-        y += 24;
+        y += SLIDER_STEP;
         this.addDrawableChild(new DoubleSettingSlider(
                 sliderX,
                 y,
@@ -105,7 +128,7 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::noiseScale,
                 this.settings::setNoiseScale
         ));
-        y += 24;
+        y += SLIDER_STEP;
         this.addDrawableChild(new DoubleSettingSlider(
                 sliderX,
                 y,
@@ -116,7 +139,7 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::detailNoiseScale,
                 this.settings::setDetailNoiseScale
         ));
-        y += 24;
+        y += SLIDER_STEP;
         this.addDrawableChild(new IntSettingSlider(
                 sliderX,
                 y,
@@ -127,7 +150,7 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::particleBurstsPerTick,
                 this.settings::setParticleBurstsPerTick
         ));
-        y += 24;
+        y += SLIDER_STEP;
         this.addDrawableChild(new IntSettingSlider(
                 sliderX,
                 y,
