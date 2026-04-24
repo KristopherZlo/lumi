@@ -7,7 +7,7 @@ public final class CorruptionSettings {
     private volatile int targetCorruptedBlocks = 96;
     private volatile int applyBatchSize = 24;
     private volatile int restoreBatchSize = 144;
-    private volatile int horizontalRadius = 12;
+    private volatile int renderRadiusPercent = 100;
     private volatile int verticalRadius = 5;
     private volatile double noiseScale = 0.115D;
     private volatile double detailNoiseScale = 0.31D;
@@ -45,12 +45,12 @@ public final class CorruptionSettings {
         this.restoreBatchSize = this.clamp(restoreBatchSize, 16, 512);
     }
 
-    public int horizontalRadius() {
-        return this.horizontalRadius;
+    public int renderRadiusPercent() {
+        return this.renderRadiusPercent;
     }
 
-    public void setHorizontalRadius(int horizontalRadius) {
-        this.horizontalRadius = this.clamp(horizontalRadius, 4, 32);
+    public void setRenderRadiusPercent(int renderRadiusPercent) {
+        this.renderRadiusPercent = this.clamp(renderRadiusPercent, 25, 100);
     }
 
     public int verticalRadius() {
