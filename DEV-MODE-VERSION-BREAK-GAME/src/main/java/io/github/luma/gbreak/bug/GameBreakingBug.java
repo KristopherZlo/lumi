@@ -4,7 +4,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 public enum GameBreakingBug {
     NONE(-1, "off", "Disable every injected bug"),
@@ -50,13 +49,6 @@ public enum GameBreakingBug {
         }
 
         String normalized = raw.trim().toLowerCase(Locale.ROOT);
-        if ("disable".equals(normalized)
-                || "none".equals(normalized)
-                || "clear".equals(normalized)
-                || "stop".equals(normalized)) {
-            return Optional.of(NONE);
-        }
-
         try {
             int parsedId = Integer.parseInt(normalized);
             return Arrays.stream(values())
@@ -70,12 +62,10 @@ public enum GameBreakingBug {
     }
 
     public static List<String> commandSuggestions() {
-        return Stream.concat(
-                        Stream.concat(
-                                Arrays.stream(values()).map(GameBreakingBug::commandToken),
-                                Stream.of("disable", "none", "clear", "stop")
-                        ),
-                        Arrays.stream(values()).filter(candidate -> candidate.id >= 0).map(candidate -> Integer.toString(candidate.id))
+        return Arrays.stream(values())
+                .flatMap(candidate -> candidate.id >= 0
+                        ? java.util.stream.Stream.of(candidate.commandToken, Integer.toString(candidate.id))
+                        : java.util.stream.Stream.of(candidate.commandToken)
                 )
                 .distinct()
                 .toList();

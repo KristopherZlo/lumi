@@ -6,6 +6,7 @@ Dev-only Fabric mod for Lumi capture scenarios.
 
 - Press `O` in-game to open the Lumi-style demo project screen.
 - Run `/gbreakui` on the client to open the same screen without the keybind.
+- Use `/gbreak off` as the single command for disabling injected bugs.
 - Most action buttons are intentionally fake and only close the UI.
 - `Restore` and `Restore last save` also trigger `/gbreak fakerestore`, which replaces random nearby blocks with glass over several ticks.
 

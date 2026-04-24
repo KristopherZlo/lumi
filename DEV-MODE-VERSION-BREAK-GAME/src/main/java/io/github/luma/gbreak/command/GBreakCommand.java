@@ -29,9 +29,6 @@ public final class GBreakCommand {
                                                 fakeRestoreService,
                                                 StringArgumentType.getString(context, "target")
                                         ))))
-                        .then(CommandManager.literal("off").executes(context -> disable(context.getSource())))
-                        .then(CommandManager.literal("disable").executes(context -> disable(context.getSource())))
-                        .then(CommandManager.literal("none").executes(context -> disable(context.getSource())))
                         .then(CommandManager.argument("bug", StringArgumentType.string())
                                 .suggests((context, builder) -> CommandSource.suggestMatching(
                                         GameBreakingBug.commandSuggestions(),
@@ -54,12 +51,6 @@ public final class GBreakCommand {
             source.sendError(Text.translatable("gbreakdev.restore.command_busy"));
             return 0;
         }
-        return 1;
-    }
-
-    private static int disable(net.minecraft.server.command.ServerCommandSource source) {
-        BugStateController.getInstance().activate(GameBreakingBug.NONE);
-        source.sendFeedback(() -> Text.literal("GBreak disabled"), false);
         return 1;
     }
 
