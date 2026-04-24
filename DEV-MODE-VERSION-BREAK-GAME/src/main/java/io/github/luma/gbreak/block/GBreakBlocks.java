@@ -32,6 +32,7 @@ public final class GBreakBlocks {
             .mapColor(MapColor.MAGENTA)
             .strength(-1.0F, 3600000.0F)
             .sounds(BlockSoundGroup.STONE)
+            .luminance(state -> 6)
             .dropsNothing());
 
     private GBreakBlocks() {
