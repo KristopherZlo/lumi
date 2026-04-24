@@ -1,6 +1,7 @@
 package io.github.luma.gbreak.server;
 
 import io.github.luma.gbreak.block.GBreakBlocks;
+import io.github.luma.gbreak.corruption.CorruptionMaskSampler;
 import io.github.luma.gbreak.state.CorruptionSettings;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -18,16 +19,14 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.noise.SimplexNoiseSampler;
-import net.minecraft.util.math.random.LocalRandom;
 import net.minecraft.world.World;
 
 public final class WorldCorruptionService {
 
     private static final int UPDATE_FLAGS = Block.NOTIFY_LISTENERS | Block.FORCE_STATE | Block.SKIP_DROPS;
-    private static final long WORLD_MASK_SEED = 0x4C554D41474C4954L;
 
     private final CorruptionSettings settings = CorruptionSettings.getInstance();
+    private final CorruptionMaskSampler maskSampler = new CorruptionMaskSampler();
     private final Map<CorruptedBlockKey, RestorableBlock> originals = new LinkedHashMap<>();
     private final Deque<RestorableBlock> restoreQueue = new ArrayDeque<>();
     private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService();
@@ -39,7 +38,6 @@ public final class WorldCorruptionService {
     private int cachedHorizontalRadius = -1;
     private int cachedVerticalRadius = -1;
     private List<BlockPos> cachedSearchOffsets = List.of();
-    private final SimplexNoiseSampler noiseSampler = new SimplexNoiseSampler(new LocalRandom(WORLD_MASK_SEED));
 
     public StartResult start(ServerPlayerEntity player) {
         if (this.corrupting) {
@@ -139,8 +137,8 @@ public final class WorldCorruptionService {
                 continue;
             }
 
-            double noiseValue = this.noiseValue(candidatePos);
-            if (this.isWorldMaskPosition(candidatePos, noiseValue, offsets.size())) {
+            double noiseValue = this.maskSampler.noiseValue(candidatePos, this.settings);
+            if (this.maskSampler.isWorldMaskPosition(candidatePos, noiseValue, offsets.size(), this.settings)) {
                 candidates.add(new NoiseCandidate(key, noiseValue));
             }
         }
@@ -149,41 +147,7 @@ public final class WorldCorruptionService {
     }
 
     private int effectiveHorizontalRadius(MinecraftServer server) {
-        int renderDistanceBlocks = Math.max(2, server.getPlayerManager().getViewDistance()) * 16;
-        return Math.max(16, renderDistanceBlocks * this.settings.renderRadiusPercent() / 100);
-    }
-
-    private double noiseValue(BlockPos pos) {
-        double noiseScale = this.settings.noiseScale();
-        double detailNoiseScale = this.settings.detailNoiseScale();
-        double base = this.noiseSampler.sample(pos.getX() * noiseScale, pos.getY() * noiseScale, pos.getZ() * noiseScale);
-        double detail = this.noiseSampler.sample(
-                1000.0D + pos.getX() * detailNoiseScale,
-                -1000.0D + pos.getY() * detailNoiseScale,
-                pos.getZ() * detailNoiseScale
-        );
-        return base + detail * 0.35D;
-    }
-
-    private boolean isWorldMaskPosition(BlockPos pos, double noiseValue, int sampledPositionCount) {
-        double density = (double) this.settings.targetCorruptedBlocks() / Math.max(1, sampledPositionCount);
-        double normalizedNoise = this.clamp((noiseValue + 1.35D) / 2.7D, 0.0D, 1.0D);
-        double clusteredDensity = density * (0.05D + Math.pow(normalizedNoise, 3.0D) * 8.0D);
-        return this.positionHashUnit(pos) < this.clamp(clusteredDensity, 0.0002D, 0.95D);
-    }
-
-    private double positionHashUnit(BlockPos pos) {
-        long hash = pos.asLong() ^ WORLD_MASK_SEED;
-        hash ^= hash >>> 33;
-        hash *= 0xff51afd7ed558ccdL;
-        hash ^= hash >>> 33;
-        hash *= 0xc4ceb9fe1a85ec53L;
-        hash ^= hash >>> 33;
-        return (hash >>> 11) * 0x1.0p-53D;
-    }
-
-    private double clamp(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
+        return this.maskSampler.effectiveHorizontalRadius(server.getPlayerManager().getViewDistance(), this.settings);
     }
 
     private void corruptDesiredBatch(ServerWorld world, List<NoiseCandidate> desiredCandidates) {
@@ -264,24 +228,8 @@ public final class WorldCorruptionService {
 
         this.cachedHorizontalRadius = horizontalRadius;
         this.cachedVerticalRadius = verticalRadius;
-        this.cachedSearchOffsets = this.buildSearchOffsets(horizontalRadius, verticalRadius);
+        this.cachedSearchOffsets = this.maskSampler.buildSearchOffsets(horizontalRadius, verticalRadius);
         return this.cachedSearchOffsets;
-    }
-
-    private List<BlockPos> buildSearchOffsets(int horizontalRadius, int verticalRadius) {
-        List<BlockPos> offsets = new ArrayList<>();
-        int horizontalStep = Math.max(1, horizontalRadius / 32);
-        for (int y = -verticalRadius; y <= verticalRadius; y++) {
-            for (int x = -horizontalRadius; x <= horizontalRadius; x += horizontalStep) {
-                for (int z = -horizontalRadius; z <= horizontalRadius; z += horizontalStep) {
-                    if (x == 0 && y == 0 && z == 0) {
-                        continue;
-                    }
-                    offsets.add(new BlockPos(x, y, z));
-                }
-            }
-        }
-        return List.copyOf(offsets);
     }
 
     public record StartResult(boolean started, int trackedBlocks) {}
