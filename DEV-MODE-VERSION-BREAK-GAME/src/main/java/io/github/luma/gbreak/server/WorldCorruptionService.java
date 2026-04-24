@@ -6,11 +6,9 @@ import io.github.luma.gbreak.state.CorruptionSettings;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -29,13 +27,15 @@ public final class WorldCorruptionService {
     private final CorruptionSettings settings = CorruptionSettings.getInstance();
     private final CorruptionMaskSampler maskSampler = new CorruptionMaskSampler();
     private final Map<CorruptedBlockKey, RestorableBlock> originals = new LinkedHashMap<>();
+    private final Deque<NoiseCandidate> corruptionQueue = new ArrayDeque<>();
     private final Deque<RestorableBlock> restoreQueue = new ArrayDeque<>();
-    private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService(this.settings, this.maskSampler);
+    private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService();
     private final CorruptionParticleService particleService = new CorruptionParticleService();
 
     private UUID targetPlayerId;
     private boolean corrupting;
     private boolean restoring;
+    private boolean corruptionPlanBuilt;
     private int cachedHorizontalRadius = -1;
     private List<BlockPos> cachedSurfaceOffsets = List.of();
 
@@ -49,7 +49,8 @@ public final class WorldCorruptionService {
 
         this.targetPlayerId = player.getUuid();
         this.corrupting = true;
-        this.skyDisplayService.generate(player);
+        this.corruptionPlanBuilt = false;
+        this.corruptionQueue.clear();
         return new StartResult(true, this.originals.size());
     }
 
@@ -57,7 +58,9 @@ public final class WorldCorruptionService {
         boolean wasRunning = this.corrupting || this.restoring || !this.originals.isEmpty();
         this.corrupting = false;
         this.restoring = !this.originals.isEmpty();
+        this.corruptionPlanBuilt = false;
         this.targetPlayerId = null;
+        this.corruptionQueue.clear();
         this.rebuildRestoreQueue();
         int removedDisplays = this.skyDisplayService.clear();
         return new StopResult(wasRunning, this.restoreQueue.size(), removedDisplays);
@@ -87,14 +90,21 @@ public final class WorldCorruptionService {
         if (player == null || player.isSpectator()) {
             return;
         }
-        this.syncCorruptionMask(server, player);
+        if (!this.corruptionPlanBuilt) {
+            this.buildCorruptionQueue(server, player);
+            this.corruptionPlanBuilt = true;
+        }
+        this.corruptQueuedBatch(server);
+        this.skyDisplayService.spawnAround(player);
         this.particleService.tick(player);
     }
 
     void restoreAllImmediately(MinecraftServer server) {
         this.corrupting = false;
         this.restoring = true;
+        this.corruptionPlanBuilt = false;
         this.targetPlayerId = null;
+        this.corruptionQueue.clear();
         this.skyDisplayService.clear();
         this.rebuildRestoreQueue();
         this.restoreBatch(server, Integer.MAX_VALUE);
@@ -107,18 +117,12 @@ public final class WorldCorruptionService {
         return server.getPlayerManager().getPlayer(this.targetPlayerId);
     }
 
-    private void syncCorruptionMask(MinecraftServer server, ServerPlayerEntity player) {
+    private void buildCorruptionQueue(MinecraftServer server, ServerPlayerEntity player) {
         ServerWorld world = player.getEntityWorld();
         BlockPos origin = player.getBlockPos();
         int horizontalRadius = this.effectiveHorizontalRadius(server);
-        List<NoiseCandidate> desiredCandidates = this.resolveDesiredCandidates(world, origin, horizontalRadius);
-        Set<CorruptedBlockKey> desiredKeys = new HashSet<>((desiredCandidates.size() * 4 / 3) + 1);
-        for (NoiseCandidate candidate : desiredCandidates) {
-            desiredKeys.add(candidate.key());
-        }
-
-        this.restoreOutsideMask(server, desiredKeys, this.settings.restoreBatchSize());
-        this.corruptDesiredBatch(world, desiredCandidates);
+        this.corruptionQueue.clear();
+        this.corruptionQueue.addAll(this.resolveDesiredCandidates(world, origin, horizontalRadius));
     }
 
     private List<NoiseCandidate> resolveDesiredCandidates(ServerWorld world, BlockPos origin, int horizontalRadius) {
@@ -160,14 +164,17 @@ public final class WorldCorruptionService {
         return this.maskSampler.effectiveHorizontalRadius(server.getPlayerManager().getViewDistance(), this.settings);
     }
 
-    private void corruptDesiredBatch(ServerWorld world, List<NoiseCandidate> desiredCandidates) {
+    private void corruptQueuedBatch(MinecraftServer server) {
         int changed = 0;
         int applyBatchSize = this.settings.applyBatchSize();
-        for (NoiseCandidate candidate : desiredCandidates) {
-            if (changed >= applyBatchSize) {
-                return;
-            }
+        while (!this.corruptionQueue.isEmpty() && changed < applyBatchSize) {
+            NoiseCandidate candidate = this.corruptionQueue.removeFirst();
             if (this.originals.containsKey(candidate.key())) {
+                continue;
+            }
+
+            ServerWorld world = server.getWorld(candidate.key().worldKey());
+            if (world == null || !world.isInBuildLimit(candidate.key().pos())) {
                 continue;
             }
 
@@ -180,25 +187,6 @@ public final class WorldCorruptionService {
             this.originals.put(candidate.key(), new RestorableBlock(candidate.key(), currentState));
             world.setBlockState(candidatePos, GBreakBlocks.MISSING_TEXTURE.getDefaultState(), UPDATE_FLAGS);
             changed++;
-        }
-    }
-
-    private void restoreOutsideMask(MinecraftServer server, Set<CorruptedBlockKey> desiredKeys, int limit) {
-        int restored = 0;
-        var iterator = this.originals.entrySet().iterator();
-        while (iterator.hasNext() && restored < limit) {
-            Map.Entry<CorruptedBlockKey, RestorableBlock> entry = iterator.next();
-            if (desiredKeys.contains(entry.getKey())) {
-                continue;
-            }
-
-            RestorableBlock block = entry.getValue();
-            ServerWorld world = server.getWorld(block.key().worldKey());
-            if (world != null && world.isInBuildLimit(block.key().pos())) {
-                world.setBlockState(block.key().pos(), block.originalState(), UPDATE_FLAGS);
-            }
-            iterator.remove();
-            restored++;
         }
     }
 
