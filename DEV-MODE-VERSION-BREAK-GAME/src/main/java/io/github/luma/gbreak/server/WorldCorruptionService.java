@@ -190,9 +190,15 @@ public final class WorldCorruptionService {
             }
 
             this.originals.put(candidate.key(), new RestorableBlock(candidate.key(), currentState));
-            world.setBlockState(candidatePos, GBreakBlocks.GROUND_CORRUPTION.getDefaultState(), UPDATE_FLAGS);
+            world.setBlockState(candidatePos, this.groundCorruptionState(candidate), UPDATE_FLAGS);
             changed++;
         }
+    }
+
+    private BlockState groundCorruptionState(NoiseCandidate candidate) {
+        BlockPos pos = candidate.key().pos();
+        int leakIndex = Math.floorMod(pos.getX() * 31 + pos.getY() * 17 + pos.getZ() * 13, 4);
+        return GBreakBlocks.GROUND_CORRUPTION.stateForLeakIndex(leakIndex);
     }
 
     private boolean canCorrupt(BlockState state) {
