@@ -34,7 +34,7 @@ public final class WorldCorruptionService {
     private final RisingGroundBlockService risingGroundBlockService = new RisingGroundBlockService();
     private final TimeJitterService timeJitterService = new TimeJitterService();
     private final CorruptionParticleService particleService = new CorruptionParticleService();
-    private final WhiteFadeRestoreDisplayService whiteFadeDisplayService = new WhiteFadeRestoreDisplayService();
+    private final CorruptionRestoreFadeNotifier restoreFadeNotifier = new CorruptionRestoreFadeNotifier();
 
     private UUID targetPlayerId;
     private CorruptionOrigin corruptionOrigin;
@@ -84,7 +84,6 @@ public final class WorldCorruptionService {
 
     void tick(MinecraftServer server) {
         this.skyDisplayService.tickExisting();
-        this.whiteFadeDisplayService.tickExisting();
         if (this.restoring) {
             this.restoreBatch(server, this.settings.restoreBatchSize());
             return;
@@ -118,7 +117,6 @@ public final class WorldCorruptionService {
         this.risingEntityService.clear();
         this.risingGroundBlockService.clear();
         this.skyDisplayService.clear();
-        this.whiteFadeDisplayService.clear();
         this.rebuildRestoreQueue();
         this.restoreBatch(server, Integer.MAX_VALUE);
     }
@@ -225,18 +223,23 @@ public final class WorldCorruptionService {
 
     private void restoreBatch(MinecraftServer server, int limit) {
         int restored = 0;
+        Map<ServerWorld, List<BlockPos>> restoredPositions = new LinkedHashMap<>();
         while (!this.restoreQueue.isEmpty() && restored < limit) {
             RestorableBlock block = this.restoreQueue.removeFirst();
             ServerWorld world = server.getWorld(block.key().worldKey());
             if (world != null && world.isInBuildLimit(block.key().pos())) {
                 world.setBlockState(block.key().pos(), block.originalState(), UPDATE_FLAGS);
                 if (limit != Integer.MAX_VALUE) {
-                    this.whiteFadeDisplayService.spawn(world, block.key().pos());
+                    restoredPositions
+                            .computeIfAbsent(world, ignored -> new ArrayList<>())
+                            .add(block.key().pos().toImmutable());
                 }
             }
             this.originals.remove(block.key());
             restored++;
         }
+
+        restoredPositions.forEach(this.restoreFadeNotifier::notifyRestoredBlocks);
 
         if (this.restoreQueue.isEmpty()) {
             this.restoring = false;

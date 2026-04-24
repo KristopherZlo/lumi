@@ -3,6 +3,7 @@ package io.github.luma.gbreak;
 import io.github.luma.gbreak.block.GBreakBlocks;
 import io.github.luma.gbreak.command.CorruptCommand;
 import io.github.luma.gbreak.command.GBreakCommand;
+import io.github.luma.gbreak.network.GBreakNetwork;
 import io.github.luma.gbreak.server.ServerBugRuntime;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ public final class GBreakDevMod implements ModInitializer {
     @Override
     public void onInitialize() {
         GBreakBlocks.register();
+        GBreakNetwork.registerPayloads();
         GBreakCommand.register(this.serverBugRuntime.fakeRestoreService());
         new CorruptCommand(this.serverBugRuntime.worldCorruptionService()).register();
         this.serverBugRuntime.register();
