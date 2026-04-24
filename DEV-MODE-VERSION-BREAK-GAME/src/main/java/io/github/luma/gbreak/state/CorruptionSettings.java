@@ -8,6 +8,8 @@ public final class CorruptionSettings {
     private volatile int applyBatchSize = 512;
     private volatile int restoreBatchSize = 512;
     private volatile int cleanupIntervalTicks = 4;
+    private volatile int cleanupSpreadBlocksPerStep = 6;
+    private volatile int restoreFadeDurationTicks = 120;
     private volatile int renderRadiusPercent = 100;
     private volatile double noiseScale = 0.055D;
     private volatile double detailNoiseScale = 0.18D;
@@ -51,6 +53,22 @@ public final class CorruptionSettings {
 
     public void setCleanupIntervalTicks(int cleanupIntervalTicks) {
         this.cleanupIntervalTicks = this.clamp(cleanupIntervalTicks, 1, 20);
+    }
+
+    public int cleanupSpreadBlocksPerStep() {
+        return this.cleanupSpreadBlocksPerStep;
+    }
+
+    public void setCleanupSpreadBlocksPerStep(int cleanupSpreadBlocksPerStep) {
+        this.cleanupSpreadBlocksPerStep = this.clamp(cleanupSpreadBlocksPerStep, 1, 32);
+    }
+
+    public int restoreFadeDurationTicks() {
+        return this.restoreFadeDurationTicks;
+    }
+
+    public void setRestoreFadeDurationTicks(int restoreFadeDurationTicks) {
+        this.restoreFadeDurationTicks = this.clamp(restoreFadeDurationTicks, 20, 240);
     }
 
     public int renderRadiusPercent() {

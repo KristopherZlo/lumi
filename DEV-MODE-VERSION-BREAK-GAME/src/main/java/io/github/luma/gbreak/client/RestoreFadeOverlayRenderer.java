@@ -1,6 +1,7 @@
 package io.github.luma.gbreak.client;
 
 import io.github.luma.gbreak.network.CorruptionRestoreFadePayload;
+import io.github.luma.gbreak.state.CorruptionSettings;
 import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.List;
@@ -18,6 +19,7 @@ public final class RestoreFadeOverlayRenderer {
     private static final double EXPANSION = 0.018D;
     private static final int MAX_ACTIVE_OVERLAYS = 4096;
 
+    private final CorruptionSettings settings = CorruptionSettings.getInstance();
     private final RestoreFadeAlphaCurve alphaCurve = new RestoreFadeAlphaCurve();
     private final ArrayDeque<RestoreFadeOverlay> overlays = new ArrayDeque<>();
     private int clientTicks;
@@ -61,7 +63,10 @@ public final class RestoreFadeOverlayRenderer {
         Iterator<RestoreFadeOverlay> iterator = this.overlays.iterator();
         while (iterator.hasNext()) {
             RestoreFadeOverlay overlay = iterator.next();
-            int alpha = this.alphaCurve.alpha(this.clientTicks - overlay.startedAtTick());
+            int alpha = this.alphaCurve.alpha(
+                    this.clientTicks - overlay.startedAtTick(),
+                    this.settings.restoreFadeDurationTicks()
+            );
             if (alpha <= 0) {
                 iterator.remove();
                 continue;
