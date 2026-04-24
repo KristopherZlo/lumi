@@ -22,8 +22,9 @@ import net.minecraft.util.math.Vec3d;
 final class SkyCorruptionDisplayService {
 
     private static final int HORIZONTAL_RADIUS = 52;
-    private static final int MIN_HEIGHT_OFFSET = 18;
-    private static final int MAX_HEIGHT_OFFSET = 46;
+    private static final int MIN_HEIGHT_OFFSET = 8;
+    private static final int MAX_HEIGHT_OFFSET = 96;
+    private static final int CLUSTER_VERTICAL_RADIUS = 14;
     private static final int MIN_CLUSTER_SIZE = 4;
     private static final int MAX_CLUSTER_SIZE = 13;
     private static final int SINGLE_DISPLAY_CHANCE = 35;
@@ -83,7 +84,11 @@ final class SkyCorruptionDisplayService {
                 ? 1
                 : random.nextInt(MIN_CLUSTER_SIZE, MAX_CLUSTER_SIZE + 1);
         for (int index = 0; index < clusterSize && this.activeDisplays.size() < maxDisplays; index++) {
-            BlockPos pos = anchor.add(random.nextInt(-2, 3), random.nextInt(-1, 2), random.nextInt(-2, 3));
+            BlockPos pos = anchor.add(
+                    random.nextInt(-2, 3),
+                    random.nextInt(-CLUSTER_VERTICAL_RADIUS, CLUSTER_VERTICAL_RADIUS + 1),
+                    random.nextInt(-2, 3)
+            );
             if (world.isInBuildLimit(pos)) {
                 this.spawn(world, pos, random);
             }
