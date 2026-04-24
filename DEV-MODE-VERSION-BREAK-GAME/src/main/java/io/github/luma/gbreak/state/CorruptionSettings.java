@@ -5,7 +5,7 @@ public final class CorruptionSettings {
     private static final CorruptionSettings INSTANCE = new CorruptionSettings();
 
     private volatile double noiseDensityPercent = 22.1D;
-    private volatile int applyBatchSize = 192;
+    private volatile int applyBatchSize = 512;
     private volatile int restoreBatchSize = 512;
     private volatile int renderRadiusPercent = 100;
     private volatile double noiseScale = 0.055D;
