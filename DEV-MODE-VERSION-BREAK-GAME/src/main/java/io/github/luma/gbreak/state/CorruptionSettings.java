@@ -4,7 +4,7 @@ public final class CorruptionSettings {
 
     private static final CorruptionSettings INSTANCE = new CorruptionSettings();
 
-    private volatile int targetCorruptedBlocks = 96;
+    private volatile double noiseDensityPercent = 22.1D;
     private volatile int applyBatchSize = 24;
     private volatile int restoreBatchSize = 144;
     private volatile int renderRadiusPercent = 100;
@@ -21,12 +21,12 @@ public final class CorruptionSettings {
         return INSTANCE;
     }
 
-    public int targetCorruptedBlocks() {
-        return this.targetCorruptedBlocks;
+    public double noiseDensityPercent() {
+        return this.noiseDensityPercent;
     }
 
-    public void setTargetCorruptedBlocks(int targetCorruptedBlocks) {
-        this.targetCorruptedBlocks = this.clamp(targetCorruptedBlocks, 8, 256);
+    public void setNoiseDensityPercent(double noiseDensityPercent) {
+        this.noiseDensityPercent = this.clamp(noiseDensityPercent, 0.1D, 65.0D);
     }
 
     public int applyBatchSize() {

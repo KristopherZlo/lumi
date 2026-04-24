@@ -40,15 +40,15 @@ public final class CorruptionSettingsScreen extends Screen {
         int panelLeft = (this.width - PANEL_WIDTH) / 2;
         int sliderX = panelLeft + 24;
         int y = this.panelTop() + 44;
-        this.addDrawableChild(new IntSettingSlider(
+        this.addDrawableChild(new PercentSettingSlider(
                 sliderX,
                 y,
                 SLIDER_WIDTH,
-                "Missing blocks",
-                8,
-                256,
-                this.settings::targetCorruptedBlocks,
-                this.settings::setTargetCorruptedBlocks
+                "Noise density",
+                0.1D,
+                65.0D,
+                this.settings::noiseDensityPercent,
+                this.settings::setNoiseDensityPercent
         ));
         y += 24;
         this.addDrawableChild(new IntSettingSlider(
@@ -184,7 +184,7 @@ public final class CorruptionSettingsScreen extends Screen {
         context.drawTextWithShadow(this.textRenderer, Text.literal("normal sky displays"), left + 14, legendTop + 14, 0xCDD3DA);
         context.drawTextWithShadow(
                 this.textRenderer,
-                Text.literal("radius " + this.settings.renderRadiusPercent() + "%  y " + this.settings.verticalRadius()),
+                Text.literal(String.format(Locale.ROOT, "density %.1f%%  radius %d%%", this.settings.noiseDensityPercent(), this.settings.renderRadiusPercent())),
                 left,
                 legendTop + 31,
                 0xA8B0BB
@@ -193,7 +193,6 @@ public final class CorruptionSettingsScreen extends Screen {
 
     private void renderMaskPreview(DrawContext context, int left, int top, int size) {
         int horizontalRadius = this.maskSampler.effectiveHorizontalRadius(PREVIEW_VIEW_DISTANCE_CHUNKS, this.settings);
-        int sampledPositions = this.maskSampler.sampledPositionCount(horizontalRadius, this.settings.verticalRadius());
         int cellSize = Math.max(2, size / PREVIEW_GRID_SIZE);
         int gridPixels = cellSize * PREVIEW_GRID_SIZE;
         int gridLeft = left + (size - gridPixels) / 2;
@@ -211,7 +210,7 @@ public final class CorruptionSettingsScreen extends Screen {
                 int x = gridLeft + column * cellSize;
                 int y = gridTop + row * cellSize;
                 context.fill(x, y, x + cellSize, y + cellSize, 0xFF000000 | shade << 16 | shade << 8 | shade);
-                if (this.maskSampler.isWorldMaskPosition(samplePos, noiseValue, sampledPositions, this.settings)) {
+                if (this.maskSampler.isWorldMaskPosition(samplePos, noiseValue, this.settings)) {
                     this.fillMissingTextureCell(context, x, y, cellSize);
                 }
             }
@@ -345,6 +344,45 @@ public final class CorruptionSettingsScreen extends Screen {
 
         private int value() {
             return this.min + (int) Math.round(this.value * (this.max - this.min));
+        }
+    }
+
+    private static final class PercentSettingSlider extends SettingSlider {
+        private final double min;
+        private final double max;
+        private final DoubleSupplier getter;
+        private final DoubleConsumer setter;
+
+        PercentSettingSlider(
+                int x,
+                int y,
+                int width,
+                String label,
+                double min,
+                double max,
+                DoubleSupplier getter,
+                DoubleConsumer setter
+        ) {
+            super(x, y, width, label, normalize(getter.getAsDouble(), min, max));
+            this.min = min;
+            this.max = max;
+            this.getter = getter;
+            this.setter = setter;
+            this.updateMessage();
+        }
+
+        @Override
+        protected void updateMessage() {
+            this.setMessage(Text.literal(this.label() + ": " + String.format(Locale.ROOT, "%.1f%%", this.getter.getAsDouble())));
+        }
+
+        @Override
+        protected void applyValue() {
+            this.setter.accept(this.value());
+        }
+
+        private double value() {
+            return this.min + this.value * (this.max - this.min);
         }
     }
 
