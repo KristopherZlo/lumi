@@ -20,7 +20,7 @@ import org.joml.Vector3f;
 
 final class GhostDisplayService {
 
-    private static final float OVERLAY_FACE_OFFSET = 0.001F;
+    private static final float OVERLAY_FACE_OFFSET = 0.005F;
     private static final float OVERLAY_SCALE = 1.0F + OVERLAY_FACE_OFFSET * 2.0F;
     private static final float OVERLAY_TRANSLATION = -OVERLAY_FACE_OFFSET;
 

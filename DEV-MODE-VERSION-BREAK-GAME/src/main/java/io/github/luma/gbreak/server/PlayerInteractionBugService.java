@@ -28,7 +28,12 @@ final class PlayerInteractionBugService {
     ActionResult handleUseBlock(PlayerEntity player, World world, Hand hand, BlockHitResult hitResult) {
         GameBreakingBug activeBug = this.bugState.activeBug();
         if (activeBug == GameBreakingBug.GHOST_PLAYER) {
-            return ActionResult.SUCCESS_SERVER;
+            return this.acceptedResult(world);
+        }
+        if (activeBug == GameBreakingBug.THE_GHOST && world.isClient()) {
+            return this.canCreateGhostPlacement(player, world, hand, hitResult)
+                    ? ActionResult.SUCCESS
+                    : ActionResult.PASS;
         }
         if (!(player instanceof ServerPlayerEntity serverPlayer) || !(world instanceof ServerWorld serverWorld)) {
             return ActionResult.PASS;
@@ -53,6 +58,18 @@ final class PlayerInteractionBugService {
         return ActionResult.PASS;
     }
 
+    private ActionResult acceptedResult(World world) {
+        return world.isClient() ? ActionResult.SUCCESS : ActionResult.SUCCESS_SERVER;
+    }
+
+    private boolean canCreateGhostPlacement(PlayerEntity player, World world, Hand hand, BlockHitResult hitResult) {
+        ItemStack stack = player.getStackInHand(hand);
+        if (!(stack.getItem() instanceof BlockItem blockItem)) {
+            return false;
+        }
+        return this.resolvePlacement(player, world, hand, hitResult, blockItem, stack) != null;
+    }
+
     boolean beforeBlockBreak(ServerWorld world, PlayerEntity player, BlockPos pos, BlockState state) {
         GameBreakingBug activeBug = this.bugState.activeBug();
         if (activeBug == GameBreakingBug.GHOST_PLAYER) {
@@ -66,8 +83,8 @@ final class PlayerInteractionBugService {
     }
 
     private PlacementPlan resolvePlacement(
-            ServerPlayerEntity player,
-            ServerWorld world,
+            PlayerEntity player,
+            World world,
             Hand hand,
             BlockHitResult hitResult,
             BlockItem blockItem,

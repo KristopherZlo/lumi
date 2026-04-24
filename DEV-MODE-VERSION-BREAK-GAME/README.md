@@ -16,4 +16,4 @@ Dev-only Fabric mod for Lumi capture scenarios.
 
 - The screen ships with two fake commits by default so the history view looks populated.
 - The restore effect is a visual demo only. It does not use Lumi project history or real rollback data.
-- Interaction ghost blocks render as slightly oversized `block_display` overlays to avoid z-fighting flicker with the real block face.
+- Interaction ghost blocks suppress client-side vanilla placement prediction and render as slightly oversized `block_display` overlays to avoid z-fighting flicker with the real block face.
