@@ -36,6 +36,9 @@ public final class WorldCorruptionService {
     private UUID targetPlayerId;
     private boolean corrupting;
     private boolean restoring;
+    private int cachedHorizontalRadius = -1;
+    private int cachedVerticalRadius = -1;
+    private List<BlockPos> cachedSearchOffsets = List.of();
     private SimplexNoiseSampler noiseSampler = new SimplexNoiseSampler(new LocalRandom(0x4C554D41474C4954L));
 
     public StartResult start(ServerPlayerEntity player) {
@@ -110,7 +113,8 @@ public final class WorldCorruptionService {
     private void syncCorruptionMask(MinecraftServer server, ServerPlayerEntity player) {
         ServerWorld world = player.getEntityWorld();
         BlockPos origin = player.getBlockPos();
-        List<NoiseCandidate> desiredCandidates = this.resolveDesiredCandidates(world, origin);
+        int horizontalRadius = this.effectiveHorizontalRadius(server);
+        List<NoiseCandidate> desiredCandidates = this.resolveDesiredCandidates(world, origin, horizontalRadius);
         Set<CorruptedBlockKey> desiredKeys = new HashSet<>((desiredCandidates.size() * 4 / 3) + 1);
         for (NoiseCandidate candidate : desiredCandidates) {
             desiredKeys.add(candidate.key());
@@ -120,9 +124,9 @@ public final class WorldCorruptionService {
         this.corruptDesiredBatch(world, desiredCandidates);
     }
 
-    private List<NoiseCandidate> resolveDesiredCandidates(ServerWorld world, BlockPos origin) {
+    private List<NoiseCandidate> resolveDesiredCandidates(ServerWorld world, BlockPos origin, int horizontalRadius) {
         List<NoiseCandidate> candidates = new ArrayList<>();
-        for (BlockPos offset : this.buildSearchOffsets()) {
+        for (BlockPos offset : this.searchOffsets(horizontalRadius)) {
             BlockPos candidatePos = origin.add(offset);
             if (!world.isInBuildLimit(candidatePos)) {
                 continue;
@@ -144,6 +148,11 @@ public final class WorldCorruptionService {
             return candidates;
         }
         return List.copyOf(candidates.subList(0, targetCorruptedBlocks));
+    }
+
+    private int effectiveHorizontalRadius(MinecraftServer server) {
+        int renderDistanceBlocks = Math.max(2, server.getPlayerManager().getViewDistance()) * 16;
+        return Math.max(16, renderDistanceBlocks * this.settings.renderRadiusPercent() / 100);
     }
 
     private double noiseValue(BlockPos pos) {
@@ -229,13 +238,24 @@ public final class WorldCorruptionService {
         }
     }
 
-    private List<BlockPos> buildSearchOffsets() {
-        List<BlockPos> offsets = new ArrayList<>();
-        int horizontalRadius = this.settings.horizontalRadius();
+    private List<BlockPos> searchOffsets(int horizontalRadius) {
         int verticalRadius = this.settings.verticalRadius();
+        if (this.cachedHorizontalRadius == horizontalRadius && this.cachedVerticalRadius == verticalRadius) {
+            return this.cachedSearchOffsets;
+        }
+
+        this.cachedHorizontalRadius = horizontalRadius;
+        this.cachedVerticalRadius = verticalRadius;
+        this.cachedSearchOffsets = this.buildSearchOffsets(horizontalRadius, verticalRadius);
+        return this.cachedSearchOffsets;
+    }
+
+    private List<BlockPos> buildSearchOffsets(int horizontalRadius, int verticalRadius) {
+        List<BlockPos> offsets = new ArrayList<>();
+        int horizontalStep = Math.max(1, horizontalRadius / 32);
         for (int y = -verticalRadius; y <= verticalRadius; y++) {
-            for (int x = -horizontalRadius; x <= horizontalRadius; x++) {
-                for (int z = -horizontalRadius; z <= horizontalRadius; z++) {
+            for (int x = -horizontalRadius; x <= horizontalRadius; x += horizontalStep) {
+                for (int z = -horizontalRadius; z <= horizontalRadius; z += horizontalStep) {
                     if (x == 0 && y == 0 && z == 0) {
                         continue;
                     }

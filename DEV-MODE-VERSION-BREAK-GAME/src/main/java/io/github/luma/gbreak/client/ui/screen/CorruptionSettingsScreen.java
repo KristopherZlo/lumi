@@ -68,11 +68,11 @@ public final class CorruptionSettingsScreen extends Screen {
                 sliderX,
                 y,
                 SLIDER_WIDTH,
-                "Horizontal radius",
-                4,
-                32,
-                this.settings::horizontalRadius,
-                this.settings::setHorizontalRadius
+                "Render radius %",
+                25,
+                100,
+                this.settings::renderRadiusPercent,
+                this.settings::setRenderRadiusPercent
         ));
         y += 24;
         this.addDrawableChild(new IntSettingSlider(
@@ -137,7 +137,6 @@ public final class CorruptionSettingsScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
         int panelLeft = (this.width - PANEL_WIDTH) / 2;
         int panelTop = Math.max(18, (this.height - 254) / 2);
         context.fill(panelLeft, panelTop, panelLeft + PANEL_WIDTH, panelTop + 254, 0xCC101115);
