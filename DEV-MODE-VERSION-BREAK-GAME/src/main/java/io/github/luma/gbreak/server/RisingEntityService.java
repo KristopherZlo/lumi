@@ -28,6 +28,8 @@ final class RisingEntityService {
     private static final int MAX_SPAWN_DELAY_TICKS = 44;
     private static final int MIN_BATCH_SIZE = 2;
     private static final int MAX_BATCH_SIZE = 6;
+    private static final double MIN_VERTICAL_SPEED = 0.012D;
+    private static final double MAX_VERTICAL_SPEED = 0.032D;
     private static final List<EntityType<? extends Entity>> MOB_TYPES = List.of(
             EntityType.BAT,
             EntityType.ALLAY,
@@ -116,13 +118,12 @@ final class RisingEntityService {
         entity.setNoGravity(true);
         entity.setSilent(true);
         entity.setInvulnerable(true);
-        entity.setGlowing(random.nextInt(100) < 35);
         world.spawnEntity(entity);
         this.activeEntities.add(new RisingEntity(
                 world,
                 entity.getUuid(),
                 world.getTime() + random.nextInt(120, 241),
-                random.nextDouble(0.035D, 0.085D),
+                random.nextDouble(MIN_VERTICAL_SPEED, MAX_VERTICAL_SPEED),
                 random.nextDouble(-0.012D, 0.012D),
                 random.nextDouble(-0.012D, 0.012D)
         ));

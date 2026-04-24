@@ -8,7 +8,8 @@ final class TimeJitterService {
 
     private static final int MIN_DELAY_TICKS = 20;
     private static final int MAX_DELAY_TICKS = 60;
-    private static final long DAY_LENGTH_TICKS = 24_000L;
+    private static final long MIN_TIME_DELTA_TICKS = -2_000L;
+    private static final long MAX_TIME_DELTA_TICKS = 2_000L;
 
     private int nextJitterAt;
 
@@ -19,9 +20,9 @@ final class TimeJitterService {
         }
 
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        long timeOfDay = random.nextLong(DAY_LENGTH_TICKS);
+        long timeDelta = random.nextLong(MIN_TIME_DELTA_TICKS, MAX_TIME_DELTA_TICKS + 1L);
         for (ServerWorld world : server.getWorlds()) {
-            world.setTimeOfDay(timeOfDay);
+            world.setTimeOfDay(world.getTimeOfDay() + timeDelta);
         }
         this.nextJitterAt = tick + random.nextInt(MIN_DELAY_TICKS, MAX_DELAY_TICKS + 1);
     }
