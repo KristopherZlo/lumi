@@ -14,8 +14,15 @@ import net.minecraft.entity.decoration.DisplayEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.AffineTransformation;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 final class GhostDisplayService {
+
+    private static final float OVERLAY_FACE_OFFSET = 0.001F;
+    private static final float OVERLAY_SCALE = 1.0F + OVERLAY_FACE_OFFSET * 2.0F;
+    private static final float OVERLAY_TRANSLATION = -OVERLAY_FACE_OFFSET;
 
     private final List<TimedGhost> activeGhosts = new ArrayList<>();
 
@@ -26,6 +33,7 @@ final class GhostDisplayService {
         }
 
         ((BlockDisplayEntityAccessor) display).gbreak$setBlockState(state);
+        this.applyOverlayTransform(display);
         display.setPosition(pos.getX(), pos.getY(), pos.getZ());
         display.setNoGravity(true);
         world.spawnEntity(display);
@@ -42,6 +50,17 @@ final class GhostDisplayService {
                 display.getUuid(),
                 world.getTime() + ThreadLocalRandom.current().nextInt(40, 101)
         ));
+    }
+
+    private void applyOverlayTransform(DisplayEntity.BlockDisplayEntity display) {
+        display.setTransformation(new AffineTransformation(
+                new Vector3f(OVERLAY_TRANSLATION, OVERLAY_TRANSLATION, OVERLAY_TRANSLATION),
+                new Quaternionf(),
+                new Vector3f(OVERLAY_SCALE, OVERLAY_SCALE, OVERLAY_SCALE),
+                new Quaternionf()
+        ));
+        display.setInterpolationDuration(0);
+        display.setStartInterpolation(0);
     }
 
     void tick() {
