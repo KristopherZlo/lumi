@@ -31,6 +31,7 @@ public final class WorldCorruptionService {
     private final Map<CorruptedBlockKey, RestorableBlock> originals = new LinkedHashMap<>();
     private final Deque<RestorableBlock> restoreQueue = new ArrayDeque<>();
     private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService();
+    private final CorruptionParticleService particleService = new CorruptionParticleService();
 
     private UUID targetPlayerId;
     private boolean corrupting;
@@ -85,6 +86,7 @@ public final class WorldCorruptionService {
         }
         this.corruptBatch(player);
         this.skyDisplayService.spawnAround(player);
+        this.particleService.tick(player);
     }
 
     void restoreAllImmediately(MinecraftServer server) {
