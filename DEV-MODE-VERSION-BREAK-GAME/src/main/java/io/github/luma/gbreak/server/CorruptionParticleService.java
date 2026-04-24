@@ -1,5 +1,6 @@
 package io.github.luma.gbreak.server;
 
+import io.github.luma.gbreak.state.CorruptionSettings;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -9,12 +10,13 @@ final class CorruptionParticleService {
 
     private static final int HORIZONTAL_RADIUS = 42;
     private static final int VERTICAL_RADIUS = 18;
-    private static final int BURSTS_PER_TICK = 14;
+
+    private final CorruptionSettings settings = CorruptionSettings.getInstance();
 
     void tick(ServerPlayerEntity player) {
         ServerWorld world = player.getEntityWorld();
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        for (int index = 0; index < BURSTS_PER_TICK; index++) {
+        for (int index = 0; index < this.settings.particleBurstsPerTick(); index++) {
             double x = player.getX() + random.nextDouble(-HORIZONTAL_RADIUS, HORIZONTAL_RADIUS);
             double y = player.getY() + random.nextDouble(-4.0D, VERTICAL_RADIUS);
             double z = player.getZ() + random.nextDouble(-HORIZONTAL_RADIUS, HORIZONTAL_RADIUS);

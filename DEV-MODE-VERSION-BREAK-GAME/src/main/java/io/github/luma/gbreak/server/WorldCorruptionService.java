@@ -1,6 +1,7 @@
 package io.github.luma.gbreak.server;
 
 import io.github.luma.gbreak.block.GBreakBlocks;
+import io.github.luma.gbreak.state.CorruptionSettings;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -24,16 +25,9 @@ import net.minecraft.world.World;
 
 public final class WorldCorruptionService {
 
-    private static final int HORIZONTAL_RADIUS = 12;
-    private static final int VERTICAL_RADIUS = 5;
-    private static final int TARGET_CORRUPTED_BLOCKS = 96;
-    private static final int CORRUPTION_BATCH_SIZE = 24;
-    private static final int RESTORE_BATCH_SIZE = 144;
-    private static final double NOISE_SCALE = 0.115D;
-    private static final double DETAIL_NOISE_SCALE = 0.31D;
     private static final int UPDATE_FLAGS = Block.NOTIFY_LISTENERS | Block.FORCE_STATE | Block.SKIP_DROPS;
-    private static final List<BlockPos> SEARCH_OFFSETS = buildSearchOffsets();
 
+    private final CorruptionSettings settings = CorruptionSettings.getInstance();
     private final Map<CorruptedBlockKey, RestorableBlock> originals = new LinkedHashMap<>();
     private final Deque<RestorableBlock> restoreQueue = new ArrayDeque<>();
     private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService();
@@ -81,7 +75,7 @@ public final class WorldCorruptionService {
     void tick(MinecraftServer server) {
         this.skyDisplayService.tickExisting();
         if (this.restoring) {
-            this.restoreBatch(server, RESTORE_BATCH_SIZE);
+            this.restoreBatch(server, this.settings.restoreBatchSize());
             return;
         }
         if (!this.corrupting) {
@@ -122,13 +116,13 @@ public final class WorldCorruptionService {
             desiredKeys.add(candidate.key());
         }
 
-        this.restoreOutsideMask(server, desiredKeys, RESTORE_BATCH_SIZE);
+        this.restoreOutsideMask(server, desiredKeys, this.settings.restoreBatchSize());
         this.corruptDesiredBatch(world, desiredCandidates);
     }
 
     private List<NoiseCandidate> resolveDesiredCandidates(ServerWorld world, BlockPos origin) {
         List<NoiseCandidate> candidates = new ArrayList<>();
-        for (BlockPos offset : SEARCH_OFFSETS) {
+        for (BlockPos offset : this.buildSearchOffsets()) {
             BlockPos candidatePos = origin.add(offset);
             if (!world.isInBuildLimit(candidatePos)) {
                 continue;
@@ -145,26 +139,31 @@ public final class WorldCorruptionService {
         }
 
         candidates.sort((left, right) -> Double.compare(right.value(), left.value()));
-        if (candidates.size() <= TARGET_CORRUPTED_BLOCKS) {
+        int targetCorruptedBlocks = this.settings.targetCorruptedBlocks();
+        if (candidates.size() <= targetCorruptedBlocks) {
             return candidates;
         }
-        return List.copyOf(candidates.subList(0, TARGET_CORRUPTED_BLOCKS));
+        return List.copyOf(candidates.subList(0, targetCorruptedBlocks));
     }
 
     private double noiseValue(BlockPos pos) {
-        double base = this.noiseSampler.sample(pos.getX() * NOISE_SCALE, pos.getY() * NOISE_SCALE, pos.getZ() * NOISE_SCALE);
+        double noiseScale = this.settings.noiseScale();
+        double detailNoiseScale = this.settings.detailNoiseScale();
+        double base = this.noiseSampler.sample(pos.getX() * noiseScale, pos.getY() * noiseScale, pos.getZ() * noiseScale);
         double detail = this.noiseSampler.sample(
-                1000.0D + pos.getX() * DETAIL_NOISE_SCALE,
-                -1000.0D + pos.getY() * DETAIL_NOISE_SCALE,
-                pos.getZ() * DETAIL_NOISE_SCALE
+                1000.0D + pos.getX() * detailNoiseScale,
+                -1000.0D + pos.getY() * detailNoiseScale,
+                pos.getZ() * detailNoiseScale
         );
         return base + detail * 0.35D;
     }
 
     private void corruptDesiredBatch(ServerWorld world, List<NoiseCandidate> desiredCandidates) {
         int changed = 0;
+        int targetCorruptedBlocks = this.settings.targetCorruptedBlocks();
+        int applyBatchSize = this.settings.applyBatchSize();
         for (NoiseCandidate candidate : desiredCandidates) {
-            if (this.originals.size() >= TARGET_CORRUPTED_BLOCKS || changed >= CORRUPTION_BATCH_SIZE) {
+            if (this.originals.size() >= targetCorruptedBlocks || changed >= applyBatchSize) {
                 return;
             }
             if (this.originals.containsKey(candidate.key())) {
@@ -230,11 +229,13 @@ public final class WorldCorruptionService {
         }
     }
 
-    private static List<BlockPos> buildSearchOffsets() {
+    private List<BlockPos> buildSearchOffsets() {
         List<BlockPos> offsets = new ArrayList<>();
-        for (int y = -VERTICAL_RADIUS; y <= VERTICAL_RADIUS; y++) {
-            for (int x = -HORIZONTAL_RADIUS; x <= HORIZONTAL_RADIUS; x++) {
-                for (int z = -HORIZONTAL_RADIUS; z <= HORIZONTAL_RADIUS; z++) {
+        int horizontalRadius = this.settings.horizontalRadius();
+        int verticalRadius = this.settings.verticalRadius();
+        for (int y = -verticalRadius; y <= verticalRadius; y++) {
+            for (int x = -horizontalRadius; x <= horizontalRadius; x++) {
+                for (int z = -horizontalRadius; z <= horizontalRadius; z++) {
                     if (x == 0 && y == 0 && z == 0) {
                         continue;
                     }
