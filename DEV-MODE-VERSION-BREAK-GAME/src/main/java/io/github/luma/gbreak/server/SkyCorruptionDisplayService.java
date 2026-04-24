@@ -2,6 +2,7 @@ package io.github.luma.gbreak.server;
 
 import io.github.luma.gbreak.block.GBreakBlocks;
 import io.github.luma.gbreak.mixin.BlockDisplayEntityAccessor;
+import io.github.luma.gbreak.state.CorruptionSettings;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -20,7 +21,6 @@ import net.minecraft.util.math.Vec3d;
 
 final class SkyCorruptionDisplayService {
 
-    private static final int MAX_ACTIVE_DISPLAYS = 96;
     private static final int HORIZONTAL_RADIUS = 52;
     private static final int MIN_HEIGHT_OFFSET = 18;
     private static final int MAX_HEIGHT_OFFSET = 46;
@@ -40,6 +40,7 @@ final class SkyCorruptionDisplayService {
             Blocks.COPPER_BLOCK.getDefaultState()
     );
 
+    private final CorruptionSettings settings = CorruptionSettings.getInstance();
     private final List<SkyDisplay> activeDisplays = new ArrayList<>();
 
     private long nextSpawnAt;
@@ -61,10 +62,12 @@ final class SkyCorruptionDisplayService {
             }
             this.jitter(entity, display.basePosition(), random);
         }
+        this.trimToConfiguredLimit();
     }
 
     void spawnAround(ServerPlayerEntity player) {
-        if (this.activeDisplays.size() >= MAX_ACTIVE_DISPLAYS) {
+        int maxDisplays = this.settings.maxSkyDisplays();
+        if (this.activeDisplays.size() >= maxDisplays) {
             return;
         }
 
@@ -79,7 +82,7 @@ final class SkyCorruptionDisplayService {
         int clusterSize = random.nextInt(100) < SINGLE_DISPLAY_CHANCE
                 ? 1
                 : random.nextInt(MIN_CLUSTER_SIZE, MAX_CLUSTER_SIZE + 1);
-        for (int index = 0; index < clusterSize && this.activeDisplays.size() < MAX_ACTIVE_DISPLAYS; index++) {
+        for (int index = 0; index < clusterSize && this.activeDisplays.size() < maxDisplays; index++) {
             BlockPos pos = anchor.add(random.nextInt(-2, 3), random.nextInt(-1, 2), random.nextInt(-2, 3));
             if (world.isInBuildLimit(pos)) {
                 this.spawn(world, pos, random);
@@ -102,6 +105,16 @@ final class SkyCorruptionDisplayService {
 
     int activeCount() {
         return this.activeDisplays.size();
+    }
+
+    private void trimToConfiguredLimit() {
+        while (this.activeDisplays.size() > this.settings.maxSkyDisplays()) {
+            SkyDisplay display = this.activeDisplays.remove(this.activeDisplays.size() - 1);
+            Entity entity = display.world().getEntity(display.entityId());
+            if (entity != null) {
+                entity.discard();
+            }
+        }
     }
 
     private void spawn(ServerWorld world, BlockPos pos, ThreadLocalRandom random) {
