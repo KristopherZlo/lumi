@@ -35,6 +35,7 @@ public final class WorldCorruptionService {
     private final TimeJitterService timeJitterService = new TimeJitterService();
     private final CorruptionParticleService particleService = new CorruptionParticleService();
     private final CorruptionRestoreFadeNotifier restoreFadeNotifier = new CorruptionRestoreFadeNotifier();
+    private final CorruptionRestoreCadence restoreCadence = new CorruptionRestoreCadence();
 
     private UUID targetPlayerId;
     private CorruptionOrigin corruptionOrigin;
@@ -65,6 +66,7 @@ public final class WorldCorruptionService {
         this.targetPlayerId = null;
         this.corruptionQueue.reset();
         this.timeJitterService.reset();
+        this.restoreCadence.reset();
         this.rebuildRestoreQueue();
         this.risingEntityService.clear();
         this.risingGroundBlockService.clear();
@@ -85,7 +87,7 @@ public final class WorldCorruptionService {
     void tick(MinecraftServer server) {
         this.skyDisplayService.tickExisting();
         if (this.restoring) {
-            this.restoreBatch(server, this.settings.restoreBatchSize());
+            this.restoreQueuedBatch(server);
             return;
         }
         if (!this.corrupting) {
@@ -117,6 +119,7 @@ public final class WorldCorruptionService {
         this.risingEntityService.clear();
         this.risingGroundBlockService.clear();
         this.skyDisplayService.clear();
+        this.restoreCadence.reset();
         this.rebuildRestoreQueue();
         this.restoreBatch(server, Integer.MAX_VALUE);
     }
@@ -219,6 +222,12 @@ public final class WorldCorruptionService {
                 this.originals.values(),
                 block -> this.restoreDistanceSquared(block.key())
         ));
+    }
+
+    private void restoreQueuedBatch(MinecraftServer server) {
+        if (this.restoreCadence.shouldRestoreNow(this.settings.cleanupIntervalTicks())) {
+            this.restoreBatch(server, this.settings.restoreBatchSize());
+        }
     }
 
     private void restoreBatch(MinecraftServer server, int limit) {

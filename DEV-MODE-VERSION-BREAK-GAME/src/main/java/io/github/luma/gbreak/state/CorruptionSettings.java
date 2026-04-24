@@ -7,6 +7,7 @@ public final class CorruptionSettings {
     private volatile double noiseDensityPercent = 22.1D;
     private volatile int applyBatchSize = 512;
     private volatile int restoreBatchSize = 512;
+    private volatile int cleanupIntervalTicks = 4;
     private volatile int renderRadiusPercent = 100;
     private volatile double noiseScale = 0.055D;
     private volatile double detailNoiseScale = 0.18D;
@@ -42,6 +43,14 @@ public final class CorruptionSettings {
 
     public void setRestoreBatchSize(int restoreBatchSize) {
         this.restoreBatchSize = this.clamp(restoreBatchSize, 16, 512);
+    }
+
+    public int cleanupIntervalTicks() {
+        return this.cleanupIntervalTicks;
+    }
+
+    public void setCleanupIntervalTicks(int cleanupIntervalTicks) {
+        this.cleanupIntervalTicks = this.clamp(cleanupIntervalTicks, 1, 20);
     }
 
     public int renderRadiusPercent() {

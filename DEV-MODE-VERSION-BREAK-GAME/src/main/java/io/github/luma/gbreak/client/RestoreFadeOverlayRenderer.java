@@ -15,7 +15,7 @@ import net.minecraft.util.math.Vec3d;
 
 public final class RestoreFadeOverlayRenderer {
 
-    private static final double EXPANSION = 0.008D;
+    private static final double EXPANSION = 0.018D;
     private static final int MAX_ACTIVE_OVERLAYS = 4096;
 
     private final RestoreFadeAlphaCurve alphaCurve = new RestoreFadeAlphaCurve();
