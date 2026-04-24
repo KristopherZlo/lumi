@@ -46,7 +46,11 @@ public final class CorruptCommand {
             return 0;
         }
 
-        source.sendFeedback(() -> Text.literal("World corruption restore queued: " + result.restoreQueueSize() + " blocks."), false);
+        source.sendFeedback(() -> Text.literal("World corruption restore queued: "
+                + result.restoreQueueSize()
+                + " blocks, removed "
+                + result.removedDisplays()
+                + " sky displays."), false);
         return 1;
     }
 
@@ -55,7 +59,8 @@ public final class CorruptCommand {
         source.sendFeedback(() -> Text.literal("World corruption: "
                 + (status.corrupting() ? "on" : status.restoring() ? "restoring" : "off")
                 + " | tracked blocks: " + status.trackedBlocks()
-                + " | restore queue: " + status.restoreQueueSize()), false);
+                + " | restore queue: " + status.restoreQueueSize()
+                + " | sky displays: " + status.activeDisplays()), false);
         return 1;
     }
 }

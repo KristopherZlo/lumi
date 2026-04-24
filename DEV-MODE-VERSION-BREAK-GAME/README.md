@@ -7,7 +7,7 @@ Dev-only Fabric mod for Lumi capture scenarios.
 - Press `O` in-game to open the Lumi-style demo project screen.
 - Run `/gbreakui` on the client to open the same screen without the keybind.
 - Use `/gbreak off` as the single command for disabling injected bugs.
-- Use `/corrupt on` to batch-replace nearby non-air blocks with a missing-texture corruption block; `/corrupt off` queues restoration of the captured original block states.
+- Use `/corrupt on` to batch-replace nearby non-air blocks with a missing-texture corruption block and spawn jittering `block_display` glitches in the sky; `/corrupt off` removes sky glitches and queues restoration of the captured original block states.
 - Most action buttons are intentionally fake and only close the UI.
 - `Restore` and `Restore last save` also trigger `/gbreak fakerestore`, which replaces random nearby blocks with glass over several ticks.
 
