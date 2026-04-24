@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.registry.RegistryKey;
@@ -26,6 +25,7 @@ import net.minecraft.world.World;
 public final class WorldCorruptionService {
 
     private static final int UPDATE_FLAGS = Block.NOTIFY_LISTENERS | Block.FORCE_STATE | Block.SKIP_DROPS;
+    private static final long WORLD_MASK_SEED = 0x4C554D41474C4954L;
 
     private final CorruptionSettings settings = CorruptionSettings.getInstance();
     private final Map<CorruptedBlockKey, RestorableBlock> originals = new LinkedHashMap<>();
@@ -39,7 +39,7 @@ public final class WorldCorruptionService {
     private int cachedHorizontalRadius = -1;
     private int cachedVerticalRadius = -1;
     private List<BlockPos> cachedSearchOffsets = List.of();
-    private SimplexNoiseSampler noiseSampler = new SimplexNoiseSampler(new LocalRandom(0x4C554D41474C4954L));
+    private final SimplexNoiseSampler noiseSampler = new SimplexNoiseSampler(new LocalRandom(WORLD_MASK_SEED));
 
     public StartResult start(ServerPlayerEntity player) {
         if (this.corrupting) {
@@ -51,7 +51,6 @@ public final class WorldCorruptionService {
 
         this.targetPlayerId = player.getUuid();
         this.corrupting = true;
-        this.noiseSampler = new SimplexNoiseSampler(new LocalRandom(ThreadLocalRandom.current().nextLong()));
         return new StartResult(true, this.originals.size());
     }
 
@@ -126,7 +125,8 @@ public final class WorldCorruptionService {
 
     private List<NoiseCandidate> resolveDesiredCandidates(ServerWorld world, BlockPos origin, int horizontalRadius) {
         List<NoiseCandidate> candidates = new ArrayList<>();
-        for (BlockPos offset : this.searchOffsets(horizontalRadius)) {
+        List<BlockPos> offsets = this.searchOffsets(horizontalRadius);
+        for (BlockPos offset : offsets) {
             BlockPos candidatePos = origin.add(offset);
             if (!world.isInBuildLimit(candidatePos)) {
                 continue;
@@ -139,15 +139,13 @@ public final class WorldCorruptionService {
                 continue;
             }
 
-            candidates.add(new NoiseCandidate(key, this.noiseValue(candidatePos)));
+            double noiseValue = this.noiseValue(candidatePos);
+            if (this.isWorldMaskPosition(candidatePos, noiseValue, offsets.size())) {
+                candidates.add(new NoiseCandidate(key, noiseValue));
+            }
         }
 
-        candidates.sort((left, right) -> Double.compare(right.value(), left.value()));
-        int targetCorruptedBlocks = this.settings.targetCorruptedBlocks();
-        if (candidates.size() <= targetCorruptedBlocks) {
-            return candidates;
-        }
-        return List.copyOf(candidates.subList(0, targetCorruptedBlocks));
+        return candidates;
     }
 
     private int effectiveHorizontalRadius(MinecraftServer server) {
@@ -167,12 +165,32 @@ public final class WorldCorruptionService {
         return base + detail * 0.35D;
     }
 
+    private boolean isWorldMaskPosition(BlockPos pos, double noiseValue, int sampledPositionCount) {
+        double density = (double) this.settings.targetCorruptedBlocks() / Math.max(1, sampledPositionCount);
+        double normalizedNoise = this.clamp((noiseValue + 1.35D) / 2.7D, 0.0D, 1.0D);
+        double clusteredDensity = density * (0.05D + Math.pow(normalizedNoise, 3.0D) * 8.0D);
+        return this.positionHashUnit(pos) < this.clamp(clusteredDensity, 0.0002D, 0.95D);
+    }
+
+    private double positionHashUnit(BlockPos pos) {
+        long hash = pos.asLong() ^ WORLD_MASK_SEED;
+        hash ^= hash >>> 33;
+        hash *= 0xff51afd7ed558ccdL;
+        hash ^= hash >>> 33;
+        hash *= 0xc4ceb9fe1a85ec53L;
+        hash ^= hash >>> 33;
+        return (hash >>> 11) * 0x1.0p-53D;
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private void corruptDesiredBatch(ServerWorld world, List<NoiseCandidate> desiredCandidates) {
         int changed = 0;
-        int targetCorruptedBlocks = this.settings.targetCorruptedBlocks();
         int applyBatchSize = this.settings.applyBatchSize();
         for (NoiseCandidate candidate : desiredCandidates) {
-            if (this.originals.size() >= targetCorruptedBlocks || changed >= applyBatchSize) {
+            if (changed >= applyBatchSize) {
                 return;
             }
             if (this.originals.containsKey(candidate.key())) {
