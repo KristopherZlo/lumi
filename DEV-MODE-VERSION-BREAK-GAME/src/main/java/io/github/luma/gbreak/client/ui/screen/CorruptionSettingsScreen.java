@@ -77,6 +77,17 @@ public final class CorruptionSettingsScreen extends Screen {
                 sliderX,
                 y,
                 SLIDER_WIDTH,
+                "Cleanup delay ticks",
+                1,
+                20,
+                this.settings::cleanupIntervalTicks,
+                this.settings::setCleanupIntervalTicks
+        ));
+        y += 24;
+        this.addDrawableChild(new IntSettingSlider(
+                sliderX,
+                y,
+                SLIDER_WIDTH,
                 "Render radius %",
                 25,
                 100,
