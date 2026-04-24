@@ -1,5 +1,6 @@
 {
   "key.category.gbreakdev": "GBreak Dev",
+  "key.gbreakdev.open_corrupt_settings": "Open corruption settings",
   "key.gbreakdev.open_lumi_demo": "Открыть экран проекта Lumi",
 
   "gbreakdev.ui.opened": "Проект Lumi открыт.",
