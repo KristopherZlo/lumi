@@ -7,6 +7,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnReason;
@@ -26,6 +28,17 @@ final class SkyCorruptionDisplayService {
     private static final int MAX_CLUSTER_SIZE = 13;
     private static final int SINGLE_DISPLAY_CHANCE = 35;
     private static final double JITTER_DISTANCE = 0.28D;
+    private static final List<BlockState> DISPLAY_STATES = List.of(
+            GBreakBlocks.MISSING_TEXTURE.getDefaultState(),
+            Blocks.BASALT.getDefaultState(),
+            Blocks.BLACKSTONE.getDefaultState(),
+            Blocks.DEEPSLATE.getDefaultState(),
+            Blocks.OBSIDIAN.getDefaultState(),
+            Blocks.CRYING_OBSIDIAN.getDefaultState(),
+            Blocks.NETHERRACK.getDefaultState(),
+            Blocks.PURPUR_BLOCK.getDefaultState(),
+            Blocks.COPPER_BLOCK.getDefaultState()
+    );
 
     private final List<SkyDisplay> activeDisplays = new ArrayList<>();
 
@@ -97,7 +110,7 @@ final class SkyCorruptionDisplayService {
             return;
         }
 
-        ((BlockDisplayEntityAccessor) display).gbreak$setBlockState(GBreakBlocks.MISSING_TEXTURE.getDefaultState());
+        ((BlockDisplayEntityAccessor) display).gbreak$setBlockState(this.randomDisplayState(random));
         display.setPosition(pos.getX(), pos.getY(), pos.getZ());
         display.setNoGravity(true);
         display.setSilent(true);
@@ -109,6 +122,13 @@ final class SkyCorruptionDisplayService {
                 Vec3d.of(pos),
                 world.getTime() + random.nextInt(80, 181)
         ));
+    }
+
+    private BlockState randomDisplayState(ThreadLocalRandom random) {
+        if (random.nextInt(100) < 45) {
+            return GBreakBlocks.MISSING_TEXTURE.getDefaultState();
+        }
+        return DISPLAY_STATES.get(1 + random.nextInt(DISPLAY_STATES.size() - 1));
     }
 
     private BlockPos randomSkyAnchor(ServerPlayerEntity player, ServerWorld world, ThreadLocalRandom random) {
