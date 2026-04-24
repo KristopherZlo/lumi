@@ -7,7 +7,7 @@ Dev-only Fabric mod for Lumi capture scenarios.
 - Press `O` in-game to open the Lumi-style demo project screen.
 - Run `/gbreakui` on the client to open the same screen without the keybind.
 - Use `/gbreak off` as the single command for disabling injected bugs.
-- Use `/corrupt on` to plan a stable world-space simplex-noise density mask projected onto the visible terrain surface, apply those ground changes in batches with a restorable missing-texture block, spawn basalt-delta-style ash particles, and spawn jittering display-only `block_display` glitches in the sky with both missing-texture and normal block states; `/corrupt off` removes sky glitches and queues restoration of the captured original block states.
+- Use `/corrupt on` to plan a stable world-space simplex-noise density mask projected onto the visible terrain surface, apply those ground changes in batches with a restorable missing-texture block, spawn basalt-delta-style ash particles, spawn upward-floating mobs and entities, jitter the time of day every 1-3 seconds, and spawn jittering display-only `block_display` glitches in the sky with both missing-texture and normal block states; `/corrupt off` removes sky glitches and queues restoration of the captured original block states.
 - Press `K` or run `/corruptsettings` to open the live corruption settings menu. It does not pause the game, slider changes apply immediately, and the preview shows the current world-space mask, ash, and sky display settings.
 - Most action buttons are intentionally fake and only close the UI.
 - `Restore` and `Restore last save` also trigger `/gbreak fakerestore`, which replaces random nearby blocks with glass over several ticks.
