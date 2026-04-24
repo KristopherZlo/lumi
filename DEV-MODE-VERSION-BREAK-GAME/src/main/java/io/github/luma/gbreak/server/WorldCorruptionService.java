@@ -138,7 +138,7 @@ public final class WorldCorruptionService {
             }
 
             double noiseValue = this.maskSampler.noiseValue(candidatePos, this.settings);
-            if (this.maskSampler.isWorldMaskPosition(candidatePos, noiseValue, offsets.size(), this.settings)) {
+            if (this.maskSampler.isWorldMaskPosition(candidatePos, noiseValue, this.settings)) {
                 candidates.add(new NoiseCandidate(key, noiseValue));
             }
         }

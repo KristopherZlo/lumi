@@ -29,17 +29,12 @@ public final class CorruptionMaskSampler {
         return base + detail * 0.35D;
     }
 
-    public boolean isWorldMaskPosition(BlockPos pos, int sampledPositionCount, CorruptionSettings settings) {
-        return this.isWorldMaskPosition(pos, this.noiseValue(pos, settings), sampledPositionCount, settings);
+    public boolean isWorldMaskPosition(BlockPos pos, CorruptionSettings settings) {
+        return this.isWorldMaskPosition(pos, this.noiseValue(pos, settings), settings);
     }
 
-    public boolean isWorldMaskPosition(
-            BlockPos pos,
-            double noiseValue,
-            int sampledPositionCount,
-            CorruptionSettings settings
-    ) {
-        double density = (double) settings.targetCorruptedBlocks() / Math.max(1, sampledPositionCount);
+    public boolean isWorldMaskPosition(BlockPos pos, double noiseValue, CorruptionSettings settings) {
+        double density = settings.noiseDensityPercent() / 100.0D;
         double normalizedNoise = this.clamp((noiseValue + 1.35D) / 2.7D, 0.0D, 1.0D);
         double clusteredDensity = density * (0.05D + Math.pow(normalizedNoise, 3.0D) * 8.0D);
         return this.positionHashUnit(pos) < this.clamp(clusteredDensity, 0.0002D, 0.95D);
@@ -59,12 +54,6 @@ public final class CorruptionMaskSampler {
             }
         }
         return List.copyOf(offsets);
-    }
-
-    public int sampledPositionCount(int horizontalRadius, int verticalRadius) {
-        int horizontalStep = this.horizontalStep(horizontalRadius);
-        int horizontalSamples = (horizontalRadius * 2 / horizontalStep) + 1;
-        return Math.max(1, horizontalSamples * horizontalSamples * (verticalRadius * 2 + 1) - 1);
     }
 
     private int horizontalStep(int horizontalRadius) {
