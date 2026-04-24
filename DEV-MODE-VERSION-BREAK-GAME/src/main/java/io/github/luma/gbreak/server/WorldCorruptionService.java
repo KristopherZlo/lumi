@@ -30,7 +30,7 @@ public final class WorldCorruptionService {
     private final CorruptionMaskSampler maskSampler = new CorruptionMaskSampler();
     private final Map<CorruptedBlockKey, RestorableBlock> originals = new LinkedHashMap<>();
     private final Deque<RestorableBlock> restoreQueue = new ArrayDeque<>();
-    private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService();
+    private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService(this.settings, this.maskSampler);
     private final CorruptionParticleService particleService = new CorruptionParticleService();
 
     private UUID targetPlayerId;
@@ -49,6 +49,7 @@ public final class WorldCorruptionService {
 
         this.targetPlayerId = player.getUuid();
         this.corrupting = true;
+        this.skyDisplayService.generate(player);
         return new StartResult(true, this.originals.size());
     }
 
@@ -87,7 +88,6 @@ public final class WorldCorruptionService {
             return;
         }
         this.syncCorruptionMask(server, player);
-        this.skyDisplayService.spawnAround(player);
         this.particleService.tick(player);
     }
 
