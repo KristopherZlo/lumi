@@ -30,6 +30,7 @@ public final class WorldCorruptionService {
     private final ArrayDeque<RestorableBlock> restoreQueue = new ArrayDeque<>();
     private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService();
     private final RisingEntityService risingEntityService = new RisingEntityService();
+    private final RisingGroundBlockService risingGroundBlockService = new RisingGroundBlockService();
     private final TimeJitterService timeJitterService = new TimeJitterService();
     private final CorruptionParticleService particleService = new CorruptionParticleService();
 
@@ -62,6 +63,7 @@ public final class WorldCorruptionService {
         this.timeJitterService.reset();
         this.rebuildRestoreQueue();
         this.risingEntityService.clear();
+        this.risingGroundBlockService.clear();
         int removedDisplays = this.skyDisplayService.clear();
         return new StopResult(wasRunning, this.restoreQueue.size(), removedDisplays);
     }
@@ -96,6 +98,7 @@ public final class WorldCorruptionService {
         this.corruptQueuedBatch(server);
         this.skyDisplayService.spawnAround(player);
         this.risingEntityService.tick(player);
+        this.risingGroundBlockService.tick(player);
         this.timeJitterService.tick(server);
         this.particleService.tick(player);
     }
@@ -107,6 +110,7 @@ public final class WorldCorruptionService {
         this.corruptionQueue.reset();
         this.timeJitterService.reset();
         this.risingEntityService.clear();
+        this.risingGroundBlockService.clear();
         this.skyDisplayService.clear();
         this.rebuildRestoreQueue();
         this.restoreBatch(server, Integer.MAX_VALUE);
