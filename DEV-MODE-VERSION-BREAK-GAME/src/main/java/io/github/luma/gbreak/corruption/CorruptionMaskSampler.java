@@ -50,12 +50,14 @@ public final class CorruptionMaskSampler {
 
     public List<BlockPos> buildSurfaceOffsets(int horizontalRadius) {
         List<BlockPos> offsets = new ArrayList<>();
-        for (int x = -horizontalRadius; x <= horizontalRadius; x++) {
-            for (int z = -horizontalRadius; z <= horizontalRadius; z++) {
-                if (x == 0 && z == 0) {
-                    continue;
-                }
-                offsets.add(new BlockPos(x, 0, z));
+        for (int radius = 1; radius <= horizontalRadius; radius++) {
+            for (int x = -radius; x <= radius; x++) {
+                offsets.add(new BlockPos(x, 0, -radius));
+                offsets.add(new BlockPos(x, 0, radius));
+            }
+            for (int z = -radius + 1; z < radius; z++) {
+                offsets.add(new BlockPos(-radius, 0, z));
+                offsets.add(new BlockPos(radius, 0, z));
             }
         }
         return List.copyOf(offsets);
