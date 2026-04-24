@@ -28,13 +28,16 @@ public final class WorldCorruptionService {
     private final Map<CorruptedBlockKey, RestorableBlock> originals = new LinkedHashMap<>();
     private final GroundCorruptionBatchQueue<NoiseCandidate> corruptionQueue = new GroundCorruptionBatchQueue<>();
     private final ArrayDeque<RestorableBlock> restoreQueue = new ArrayDeque<>();
+    private final CorruptionRestoreWavePlanner restoreWavePlanner = new CorruptionRestoreWavePlanner();
     private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService();
     private final RisingEntityService risingEntityService = new RisingEntityService();
     private final RisingGroundBlockService risingGroundBlockService = new RisingGroundBlockService();
     private final TimeJitterService timeJitterService = new TimeJitterService();
     private final CorruptionParticleService particleService = new CorruptionParticleService();
+    private final WhiteFadeRestoreDisplayService whiteFadeDisplayService = new WhiteFadeRestoreDisplayService();
 
     private UUID targetPlayerId;
+    private CorruptionOrigin corruptionOrigin;
     private boolean corrupting;
     private boolean restoring;
     private int cachedHorizontalRadius = -1;
@@ -49,6 +52,7 @@ public final class WorldCorruptionService {
         }
 
         this.targetPlayerId = player.getUuid();
+        this.corruptionOrigin = new CorruptionOrigin(player.getEntityWorld().getRegistryKey(), player.getBlockPos().toImmutable());
         this.corrupting = true;
         this.corruptionQueue.reset();
         return new StartResult(true, this.originals.size());
@@ -80,6 +84,7 @@ public final class WorldCorruptionService {
 
     void tick(MinecraftServer server) {
         this.skyDisplayService.tickExisting();
+        this.whiteFadeDisplayService.tickExisting();
         if (this.restoring) {
             this.restoreBatch(server, this.settings.restoreBatchSize());
             return;
@@ -107,11 +112,13 @@ public final class WorldCorruptionService {
         this.corrupting = false;
         this.restoring = true;
         this.targetPlayerId = null;
+        this.corruptionOrigin = null;
         this.corruptionQueue.reset();
         this.timeJitterService.reset();
         this.risingEntityService.clear();
         this.risingGroundBlockService.clear();
         this.skyDisplayService.clear();
+        this.whiteFadeDisplayService.clear();
         this.rebuildRestoreQueue();
         this.restoreBatch(server, Integer.MAX_VALUE);
     }
@@ -210,7 +217,10 @@ public final class WorldCorruptionService {
 
     private void rebuildRestoreQueue() {
         this.restoreQueue.clear();
-        this.restoreQueue.addAll(this.originals.values());
+        this.restoreQueue.addAll(this.restoreWavePlanner.orderFromCenter(
+                this.originals.values(),
+                block -> this.restoreDistanceSquared(block.key())
+        ));
     }
 
     private void restoreBatch(MinecraftServer server, int limit) {
@@ -220,6 +230,9 @@ public final class WorldCorruptionService {
             ServerWorld world = server.getWorld(block.key().worldKey());
             if (world != null && world.isInBuildLimit(block.key().pos())) {
                 world.setBlockState(block.key().pos(), block.originalState(), UPDATE_FLAGS);
+                if (limit != Integer.MAX_VALUE) {
+                    this.whiteFadeDisplayService.spawn(world, block.key().pos());
+                }
             }
             this.originals.remove(block.key());
             restored++;
@@ -227,7 +240,15 @@ public final class WorldCorruptionService {
 
         if (this.restoreQueue.isEmpty()) {
             this.restoring = false;
+            this.corruptionOrigin = null;
         }
+    }
+
+    private long restoreDistanceSquared(CorruptedBlockKey key) {
+        if (this.corruptionOrigin == null || !this.corruptionOrigin.worldKey().equals(key.worldKey())) {
+            return 0L;
+        }
+        return this.restoreWavePlanner.distanceSquared(this.corruptionOrigin.center(), key.pos());
     }
 
     private List<BlockPos> surfaceOffsets(int horizontalRadius) {
@@ -257,4 +278,6 @@ public final class WorldCorruptionService {
     private record RestorableBlock(CorruptedBlockKey key, BlockState originalState) {}
 
     private record NoiseCandidate(CorruptedBlockKey key, double value) {}
+
+    private record CorruptionOrigin(RegistryKey<World> worldKey, BlockPos center) {}
 }
