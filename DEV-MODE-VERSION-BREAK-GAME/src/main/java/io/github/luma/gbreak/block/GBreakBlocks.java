@@ -27,12 +27,11 @@ public final class GBreakBlocks {
             .nonOpaque()
             .noCollision());
 
-    public static final Block GROUND_CORRUPTION = new Block(AbstractBlock.Settings.create()
+    public static final GroundCorruptionBlock GROUND_CORRUPTION = new GroundCorruptionBlock(AbstractBlock.Settings.create()
             .registryKey(GROUND_CORRUPTION_KEY)
             .mapColor(MapColor.MAGENTA)
             .strength(-1.0F, 3600000.0F)
             .sounds(BlockSoundGroup.STONE)
-            .luminance(state -> 6)
             .dropsNothing());
 
     private GBreakBlocks() {

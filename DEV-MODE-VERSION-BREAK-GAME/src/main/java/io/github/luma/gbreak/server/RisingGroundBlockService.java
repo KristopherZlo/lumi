@@ -20,13 +20,9 @@ import net.minecraft.world.Heightmap;
 final class RisingGroundBlockService {
 
     private static final int HORIZONTAL_RADIUS = 30;
-    private static final int CLUSTER_RADIUS = 5;
-    private static final int MAX_ACTIVE = 112;
-    private static final int MIN_SPAWN_DELAY_TICKS = 34;
-    private static final int MAX_SPAWN_DELAY_TICKS = 82;
-    private static final int MIN_BATCH_SIZE = 8;
-    private static final int MAX_BATCH_SIZE = 22;
-    private static final int MAX_SAMPLE_ATTEMPTS = 80;
+    private static final int MAX_ACTIVE = 128;
+    private static final int MIN_SPAWN_DELAY_TICKS = 42;
+    private static final int MAX_SPAWN_DELAY_TICKS = 96;
 
     private final List<RisingBlock> activeBlocks = new ArrayList<>();
 
@@ -41,7 +37,7 @@ final class RisingGroundBlockService {
         }
 
         this.nextSpawnAt = world.getTime() + random.nextInt(MIN_SPAWN_DELAY_TICKS, MAX_SPAWN_DELAY_TICKS + 1);
-        this.spawnBatch(player, random);
+        this.spawnSlice(player, random);
     }
 
     int clear() {
@@ -81,44 +77,53 @@ final class RisingGroundBlockService {
         }
     }
 
-    private void spawnBatch(ServerPlayerEntity player, ThreadLocalRandom random) {
+    private void spawnSlice(ServerPlayerEntity player, ThreadLocalRandom random) {
         ServerWorld world = player.getEntityWorld();
         BlockPos center = player.getBlockPos().add(
                 random.nextInt(-HORIZONTAL_RADIUS, HORIZONTAL_RADIUS + 1),
                 0,
                 random.nextInt(-HORIZONTAL_RADIUS, HORIZONTAL_RADIUS + 1)
         );
-        int batchSize = random.nextInt(MIN_BATCH_SIZE, MAX_BATCH_SIZE + 1);
-        int spawned = 0;
-        int attempts = 0;
-        while (spawned < batchSize && attempts++ < MAX_SAMPLE_ATTEMPTS && this.activeBlocks.size() < MAX_ACTIVE) {
-            BlockPos pos = this.randomSurfacePos(world, center, random);
-            if (pos == null) {
-                continue;
-            }
+        int sliceSize = random.nextBoolean() ? 3 : 5;
+        int radius = sliceSize / 2;
+        double verticalSpeed = random.nextDouble(0.014D, 0.034D);
+        double driftX = random.nextDouble(-0.003D, 0.003D);
+        double driftZ = random.nextDouble(-0.003D, 0.003D);
+        long expiresAt = world.getTime() + random.nextInt(140, 261);
+        for (int xOffset = -radius; xOffset <= radius && this.activeBlocks.size() < MAX_ACTIVE; xOffset++) {
+            for (int zOffset = -radius; zOffset <= radius && this.activeBlocks.size() < MAX_ACTIVE; zOffset++) {
+                BlockPos pos = this.surfacePos(world, center.getX() + xOffset, center.getZ() + zOffset);
+                if (pos == null) {
+                    continue;
+                }
 
-            BlockState state = world.getBlockState(pos);
-            if (!this.canLift(state)) {
-                continue;
-            }
-            if (this.spawn(world, pos, state, random)) {
-                spawned++;
+                BlockState state = world.getBlockState(pos);
+                if (this.canLift(state)) {
+                    this.spawn(world, pos, state, random, verticalSpeed, driftX, driftZ, expiresAt);
+                }
             }
         }
     }
 
-    private BlockPos randomSurfacePos(ServerWorld world, BlockPos center, ThreadLocalRandom random) {
-        int x = center.getX() + random.nextInt(-CLUSTER_RADIUS, CLUSTER_RADIUS + 1);
-        int z = center.getZ() + random.nextInt(-CLUSTER_RADIUS, CLUSTER_RADIUS + 1);
+    private BlockPos surfacePos(ServerWorld world, int x, int z) {
         int y = world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
         BlockPos pos = new BlockPos(x, y, z);
         return world.isInBuildLimit(pos) ? pos : null;
     }
 
-    private boolean spawn(ServerWorld world, BlockPos pos, BlockState state, ThreadLocalRandom random) {
+    private void spawn(
+            ServerWorld world,
+            BlockPos pos,
+            BlockState state,
+            ThreadLocalRandom random,
+            double verticalSpeed,
+            double driftX,
+            double driftZ,
+            long expiresAt
+    ) {
         DisplayEntity.BlockDisplayEntity display = EntityType.BLOCK_DISPLAY.create(world, SpawnReason.COMMAND);
         if (display == null) {
-            return false;
+            return;
         }
 
         ((BlockDisplayEntityAccessor) display).gbreak$setBlockState(state);
@@ -135,12 +140,11 @@ final class RisingGroundBlockService {
         this.activeBlocks.add(new RisingBlock(
                 world,
                 display.getUuid(),
-                world.getTime() + random.nextInt(110, 221),
-                random.nextDouble(0.018D, 0.052D),
-                random.nextDouble(-0.004D, 0.004D),
-                random.nextDouble(-0.004D, 0.004D)
+                expiresAt,
+                verticalSpeed,
+                driftX,
+                driftZ
         ));
-        return true;
     }
 
     private boolean canLift(BlockState state) {
