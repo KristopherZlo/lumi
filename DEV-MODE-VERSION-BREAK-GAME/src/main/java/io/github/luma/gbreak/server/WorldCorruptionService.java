@@ -30,6 +30,7 @@ public final class WorldCorruptionService {
 
     private final Map<CorruptedBlockKey, RestorableBlock> originals = new LinkedHashMap<>();
     private final Deque<RestorableBlock> restoreQueue = new ArrayDeque<>();
+    private final SkyCorruptionDisplayService skyDisplayService = new SkyCorruptionDisplayService();
 
     private UUID targetPlayerId;
     private boolean corrupting;
@@ -54,14 +55,22 @@ public final class WorldCorruptionService {
         this.restoring = !this.originals.isEmpty();
         this.targetPlayerId = null;
         this.rebuildRestoreQueue();
-        return new StopResult(wasRunning, this.restoreQueue.size());
+        int removedDisplays = this.skyDisplayService.clear();
+        return new StopResult(wasRunning, this.restoreQueue.size(), removedDisplays);
     }
 
     public StatusSnapshot status() {
-        return new StatusSnapshot(this.corrupting, this.restoring, this.originals.size(), this.restoreQueue.size());
+        return new StatusSnapshot(
+                this.corrupting,
+                this.restoring,
+                this.originals.size(),
+                this.restoreQueue.size(),
+                this.skyDisplayService.activeCount()
+        );
     }
 
     void tick(MinecraftServer server) {
+        this.skyDisplayService.tickExisting();
         if (this.restoring) {
             this.restoreBatch(server, RESTORE_BATCH_SIZE);
             return;
@@ -75,12 +84,14 @@ public final class WorldCorruptionService {
             return;
         }
         this.corruptBatch(player);
+        this.skyDisplayService.spawnAround(player);
     }
 
     void restoreAllImmediately(MinecraftServer server) {
         this.corrupting = false;
         this.restoring = true;
         this.targetPlayerId = null;
+        this.skyDisplayService.clear();
         this.rebuildRestoreQueue();
         this.restoreBatch(server, Integer.MAX_VALUE);
     }
@@ -167,9 +178,15 @@ public final class WorldCorruptionService {
 
     public record StartResult(boolean started, int trackedBlocks) {}
 
-    public record StopResult(boolean wasRunning, int restoreQueueSize) {}
+    public record StopResult(boolean wasRunning, int restoreQueueSize, int removedDisplays) {}
 
-    public record StatusSnapshot(boolean corrupting, boolean restoring, int trackedBlocks, int restoreQueueSize) {}
+    public record StatusSnapshot(
+            boolean corrupting,
+            boolean restoring,
+            int trackedBlocks,
+            int restoreQueueSize,
+            int activeDisplays
+    ) {}
 
     private record CorruptedBlockKey(RegistryKey<World> worldKey, BlockPos pos) {}
 
