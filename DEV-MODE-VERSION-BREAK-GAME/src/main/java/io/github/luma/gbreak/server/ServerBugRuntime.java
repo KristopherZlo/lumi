@@ -4,6 +4,7 @@ import io.github.luma.gbreak.bug.GameBreakingBug;
 import io.github.luma.gbreak.state.BugStateController;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
@@ -22,9 +23,14 @@ public final class ServerBugRuntime {
     private final PlayerInteractionBugService playerInteractionBugService = new PlayerInteractionBugService(this.ghostDisplayService);
     private final CorruptedBlocksService corruptedBlocksService = new CorruptedBlocksService();
     private final FakeRestoreService fakeRestoreService = new FakeRestoreService();
+    private final WorldCorruptionService worldCorruptionService = new WorldCorruptionService();
 
     public FakeRestoreService fakeRestoreService() {
         return this.fakeRestoreService;
+    }
+
+    public WorldCorruptionService worldCorruptionService() {
+        return this.worldCorruptionService;
     }
 
     public void register() {
@@ -36,6 +42,7 @@ public final class ServerBugRuntime {
                 : true);
         ServerTickEvents.START_SERVER_TICK.register(this::startTick);
         ServerTickEvents.END_SERVER_TICK.register(this::endTick);
+        ServerLifecycleEvents.SERVER_STOPPING.register(this.worldCorruptionService::restoreAllImmediately);
     }
 
     private boolean beforeBlockBreak(
@@ -55,6 +62,7 @@ public final class ServerBugRuntime {
     private void endTick(MinecraftServer server) {
         this.ghostDisplayService.tick();
         this.corruptedBlocksService.tick(server);
+        this.worldCorruptionService.tick(server);
         this.fakeRestoreService.tick(server);
         this.tickPerformanceCollapse();
     }

@@ -1,5 +1,7 @@
 package io.github.luma.gbreak;
 
+import io.github.luma.gbreak.block.GBreakBlocks;
+import io.github.luma.gbreak.command.CorruptCommand;
 import io.github.luma.gbreak.command.GBreakCommand;
 import io.github.luma.gbreak.server.ServerBugRuntime;
 import net.fabricmc.api.ModInitializer;
@@ -15,7 +17,9 @@ public final class GBreakDevMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        GBreakBlocks.register();
         GBreakCommand.register(this.serverBugRuntime.fakeRestoreService());
+        new CorruptCommand(this.serverBugRuntime.worldCorruptionService()).register();
         this.serverBugRuntime.register();
         LOGGER.info("GBreak Dev initialized");
     }
