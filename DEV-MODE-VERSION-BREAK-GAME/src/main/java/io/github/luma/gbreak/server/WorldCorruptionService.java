@@ -4,9 +4,11 @@ import io.github.luma.gbreak.block.GBreakBlocks;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.block.Block;
@@ -16,15 +18,19 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.noise.SimplexNoiseSampler;
+import net.minecraft.util.math.random.LocalRandom;
 import net.minecraft.world.World;
 
 public final class WorldCorruptionService {
 
     private static final int HORIZONTAL_RADIUS = 12;
     private static final int VERTICAL_RADIUS = 5;
-    private static final int CORRUPTION_BATCH_SIZE = 36;
+    private static final int TARGET_CORRUPTED_BLOCKS = 96;
+    private static final int CORRUPTION_BATCH_SIZE = 24;
     private static final int RESTORE_BATCH_SIZE = 144;
-    private static final int MAX_ATTEMPTS_PER_TICK = 768;
+    private static final double NOISE_SCALE = 0.115D;
+    private static final double DETAIL_NOISE_SCALE = 0.31D;
     private static final int UPDATE_FLAGS = Block.NOTIFY_LISTENERS | Block.FORCE_STATE | Block.SKIP_DROPS;
     private static final List<BlockPos> SEARCH_OFFSETS = buildSearchOffsets();
 
@@ -36,6 +42,7 @@ public final class WorldCorruptionService {
     private UUID targetPlayerId;
     private boolean corrupting;
     private boolean restoring;
+    private SimplexNoiseSampler noiseSampler = new SimplexNoiseSampler(new LocalRandom(0x4C554D41474C4954L));
 
     public StartResult start(ServerPlayerEntity player) {
         if (this.corrupting) {
@@ -47,6 +54,7 @@ public final class WorldCorruptionService {
 
         this.targetPlayerId = player.getUuid();
         this.corrupting = true;
+        this.noiseSampler = new SimplexNoiseSampler(new LocalRandom(ThreadLocalRandom.current().nextLong()));
         return new StartResult(true, this.originals.size());
     }
 
@@ -84,7 +92,7 @@ public final class WorldCorruptionService {
         if (player == null || player.isSpectator()) {
             return;
         }
-        this.corruptBatch(player);
+        this.syncCorruptionMask(server, player);
         this.skyDisplayService.spawnAround(player);
         this.particleService.tick(player);
     }
@@ -105,33 +113,92 @@ public final class WorldCorruptionService {
         return server.getPlayerManager().getPlayer(this.targetPlayerId);
     }
 
-    private void corruptBatch(ServerPlayerEntity player) {
+    private void syncCorruptionMask(MinecraftServer server, ServerPlayerEntity player) {
         ServerWorld world = player.getEntityWorld();
         BlockPos origin = player.getBlockPos();
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        int startIndex = random.nextInt(SEARCH_OFFSETS.size());
-        int changed = 0;
-        int attempts = Math.min(MAX_ATTEMPTS_PER_TICK, SEARCH_OFFSETS.size());
-        for (int attempt = 0; attempt < attempts && changed < CORRUPTION_BATCH_SIZE; attempt++) {
-            BlockPos offset = SEARCH_OFFSETS.get((startIndex + attempt) % SEARCH_OFFSETS.size());
+        List<NoiseCandidate> desiredCandidates = this.resolveDesiredCandidates(world, origin);
+        Set<CorruptedBlockKey> desiredKeys = new HashSet<>((desiredCandidates.size() * 4 / 3) + 1);
+        for (NoiseCandidate candidate : desiredCandidates) {
+            desiredKeys.add(candidate.key());
+        }
+
+        this.restoreOutsideMask(server, desiredKeys, RESTORE_BATCH_SIZE);
+        this.corruptDesiredBatch(world, desiredCandidates);
+    }
+
+    private List<NoiseCandidate> resolveDesiredCandidates(ServerWorld world, BlockPos origin) {
+        List<NoiseCandidate> candidates = new ArrayList<>();
+        for (BlockPos offset : SEARCH_OFFSETS) {
             BlockPos candidatePos = origin.add(offset);
             if (!world.isInBuildLimit(candidatePos)) {
                 continue;
             }
 
             CorruptedBlockKey key = new CorruptedBlockKey(world.getRegistryKey(), candidatePos.toImmutable());
-            if (this.originals.containsKey(key)) {
+            RestorableBlock tracked = this.originals.get(key);
+            BlockState state = tracked == null ? world.getBlockState(candidatePos) : tracked.originalState();
+            if (!this.canCorrupt(state)) {
                 continue;
             }
 
+            candidates.add(new NoiseCandidate(key, this.noiseValue(candidatePos)));
+        }
+
+        candidates.sort((left, right) -> Double.compare(right.value(), left.value()));
+        if (candidates.size() <= TARGET_CORRUPTED_BLOCKS) {
+            return candidates;
+        }
+        return List.copyOf(candidates.subList(0, TARGET_CORRUPTED_BLOCKS));
+    }
+
+    private double noiseValue(BlockPos pos) {
+        double base = this.noiseSampler.sample(pos.getX() * NOISE_SCALE, pos.getY() * NOISE_SCALE, pos.getZ() * NOISE_SCALE);
+        double detail = this.noiseSampler.sample(
+                1000.0D + pos.getX() * DETAIL_NOISE_SCALE,
+                -1000.0D + pos.getY() * DETAIL_NOISE_SCALE,
+                pos.getZ() * DETAIL_NOISE_SCALE
+        );
+        return base + detail * 0.35D;
+    }
+
+    private void corruptDesiredBatch(ServerWorld world, List<NoiseCandidate> desiredCandidates) {
+        int changed = 0;
+        for (NoiseCandidate candidate : desiredCandidates) {
+            if (this.originals.size() >= TARGET_CORRUPTED_BLOCKS || changed >= CORRUPTION_BATCH_SIZE) {
+                return;
+            }
+            if (this.originals.containsKey(candidate.key())) {
+                continue;
+            }
+
+            BlockPos candidatePos = candidate.key().pos();
             BlockState currentState = world.getBlockState(candidatePos);
             if (!this.canCorrupt(currentState)) {
                 continue;
             }
 
-            this.originals.put(key, new RestorableBlock(key, currentState));
+            this.originals.put(candidate.key(), new RestorableBlock(candidate.key(), currentState));
             world.setBlockState(candidatePos, GBreakBlocks.MISSING_TEXTURE.getDefaultState(), UPDATE_FLAGS);
             changed++;
+        }
+    }
+
+    private void restoreOutsideMask(MinecraftServer server, Set<CorruptedBlockKey> desiredKeys, int limit) {
+        int restored = 0;
+        var iterator = this.originals.entrySet().iterator();
+        while (iterator.hasNext() && restored < limit) {
+            Map.Entry<CorruptedBlockKey, RestorableBlock> entry = iterator.next();
+            if (desiredKeys.contains(entry.getKey())) {
+                continue;
+            }
+
+            RestorableBlock block = entry.getValue();
+            ServerWorld world = server.getWorld(block.key().worldKey());
+            if (world != null && world.isInBuildLimit(block.key().pos())) {
+                world.setBlockState(block.key().pos(), block.originalState(), UPDATE_FLAGS);
+            }
+            iterator.remove();
+            restored++;
         }
     }
 
@@ -193,4 +260,6 @@ public final class WorldCorruptionService {
     private record CorruptedBlockKey(RegistryKey<World> worldKey, BlockPos pos) {}
 
     private record RestorableBlock(CorruptedBlockKey key, BlockState originalState) {}
+
+    private record NoiseCandidate(CorruptedBlockKey key, double value) {}
 }
