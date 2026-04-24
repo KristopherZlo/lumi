@@ -19,6 +19,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.Heightmap;
 import net.minecraft.world.World;
 
 public final class WorldCorruptionService {
@@ -36,8 +37,7 @@ public final class WorldCorruptionService {
     private boolean corrupting;
     private boolean restoring;
     private int cachedHorizontalRadius = -1;
-    private int cachedVerticalRadius = -1;
-    private List<BlockPos> cachedSearchOffsets = List.of();
+    private List<BlockPos> cachedSurfaceOffsets = List.of();
 
     public StartResult start(ServerPlayerEntity player) {
         if (this.corrupting) {
@@ -123,10 +123,17 @@ public final class WorldCorruptionService {
 
     private List<NoiseCandidate> resolveDesiredCandidates(ServerWorld world, BlockPos origin, int horizontalRadius) {
         List<NoiseCandidate> candidates = new ArrayList<>();
-        List<BlockPos> offsets = this.searchOffsets(horizontalRadius);
+        List<BlockPos> offsets = this.surfaceOffsets(horizontalRadius);
         for (BlockPos offset : offsets) {
-            BlockPos candidatePos = origin.add(offset);
-            if (!world.isInBuildLimit(candidatePos)) {
+            int x = origin.getX() + offset.getX();
+            int z = origin.getZ() + offset.getZ();
+            double noiseValue = this.maskSampler.noiseValue(x, z, this.settings);
+            if (!this.maskSampler.isWorldMaskColumn(x, z, noiseValue, this.settings)) {
+                continue;
+            }
+
+            BlockPos candidatePos = this.surfacePos(world, x, z);
+            if (candidatePos == null) {
                 continue;
             }
 
@@ -137,13 +144,16 @@ public final class WorldCorruptionService {
                 continue;
             }
 
-            double noiseValue = this.maskSampler.noiseValue(candidatePos, this.settings);
-            if (this.maskSampler.isWorldMaskPosition(candidatePos, noiseValue, this.settings)) {
-                candidates.add(new NoiseCandidate(key, noiseValue));
-            }
+            candidates.add(new NoiseCandidate(key, noiseValue));
         }
 
         return candidates;
+    }
+
+    private BlockPos surfacePos(ServerWorld world, int x, int z) {
+        int y = world.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+        BlockPos pos = new BlockPos(x, y, z);
+        return world.isInBuildLimit(pos) ? pos : null;
     }
 
     private int effectiveHorizontalRadius(MinecraftServer server) {
@@ -220,16 +230,14 @@ public final class WorldCorruptionService {
         }
     }
 
-    private List<BlockPos> searchOffsets(int horizontalRadius) {
-        int verticalRadius = this.settings.verticalRadius();
-        if (this.cachedHorizontalRadius == horizontalRadius && this.cachedVerticalRadius == verticalRadius) {
-            return this.cachedSearchOffsets;
+    private List<BlockPos> surfaceOffsets(int horizontalRadius) {
+        if (this.cachedHorizontalRadius == horizontalRadius) {
+            return this.cachedSurfaceOffsets;
         }
 
         this.cachedHorizontalRadius = horizontalRadius;
-        this.cachedVerticalRadius = verticalRadius;
-        this.cachedSearchOffsets = this.maskSampler.buildSearchOffsets(horizontalRadius, verticalRadius);
-        return this.cachedSearchOffsets;
+        this.cachedSurfaceOffsets = this.maskSampler.buildSurfaceOffsets(horizontalRadius);
+        return this.cachedSurfaceOffsets;
     }
 
     public record StartResult(boolean started, int trackedBlocks) {}

@@ -5,12 +5,11 @@ public final class CorruptionSettings {
     private static final CorruptionSettings INSTANCE = new CorruptionSettings();
 
     private volatile double noiseDensityPercent = 22.1D;
-    private volatile int applyBatchSize = 24;
-    private volatile int restoreBatchSize = 144;
+    private volatile int applyBatchSize = 192;
+    private volatile int restoreBatchSize = 512;
     private volatile int renderRadiusPercent = 100;
-    private volatile int verticalRadius = 5;
-    private volatile double noiseScale = 0.115D;
-    private volatile double detailNoiseScale = 0.31D;
+    private volatile double noiseScale = 0.055D;
+    private volatile double detailNoiseScale = 0.18D;
     private volatile int particleBurstsPerTick = 14;
     private volatile int maxSkyDisplays = 96;
 
@@ -34,7 +33,7 @@ public final class CorruptionSettings {
     }
 
     public void setApplyBatchSize(int applyBatchSize) {
-        this.applyBatchSize = this.clamp(applyBatchSize, 1, 96);
+        this.applyBatchSize = this.clamp(applyBatchSize, 1, 1024);
     }
 
     public int restoreBatchSize() {
@@ -53,20 +52,12 @@ public final class CorruptionSettings {
         this.renderRadiusPercent = this.clamp(renderRadiusPercent, 25, 100);
     }
 
-    public int verticalRadius() {
-        return this.verticalRadius;
-    }
-
-    public void setVerticalRadius(int verticalRadius) {
-        this.verticalRadius = this.clamp(verticalRadius, 1, 12);
-    }
-
     public double noiseScale() {
         return this.noiseScale;
     }
 
     public void setNoiseScale(double noiseScale) {
-        this.noiseScale = this.clamp(noiseScale, 0.04D, 0.25D);
+        this.noiseScale = this.clamp(noiseScale, 0.01D, 0.18D);
     }
 
     public double detailNoiseScale() {

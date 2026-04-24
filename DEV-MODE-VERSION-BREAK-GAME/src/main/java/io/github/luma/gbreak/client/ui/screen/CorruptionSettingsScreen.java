@@ -57,7 +57,7 @@ public final class CorruptionSettingsScreen extends Screen {
                 SLIDER_WIDTH,
                 "Apply batch",
                 1,
-                96,
+                1024,
                 this.settings::applyBatchSize,
                 this.settings::setApplyBatchSize
         ));
@@ -84,24 +84,13 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::setRenderRadiusPercent
         ));
         y += 24;
-        this.addDrawableChild(new IntSettingSlider(
-                sliderX,
-                y,
-                SLIDER_WIDTH,
-                "Vertical radius",
-                1,
-                12,
-                this.settings::verticalRadius,
-                this.settings::setVerticalRadius
-        ));
-        y += 24;
         this.addDrawableChild(new DoubleSettingSlider(
                 sliderX,
                 y,
                 SLIDER_WIDTH,
                 "Noise scale",
-                0.04D,
-                0.25D,
+                0.01D,
+                0.18D,
                 this.settings::noiseScale,
                 this.settings::setNoiseScale
         ));
@@ -205,12 +194,12 @@ public final class CorruptionSettingsScreen extends Screen {
                 int xOffset = (column - PREVIEW_GRID_SIZE / 2) * sampleStep;
                 int zOffset = (row - PREVIEW_GRID_SIZE / 2) * sampleStep;
                 BlockPos samplePos = new BlockPos(center.getX() + xOffset, center.getY(), center.getZ() + zOffset);
-                double noiseValue = this.maskSampler.noiseValue(samplePos, this.settings);
+                double noiseValue = this.maskSampler.noiseValue(samplePos.getX(), samplePos.getZ(), this.settings);
                 int shade = 20 + (int) Math.round(this.clamp((noiseValue + 1.0D) * 18.0D, 0.0D, 34.0D));
                 int x = gridLeft + column * cellSize;
                 int y = gridTop + row * cellSize;
                 context.fill(x, y, x + cellSize, y + cellSize, 0xFF000000 | shade << 16 | shade << 8 | shade);
-                if (this.maskSampler.isWorldMaskPosition(samplePos, noiseValue, this.settings)) {
+                if (this.maskSampler.isWorldMaskColumn(samplePos.getX(), samplePos.getZ(), noiseValue, this.settings)) {
                     this.fillMissingTextureCell(context, x, y, cellSize);
                 }
             }
