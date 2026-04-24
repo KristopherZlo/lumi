@@ -178,7 +178,7 @@ public final class WorldCorruptionService {
             }
 
             this.originals.put(candidate.key(), new RestorableBlock(candidate.key(), currentState));
-            world.setBlockState(candidatePos, GBreakBlocks.MISSING_TEXTURE.getDefaultState(), UPDATE_FLAGS);
+            world.setBlockState(candidatePos, GBreakBlocks.GROUND_CORRUPTION.getDefaultState(), UPDATE_FLAGS);
             changed++;
         }
     }
@@ -186,7 +186,8 @@ public final class WorldCorruptionService {
     private boolean canCorrupt(BlockState state) {
         return !state.isAir()
                 && !state.hasBlockEntity()
-                && !state.isOf(GBreakBlocks.MISSING_TEXTURE);
+                && !state.isOf(GBreakBlocks.MISSING_TEXTURE)
+                && !state.isOf(GBreakBlocks.GROUND_CORRUPTION);
     }
 
     private void rebuildRestoreQueue() {

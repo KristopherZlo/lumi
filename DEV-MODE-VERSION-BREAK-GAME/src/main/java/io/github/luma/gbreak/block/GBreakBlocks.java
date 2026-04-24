@@ -15,6 +15,8 @@ public final class GBreakBlocks {
 
     private static final Identifier MISSING_TEXTURE_ID = Identifier.of(GBreakDevMod.MOD_ID, "missing_texture");
     private static final RegistryKey<Block> MISSING_TEXTURE_KEY = RegistryKey.of(RegistryKeys.BLOCK, MISSING_TEXTURE_ID);
+    private static final Identifier GROUND_CORRUPTION_ID = Identifier.of(GBreakDevMod.MOD_ID, "ground_corruption");
+    private static final RegistryKey<Block> GROUND_CORRUPTION_KEY = RegistryKey.of(RegistryKeys.BLOCK, GROUND_CORRUPTION_ID);
 
     public static final Block MISSING_TEXTURE = new Block(AbstractBlock.Settings.create()
             .registryKey(MISSING_TEXTURE_KEY)
@@ -25,10 +27,18 @@ public final class GBreakBlocks {
             .nonOpaque()
             .noCollision());
 
+    public static final Block GROUND_CORRUPTION = new Block(AbstractBlock.Settings.create()
+            .registryKey(GROUND_CORRUPTION_KEY)
+            .mapColor(MapColor.MAGENTA)
+            .strength(-1.0F, 3600000.0F)
+            .sounds(BlockSoundGroup.STONE)
+            .dropsNothing());
+
     private GBreakBlocks() {
     }
 
     public static void register() {
         Registry.register(Registries.BLOCK, MISSING_TEXTURE_KEY, MISSING_TEXTURE);
+        Registry.register(Registries.BLOCK, GROUND_CORRUPTION_KEY, GROUND_CORRUPTION);
     }
 }
