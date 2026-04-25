@@ -179,35 +179,6 @@ Deletes the candidates from the dry-run set.
 
 If the project has an active Lumi world operation, the cleanup flow keeps `recovery/operation-draft.bin.lz4` and reports that skip in the command response.
 
-## Development animal commands
-
-These commands are standalone development helpers, not part of the `/lumi` project workflow. They require the same operator-level permission gate as Lumi commands.
-
-### Move nearby animals
-
-```mcfunction
-/animove <radii> <x> <y> <z> [x] [y] [z] [animal_selector] [-loop]
-```
-
-Moves matching animals within `radii` blocks of the command source toward `<x> <y> <z>` using a panic-speed navigation push. If the optional second coordinate is provided, animals return there after reaching the first target. With `-loop`, they alternate between both points until stopped.
-
-Examples:
-
-```mcfunction
-/animove 24 100 64 100
-/animove 24 100 64 100 80 64 80 [type=cow,name=Bessie] -loop
-```
-
-`animal_selector` accepts Minecraft-style selector options without the `@e` prefix, such as `[name=Bessie,type=cow]`. Full selectors like `@e[type=minecraft:cow]` also work. Only animal entities are affected.
-
-### Stop animal movement
-
-```mcfunction
-/animovestop [animal_selector]
-```
-
-Stops active animove sessions in the current dimension. Without a selector it stops all active animove animals there; with a selector it stops only matching animals.
-
 ## Notes
 
 - Commands currently target the local integrated server workflow.
