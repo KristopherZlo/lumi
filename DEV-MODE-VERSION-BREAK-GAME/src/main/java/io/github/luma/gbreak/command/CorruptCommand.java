@@ -39,8 +39,9 @@ public final class CorruptCommand {
         return 1;
     }
 
-    private int disable(ServerCommandSource source) {
-        WorldCorruptionService.StopResult result = this.worldCorruptionService.stop();
+    private int disable(ServerCommandSource source) throws CommandSyntaxException {
+        ServerPlayerEntity player = source.getPlayerOrThrow();
+        WorldCorruptionService.StopResult result = this.worldCorruptionService.stop(player);
         if (!result.wasRunning()) {
             source.sendFeedback(() -> Text.literal("World corruption is already disabled."), false);
             return 0;

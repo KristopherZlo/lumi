@@ -15,6 +15,7 @@ public final class GBreakNetwork {
         }
 
         PayloadTypeRegistry.playS2C().register(CorruptionRestoreFadePayload.ID, CorruptionRestoreFadePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(CorruptionHealingWavePayload.ID, CorruptionHealingWavePayload.CODEC);
         registered = true;
     }
 }
