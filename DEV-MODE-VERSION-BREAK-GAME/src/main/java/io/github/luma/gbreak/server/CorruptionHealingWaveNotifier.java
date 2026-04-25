@@ -13,13 +13,17 @@ final class CorruptionHealingWaveNotifier {
             BlockPos center,
             int maxRadiusBlocks,
             int blocksPerStep,
-            int intervalTicks
+            int intervalTicks,
+            int startDelayTicks,
+            boolean blackoutMode
     ) {
         CorruptionHealingWavePayload payload = new CorruptionHealingWavePayload(
                 center,
                 maxRadiusBlocks,
                 blocksPerStep,
-                intervalTicks
+                intervalTicks,
+                startDelayTicks,
+                blackoutMode
         );
         for (ServerPlayerEntity player : world.getPlayers()) {
             if (ServerPlayNetworking.canSend(player, CorruptionHealingWavePayload.ID)) {

@@ -20,7 +20,7 @@ import net.minecraft.util.math.BlockPos;
 public final class CorruptionSettingsScreen extends Screen {
 
     private static final int PANEL_WIDTH = 560;
-    private static final int PANEL_HEIGHT = 356;
+    private static final int PANEL_HEIGHT = 378;
     private static final int SLIDER_WIDTH = 288;
     private static final int SLIDER_HEIGHT = 20;
     private static final int SLIDER_STEP = 22;
@@ -107,6 +107,13 @@ public final class CorruptionSettingsScreen extends Screen {
                 this.settings::setRestoreFadeDurationTicks
         ));
         y += SLIDER_STEP;
+        this.addDrawableChild(ButtonWidget.builder(this.healingBlackoutModeText(), button -> {
+                    this.settings.setHealingBlackoutMode(!this.settings.healingBlackoutMode());
+                    button.setMessage(this.healingBlackoutModeText());
+                })
+                .dimensions(sliderX, y, SLIDER_WIDTH, SLIDER_HEIGHT)
+                .build());
+        y += SLIDER_STEP;
         this.addDrawableChild(new IntSettingSlider(
                 sliderX,
                 y,
@@ -191,6 +198,10 @@ public final class CorruptionSettingsScreen extends Screen {
 
     private int panelTop() {
         return Math.max(18, (this.height - PANEL_HEIGHT) / 2);
+    }
+
+    private Text healingBlackoutModeText() {
+        return Text.literal("Blackout healing mode: " + (this.settings.healingBlackoutMode() ? "on" : "off"));
     }
 
     private void renderPreview(DrawContext context, int left, int top) {
