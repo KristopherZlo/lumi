@@ -1,6 +1,7 @@
 package io.github.luma.gbreak;
 
 import io.github.luma.gbreak.block.GBreakBlocks;
+import io.github.luma.gbreak.command.AnimoveCommand;
 import io.github.luma.gbreak.command.CorruptCommand;
 import io.github.luma.gbreak.command.GBreakCommand;
 import io.github.luma.gbreak.network.GBreakNetwork;
@@ -22,6 +23,7 @@ public final class GBreakDevMod implements ModInitializer {
         GBreakNetwork.registerPayloads();
         GBreakCommand.register(this.serverBugRuntime.fakeRestoreService());
         new CorruptCommand(this.serverBugRuntime.worldCorruptionService()).register();
+        new AnimoveCommand(this.serverBugRuntime.animalMoveManager()).register();
         this.serverBugRuntime.register();
         LOGGER.info("GBreak Dev initialized");
     }

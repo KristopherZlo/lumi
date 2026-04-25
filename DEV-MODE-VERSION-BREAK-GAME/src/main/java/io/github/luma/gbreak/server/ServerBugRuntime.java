@@ -1,6 +1,7 @@
 package io.github.luma.gbreak.server;
 
 import io.github.luma.gbreak.bug.GameBreakingBug;
+import io.github.luma.gbreak.server.animal.AnimalMoveManager;
 import io.github.luma.gbreak.state.BugStateController;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
@@ -24,6 +25,7 @@ public final class ServerBugRuntime {
     private final CorruptedBlocksService corruptedBlocksService = new CorruptedBlocksService();
     private final FakeRestoreService fakeRestoreService = new FakeRestoreService();
     private final WorldCorruptionService worldCorruptionService = new WorldCorruptionService();
+    private final AnimalMoveManager animalMoveManager = new AnimalMoveManager();
 
     public FakeRestoreService fakeRestoreService() {
         return this.fakeRestoreService;
@@ -31,6 +33,10 @@ public final class ServerBugRuntime {
 
     public WorldCorruptionService worldCorruptionService() {
         return this.worldCorruptionService;
+    }
+
+    public AnimalMoveManager animalMoveManager() {
+        return this.animalMoveManager;
     }
 
     public void register() {
@@ -42,7 +48,10 @@ public final class ServerBugRuntime {
                 : true);
         ServerTickEvents.START_SERVER_TICK.register(this::startTick);
         ServerTickEvents.END_SERVER_TICK.register(this::endTick);
-        ServerLifecycleEvents.SERVER_STOPPING.register(this.worldCorruptionService::restoreAllImmediately);
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            this.worldCorruptionService.restoreAllImmediately(server);
+            this.animalMoveManager.shutdown(server);
+        });
     }
 
     private boolean beforeBlockBreak(
@@ -64,6 +73,7 @@ public final class ServerBugRuntime {
         this.corruptedBlocksService.tick(server);
         this.worldCorruptionService.tick(server);
         this.fakeRestoreService.tick(server);
+        this.animalMoveManager.tick(server);
         this.tickPerformanceCollapse();
     }
 
