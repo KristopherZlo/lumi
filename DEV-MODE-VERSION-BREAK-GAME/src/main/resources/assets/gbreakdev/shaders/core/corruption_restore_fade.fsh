@@ -11,6 +11,5 @@ void main() {
         discard;
     }
 
-    float shimmer = 0.84 + 0.16 * sin((gl_FragCoord.x + gl_FragCoord.y) * 0.18);
-    fragColor = vec4(1.0, 1.0, 1.0, vertexColor.a * shimmer) * ColorModulator;
+    fragColor = vec4(1.0, 1.0, 1.0, vertexColor.a) * ColorModulator;
 }

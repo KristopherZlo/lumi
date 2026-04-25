@@ -35,6 +35,7 @@ public final class WorldCorruptionService {
     private final TimeJitterService timeJitterService = new TimeJitterService();
     private final CorruptionParticleService particleService = new CorruptionParticleService();
     private final CorruptionRestoreFadeNotifier restoreFadeNotifier = new CorruptionRestoreFadeNotifier();
+    private final CorruptionHealingWaveNotifier healingWaveNotifier = new CorruptionHealingWaveNotifier();
     private final CorruptionRestoreCadence restoreCadence = new CorruptionRestoreCadence();
     private final CorruptionRestoreWaveProgress restoreWaveProgress = new CorruptionRestoreWaveProgress();
 
@@ -60,11 +61,12 @@ public final class WorldCorruptionService {
         return new StartResult(true, this.originals.size());
     }
 
-    public StopResult stop() {
+    public StopResult stop(ServerPlayerEntity player) {
         boolean wasRunning = this.corrupting || this.restoring || !this.originals.isEmpty();
         this.corrupting = false;
         this.restoring = !this.originals.isEmpty();
         this.targetPlayerId = null;
+        this.corruptionOrigin = new CorruptionOrigin(player.getEntityWorld().getRegistryKey(), player.getBlockPos().toImmutable());
         this.corruptionQueue.reset();
         this.timeJitterService.reset();
         this.restoreCadence.reset();
@@ -73,6 +75,9 @@ public final class WorldCorruptionService {
         this.risingEntityService.clear();
         this.risingGroundBlockService.clear();
         int removedDisplays = this.skyDisplayService.clear();
+        if (this.restoring) {
+            this.sendHealingWave(player);
+        }
         return new StopResult(wasRunning, this.restoreQueue.size(), removedDisplays);
     }
 
@@ -225,6 +230,24 @@ public final class WorldCorruptionService {
                 this.originals.values(),
                 block -> this.restoreDistanceSquared(block.key())
         ));
+    }
+
+    private void sendHealingWave(ServerPlayerEntity player) {
+        this.healingWaveNotifier.notifyStarted(
+                player.getEntityWorld(),
+                player.getBlockPos(),
+                this.maxRestoreRadiusBlocks(),
+                this.settings.cleanupSpreadBlocksPerStep(),
+                this.settings.cleanupIntervalTicks()
+        );
+    }
+
+    private int maxRestoreRadiusBlocks() {
+        long maxDistanceSquared = 0L;
+        for (RestorableBlock block : this.restoreQueue) {
+            maxDistanceSquared = Math.max(maxDistanceSquared, this.restoreDistanceSquared(block.key()));
+        }
+        return Math.min(384, (int) Math.ceil(Math.sqrt(maxDistanceSquared)) + this.settings.cleanupSpreadBlocksPerStep());
     }
 
     private void restoreQueuedBatch(MinecraftServer server) {
