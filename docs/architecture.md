@@ -14,7 +14,7 @@ The architecture is intentionally optimized around three requirements:
 
 ### Bootstrap layer
 
-`io.github.luma.LumaMod` wires the mod into Fabric events. It registers commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations once per server tick, flushes idle capture sessions, and persists active sessions on server shutdown.
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations and development animal-move sessions once per server tick, flushes idle capture sessions, and persists or clears active sessions on server shutdown.
 
 ### Domain model layer
 
@@ -67,6 +67,7 @@ Important adapters:
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `LumaAccessControl`: centralizes the operator/cheats gate for commands, UI entry points, and tracked world actions
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
+- `AnimalMoveManager`: owns development-only `/animove` sessions and repeatedly pushes selected animals toward command targets on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
 - `LumaCommands`: fallback command interface
