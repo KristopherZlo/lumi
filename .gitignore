@@ -29,6 +29,7 @@ Desktop.ini
 !README.md
 !docs/*.md
 !docs/**/*.md
+modrinth.md
 
 AGENTS.md
 docs/commit-policy.md
@@ -41,3 +42,4 @@ COPILOT.md
 .cursor/
 .windsurfrules
 .windsurf/
+DEV-MODE-VERSION-BREAK-GAME/
