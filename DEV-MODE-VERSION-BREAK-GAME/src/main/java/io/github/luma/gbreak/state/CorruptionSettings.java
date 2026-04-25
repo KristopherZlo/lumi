@@ -15,6 +15,7 @@ public final class CorruptionSettings {
     private volatile double detailNoiseScale = 0.18D;
     private volatile int particleBurstsPerTick = 14;
     private volatile int maxSkyDisplays = 96;
+    private volatile boolean healingBlackoutMode;
 
     private CorruptionSettings() {
     }
@@ -109,6 +110,14 @@ public final class CorruptionSettings {
 
     public void setMaxSkyDisplays(int maxSkyDisplays) {
         this.maxSkyDisplays = this.clamp(maxSkyDisplays, 0, 160);
+    }
+
+    public boolean healingBlackoutMode() {
+        return this.healingBlackoutMode;
+    }
+
+    public void setHealingBlackoutMode(boolean healingBlackoutMode) {
+        this.healingBlackoutMode = healingBlackoutMode;
     }
 
     private int clamp(int value, int min, int max) {

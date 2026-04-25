@@ -22,6 +22,7 @@ import net.minecraft.world.World;
 public final class WorldCorruptionService {
 
     private static final int UPDATE_FLAGS = Block.NOTIFY_LISTENERS | Block.FORCE_STATE | Block.SKIP_DROPS;
+    private static final int HEALING_BLACKOUT_DELAY_TICKS = 20;
 
     private final CorruptionSettings settings = CorruptionSettings.getInstance();
     private final CorruptionMaskSampler maskSampler = new CorruptionMaskSampler();
@@ -43,6 +44,7 @@ public final class WorldCorruptionService {
     private CorruptionOrigin corruptionOrigin;
     private boolean corrupting;
     private boolean restoring;
+    private int restoreStartDelayTicks;
     private int cachedHorizontalRadius = -1;
     private List<BlockPos> cachedSurfaceOffsets = List.of();
 
@@ -71,6 +73,7 @@ public final class WorldCorruptionService {
         this.timeJitterService.reset();
         this.restoreCadence.reset();
         this.restoreWaveProgress.reset();
+        this.restoreStartDelayTicks = this.settings.healingBlackoutMode() ? HEALING_BLACKOUT_DELAY_TICKS : 0;
         this.rebuildRestoreQueue();
         this.risingEntityService.clear();
         this.risingGroundBlockService.clear();
@@ -128,6 +131,7 @@ public final class WorldCorruptionService {
         this.skyDisplayService.clear();
         this.restoreCadence.reset();
         this.restoreWaveProgress.reset();
+        this.restoreStartDelayTicks = 0;
         this.rebuildRestoreQueue();
         this.restoreBatch(server, Integer.MAX_VALUE);
     }
@@ -238,7 +242,9 @@ public final class WorldCorruptionService {
                 player.getBlockPos(),
                 this.maxRestoreRadiusBlocks(),
                 this.settings.cleanupSpreadBlocksPerStep(),
-                this.settings.cleanupIntervalTicks()
+                this.settings.cleanupIntervalTicks(),
+                this.restoreStartDelayTicks,
+                this.settings.healingBlackoutMode()
         );
     }
 
@@ -251,6 +257,11 @@ public final class WorldCorruptionService {
     }
 
     private void restoreQueuedBatch(MinecraftServer server) {
+        if (this.restoreStartDelayTicks > 0) {
+            this.restoreStartDelayTicks--;
+            return;
+        }
+
         if (this.restoreCadence.shouldRestoreNow(this.settings.cleanupIntervalTicks())) {
             long allowedDistanceSquared = this.restoreWaveProgress.advanceAndAllowedDistanceSquared(
                     this.settings.cleanupSpreadBlocksPerStep()
@@ -291,6 +302,7 @@ public final class WorldCorruptionService {
         if (this.restoreQueue.isEmpty()) {
             this.restoring = false;
             this.corruptionOrigin = null;
+            this.restoreStartDelayTicks = 0;
         }
     }
 

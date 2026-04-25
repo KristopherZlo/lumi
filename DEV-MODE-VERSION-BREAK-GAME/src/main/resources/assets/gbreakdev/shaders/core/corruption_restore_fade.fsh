@@ -11,5 +11,5 @@ void main() {
         discard;
     }
 
-    fragColor = vec4(1.0, 1.0, 1.0, vertexColor.a) * ColorModulator;
+    fragColor = vertexColor * ColorModulator;
 }

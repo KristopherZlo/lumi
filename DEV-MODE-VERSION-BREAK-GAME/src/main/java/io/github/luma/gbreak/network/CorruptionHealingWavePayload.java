@@ -11,7 +11,9 @@ public record CorruptionHealingWavePayload(
         BlockPos center,
         int maxRadiusBlocks,
         int blocksPerStep,
-        int intervalTicks
+        int intervalTicks,
+        int startDelayTicks,
+        boolean blackoutMode
 ) implements CustomPayload {
 
     public static final CustomPayload.Id<CorruptionHealingWavePayload> ID =
@@ -25,6 +27,7 @@ public record CorruptionHealingWavePayload(
         maxRadiusBlocks = Math.max(1, maxRadiusBlocks);
         blocksPerStep = Math.max(1, blocksPerStep);
         intervalTicks = Math.max(1, intervalTicks);
+        startDelayTicks = Math.max(0, startDelayTicks);
     }
 
     @Override
@@ -37,6 +40,8 @@ public record CorruptionHealingWavePayload(
         buf.writeVarInt(payload.maxRadiusBlocks);
         buf.writeVarInt(payload.blocksPerStep);
         buf.writeVarInt(payload.intervalTicks);
+        buf.writeVarInt(payload.startDelayTicks);
+        buf.writeBoolean(payload.blackoutMode);
     }
 
     private static CorruptionHealingWavePayload read(RegistryByteBuf buf) {
@@ -44,7 +49,9 @@ public record CorruptionHealingWavePayload(
                 buf.readBlockPos(),
                 buf.readVarInt(),
                 buf.readVarInt(),
-                buf.readVarInt()
+                buf.readVarInt(),
+                buf.readVarInt(),
+                buf.readBoolean()
         );
     }
 }
