@@ -71,8 +71,7 @@ public final class RecentChangesOverlayRenderer {
                     entry.pos().y() - camera.y,
                     entry.pos().z() - camera.z,
                     0xFFFF9C3A,
-                    Math.max(0.08F, entry.alpha() / 255.0F)
-            );
+                    Math.max(0.08F, entry.alpha() / 255.0F));
         }
     }
 
@@ -110,8 +109,7 @@ public final class RecentChangesOverlayRenderer {
             float maxY,
             float maxZ,
             SurfaceEntry surfaceEntry,
-            int alpha
-    ) {
+            int alpha) {
         PoseStack.Pose pose = matrices.last();
 
         if (surfaceEntry.northExposed()) {
@@ -149,8 +147,7 @@ public final class RecentChangesOverlayRenderer {
             float z3,
             float x4,
             float y4,
-            float z4
-    ) {
+            float z4) {
         consumer.addVertex(pose, x1, y1, z1).setColor(0xFF, 0x9C, 0x3A, alpha);
         consumer.addVertex(pose, x2, y2, z2).setColor(0xFF, 0x9C, 0x3A, alpha);
         consumer.addVertex(pose, x3, y3, z3).setColor(0xFF, 0x9C, 0x3A, alpha);
@@ -161,16 +158,14 @@ public final class RecentChangesOverlayRenderer {
             List<RecentChangeEntry> entries,
             double cameraX,
             double cameraY,
-            double cameraZ
-    ) {
+            double cameraZ) {
         if (entries.isEmpty()) {
             return List.of();
         }
 
         PriorityQueue<RankedEntry> selected = new PriorityQueue<>(
                 MAX_RENDERED_BLOCKS,
-                Comparator.comparingDouble(RankedEntry::distanceSquared).reversed()
-        );
+                Comparator.comparingDouble(RankedEntry::distanceSquared).reversed());
         for (RecentChangeEntry entry : entries) {
             double distanceSquared = distanceSquared(entry, cameraX, cameraY, cameraZ);
             if (selected.size() < MAX_RENDERED_BLOCKS) {
@@ -214,8 +209,7 @@ public final class RecentChangesOverlayRenderer {
             boolean westExposed,
             boolean eastExposed,
             boolean downExposed,
-            boolean upExposed
-    ) {
+            boolean upExposed) {
     }
 
     private static final class OverlayState {
@@ -232,7 +226,8 @@ public final class RecentChangesOverlayRenderer {
             this.projectId = projectId;
             this.entries = List.copyOf(entries);
             this.occupiedPositions = SURFACE_RESOLVER.indexPositions(entries.stream()
-                    .map(entry -> new io.github.luma.domain.model.DiffBlockEntry(entry.pos(), "", "", io.github.luma.domain.model.ChangeType.CHANGED))
+                    .map(entry -> new io.github.luma.domain.model.DiffBlockEntry(entry.pos(), "", "",
+                            io.github.luma.domain.model.ChangeType.CHANGED))
                     .toList());
         }
 
@@ -259,10 +254,10 @@ public final class RecentChangesOverlayRenderer {
                             entry.pos(),
                             "",
                             "",
-                            io.github.luma.domain.model.ChangeType.CHANGED
-                    ))
+                            io.github.luma.domain.model.ChangeType.CHANGED))
                     .toList();
-            List<CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocks = SURFACE_RESOLVER.resolve(diffEntries, this.occupiedPositions);
+            List<CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocks = SURFACE_RESOLVER.resolve(diffEntries,
+                    this.occupiedPositions);
             List<SurfaceEntry> resolved = new ArrayList<>(surfaceBlocks.size());
             for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : surfaceBlocks) {
                 RecentChangeEntry entry = this.findEntry(surfaceBlock.entry().pos());
@@ -276,8 +271,7 @@ public final class RecentChangesOverlayRenderer {
                         surfaceBlock.westExposed(),
                         surfaceBlock.eastExposed(),
                         surfaceBlock.downExposed(),
-                        surfaceBlock.upExposed()
-                ));
+                        surfaceBlock.upExposed()));
             }
             this.cachedVisibleEntries = List.copyOf(resolved);
             return this.cachedVisibleEntries;
