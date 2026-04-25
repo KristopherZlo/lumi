@@ -4,6 +4,7 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.command.LumaCommands;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.minecraft.animal.AnimalMoveManager;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.api.ModInitializer;
@@ -26,12 +27,14 @@ public final class LumaMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_NAME);
     private final LumaCommands commands = new LumaCommands();
     private final ProjectService projectService = new ProjectService();
+    private final AnimalMoveManager animalMoveManager = AnimalMoveManager.getInstance();
 
     @Override
     public void onInitialize() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> this.commands.register(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             WorldOperationManager.getInstance().tick(server);
+            this.animalMoveManager.tick(server);
             HistoryCaptureManager.getInstance().flushIdleSessions(server);
         });
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
@@ -43,6 +46,7 @@ public final class LumaMod implements ModInitializer {
         });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             HistoryCaptureManager.getInstance().flushAll(server);
+            this.animalMoveManager.shutdown(server);
             WorldOperationManager.getInstance().shutdown();
         });
         LOGGER.info("{} bootstrap initialized", MOD_NAME);

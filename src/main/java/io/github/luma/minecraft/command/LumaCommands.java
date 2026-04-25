@@ -2,6 +2,7 @@ package io.github.luma.minecraft.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import io.github.luma.domain.model.ProjectArchiveExportResult;
 import io.github.luma.domain.model.ProjectArchiveImportResult;
@@ -12,14 +13,20 @@ import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
+import io.github.luma.minecraft.animal.AnimalMoveManager;
+import io.github.luma.minecraft.animal.AnimalMovePlan;
+import io.github.luma.minecraft.animal.AnimalSelector;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import java.io.IOException;
 import java.util.stream.Collectors;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
+import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
 
 public final class LumaCommands {
 
@@ -31,6 +38,8 @@ public final class LumaCommands {
     private final VariantService variantService = new VariantService();
     private final RecoveryService recoveryService = new RecoveryService();
     private final LumaAccessControl accessControl = LumaAccessControl.getInstance();
+    private final AnimalMoveManager animalMoveManager = AnimalMoveManager.getInstance();
+    private final AnimalMoveCommandParser animalMoveCommandParser = new AnimalMoveCommandParser();
 
     public void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         var root = Commands.literal("lumi")
@@ -167,6 +176,36 @@ public final class LumaCommands {
                                 ))))));
 
         dispatcher.register(root);
+        this.registerAnimalMoveCommands(dispatcher);
+    }
+
+    private void registerAnimalMoveCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(Commands.literal("animove")
+                .requires(this.accessControl::canUse)
+                .then(Commands.argument("radii", DoubleArgumentType.doubleArg(0.0D))
+                        .then(Commands.argument("target", Vec3Argument.vec3())
+                                .executes(context -> this.execute(context.getSource(), source -> this.startAnimalMove(
+                                        source,
+                                        DoubleArgumentType.getDouble(context, "radii"),
+                                        Vec3Argument.getVec3(context, "target"),
+                                        ""
+                                )))
+                                .then(Commands.argument("options", StringArgumentType.greedyString())
+                                        .executes(context -> this.execute(context.getSource(), source -> this.startAnimalMove(
+                                                source,
+                                                DoubleArgumentType.getDouble(context, "radii"),
+                                                Vec3Argument.getVec3(context, "target"),
+                                                StringArgumentType.getString(context, "options")
+                                        )))))));
+
+        dispatcher.register(Commands.literal("animovestop")
+                .requires(this.accessControl::canUse)
+                .executes(context -> this.execute(context.getSource(), source -> this.stopAnimalMove(source, "")))
+                .then(Commands.argument("animal_selector", StringArgumentType.greedyString())
+                        .executes(context -> this.execute(context.getSource(), source -> this.stopAnimalMove(
+                                source,
+                                StringArgumentType.getString(context, "animal_selector")
+                        )))));
     }
 
     private int listProjects(CommandSourceStack source) throws IOException {
@@ -287,6 +326,37 @@ public final class LumaCommands {
                         + " and reclaimed " + report.reclaimedBytes() + " bytes" + this.warningSuffix(report.warnings())
         ), true);
         return report.candidates().size();
+    }
+
+    private int startAnimalMove(CommandSourceStack source, double radius, Vec3 destination, String rawOptions) throws Exception {
+        ServerLevel level = source.getLevel();
+        AnimalMoveCommandOptions options = this.animalMoveCommandParser.parse(source, rawOptions);
+        AnimalSelector selector = options.selector();
+        var animals = selector.selectWithin(source, level, source.getPosition(), radius);
+        int started = this.animalMoveManager.start(
+                level,
+                animals,
+                new AnimalMovePlan(destination, options.returnPosition(), options.loop())
+        );
+        source.sendSuccess(() -> Component.literal(
+                "Animove started for " + started + " animals"
+                        + (options.loop() ? " in loop" : "")
+                        + " using " + selector
+        ), true);
+        return started;
+    }
+
+    private int stopAnimalMove(CommandSourceStack source, String rawSelector) throws Exception {
+        ServerLevel level = source.getLevel();
+        int stopped;
+        if (rawSelector == null || rawSelector.isBlank()) {
+            stopped = this.animalMoveManager.stopAll(level);
+        } else {
+            AnimalSelector selector = this.animalMoveCommandParser.parseSelector(rawSelector);
+            stopped = this.animalMoveManager.stop(level, selector.selectedAnimalIds(source));
+        }
+        source.sendSuccess(() -> Component.literal("Animove stopped " + stopped + " animals"), true);
+        return stopped;
     }
 
     private int execute(CommandSourceStack source, IoAction action) {
