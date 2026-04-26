@@ -405,6 +405,8 @@
   "luma.screen.variants.title": "Variants: %s",
   "luma.screen.share.title": "Share: %s",
 
+  "luma.window.mode": "Build history window",
+  "luma.window.home_help": "Choose the next step for this build.",
   "luma.simple.step": "Step %s",
   "luma.simple.workspace_title": "%s",
   "luma.simple.current_place": "Place: %s",

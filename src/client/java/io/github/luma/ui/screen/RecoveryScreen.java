@@ -45,7 +45,7 @@ public final class RecoveryScreen extends LumaScreen {
     protected void build(FlowLayout root) {
         Optional<io.github.luma.domain.model.RecoveryDraftSummary> draftSummary = this.controller.loadSummary(this.projectName);
 
-        root.surface(Surface.BLANK);
+        root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
         root.gap(0);
 
@@ -53,8 +53,8 @@ public final class RecoveryScreen extends LumaScreen {
         root.child(frame);
 
         FlowLayout header = LumaUi.actionRow();
-        header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        header.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
+        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        header.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
                 this.parent,
                 this.projectName
         )));
@@ -73,7 +73,7 @@ public final class RecoveryScreen extends LumaScreen {
                     Component.translatable("luma.recovery.no_draft")
             );
             FlowLayout actions = LumaUi.actionRow();
-            actions.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
+            actions.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
                     this.parent,
                     this.projectName
             )));
@@ -142,15 +142,15 @@ public final class RecoveryScreen extends LumaScreen {
         );
 
         FlowLayout primary = LumaUi.actionRow();
-        primary.child(UIComponents.button(Component.translatable("luma.action.recovery_restore"), button -> {
+        primary.child(LumaUi.primaryButton(Component.translatable("luma.action.recovery_restore"), button -> {
             this.status = this.controller.restoreDraft(this.projectName);
             this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
         }));
-        primary.child(UIComponents.button(Component.translatable("luma.action.recovery_save"), button -> {
+        primary.child(LumaUi.primaryButton(Component.translatable("luma.action.recovery_save"), button -> {
             this.status = this.controller.saveDraftVersion(this.projectName, this.saveMessage);
             this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
         }));
-        primary.child(UIComponents.button(Component.translatable("luma.action.recovery_discard"), button -> {
+        primary.child(LumaUi.button(Component.translatable("luma.action.recovery_discard"), button -> {
             this.status = this.controller.discardDraft(this.projectName);
             this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
         }));
@@ -165,7 +165,7 @@ public final class RecoveryScreen extends LumaScreen {
         );
 
         FlowLayout toggle = LumaUi.actionRow();
-        toggle.child(UIComponents.button(Component.translatable(
+        toggle.child(LumaUi.button(Component.translatable(
                 this.showDetails ? "luma.action.hide_tools" : "luma.action.more_tools"
         ), button -> {
             this.showDetails = !this.showDetails;

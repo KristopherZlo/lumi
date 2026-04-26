@@ -112,7 +112,7 @@ Controllers own service access and loading logic. Screens keep transient UI stat
 Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
 
 LDLib2 is the target UI toolkit for future migration. The published LDLib2 UI docs and source (`https://low-drag-mc.github.io/LowDragMC-Doc/ldlib2/ui/`, `https://github.com/Low-Drag-MC/LDLib2`) are currently NeoForge-oriented around Minecraft `1.21.1`, while Lumi targets Fabric `1.21.11`. Keep LDLib2 behind `UiToolkitRegistry` and reflection-style detection until a compatible Fabric runtime exists. Do not add a hard `fabric.mod.json` or Gradle runtime dependency that makes the Fabric build unlaunchable.
-`LdLib2InterfaceBlueprint` is the current migration contract for the home screen. It maps the simple builder flow to LDLib2 element roles (`UIElement`, `Label`, `Button`, `ScrollerView`, and `TabView`) while the runtime screen still renders through the compatible fallback.
+`LdLib2InterfaceBlueprint` is the current migration contract for the home screen. It maps the simple builder flow to LDLib2 element roles (`UIElement`, `Label`, `Button`, `ScrollerView`, and `TabView`) while the runtime screen still renders through the compatible fallback. `ProjectWindowLayout` mirrors that contract visually with a bordered app window, sidebar, title bar, status strip, and scrollable body.
 
 Current UX assumptions:
 
@@ -126,7 +126,7 @@ Current UX assumptions:
 - holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - holding `Alt` while compare highlight is inactive shows the latest 10 tracked Lumi actions with a fading temporary overlay
 - the dashboard is now secondary navigation from the workspace header
-- the workspace home screen is product-first and child-friendly: numbered cards for keep this moment, go back safely, saved moments, try another idea, and share or combine
+- the workspace home screen is product-first and child-friendly: a LDLib2-style window with numbered cards for keep this moment, go back safely, saved moments, try another idea, and share or combine
 - low-frequency tools such as technical graph, diagnostics, and raw info live behind `More`
 - save composition, save details, variant management, and share/merge review now have dedicated screens instead of sharing one overloaded project page
 

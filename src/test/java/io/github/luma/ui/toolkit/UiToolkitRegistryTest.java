@@ -43,6 +43,8 @@ final class UiToolkitRegistryTest {
         assertTrue(blueprint.elementTypes().contains("UIElement"));
         assertTrue(blueprint.elementTypes().contains("Button"));
         assertTrue(blueprint.elementTypes().contains("ScrollerView"));
+        assertTrue(blueprint.projectHome().stream().anyMatch(role -> "window".equals(role.id())));
+        assertTrue(blueprint.projectHome().stream().anyMatch(role -> "sidebar".equals(role.id())));
         assertEquals(5, blueprint.projectHome().stream()
                 .filter(role -> role.id().endsWith("-action"))
                 .count());

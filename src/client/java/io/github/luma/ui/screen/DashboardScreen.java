@@ -42,7 +42,7 @@ public final class DashboardScreen extends LumaScreen {
         this.state = this.controller.loadState(this.state.status());
         DashboardProjectItem workspaceItem = this.primaryWorkspace(this.workspaceProjects());
 
-        root.surface(Surface.BLANK);
+        root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
         root.gap(0);
 
@@ -50,8 +50,8 @@ public final class DashboardScreen extends LumaScreen {
         root.child(frame);
 
         FlowLayout header = LumaUi.actionRow();
-        header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        header.child(UIComponents.button(Component.translatable("luma.action.refresh"), button -> this.refresh("luma.status.dashboard_ready")));
+        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        header.child(LumaUi.button(Component.translatable("luma.action.refresh"), button -> this.refresh("luma.status.dashboard_ready")));
         frame.child(header);
 
         FlowLayout titleRow = LumaUi.actionRow();
@@ -122,11 +122,11 @@ public final class DashboardScreen extends LumaScreen {
         }
 
         FlowLayout actions = LumaUi.actionRow();
-        actions.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProject(this, item.name())));
+        actions.child(LumaUi.primaryButton(Component.translatable("luma.action.open_workspace"), button -> this.router.openProject(this, item.name())));
         if (item.hasDraft()) {
-            actions.child(UIComponents.button(Component.translatable("luma.action.recovery"), button -> this.router.openRecovery(this, item.name())));
+            actions.child(LumaUi.button(Component.translatable("luma.action.recovery"), button -> this.router.openRecovery(this, item.name())));
         }
-        actions.child(UIComponents.button(Component.translatable("luma.action.settings"), button -> this.router.openSettings(this, item.name())));
+        actions.child(LumaUi.button(Component.translatable("luma.action.settings"), button -> this.router.openSettings(this, item.name())));
         card.child(actions);
         return card;
     }
@@ -151,11 +151,11 @@ public final class DashboardScreen extends LumaScreen {
             row.child(meta);
 
             FlowLayout actions = LumaUi.actionRow();
-            actions.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProject(this, item.name())));
+            actions.child(LumaUi.primaryButton(Component.translatable("luma.action.open_workspace"), button -> this.router.openProject(this, item.name())));
             if (item.hasDraft()) {
-                actions.child(UIComponents.button(Component.translatable("luma.action.recovery"), button -> this.router.openRecovery(this, item.name())));
+                actions.child(LumaUi.button(Component.translatable("luma.action.recovery"), button -> this.router.openRecovery(this, item.name())));
             }
-            actions.child(UIComponents.button(Component.translatable("luma.action.settings"), button -> this.router.openSettings(this, item.name())));
+            actions.child(LumaUi.button(Component.translatable("luma.action.settings"), button -> this.router.openSettings(this, item.name())));
             row.child(actions);
             card.child(row);
         }
