@@ -14,7 +14,7 @@ The architecture is intentionally optimized around three requirements:
 
 ### Bootstrap layer
 
-`io.github.luma.LumaMod` wires the mod into Fabric events. It registers commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations once per server tick, flushes idle capture sessions, and persists active sessions on server shutdown.
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations once per server tick, flushes idle capture sessions, and persists active sessions on server shutdown.
 
 ### Domain model layer
 
@@ -65,11 +65,11 @@ Important adapters:
 - `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
-- `LumaAccessControl`: centralizes the operator/cheats gate for commands, UI entry points, and tracked world actions
+- `LumaAccessControl`: centralizes the operator/cheats gate for diagnostic commands, UI entry points, and tracked world actions
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
-- `LumaCommands`: fallback command interface
+- `LumaCommands`: read-only diagnostic command interface
 
 ### Optional integration layer
 
@@ -143,7 +143,7 @@ Important invariants:
 
 ## Save flow
 
-1. UI or commands call `VersionService.startSaveVersion(...)`.
+1. UI controllers call `VersionService.startSaveVersion(...)`.
 2. The live in-memory buffer is consumed first; persisted recovery storage is only a fallback.
 3. The draft is moved into isolated operation-draft storage while async save work runs.
 4. `WorldOperationManager` executes background preparation off the tick thread.
@@ -212,7 +212,7 @@ The current durable history format is schema v3.
 Main files:
 
 - `world-origin.json`: shared world seed/version/datapack/generator manifest for all dimension workspaces
-- `exports/*.zip`: command-driven project history archives
+- `exports/*.zip`: UI-driven project history archives and share packages
 - `versions/*.json`: version manifests
 - `patches/<patchId>.meta.json`: patch metadata and chunk index
 - `patches/<patchId>.bin.lz4`: patch payload
@@ -266,4 +266,4 @@ When extending history or storage behavior, update both tests and documentation 
 - Add new repository types instead of growing one repository into a mixed metadata and payload god object.
 - Prefer immutable records for persisted state and summaries.
 - Restrict mutable state to clearly bounded runtime coordinators such as capture buffers or active operations.
-- Preserve the menu-first product flow. Commands should remain a fallback, not the primary UX model.
+- Preserve the menu-first product flow. Commands must stay read-only diagnostics/help and must not duplicate mutation workflows.

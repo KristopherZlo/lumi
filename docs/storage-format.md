@@ -16,7 +16,7 @@ Shared world-level metadata is stored at:
 <world>/lumi/world-origin.json
 ```
 
-Project history archives exported from commands are stored at:
+Project history archives and share packages exported from the UI are stored at:
 
 ```text
 <world>/lumi/exports/
@@ -248,8 +248,8 @@ Recovery draft payloads are intentionally excluded from archives, so export/impo
 
 ## Cleanup policy
 
-Current cleanup is conservative and command-driven:
+Current cleanup is conservative and UI-driven:
 
-- dry-run first via `/lumi cleanup inspect`
+- dry-run first
 - delete only unreferenced snapshot payloads, orphaned preview PNGs, disposable cache files outside `baseline-chunks`, and stale `operation-draft`
 - never delete baseline chunks or files still referenced by version manifests
