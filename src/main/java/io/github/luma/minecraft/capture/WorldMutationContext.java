@@ -51,6 +51,15 @@ public final class WorldMutationContext {
         ));
     }
 
+    public static void pushExternalSource(WorldMutationSource source, String actor, String actionId) {
+        SOURCE_STACK.get().push(new Frame(
+                source == null ? WorldMutationSource.EXTERNAL_TOOL : source,
+                actor == null || actor.isBlank() ? "external-tool" : actor,
+                actionId == null || actionId.isBlank() ? UUID.randomUUID().toString() : actionId,
+                true
+        ));
+    }
+
     public static void popSource() {
         Deque<Frame> stack = SOURCE_STACK.get();
         if (stack.size() > 1) {

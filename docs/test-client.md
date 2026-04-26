@@ -42,6 +42,7 @@ The `installTestClientMods` task syncs the supported Fabric 1.21.11 jars into `r
 
 Included from the requested list:
 
+- WorldEdit
 - Sodium
 - Entity Culling
 - FerriteCore

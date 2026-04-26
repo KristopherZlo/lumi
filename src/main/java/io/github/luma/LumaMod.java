@@ -1,6 +1,7 @@
 package io.github.luma;
 
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.integration.OptionalIntegrationBootstrap;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.command.LumaCommands;
 import io.github.luma.domain.service.ProjectService;
@@ -26,9 +27,11 @@ public final class LumaMod implements ModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_NAME);
     private final LumaCommands commands = new LumaCommands();
     private final ProjectService projectService = new ProjectService();
+    private final OptionalIntegrationBootstrap optionalIntegrations = new OptionalIntegrationBootstrap();
 
     @Override
     public void onInitialize() {
+        this.optionalIntegrations.initialize();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> this.commands.register(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             WorldOperationManager.getInstance().tick(server);
