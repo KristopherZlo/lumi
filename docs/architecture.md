@@ -67,7 +67,7 @@ Important adapters:
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `LumaAccessControl`: centralizes the operator/cheats gate for diagnostic commands, UI entry points, and tracked world actions
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
-- `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime
+- `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
 - `LumaCommands`: read-only diagnostic command interface
 
@@ -219,7 +219,7 @@ Current guarantees:
 
 ## Storage format summary
 
-The current durable history format is schema v3.
+The current durable history format is schema v4.
 
 Main files:
 

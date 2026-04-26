@@ -163,7 +163,7 @@ Current world-apply runtime types:
 
 - `ChunkBatch`
 - `SectionBatch`
-- `EntityBatch`
+- `EntityBatch`, including spawn, remove, and full-NBT update lists
 - `LocalQueue`
 - `GlobalDispatcher`
 - `BatchState`

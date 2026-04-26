@@ -27,7 +27,7 @@ import net.minecraft.server.level.ServerLevel;
 public final class SnapshotReader {
 
     private static final int MAGIC = 0x4C534E50;
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
     private static final net.minecraft.nbt.CompoundTag AIR_TAG = createAirTag();
 
     public SnapshotData load(ProjectLayout layout, SnapshotRef snapshot) throws IOException {
@@ -40,7 +40,7 @@ public final class SnapshotReader {
         ))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != MAGIC || version != VERSION) {
+            if (magic != MAGIC || (version != 3 && version != VERSION)) {
                 throw new IOException("Unsupported snapshot format: " + snapshotFile.getFileName());
             }
 
@@ -76,6 +76,12 @@ public final class SnapshotReader {
                 Map<Integer, net.minecraft.nbt.CompoundTag> blockEntities = new LinkedHashMap<>();
                 for (int blockEntityIndex = 0; blockEntityIndex < blockEntityCount; blockEntityIndex++) {
                     blockEntities.put(input.readInt(), StorageIo.readCompound(input));
+                }
+                if (version >= 4) {
+                    int entityCount = input.readInt();
+                    for (int entityIndex = 0; entityIndex < entityCount; entityIndex++) {
+                        StorageIo.readCompound(input);
+                    }
                 }
 
                 chunks.add(new SnapshotChunkData(chunkX, chunkZ, sections, blockEntities));
