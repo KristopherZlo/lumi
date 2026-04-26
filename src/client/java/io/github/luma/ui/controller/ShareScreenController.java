@@ -32,14 +32,21 @@ public final class ShareScreenController {
 
     private final Query query;
     private final Actions actions;
+    private final MergePreviewCache mergePreviewCache;
+    private String lastValidationMessage = "";
 
     public ShareScreenController() {
-        this(new ServiceQuery(), new ServiceActions());
+        this(new ServiceQuery(), new ServiceActions(), new MergePreviewCache());
     }
 
     ShareScreenController(Query query, Actions actions) {
+        this(query, actions, new MergePreviewCache());
+    }
+
+    ShareScreenController(Query query, Actions actions, MergePreviewCache mergePreviewCache) {
         this.query = query;
         this.actions = actions;
+        this.mergePreviewCache = mergePreviewCache;
     }
 
     public ShareViewState loadState(String projectName, String status) {
@@ -65,21 +72,41 @@ public final class ShareScreenController {
         }
     }
 
-    public ProjectArchiveExportResult exportVariantPackage(String projectName, String variantId) {
+    public ProjectArchiveExportResult exportVariantPackage(String projectName, String variantId, boolean includePreviews) {
         try {
-            return this.actions.exportVariantPackage(projectName, variantId);
+            ProjectArchiveExportResult result = this.actions.exportVariantPackage(projectName, variantId, includePreviews);
+            this.clearValidationMessage();
+            return result;
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Variant package export failed for project {} variant {}", projectName, variantId, exception);
+            this.captureValidationMessage(exception);
             return null;
         }
     }
 
     public HistoryPackageImportResult importVariantPackage(String projectName, String archivePath) {
         try {
-            return this.actions.importVariantPackage(projectName, archivePath);
+            HistoryPackageImportResult result = this.actions.importVariantPackage(projectName, archivePath);
+            this.clearValidationMessage();
+            this.mergePreviewCache.clear();
+            return result;
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Variant package import failed for project {}", projectName, exception);
+            this.captureValidationMessage(exception);
             return null;
+        }
+    }
+
+    public String deleteImportedProject(String targetProjectName, String importedProjectName) {
+        try {
+            this.actions.deleteImportedProject(targetProjectName, importedProjectName);
+            this.clearValidationMessage();
+            this.mergePreviewCache.clear();
+            return "luma.status.imported_package_deleted";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Imported package delete failed for project {} package {}", targetProjectName, importedProjectName, exception);
+            this.captureValidationMessage(exception);
+            return "luma.status.operation_failed";
         }
     }
 
@@ -103,20 +130,52 @@ public final class ShareScreenController {
         }
     }
 
+    public MergePreviewStatus requestMergePreview(
+            String targetProjectName,
+            String sourceProjectName,
+            String sourceVariantId,
+            String targetVariantId
+    ) {
+        MergePreviewKey key = new MergePreviewKey(targetProjectName, sourceProjectName, sourceVariantId, targetVariantId);
+        MergePreviewStatus status = this.mergePreviewCache.request(key, request -> this.actions.previewMerge(
+                request.targetProjectName(),
+                request.sourceProjectName(),
+                request.sourceVariantId(),
+                request.targetVariantId()
+        ));
+        if (status.state() == MergePreviewStatus.State.FAILED) {
+            this.lastValidationMessage = status.detail();
+            return status;
+        }
+        if (status.state() == MergePreviewStatus.State.READY) {
+            if (status.plan() == null) {
+                this.lastValidationMessage = "Merge preview did not return a plan.";
+                return MergePreviewStatus.failed(this.lastValidationMessage);
+            }
+            this.clearValidationMessage();
+        }
+        return status;
+    }
+
     public String startMerge(VariantMergeApplyRequest request) {
         try {
             this.actions.startMerge(request);
+            this.clearValidationMessage();
+            this.mergePreviewCache.clear();
             return "luma.status.merge_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Merge start rejected for project {}", request.targetProjectName(), exception);
+            this.captureValidationMessage(exception);
             return "luma.status.world_operation_busy";
         } catch (IllegalArgumentException exception) {
             LumaMod.LOGGER.warn("Merge start blocked for project {}", request.targetProjectName(), exception);
+            this.captureValidationMessage(exception);
             return exception.getMessage() != null && exception.getMessage().contains("does not add any new changes")
                     ? "luma.status.merge_no_changes"
                     : "luma.status.merge_conflicts_found";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Merge start failed for project {}", request.targetProjectName(), exception);
+            this.captureValidationMessage(exception);
             return "luma.status.operation_failed";
         }
     }
@@ -129,16 +188,64 @@ public final class ShareScreenController {
     ) {
         try {
             this.actions.showConflictZoneOverlay(sourceProjectName, sourceVariantId, targetVariantId, zone);
+            this.clearValidationMessage();
             return "luma.status.compare_overlay_enabled";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Conflict overlay failed for {}:{}", sourceProjectName, sourceVariantId, exception);
+            this.captureValidationMessage(exception);
+            return "luma.status.compare_failed";
+        }
+    }
+
+    public String showConflictZonesOverlay(
+            String sourceProjectName,
+            String sourceVariantId,
+            String targetVariantId,
+            VariantMergePlan plan
+    ) {
+        try {
+            this.actions.showConflictZonesOverlay(sourceProjectName, sourceVariantId, targetVariantId, plan.conflictZones());
+            this.clearValidationMessage();
+            return "luma.status.compare_overlay_enabled";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Conflict overlay failed for {}:{}", sourceProjectName, sourceVariantId, exception);
+            this.captureValidationMessage(exception);
             return "luma.status.compare_failed";
         }
     }
 
     public String clearConflictZoneOverlay() {
         CompareOverlayRenderer.clear();
+        this.clearValidationMessage();
         return "luma.status.compare_overlay_cleared";
+    }
+
+    public String lastValidationMessage() {
+        return this.lastValidationMessage;
+    }
+
+    static String describeFailure(Throwable throwable) {
+        Throwable cursor = throwable;
+        while (cursor instanceof java.util.concurrent.CompletionException) {
+            Throwable cause = cursor.getCause();
+            if (cause == null) {
+                break;
+            }
+            cursor = cause;
+        }
+        String message = cursor.getMessage();
+        if (message == null || message.isBlank()) {
+            return "The action failed. See the log for details.";
+        }
+        return message.length() <= 180 ? message : message.substring(0, 177) + "...";
+    }
+
+    private void captureValidationMessage(Exception exception) {
+        this.lastValidationMessage = describeFailure(exception);
+    }
+
+    private void clearValidationMessage() {
+        this.lastValidationMessage = "";
     }
 
     interface Query {
@@ -158,9 +265,11 @@ public final class ShareScreenController {
 
     interface Actions {
 
-        ProjectArchiveExportResult exportVariantPackage(String projectName, String variantId) throws Exception;
+        ProjectArchiveExportResult exportVariantPackage(String projectName, String variantId, boolean includePreviews) throws Exception;
 
         HistoryPackageImportResult importVariantPackage(String projectName, String archivePath) throws Exception;
+
+        void deleteImportedProject(String targetProjectName, String importedProjectName) throws Exception;
 
         VariantMergePlan previewMerge(
                 String targetProjectName,
@@ -176,6 +285,13 @@ public final class ShareScreenController {
                 String sourceVariantId,
                 String targetVariantId,
                 MergeConflictZone zone
+        );
+
+        void showConflictZonesOverlay(
+                String sourceProjectName,
+                String sourceVariantId,
+                String targetVariantId,
+                List<MergeConflictZone> zones
         );
     }
 
@@ -233,13 +349,18 @@ public final class ShareScreenController {
         private final VariantMergeService variantMergeService = new VariantMergeService();
 
         @Override
-        public ProjectArchiveExportResult exportVariantPackage(String projectName, String variantId) throws Exception {
-            return this.historyShareService.exportVariantPackage(this.server(), projectName, variantId, false);
+        public ProjectArchiveExportResult exportVariantPackage(String projectName, String variantId, boolean includePreviews) throws Exception {
+            return this.historyShareService.exportVariantPackage(this.server(), projectName, variantId, includePreviews);
         }
 
         @Override
         public HistoryPackageImportResult importVariantPackage(String projectName, String archivePath) throws Exception {
             return this.historyShareService.importVariantPackage(this.server(), projectName, archivePath);
+        }
+
+        @Override
+        public void deleteImportedProject(String targetProjectName, String importedProjectName) throws Exception {
+            this.historyShareService.deleteImportedProject(this.server(), targetProjectName, importedProjectName);
         }
 
         @Override
@@ -270,10 +391,28 @@ public final class ShareScreenController {
                 String targetVariantId,
                 MergeConflictZone zone
         ) {
+            this.showConflictZonesOverlay(
+                    sourceProjectName + ":" + zone.id(),
+                    sourceVariantId,
+                    targetVariantId,
+                    List.of(zone)
+            );
+        }
+
+        @Override
+        public void showConflictZonesOverlay(
+                String sourceProjectName,
+                String sourceVariantId,
+                String targetVariantId,
+                List<MergeConflictZone> zones
+        ) {
             CompareOverlayRenderer.show(
                     sourceProjectName + ":" + sourceVariantId,
                     "local:" + targetVariantId,
-                    zone.importedChanges().stream().map(this::diffEntry).toList(),
+                    zones.stream()
+                            .flatMap(zone -> zone.importedChanges().stream())
+                            .map(this::diffEntry)
+                            .toList(),
                     false
             );
         }

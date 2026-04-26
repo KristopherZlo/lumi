@@ -44,7 +44,7 @@ This now includes regression checks for:
 - detached commit visibility after a restore-style reset
 - recovery draft isolation while save/amend operations run
 - zip archive import/export for project history, with previews optional and recovery drafts excluded
-- variant-scoped history package export/import plus imported-variant merge planning with conflict zones and per-zone resolutions
+- variant-scoped history package export/import, imported review package deletion, cached imported-variant merge planning, conflict zones, and per-zone resolutions
 - conservative cleanup flow for orphaned snapshots/previews/cache and stale operation drafts
 - material delta summarization on large diffs
 - lightweight home, variants, and share controller loading plus operation-state normalization
@@ -107,7 +107,7 @@ The current menu flow is centered around:
 - `SettingsScreen`
 
 Controllers own service access and loading logic. Screens keep transient UI state. `LumaScreen` is the shared non-pausing base class for in-world menus. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
-`ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen.
+`ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Share merge previews are requested only by explicit review actions, then cached by imported package and target variant while the screen is open.
 
 Current UX assumptions:
 
@@ -141,8 +141,8 @@ Current runtime history behavior:
 - Changes are aggregated into an in-memory recovery draft immediately, then flushed asynchronously through the capture-maintenance executor and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `ProjectArchiveService` owns UI-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
-- `HistoryShareService` builds the first `Share` MVP on top of the same archive format by exporting one variant lineage and importing it back as a review project.
-- `ShareScreenController` keeps history package import/export separate from the main home and variants screens, and only asks `VariantMergeService` for a merge preview when the user explicitly reviews one imported package.
+- `HistoryShareService` builds the `Share` flow on top of the same archive format by exporting one variant lineage, importing it back as a review project, and deleting imported review projects after validating they belong to the same project lineage.
+- `ShareScreenController` keeps history package import/export separate from the main home and variants screens, only asks `VariantMergeService` for a merge preview when the user explicitly reviews one imported package, and moves that preview work through a small background cache so the screen does not block on storage scans.
 - `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
 - Preview generation now queues lightweight request files on the server side and fulfills them later through the client-side `PreviewCaptureCoordinator`.

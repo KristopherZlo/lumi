@@ -69,8 +69,8 @@ Use Lumi if you want to:
 - recovery drafts with WAL compaction
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
 - material delta summaries and integrity checks
-- zip import/export for project history, including variant-scoped share packages
-- imported review projects plus conflict-zone merge review for shared variants
+- zip import/export for project history, including variant-scoped share packages with optional previews
+- imported review projects with deletion, cached merge review, and conflict-zone overlays for shared variants
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
 - temporary `Alt` overlay for the latest 10 tracked actions when compare highlight is not active
@@ -226,7 +226,7 @@ Current scope:
 
 - singleplayer / integrated-server first
 - menu flow first, commands limited to diagnostics/help
-- merge currently works through imported review projects for the same project lineage, with block-level conflict detection before Lumi writes a merged save
+- merge currently works through imported review projects for the same project lineage, with background merge preview, block-level conflict detection, and validation messages before Lumi writes a merged save
 - partial restore is available from save details with manual bounds
 - compare overlay marks changed positions, not a full 3D preview
 

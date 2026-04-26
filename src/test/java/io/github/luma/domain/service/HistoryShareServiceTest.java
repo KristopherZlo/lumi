@@ -75,6 +75,38 @@ class HistoryShareServiceTest {
         assertTrue(Files.notExists(importedLayout.versionFile("v0003")));
     }
 
+    @Test
+    void deleteImportedProjectRemovesOnlySameLineageReviewProject() throws Exception {
+        Path projectsRoot = this.tempDir.resolve("projects-delete");
+        UUID sharedProjectId = UUID.fromString("12121212-1212-1212-1212-121212121212");
+        ProjectLayout targetLayout = this.seedProject(projectsRoot.resolve("tower.mbp"), sharedProjectId, "Tower", false);
+        ProjectLayout sourceLayout = this.seedProject(projectsRoot.resolve("tower-share.mbp"), sharedProjectId, "Tower copy", true);
+        BuildProject sourceProject = this.projectRepository.load(sourceLayout).orElseThrow();
+        ProjectVariant sourceVariant = this.variantRepository.loadAll(sourceLayout).stream()
+                .filter(variant -> variant.id().equals("roof-pass"))
+                .findFirst()
+                .orElseThrow();
+        Path archiveFile = this.tempDir.resolve("roof-pass-delete.zip");
+        this.projectArchiveRepository.exportVariantArchive(
+                sourceLayout,
+                sourceProject,
+                sourceVariant,
+                this.versionRepository.loadAll(sourceLayout),
+                archiveFile,
+                false
+        );
+
+        BuildProject targetProject = this.projectRepository.load(targetLayout).orElseThrow();
+        var result = this.historyShareService.importVariantPackage(projectsRoot, targetProject, archiveFile);
+        ProjectLayout importedLayout = ProjectLayout.of(projectsRoot, result.importedProjectName());
+
+        this.historyShareService.deleteImportedProject(projectsRoot, targetProject, result.importedProjectName());
+
+        assertTrue(Files.notExists(importedLayout.root()));
+        assertTrue(Files.exists(targetLayout.root()));
+        assertTrue(Files.exists(sourceLayout.root()));
+    }
+
     private ProjectLayout seedProject(Path root, UUID projectId, String projectName, boolean withSharedVariant) throws Exception {
         ProjectLayout layout = new ProjectLayout(root);
         this.projectRepository.initializeLayout(layout);

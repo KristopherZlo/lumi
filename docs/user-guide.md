@@ -174,11 +174,14 @@ Use the `Share` screen to:
 - import a shared package as a review project
 - review imported packages without leaving the current project
 - export one local variant as a history package
+- choose whether exported packages include preview PNGs
+- delete imported review packages after you are done with them
 - merge an imported variant into a local target variant
 
 Import comes first on the screen because it is the usual starting point.
 
 After a package is imported, Lumi keeps you on `Share`, selects that imported review project, and builds a merge review against the current active local variant automatically.
+That merge review runs in the background and is cached for the selected imported package and target variant, so reopening the same review does not repeat the file scan unless the imported package list changes.
 
 Merge conflicts are grouped into conflict zones instead of one long raw block list.
 
@@ -188,6 +191,8 @@ For each zone you can:
 - use imported
 - skip for now
 - show that zone in world
+
+You can also show all conflict zones at once. Failed imports, incompatible packages, and rejected merges are shown on the screen as validation messages instead of only falling back to a generic failure banner.
 
 Lumi only enables `Apply merge` when every conflict zone has a decision and the result would still bring in at least one imported change.
 

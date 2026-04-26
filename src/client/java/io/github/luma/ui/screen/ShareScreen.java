@@ -14,6 +14,7 @@ import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
+import io.github.luma.ui.controller.MergePreviewStatus;
 import io.github.luma.ui.controller.ShareScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
@@ -53,9 +54,12 @@ public final class ShareScreen extends LumaScreen {
     private String selectedImportedVariantName = "";
     private String lastExportPath = "";
     private String lastImportedProjectName = "";
+    private String validationMessage = "";
     private VariantMergePlan mergePlan = null;
     private final Map<String, MergeConflictResolution> conflictResolutions = new LinkedHashMap<>();
     private TextBoxComponent importArchiveInput;
+    private boolean includePreviews = false;
+    private boolean mergePreviewPending = false;
     private int refreshCooldown = 0;
 
     public ShareScreen(Screen parent, String projectName) {
@@ -106,6 +110,9 @@ public final class ShareScreen extends LumaScreen {
         )));
         frame.child(titleRow);
         frame.child(LumaUi.statusBanner(this.bannerText()));
+        if (!this.validationMessage.isBlank()) {
+            frame.child(LumaUi.danger(Component.literal(this.validationMessage)));
+        }
         frame.child(this.navigationRow());
         if (this.state.operationSnapshot() != null) {
             frame.child(this.operationSection());
@@ -145,6 +152,9 @@ public final class ShareScreen extends LumaScreen {
         if (!refreshed.equals(this.state)) {
             this.state = refreshed;
             this.rebuild();
+        }
+        if (this.mergePreviewPending) {
+            this.pollMergePreview();
         }
     }
 
@@ -229,12 +239,31 @@ public final class ShareScreen extends LumaScreen {
         });
         reviewButton.active(true);
         actions.child(reviewButton);
+        ButtonComponent deleteButton = UIComponents.button(Component.translatable("luma.action.delete_package"), button -> this.deleteImportedProject(importedProject));
+        deleteButton.active(!this.operationActive());
+        actions.child(deleteButton);
         card.child(actions);
 
-        if (selected && this.mergePlan != null) {
-            card.child(this.mergeReviewSection());
+        if (selected) {
+            if (this.mergePreviewPending && this.mergePlan == null) {
+                card.child(this.mergePreviewPendingSection());
+            } else if (this.mergePlan != null) {
+                card.child(this.mergeReviewSection());
+            }
         }
         return card;
+    }
+
+    private FlowLayout mergePreviewPendingSection() {
+        FlowLayout section = LumaUi.insetSection(
+                Component.translatable("luma.share.merge_preview_title"),
+                Component.translatable("luma.share.merge_preview_loading")
+        );
+        section.child(LumaUi.caption(Component.translatable(
+                "luma.share.target_variant",
+                ProjectUiSupport.displayVariantName(this.state.variants(), this.selectedTargetVariantId)
+        )));
+        return section;
     }
 
     private FlowLayout mergeReviewSection() {
@@ -276,6 +305,18 @@ public final class ShareScreen extends LumaScreen {
                     this.mergePlan.conflictPositions().size(),
                     this.mergePlan.conflictChunkCount()
             )));
+            FlowLayout conflictOverlayActions = LumaUi.actionRow();
+            conflictOverlayActions.child(UIComponents.button(Component.translatable("luma.action.show_all_conflicts"), button -> {
+                String statusKey = this.controller.showConflictZonesOverlay(
+                            this.selectedImportedProjectName,
+                            this.selectedImportedVariantId,
+                            this.selectedTargetVariantId,
+                            this.mergePlan
+                    );
+                this.validationMessage = this.controller.lastValidationMessage();
+                this.refresh(statusKey);
+            }));
+            section.child(conflictOverlayActions);
             for (MergeConflictZone zone : this.mergePlan.conflictZones()) {
                 section.child(this.conflictZoneCard(zone));
             }
@@ -285,22 +326,26 @@ public final class ShareScreen extends LumaScreen {
 
         if (CompareOverlayRenderer.hasData()) {
             FlowLayout overlayActions = LumaUi.actionRow();
-            overlayActions.child(UIComponents.button(Component.translatable("luma.action.hide_highlight"), button -> this.refresh(
-                    this.controller.clearConflictZoneOverlay()
-            )));
+            overlayActions.child(UIComponents.button(Component.translatable("luma.action.hide_highlight"), button -> {
+                String statusKey = this.controller.clearConflictZoneOverlay();
+                this.validationMessage = this.controller.lastValidationMessage();
+                this.refresh(statusKey);
+            }));
             section.child(overlayActions);
         }
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent mergeButton = UIComponents.button(Component.translatable("luma.action.merge_variant"), button -> this.refresh(
-                this.controller.startMerge(new VariantMergeApplyRequest(
+        ButtonComponent mergeButton = UIComponents.button(Component.translatable("luma.action.merge_variant"), button -> {
+            String statusKey = this.controller.startMerge(new VariantMergeApplyRequest(
                         this.projectName,
                         this.selectedImportedProjectName,
                         this.selectedImportedVariantId,
                         this.selectedTargetVariantId,
                         this.conflictZoneResolutions()
-                ))
-        ));
+                ));
+            this.validationMessage = this.controller.lastValidationMessage();
+            this.refresh(statusKey);
+        });
         mergeButton.active(this.mergePlan.canApply(this.conflictZoneResolutions()) && !this.operationActive());
         actions.child(mergeButton);
         section.child(actions);
@@ -371,14 +416,16 @@ public final class ShareScreen extends LumaScreen {
         skip.active(resolution != null);
         actions.child(skip);
 
-        actions.child(UIComponents.button(Component.translatable("luma.action.show_highlight"), button -> this.refresh(
-                this.controller.showConflictZoneOverlay(
+        actions.child(UIComponents.button(Component.translatable("luma.action.show_highlight"), button -> {
+            String statusKey = this.controller.showConflictZoneOverlay(
                         this.selectedImportedProjectName,
                         this.selectedImportedVariantId,
                         this.selectedTargetVariantId,
                         zone
-                )
-        )));
+                );
+            this.validationMessage = this.controller.lastValidationMessage();
+            this.refresh(statusKey);
+        }));
         card.child(actions);
         return card;
     }
@@ -397,9 +444,20 @@ public final class ShareScreen extends LumaScreen {
             this.refresh("luma.status.share_ready");
         }));
 
+        FlowLayout previewToggle = LumaUi.actionRow();
+        var includePreviewCheckbox = UIComponents.checkbox(Component.translatable("luma.share.include_previews"));
+        includePreviewCheckbox.checked(this.includePreviews);
+        includePreviewCheckbox.onChanged(value -> {
+            this.includePreviews = value;
+            this.refresh("luma.status.share_ready");
+        });
+        previewToggle.child(includePreviewCheckbox);
+        section.child(previewToggle);
+
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent exportButton = UIComponents.button(Component.translatable("luma.action.export_history"), button -> {
-            var result = this.controller.exportVariantPackage(this.projectName, this.selectedExportVariantId);
+            var result = this.controller.exportVariantPackage(this.projectName, this.selectedExportVariantId, this.includePreviews);
+            this.validationMessage = this.controller.lastValidationMessage();
             this.lastExportPath = result == null ? "" : result.archiveFile().toString();
             this.refresh(result == null ? "luma.status.operation_failed" : "luma.status.history_exported");
         });
@@ -461,6 +519,7 @@ public final class ShareScreen extends LumaScreen {
 
     private void importPackage() {
         HistoryPackageImportResult result = this.controller.importVariantPackage(this.projectName, this.importArchivePath);
+        this.validationMessage = this.controller.lastValidationMessage();
         if (result == null) {
             this.refresh("luma.status.operation_failed");
             return;
@@ -474,28 +533,71 @@ public final class ShareScreen extends LumaScreen {
         if (this.selectedTargetVariantId.isBlank() && this.state.project() != null) {
             this.selectedTargetVariantId = this.state.project().activeVariantId();
         }
-        this.mergePlan = this.controller.previewMerge(
-                this.projectName,
-                result.importedProjectName(),
-                result.importedVariantId(),
-                this.selectedTargetVariantId
-        );
-        this.refresh(this.mergeStatusKey(this.mergePlan));
+        this.refreshMergePreview();
+    }
+
+    private void deleteImportedProject(ImportedHistoryProjectSummary importedProject) {
+        String statusKey = this.controller.deleteImportedProject(this.projectName, importedProject.projectName());
+        this.validationMessage = this.controller.lastValidationMessage();
+        if (importedProject.projectName().equals(this.selectedImportedProjectName)) {
+            this.selectedImportedProjectName = "";
+            this.selectedImportedVariantId = "";
+            this.selectedImportedVariantName = "";
+            this.mergePlan = null;
+            this.mergePreviewPending = false;
+            this.conflictResolutions.clear();
+            this.controller.clearConflictZoneOverlay();
+        }
+        this.refresh(statusKey);
     }
 
     private void refreshMergePreview() {
         if (this.selectedImportedProjectName.isBlank() || this.selectedImportedVariantId.isBlank() || this.selectedTargetVariantId.isBlank()) {
             this.mergePlan = null;
+            this.mergePreviewPending = false;
             this.refresh("luma.status.share_ready");
             return;
         }
-        this.mergePlan = this.controller.previewMerge(
+        this.applyMergePreviewStatus(this.controller.requestMergePreview(
+                this.projectName,
+                this.selectedImportedProjectName,
+                this.selectedImportedVariantId,
+                this.selectedTargetVariantId
+        ));
+    }
+
+    private void pollMergePreview() {
+        if (this.selectedImportedProjectName.isBlank() || this.selectedImportedVariantId.isBlank() || this.selectedTargetVariantId.isBlank()) {
+            this.mergePreviewPending = false;
+            return;
+        }
+        MergePreviewStatus status = this.controller.requestMergePreview(
                 this.projectName,
                 this.selectedImportedProjectName,
                 this.selectedImportedVariantId,
                 this.selectedTargetVariantId
         );
-        this.refresh(this.mergeStatusKey(this.mergePlan));
+        if (status.state() != MergePreviewStatus.State.PENDING) {
+            this.applyMergePreviewStatus(status);
+        }
+    }
+
+    private void applyMergePreviewStatus(MergePreviewStatus status) {
+        if (status.state() == MergePreviewStatus.State.PENDING) {
+            this.mergePlan = null;
+            this.mergePreviewPending = true;
+            this.validationMessage = "";
+            this.refresh("luma.status.merge_preview_loading");
+            return;
+        }
+        this.mergePreviewPending = false;
+        this.validationMessage = status.state() == MergePreviewStatus.State.FAILED
+                ? status.detail()
+                : this.controller.lastValidationMessage();
+        this.mergePlan = status.state() == MergePreviewStatus.State.READY ? status.plan() : null;
+        this.refresh(status.state() == MergePreviewStatus.State.READY
+                ? this.mergeStatusKey(this.mergePlan)
+                : "luma.status.merge_preview_failed");
     }
 
     private List<MergeConflictZoneResolution> conflictZoneResolutions() {

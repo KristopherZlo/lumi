@@ -165,6 +165,41 @@ public final class HistoryShareService {
         return List.copyOf(importedProjects);
     }
 
+    public void deleteImportedProject(
+            MinecraftServer server,
+            String targetProjectName,
+            String importedProjectName
+    ) throws IOException {
+        BuildProject targetProject = this.projectService.loadProject(server, targetProjectName);
+        this.deleteImportedProject(this.projectService.projectsRoot(server), targetProject, importedProjectName);
+        HistoryCaptureManager.getInstance().invalidateProjectCache(server);
+    }
+
+    void deleteImportedProject(Path projectsRoot, BuildProject targetProject, String importedProjectName) throws IOException {
+        if (importedProjectName == null || importedProjectName.isBlank()) {
+            throw new IllegalArgumentException("Imported package name is missing");
+        }
+        if (targetProject.name().equals(importedProjectName)) {
+            throw new IllegalArgumentException("Cannot delete the active project from Share");
+        }
+
+        ProjectLayout importedLayout = this.projectRepository.findLayoutByProjectName(projectsRoot, importedProjectName)
+                .orElseThrow(() -> new IllegalArgumentException("Imported package not found: " + importedProjectName));
+        BuildProject importedProject = this.projectRepository.load(importedLayout)
+                .orElseThrow(() -> new IllegalArgumentException("Imported package metadata is missing: " + importedProjectName));
+        if (!targetProject.id().equals(importedProject.id())) {
+            throw new IllegalArgumentException("Imported package belongs to a different project lineage");
+        }
+
+        Path normalizedRoot = projectsRoot.toAbsolutePath().normalize();
+        Path importedRoot = importedLayout.root().toAbsolutePath().normalize();
+        if (!importedRoot.startsWith(normalizedRoot)) {
+            throw new IOException("Imported package storage is outside the projects root");
+        }
+
+        this.deleteTree(importedLayout.root());
+    }
+
     private String archiveFileName(String projectName, String variantName, Instant now) {
         return this.safeName(projectName) + "-" + this.safeName(variantName) + "-history-" + ARCHIVE_TIME.format(now) + ".zip";
     }
