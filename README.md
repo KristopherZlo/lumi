@@ -227,7 +227,7 @@ Current scope:
 - singleplayer / integrated-server first
 - menu flow first, commands limited to diagnostics/help
 - merge currently works through imported review projects for the same project lineage, with block-level conflict detection before Lumi writes a merged save
-- no partial restore yet
+- partial restore is available from save details with manual bounds
 - compare overlay marks changed positions, not a full 3D preview
 
 ## Docs

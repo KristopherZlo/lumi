@@ -26,4 +26,16 @@ public record Bounds3i(BlockPoint min, BlockPoint max) {
     public long volume() {
         return (long) this.sizeX() * this.sizeY() * this.sizeZ();
     }
+
+    public boolean contains(BlockPoint point) {
+        if (point == null) {
+            return false;
+        }
+        return point.x() >= this.min.x()
+                && point.x() <= this.max.x()
+                && point.y() >= this.min.y()
+                && point.y() <= this.max.y()
+                && point.z() >= this.min.z()
+                && point.z() <= this.max.z();
+    }
 }

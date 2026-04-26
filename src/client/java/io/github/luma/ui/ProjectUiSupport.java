@@ -113,6 +113,7 @@ public final class ProjectUiSupport {
             case MANUAL -> "luma.version_kind.manual";
             case RECOVERY -> "luma.version_kind.recovery";
             case RESTORE -> "luma.version_kind.restore";
+            case PARTIAL_RESTORE -> "luma.version_kind.partial_restore";
             case LEGACY -> "luma.version_kind.legacy";
             case WORLD_ROOT -> "luma.version_kind.world_root";
         };

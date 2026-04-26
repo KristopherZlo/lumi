@@ -180,6 +180,25 @@ public final class ProjectScreenController {
         }
     }
 
+    public String partialRestore(io.github.luma.domain.model.PartialRestoreRequest request) {
+        if (request == null) {
+            return "luma.status.operation_failed";
+        }
+        try {
+            this.restoreService.partialRestore(
+                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, request.projectName()),
+                    request
+            );
+            return "luma.status.partial_restore_started";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Partial restore request rejected for project {}", request.projectName(), exception);
+            return "luma.status.world_operation_busy";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Partial restore request failed for project {}", request == null ? "" : request.projectName(), exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
     public io.github.luma.domain.model.RestorePlanSummary restorePlanSummary(String projectName, String versionId) {
         try {
             return this.restoreService.summarizeRestorePlan(
@@ -189,6 +208,25 @@ public final class ProjectScreenController {
             );
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Restore plan summary failed for project {} version {}", projectName, versionId, exception);
+            return null;
+        }
+    }
+
+    public io.github.luma.domain.model.PartialRestorePlanSummary partialRestorePlanSummary(
+            io.github.luma.domain.model.PartialRestoreRequest request
+    ) {
+        try {
+            return this.restoreService.summarizePartialRestorePlan(
+                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, request.projectName()),
+                    request
+            );
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn(
+                    "Partial restore plan summary failed for project {} version {}",
+                    request == null ? "" : request.projectName(),
+                    request == null ? "" : request.targetVersionId(),
+                    exception
+            );
             return null;
         }
     }

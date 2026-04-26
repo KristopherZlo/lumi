@@ -228,6 +228,8 @@ Current behavior:
 
 ## Archive format
 
+Version manifests may use `versionKind = PARTIAL_RESTORE` for region-scoped restores. The patch payload uses the normal block-change format; the semantic difference is that the active variant advances to this new version instead of moving its head back to the historical target version.
+
 Project import/export uses a zip archive with:
 
 - `manifest.json`

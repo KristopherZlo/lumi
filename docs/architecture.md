@@ -173,6 +173,18 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 12. Completion resets the active variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly.
 13. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
 
+## Partial Restore Flow
+
+Partial restore is a region-scoped restore workflow. The UI builds a `PartialRestoreRequest` with explicit bounds and a region source, then `RestoreService.partialRestore(...)` filters the same-lineage patch replay plan off the server tick.
+
+Key differences from full restore:
+
+- partial restore does not move the active variant head to the old target version
+- Lumi applies only changes inside the selected bounds
+- after apply, Lumi writes a new `PARTIAL_RESTORE` version on the active variant
+- pending draft changes inside the selected region are folded into that version; pending draft changes outside the region are preserved as the recovery draft
+- non-direct cross-lineage partial restore is rejected until a snapshot/baseline target-state planner is implemented
+
 Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never happen on the tick-thread apply path.
 
 ## Recovery flow

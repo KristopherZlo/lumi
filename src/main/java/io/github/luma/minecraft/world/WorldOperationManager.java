@@ -204,7 +204,8 @@ public final class WorldOperationManager {
     private boolean isRestoreOperation(ActiveOperation operation) {
         return operation != null
                 && operation.handle() != null
-                && "restore-version".equals(operation.handle().label());
+                && ("restore-version".equals(operation.handle().label())
+                || "partial-restore".equals(operation.handle().label()));
     }
 
     private void ensureIdle(String serverKey) {
@@ -457,6 +458,7 @@ public final class WorldOperationManager {
         private GlobalDispatcher dispatcher;
         private ChunkBatch currentBatch;
         private List<SectionBatch> currentSections = List.of();
+        private CompletableFuture<Void> completionFuture;
         private int sectionIndex = 0;
         private int placementIndex = 0;
         private boolean blockEntitiesApplied = false;
@@ -513,9 +515,7 @@ public final class WorldOperationManager {
                         "Applying prepared batches"
                 );
                 if (this.prepared.totalPlacements() == 0) {
-                    this.prepared.onComplete().run();
-                    this.complete("Completed");
-                    return true;
+                    return this.advanceCompletion();
                 }
             }
 
@@ -596,12 +596,43 @@ public final class WorldOperationManager {
                         this.handle().label(),
                         this.appliedBlocks
                 );
-                this.prepared.onComplete().run();
-                this.complete("Completed");
-                return true;
+                return this.advanceCompletion();
             }
 
             return false;
+        }
+
+        private boolean advanceCompletion() throws Exception {
+            if (this.completionFuture == null) {
+                this.progressSink().update(
+                        OperationStage.FINALIZING,
+                        this.appliedBlocks,
+                        this.prepared.totalPlacements(),
+                        "Finalizing"
+                );
+                this.completionFuture = CompletableFuture.runAsync(() -> {
+                    try {
+                        this.prepared.onComplete().run();
+                    } catch (Exception exception) {
+                        throw new CompletionException(exception);
+                    }
+                }, WorldOperationManager.this.executor());
+                return false;
+            }
+            if (!this.completionFuture.isDone()) {
+                return false;
+            }
+            try {
+                this.completionFuture.join();
+                this.complete("Completed");
+                return true;
+            } catch (CompletionException exception) {
+                Exception cause = exception.getCause() instanceof Exception
+                        ? (Exception) exception.getCause()
+                        : new RuntimeException(exception.getCause());
+                this.fail(cause);
+                throw cause;
+            }
         }
 
         private int applyCurrentChunk(int maxBlocks) {

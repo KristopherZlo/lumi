@@ -240,6 +240,8 @@ Primary actions stay focused:
 
 Advanced actions like refresh preview, replace latest save, create variant from this save, and raw info stay under `More`.
 
+`Partial restore` is also under `More`. Use it when you want to restore only a bounded region from the selected save. Preview the region first, then apply it. Lumi writes the result as a new save on the active variant instead of moving the variant head back to the older save.
+
 ## Settings
 
 The settings screen includes:
