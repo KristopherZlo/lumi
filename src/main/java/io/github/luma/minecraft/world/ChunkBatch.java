@@ -55,7 +55,7 @@ public record ChunkBatch(
                 batch.chunk(),
                 Map.copyOf(sections),
                 Map.copyOf(blockEntities),
-                EntityBatch.empty(),
+                batch.entityBatch(),
                 BatchState.COMPLETE
         );
     }

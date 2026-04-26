@@ -6,9 +6,15 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityProcessor;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -95,8 +101,16 @@ public final class BlockChangeApplier {
             return;
         }
 
-        // Entity diff replay is introduced incrementally; keep the commit stage
-        // explicit even when the first pass carries no entity work yet.
+        for (String entityId : entityBatch.entityIdsToRemove()) {
+            removeEntity(level, entityId);
+        }
+        for (CompoundTag entityTag : entityBatch.entitiesToUpdate()) {
+            removeEntity(level, entityTag.getString("UUID").orElse(""));
+            spawnEntity(level, entityTag);
+        }
+        for (CompoundTag entityTag : entityBatch.entitiesToSpawn()) {
+            spawnEntity(level, entityTag);
+        }
     }
 
     public static void applyBlockState(ServerLevel level, BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
@@ -152,5 +166,35 @@ public final class BlockChangeApplier {
 
         CompoundTag currentBlockEntityTag = currentBlockEntity.saveWithFullMetadata(level.registryAccess());
         return !Objects.equals(currentBlockEntityTag, targetBlockEntityTag);
+    }
+
+    private static void removeEntity(ServerLevel level, String entityId) {
+        if (entityId == null || entityId.isBlank()) {
+            return;
+        }
+        try {
+            Entity entity = level.getEntity(UUID.fromString(entityId));
+            if (entity == null || entity instanceof ServerPlayer) {
+                return;
+            }
+            entity.discard();
+        } catch (IllegalArgumentException ignored) {
+        }
+    }
+
+    private static void spawnEntity(ServerLevel level, CompoundTag entityTag) {
+        if (entityTag == null || entityTag.isEmpty()) {
+            return;
+        }
+        Entity entity = EntityType.loadEntityRecursive(
+                entityTag.copy(),
+                level,
+                EntitySpawnReason.LOAD,
+                EntityProcessor.NOP
+        );
+        if (entity == null || entity instanceof ServerPlayer) {
+            return;
+        }
+        level.tryAddFreshEntityWithPassengers(entity);
     }
 }

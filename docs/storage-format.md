@@ -127,7 +127,7 @@ Metadata reads must not require deserializing the full payload.
 
 ### `patches/<patchId>.bin.lz4`
 
-Patch payloads are the primary history format for tracked saves in schema v3.
+Patch payloads are the primary history format for tracked saves in schema v4.
 
 Current payload characteristics:
 
@@ -136,6 +136,7 @@ Current payload characteristics:
 - per-chunk local-position ordering
 - chunk-local palettes for block states
 - chunk-local palettes for block entity payloads
+- backward-compatible entity spawn/remove/update list sections; they are currently written empty for block-only saves
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
@@ -150,6 +151,7 @@ Current snapshot characteristics:
 - chunk -> section -> palette structure
 - only non-empty sections are stored
 - block entities are kept in a sparse side table keyed by local block index
+- schema v4 includes a per-chunk entity snapshot list; it is currently written empty and schema v3 snapshots still load as block-only snapshots
 
 They are currently created:
 

@@ -32,7 +32,7 @@ import net.minecraft.server.level.ServerLevel;
 public final class PatchDataRepository {
 
     private static final int MAGIC = 0x4C504154;
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
 
     public PatchMetadata writePayload(
             ProjectLayout layout,
@@ -102,14 +102,14 @@ public final class PatchDataRepository {
         ))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != MAGIC || version != VERSION) {
+            if (magic != MAGIC || (version != 3 && version != VERSION)) {
                 throw new IOException("Unsupported patch payload format for " + metadata.id());
             }
 
             int chunkCount = input.readInt();
             List<StoredBlockChange> changes = new ArrayList<>();
             for (int index = 0; index < chunkCount; index++) {
-                changes.addAll(this.readChunk(input));
+                changes.addAll(this.readChunk(input, version));
                 BackgroundThrottle.pauseEvery(index + 1, 8, 250_000L);
             }
             return changes;
@@ -167,11 +167,15 @@ public final class PatchDataRepository {
                 output.writeInt(blockEntityPaletteId(blockEntityPalette, change.oldValue().blockEntityTag()));
                 output.writeInt(blockEntityPaletteId(blockEntityPalette, change.newValue().blockEntityTag()));
             }
+
+            output.writeInt(0); // entities to spawn
+            output.writeInt(0); // entity ids to remove
+            output.writeInt(0); // entities to update
         }
         return chunkBuffer.toByteArray();
     }
 
-    private List<StoredBlockChange> readChunk(DataInputStream input) throws IOException {
+    private List<StoredBlockChange> readChunk(DataInputStream input, int version) throws IOException {
         int chunkX = input.readInt();
         int chunkZ = input.readInt();
         int changeCount = input.readInt();
@@ -202,7 +206,25 @@ public final class PatchDataRepository {
                     new StatePayload(statePalette.get(newStateId).copy(), blockEntityAt(blockEntityPalette, newBlockEntityId))
             ));
         }
+        if (version >= 4) {
+            this.skipEntityLists(input);
+        }
         return changes;
+    }
+
+    private void skipEntityLists(DataInputStream input) throws IOException {
+        int spawnCount = input.readInt();
+        for (int index = 0; index < spawnCount; index++) {
+            StorageIo.readCompound(input);
+        }
+        int removeCount = input.readInt();
+        for (int index = 0; index < removeCount; index++) {
+            input.readUTF();
+        }
+        int updateCount = input.readInt();
+        for (int index = 0; index < updateCount; index++) {
+            StorageIo.readCompound(input);
+        }
     }
 
     private void writeCompressed(OutputStream output, byte[] bytes) throws IOException {

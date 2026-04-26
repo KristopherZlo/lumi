@@ -32,7 +32,7 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class SnapshotWriter {
 
     private static final int MAGIC = 0x4C534E50;
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
     private static final String AIR_ID = "minecraft:air";
 
     public SnapshotRef capture(
@@ -140,6 +140,8 @@ public final class SnapshotWriter {
                     data.writeInt(entry.getKey());
                     StorageIo.writeCompound(data, entry.getValue());
                 }
+
+                data.writeInt(0); // chunk entity snapshots
             }
         }
     }
