@@ -77,7 +77,7 @@ public final class CompareScreen extends LumaScreen {
     protected void build(FlowLayout root) {
         this.state = this.controller.loadState(this.projectName, this.leftReference, this.rightReference, this.status);
 
-        root.surface(Surface.BLANK);
+        root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
         root.gap(0);
 
@@ -85,8 +85,8 @@ public final class CompareScreen extends LumaScreen {
         root.child(frame);
 
         FlowLayout header = LumaUi.actionRow();
-        header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        header.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
+        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        header.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
                 this.parent,
                 this.projectName
         )));
@@ -155,7 +155,7 @@ public final class CompareScreen extends LumaScreen {
         section.child(inputs);
 
         FlowLayout actions = LumaUi.actionRow();
-        actions.child(UIComponents.button(Component.translatable("luma.action.compare"), button -> {
+        actions.child(LumaUi.primaryButton(Component.translatable("luma.action.compare"), button -> {
             this.runCompare();
         }));
         section.child(actions);
@@ -193,7 +193,7 @@ public final class CompareScreen extends LumaScreen {
         section.child(stats);
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent overlayButton = UIComponents.button(this.overlayButtonLabel(), button -> {
+        ButtonComponent overlayButton = LumaUi.button(this.overlayButtonLabel(), button -> {
             this.status = CompareOverlayRenderer.hasData()
                     ? this.controller.toggleOverlayVisibility()
                     : this.controller.showOverlay(this.projectName, this.state);
@@ -202,11 +202,11 @@ public final class CompareScreen extends LumaScreen {
         overlayButton.active(!this.state.diff().changedBlocks().isEmpty() || CompareOverlayRenderer.hasData());
         actions.child(overlayButton);
 
-        ButtonComponent restoreButton = UIComponents.button(Component.translatable("luma.action.restore"), button -> this.restoreComparedSave());
+        ButtonComponent restoreButton = LumaUi.button(Component.translatable("luma.action.restore"), button -> this.restoreComparedSave());
         restoreButton.active(this.restorableVersion() != null);
         actions.child(restoreButton);
 
-        actions.child(UIComponents.button(Component.translatable(
+        actions.child(LumaUi.button(Component.translatable(
                 this.showMoreDetails ? "luma.action.hide_tools" : "luma.compare.more_details"
         ), button -> {
             this.showMoreDetails = !this.showMoreDetails;
@@ -340,7 +340,7 @@ public final class CompareScreen extends LumaScreen {
     }
 
     private ButtonComponent pairedPresetButton(Component label, String leftValue, String rightValue) {
-        ButtonComponent button = UIComponents.button(label, pressed -> {
+        ButtonComponent button = LumaUi.button(label, pressed -> {
             this.leftReference = leftValue;
             this.rightReference = rightValue;
             this.status = "luma.status.compare_ready";

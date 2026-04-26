@@ -67,7 +67,7 @@ public final class SaveScreen extends LumaScreen {
         ProjectVersion activeHead = ProjectUiSupport.activeHead(this.state.project(), this.state.variants(), this.state.versions());
         boolean operationActive = this.state.operationSnapshot() != null && !this.state.operationSnapshot().terminal();
 
-        root.surface(Surface.BLANK);
+        root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
         root.gap(0);
 
@@ -75,8 +75,8 @@ public final class SaveScreen extends LumaScreen {
         root.child(frame);
 
         FlowLayout header = LumaUi.actionRow();
-        header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        header.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
+        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        header.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
                 this.parent,
                 this.projectName
         )));
@@ -103,7 +103,7 @@ public final class SaveScreen extends LumaScreen {
                     Component.translatable("luma.save.empty_help")
             );
             FlowLayout actions = LumaUi.actionRow();
-            actions.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
+            actions.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
                     this.parent,
                     this.projectName
             )));
@@ -168,7 +168,7 @@ public final class SaveScreen extends LumaScreen {
                 null
         );
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent saveButton = UIComponents.button(Component.translatable("luma.action.save_version"), button -> {
+        ButtonComponent saveButton = LumaUi.primaryButton(Component.translatable("luma.action.save_version"), button -> {
             String result = this.controller.saveVersion(this.projectName, this.saveMessage);
             if ("luma.status.save_started".equals(result)) {
                 this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
@@ -178,7 +178,7 @@ public final class SaveScreen extends LumaScreen {
         });
         saveButton.active(!operationActive);
         actions.child(saveButton);
-        actions.child(UIComponents.button(Component.translatable("luma.action.cancel"), button -> this.onClose()));
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.onClose()));
         section.child(actions);
         return section;
     }
@@ -197,7 +197,7 @@ public final class SaveScreen extends LumaScreen {
     }
 
     private ButtonComponent suggestionButton(String translationKey) {
-        return UIComponents.button(Component.translatable(translationKey), button -> {
+        return LumaUi.button(Component.translatable(translationKey), button -> {
             this.saveMessage = Component.translatable(translationKey).getString();
             this.rebuild();
         });
@@ -209,7 +209,7 @@ public final class SaveScreen extends LumaScreen {
                 Component.translatable("luma.save.more_help")
         );
         FlowLayout toggle = LumaUi.actionRow();
-        toggle.child(UIComponents.button(Component.translatable(
+        toggle.child(LumaUi.button(Component.translatable(
                 this.showMoreOptions ? "luma.action.hide_tools" : "luma.action.more_tools"
         ), button -> {
             this.showMoreOptions = !this.showMoreOptions;
@@ -221,7 +221,7 @@ public final class SaveScreen extends LumaScreen {
             return section;
         }
 
-        ButtonComponent replaceButton = UIComponents.button(Component.translatable("luma.action.amend_version"), button -> {
+        ButtonComponent replaceButton = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> {
             String result = this.controller.amendVersion(this.projectName, this.saveMessage);
             if ("luma.status.amend_started".equals(result)) {
                 this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);

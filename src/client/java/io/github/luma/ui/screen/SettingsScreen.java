@@ -68,7 +68,7 @@ public final class SettingsScreen extends LumaScreen {
         }
         ProjectIntegrityReport integrity = this.controller.loadIntegrity(this.projectName);
 
-        root.surface(Surface.BLANK);
+        root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
         root.gap(0);
 
@@ -76,7 +76,7 @@ public final class SettingsScreen extends LumaScreen {
         root.child(frame);
 
         FlowLayout header = LumaUi.actionRow();
-        header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
         frame.child(header);
 
         frame.child(LumaUi.value(Component.translatable("luma.screen.settings.title", this.projectName)));
@@ -106,7 +106,7 @@ public final class SettingsScreen extends LumaScreen {
                 Component.translatable("luma.settings.save_help")
         );
         FlowLayout buttons = LumaUi.actionRow();
-        buttons.child(UIComponents.button(Component.translatable("luma.action.save_settings"), button -> this.save()));
+        buttons.child(LumaUi.primaryButton(Component.translatable("luma.action.save_settings"), button -> this.save()));
         actions.child(buttons);
         body.child(actions);
         body.child(LumaUi.bottomSpacer());

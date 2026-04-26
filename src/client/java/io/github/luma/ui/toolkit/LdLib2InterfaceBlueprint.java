@@ -19,7 +19,10 @@ public final class LdLib2InterfaceBlueprint {
 
     public static LdLib2InterfaceBlueprint childFriendlyProjectHome() {
         return new LdLib2InterfaceBlueprint(List.of(
-                new LdLib2ElementRole("root", "UIElement", "Column root with padding and full-screen sizing."),
+                new LdLib2ElementRole("root", "UIElement", "Dimmed screen root with full-screen sizing."),
+                new LdLib2ElementRole("window", "UIElement", "Bordered application window."),
+                new LdLib2ElementRole("sidebar", "UIElement", "Project navigation and context."),
+                new LdLib2ElementRole("title-bar", "UIElement", "Project title and short guidance."),
                 new LdLib2ElementRole("status", "Label", "Short, persistent operation status."),
                 new LdLib2ElementRole("primary-actions", "UIElement", "Column of the main builder decisions."),
                 new LdLib2ElementRole("save-action", "Button", "Keep this moment."),

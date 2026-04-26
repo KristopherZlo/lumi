@@ -49,28 +49,31 @@ public final class CreateProjectScreen extends LumaScreen {
 
     @Override
     protected void build(FlowLayout root) {
-        root.surface(Surface.VANILLA_TRANSLUCENT);
+        root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
-        root.gap(8);
+        root.gap(0);
+
+        FlowLayout frame = LumaUi.screenFrame();
+        root.child(frame);
 
         FlowLayout header = LumaUi.actionRow();
-        header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        root.child(header);
+        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        frame.child(header);
 
-        root.child(LumaUi.value(Component.translatable("luma.screen.create_project.title")));
-        root.child(LumaUi.caption(Component.translatable(this.status)));
+        frame.child(LumaUi.value(Component.translatable("luma.screen.create_project.title")));
+        frame.child(LumaUi.statusBanner(Component.translatable(this.status)));
 
-        root.child(LumaUi.caption(Component.translatable("luma.create_project.name")));
+        frame.child(LumaUi.caption(Component.translatable("luma.create_project.name")));
         var nameBox = UIComponents.textBox(Sizing.fill(100), this.name);
         nameBox.onChanged().subscribe(value -> this.name = value);
-        root.child(nameBox);
+        frame.child(nameBox);
 
-        root.child(buildCoordsRow("luma.create_project.min", this.minX, this.minY, this.minZ,
+        frame.child(buildCoordsRow("luma.create_project.min", this.minX, this.minY, this.minZ,
                 value -> this.minX = value, value -> this.minY = value, value -> this.minZ = value));
-        root.child(buildCoordsRow("luma.create_project.max", this.maxX, this.maxY, this.maxZ,
+        frame.child(buildCoordsRow("luma.create_project.max", this.maxX, this.maxY, this.maxZ,
                 value -> this.maxX = value, value -> this.maxY = value, value -> this.maxZ = value));
 
-        root.child(UIComponents.button(Component.translatable("luma.action.create_project"), button -> {
+        frame.child(LumaUi.primaryButton(Component.translatable("luma.action.create_project"), button -> {
             this.status = this.controller.createProject(
                     this.name,
                     new BlockPos(parse(this.minX), parse(this.minY), parse(this.minZ)),

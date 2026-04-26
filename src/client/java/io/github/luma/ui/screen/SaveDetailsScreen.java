@@ -86,7 +86,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         ProjectVariant versionVariant = version == null ? null : ProjectUiSupport.variantFor(this.state.variants(), version.variantId());
         boolean operationActive = this.state.operationSnapshot() != null && !this.state.operationSnapshot().terminal();
 
-        root.surface(Surface.BLANK);
+        root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
         root.gap(0);
 
@@ -94,8 +94,8 @@ public final class SaveDetailsScreen extends LumaScreen {
         root.child(frame);
 
         FlowLayout header = LumaUi.actionRow();
-        header.child(UIComponents.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        header.child(UIComponents.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
+        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        header.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
                 this.parent,
                 this.projectName
         )));
@@ -225,11 +225,11 @@ public final class SaveDetailsScreen extends LumaScreen {
         );
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent restoreButton = UIComponents.button(Component.translatable("luma.action.restore"), button -> this.restoreVersion(version, versionVariant));
+        ButtonComponent restoreButton = LumaUi.primaryButton(Component.translatable("luma.action.restore"), button -> this.restoreVersion(version, versionVariant));
         restoreButton.active(!operationActive);
         actions.child(restoreButton);
 
-        actions.child(UIComponents.button(Component.translatable("luma.action.compare_with_current"), button -> this.router.openCompare(
+        actions.child(LumaUi.button(Component.translatable("luma.action.compare_with_current"), button -> this.router.openCompare(
                 this,
                 this.projectName,
                 version.id(),
@@ -237,7 +237,7 @@ public final class SaveDetailsScreen extends LumaScreen {
                 version.id()
         )));
 
-        ButtonComponent comparePrevious = UIComponents.button(Component.translatable("luma.action.compare_with_parent"), button -> this.router.openCompare(
+        ButtonComponent comparePrevious = LumaUi.button(Component.translatable("luma.action.compare_with_parent"), button -> this.router.openCompare(
                 this,
                 this.projectName,
                 this.parentVersionId(version.id()),
@@ -258,7 +258,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         );
 
         FlowLayout toggle = LumaUi.actionRow();
-        toggle.child(UIComponents.button(Component.translatable(
+        toggle.child(LumaUi.button(Component.translatable(
                 this.showMoreOptions ? "luma.action.hide_tools" : "luma.action.more_tools"
         ), button -> {
             this.showMoreOptions = !this.showMoreOptions;
@@ -271,7 +271,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         }
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent replaceButton = UIComponents.button(Component.translatable("luma.action.amend_version"), button -> this.router.openSave(
+        ButtonComponent replaceButton = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> this.router.openSave(
                 this,
                 this.projectName,
                 ProjectUiSupport.displayMessage(version),
@@ -280,12 +280,12 @@ public final class SaveDetailsScreen extends LumaScreen {
         replaceButton.active(this.canReplaceLatest(version) && !operationActive);
         actions.child(replaceButton);
 
-        actions.child(UIComponents.button(Component.translatable("luma.action.refresh_preview"), button -> {
+        actions.child(LumaUi.button(Component.translatable("luma.action.refresh_preview"), button -> {
             ProjectPreviewTextureCache.release(this.projectName, version.id());
             this.refresh(this.controller.refreshPreview(this.projectName, version.id()));
         }));
 
-        actions.child(UIComponents.button(Component.translatable("luma.save_details.create_variant"), button -> this.router.openVariants(
+        actions.child(LumaUi.button(Component.translatable("luma.save_details.create_variant"), button -> this.router.openVariants(
                 this,
                 this.projectName,
                 version.id()
@@ -293,7 +293,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         section.child(actions);
 
         FlowLayout secondary = LumaUi.actionRow();
-        secondary.child(UIComponents.button(Component.translatable("luma.action.settings"), button -> this.router.openSettings(
+        secondary.child(LumaUi.button(Component.translatable("luma.action.settings"), button -> this.router.openSettings(
                 this,
                 this.projectName
         )));
@@ -345,7 +345,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         }
 
         FlowLayout actions = LumaUi.actionRow();
-        actions.child(UIComponents.button(Component.translatable("luma.action.preview_partial_restore"), button -> {
+        actions.child(LumaUi.button(Component.translatable("luma.action.preview_partial_restore"), button -> {
             Optional<PartialRestoreRequest> request = this.partialRestoreRequest(version);
             if (request.isEmpty()) {
                 this.refresh("luma.status.partial_restore_invalid_bounds");
@@ -356,7 +356,7 @@ public final class SaveDetailsScreen extends LumaScreen {
                     ? "luma.status.operation_failed"
                     : "luma.status.partial_restore_plan_ready");
         }));
-        ButtonComponent applyButton = UIComponents.button(Component.translatable("luma.action.apply_partial_restore"), button -> {
+        ButtonComponent applyButton = LumaUi.primaryButton(Component.translatable("luma.action.apply_partial_restore"), button -> {
             Optional<PartialRestoreRequest> request = this.partialRestoreRequest(version);
             if (request.isEmpty()) {
                 this.refresh("luma.status.partial_restore_invalid_bounds");
@@ -505,11 +505,11 @@ public final class SaveDetailsScreen extends LumaScreen {
         }
 
         FlowLayout actions = LumaUi.actionRow();
-        actions.child(UIComponents.button(Component.translatable("luma.action.cancel"), button -> {
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
             this.pendingRestoreConfirmation = false;
             this.rebuild();
         }));
-        ButtonComponent confirmButton = UIComponents.button(Component.translatable("luma.action.confirm_initial_restore"), button -> {
+        ButtonComponent confirmButton = LumaUi.primaryButton(Component.translatable("luma.action.confirm_initial_restore"), button -> {
             this.pendingRestoreConfirmation = false;
             this.executeRestore(version, versionVariant);
         });
