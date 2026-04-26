@@ -57,8 +57,8 @@ Use Lumi if you want to:
 ## Current Features
 
 - automatic dimension projects
-- home-first UI built around `Build`, `Save`, `History`, and `Restore`
-- lightweight `History / Variants / Share` navigation with live background-operation refresh while screens stay open
+- child-friendly home UI built around `Save now`, `Go back`, `Saved moments`, `Ideas`, and `Share`
+- lightweight saved-moment, idea, and share navigation with live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, compare, restore, and variant actions
@@ -177,6 +177,8 @@ Main libraries:
 - `cloth-config`
 - `lz4-java`
 
+LDLib2 is the target UI backend for a future runtime switch, but the current Fabric `1.21.11` build keeps it optional and uses the packaged owo-lib fallback until a compatible LDLib2 Fabric artifact exists.
+
 Build output is one mod jar.
 
 ## Build
@@ -217,7 +219,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 6. Use `Alt+Z` / `Alt+Y` to undo or redo the latest tracked Lumi action.
 7. Hold `Alt` to preview the latest 10 tracked actions when the compare overlay is not active.
    Compare against `current` now enables the world highlight immediately and refreshes it automatically while you keep editing.
-8. Use the main `Save` action when you want a safe restore point.
+8. Use `Save now` when you want a safe restore point.
 9. Open a save when you want details, compare, restore, or create a new variant from it.
 10. Use `Variants`, `Recovered work`, and `Settings` as needed.
 
