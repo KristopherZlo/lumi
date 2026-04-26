@@ -110,9 +110,10 @@ Responsibilities are split as follows:
 - lightweight summary controllers keep `ProjectScreen`, `VariantsScreen`, and `ShareScreen` fast by avoiding diff, material, and merge-preview work on open
 - `MergePreviewCache` runs Share merge previews in the background and caches them by imported package and target variant while the screen is open
 - `UiToolkitRegistry` treats LDLib2 as the target UI backend and reports whether its runtime classes are present, while the Fabric `1.21.11` build keeps an owo-lib fallback active until a compatible LDLib2 runtime is available
+- `LdLib2InterfaceBlueprint` records the target LDLib2 shape for the project home screen in terms of LDLib2 concepts such as `UIElement`, `Label`, `Button`, `ScrollerView`, and `TabView`, without linking the Fabric build to a NeoForge-only artifact
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
 - obsolete tab-builder scaffolds have been removed; larger workflows now use dedicated screens and narrow view-state records instead of a shared project tab container
-- the project home screen now uses child-friendly actions first: keep this moment, go back safely, saved moments, try another idea, and share or combine
+- the project home screen now uses child-friendly numbered action cards first: keep this moment, go back safely, saved moments, try another idea, and share or combine
 - dedicated screens isolate `Save`, `Save details`, `Variants`, `Share`, `Compare`, `Recovered work`, and `Settings` so the main project screen no longer tries to carry every workflow at once
 - `LumaScreen` ensures Lumi screens never pause the game
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface

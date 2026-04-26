@@ -10,6 +10,7 @@ import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.SimpleActionCard;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
@@ -187,8 +188,11 @@ public final class ProjectScreen extends LumaScreen {
         ));
         saveButton.active(!pending.isEmpty() && !operationActive);
         section.child(this.homeAction(
+                "1",
                 Component.translatable("luma.simple.save_title"),
-                Component.translatable("luma.simple.save_help"),
+                pending.isEmpty()
+                        ? Component.translatable("luma.simple.save_clean_help")
+                        : Component.translatable("luma.simple.save_help"),
                 saveButton
         ));
 
@@ -199,6 +203,7 @@ public final class ProjectScreen extends LumaScreen {
         });
         restoreButton.active(activeHead != null && !operationActive);
         section.child(this.homeAction(
+                "2",
                 Component.translatable("luma.simple.restore_title"),
                 activeHead == null
                         ? Component.translatable("luma.simple.restore_empty_help")
@@ -208,6 +213,7 @@ public final class ProjectScreen extends LumaScreen {
 
         ButtonComponent savedMomentsButton = UIComponents.button(Component.translatable("luma.simple.saved_button"), button -> this.openSavedMoments());
         section.child(this.homeAction(
+                "3",
                 Component.translatable("luma.simple.saved_title"),
                 Component.translatable("luma.simple.saved_short_help"),
                 savedMomentsButton
@@ -218,6 +224,7 @@ public final class ProjectScreen extends LumaScreen {
                 this.projectName
         ));
         section.child(this.homeAction(
+                "4",
                 Component.translatable("luma.simple.ideas_title"),
                 Component.translatable("luma.simple.ideas_help"),
                 ideasButton
@@ -228,6 +235,7 @@ public final class ProjectScreen extends LumaScreen {
                 this.projectName
         ));
         section.child(this.homeAction(
+                "5",
                 Component.translatable("luma.simple.share_title"),
                 Component.translatable("luma.simple.share_help"),
                 shareButton
@@ -262,21 +270,13 @@ public final class ProjectScreen extends LumaScreen {
         return section;
     }
 
-    private FlowLayout homeAction(Component title, Component help, ButtonComponent button) {
-        FlowLayout panel = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
-        FlowLayout row = this.width < 760
-                ? UIContainers.verticalFlow(Sizing.fill(100), Sizing.content())
-                : UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        row.gap(8);
-
-        FlowLayout text = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        text.gap(3);
-        text.child(LumaUi.value(title));
-        text.child(LumaUi.caption(help));
-        row.child(text);
-        row.child(button);
-        panel.child(row);
-        return panel;
+    private FlowLayout homeAction(String stepNumber, Component title, Component help, ButtonComponent button) {
+        return new SimpleActionCard(
+                Component.translatable("luma.simple.step", stepNumber),
+                title,
+                help,
+                button
+        ).render(this.width);
     }
 
     private int pendingTotal(PendingChangeSummary pending) {

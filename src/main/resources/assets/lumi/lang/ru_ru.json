@@ -532,6 +532,7 @@
   "luma.share.zone_status_keep_local": "Оставить локальные изменения",
   "luma.share.zone_status_use_imported": "Взять импортированные изменения"
   ,
+  "luma.simple.step": "Шаг %s",
   "luma.simple.workspace_title": "%s",
   "luma.simple.current_place": "Место: %s",
   "luma.simple.current_idea": "Идея: %s",
@@ -544,6 +545,7 @@
   "luma.simple.blocks_changed": "Изменено",
   "luma.simple.save_title": "Оставить этот момент",
   "luma.simple.save_help": "Сохрани, как постройка выглядит сейчас, чтобы вернуться позже.",
+  "luma.simple.save_clean_help": "Сначала немного построй. Когда блоки изменятся, эта кнопка сохранит момент.",
   "luma.simple.save_button": "Сохранить",
   "luma.simple.restore_title": "Вернуться назад",
   "luma.simple.restore_help": "Вернуть мир к последнему сохранённому моменту: %s.",
