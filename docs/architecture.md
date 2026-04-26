@@ -39,7 +39,7 @@ Key services:
 - `ProjectService`: create, load, and update projects
 - `ProjectService`: also owns world-origin bootstrap and automatic `WORLD_ROOT` creation for dimension workspaces
 - `ProjectArchiveService`: export stable project history to zip archives and import it back into project storage
-- `HistoryShareService`: export variant-scoped history packages and import them back as review projects for the same project lineage
+- `HistoryShareService`: export variant-scoped history packages, import them back as review projects for the same project lineage, and delete imported review packages after lineage validation
 - `ProjectCleanupService`: compute safe cleanup candidates from reachable history metadata and active operation state
 - `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy
 - `RestoreService`: build restore plans, decode world-root baseline restores, and prepare chunk batches
@@ -107,6 +107,7 @@ Responsibilities are split as follows:
 - controllers invoke services and translate failures into status keys
 - view-state records provide immutable inputs to the rendering layer
 - lightweight summary controllers keep `ProjectScreen`, `VariantsScreen`, and `ShareScreen` fast by avoiding diff, material, and merge-preview work on open
+- `MergePreviewCache` runs Share merge previews in the background and caches them by imported package and target variant while the screen is open
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
 - tab builders keep larger screen sections isolated
 - the project home screen now focuses on `Build`, `Save`, `History`, and `Restore` first, with advanced tools behind progressive disclosure
@@ -117,7 +118,7 @@ Responsibilities are split as follows:
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, prioritizes the nearest changed blocks to the current camera position, and renders only exposed overlay faces so translucent fill does not self-stack through dense diff volumes
 - `CompareOverlayCoordinator` refreshes `current`-world compare overlays on the client tick so live edits appear in the active highlight without rebuilding the screen manually
 - `RecentChangesOverlayRenderer` renders the latest tracked Lumi actions when `Alt` is held and the compare overlay is not active
-- `ShareScreen` now carries the advanced `Share & Merge` flow: import and export history packages, review imported packages, resolve merge conflict zones, and apply a merged save without cluttering the home or variants screens
+- `ShareScreen` now carries the advanced `Share & Merge` flow: import and export history packages, optionally include preview PNGs in exports, delete imported review packages, review imported packages, resolve merge conflict zones, show zone overlays, and apply a merged save without cluttering the home or variants screens
 
 ## Core runtime flows
 

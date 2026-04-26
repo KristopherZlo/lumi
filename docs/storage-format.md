@@ -245,8 +245,10 @@ Project import/export uses a zip archive with:
 - optional `project/recovery/journal.json`
 
 The archive manifest now carries a scope descriptor. Full-project archives keep `scope = PROJECT`. Variant share packages keep `scope = VARIANT` plus the selected variant id, name, base version id, and head version id.
+The manifest also records whether preview PNGs were included. Share export exposes that as a UI toggle; disabling it keeps the package focused on durable history payloads.
 
 Variant share packages still use the same zip format, but they only include the selected variant lineage and the payloads that lineage references. On import, Lumi rewrites the imported project metadata so the review project exposes just that imported variant as its active line.
+Deleting an imported review package from Share removes that review project folder after Lumi verifies it has the same project id as the current target project.
 
 Recovery draft payloads are intentionally excluded from archives, so export/import remains focused on stable project history rather than live unsaved state.
 

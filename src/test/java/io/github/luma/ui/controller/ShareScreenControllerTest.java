@@ -113,13 +113,17 @@ class ShareScreenControllerTest {
         private int previewCalls;
 
         @Override
-        public ProjectArchiveExportResult exportVariantPackage(String projectName, String variantId) {
+        public ProjectArchiveExportResult exportVariantPackage(String projectName, String variantId, boolean includePreviews) {
             return null;
         }
 
         @Override
         public HistoryPackageImportResult importVariantPackage(String projectName, String archivePath) {
             return null;
+        }
+
+        @Override
+        public void deleteImportedProject(String targetProjectName, String importedProjectName) {
         }
 
         @Override
@@ -134,6 +138,10 @@ class ShareScreenControllerTest {
 
         @Override
         public void showConflictZoneOverlay(String sourceProjectName, String sourceVariantId, String targetVariantId, io.github.luma.domain.model.MergeConflictZone zone) {
+        }
+
+        @Override
+        public void showConflictZonesOverlay(String sourceProjectName, String sourceVariantId, String targetVariantId, List<io.github.luma.domain.model.MergeConflictZone> zones) {
         }
     }
 
