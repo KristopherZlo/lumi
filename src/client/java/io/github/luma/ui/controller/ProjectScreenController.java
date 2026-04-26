@@ -8,13 +8,11 @@ import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.MaterialDeltaService;
-import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.domain.service.VersionLineageService;
-import io.github.luma.integration.common.IntegrationStatusService;
 import io.github.luma.minecraft.world.WorldOperationManager;
-import io.github.luma.ui.state.ProjectTab;
-import io.github.luma.ui.state.ProjectViewState;
+import io.github.luma.ui.state.SaveDetailsViewState;
+import io.github.luma.ui.state.SaveViewState;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,25 +29,16 @@ public final class ProjectScreenController {
     private final RecoveryService recoveryService = new RecoveryService();
     private final DiffService diffService = new DiffService();
     private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
-    private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
-    private final IntegrationStatusService integrationStatusService = new IntegrationStatusService();
     private final VersionLineageService versionLineageService = new VersionLineageService();
 
-    public ProjectViewState loadState(String projectName, ProjectTab selectedTab, String selectedVersionId, String status) {
+    public SaveViewState loadSaveState(String projectName, String status) {
         if (!this.client.hasSingleplayerServer()) {
-            return new ProjectViewState(
-                    null,
-                    List.of(),
-                    List.of(),
-                    List.of(),
-                    null,
-                    null,
+            return new SaveViewState(
                     null,
                     List.of(),
                     List.of(),
                     null,
-                    new io.github.luma.domain.model.ProjectIntegrityReport(true, List.of(), List.of()),
-                    selectedTab,
+                    null,
                     "luma.status.singleplayer_only"
             );
         }
@@ -60,8 +49,50 @@ public final class ProjectScreenController {
             var loadedVariants = new ArrayList<>(this.projectService.loadVariants(server, projectName));
             var loadedVersions = new ArrayList<>(this.projectService.loadVersions(server, projectName));
             loadedVersions.sort(java.util.Comparator.comparing(io.github.luma.domain.model.ProjectVersion::createdAt).reversed());
-            var loadedJournal = new ArrayList<>(this.recoveryService.loadJournal(server, projectName));
-            loadedJournal.sort(java.util.Comparator.comparing(io.github.luma.domain.model.RecoveryJournalEntry::timestamp).reversed());
+            var operationSnapshot = this.visibleOperationSnapshot(WorldOperationManager.getInstance()
+                    .snapshot(server, project.id().toString())
+                    .orElse(null));
+            return new SaveViewState(
+                    project,
+                    loadedVersions,
+                    loadedVariants,
+                    this.recoveryService.loadDraft(server, projectName).orElse(null),
+                    operationSnapshot,
+                    status == null || status.isBlank() ? "luma.status.project_ready" : status
+            );
+        } catch (Exception exception) {
+            return new SaveViewState(
+                    null,
+                    List.of(),
+                    List.of(),
+                    null,
+                    null,
+                    "luma.status.project_failed"
+            );
+        }
+    }
+
+    public SaveDetailsViewState loadSaveDetailsState(String projectName, String selectedVersionId, String status) {
+        if (!this.client.hasSingleplayerServer()) {
+            return new SaveDetailsViewState(
+                    null,
+                    List.of(),
+                    List.of(),
+                    null,
+                    null,
+                    List.of(),
+                    null,
+                    null,
+                    "luma.status.singleplayer_only"
+            );
+        }
+
+        try {
+            var server = ClientProjectAccess.requireSingleplayerServer(this.client);
+            var project = this.projectService.loadProject(server, projectName);
+            var loadedVariants = new ArrayList<>(this.projectService.loadVariants(server, projectName));
+            var loadedVersions = new ArrayList<>(this.projectService.loadVersions(server, projectName));
+            loadedVersions.sort(java.util.Comparator.comparing(io.github.luma.domain.model.ProjectVersion::createdAt).reversed());
             var selectedVersion = this.resolveSelectedVersion(loadedVersions, loadedVariants, project.activeVariantId(), selectedVersionId);
             var diff = selectedVersion != null
                     ? this.diffService.compareVersionToParent(server, projectName, selectedVersion.id())
@@ -69,35 +100,27 @@ public final class ProjectScreenController {
             var operationSnapshot = this.visibleOperationSnapshot(WorldOperationManager.getInstance()
                     .snapshot(server, project.id().toString())
                     .orElse(null));
-            return new ProjectViewState(
+            return new SaveDetailsViewState(
                     project,
                     loadedVersions,
                     loadedVariants,
-                    loadedJournal,
-                    this.recoveryService.loadDraft(server, projectName).orElse(null),
                     selectedVersion,
                     diff,
                     diff == null ? List.of() : this.materialDeltaService.summarize(diff),
-                    this.integrationStatusService.statuses(),
+                    this.recoveryService.loadDraft(server, projectName).orElse(null),
                     operationSnapshot,
-                    this.integrityService.inspect(server, projectName),
-                    selectedTab,
                     status == null || status.isBlank() ? "luma.status.project_ready" : status
             );
         } catch (Exception exception) {
-            return new ProjectViewState(
-                    null,
-                    List.of(),
-                    List.of(),
-                    List.of(),
-                    null,
-                    null,
+            return new SaveDetailsViewState(
                     null,
                     List.of(),
                     List.of(),
                     null,
-                    new io.github.luma.domain.model.ProjectIntegrityReport(false, List.of(), List.of("load-failed")),
-                    selectedTab,
+                    null,
+                    List.of(),
+                    null,
+                    null,
                     "luma.status.project_failed"
             );
         }

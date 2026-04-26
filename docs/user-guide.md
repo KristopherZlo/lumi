@@ -251,14 +251,14 @@ Advanced actions like refresh preview, replace latest save, create variant from 
 
 The settings screen includes:
 
-- auto-version toggle and interval
 - change session idle timeout
 - checkpoint frequency
 - checkpoint volume threshold
 - safety snapshot before restore
 - preview generation
+- debug logging
 
-You can also mark the project as favorite or archived there.
+You can also archive the project there. Auto-version and favorite controls are no longer exposed because those workflows are not part of the supported UI surface.
 
 ## Cleanup
 

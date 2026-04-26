@@ -109,7 +109,7 @@ Responsibilities are split as follows:
 - lightweight summary controllers keep `ProjectScreen`, `VariantsScreen`, and `ShareScreen` fast by avoiding diff, material, and merge-preview work on open
 - `MergePreviewCache` runs Share merge previews in the background and caches them by imported package and target variant while the screen is open
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
-- tab builders keep larger screen sections isolated
+- obsolete tab-builder scaffolds have been removed; larger workflows now use dedicated screens and narrow view-state records instead of a shared project tab container
 - the project home screen now focuses on `Build`, `Save`, `History`, and `Restore` first, with advanced tools behind progressive disclosure
 - dedicated screens isolate `Save`, `Save details`, `Variants`, `Share`, `Compare`, `Recovered work`, and `Settings` so the main project screen no longer tries to carry every workflow at once
 - `LumaScreen` ensures Lumi screens never pause the game

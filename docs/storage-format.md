@@ -79,7 +79,7 @@ Stores the project metadata, including:
 - active and main variant ids
 - timestamps
 - project settings
-- favorite/archive flags
+- legacy favorite flag and archive flag
 
 ### `variants.json`
 

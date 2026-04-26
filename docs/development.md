@@ -108,6 +108,7 @@ The current menu flow is centered around:
 
 Controllers own service access and loading logic. Screens keep transient UI state. `LumaScreen` is the shared non-pausing base class for in-world menus. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
 `ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Share merge previews are requested only by explicit review actions, then cached by imported package and target variant while the screen is open.
+Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
 
 Current UX assumptions:
 

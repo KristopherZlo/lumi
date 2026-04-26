@@ -316,6 +316,8 @@
   "luma.create_project.min": "Минимальный угол",
   "luma.create_project.max": "Максимальный угол",
 
+  "luma.settings.capture_title": "Захват изменений",
+  "luma.settings.capture_help": "Настрой, как Lumi закрывает активные сессии отслеживания.",
   "luma.settings.autoversions": "Автоверсии",
   "luma.settings.autoversions_help": "Автоматически сохранять версии после тихого периода.",
   "luma.settings.safety_snapshot": "Контрольная точка перед откатом",

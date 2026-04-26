@@ -39,22 +39,12 @@ public final class SettingsScreenController {
         }
     }
 
-    public String saveAll(String projectName, ProjectSettings settings, boolean favorite, boolean archived) {
+    public String saveAll(String projectName, ProjectSettings settings, boolean archived) {
         try {
             var server = ClientProjectAccess.requireSingleplayerServer(this.client);
             this.projectService.updateSettings(server, projectName, settings);
-            this.projectService.setFavorite(server, projectName, favorite);
             this.projectService.setArchived(server, projectName, archived);
             return "luma.status.settings_saved";
-        } catch (Exception exception) {
-            return "luma.status.operation_failed";
-        }
-    }
-
-    public String setFavorite(String projectName, boolean favorite) {
-        try {
-            this.projectService.setFavorite(ClientProjectAccess.requireSingleplayerServer(this.client), projectName, favorite);
-            return favorite ? "luma.status.favorite_enabled" : "luma.status.favorite_disabled";
         } catch (Exception exception) {
             return "luma.status.operation_failed";
         }
