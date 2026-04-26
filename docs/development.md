@@ -85,7 +85,7 @@ The codebase currently follows these top-level areas:
 - `src/main/java/io/github/luma/minecraft`
   Minecraft-specific capture, command, and world-application code.
 - `src/main/java/io/github/luma/integration`
-  Integration contracts and current availability/fallback status plumbing.
+  Optional integration contracts, typed capability reporting, and fallback status plumbing for external builder tools.
 - `src/client/java/io/github/luma/ui`
   `Screen + Controller + ViewState` client UI implementation with router-driven navigation.
 
@@ -132,6 +132,7 @@ Current runtime history behavior:
 - `HistoryCaptureManager` still records explicit tracked block changes inside project bounds, including TNT ignition, explosions, piston movement, and selected mob block mutations, while still excluding Lumi's own restore applications.
 - Authorized player-root actions are mirrored into `UndoRedoHistoryManager`, which keeps a bounded per-project action stack for live undo/redo and the recent-action overlay.
 - Automatic dimension project bootstrap is limited to explicit builder-driven sources. Ambient fluid, fire, growth, block-update, and mob mutations cannot create a workspace on world load by themselves.
+- Optional external builder tools use explicit mutation sources. WorldEdit and Axiom sessions are treated as builder-driven roots only when Lumi's guarded adapters or fallback capture path can observe the mutation.
 - Client controllers and commands now require an operator-level permission set. In singleplayer, the practical requirement is cheats enabled for the world owner.
 - New live capture sessions are also limited to explicit builder-driven sources. Whole-dimension sessions now seed a causal chunk envelope from those root edits, then capture per-chunk session baselines lazily as compact chunk snapshot payloads only when a chunk inside that envelope first needs stabilization.
 - First-touch whole-dimension tracking no longer samples the live world block-by-block. The server thread copies loaded chunk section palettes and real block-entity tags once, queues async baseline persistence, and returns to normal capture immediately.

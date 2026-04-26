@@ -13,6 +13,8 @@ public enum WorldMutationSource {
     EXPLOSIVE,
     MOB,
     EXTERNAL_TOOL,
+    WORLDEDIT,
+    AXIOM,
     RESTORE,
     SYSTEM
 }

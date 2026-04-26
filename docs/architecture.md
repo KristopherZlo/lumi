@@ -71,6 +71,18 @@ Important adapters:
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
 - `LumaCommands`: fallback command interface
 
+### Optional integration layer
+
+`src/main/java/io/github/luma/integration` contains optional integration contracts for external builder tools. These adapters must not create hard runtime dependencies on WorldEdit, Axiom, or their client APIs.
+
+`ExternalToolIntegrationRegistry` reports typed capabilities for detected tools:
+
+- WorldEdit capabilities are enabled only when the corresponding WorldEdit API classes are present, such as edit-session events, local sessions, clipboard, and schematic formats.
+- Axiom capabilities are intentionally conservative. Lumi may report detection or a custom region API, but it does not claim selection, clipboard, or schematic support unless a stable API is available.
+- The fallback integration remains always available and represents Lumi's own world-tracking capture path.
+
+External tool mutations use explicit `WorldMutationSource` values such as `WORLDEDIT` and `AXIOM` so saved versions can distinguish tool-originated history from generic external capture.
+
 ### Storage layer
 
 `src/main/java/io/github/luma/storage` and `storage/repository` own the on-disk layout and persistence.

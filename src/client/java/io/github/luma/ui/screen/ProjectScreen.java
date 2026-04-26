@@ -503,8 +503,8 @@ public final class ProjectScreen extends LumaScreen {
                     "luma.integrations.entry",
                     integration.toolId(),
                     integration.available() ? Component.translatable("luma.common.available") : Component.translatable("luma.common.unavailable"),
-                    integration.mode(),
-                    String.join(", ", integration.capabilities())
+                    integration.modeLabel(),
+                    String.join(", ", integration.capabilityLabels())
             )));
         }
         return card;
