@@ -78,6 +78,7 @@ Important adapters:
 `ExternalToolIntegrationRegistry` reports typed capabilities for detected tools:
 
 - WorldEdit capabilities are enabled only when the corresponding WorldEdit API classes are present, such as edit-session events, local sessions, clipboard, and schematic formats.
+- `OptionalIntegrationBootstrap` reflectively loads the WorldEdit edit-session tracker only when those capabilities are present. The tracker registers on WorldEdit's event bus and wraps `EditSession.Stage.BEFORE_CHANGE` extents so WorldEdit block writes enter Lumi through `WorldMutationSource.WORLDEDIT`.
 - Axiom capabilities are intentionally conservative. Lumi may report detection or a custom region API, but it does not claim selection, clipboard, or schematic support unless a stable API is available.
 - The fallback integration remains always available and represents Lumi's own world-tracking capture path.
 

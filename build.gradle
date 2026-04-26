@@ -170,7 +170,10 @@ dependencies {
     implementation "org.lz4:lz4-java:${project.lz4_version}"
     include "org.lz4:lz4-java:${project.lz4_version}"
 
+    modCompileOnly "maven.modrinth:worldedit:${project.worldedit_version}"
+
     testClientMods "maven.modrinth:fabric-api:${project.fabric_api_version}"
+    testClientMods "maven.modrinth:worldedit:${project.worldedit_version}"
     testClientMods "maven.modrinth:fabric-language-kotlin:${testClientModVersions.fabricLanguageKotlin}"
     testClientMods "maven.modrinth:yacl:${testClientModVersions.yacl}"
     testClientMods "maven.modrinth:fzzy-config:${testClientModVersions.fzzyConfig}"

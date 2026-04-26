@@ -71,6 +71,7 @@ Use Lumi if you want to:
 - material delta summaries and integrity checks
 - zip import/export for project history, including variant-scoped share packages with optional previews
 - imported review projects with deletion, cached merge review, and conflict-zone overlays for shared variants
+- optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
 - temporary `Alt` overlay for the latest 10 tracked actions when compare highlight is not active
