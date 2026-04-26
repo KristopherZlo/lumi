@@ -111,6 +111,8 @@ Controllers own service access and loading logic. Screens keep transient UI stat
 `ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Share merge previews are requested only by explicit review actions, then cached by imported package and target variant while the screen is open.
 Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
 
+LDLib2 is the target UI toolkit for future migration. The published LDLib2 UI docs and source (`https://low-drag-mc.github.io/LowDragMC-Doc/ldlib2/ui/`, `https://github.com/Low-Drag-MC/LDLib2`) are currently NeoForge-oriented around Minecraft `1.21.1`, while Lumi targets Fabric `1.21.11`. Keep LDLib2 behind `UiToolkitRegistry` and reflection-style detection until a compatible Fabric runtime exists. Do not add a hard `fabric.mod.json` or Gradle runtime dependency that makes the Fabric build unlaunchable.
+
 Current UX assumptions:
 
 - pressing `U` opens the current dimension workspace directly
@@ -123,7 +125,7 @@ Current UX assumptions:
 - holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - holding `Alt` while compare highlight is inactive shows the latest 10 tracked Lumi actions with a fading temporary overlay
 - the dashboard is now secondary navigation from the workspace header
-- the workspace home screen is product-first: current build state, save, restore last save, `History / Variants / Share`, then recent saves
+- the workspace home screen is product-first and child-friendly: keep this moment, go back safely, saved moments, try another idea, and share or combine
 - low-frequency tools such as technical graph, diagnostics, and raw info live behind `More`
 - save composition, save details, variant management, and share/merge review now have dedicated screens instead of sharing one overloaded project page
 
@@ -177,6 +179,7 @@ Current world-apply runtime types:
 - Lumi is shipped as one distributable mod jar.
 - Support libraries used by the mod are included through Loom jar-in-jar configuration.
 - The textured preview path now uses Lumi's own layered client mesh builder on top of the `1.21.11` render APIs instead of an external meshing runtime dependency.
+- LDLib2 is not packaged until a compatible Fabric `1.21.11` artifact exists; the current client UI ships with the existing owo-lib fallback and a runtime status surface under diagnostics.
 - Fabric API remains an external required mod.
 - Packaging tasks prune stale legacy `luma-*` outputs from `build/libs` before writing the current `lumi-*` artifacts.
 

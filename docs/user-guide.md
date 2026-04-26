@@ -26,7 +26,7 @@ Manual bounded project workflows are not exposed through commands. Use the Lumi 
 
 The main project screen is now a home screen first and a history screen second.
 
-The first block is `Build`.
+The first block is `What do you want to do?`.
 
 It is meant to answer these questions in a few seconds:
 
@@ -34,25 +34,26 @@ It is meant to answer these questions in a few seconds:
 - whether anything changed
 - how to save right now
 - how to restore the latest save
-- how to open variants or share history
+- how to see saved moments
+- how to try or share ideas
 
-The build block shows:
+The top block shows:
 
 - the current dimension
-- the current variant
-- whether the build is clean or has unsaved changes
+- the current idea
+- whether there are unsaved changes
 - added, removed, and changed block counts when a draft exists
 
-The primary action is `Save`.
+The primary action is `Save now`.
 
 Secondary actions stay short:
 
-- `Restore last save`
-- `Variants`
+- `Go back`
+- `Show them`
+- `Ideas`
 - `Share`
-- `History`
 
-Below that, `History` shows recent save cards for the selected variant.
+Below that, `Saved moments` shows recent save cards for the selected idea.
 
 Each card keeps only the essentials visible:
 
@@ -60,9 +61,9 @@ Each card keeps only the essentials visible:
 - time
 - small isometric preview
 - simple changed-block summary
-- `Open`
-- `Compare to current build`
-- `Restore`
+- `Look closer`
+- `See changes`
+- `Go back here`
 
 Rare tools like the technical graph, diagnostics, and recovery log now stay under `More`.
 
