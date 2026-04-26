@@ -66,6 +66,8 @@
   "luma.action.hide_diagnostics": "Hide diagnostics",
   "luma.action.cancel": "Cancel",
   "luma.action.confirm_initial_restore": "Restore Initial",
+  "luma.action.preview_partial_restore": "Preview partial restore",
+  "luma.action.apply_partial_restore": "Apply partial restore",
 
   "luma.tab.history": "History",
   "luma.tab.variants": "Variants",
@@ -207,6 +209,7 @@
   "luma.version_kind.manual": "Save",
   "luma.version_kind.recovery": "Recovered save",
   "luma.version_kind.restore": "Restore checkpoint",
+  "luma.version_kind.partial_restore": "Partial restore",
   "luma.version_kind.legacy": "Legacy migration",
 
   "luma.variant.active_current": "Current variant: %s",
@@ -358,6 +361,9 @@
   "luma.status.version_saved": "Version saved.",
   "luma.status.version_restored": "Version restored.",
   "luma.status.restore_started": "Restore started. Lumi is applying blocks in the background.",
+  "luma.status.partial_restore_started": "Partial restore started. Lumi is applying the selected region.",
+  "luma.status.partial_restore_plan_ready": "Partial restore preview is ready.",
+  "luma.status.partial_restore_invalid_bounds": "Partial restore bounds must be valid numbers.",
   "luma.status.undo_started": "Undo started. Lumi is rolling back the latest tracked action.",
   "luma.status.redo_started": "Redo started. Lumi is replaying the latest tracked action.",
   "luma.status.undo_unavailable": "There is no tracked Lumi action to undo here.",
@@ -459,6 +465,11 @@
   "luma.save_details.raw_info_id": "Save id: %s",
   "luma.save_details.raw_info_author": "Author: %s",
   "luma.save_details.raw_info_type": "Type: %s",
+  "luma.partial_restore.title": "Partial restore",
+  "luma.partial_restore.help": "Restore only the selected bounds and save the result as a new version.",
+  "luma.partial_restore.min": "Min XYZ",
+  "luma.partial_restore.max": "Max XYZ",
+  "luma.partial_restore.summary": "%s blocks across %s chunks",
 
   "luma.variants.overview_title": "Variants",
   "luma.variants.overview_help": "Use variants when you want to try another idea without risking the current one.",

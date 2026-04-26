@@ -5,6 +5,8 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchMetadata;
+import io.github.luma.domain.model.PartialRestorePlanSummary;
+import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -66,6 +68,7 @@ public final class RestoreService {
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final VersionService versionService = new VersionService();
+    private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     /**
@@ -243,6 +246,263 @@ public final class RestoreService {
                 baseVersionId,
                 targetVersion.id()
         );
+    }
+
+    public OperationHandle partialRestore(ServerLevel level, PartialRestoreRequest request) throws IOException {
+        if (request == null || request.bounds() == null) {
+            throw new IllegalArgumentException("Partial restore requires bounds");
+        }
+
+        ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), request.projectName());
+        var project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + request.projectName()));
+        List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        ProjectVersion targetVersion = this.resolveVersion(project, versions, variants, request.targetVersionId());
+        ProjectVariant activeVariant = this.activeVariant(project, variants);
+        Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
+        Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
+                .freezeSession(level.getServer(), project.id().toString());
+        Optional<RecoveryDraft> frozenDraft = frozenSession.map(TrackedChangeBuffer::toDraft);
+        RecoveryDraft pendingDraft = frozenDraft
+                .or(() -> persistedDraft)
+                .orElse(null);
+
+        LumaMod.LOGGER.info(
+                "Starting partial restore for project {} to version {} over {}",
+                project.name(),
+                targetVersion.id(),
+                request.bounds()
+        );
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                Instant.now(),
+                "partial-restore-started",
+                "Started partial restore to version " + targetVersion.id(),
+                targetVersion.id(),
+                activeVariant.id()
+        ));
+
+        return this.worldOperationManager.startPreparedApplyOperation(
+                level,
+                project.id().toString(),
+                "partial-restore",
+                "blocks",
+                LumaDebugLog.enabled(project),
+                progressSink -> {
+                    PartialRestoreDraft partialDraft = this.buildPartialRestoreDraft(
+                            layout,
+                            project,
+                            versions,
+                            variants,
+                            activeVariant,
+                            targetVersion,
+                            pendingDraft,
+                            request,
+                            progressSink
+                    );
+                    if (partialDraft.draft().isEmpty()) {
+                        throw new IllegalArgumentException("Partial restore has no changes inside the selected region");
+                    }
+                    List<PreparedChunkBatch> batches = collapsePreparedBatches(this.decodeStoredChanges(
+                            level,
+                            partialDraft.draft().changes(),
+                            true
+                    ));
+                    return new WorldOperationManager.PreparedApplyOperation(
+                            batches,
+                            () -> this.completePartialRestore(
+                                    level,
+                                    layout,
+                                    project,
+                                    pendingDraft,
+                                    request,
+                                    partialDraft.draft(),
+                                    batches.size()
+                            )
+                    );
+                }
+        );
+    }
+
+    public PartialRestorePlanSummary summarizePartialRestorePlan(ServerLevel level, PartialRestoreRequest request) throws IOException {
+        if (request == null || request.bounds() == null) {
+            throw new IllegalArgumentException("Partial restore requires bounds");
+        }
+
+        ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), request.projectName());
+        var project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + request.projectName()));
+        List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        ProjectVersion targetVersion = this.resolveVersion(project, versions, variants, request.targetVersionId());
+        ProjectVariant activeVariant = this.activeVariant(project, variants);
+        Optional<RecoveryDraft> pendingDraft = this.recoveryRepository.loadDraft(layout);
+
+        PartialRestoreDraft draft = this.buildPartialRestoreDraft(
+                layout,
+                project,
+                versions,
+                variants,
+                activeVariant,
+                targetVersion,
+                pendingDraft.orElse(null),
+                request,
+                (stage, completed, total, detail) -> {
+                }
+        );
+
+        return new PartialRestorePlanSummary(
+                draft.draft().changes().isEmpty() ? RestorePlanMode.NO_OP : RestorePlanMode.PATCH_REPLAY,
+                request.bounds(),
+                request.regionSource(),
+                ChunkSelectionFactory.fromStoredChanges(draft.draft().changes()),
+                activeVariant.id(),
+                activeVariant.headVersionId(),
+                targetVersion.id(),
+                draft.draft().changes().size()
+        );
+    }
+
+    private PartialRestoreDraft buildPartialRestoreDraft(
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVariant activeVariant,
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft,
+            PartialRestoreRequest request,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
+        List<ProjectVersion> directVersions = this.directRestorePatchVersions(project, versions, variants, targetVersion);
+        if (directVersions == null) {
+            throw new IllegalArgumentException("Partial restore currently requires a target on the active variant lineage");
+        }
+
+        Map<String, ProjectVersion> versionMap = this.versionMap(versions);
+        boolean applyNewValues = this.isAncestor(versionMap, activeVariant.headVersionId(), targetVersion.id());
+        List<StoredBlockChange> lineageChanges = this.loadVersionChanges(layout, directVersions);
+        progressSink.update(OperationStage.PREPARING, 0, Math.max(1, lineageChanges.size()), "Filtering partial restore region");
+        List<StoredBlockChange> partialChanges = this.partialRestorePlanner.plan(
+                pendingDraft == null ? List.of() : pendingDraft.changes(),
+                lineageChanges,
+                applyNewValues,
+                request.bounds()
+        );
+        Instant now = Instant.now();
+        RecoveryDraft draft = new RecoveryDraft(
+                project.id().toString(),
+                activeVariant.id(),
+                activeVariant.headVersionId(),
+                request.actor() == null || request.actor().isBlank() ? "Lumi" : request.actor(),
+                io.github.luma.domain.model.WorldMutationSource.RESTORE,
+                now,
+                now,
+                partialChanges
+        );
+        LumaDebugLog.log(
+                project,
+                "restore",
+                "Partial restore for project {} target {} filtered {} lineage changes to {} region changes",
+                project.name(),
+                targetVersion.id(),
+                lineageChanges.size(),
+                partialChanges.size()
+        );
+        return new PartialRestoreDraft(draft);
+    }
+
+    private void completePartialRestore(
+            ServerLevel level,
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            RecoveryDraft pendingDraft,
+            PartialRestoreRequest request,
+            RecoveryDraft partialDraft,
+            int batchCount
+    ) throws IOException {
+        this.versionService.writeVersion(
+                level,
+                layout,
+                project,
+                partialDraft,
+                "Partial restore to " + request.targetVersionId(),
+                partialDraft.actor(),
+                VersionKind.PARTIAL_RESTORE,
+                true,
+                progressSinkNoOp()
+        );
+        this.rewritePendingDraftAfterPartialRestore(layout, pendingDraft, request.bounds());
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                Instant.now(),
+                "partial-restore-completed",
+                "Partial restore wrote a new version from selected region",
+                request.targetVersionId(),
+                partialDraft.variantId()
+        ));
+        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
+        LumaMod.LOGGER.info(
+                "Completed partial restore for project {} to version {} with {} chunk batches and {} changes",
+                project.name(),
+                request.targetVersionId(),
+                batchCount,
+                partialDraft.changes().size()
+        );
+    }
+
+    private void rewritePendingDraftAfterPartialRestore(
+            ProjectLayout layout,
+            RecoveryDraft pendingDraft,
+            io.github.luma.domain.model.Bounds3i bounds
+    ) throws IOException {
+        if (pendingDraft == null || pendingDraft.isEmpty()) {
+            this.recoveryRepository.deleteDraft(layout);
+            return;
+        }
+        List<StoredBlockChange> remaining = pendingDraft.changes().stream()
+                .filter(change -> !bounds.contains(change.pos()))
+                .toList();
+        if (remaining.isEmpty()) {
+            this.recoveryRepository.deleteDraft(layout);
+            return;
+        }
+        this.recoveryRepository.saveDraft(layout, new RecoveryDraft(
+                pendingDraft.projectId(),
+                pendingDraft.variantId(),
+                pendingDraft.baseVersionId(),
+                pendingDraft.actor(),
+                pendingDraft.mutationSource(),
+                pendingDraft.startedAt(),
+                Instant.now(),
+                remaining
+        ));
+    }
+
+    private ProjectVariant activeVariant(
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVariant> variants
+    ) {
+        return variants.stream()
+                .filter(variant -> variant.id().equals(project.activeVariantId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
+    }
+
+    private List<StoredBlockChange> loadVersionChanges(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
+        List<StoredBlockChange> changes = new ArrayList<>();
+        for (ProjectVersion version : versions) {
+            for (String patchId : version.patchIds()) {
+                PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
+                        .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
+                changes.addAll(this.patchDataRepository.loadChanges(layout, metadata));
+            }
+        }
+        return List.copyOf(changes);
+    }
+
+    private static WorldOperationManager.ProgressSink progressSinkNoOp() {
+        return (stage, completedUnits, totalUnits, detail) -> {
+        };
     }
 
     private void completeRestore(
@@ -773,6 +1033,9 @@ public final class RestoreService {
             List<PatchMetadata> patchChain,
             List<io.github.luma.domain.model.ChunkPoint> baselineGaps
     ) {
+    }
+
+    private record PartialRestoreDraft(RecoveryDraft draft) {
     }
 
     private record ChunkPointAccumulator(int chunkX, int chunkZ) {

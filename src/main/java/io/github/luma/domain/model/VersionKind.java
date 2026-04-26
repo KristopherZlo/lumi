@@ -6,5 +6,6 @@ public enum VersionKind {
     MANUAL,
     RECOVERY,
     RESTORE,
+    PARTIAL_RESTORE,
     LEGACY
 }

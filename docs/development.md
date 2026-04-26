@@ -147,6 +147,7 @@ Current runtime history behavior:
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
 - Preview generation now queues lightweight request files on the server side and fulfills them later through the client-side `PreviewCaptureCoordinator`.
 - `RestoreService` prefers direct same-variant patch replay, including `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored version on success without deleting detached versions.
+- `RestoreService` also supports same-lineage partial restore from save details. It filters pending draft and direct patch changes to manual bounds, applies prepared batches through the operation model, then writes a new `PARTIAL_RESTORE` version on the active variant while preserving pending draft changes outside the selected region.
 - `VariantService` keeps one head pointer per variant.
 - `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, and delegating merged version persistence to `VersionService`.
 - `DiffService` reconstructs version-to-version changes from patch history.

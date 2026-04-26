@@ -714,6 +714,7 @@ public final class VersionService {
             case RECOVERY -> "Recovered draft";
             case LEGACY -> "Migrated legacy save";
             case RESTORE -> "Restore safety checkpoint";
+            case PARTIAL_RESTORE -> "Partial restore";
             case INITIAL, MANUAL -> "Saved version";
         };
     }
@@ -723,6 +724,16 @@ public final class VersionService {
             case WORLD_ROOT -> ExternalSourceInfo.manual();
             case RECOVERY -> ExternalSourceInfo.recovery();
             case RESTORE -> ExternalSourceInfo.restore();
+            case PARTIAL_RESTORE -> ExternalSourceInfo.external(
+                    "SYSTEM",
+                    "partial-restore",
+                    "Partial Restore",
+                    "",
+                    null,
+                    false,
+                    false,
+                    Map.of()
+            );
             case INITIAL, MANUAL, LEGACY -> ExternalSourceInfo.manual();
         };
     }
@@ -733,6 +744,7 @@ public final class VersionService {
             case RECOVERY -> "Saved recovery draft as a new version";
             case LEGACY -> "Saved a new version while migrating a legacy snapshot project";
             case RESTORE -> "Saved restore checkpoint version";
+            case PARTIAL_RESTORE -> "Saved partial restore as a new version";
             case INITIAL, MANUAL -> "Saved version from tracked changes";
         };
     }
