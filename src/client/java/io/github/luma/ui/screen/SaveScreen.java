@@ -7,8 +7,7 @@ import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
-import io.github.luma.ui.state.ProjectTab;
-import io.github.luma.ui.state.ProjectViewState;
+import io.github.luma.ui.state.SaveViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -31,19 +30,12 @@ public final class SaveScreen extends LumaScreen {
     private final ProjectScreenController controller = new ProjectScreenController();
     private final ScreenRouter router = new ScreenRouter();
     private LumaScrollContainer<FlowLayout> bodyScroll;
-    private ProjectViewState state = new ProjectViewState(
-            null,
-            List.of(),
-            List.of(),
-            List.of(),
-            null,
-            null,
+    private SaveViewState state = new SaveViewState(
             null,
             List.of(),
             List.of(),
             null,
-            new io.github.luma.domain.model.ProjectIntegrityReport(true, List.of(), List.of()),
-            ProjectTab.HISTORY,
+            null,
             "luma.status.project_ready"
     );
     private String status = "luma.status.project_ready";
@@ -70,7 +62,7 @@ public final class SaveScreen extends LumaScreen {
 
     @Override
     protected void build(FlowLayout root) {
-        this.state = this.controller.loadState(this.projectName, ProjectTab.HISTORY, "", this.status);
+        this.state = this.controller.loadSaveState(this.projectName, this.status);
         PendingChangeSummary pending = this.controller.summarizePending(this.state.recoveryDraft());
         ProjectVersion activeHead = ProjectUiSupport.activeHead(this.state.project(), this.state.variants(), this.state.versions());
         boolean operationActive = this.state.operationSnapshot() != null && !this.state.operationSnapshot().terminal();

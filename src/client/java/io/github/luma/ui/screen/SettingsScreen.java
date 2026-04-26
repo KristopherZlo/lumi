@@ -31,13 +31,11 @@ public final class SettingsScreen extends LumaScreen {
     private boolean safetySnapshotBeforeRestore;
     private boolean previewGenerationEnabled;
     private boolean debugLoggingEnabled;
-    private boolean favorite;
     private boolean archived;
     private String autoVersionMinutes = "10";
     private String sessionIdleSeconds = "5";
     private String snapshotEveryVersions = "10";
     private String snapshotVolumeThreshold = "0.20";
-    private String autoVersionMinutesError = "";
     private String sessionIdleSecondsError = "";
     private String snapshotEveryVersionsError = "";
     private String snapshotVolumeThresholdError = "";
@@ -61,7 +59,6 @@ public final class SettingsScreen extends LumaScreen {
             this.safetySnapshotBeforeRestore = project.settings().safetySnapshotBeforeRestore();
             this.previewGenerationEnabled = project.settings().previewGenerationEnabled();
             this.debugLoggingEnabled = project.settings().debugLoggingEnabled();
-            this.favorite = project.favorite();
             this.archived = project.archived();
             this.autoVersionMinutes = Integer.toString(project.settings().autoVersionMinutes());
             this.sessionIdleSeconds = Integer.toString(project.settings().sessionIdleSeconds());
@@ -97,7 +94,7 @@ public final class SettingsScreen extends LumaScreen {
             return;
         }
 
-        body.child(this.automationSection());
+        body.child(this.captureSection());
         body.child(this.snapshotSection());
         body.child(this.previewSection());
         body.child(this.debugSection());
@@ -120,24 +117,11 @@ public final class SettingsScreen extends LumaScreen {
         this.client.setScreen(this.parent);
     }
 
-    private FlowLayout automationSection() {
+    private FlowLayout captureSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.settings.automation_title"),
-                Component.translatable("luma.settings.automation_help")
+                Component.translatable("luma.settings.capture_title"),
+                Component.translatable("luma.settings.capture_help")
         );
-
-        section.child(this.fieldWithError(
-                Component.translatable("luma.settings.autoversions"),
-                Component.translatable("luma.settings.autoversions_help"),
-                this.toggleControl(this.autoVersionsEnabled, value -> this.autoVersionsEnabled = value),
-                ""
-        ));
-        section.child(this.fieldWithError(
-                Component.translatable("luma.settings.auto_minutes"),
-                Component.translatable("luma.settings.auto_minutes_help"),
-                this.numberInput(this.autoVersionMinutes, value -> this.autoVersionMinutes = value),
-                this.autoVersionMinutesError
-        ));
         section.child(this.fieldWithError(
                 Component.translatable("luma.settings.idle_seconds"),
                 Component.translatable("luma.settings.idle_seconds_help"),
@@ -208,12 +192,6 @@ public final class SettingsScreen extends LumaScreen {
                 Component.translatable("luma.settings.project_state_help")
         );
         section.child(this.fieldWithError(
-                Component.translatable("luma.action.favorite"),
-                Component.translatable("luma.settings.favorite_help"),
-                this.toggleControl(this.favorite, value -> this.favorite = value),
-                ""
-        ));
-        section.child(this.fieldWithError(
                 Component.translatable("luma.action.archive"),
                 Component.translatable("luma.settings.archive_help"),
                 this.toggleControl(this.archived, value -> this.archived = value),
@@ -279,13 +257,11 @@ public final class SettingsScreen extends LumaScreen {
     private void save() {
         this.clearValidationErrors();
 
-        Integer parsedAutoVersionMinutes = this.parsePositiveInt(this.autoVersionMinutes, error -> this.autoVersionMinutesError = error);
         Integer parsedSessionIdleSeconds = this.parsePositiveInt(this.sessionIdleSeconds, error -> this.sessionIdleSecondsError = error);
         Integer parsedSnapshotEveryVersions = this.parsePositiveInt(this.snapshotEveryVersions, error -> this.snapshotEveryVersionsError = error);
         Double parsedSnapshotVolumeThreshold = this.parsePositiveDouble(this.snapshotVolumeThreshold, error -> this.snapshotVolumeThresholdError = error);
 
-        if (parsedAutoVersionMinutes == null
-                || parsedSessionIdleSeconds == null
+        if (parsedSessionIdleSeconds == null
                 || parsedSnapshotEveryVersions == null
                 || parsedSnapshotVolumeThreshold == null) {
             this.status = "luma.status.settings_invalid";
@@ -297,7 +273,7 @@ public final class SettingsScreen extends LumaScreen {
                 this.projectName,
                 new ProjectSettings(
                         this.autoVersionsEnabled,
-                        parsedAutoVersionMinutes,
+                        this.parseLegacyAutoVersionMinutes(),
                         parsedSessionIdleSeconds,
                         parsedSnapshotEveryVersions,
                         parsedSnapshotVolumeThreshold,
@@ -305,7 +281,6 @@ public final class SettingsScreen extends LumaScreen {
                         this.previewGenerationEnabled,
                         this.debugLoggingEnabled
                 ),
-                this.favorite,
                 this.archived
         );
 
@@ -346,10 +321,18 @@ public final class SettingsScreen extends LumaScreen {
     }
 
     private void clearValidationErrors() {
-        this.autoVersionMinutesError = "";
         this.sessionIdleSecondsError = "";
         this.snapshotEveryVersionsError = "";
         this.snapshotVolumeThresholdError = "";
+    }
+
+    private int parseLegacyAutoVersionMinutes() {
+        try {
+            int parsed = Integer.parseInt(this.autoVersionMinutes);
+            return parsed <= 0 ? ProjectSettings.defaults().autoVersionMinutes() : parsed;
+        } catch (NumberFormatException exception) {
+            return ProjectSettings.defaults().autoVersionMinutes();
+        }
     }
 
     private void rebuild() {

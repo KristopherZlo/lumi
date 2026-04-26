@@ -18,8 +18,7 @@ import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.preview.ProjectPreviewTextureCache;
-import io.github.luma.ui.state.ProjectTab;
-import io.github.luma.ui.state.ProjectViewState;
+import io.github.luma.ui.state.SaveDetailsViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -46,19 +45,15 @@ public final class SaveDetailsScreen extends LumaScreen {
     private final ProjectScreenController controller = new ProjectScreenController();
     private final ScreenRouter router = new ScreenRouter();
     private LumaScrollContainer<FlowLayout> bodyScroll;
-    private ProjectViewState state = new ProjectViewState(
-            null,
-            List.of(),
-            List.of(),
-            List.of(),
-            null,
-            null,
+    private SaveDetailsViewState state = new SaveDetailsViewState(
             null,
             List.of(),
             List.of(),
             null,
-            new io.github.luma.domain.model.ProjectIntegrityReport(true, List.of(), List.of()),
-            ProjectTab.PREVIEW,
+            null,
+            List.of(),
+            null,
+            null,
             "luma.status.project_ready"
     );
     private String status = "luma.status.project_ready";
@@ -86,7 +81,7 @@ public final class SaveDetailsScreen extends LumaScreen {
 
     @Override
     protected void build(FlowLayout root) {
-        this.state = this.controller.loadState(this.projectName, ProjectTab.PREVIEW, this.versionId, this.status);
+        this.state = this.controller.loadSaveDetailsState(this.projectName, this.versionId, this.status);
         ProjectVersion version = this.state.selectedVersion();
         ProjectVariant versionVariant = version == null ? null : ProjectUiSupport.variantFor(this.state.variants(), version.variantId());
         boolean operationActive = this.state.operationSnapshot() != null && !this.state.operationSnapshot().terminal();

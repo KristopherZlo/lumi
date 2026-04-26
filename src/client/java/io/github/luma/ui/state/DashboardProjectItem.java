@@ -9,7 +9,6 @@ public record DashboardProjectItem(
         int draftChangeCount,
         boolean hasDraft,
         boolean worldWorkspace,
-        boolean favorite,
         boolean archived,
         String updatedAt
 ) {

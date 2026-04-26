@@ -42,7 +42,6 @@ public final class DashboardScreenController {
                         draft == null ? 0 : draft.changes().size(),
                         draft != null,
                         project.tracksWholeDimension(),
-                        project.favorite(),
                         project.archived(),
                         project.updatedAt().toString()
                 ));

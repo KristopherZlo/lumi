@@ -193,17 +193,6 @@ public final class ProjectService {
         return updated;
     }
 
-    public BuildProject setFavorite(MinecraftServer server, String projectName, boolean favorite) throws IOException {
-        ProjectLayout layout = this.resolveLayout(server, projectName);
-        BuildProject project = this.projectRepository.load(layout)
-                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
-        BuildProject updated = project
-                .withFavorite(favorite, Instant.now())
-                .withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION);
-        this.projectRepository.save(layout, updated);
-        return updated;
-    }
-
     public BuildProject setArchived(MinecraftServer server, String projectName, boolean archived) throws IOException {
         ProjectLayout layout = this.resolveLayout(server, projectName);
         BuildProject project = this.projectRepository.load(layout)
