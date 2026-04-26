@@ -83,7 +83,7 @@ The codebase currently follows these top-level areas:
 - `src/main/java/io/github/luma/storage`
   Save-file layout plus repositories for metadata, patches, snapshots, variants, and recovery.
 - `src/main/java/io/github/luma/minecraft`
-  Minecraft-specific capture, command, and world-application code.
+  Minecraft-specific capture, diagnostic command, and world-application code.
 - `src/main/java/io/github/luma/integration`
   Optional integration contracts, typed capability reporting, and fallback status plumbing for external builder tools.
 - `src/client/java/io/github/luma/ui`
@@ -133,14 +133,14 @@ Current runtime history behavior:
 - Authorized player-root actions are mirrored into `UndoRedoHistoryManager`, which keeps a bounded per-project action stack for live undo/redo and the recent-action overlay.
 - Automatic dimension project bootstrap is limited to explicit builder-driven sources. Ambient fluid, fire, growth, block-update, and mob mutations cannot create a workspace on world load by themselves.
 - Optional external builder tools use explicit mutation sources. WorldEdit and Axiom sessions are treated as builder-driven roots only when Lumi's guarded adapters or fallback capture path can observe the mutation.
-- Client controllers and commands now require an operator-level permission set. In singleplayer, the practical requirement is cheats enabled for the world owner.
+- Client controllers and diagnostic commands now require an operator-level permission set. In singleplayer, the practical requirement is cheats enabled for the world owner.
 - New live capture sessions are also limited to explicit builder-driven sources. Whole-dimension sessions now seed a causal chunk envelope from those root edits, then capture per-chunk session baselines lazily as compact chunk snapshot payloads only when a chunk inside that envelope first needs stabilization.
 - First-touch whole-dimension tracking no longer samples the live world block-by-block. The server thread copies loaded chunk section palettes and real block-entity tags once, queues async baseline persistence, and returns to normal capture immediately.
 - For whole-dimension workspaces, fluid spread and falling blocks no longer append directly into the draft. They only re-mark chunks inside that causal envelope as dirty, and `SessionStabilizationService` later rebuilds the final chunk diff by comparing compact chunk snapshots instead of walking the world through `level.getBlockState()`.
 - Secondary explosion, piston, fire, growth, block-update, and mob sources are still gated by the active session envelope so one explicit edit does not pull unrelated far-away cave settling into the same draft.
 - Changes are aggregated into an in-memory recovery draft immediately, then flushed asynchronously through the capture-maintenance executor and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
-- `ProjectArchiveService` owns command-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
+- `ProjectArchiveService` owns UI-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
 - `HistoryShareService` builds the first `Share` MVP on top of the same archive format by exporting one variant lineage and importing it back as a review project.
 - `ShareScreenController` keeps history package import/export separate from the main home and variants screens, and only asks `VariantMergeService` for a merge preview when the user explicitly reviews one imported package.
 - `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
@@ -207,7 +207,7 @@ The current repo also ships that policy in [commit-policy.md](commit-policy.md).
 ## Coding conventions
 
 - Keep the product wording builder-friendly. Prefer `project`, `version`, `variant`, `compare`, `restore`, and `recovery`.
-- Keep the mod usable through menus first. Commands are fallback tools.
+- Keep the mod usable through menus first. Commands are read-only diagnostics/help only.
 - Preserve the singleplayer-first assumption unless a change explicitly expands runtime scope.
 - When touching storage, prefer forward-only adjustments with simple legacy handling for the current local format.
 - Preview generation now has a split responsibility: the server can queue preview capture requests in storage, while the client render path fulfills them later.

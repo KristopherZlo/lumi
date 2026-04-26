@@ -119,7 +119,7 @@ Use Lumi if you want to:
 
 | Layer | Responsibility | Main types |
 | --- | --- | --- |
-| Bootstrap | Fabric wiring, commands, ticking, flushes | `LumaMod` |
+| Bootstrap | Fabric wiring, diagnostic commands, ticking, flushes | `LumaMod` |
 | Domain model | persisted records and runtime state | `BuildProject`, `ProjectVersion`, `TrackedChangeBuffer` |
 | Domain service | product logic | `VersionService`, `RestoreService`, `RecoveryService`, `DiffService` |
 | Minecraft adapter | game hooks and map mutation | `HistoryCaptureManager`, `WorldOperationManager`, `BlockChangeApplier` |
@@ -155,7 +155,7 @@ Main files:
 - `recovery/draft.wal.lz4`
 - `recovery/journal.json`
 
-History archives exported from commands are written under:
+History archives and share packages are written under:
 
 ```text
 <save>/lumi/exports/
@@ -225,7 +225,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 Current scope:
 
 - singleplayer / integrated-server first
-- menu flow first, commands as fallback
+- menu flow first, commands limited to diagnostics/help
 - merge currently works through imported review projects for the same project lineage, with block-level conflict detection before Lumi writes a merged save
 - no partial restore yet
 - compare overlay marks changed positions, not a full 3D preview

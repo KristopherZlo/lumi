@@ -20,9 +20,7 @@ Lumi only works for players with operator-level permissions or when cheats are e
 
 ## Legacy Manual Projects
 
-Manual bounded projects still exist through commands like `/lumi create`.
-
-They are a fallback. The main flow is the menu UI.
+Manual bounded project workflows are not exposed through commands. Use the Lumi UI for supported project workflows.
 
 ## Main Screen
 
@@ -257,11 +255,9 @@ You can also mark the project as favorite or archived there.
 
 ## Cleanup
 
-Lumi cleanup is currently command-first.
+Cleanup is a UI workflow. Review the dry-run candidates before applying cleanup.
 
-Use `/lumi cleanup inspect <project>` to see a dry run for orphaned previews, unreferenced snapshots, disposable cache files outside `baseline-chunks`, and stale operation drafts.
-
-Use `/lumi cleanup apply <project>` only after that review.
+Cleanup can remove orphaned previews, unreferenced snapshots, disposable cache files outside `baseline-chunks`, and stale operation drafts.
 
 If a Lumi world operation is still running for the project, cleanup keeps `recovery/operation-draft.bin.lz4` and reports the skip instead of deleting it.
 
