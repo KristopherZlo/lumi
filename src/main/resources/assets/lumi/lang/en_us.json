@@ -405,6 +405,7 @@
   "luma.screen.variants.title": "Variants: %s",
   "luma.screen.share.title": "Share: %s",
 
+  "luma.simple.step": "Step %s",
   "luma.simple.workspace_title": "%s",
   "luma.simple.current_place": "Place: %s",
   "luma.simple.current_idea": "Idea: %s",
@@ -417,6 +418,7 @@
   "luma.simple.blocks_changed": "Changed",
   "luma.simple.save_title": "Keep this moment",
   "luma.simple.save_help": "Save what the build looks like now so you can come back later.",
+  "luma.simple.save_clean_help": "Build a little first. When blocks change, this button keeps that moment.",
   "luma.simple.save_button": "Save now",
   "luma.simple.restore_title": "Go back safely",
   "luma.simple.restore_help": "Return the world to the latest saved moment: %s.",

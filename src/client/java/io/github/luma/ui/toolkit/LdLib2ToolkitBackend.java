@@ -10,6 +10,7 @@ public final class LdLib2ToolkitBackend implements UiToolkitBackend {
     );
 
     private final boolean available;
+    private final LdLib2InterfaceBlueprint blueprint = LdLib2InterfaceBlueprint.childFriendlyProjectHome();
 
     public LdLib2ToolkitBackend(ClassLoader classLoader) {
         this.available = REQUIRED_CLASSES.stream().allMatch(className -> this.classPresent(classLoader, className));
@@ -32,10 +33,14 @@ public final class LdLib2ToolkitBackend implements UiToolkitBackend {
 
     @Override
     public List<String> notes() {
+        String targetElements = "Target elements: " + String.join(", ", this.blueprint.elementTypes()) + ".";
         if (this.available) {
-            return List.of("LDLib2 UI classes detected.");
+            return List.of("LDLib2 UI classes detected.", targetElements);
         }
-        return List.of("LDLib2 is the target UI backend, but no compatible Fabric 1.21.11 runtime classes are present.");
+        return List.of(
+                "LDLib2 is the target UI backend, but no compatible Fabric 1.21.11 runtime classes are present.",
+                targetElements
+        );
     }
 
     private boolean classPresent(ClassLoader classLoader, String className) {

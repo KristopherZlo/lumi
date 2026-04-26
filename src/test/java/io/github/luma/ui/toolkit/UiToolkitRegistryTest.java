@@ -36,6 +36,18 @@ final class UiToolkitRegistryTest {
         assertTrue(status.targetActive());
     }
 
+    @Test
+    void ldLib2BlueprintKeepsPrimaryHomeActionsSimple() {
+        LdLib2InterfaceBlueprint blueprint = LdLib2InterfaceBlueprint.childFriendlyProjectHome();
+
+        assertTrue(blueprint.elementTypes().contains("UIElement"));
+        assertTrue(blueprint.elementTypes().contains("Button"));
+        assertTrue(blueprint.elementTypes().contains("ScrollerView"));
+        assertEquals(5, blueprint.projectHome().stream()
+                .filter(role -> role.id().endsWith("-action"))
+                .count());
+    }
+
     private record StaticBackend(UiToolkit toolkit, boolean available, boolean primaryTarget)
             implements UiToolkitBackend {
 
