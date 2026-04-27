@@ -7,14 +7,22 @@ import com.sk89q.worldedit.event.extent.EditSessionEvent;
 import com.sk89q.worldedit.extent.AbstractDelegateExtent;
 import com.sk89q.worldedit.extent.Extent;
 import com.sk89q.worldedit.extension.platform.Actor;
+import com.sk89q.worldedit.fabric.FabricAdapter;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.util.eventbus.Subscribe;
 import com.sk89q.worldedit.world.block.BlockStateHolder;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 
 public final class WorldEditEditSessionTracker {
 
@@ -33,8 +41,13 @@ public final class WorldEditEditSessionTracker {
         if (event == null || event.getStage() != EditSession.Stage.BEFORE_CHANGE) {
             return;
         }
+        ServerLevel level = this.resolveServerLevel(event);
+        if (level == null) {
+            return;
+        }
         event.setExtent(new TrackingExtent(
                 event.getExtent(),
+                level,
                 this.actorName(event.getActor()),
                 UUID.randomUUID().toString()
         ));
@@ -47,25 +60,59 @@ public final class WorldEditEditSessionTracker {
         return "worldedit:" + actor.getName().toLowerCase(Locale.ROOT);
     }
 
+    private ServerLevel resolveServerLevel(EditSessionEvent event) {
+        try {
+            Level level = FabricAdapter.adapt(event.getWorld());
+            return level instanceof ServerLevel serverLevel ? serverLevel : null;
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
     private static final class TrackingExtent extends AbstractDelegateExtent {
 
+        private final ServerLevel level;
         private final String actor;
         private final String actionId;
 
-        private TrackingExtent(Extent extent, String actor, String actionId) {
+        private TrackingExtent(Extent extent, ServerLevel level, String actor, String actionId) {
             super(extent);
+            this.level = level;
             this.actor = actor;
             this.actionId = actionId;
         }
 
         @Override
         public <B extends BlockStateHolder<B>> boolean setBlock(BlockVector3 location, B block) throws WorldEditException {
+            BlockPos pos = FabricAdapter.toBlockPos(location);
+            BlockState oldState = this.level.getBlockState(pos);
+            CompoundTag oldBlockEntity = this.blockEntityTag(pos);
             WorldMutationContext.pushExternalSource(WorldMutationSource.WORLDEDIT, this.actor, this.actionId);
             try {
-                return super.setBlock(location, block);
+                boolean changed = super.setBlock(location, block);
+                if (changed) {
+                    this.recordChange(pos, oldState, oldBlockEntity);
+                }
+                return changed;
             } finally {
                 WorldMutationContext.popSource();
             }
+        }
+
+        private void recordChange(BlockPos pos, BlockState oldState, CompoundTag oldBlockEntity) {
+            HistoryCaptureManager.getInstance().recordBlockChange(
+                    this.level,
+                    pos,
+                    oldState,
+                    this.level.getBlockState(pos),
+                    oldBlockEntity,
+                    this.blockEntityTag(pos)
+            );
+        }
+
+        private CompoundTag blockEntityTag(BlockPos pos) {
+            BlockEntity blockEntity = this.level.getBlockEntity(pos);
+            return blockEntity == null ? null : blockEntity.saveWithFullMetadata(this.level.registryAccess());
         }
     }
 }
