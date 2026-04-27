@@ -4,7 +4,6 @@ import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.SettingsScreenController;
-import io.github.luma.ui.navigation.ScreenRouter;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -21,7 +20,6 @@ public final class SettingsScreen extends LumaScreen {
     private final String projectName;
     private final Minecraft client = Minecraft.getInstance();
     private final SettingsScreenController controller = new SettingsScreenController();
-    private final ScreenRouter router = new ScreenRouter();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.settings_ready";
     private boolean loaded = false;
@@ -98,16 +96,6 @@ public final class SettingsScreen extends LumaScreen {
         body.child(this.storageSection());
         body.child(this.performanceSection());
         body.child(this.debugSection());
-
-        FlowLayout actions = LumaUi.sectionCard(
-                Component.translatable("luma.settings.save_title"),
-                Component.translatable("luma.settings.save_help")
-        );
-        FlowLayout buttons = LumaUi.actionRow();
-        buttons.child(LumaUi.primaryButton(Component.translatable("luma.action.save_settings"), button -> this.save()));
-        buttons.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.onClose()));
-        actions.child(buttons);
-        body.child(actions);
         body.child(LumaUi.bottomSpacer());
     }
 
@@ -226,7 +214,10 @@ public final class SettingsScreen extends LumaScreen {
     ) {
         var checkbox = UIComponents.checkbox(Component.literal(""));
         checkbox.checked(value);
-        checkbox.onChanged(onToggle::accept);
+        checkbox.onChanged(checked -> {
+            onToggle.accept(checked);
+            this.autoSave();
+        });
         return checkbox;
     }
 
@@ -235,11 +226,14 @@ public final class SettingsScreen extends LumaScreen {
             java.util.function.Consumer<String> onChanged
     ) {
         var box = UIComponents.textBox(Sizing.fill(100), value);
-        box.onChanged().subscribe(onChanged::accept);
+        box.onChanged().subscribe(changedValue -> {
+            onChanged.accept(changedValue);
+            this.autoSave();
+        });
         return box;
     }
 
-    private void save() {
+    private void autoSave() {
         this.clearValidationErrors();
 
         Integer parsedSessionIdleSeconds = this.parsePositiveInt(this.sessionIdleSeconds, error -> this.sessionIdleSecondsError = error);
@@ -250,7 +244,6 @@ public final class SettingsScreen extends LumaScreen {
                 || parsedSnapshotEveryVersions == null
                 || parsedSnapshotVolumeThreshold == null) {
             this.status = "luma.status.settings_invalid";
-            this.rebuild();
             return;
         }
 
@@ -269,13 +262,6 @@ public final class SettingsScreen extends LumaScreen {
                 ),
                 this.archived
         );
-
-        if ("luma.status.settings_saved".equals(this.status)) {
-            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
-            return;
-        }
-
-        this.rebuild();
     }
 
     private Integer parsePositiveInt(String value, java.util.function.Consumer<String> onError) {

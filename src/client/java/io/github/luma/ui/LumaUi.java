@@ -215,11 +215,31 @@ public final class LumaUi {
     public static FlowLayout statChip(Component label, Component value) {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
-        chip.padding(Insets.of(1));
-        chip.gap(2);
+        chip.padding(Insets.of(3));
+        chip.gap(4);
         chip.child(statValue(value));
         chip.child(statLabel(label));
         return chip;
+    }
+
+    public static FlowLayout sidebarTabs() {
+        FlowLayout tabs = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        tabs.gap(3);
+        tabs.margins(Insets.top(5));
+        return tabs;
+    }
+
+    public static ButtonComponent sidebarTab(Component text, boolean selected, Consumer<ButtonComponent> onPress) {
+        ButtonComponent button = styledButton(
+                text,
+                onPress,
+                selected ? STATUS_FILL : BUTTON_FILL,
+                selected ? STATUS_FILL : BUTTON_HOVER,
+                selected ? STATUS_FILL : BUTTON_DISABLED
+        );
+        button.sizing(Sizing.fill(100), Sizing.fixed(20));
+        button.active(!selected);
+        return button;
     }
 
     public static FlowLayout revealGroup() {
@@ -291,10 +311,10 @@ public final class LumaUi {
     }
 
     private static LabelComponent statValue(Component text) {
-        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false).maxWidth(56);
+        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false).maxWidth(72);
     }
 
     private static LabelComponent statLabel(Component text) {
-        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(86);
+        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(108);
     }
 }
