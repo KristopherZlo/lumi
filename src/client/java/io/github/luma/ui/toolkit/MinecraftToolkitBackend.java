@@ -2,11 +2,11 @@ package io.github.luma.ui.toolkit;
 
 import java.util.List;
 
-public final class OwoToolkitBackend implements UiToolkitBackend {
+public final class MinecraftToolkitBackend implements UiToolkitBackend {
 
     @Override
     public UiToolkit toolkit() {
-        return UiToolkit.OWO;
+        return UiToolkit.MINECRAFT;
     }
 
     @Override
@@ -21,6 +21,6 @@ public final class OwoToolkitBackend implements UiToolkitBackend {
 
     @Override
     public List<String> notes() {
-        return List.of("Fabric fallback used by the current 1.21.11 client build.");
+        return List.of("Packaged fallback renderer built on Minecraft client GUI primitives.");
     }
 }

@@ -10,16 +10,16 @@ import org.junit.jupiter.api.Test;
 final class UiToolkitRegistryTest {
 
     @Test
-    void fallsBackToOwoWhenLdLib2IsUnavailable() {
+    void fallsBackToMinecraftUiWhenLdLib2IsUnavailable() {
         UiToolkitRegistry registry = new UiToolkitRegistry(List.of(
                 new StaticBackend(UiToolkit.LDLIB2, false, true),
-                new StaticBackend(UiToolkit.OWO, true, false)
+                new StaticBackend(UiToolkit.MINECRAFT, true, false)
         ));
 
         UiToolkitStatus status = registry.status();
 
         assertEquals(UiToolkit.LDLIB2, status.targetToolkit());
-        assertEquals(UiToolkit.OWO, status.activeToolkit());
+        assertEquals(UiToolkit.MINECRAFT, status.activeToolkit());
         assertFalse(status.targetActive());
     }
 
@@ -27,7 +27,7 @@ final class UiToolkitRegistryTest {
     void activatesLdLib2WhenItIsAvailable() {
         UiToolkitRegistry registry = new UiToolkitRegistry(List.of(
                 new StaticBackend(UiToolkit.LDLIB2, true, true),
-                new StaticBackend(UiToolkit.OWO, true, false)
+                new StaticBackend(UiToolkit.MINECRAFT, true, false)
         ));
 
         UiToolkitStatus status = registry.status();

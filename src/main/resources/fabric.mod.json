@@ -26,7 +26,6 @@
     "minecraft": "${minecraft_version}",
     "java": ">=21",
     "fabric-api": ">=${fabric_api_version}",
-    "owo": ">=${owo_version}",
     "cloth-config": ">=${cloth_config_version}"
   }
 }

@@ -173,11 +173,10 @@ See [docs/storage-format.md](docs/storage-format.md) for the full format.
 
 Main libraries:
 
-- `owo-lib`
 - `cloth-config`
 - `lz4-java`
 
-LDLib2 is the target UI backend, but the current Fabric `1.21.11` build keeps it optional until a compatible LDLib2 Fabric artifact exists. When compatible LDLib2 runtime classes are present, the project home screen is created as a LDLib2 `ModularUIScreen` with the built-in GDP stylesheet (`ldlib2:lss/gdp.lss`); otherwise Lumi falls back to the packaged owo-lib renderer so the Fabric build remains launchable.
+LDLib2 is the target UI backend, but the current Fabric `1.21.11` build keeps it optional until a compatible LDLib2 Fabric artifact exists. When compatible LDLib2 runtime classes are present, the project home screen is created as a LDLib2 `ModularUIScreen` with the built-in GDP stylesheet (`ldlib2:lss/gdp.lss`); otherwise Lumi uses its packaged Minecraft-client UI renderer so the Fabric build remains launchable without an external UI toolkit dependency.
 
 Build output is one mod jar.
 

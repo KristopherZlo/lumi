@@ -65,7 +65,7 @@ final class LdLib2ProjectHomeScreenFactory {
                     statusKey
             ).createScreen());
         } catch (IllegalStateException exception) {
-            LumaMod.LOGGER.warn("LDLib2 project home screen failed; falling back to owo-lib", exception);
+            LumaMod.LOGGER.warn("LDLib2 project home screen failed; falling back to Lumi internal UI", exception);
             return Optional.empty();
         }
     }
