@@ -36,6 +36,7 @@ import net.minecraft.network.chat.Component;
 public final class SaveDetailsScreen extends LumaScreen {
 
     private static final int MATERIAL_LIMIT = 6;
+    private static final int[] PREVIEW_WIDTH_STEPS = {168, 212, 284, 356};
 
     private final Screen parent;
     private final String projectName;
@@ -60,6 +61,7 @@ public final class SaveDetailsScreen extends LumaScreen {
     private boolean pendingRestoreConfirmation = false;
     private boolean showPartialRestore = false;
     private boolean showAdvancedInfo = false;
+    private int previewZoomStep = 1;
     private String partialMinX = "";
     private String partialMinY = "";
     private String partialMinZ = "";
@@ -145,19 +147,17 @@ public final class SaveDetailsScreen extends LumaScreen {
                 ? UIContainers.verticalFlow(Sizing.fill(100), Sizing.content())
                 : UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         hero.gap(10);
-        hero.child(ProjectUiSupport.versionPreview(this.controller, this.projectName, version, 212, 112, 168));
+        hero.child(this.previewPanel(version));
 
         FlowLayout text = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
         text.gap(6);
         text.child(LumaUi.value(Component.literal(ProjectUiSupport.displayMessage(version))));
 
-        FlowLayout meta = LumaUi.actionRow();
-        meta.child(LumaUi.chip(Component.translatable(ProjectUiSupport.versionKindKey(version.versionKind()))));
-        meta.child(LumaUi.chip(Component.literal(ProjectUiSupport.displayVariantName(versionVariant))));
         if (ProjectUiSupport.isVariantHead(this.state.variants(), version)) {
+            FlowLayout meta = LumaUi.actionRow();
             meta.child(LumaUi.chip(Component.translatable("luma.history.current_badge")));
+            text.child(meta);
         }
-        text.child(meta);
         text.child(LumaUi.caption(Component.translatable("luma.history.version_meta",
                 ProjectUiSupport.safeText(version.author()),
                 ProjectUiSupport.formatTimestamp(version.createdAt())
@@ -165,6 +165,51 @@ public final class SaveDetailsScreen extends LumaScreen {
         hero.child(text);
         section.child(hero);
         return section;
+    }
+
+    private FlowLayout previewPanel(ProjectVersion version) {
+        int previewWidth = this.previewWidth();
+        FlowLayout panel = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
+        panel.gap(4);
+        panel.child(ProjectUiSupport.versionPreview(
+                this.controller,
+                this.projectName,
+                version,
+                previewWidth,
+                Math.max(88, previewWidth / 2),
+                Math.max(132, (previewWidth * 3) / 4)
+        ));
+
+        FlowLayout actions = LumaUi.actionRow();
+        ButtonComponent zoomOut = LumaUi.button(Component.translatable("luma.action.zoom_out"), button -> {
+            this.previewZoomStep = Math.max(0, this.previewZoomStep - 1);
+            this.rebuild();
+        });
+        zoomOut.active(this.previewZoomStep > 0);
+        actions.child(zoomOut);
+
+        ButtonComponent zoomIn = LumaUi.button(Component.translatable("luma.action.zoom_in"), button -> {
+            this.previewZoomStep = Math.min(this.maxPreviewZoomStep(), this.previewZoomStep + 1);
+            this.rebuild();
+        });
+        zoomIn.active(this.previewZoomStep < this.maxPreviewZoomStep());
+        actions.child(zoomIn);
+        panel.child(actions);
+        return panel;
+    }
+
+    private int previewWidth() {
+        return PREVIEW_WIDTH_STEPS[Math.max(0, Math.min(this.previewZoomStep, this.maxPreviewZoomStep()))];
+    }
+
+    private int maxPreviewZoomStep() {
+        if (this.width < 560) {
+            return 1;
+        }
+        if (this.width < 760) {
+            return 2;
+        }
+        return PREVIEW_WIDTH_STEPS.length - 1;
     }
 
     private FlowLayout changesSection(ProjectVersion version) {

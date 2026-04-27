@@ -110,8 +110,7 @@ public final class ProjectScreen extends LumaScreen {
                 idea
         );
         root.child(window.root());
-        window.sidebar().child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        window.sidebar().child(LumaUi.button(Component.translatable("luma.action.more"), button -> this.router.openMore(this, this.projectName)));
+        this.buildSidebarTabs(window);
         window.content().child(LumaUi.statusBanner(this.bannerText()));
 
         FlowLayout confirmation = this.initialRestoreConfirmationSection();
@@ -126,6 +125,30 @@ public final class ProjectScreen extends LumaScreen {
         body.child(this.buildSection());
         body.child(this.historySection());
         body.child(LumaUi.bottomSpacer());
+    }
+
+    private void buildSidebarTabs(ProjectWindowLayout window) {
+        FlowLayout tabs = LumaUi.sidebarTabs();
+        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.tab.history"), true, button -> {
+        }));
+        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.tab.variants"), false, button -> this.router.openVariants(
+                this,
+                this.projectName
+        )));
+        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.tab.import_export"), false, button -> this.router.openShare(
+                this,
+                this.projectName
+        )));
+        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.action.settings"), false, button -> this.router.openSettings(
+                this,
+                this.projectName
+        )));
+        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.action.more"), false, button -> this.router.openMore(
+                this,
+                this.projectName
+        )));
+        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.action.back"), false, button -> this.onClose()));
+        window.sidebar().child(tabs);
     }
 
     @Override
@@ -322,12 +345,11 @@ public final class ProjectScreen extends LumaScreen {
                 version.stats().changedBlocks()
         )));
 
-        FlowLayout meta = LumaUi.actionRow();
-        meta.child(LumaUi.chip(Component.translatable(ProjectUiSupport.versionKindKey(version.versionKind()))));
         if (current) {
+            FlowLayout meta = LumaUi.actionRow();
             meta.child(LumaUi.chip(Component.translatable("luma.history.current_badge")));
+            text.child(meta);
         }
-        text.child(meta);
         hero.child(text);
         card.child(hero);
 

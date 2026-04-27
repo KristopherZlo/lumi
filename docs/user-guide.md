@@ -6,7 +6,7 @@ Lumi is built first for local singleplayer saves.
 
 Project data is stored inside the save folder.
 
-Lumi only works for players with operator-level permissions or when cheats are enabled in the current world.
+Lumi's UI operations are intended for the local world owner. Dedicated servers still require operator-level permissions for mutating Lumi actions, while singleplayer integrated worlds capture builder edits for history and live undo/redo immediately.
 
 ## Open Lumi
 
@@ -168,6 +168,8 @@ Future saves continue from that head.
 
 Use the `Import / Export` screen to:
 
+- open the game-root `lumi-projects` folder
+- import package zips listed in that folder
 - import a shared package as a review project
 - review imported packages without leaving the current project
 - export the build history, current branch, or selected save as a package
@@ -175,7 +177,7 @@ Use the `Import / Export` screen to:
 - delete imported review packages after you are done with them
 - combine an imported branch into your current build
 
-Import comes first on the screen because it is the usual starting point.
+Export comes first on the screen, then Import lists package zips found in the game-root `lumi-projects` folder. You can still paste an absolute archive path manually.
 
 After a package is imported, Lumi keeps you on `Import / Export`, selects that imported review project, and builds a combine review against the current active local branch automatically.
 That combine review runs in the background and is cached for the selected imported package and target branch, so reopening the same review does not repeat the file scan unless the imported package list changes.
@@ -227,7 +229,7 @@ Open a save card to reach the save details screen.
 The save details screen shows:
 
 - the save name
-- isometric preview with automatic empty-margin trimming
+- isometric preview with automatic empty-margin trimming and zoom controls
 - time
 - change summary
 
@@ -251,6 +253,8 @@ The settings screen includes:
 - checkpoint volume threshold
 - change session idle timeout
 - debug logging
+
+Settings apply and persist immediately when a checkbox or valid numeric field changes. There is no separate save/apply block.
 
 Project archive controls are no longer part of normal Settings. Cleanup, diagnostics, import/export, and advanced tools live under `More`. Auto-version and favorite controls are no longer exposed because those workflows are not part of the supported UI surface.
 
