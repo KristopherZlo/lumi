@@ -88,35 +88,20 @@ The codebase currently follows these top-level areas:
 - `src/main/java/io/github/luma/integration`
   Optional integration contracts, typed capability reporting, WorldEdit edit-session tracking, and fallback status plumbing for external builder tools.
 - `src/client/java/io/github/luma/ui`
-  `Screen + Controller + ViewState` client UI implementation with router-driven navigation.
+  LDLib2 GDP screen factories, controllers, overlays, and view-state records with router-driven navigation.
 
 For the current architecture, responsibility boundaries, and runtime invariants, see [architecture.md](architecture.md).
 
 ## UI architecture
 
-The current menu flow is centered around:
+The current menu flow is centered around `ScreenRouter`, `LdLib2Screens`, and `LdLib2ProjectHomeScreenFactory`. Every in-game menu is created as an LDLib2 `ModularUIScreen` and receives the built-in GDP stylesheet through `StylesheetManager.GDP`.
 
-- `DashboardScreen`
-- `CreateProjectScreen`
-- `ProjectScreen`
-- `SaveScreen`
-- `SaveDetailsScreen`
-- `VariantsScreen`
-- `ShareScreen`
-- `RecoveryScreen`
-- `CompareScreen`
-- `SettingsScreen`
-- `MoreScreen`
-- `CleanupScreen`
-- `DiagnosticsScreen`
-- `AdvancedScreen`
-
-Controllers own service access and loading logic. Screens keep transient UI state. `LumaScreen` is the shared non-pausing base class for in-world menus. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
+Controllers own service access and loading logic. LDLib2 screen factories keep transient UI state. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
 `ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Import / Export combine previews are requested only by explicit review actions, then cached by imported package and target idea while the screen is open.
 Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
 
-LDLib2 is the target UI toolkit for future migration. The published LDLib2 UI docs and source (`https://low-drag-mc.github.io/LowDragMC-Doc/ldlib2/ui/`, `https://github.com/Low-Drag-MC/LDLib2`) are currently NeoForge-oriented around Minecraft `1.21.1`, while Lumi targets Fabric `1.21.11`. Keep LDLib2 behind `UiToolkitRegistry` and reflection-style detection until a compatible Fabric runtime exists. Do not add a hard `fabric.mod.json` or Gradle runtime dependency that makes the Fabric build unlaunchable.
-`LdLib2InterfaceBlueprint` is the migration contract for the home screen. It maps the simple builder flow to LDLib2 element roles (`UIElement`, `Label`, `Button`, `ScrollerView`, and `TabView`), pins the built-in GDP theme (`ldlib2:lss/gdp.lss`), and records compact flex hints for the LDLib2 tree. `LdLib2ReflectiveUi` and `LdLib2ProjectHomeScreenFactory` use that runtime shape to create a real LDLib2 `ModularUIScreen` when compatible LDLib2 classes are present. `ProjectWindowLayout` remains the compact internal fallback only for environments where LDLib2 is absent.
+LDLib2 GDP is the only menu toolkit in this branch. The Fabric build still uses reflection instead of a Gradle LDLib2 dependency because the published LDLib2 artifacts and UI docs are currently NeoForge-oriented around Minecraft `1.21.1`, while Lumi targets Fabric `1.21.11`. That compile-time isolation is not a UI fallback: if compatible LDLib2 runtime classes are absent, Lumi reports the missing runtime instead of opening an internal screen.
+`LdLib2InterfaceBlueprint` maps the simple builder flow to LDLib2 element roles (`UIElement`, `Label`, `Button`, `ScrollerView`, and `TabView`), pins the built-in GDP theme (`ldlib2:lss/gdp.lss`), and records compact flex hints for the LDLib2 tree. `LdLib2ReflectiveUi`, `LdLib2Screens`, and `LdLib2ProjectHomeScreenFactory` use that runtime shape for all menu routes.
 
 Current UX assumptions:
 
@@ -184,7 +169,7 @@ Current world-apply runtime types:
 - Lumi is shipped as one distributable mod jar.
 - Support libraries used by the mod are included through Loom jar-in-jar configuration.
 - The textured preview path now uses Lumi's own layered client mesh builder on top of the `1.21.11` render APIs instead of an external meshing runtime dependency.
-- LDLib2 is not packaged until a compatible Fabric `1.21.11` artifact exists; the current client UI ships with Lumi's internal Minecraft-client fallback and a runtime status surface under diagnostics.
+- LDLib2 is not packaged until a compatible Fabric `1.21.11` artifact exists; menu screens still require compatible LDLib2 runtime classes and do not include a secondary Minecraft-client renderer.
 - Fabric API remains an external required mod.
 - Packaging tasks prune stale legacy `luma-*` outputs from `build/libs` before writing the current `lumi-*` artifacts.
 

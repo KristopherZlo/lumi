@@ -1,6 +1,5 @@
 package io.github.luma.ui.screen;
 
-import io.github.luma.LumaMod;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
@@ -16,7 +15,6 @@ import io.github.luma.ui.toolkit.LdLib2ReflectiveUi;
 import io.github.luma.ui.toolkit.LdLib2ReflectiveUi.TextTone;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -50,24 +48,15 @@ final class LdLib2ProjectHomeScreenFactory {
         this.statusKey = statusKey == null || statusKey.isBlank() ? "luma.status.project_ready" : statusKey;
     }
 
-    static Optional<Screen> create(Screen parent, String projectName, String selectedVariantId, String statusKey) {
-        Optional<LdLib2ReflectiveUi> runtime = LdLib2ReflectiveUi.create(LdLib2ProjectHomeScreenFactory.class.getClassLoader());
-        if (runtime.isEmpty()) {
-            return Optional.empty();
-        }
-
-        try {
-            return Optional.of(new LdLib2ProjectHomeScreenFactory(
-                    runtime.get(),
-                    parent,
-                    projectName,
-                    selectedVariantId,
-                    statusKey
-            ).createScreen());
-        } catch (IllegalStateException exception) {
-            LumaMod.LOGGER.warn("LDLib2 project home screen failed; falling back to Lumi internal UI", exception);
-            return Optional.empty();
-        }
+    static Screen create(Screen parent, String projectName, String selectedVariantId, String statusKey) {
+        LdLib2ReflectiveUi runtime = LdLib2ReflectiveUi.required(LdLib2ProjectHomeScreenFactory.class.getClassLoader());
+        return new LdLib2ProjectHomeScreenFactory(
+                runtime,
+                parent,
+                projectName,
+                selectedVariantId,
+                statusKey
+        ).createScreen();
     }
 
     private Screen createScreen() {

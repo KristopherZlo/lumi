@@ -11,6 +11,8 @@ public final class LdLib2ToolkitBackend implements UiToolkitBackend {
             "com.lowdragmc.lowdraglib2.gui.ui.elements.Button",
             "com.lowdragmc.lowdraglib2.gui.ui.elements.Label",
             "com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView",
+            "com.lowdragmc.lowdraglib2.gui.ui.elements.TextField",
+            "com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle",
             "com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager"
     );
 
@@ -42,10 +44,10 @@ public final class LdLib2ToolkitBackend implements UiToolkitBackend {
         String theme = "Built-in LDLib2 theme target: " + this.blueprint.builtInThemeName()
                 + " (" + this.blueprint.stylesheetLocation() + ").";
         if (this.available) {
-            return List.of("LDLib2 UI classes detected.", theme, targetElements);
+            return List.of("LDLib2 GDP UI classes detected.", theme, targetElements);
         }
         return List.of(
-                "LDLib2 is the target UI backend, but no compatible Fabric 1.21.11 runtime classes are present.",
+                "LDLib2 GDP is required for every Lumi screen, but compatible runtime classes are not present.",
                 theme,
                 targetElements
         );

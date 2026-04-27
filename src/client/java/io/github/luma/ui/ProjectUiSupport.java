@@ -6,19 +6,10 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionDiff;
 import io.github.luma.domain.model.VersionKind;
-import io.github.luma.ui.controller.ProjectScreenController;
-import io.github.luma.ui.preview.ProjectPreviewTextureCache;
-import io.github.luma.ui.framework.component.UIComponents;
-import io.github.luma.ui.framework.container.FlowLayout;
-import io.github.luma.ui.framework.core.Sizing;
-import io.github.luma.ui.framework.core.UIComponent;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import net.minecraft.network.chat.Component;
 
 public final class ProjectUiSupport {
 
@@ -131,63 +122,5 @@ public final class ProjectUiSupport {
             }
         }
         return count;
-    }
-
-    public static UIComponent versionPreview(
-            ProjectScreenController controller,
-            String projectName,
-            ProjectVersion version,
-            int width,
-            int minHeight,
-            int maxHeight
-    ) {
-        int previewWidth = version == null || version.preview() == null ? 0 : version.preview().width();
-        int previewHeight = version == null || version.preview() == null ? 0 : version.preview().height();
-        int height = previewWidth <= 0 || previewHeight <= 0
-                ? minHeight
-                : Math.max(minHeight, Math.min(maxHeight, (int) Math.round(
-                        (double) previewHeight * (double) width / Math.max(1, previewWidth)
-                )));
-
-        if (version == null
-                || version.preview() == null
-                || version.preview().fileName() == null
-                || version.preview().fileName().isBlank()
-                || previewWidth <= 0
-                || previewHeight <= 0) {
-            return previewPlaceholder(width, height);
-        }
-
-        String previewPath = controller.resolvePreviewPath(projectName, version.id());
-        if (previewPath == null || previewPath.isBlank()) {
-            return previewPlaceholder(width, height);
-        }
-
-        Path path = Path.of(previewPath);
-        if (!Files.exists(path)) {
-            return previewPlaceholder(width, height);
-        }
-
-        try {
-            var texture = UIComponents.texture(
-                    ProjectPreviewTextureCache.load(projectName, version.id(), path),
-                    0,
-                    0,
-                    previewWidth,
-                    previewHeight,
-                    previewWidth,
-                    previewHeight
-            );
-            texture.sizing(Sizing.fixed(width), Sizing.fixed(height));
-            return texture;
-        } catch (Exception exception) {
-            return previewPlaceholder(width, height);
-        }
-    }
-
-    private static FlowLayout previewPlaceholder(int width, int height) {
-        FlowLayout placeholder = LumaUi.insetPanel(Sizing.fixed(width), Sizing.fixed(height));
-        placeholder.child(LumaUi.caption(Component.translatable("luma.history.no_preview")));
-        return placeholder;
     }
 }

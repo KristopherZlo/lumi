@@ -121,7 +121,7 @@ public final class LdLib2ReflectiveUi {
         Object textField = this.newInstance(this.textFieldClass);
         this.identify(textField, id, "lumi-text-field");
         this.layout(textField, layout -> layout.widthPercent(100).height(18).paddingHorizontal(4));
-        this.invoke(textField, "setAnyString", new Class<?>[] {});
+        this.invokeIfPresent(textField, "setAnyString", new Class<?>[] {});
         this.invoke(textField, "setText", new Class<?>[] {String.class}, value == null ? "" : value);
         if (placeholder != null) {
             this.invoke(textField, "textFieldStyle", new Class<?>[] {Consumer.class}, (Consumer<Object>) style -> {

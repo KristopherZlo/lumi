@@ -148,8 +148,7 @@ public final class LdLib2Screens {
     }
 
     public static Screen project(Screen parent, String projectName, String selectedVariantId, String statusKey) {
-        return LdLib2ProjectHomeScreenFactory.create(parent, projectName, selectedVariantId, statusKey)
-                .orElseThrow(() -> new IllegalStateException("LDLib2 project home screen is required."));
+        return LdLib2ProjectHomeScreenFactory.create(parent, projectName, selectedVariantId, statusKey);
     }
 
     public static Screen more(Screen parent, String projectName) {

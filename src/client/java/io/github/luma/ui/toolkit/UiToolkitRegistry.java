@@ -15,10 +15,7 @@ public final class UiToolkitRegistry {
 
     public static UiToolkitRegistry defaultRegistry() {
         ClassLoader classLoader = UiToolkitRegistry.class.getClassLoader();
-        return new UiToolkitRegistry(List.of(
-                new LdLib2ToolkitBackend(classLoader),
-                new MinecraftToolkitBackend()
-        ));
+        return new UiToolkitRegistry(List.of(new LdLib2ToolkitBackend(classLoader)));
     }
 
     public UiToolkitStatus status() {
@@ -26,12 +23,7 @@ public final class UiToolkitRegistry {
                 .filter(UiToolkitBackend::primaryTarget)
                 .map(UiToolkitBackend::toolkit)
                 .findFirst()
-                .orElse(UiToolkit.MINECRAFT);
-        UiToolkit active = this.backends.stream()
-                .filter(UiToolkitBackend::available)
-                .map(UiToolkitBackend::toolkit)
-                .findFirst()
-                .orElseThrow();
-        return new UiToolkitStatus(active, target, this.backends);
+                .orElse(UiToolkit.LDLIB2);
+        return new UiToolkitStatus(target, target, this.backends);
     }
 }
