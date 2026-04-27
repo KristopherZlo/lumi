@@ -77,7 +77,7 @@ Use Lumi if you want to:
 - zip import/export under `More`, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews
 - imported review projects with deletion, cached combine review, and same-area overlays for shared branches
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
-- conservative Axiom capability reporting; Axiom can be detected, and server-side Axiom block mutations are captured when they surface through observable chunk mutation paths
+- conservative Axiom capability reporting; Axiom can be detected, and server-side Axiom block-buffer mutations are captured when they surface through the guarded packet apply path
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
 - temporary `Alt` overlay for the latest 10 tracked actions when compare highlight is not active
