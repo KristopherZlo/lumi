@@ -23,6 +23,8 @@ public final class LdLib2ReflectiveUi {
     private static final String LABEL = "com.lowdragmc.lowdraglib2.gui.ui.elements.Label";
     private static final String BUTTON = "com.lowdragmc.lowdraglib2.gui.ui.elements.Button";
     private static final String SCROLLER_VIEW = "com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView";
+    private static final String TEXT_FIELD = "com.lowdragmc.lowdraglib2.gui.ui.elements.TextField";
+    private static final String TOGGLE = "com.lowdragmc.lowdraglib2.gui.ui.elements.Toggle";
     private static final String STYLE_MANAGER = "com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager";
     private static final String STYLESHEET = "com.lowdragmc.lowdraglib2.gui.ui.style.Stylesheet";
     private static final String UI_EVENT_LISTENER = "com.lowdragmc.lowdraglib2.gui.ui.event.UIEventListener";
@@ -34,6 +36,8 @@ public final class LdLib2ReflectiveUi {
     private final Class<?> labelClass;
     private final Class<?> buttonClass;
     private final Class<?> scrollerViewClass;
+    private final Class<?> textFieldClass;
+    private final Class<?> toggleClass;
     private final Class<?> stylesheetManagerClass;
     private final Class<?> stylesheetClass;
     private final Class<?> uiEventListenerClass;
@@ -46,6 +50,8 @@ public final class LdLib2ReflectiveUi {
         this.labelClass = Class.forName(LABEL, false, classLoader);
         this.buttonClass = Class.forName(BUTTON, false, classLoader);
         this.scrollerViewClass = Class.forName(SCROLLER_VIEW, false, classLoader);
+        this.textFieldClass = Class.forName(TEXT_FIELD, false, classLoader);
+        this.toggleClass = Class.forName(TOGGLE, false, classLoader);
         this.stylesheetManagerClass = Class.forName(STYLE_MANAGER, false, classLoader);
         this.stylesheetClass = Class.forName(STYLESHEET, false, classLoader);
         this.uiEventListenerClass = Class.forName(UI_EVENT_LISTENER, false, classLoader);
@@ -57,6 +63,11 @@ public final class LdLib2ReflectiveUi {
         } catch (ClassNotFoundException exception) {
             return Optional.empty();
         }
+    }
+
+    public static LdLib2ReflectiveUi required(ClassLoader classLoader) {
+        return create(classLoader)
+                .orElseThrow(() -> new IllegalStateException("LDLib2 runtime classes are required for every Lumi UI screen."));
     }
 
     public Object element(String id, String... classes) {
@@ -104,6 +115,38 @@ public final class LdLib2ReflectiveUi {
             this.layout(viewContainer, layout -> layout.widthPercent(100).gapAll(5));
         });
         return scroller;
+    }
+
+    public Object textField(String id, String value, Component placeholder, Consumer<String> onChanged) {
+        Object textField = this.newInstance(this.textFieldClass);
+        this.identify(textField, id, "lumi-text-field");
+        this.layout(textField, layout -> layout.widthPercent(100).height(18).paddingHorizontal(4));
+        this.invoke(textField, "setAnyString", new Class<?>[] {});
+        this.invoke(textField, "setText", new Class<?>[] {String.class}, value == null ? "" : value);
+        if (placeholder != null) {
+            this.invoke(textField, "textFieldStyle", new Class<?>[] {Consumer.class}, (Consumer<Object>) style -> {
+                this.invokeIfPresent(style, "placeholder", new Class<?>[] {Component.class}, placeholder);
+                this.invokeIfPresent(style, "textShadow", new Class<?>[] {boolean.class}, false);
+            });
+        }
+        this.invoke(textField, "setTextResponder", new Class<?>[] {Consumer.class}, onChanged);
+        return textField;
+    }
+
+    public Object fixedTextField(String id, String value, int width, Consumer<String> onChanged) {
+        Object textField = this.textField(id, value, null, onChanged);
+        this.layout(textField, layout -> layout.width(width).height(18).paddingHorizontal(4));
+        return textField;
+    }
+
+    public Object toggle(String id, Component text, boolean value, Consumer<Boolean> onChanged) {
+        Object toggle = this.newInstance(this.toggleClass);
+        this.identify(toggle, id, "lumi-toggle");
+        this.layout(toggle, layout -> layout.widthPercent(100).height(18));
+        this.setText(toggle, text);
+        this.invoke(toggle, "setOn", new Class<?>[] {boolean.class}, value);
+        this.invokeSingleArgMethod(toggle, "setOnToggleChanged", parameterType -> this.booleanListener(parameterType, onChanged));
+        return toggle;
     }
 
     public void addChild(Object parent, Object child) {
@@ -154,6 +197,14 @@ public final class LdLib2ReflectiveUi {
         }
     }
 
+    private void setText(Object element, Component text) {
+        try {
+            this.invoke(element, "setText", new Class<?>[] {Component.class}, text);
+        } catch (IllegalStateException exception) {
+            this.invoke(element, "setText", new Class<?>[] {String.class, boolean.class}, text.getString(), false);
+        }
+    }
+
     private Object listener(Runnable action) {
         return Proxy.newProxyInstance(
                 this.uiEventListenerClass.getClassLoader(),
@@ -161,6 +212,19 @@ public final class LdLib2ReflectiveUi {
                 (proxy, method, args) -> {
                     if ("handleEvent".equals(method.getName())) {
                         action.run();
+                    }
+                    return null;
+                }
+        );
+    }
+
+    private Object booleanListener(Class<?> listenerType, Consumer<Boolean> consumer) {
+        return Proxy.newProxyInstance(
+                listenerType.getClassLoader(),
+                new Class<?>[] {listenerType},
+                (proxy, method, args) -> {
+                    if (args != null && args.length > 0 && args[0] instanceof Boolean value) {
+                        consumer.accept(value);
                     }
                     return null;
                 }
@@ -186,6 +250,27 @@ public final class LdLib2ReflectiveUi {
             Throwable cause = exception.getCause() == null ? exception : exception.getCause();
             throw new IllegalStateException("LDLib2 method failed: " + methodName, cause);
         }
+    }
+
+    private void invokeIfPresent(Object target, String methodName, Class<?>[] parameterTypes, Object... args) {
+        try {
+            target.getClass().getMethod(methodName, parameterTypes).invoke(target, args);
+        } catch (ReflectiveOperationException ignored) {
+        }
+    }
+
+    private Object invokeSingleArgMethod(Object target, String methodName, java.util.function.Function<Class<?>, Object> argumentFactory) {
+        for (Method method : target.getClass().getMethods()) {
+            if (!methodName.equals(method.getName()) || method.getParameterCount() != 1) {
+                continue;
+            }
+            try {
+                return method.invoke(target, argumentFactory.apply(method.getParameterTypes()[0]));
+            } catch (ReflectiveOperationException exception) {
+                throw new IllegalStateException("LDLib2 method failed: " + methodName, exception);
+            }
+        }
+        throw new IllegalStateException("LDLib2 method is unavailable: " + methodName);
     }
 
     public final class LayoutOps {
