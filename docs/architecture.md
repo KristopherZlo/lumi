@@ -80,7 +80,7 @@ Important adapters:
 
 - WorldEdit capabilities are enabled only when the corresponding WorldEdit API classes are present, such as edit-session events, local sessions, clipboard, and schematic formats.
 - `OptionalIntegrationBootstrap` reflectively loads the WorldEdit edit-session tracker only when those capabilities are present. The tracker registers on WorldEdit's event bus and wraps `EditSession.Stage.BEFORE_CHANGE` extents. It records WorldEdit old/new block transitions directly under `WorldMutationSource.WORLDEDIT`, while still keeping the mutation context active for Minecraft-level fallback capture.
-- Axiom capabilities are intentionally conservative. Lumi may report detection or a custom region API, but it does not claim selection, clipboard, or schematic support unless a stable API is available.
+- Axiom capabilities are intentionally conservative. Lumi may report detection or a custom region API, but it does not claim selection, clipboard, or schematic support unless a stable API is available. Because Axiom does not expose a stable operation API, Lumi uses a guarded server-side chunk mutation fallback: when an otherwise untracked chunk mutation is observed from an external Axiom stack frame, it is recorded as `WorldMutationSource.AXIOM`.
 - The fallback integration remains always available and represents Lumi's own world-tracking capture path.
 
 External tool mutations use explicit `WorldMutationSource` values such as `WORLDEDIT` and `AXIOM` so saved versions can distinguish tool-originated history from generic external capture.
@@ -127,7 +127,7 @@ Responsibilities are split as follows:
 
 ## Capture flow
 
-1. A Minecraft mixin intercepts a block mutation.
+1. A Minecraft mixin intercepts a block mutation. Axiom edits that bypass the normal `Level#setBlock` context can still be captured by the guarded `LevelChunk#setBlockState` fallback when the mutation stack is attributable to Axiom.
 2. `WorldMutationContext` accepts only explicit player, explosive, explosion, falling-block, selected mob, and other targeted mutation scopes.
 3. `HistoryCaptureManager` finds matching projects for the block position.
 4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.
