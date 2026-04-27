@@ -16,7 +16,7 @@ Use a custom nickname:
 .\scripts\run-test-client.ps1 -Username YourNickHere
 ```
 
-The script automatically selects a compatible local JDK 17+ and overrides an older shell `JAVA_HOME` for that launch only.
+The script automatically selects a compatible local JDK 21+ and prefers Java 21 when it is installed. It overrides an older shell `JAVA_HOME` for that launch only.
 
 If you want to force a specific JDK:
 
@@ -30,6 +30,12 @@ If you only want to verify the Gradle profile without starting Minecraft:
 .\scripts\run-test-client.ps1 -GradleTasks tasks --all
 ```
 
+If you want to launch the broader performance-mod profile:
+
+```powershell
+.\scripts\run-test-client.ps1 -FullStack
+```
+
 You can also call Gradle directly:
 
 ```powershell
@@ -38,12 +44,19 @@ You can also call Gradle directly:
 
 ## Installed client mods
 
-The `installTestClientMods` task syncs the supported Fabric 1.21.11 jars into `run/test-client/mods`.
+The `installTestClientMods` task syncs the supported Fabric 1.21.11 jars into `run/test-client/mods`. The default profile is intentionally small so the dev runtime can validate Lumi with external builder tools without remapping a large unrelated client stack.
 
-Included from the requested list:
+Default profile:
 
 - Axiom
 - WorldEdit
+
+Axiom is pinned to the exact `Axiom-5.4.1-for-MC1.21.11.jar` Modrinth file because the generic Modrinth Maven coordinate for `5.4.1` can resolve to a jar with older Minecraft metadata.
+
+The default profile also installs Fabric API as a test-client runtime dependency. These jars are not bundled into the final `lumi` release jar.
+
+Full-stack profile, enabled with `-FullStack` or `-Plumi.testClientFullStack=true`:
+
 - Sodium
 - Entity Culling
 - FerriteCore
@@ -60,8 +73,6 @@ Included from the requested list:
 - Remove Reloading Screen
 - FastQuit
 - Particle Core
-
-Axiom is pinned to the exact `Axiom-5.4.1-for-MC1.21.11.jar` Modrinth file because the generic Modrinth Maven coordinate for `5.4.1` can resolve to a jar with older Minecraft metadata.
 
 Compatibility replacements used because the exact requested mod has no Fabric 1.21.11 release available on Modrinth:
 
@@ -81,11 +92,10 @@ The following requested mods are not installed in this profile because a Fabric 
 
 `Chloride` is also not available as a Fabric mod for this Minecraft version. `LazyDFU Reloaded` was evaluated as a fallback candidate but was not kept in the profile because the available jar was not a valid Fabric mod jar for 1.21.11.
 
-## Runtime dependencies
+## Full-stack runtime dependencies
 
-The profile also installs the runtime libraries needed by the selected client mods:
+The full-stack profile also installs the runtime libraries needed by the selected client mods:
 
-- Fabric API
 - Fabric Language Kotlin
 - YetAnotherConfigLib (YACL)
 - Forge Config API Port

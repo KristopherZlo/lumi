@@ -209,7 +209,7 @@ Run test client:
 .\scripts\run-test-client.ps1
 ```
 
-The test-client profile installs a Fabric `1.21.11` builder/performance stack for local validation, including WorldEdit and a pinned `Axiom-5.4.1-for-MC1.21.11.jar` Modrinth file. See [docs/test-client.md](docs/test-client.md) for the complete mod list.
+The default test-client profile installs a small Fabric `1.21.11` builder-tool stack for local validation: Fabric API, WorldEdit, and a pinned `Axiom-5.4.1-for-MC1.21.11.jar` Modrinth file. The broader performance-mod stack is available with `.\scripts\run-test-client.ps1 -FullStack`. See [docs/test-client.md](docs/test-client.md) for the complete mod list.
 
 Run tests:
 

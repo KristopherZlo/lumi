@@ -1,6 +1,7 @@
 param(
-    [string]$Username = "LumaTestClient",
+    [string]$Username = "LumiTestClient",
     [string]$JavaHome,
+    [switch]$FullStack,
     [string[]]$GradleTasks = @("installTestClientMods", "runTestClient")
 )
 
@@ -35,11 +36,25 @@ function Find-JavaHome {
         [string]$RequestedJavaHome
     )
 
-    $candidates = [System.Collections.Generic.List[string]]::new()
-
     if ($RequestedJavaHome) {
-        $candidates.Add($RequestedJavaHome)
+        $javaExe = Join-Path $RequestedJavaHome "bin\java.exe"
+        if (-not (Test-Path $javaExe)) {
+            return $null
+        }
+
+        $major = Get-JavaMajorVersion -JavaExe $javaExe
+        if ($null -eq $major -or $major -lt 21) {
+            return $null
+        }
+
+        return [PSCustomObject]@{
+            JavaHome = $RequestedJavaHome
+            JavaExe = $javaExe
+            Major = $major
+        }
     }
+
+    $candidates = [System.Collections.Generic.List[string]]::new()
 
     if ($env:JAVA_HOME) {
         $candidates.Add($env:JAVA_HOME)
@@ -63,7 +78,7 @@ function Find-JavaHome {
         }
 
         $major = Get-JavaMajorVersion -JavaExe $javaExe
-        if ($null -eq $major -or $major -lt 17) {
+        if ($null -eq $major -or $major -lt 21) {
             continue
         }
 
@@ -74,14 +89,14 @@ function Find-JavaHome {
         }
     }
 
-    return $resolved | Sort-Object Major, JavaHome -Descending | Select-Object -First 1
+    return $resolved | Sort-Object @{ Expression = { if ($_.Major -eq 21) { 0 } else { 1 } } }, Major, JavaHome | Select-Object -First 1
 }
 
 Push-Location $repoRoot
 try {
     $selectedJava = Find-JavaHome -RequestedJavaHome $JavaHome
     if (-not $selectedJava) {
-        throw "No compatible JDK 17+ installation was found. Install Java 17+ or pass -JavaHome 'C:\Path\To\JDK'."
+        throw "No compatible JDK 21+ installation was found. Install Java 21+ or pass -JavaHome 'C:\Path\To\JDK'."
     }
 
     $env:JAVA_HOME = $selectedJava.JavaHome
@@ -91,7 +106,11 @@ try {
 
     $arguments = @()
     $arguments += $GradleTasks
-    $arguments += "-Pluma.testUsername=$Username"
+    $arguments += "-Plumi.testUsername=$Username"
+
+    if ($FullStack) {
+        $arguments += "-Plumi.testClientFullStack=true"
+    }
 
     & .\gradlew.bat @arguments
 } finally {
