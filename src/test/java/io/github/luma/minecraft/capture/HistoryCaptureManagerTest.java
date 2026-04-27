@@ -25,6 +25,7 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.MOB));
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.EXTERNAL_TOOL));
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.WORLDEDIT));
+        assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.FAWE));
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.AXIOM));
         assertFalse(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.SYSTEM));
         assertFalse(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.RESTORE));
@@ -38,6 +39,7 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.EXPLOSIVE));
         assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.EXTERNAL_TOOL));
         assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.WORLDEDIT));
+        assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.FAWE));
         assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.AXIOM));
         assertFalse(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.EXPLOSION));
         assertFalse(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.FLUID));
@@ -59,6 +61,7 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXPLOSIVE));
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXTERNAL_TOOL));
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.WORLDEDIT));
+        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.FAWE));
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.AXIOM));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXPLOSION));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.FLUID));
@@ -88,6 +91,7 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXPLOSIVE));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXTERNAL_TOOL));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.WORLDEDIT));
+        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FAWE));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.AXIOM));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.SYSTEM));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.RESTORE));
@@ -109,6 +113,7 @@ class HistoryCaptureManagerTest {
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.EXPLOSIVE));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.EXTERNAL_TOOL));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.WORLDEDIT));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FAWE));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.AXIOM));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.SYSTEM));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.RESTORE));
@@ -130,6 +135,7 @@ class HistoryCaptureManagerTest {
     void shouldAllowSingleplayerExplicitActionsWithoutPermissionFrame() {
         assertTrue(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.WORLDEDIT));
+        assertTrue(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.FAWE));
         assertTrue(HistoryCaptureManager.canUseMutationSource(true, true, WorldMutationSource.PLAYER));
         assertFalse(HistoryCaptureManager.canUseMutationSource(true, false, WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.canUseMutationSource(true, false, WorldMutationSource.FLUID));
@@ -150,6 +156,7 @@ class HistoryCaptureManagerTest {
         assertEquals("mob", HistoryCaptureManager.defaultActor(WorldMutationSource.MOB));
         assertEquals("external-tool", HistoryCaptureManager.defaultActor(WorldMutationSource.EXTERNAL_TOOL));
         assertEquals("worldedit", HistoryCaptureManager.defaultActor(WorldMutationSource.WORLDEDIT));
+        assertEquals("fawe", HistoryCaptureManager.defaultActor(WorldMutationSource.FAWE));
         assertEquals("axiom", HistoryCaptureManager.defaultActor(WorldMutationSource.AXIOM));
         assertEquals("world", HistoryCaptureManager.defaultActor(WorldMutationSource.SYSTEM));
         assertEquals("world", HistoryCaptureManager.defaultActor(null));

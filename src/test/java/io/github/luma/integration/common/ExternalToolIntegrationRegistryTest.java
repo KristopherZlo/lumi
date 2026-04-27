@@ -17,11 +17,14 @@ class ExternalToolIntegrationRegistryTest {
         );
 
         IntegrationStatus worldEdit = registry.worldEditStatus();
+        IntegrationStatus fawe = registry.faweStatus();
         IntegrationStatus axiom = registry.axiomStatus();
         IntegrationStatus fallback = registry.fallbackStatus();
 
         assertFalse(worldEdit.available());
         assertEquals(IntegrationMode.UNAVAILABLE, worldEdit.mode());
+        assertFalse(fawe.available());
+        assertEquals(IntegrationMode.UNAVAILABLE, fawe.mode());
         assertFalse(axiom.available());
         assertEquals(IntegrationMode.UNAVAILABLE, axiom.mode());
         assertTrue(fallback.available());
@@ -29,6 +32,24 @@ class ExternalToolIntegrationRegistryTest {
         assertTrue(fallback.capabilities().contains(IntegrationCapability.WORLD_TRACKING));
         assertTrue(fallback.capabilities().contains(IntegrationCapability.MASS_EDIT_GROUPING));
         assertTrue(fallback.capabilities().contains(IntegrationCapability.FALLBACK_CAPTURE));
+    }
+
+    @Test
+    void reportsFaweAsDetectedFallbackCapture() {
+        Set<String> classes = Set.of("com.fastasyncworldedit.core.Fawe");
+        ExternalToolIntegrationRegistry registry = new ExternalToolIntegrationRegistry(
+                modId -> false,
+                classes::contains
+        );
+
+        IntegrationStatus status = registry.faweStatus();
+
+        assertTrue(status.available());
+        assertEquals(IntegrationMode.DETECTED, status.mode());
+        assertTrue(status.capabilities().contains(IntegrationCapability.FALLBACK_CAPTURE));
+        assertTrue(status.capabilities().contains(IntegrationCapability.MASS_EDIT_GROUPING));
+        assertFalse(status.capabilities().contains(IntegrationCapability.SELECTION));
+        assertFalse(status.capabilities().contains(IntegrationCapability.CLIPBOARD));
     }
 
     @Test

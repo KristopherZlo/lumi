@@ -14,6 +14,7 @@ public enum WorldMutationSource {
     MOB,
     EXTERNAL_TOOL,
     WORLDEDIT,
+    FAWE,
     AXIOM,
     RESTORE,
     SYSTEM

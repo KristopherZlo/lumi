@@ -76,6 +76,7 @@ public final class WorldMutationCapturePolicy {
                     MOB,
                     EXTERNAL_TOOL,
                     WORLDEDIT,
+                    FAWE,
                     AXIOM -> true;
             case PISTON, RESTORE, SYSTEM -> false;
         };
