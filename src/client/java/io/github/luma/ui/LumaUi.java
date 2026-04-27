@@ -46,8 +46,8 @@ public final class LumaUi {
     public static FlowLayout screenFrame() {
         FlowLayout layout = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
         layout.surface(windowSurface());
-        layout.padding(Insets.of(8));
-        layout.gap(8);
+        layout.padding(Insets.of(6));
+        layout.gap(6);
         return layout;
     }
 
@@ -69,30 +69,30 @@ public final class LumaUi {
     public static FlowLayout windowSidebar(int width) {
         FlowLayout sidebar = UIContainers.verticalFlow(Sizing.fixed(width), Sizing.fill(100));
         sidebar.surface(Surface.flat(SIDEBAR_FILL).and(Surface.outline(0xFF272528)));
-        sidebar.padding(Insets.of(10));
-        sidebar.gap(8);
+        sidebar.padding(Insets.of(8));
+        sidebar.gap(6);
         return sidebar;
     }
 
     public static FlowLayout windowContent() {
         FlowLayout content = UIContainers.verticalFlow(Sizing.expand(100), Sizing.fill(100));
-        content.padding(Insets.of(10));
-        content.gap(8);
+        content.padding(Insets.of(8));
+        content.gap(6);
         return content;
     }
 
     public static FlowLayout titleBar() {
         FlowLayout titleBar = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         titleBar.surface(Surface.flat(TITLEBAR_FILL).and(Surface.outline(PANEL_BORDER)));
-        titleBar.padding(Insets.of(8));
-        titleBar.gap(8);
+        titleBar.padding(Insets.of(6));
+        titleBar.gap(6);
         return titleBar;
     }
 
     public static FlowLayout screenBody() {
         FlowLayout layout = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        layout.padding(Insets.bottom(12));
-        layout.gap(8);
+        layout.padding(Insets.bottom(10));
+        layout.gap(6);
         return layout;
     }
 
@@ -118,23 +118,23 @@ public final class LumaUi {
     public static FlowLayout panel(Sizing horizontal, Sizing vertical) {
         FlowLayout layout = UIContainers.verticalFlow(horizontal, vertical);
         layout.surface(Surface.flat(PANEL_FILL).and(Surface.outline(PANEL_BORDER)));
-        layout.padding(Insets.of(10));
-        layout.gap(7);
+        layout.padding(Insets.of(8));
+        layout.gap(6);
         return layout;
     }
 
     public static FlowLayout insetPanel(Sizing horizontal, Sizing vertical) {
         FlowLayout layout = UIContainers.verticalFlow(horizontal, vertical);
         layout.surface(Surface.flat(INSET_FILL).and(Surface.outline(INSET_BORDER)));
-        layout.padding(Insets.of(7));
-        layout.gap(5);
+        layout.padding(Insets.of(5));
+        layout.gap(4);
         return layout;
     }
 
     public static FlowLayout chip(Component text) {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
-        chip.padding(Insets.of(3));
+        chip.padding(Insets.of(2));
         chip.child(compactCaption(text));
         return chip;
     }
@@ -143,7 +143,7 @@ public final class LumaUi {
         FlowLayout badge = UIContainers.horizontalFlow(Sizing.fixed(50), Sizing.fixed(22));
         badge.surface(Surface.flat(STATUS_FILL).and(Surface.outline(STATUS_BORDER)));
         badge.horizontalAlignment(HorizontalAlignment.CENTER);
-        badge.padding(Insets.of(4));
+        badge.padding(Insets.of(3));
         badge.child(compactAccent(text));
         return badge;
     }
@@ -151,7 +151,7 @@ public final class LumaUi {
     public static FlowLayout statusBanner(Component text) {
         FlowLayout banner = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
         banner.surface(Surface.flat(STATUS_FILL).and(Surface.outline(STATUS_BORDER)));
-        banner.padding(Insets.of(7));
+        banner.padding(Insets.of(6));
         banner.gap(4);
         banner.child(accent(text));
         return banner;
@@ -179,8 +179,8 @@ public final class LumaUi {
 
     public static FlowLayout insetSection(Component title, Component subtitle) {
         FlowLayout section = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        section.padding(Insets.of(4));
-        section.gap(4);
+        section.padding(Insets.of(3));
+        section.gap(3);
         if (title != null) {
             section.child(value(title));
         }
@@ -213,17 +213,17 @@ public final class LumaUi {
 
     public static FlowLayout statChip(Component label, Component value) {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-        chip.surface(Surface.PANEL_INSET);
-        chip.padding(Insets.of(4));
-        chip.gap(4);
-        chip.child(compactValue(value));
-        chip.child(compactCaption(label));
+        chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
+        chip.padding(Insets.of(2));
+        chip.gap(3);
+        chip.child(statValue(value));
+        chip.child(statLabel(label));
         return chip;
     }
 
     public static FlowLayout actionRow() {
         FlowLayout row = UIContainers.ltrTextFlow(Sizing.fill(100), Sizing.content());
-        row.gap(6);
+        row.gap(4);
         return row;
     }
 
@@ -245,7 +245,7 @@ public final class LumaUi {
         ButtonComponent button = UIComponents.button(text, onPress);
         button.renderer(ButtonComponent.Renderer.flat(fill, hover, disabled));
         button.textShadow(false);
-        button.sizing(Sizing.content(8), Sizing.fixed(22));
+        button.sizing(Sizing.content(6), Sizing.fixed(20));
         return button;
     }
 
@@ -279,5 +279,13 @@ public final class LumaUi {
 
     private static LabelComponent compactCaption(Component text) {
         return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(180);
+    }
+
+    private static LabelComponent statValue(Component text) {
+        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false).maxWidth(72);
+    }
+
+    private static LabelComponent statLabel(Component text) {
+        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(108);
     }
 }
