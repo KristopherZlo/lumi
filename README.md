@@ -20,7 +20,7 @@ Lumi is a Fabric mod for Minecraft `1.21.11`.
 
 It gives builders safety history for a build area.
 
-You can save builds, see changes, restore earlier states, try alternate ideas, import/export portable history packages, combine imported ideas back into your build, and recover pending edits after a crash.
+You can save builds, see changes, restore earlier states, try alternate branches, import/export portable history packages, combine imported branches back into your build, and recover pending edits after a crash.
 
 Lumi only activates for players with operator-level permissions or when cheats are enabled in the world.
 
@@ -28,7 +28,7 @@ The normal UI uses builder terms:
 
 - `Build History`
 - `Save`
-- `Idea`
+- `Branch`
 - `See changes`
 - `restore`
 - `Recovered work`
@@ -40,7 +40,7 @@ Use Lumi if you want to:
 - try a redesign without losing the stable version
 - check what changed since the last save
 - go back to an older state without copying full save folders
-- keep separate ideas for alternate build directions
+- keep separate branches for alternate build directions
 - recover work after a crash or bad edit
 
 ## Core Model
@@ -57,20 +57,20 @@ Use Lumi if you want to:
 ## Current Features
 
 - automatic dimension projects
-- builder-first Build History UI built around `Save build`, `See changes`, recent saves, `Ideas`, and `More`
-- lightweight save, idea, import/export, cleanup, diagnostics, and advanced navigation with live background-operation refresh while screens stay open
+- builder-first Build History UI built around `Save build`, `See changes`, recent saves, `Branches`, and `More`
+- lightweight save, branch, import/export, cleanup, diagnostics, and advanced navigation with live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
 - dedicated save screen with optional `Replace latest save`
-- save details screen with isometric preview, restore, see-changes, and idea actions
-- See Changes screen for saved states, ideas, and the current build, with manual references hidden under Advanced
+- save details screen with isometric preview, restore, see-changes, and branch actions
+- See Changes screen for saved states, branches, and the current build, with manual references hidden under Advanced
 - live undo and redo for the last tracked builder actions with default `Alt+Z` / `Alt+Y` bindings
-- short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit
-- hard restore that moves the active idea head
+- short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit, including reconciled fluid and falling-block deltas from whole-dimension sessions
+- hard restore that moves the active branch head
 - recovery drafts with WAL compaction
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
 - material delta summaries and integrity checks under focused details/diagnostic screens
-- zip import/export under `More`, including idea-scoped packages with optional previews
-- imported review projects with deletion, cached combine review, and same-area overlays for shared ideas
+- zip import/export under `More`, including branch-scoped packages with optional previews
+- imported review projects with deletion, cached combine review, and same-area overlays for shared branches
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
@@ -105,7 +105,7 @@ Use Lumi if you want to:
 3. `WORLD_ROOT` restore uses tracked baseline chunks.
 4. Snapshot fallback is used if direct replay is not valid.
 5. Tick-thread apply uses bounded chunk batches.
-6. The active variant head moves to the restored version.
+6. The active branch head moves to the restored version.
 
 ## Runtime Rules
 
@@ -220,8 +220,8 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 7. Hold `Alt` to preview the latest 10 tracked actions when the compare overlay is not active.
    Seeing changes against `Current build` enables the world highlight immediately and refreshes it automatically while you keep editing.
 8. Use `Save build` when you want a safe restore point.
-9. Open a save when you want details, restore, see changes, or create an idea from it.
-10. Use `Ideas` for alternate build directions and `More` for import/export, settings, cleanup, diagnostics, and advanced tools.
+9. Open a save when you want details, restore, see changes, or create a branch from it.
+10. Use `Branches` for alternate build directions and `More` for import/export, settings, cleanup, diagnostics, and advanced tools.
 
 ## Scope
 

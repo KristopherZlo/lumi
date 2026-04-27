@@ -1,6 +1,6 @@
 # Commands
 
-Commands are diagnostics only. Lumi project creation, save, restore, variants, recovery, share, merge, import/export, cleanup, settings, and compare workflows are UI-only.
+Commands are diagnostics only. Lumi project creation, save, restore, branches, recovery, share, merge, import/export, cleanup, settings, and compare workflows are UI-only.
 
 All `/lumi` commands require an operator-level player permission set. In singleplayer, that means cheats must be enabled for the world.
 
@@ -21,7 +21,7 @@ Shows the currently supported diagnostic commands and reminds the player to use 
 
 Shows:
 
-- the number of Lumi projects in the current world and their active variant ids
+- the number of Lumi projects in the current world and their active branch ids
 - the active or most recent Lumi world operation, including operation id, label, stage, progress, and detail text when available
 
 ## Removed Command Workflows
@@ -31,7 +31,7 @@ The following workflows intentionally no longer have `/lumi` commands:
 - project creation
 - save/amend
 - restore
-- variant create/switch
+- branch create/switch
 - recovery restore/discard
 - archive import/export
 - cleanup apply

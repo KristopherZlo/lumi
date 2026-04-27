@@ -289,7 +289,7 @@ public final class ProjectScreen extends LumaScreen {
             ButtonComponent button = LumaUi.button(Component.literal(ProjectUiSupport.displayVariantName(variant)), pressed -> {
                 this.selectedVariantId = variant.id();
                 this.showAllSaves = false;
-                this.refresh("luma.status.project_ready");
+                this.refresh("luma.status.project_ready", false);
             });
             button.active(!variant.id().equals(this.selectedVariantId));
             picker.child(button);
@@ -468,12 +468,16 @@ public final class ProjectScreen extends LumaScreen {
     }
 
     private void refresh(String statusKey) {
+        this.refresh(statusKey, true);
+    }
+
+    private void refresh(String statusKey, boolean preserveScroll) {
         double scrollProgress = this.currentScrollProgress();
         this.statusKey = statusKey == null || statusKey.isBlank() ? "luma.status.project_ready" : statusKey;
         this.uiAdapter.rootComponent.clearChildren();
         this.build(this.uiAdapter.rootComponent);
         this.uiAdapter.inflateAndMount();
-        this.restoreScroll(scrollProgress);
+        this.restoreScroll(preserveScroll ? scrollProgress : 0.0D);
     }
 
     @Override
