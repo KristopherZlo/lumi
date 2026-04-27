@@ -61,6 +61,8 @@ Included from the requested list:
 - FastQuit
 - Particle Core
 
+Axiom is pinned to the exact `Axiom-5.4.1-for-MC1.21.11.jar` Modrinth file because the generic Modrinth Maven coordinate for `5.4.1` can resolve to a jar with older Minecraft metadata.
+
 Compatibility replacements used because the exact requested mod has no Fabric 1.21.11 release available on Modrinth:
 
 - `ModernFix` -> `ModernFix-mVUS`
