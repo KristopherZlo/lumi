@@ -77,22 +77,22 @@ Use Lumi if you want to:
 - zip import/export under `More`, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews
 - imported review projects with deletion, cached combine review, and same-area overlays for shared branches
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
-- conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, and known tool stacks that reach Minecraft block mutation paths
+- conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica/Tweakeroo placement paths, and known tool stacks that reach Minecraft block or entity mutation paths
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
-- capture of player edits plus supported entity and explosion edits
+- capture of player edits plus builder-relevant entity spawn/remove/update and supported explosion edits
 - temporary `Alt` overlay for the latest 10 tracked actions when compare highlight is not active
 
 ## How It Works
 
 ### Capture
 
-1. A mixin, guarded external-tool adapter, known-tool stack fallback, or direct section fallback catches a block change.
+1. A mixin, guarded external-tool adapter, known-tool stack fallback, direct section fallback, or entity lifecycle/update hook catches a block or entity change.
 2. `HistoryCaptureManager` finds matching projects.
 3. Explicit builder-driven sources can bootstrap a dimension project on demand, but ambient world-settling sources do not.
 4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.
 5. Whole-dimension sessions keep a causal chunk envelope rooted in explicit builder edits. The root chunk defines a one-chunk halo envelope, and Lumi captures per-chunk baselines lazily when a chunk inside that envelope first needs stabilization.
 6. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
-7. `TrackedChangeBuffer` merges explicit and targeted realtime changes immediately.
+7. `TrackedChangeBuffer` merges explicit and targeted realtime block changes by position and entity changes by UUID immediately.
 8. First-touch whole-dimension baseline capture copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
 9. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
 10. Recovery draft data flushes on an interval, but the WAL append and compaction run asynchronously on that same capture-maintenance executor.
@@ -112,7 +112,7 @@ Use Lumi if you want to:
 3. Lumi tries direct same-lineage replay first, including rollback to `WORLD_ROOT`.
 4. `WORLD_ROOT` fallback uses tracked baseline chunks when direct replay is not valid.
 5. Snapshot fallback is used for normal versions when direct replay is not valid.
-6. Tick-thread apply uses bounded chunk batches with pre-decoded block states.
+6. Tick-thread apply uses bounded chunk batches with pre-decoded block states and prepared entity batches.
 7. A full restore moves the active branch head to the restored version; a partial restore applies only selected bounds and writes a new save on the active branch.
 
 ## Runtime Rules
