@@ -1,9 +1,9 @@
 package io.github.luma.mixin;
 
-import io.github.luma.domain.model.WorldMutationSource;
-import io.github.luma.integration.axiom.AxiomMutationOriginDetector;
-import io.github.luma.integration.axiom.ObservedAxiomOperation;
+import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
+import io.github.luma.integration.common.ObservedExternalToolOperation;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -26,14 +26,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 abstract class LevelChunkSetBlockStateMixin {
 
     @Unique
-    private static final AxiomMutationOriginDetector LUMA_AXIOM_DETECTOR = AxiomMutationOriginDetector.getInstance();
+    private static final ExternalToolMutationOriginDetector LUMA_TOOL_DETECTOR =
+            ExternalToolMutationOriginDetector.getInstance();
 
     @Unique
-    private static final PendingAxiomBlockMutation LUMA_SKIPPED_AXIOM_MUTATION =
-            new PendingAxiomBlockMutation(null, null, null, null);
-
-    @Unique
-    private static final ThreadLocal<Deque<PendingAxiomBlockMutation>> LUMA_PENDING_AXIOM_MUTATIONS =
+    private static final ThreadLocal<Deque<PendingExternalToolBlockMutation>> LUMA_PENDING_TOOL_MUTATIONS =
             ThreadLocal.withInitial(ArrayDeque::new);
 
     @Shadow
@@ -50,30 +47,27 @@ abstract class LevelChunkSetBlockStateMixin {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return;
         }
-        if (!LUMA_AXIOM_DETECTOR.canDetectOperation()) {
+        if (HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource())
+                || WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
             return;
         }
 
-        PendingAxiomBlockMutation mutation = LUMA_SKIPPED_AXIOM_MUTATION;
-        if (HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource())) {
-            LUMA_PENDING_AXIOM_MUTATIONS.get().push(mutation);
+        var operation = LUMA_TOOL_DETECTOR.detectOperation();
+        if (operation.isEmpty()) {
             return;
         }
 
-        var operation = LUMA_AXIOM_DETECTOR.detectOperation();
-        if (operation.isPresent()) {
-            LevelChunk chunk = (LevelChunk) (Object) this;
-            BlockState oldState = chunk.getBlockState(pos);
-            BlockEntity blockEntity = chunk.getBlockEntity(pos);
-            CompoundTag oldBlockEntity = blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
-            mutation = new PendingAxiomBlockMutation(
-                    pos.immutable(),
-                    oldState,
-                    oldBlockEntity,
-                    operation.get()
-            );
-        }
-        LUMA_PENDING_AXIOM_MUTATIONS.get().push(mutation);
+        LevelChunk chunk = (LevelChunk) (Object) this;
+        BlockState oldState = chunk.getBlockState(pos);
+        BlockEntity blockEntity = chunk.getBlockEntity(pos);
+        CompoundTag oldBlockEntity = blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
+        WorldMutationCaptureGuard.pushChunkSetBlockBoundary();
+        LUMA_PENDING_TOOL_MUTATIONS.get().push(new PendingExternalToolBlockMutation(
+                pos.immutable(),
+                oldState,
+                oldBlockEntity,
+                operation.get()
+        ));
     }
 
     @Inject(method = "setBlockState(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Lnet/minecraft/world/level/block/state/BlockState;", at = @At("RETURN"))
@@ -86,29 +80,28 @@ abstract class LevelChunkSetBlockStateMixin {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return;
         }
-        if (!LUMA_AXIOM_DETECTOR.canDetectOperation()) {
-            return;
-        }
 
-        Deque<PendingAxiomBlockMutation> mutations = LUMA_PENDING_AXIOM_MUTATIONS.get();
+        Deque<PendingExternalToolBlockMutation> mutations = LUMA_PENDING_TOOL_MUTATIONS.get();
         if (mutations.isEmpty()) {
             return;
         }
 
-        PendingAxiomBlockMutation mutation = mutations.pop();
-        if (!mutation.shouldCapture() || cir.getReturnValue() == null) {
-            return;
-        }
-
-        LevelChunk chunk = (LevelChunk) (Object) this;
-        BlockEntity blockEntity = chunk.getBlockEntity(mutation.pos());
-        CompoundTag newBlockEntity = blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
-        WorldMutationContext.pushExternalSource(
-                WorldMutationSource.AXIOM,
-                mutation.operation().actor(),
-                mutation.operation().actionId()
-        );
+        PendingExternalToolBlockMutation mutation = mutations.pop();
+        boolean sourcePushed = false;
         try {
+            if (cir.getReturnValue() == null) {
+                return;
+            }
+
+            LevelChunk chunk = (LevelChunk) (Object) this;
+            BlockEntity blockEntity = chunk.getBlockEntity(mutation.pos());
+            CompoundTag newBlockEntity = blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
+            WorldMutationContext.pushExternalSource(
+                    mutation.operation().source(),
+                    mutation.operation().actor(),
+                    mutation.operation().actionId()
+            );
+            sourcePushed = true;
             HistoryCaptureManager.getInstance().recordBlockChange(
                     serverLevel,
                     mutation.pos(),
@@ -118,20 +111,19 @@ abstract class LevelChunkSetBlockStateMixin {
                     newBlockEntity
             );
         } finally {
-            WorldMutationContext.popSource();
+            if (sourcePushed) {
+                WorldMutationContext.popSource();
+            }
+            WorldMutationCaptureGuard.popChunkSetBlockBoundary();
         }
     }
 
     @Unique
-    private record PendingAxiomBlockMutation(
+    private record PendingExternalToolBlockMutation(
             BlockPos pos,
             BlockState oldState,
             CompoundTag oldBlockEntity,
-            ObservedAxiomOperation operation
+            ObservedExternalToolOperation operation
     ) {
-
-        private boolean shouldCapture() {
-            return this.operation != null;
-        }
     }
 }

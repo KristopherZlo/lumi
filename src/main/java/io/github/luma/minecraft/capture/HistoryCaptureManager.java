@@ -921,7 +921,7 @@ public final class HistoryCaptureManager {
             return false;
         }
         return switch (source) {
-            case PLAYER, ENTITY, EXPLOSIVE, EXTERNAL_TOOL, WORLDEDIT, AXIOM -> true;
+            case PLAYER, ENTITY, EXPLOSIVE, EXTERNAL_TOOL, WORLDEDIT, FAWE, AXIOM -> true;
             case EXPLOSION, FLUID, FIRE, GROWTH, BLOCK_UPDATE, PISTON, FALLING_BLOCK, MOB, RESTORE, SYSTEM -> false;
         };
     }
@@ -1149,6 +1149,7 @@ public final class HistoryCaptureManager {
                     EXPLOSIVE,
                     EXTERNAL_TOOL,
                     WORLDEDIT,
+                    FAWE,
                     AXIOM -> true;
             case EXPLOSION,
                     FLUID,
@@ -1173,6 +1174,7 @@ public final class HistoryCaptureManager {
                     EXPLOSIVE,
                     EXTERNAL_TOOL,
                     WORLDEDIT,
+                    FAWE,
                     AXIOM -> true;
             case EXPLOSION,
                     FLUID,
@@ -1202,6 +1204,7 @@ public final class HistoryCaptureManager {
                     EXPLOSIVE,
                     EXTERNAL_TOOL,
                     WORLDEDIT,
+                    FAWE,
                     AXIOM -> true;
             case FLUID,
                     PISTON,
@@ -1227,6 +1230,7 @@ public final class HistoryCaptureManager {
                     EXPLOSIVE,
                     EXTERNAL_TOOL,
                     WORLDEDIT,
+                    FAWE,
                     AXIOM,
                     PISTON,
                     RESTORE,
@@ -1260,6 +1264,7 @@ public final class HistoryCaptureManager {
             case MOB -> "mob";
             case EXTERNAL_TOOL -> "external-tool";
             case WORLDEDIT -> "worldedit";
+            case FAWE -> "fawe";
             case AXIOM -> "axiom";
             case RESTORE, SYSTEM -> "world";
         };

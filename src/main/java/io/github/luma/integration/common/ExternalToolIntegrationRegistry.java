@@ -9,6 +9,7 @@ import net.fabricmc.loader.api.FabricLoader;
 public final class ExternalToolIntegrationRegistry {
 
     private static final String WORLDEDIT_MOD_ID = "worldedit";
+    private static final String FAWE_MOD_ID = "fastasyncworldedit";
     private static final String AXIOM_MOD_ID = "axiom";
     private static final String AXIOM_CLIENT_API_MOD_ID = "axiomclientapi";
 
@@ -30,6 +31,7 @@ public final class ExternalToolIntegrationRegistry {
     public List<IntegrationStatus> statuses() {
         return List.of(
                 this.worldEditStatus(),
+                this.faweStatus(),
                 this.axiomStatus(),
                 this.fallbackStatus()
         );
@@ -70,6 +72,30 @@ public final class ExternalToolIntegrationRegistry {
         boolean available = modDetected || corePresent || !capabilities.isEmpty();
         IntegrationMode mode = this.worldEditMode(available, editSessionEventPresent, corePresent);
         return new IntegrationStatus(WORLDEDIT_MOD_ID, available, List.copyOf(capabilities), mode);
+    }
+
+    public IntegrationStatus faweStatus() {
+        boolean modDetected = this.modLoaded.test(FAWE_MOD_ID) || this.modLoaded.test("fawe");
+        boolean corePresent = this.anyClassPresent(
+                "com.fastasyncworldedit.core.Fawe",
+                "com.fastasyncworldedit.core.FaweAPI",
+                "com.boydti.fawe.Fawe",
+                "com.boydti.fawe.FaweAPI"
+        );
+
+        boolean available = modDetected || corePresent;
+        Set<IntegrationCapability> capabilities = EnumSet.noneOf(IntegrationCapability.class);
+        if (available) {
+            capabilities.add(IntegrationCapability.FALLBACK_CAPTURE);
+            capabilities.add(IntegrationCapability.MASS_EDIT_GROUPING);
+        }
+
+        return new IntegrationStatus(
+                FAWE_MOD_ID,
+                available,
+                List.copyOf(capabilities),
+                available ? IntegrationMode.DETECTED : IntegrationMode.UNAVAILABLE
+        );
     }
 
     public IntegrationStatus axiomStatus() {
