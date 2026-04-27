@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>Version control for your creations to save builds, compare changes, restore earlier states.</strong>
+  <strong>Singleplayer-first build history for saving, comparing, branching, restoring, and recovering Minecraft projects.</strong>
 </p>
 
 <p align="center">
@@ -18,19 +18,20 @@
 
 Lumi is a Fabric mod for Minecraft `1.21.11`.
 
-It gives builders safety history for a build area.
+It gives builders a project-oriented safety history for the current dimension or build area.
 
-You can save builds, see changes, restore earlier states, try alternate branches, import/export portable history packages, combine imported branches back into your build, and recover pending edits after a crash.
+You can save builds, see changes, restore earlier states, try alternate branches, export/import portable history packages, review imported branches before combining them back into your build, partially restore selected regions, and recover pending edits after a crash.
 
 Lumi's UI operations are intended for the local world owner. On dedicated servers, mutating Lumi actions require operator-level permissions; in singleplayer integrated worlds, builder edits are captured for history and live undo/redo immediately.
 
 The normal UI uses builder terms:
 
 - `Build History`
-- `Save`
-- `Branch`
+- `Save build`
+- `Branches`
 - `See changes`
-- `restore`
+- `Restore`
+- `Import / Export`
 - `Recovered work`
 
 ## What It Solves
@@ -52,6 +53,8 @@ Use Lumi if you want to:
 | `Variant` | Named branch-like head pointer | `variants.json` |
 | `Compare` | Diff between two saved states, or between a saved state and the live game state | `DiffService` |
 | `Restore` | Apply a chosen version back into the map and move the active head to it | `RestoreService` |
+| `Partial restore` | Apply a bounded region from an older save as a new save on the active branch | `RestoreService` |
+| `Import / Export` | Portable branch or project history packages for review and combine workflows | `HistoryShareService`, `ProjectArchiveService` |
 | `Recovery` | Crash-safe draft storage | `recovery/draft.*` |
 
 ## Current Features
@@ -67,12 +70,14 @@ Use Lumi if you want to:
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit, including reconciled fluid and falling-block deltas from whole-dimension sessions
 - runtime-only redstone state flips and piston animation blocks are ignored so active mechanisms do not pollute pending history or the recent `Alt` action overlay
 - hard restore that moves the active branch head
+- region-scoped partial restore from save details, written back as a new `PARTIAL_RESTORE` save
 - recovery drafts with WAL compaction
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
 - material delta summaries and integrity checks under focused details/diagnostic screens
 - zip import/export under `More`, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews
 - imported review projects with deletion, cached combine review, and same-area overlays for shared branches
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
+- conservative Axiom capability reporting; Axiom can be detected, while capture still depends on observable guarded mutation sources
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
 - temporary `Alt` overlay for the latest 10 tracked actions when compare highlight is not active
@@ -84,12 +89,13 @@ Use Lumi if you want to:
 1. A mixin catches a block change.
 2. `HistoryCaptureManager` finds matching projects.
 3. Explicit builder-driven sources can bootstrap a dimension project on demand, but ambient world-settling sources do not.
-4. Whole-dimension sessions now keep a causal chunk envelope rooted in explicit builder edits. The root chunk defines a one-chunk halo envelope, and Lumi captures per-chunk baselines lazily when a chunk inside that envelope first needs stabilization.
-5. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
-6. `TrackedChangeBuffer` still merges explicit and targeted realtime changes immediately.
-7. First-touch whole-dimension baseline capture now copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
-8. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
-9. Recovery draft data still flushes on an interval, but the WAL append and compaction now run asynchronously on that same capture-maintenance executor.
+4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.
+5. Whole-dimension sessions keep a causal chunk envelope rooted in explicit builder edits. The root chunk defines a one-chunk halo envelope, and Lumi captures per-chunk baselines lazily when a chunk inside that envelope first needs stabilization.
+6. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
+7. `TrackedChangeBuffer` merges explicit and targeted realtime changes immediately.
+8. First-touch whole-dimension baseline capture copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
+9. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
+10. Recovery draft data flushes on an interval, but the WAL append and compaction run asynchronously on that same capture-maintenance executor.
 
 ### Save
 
@@ -102,11 +108,12 @@ Use Lumi if you want to:
 ### Restore
 
 1. Active capture is frozen first.
-2. Lumi tries direct same-lineage replay first.
-3. `WORLD_ROOT` restore uses tracked baseline chunks.
-4. Snapshot fallback is used if direct replay is not valid.
-5. Tick-thread apply uses bounded chunk batches.
-6. The active branch head moves to the restored version.
+2. Lumi shows confirmation for initial/root restores with a lightweight restore-plan summary.
+3. Lumi tries direct same-lineage replay first, including rollback to `WORLD_ROOT`.
+4. `WORLD_ROOT` fallback uses tracked baseline chunks when direct replay is not valid.
+5. Snapshot fallback is used for normal versions when direct replay is not valid.
+6. Tick-thread apply uses bounded chunk batches with pre-decoded block states.
+7. A full restore moves the active branch head to the restored version; a partial restore applies only selected bounds and writes a new save on the active branch.
 
 ## Runtime Rules
 
@@ -123,10 +130,10 @@ Use Lumi if you want to:
 | --- | --- | --- |
 | Bootstrap | Fabric wiring, diagnostic commands, ticking, flushes | `LumaMod` |
 | Domain model | persisted records and runtime state | `BuildProject`, `ProjectVersion`, `TrackedChangeBuffer` |
-| Domain service | product logic | `VersionService`, `RestoreService`, `RecoveryService`, `DiffService` |
-| Minecraft adapter | game hooks and map mutation | `HistoryCaptureManager`, `WorldOperationManager`, `BlockChangeApplier` |
+| Domain service | product logic | `VersionService`, `RestoreService`, `HistoryShareService`, `VariantMergeService` |
+| Minecraft adapter | game hooks and map mutation | `HistoryCaptureManager`, `WorldOperationManager`, `BlockChangeApplier`, `WorldMutationCapturePolicy` |
 | Storage | file layout and payload I/O | `ProjectLayout`, repositories in `storage/repository` |
-| Client UI | owo-ui screens, controllers, HUD, view state | `ProjectScreen`, `CompareScreen`, `WorkspaceHudCoordinator` |
+| Client UI | owo-ui screens, controllers, HUD, overlays, view state | `ScreenRouter`, `ProjectScreen`, `SaveScreen`, `ShareScreen`, `WorkspaceHudCoordinator` |
 
 Rules:
 
@@ -201,6 +208,8 @@ Run test client:
 ```powershell
 .\scripts\run-test-client.ps1
 ```
+
+The test-client profile installs a Fabric `1.21.11` builder/performance stack for local validation, including WorldEdit and a pinned `Axiom-5.4.1-for-MC1.21.11.jar` Modrinth file. See [docs/test-client.md](docs/test-client.md) for the complete mod list.
 
 Run tests:
 
