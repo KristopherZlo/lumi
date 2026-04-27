@@ -84,6 +84,20 @@ class ExternalToolMutationOriginDetectorTest {
     }
 
     @Test
+    void detectsKnownBuilderToolFramesAsExternalTools() {
+        ExternalToolMutationOriginDetector detector = new ExternalToolMutationOriginDetector(
+                () -> List.of("fi.dy.masa.litematica.world.SchematicWorldHandler"),
+                System::nanoTime
+        );
+
+        ObservedExternalToolOperation operation = detector.detectOperation().orElseThrow();
+
+        assertEquals(WorldMutationSource.EXTERNAL_TOOL, operation.source());
+        assertEquals("litematica", operation.actor());
+        assertTrue(operation.actionId().startsWith("litematica-"));
+    }
+
+    @Test
     void reusesActionIdWhileObservedMutationsAreCloseTogether() {
         AtomicLong now = new AtomicLong(1_000L);
         ExternalToolMutationOriginDetector detector = new ExternalToolMutationOriginDetector(
@@ -96,6 +110,23 @@ class ExternalToolMutationOriginDetectorTest {
         String secondActionId = detector.detectOperation().orElseThrow().actionId();
 
         assertEquals(firstActionId, secondActionId);
+    }
+
+    @Test
+    void separatesExternalToolActorsWhenSourcesAreShared() {
+        AtomicLong now = new AtomicLong(1_000L);
+        ExternalToolMutationOriginDetector detector = new ExternalToolMutationOriginDetector(
+                () -> List.of(now.get() == 1_000L
+                        ? "fi.dy.masa.litematica.world.SchematicWorldHandler"
+                        : "fi.dy.masa.tweakeroo.tweaks.PlacementTweaks"),
+                now::get
+        );
+
+        String firstActionId = detector.detectOperation().orElseThrow().actionId();
+        now.incrementAndGet();
+        String secondActionId = detector.detectOperation().orElseThrow().actionId();
+
+        assertNotEquals(firstActionId, secondActionId);
     }
 
     @Test

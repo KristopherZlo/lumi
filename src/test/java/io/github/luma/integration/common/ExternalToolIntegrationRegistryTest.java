@@ -94,4 +94,35 @@ class ExternalToolIntegrationRegistryTest {
         assertFalse(status.capabilities().contains(IntegrationCapability.CLIPBOARD));
         assertFalse(status.capabilities().contains(IntegrationCapability.SCHEMATIC));
     }
+
+    @Test
+    void reportsKnownBuilderFallbackTools() {
+        ExternalToolIntegrationRegistry registry = new ExternalToolIntegrationRegistry(
+                "autobuild"::equals,
+                className -> false
+        );
+
+        IntegrationStatus status = registry.autoBuildStatus();
+
+        assertTrue(status.available());
+        assertEquals(IntegrationMode.DETECTED, status.mode());
+        assertTrue(status.capabilities().contains(IntegrationCapability.FALLBACK_CAPTURE));
+        assertTrue(status.capabilities().contains(IntegrationCapability.MASS_EDIT_GROUPING));
+        assertFalse(status.capabilities().contains(IntegrationCapability.ENTITY_TRACKING));
+    }
+
+    @Test
+    void reportsPlayerDrivenPlacementToolsWithoutDirectMutationPromise() {
+        ExternalToolIntegrationRegistry registry = new ExternalToolIntegrationRegistry(
+                "litematica"::equals,
+                className -> false
+        );
+
+        IntegrationStatus status = registry.litematicaStatus();
+
+        assertTrue(status.available());
+        assertEquals(IntegrationMode.DETECTED, status.mode());
+        assertTrue(status.capabilities().contains(IntegrationCapability.WORLD_TRACKING));
+        assertFalse(status.capabilities().contains(IntegrationCapability.FALLBACK_CAPTURE));
+    }
 }
