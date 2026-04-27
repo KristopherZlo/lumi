@@ -17,7 +17,7 @@ public final class UiToolkitRegistry {
         ClassLoader classLoader = UiToolkitRegistry.class.getClassLoader();
         return new UiToolkitRegistry(List.of(
                 new LdLib2ToolkitBackend(classLoader),
-                new OwoToolkitBackend()
+                new MinecraftToolkitBackend()
         ));
     }
 
@@ -26,7 +26,7 @@ public final class UiToolkitRegistry {
                 .filter(UiToolkitBackend::primaryTarget)
                 .map(UiToolkitBackend::toolkit)
                 .findFirst()
-                .orElse(UiToolkit.OWO);
+                .orElse(UiToolkit.MINECRAFT);
         UiToolkit active = this.backends.stream()
                 .filter(UiToolkitBackend::available)
                 .map(UiToolkitBackend::toolkit)

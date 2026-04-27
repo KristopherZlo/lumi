@@ -116,7 +116,7 @@ Controllers own service access and loading logic. Screens keep transient UI stat
 Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
 
 LDLib2 is the target UI toolkit for future migration. The published LDLib2 UI docs and source (`https://low-drag-mc.github.io/LowDragMC-Doc/ldlib2/ui/`, `https://github.com/Low-Drag-MC/LDLib2`) are currently NeoForge-oriented around Minecraft `1.21.1`, while Lumi targets Fabric `1.21.11`. Keep LDLib2 behind `UiToolkitRegistry` and reflection-style detection until a compatible Fabric runtime exists. Do not add a hard `fabric.mod.json` or Gradle runtime dependency that makes the Fabric build unlaunchable.
-`LdLib2InterfaceBlueprint` is the migration contract for the home screen. It maps the simple builder flow to LDLib2 element roles (`UIElement`, `Label`, `Button`, `ScrollerView`, and `TabView`), pins the built-in GDP theme (`ldlib2:lss/gdp.lss`), and records compact flex hints for the LDLib2 tree. `LdLib2ReflectiveUi` and `LdLib2ProjectHomeScreenFactory` use that runtime shape to create a real LDLib2 `ModularUIScreen` when compatible LDLib2 classes are present. `ProjectWindowLayout` remains the compact owo-lib fallback only for environments where LDLib2 is absent.
+`LdLib2InterfaceBlueprint` is the migration contract for the home screen. It maps the simple builder flow to LDLib2 element roles (`UIElement`, `Label`, `Button`, `ScrollerView`, and `TabView`), pins the built-in GDP theme (`ldlib2:lss/gdp.lss`), and records compact flex hints for the LDLib2 tree. `LdLib2ReflectiveUi` and `LdLib2ProjectHomeScreenFactory` use that runtime shape to create a real LDLib2 `ModularUIScreen` when compatible LDLib2 classes are present. `ProjectWindowLayout` remains the compact internal fallback only for environments where LDLib2 is absent.
 
 Current UX assumptions:
 
@@ -184,7 +184,7 @@ Current world-apply runtime types:
 - Lumi is shipped as one distributable mod jar.
 - Support libraries used by the mod are included through Loom jar-in-jar configuration.
 - The textured preview path now uses Lumi's own layered client mesh builder on top of the `1.21.11` render APIs instead of an external meshing runtime dependency.
-- LDLib2 is not packaged until a compatible Fabric `1.21.11` artifact exists; the current client UI ships with the existing owo-lib fallback and a runtime status surface under diagnostics.
+- LDLib2 is not packaged until a compatible Fabric `1.21.11` artifact exists; the current client UI ships with Lumi's internal Minecraft-client fallback and a runtime status surface under diagnostics.
 - Fabric API remains an external required mod.
 - Packaging tasks prune stale legacy `luma-*` outputs from `build/libs` before writing the current `lumi-*` artifacts.
 

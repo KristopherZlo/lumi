@@ -2,7 +2,7 @@ package io.github.luma.ui.toolkit;
 
 public enum UiToolkit {
     LDLIB2("LDLib2"),
-    OWO("owo-lib");
+    MINECRAFT("Lumi internal UI");
 
     private final String displayName;
 
