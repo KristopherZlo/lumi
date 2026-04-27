@@ -74,16 +74,18 @@ Important adapters:
 
 ### Optional integration layer
 
-`src/main/java/io/github/luma/integration` contains optional integration contracts for external builder tools. These adapters must not create hard runtime dependencies on WorldEdit, Axiom, or their client APIs.
+`src/main/java/io/github/luma/integration` contains optional integration contracts for external builder tools. These adapters must not create hard runtime dependencies on WorldEdit, FAWE, Axiom, or their client APIs.
 
 `ExternalToolIntegrationRegistry` reports typed capabilities for detected tools:
 
 - WorldEdit capabilities are enabled only when the corresponding WorldEdit API classes are present, such as edit-session events, local sessions, clipboard, and schematic formats.
 - `OptionalIntegrationBootstrap` reflectively loads the WorldEdit edit-session tracker only when those capabilities are present. The tracker registers on WorldEdit's event bus and wraps `EditSession.Stage.BEFORE_CHANGE` extents. It records WorldEdit old/new block transitions directly under `WorldMutationSource.WORLDEDIT`, while still keeping the mutation context active for Minecraft-level fallback capture.
-- Axiom capabilities are intentionally conservative. Lumi may report detection or a custom region API, but it does not claim selection, clipboard, or schematic support unless a stable API is available. Because Axiom does not expose a stable operation API, Lumi uses guarded server-side fallbacks: Axiom block-buffer packet applies are captured before Axiom mutates chunk sections directly, and otherwise untracked chunk mutations can still be recorded from external Axiom stack frames as `WorldMutationSource.AXIOM`.
+- FAWE is reported as a detected fallback-capture tool when known FAWE classes or mod ids are present. Lumi does not claim FAWE selection, clipboard, or schematic APIs; block history capture relies on the generic known-tool mutation fallbacks.
+- `ExternalToolMutationOriginDetector` recognizes WorldEdit, FAWE, and Axiom stack frames at Minecraft mutation boundaries without linking those tools. `WorldMutationCaptureGuard` prevents duplicate records so the highest available hook wins: WorldEdit API extent, `Level#setBlock`, `LevelChunk#setBlockState`, then direct `LevelChunkSection#setBlockState`.
+- Axiom capabilities are intentionally conservative. Lumi may report detection or a custom region API, but it does not claim selection, clipboard, or schematic support unless a stable API is available. Because Axiom does not expose a stable operation API, Lumi uses guarded server-side fallbacks: Axiom block-buffer packet applies are captured before Axiom mutates chunk sections directly, and otherwise untracked Axiom mutations can still be recorded from known-tool stack frames.
 - The fallback integration remains always available and represents Lumi's own world-tracking capture path.
 
-External tool mutations use explicit `WorldMutationSource` values such as `WORLDEDIT` and `AXIOM` so saved versions can distinguish tool-originated history from generic external capture.
+External tool mutations use explicit `WorldMutationSource` values such as `WORLDEDIT`, `FAWE`, and `AXIOM` so saved versions can distinguish tool-originated history from generic external capture.
 
 ### Storage layer
 
@@ -127,7 +129,7 @@ Responsibilities are split as follows:
 
 ## Capture flow
 
-1. A Minecraft mixin intercepts a block mutation. Axiom edits that bypass the normal `Level#setBlock` context can still be captured by the guarded Axiom block-buffer fallback or by the `LevelChunk#setBlockState` fallback when the mutation stack is attributable to Axiom.
+1. A Minecraft mixin intercepts a block mutation. External builder edits that bypass the normal `Level#setBlock` context can still be captured by the guarded Axiom block-buffer fallback, the `LevelChunk#setBlockState` known-tool fallback, or the direct `LevelChunkSection#setBlockState` fallback used by FAWE-style chunk placement.
 2. `WorldMutationContext` accepts only explicit player, explosive, explosion, falling-block, selected mob, and other targeted mutation scopes.
 3. `HistoryCaptureManager` finds matching projects for the block position.
 4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.

@@ -77,7 +77,7 @@ Use Lumi if you want to:
 - zip import/export under `More`, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews
 - imported review projects with deletion, cached combine review, and same-area overlays for shared branches
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
-- conservative Axiom capability reporting; Axiom can be detected, and server-side Axiom block-buffer mutations are captured when they surface through the guarded packet apply path
+- conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, and known tool stacks that reach Minecraft block mutation paths
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
 - temporary `Alt` overlay for the latest 10 tracked actions when compare highlight is not active
@@ -86,7 +86,7 @@ Use Lumi if you want to:
 
 ### Capture
 
-1. A mixin, guarded external-tool adapter, or Axiom-observed chunk fallback catches a block change.
+1. A mixin, guarded external-tool adapter, known-tool stack fallback, or direct section fallback catches a block change.
 2. `HistoryCaptureManager` finds matching projects.
 3. Explicit builder-driven sources can bootstrap a dimension project on demand, but ambient world-settling sources do not.
 4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.

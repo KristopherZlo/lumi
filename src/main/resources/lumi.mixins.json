@@ -3,6 +3,7 @@
   "package": "io.github.luma.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "ChunkAccessSectionOwnershipMixin",
     "CropBlockMixin",
     "AxiomSetBufferPacketMixin",
     "FallingBlockEntityMixin",
@@ -10,6 +11,7 @@
     "FireBlockMixin",
     "FlowingFluidMixin",
     "LevelChunkSetBlockStateMixin",
+    "LevelChunkSectionSetBlockStateMixin",
     "LevelExplosionMixin",
     "LevelSetBlockMixin",
     "PistonBaseBlockMixin",
