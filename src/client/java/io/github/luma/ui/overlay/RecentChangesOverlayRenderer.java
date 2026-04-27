@@ -2,6 +2,7 @@ package io.github.luma.ui.overlay;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.UndoRedoAction;
 import java.util.ArrayList;
@@ -48,7 +49,15 @@ public final class RecentChangesOverlayRenderer {
         if (state == null || state.entries().isEmpty()) {
             return;
         }
+        try {
+            renderOverlay(context, state);
+        } catch (IllegalStateException exception) {
+            ACTIVE_STATE.compareAndSet(state, null);
+            LumaMod.LOGGER.warn("Disabled recent changes overlay after a render pipeline failure", exception);
+        }
+    }
 
+    private static void renderOverlay(WorldRenderContext context, OverlayState state) {
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
         PoseStack matrices = context.matrices();
         VertexConsumer fillConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.fill(false));

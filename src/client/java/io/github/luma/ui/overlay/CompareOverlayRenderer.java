@@ -2,6 +2,7 @@ package io.github.luma.ui.overlay;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
@@ -177,7 +178,15 @@ public final class CompareOverlayRenderer {
         if (state == null || !state.visible() || state.changedBlocks().isEmpty()) {
             return;
         }
+        try {
+            renderOverlay(context, state);
+        } catch (IllegalStateException exception) {
+            ACTIVE_STATE.compareAndSet(state, state.withVisible(false));
+            LumaMod.LOGGER.warn("Disabled compare overlay after a render pipeline failure", exception);
+        }
+    }
 
+    private static void renderOverlay(WorldRenderContext context, OverlayState state) {
         boolean xrayEnabled = XRAY_ENABLED.get();
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
         PoseStack matrices = context.matrices();

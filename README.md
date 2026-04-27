@@ -86,7 +86,7 @@ Use Lumi if you want to:
 
 ### Capture
 
-1. A mixin catches a block change.
+1. A mixin or guarded external-tool adapter catches a block change.
 2. `HistoryCaptureManager` finds matching projects.
 3. Explicit builder-driven sources can bootstrap a dimension project on demand, but ambient world-settling sources do not.
 4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.
