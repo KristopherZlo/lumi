@@ -148,7 +148,7 @@ Important invariants:
 ## Save flow
 
 1. UI controllers call `VersionService.startSaveVersion(...)`.
-2. The live in-memory buffer is consumed first; persisted recovery storage is only a fallback.
+2. The live in-memory buffer is consumed on the server thread first; persisted recovery storage is only a fallback.
 3. The draft is moved into isolated operation-draft storage while async save work runs.
 4. `WorldOperationManager` executes background preparation off the tick thread.
 5. `PatchDataRepository` writes the binary patch payload.
@@ -212,6 +212,8 @@ Lumi uses a strict two-stage operation pattern:
 - apply stage: bounded world mutation batches on the server thread
 
 For live capture, the server thread is limited to compact chunk-copy work. It no longer samples whole chunks block-by-block through `Level.getBlockState()` or compacts recovery WAL data inline.
+
+Capture session entry points that snapshot, freeze, consume, discard, or adjust live draft state marshal onto the Minecraft server thread when a client UI or background completion callback invokes them. This keeps loaded-chunk stabilization and mutable capture maps on the same thread as normal world capture while leaving save payload writing and operation preparation off-thread.
 
 Current guarantees:
 

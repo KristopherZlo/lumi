@@ -87,7 +87,7 @@ Use Lumi if you want to:
 5. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
 6. `TrackedChangeBuffer` still merges explicit and targeted realtime changes immediately.
 7. First-touch whole-dimension baseline capture now copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
-8. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
+8. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
 9. Recovery draft data still flushes on an interval, but the WAL append and compaction now run asynchronously on that same capture-maintenance executor.
 
 ### Save

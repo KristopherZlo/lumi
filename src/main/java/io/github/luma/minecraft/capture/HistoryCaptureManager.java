@@ -61,6 +61,7 @@ public final class HistoryCaptureManager {
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
+    private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final Map<String, TrackedChangeBuffer> activeBuffers = new HashMap<>();
     private final Map<String, CaptureSessionState> activeSessions = new HashMap<>();
     private final Map<String, CaptureSessionDiagnostics> sessionDiagnostics = new HashMap<>();
@@ -239,6 +240,22 @@ public final class HistoryCaptureManager {
             String actor,
             Instant now
     ) throws IOException {
+        this.serverThreadExecutor.run(server, () -> this.applyUndoRedoAdjustmentsOnServerThread(
+                server,
+                projectId,
+                changes,
+                actor,
+                now
+        ));
+    }
+
+    private void applyUndoRedoAdjustmentsOnServerThread(
+            MinecraftServer server,
+            String projectId,
+            List<StoredBlockChange> changes,
+            String actor,
+            Instant now
+    ) throws IOException {
         if (changes == null || changes.isEmpty()) {
             return;
         }
@@ -290,6 +307,10 @@ public final class HistoryCaptureManager {
     }
 
     public Optional<RecoveryDraft> snapshotDraft(MinecraftServer server, String projectId) throws IOException {
+        return this.serverThreadExecutor.call(server, () -> this.snapshotDraftOnServerThread(server, projectId));
+    }
+
+    private Optional<RecoveryDraft> snapshotDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
         TrackedChangeBuffer buffer = this.activeBuffers.get(projectId);
         if (buffer != null) {
             return buffer.isEmpty() ? Optional.empty() : Optional.of(buffer.toDraft());
@@ -310,6 +331,10 @@ public final class HistoryCaptureManager {
      * interrupted workflow.
      */
     public Optional<TrackedChangeBuffer> freezeSession(MinecraftServer server, String projectId) throws IOException {
+        return this.serverThreadExecutor.call(server, () -> this.freezeSessionOnServerThread(server, projectId));
+    }
+
+    private Optional<TrackedChangeBuffer> freezeSessionOnServerThread(MinecraftServer server, String projectId) throws IOException {
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         CaptureSessionState sessionState = this.activeSessions.get(projectId);
         if (trackedProject != null && sessionState != null) {
@@ -364,6 +389,10 @@ public final class HistoryCaptureManager {
      * already flushed out of memory.
      */
     public Optional<TrackedChangeBuffer> consumeSession(MinecraftServer server, String projectId) throws IOException {
+        return this.serverThreadExecutor.call(server, () -> this.consumeSessionOnServerThread(server, projectId));
+    }
+
+    private Optional<TrackedChangeBuffer> consumeSessionOnServerThread(MinecraftServer server, String projectId) throws IOException {
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         CaptureSessionState sessionState = this.activeSessions.get(projectId);
         if (trackedProject != null && sessionState != null) {
@@ -407,6 +436,10 @@ public final class HistoryCaptureManager {
     }
 
     public void discardSession(MinecraftServer server, String projectId) throws IOException {
+        this.serverThreadExecutor.run(server, () -> this.discardSessionOnServerThread(server, projectId));
+    }
+
+    private void discardSessionOnServerThread(MinecraftServer server, String projectId) throws IOException {
         this.activeBuffers.remove(projectId);
         this.activeSessions.remove(projectId);
         this.dirtySessions.remove(projectId);
