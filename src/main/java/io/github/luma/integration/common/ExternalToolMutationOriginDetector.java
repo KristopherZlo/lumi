@@ -36,6 +36,51 @@ public final class ExternalToolMutationOriginDetector {
                             "com.moulberry.axiomclientapi.",
                             "axiom."
                     )
+            ),
+            new ToolProfile(
+                    WorldMutationSource.EXTERNAL_TOOL,
+                    "axion",
+                    List.of(
+                            "axion.",
+                            "com.moulberry.axion.",
+                            "dev.moulberry.axion."
+                    )
+            ),
+            new ToolProfile(
+                    WorldMutationSource.EXTERNAL_TOOL,
+                    "autobuild",
+                    List.of(
+                            "autobuild.",
+                            "net.autobuild.",
+                            "com.autobuild."
+                    )
+            ),
+            new ToolProfile(
+                    WorldMutationSource.EXTERNAL_TOOL,
+                    "simplebuilding",
+                    List.of(
+                            "simplebuilding.",
+                            "net.simplebuilding.",
+                            "com.simplebuilding."
+                    )
+            ),
+            new ToolProfile(
+                    WorldMutationSource.EXTERNAL_TOOL,
+                    "effortlessbuilding",
+                    List.of(
+                            "nl.requios.effortlessbuilding.",
+                            "effortlessbuilding."
+                    )
+            ),
+            new ToolProfile(
+                    WorldMutationSource.EXTERNAL_TOOL,
+                    "litematica",
+                    List.of("fi.dy.masa.litematica.")
+            ),
+            new ToolProfile(
+                    WorldMutationSource.EXTERNAL_TOOL,
+                    "tweakeroo",
+                    List.of("fi.dy.masa.tweakeroo.")
             )
     );
     private static final ExternalToolMutationOriginDetector INSTANCE = new ExternalToolMutationOriginDetector(
@@ -138,7 +183,8 @@ public final class ExternalToolMutationOriginDetector {
         }
 
         private boolean matches(ToolProfile otherProfile) {
-            return this.profile.source() == otherProfile.source();
+            return this.profile.source() == otherProfile.source()
+                    && this.profile.actor().equals(otherProfile.actor());
         }
 
         private boolean expired(long now, long idleTimeoutNanos) {

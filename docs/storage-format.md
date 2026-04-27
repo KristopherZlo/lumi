@@ -138,7 +138,7 @@ Metadata reads must not require deserializing the full payload.
 
 ### `patches/<patchId>.bin.lz4`
 
-Patch payloads are the primary history format for tracked saves in schema v4.
+Patch payloads are the primary history format for tracked saves. New payloads use binary schema v5.
 
 Current payload characteristics:
 
@@ -147,7 +147,8 @@ Current payload characteristics:
 - per-chunk local-position ordering
 - chunk-local palettes for block states
 - chunk-local palettes for block entity payloads
-- backward-compatible entity spawn/remove/update list sections; they are currently written empty for block-only saves
+- per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload
+- block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
 - runtime-only redstone state flips and piston animation states are filtered before new patch payloads are written
 
@@ -200,13 +201,13 @@ These files let server-side save and refresh workflows queue preview work withou
 
 ### `recovery/draft.bin.lz4`
 
-Stores the current compacted recovery base snapshot in schema v3 binary format.
+Stores the current compacted recovery base snapshot in schema v4 binary format. Schema v3 drafts still load as block-only/entity-empty drafts.
 
 ### `recovery/draft.wal.lz4`
 
 Stores append-only recovery draft updates as an LZ4-compressed write-ahead log.
 
-The active in-memory `TrackedChangeBuffer` is periodically snapshotted into an immutable `RecoveryDraft` and queued to the low-priority capture-maintenance executor instead of rewriting one large JSON file for every change on the server tick. Once the WAL reaches the compaction threshold, the latest entry is rewritten into `draft.bin.lz4` and the WAL is removed.
+The active in-memory `TrackedChangeBuffer` is periodically snapshotted into an immutable `RecoveryDraft` and queued to the low-priority capture-maintenance executor instead of rewriting one large JSON file for every change on the server tick. Recovery drafts now carry block changes and entity spawn/remove/update diffs. Once the WAL reaches the compaction threshold, the latest entry is rewritten into `draft.bin.lz4` and the WAL is removed.
 
 ### `recovery/operation-draft.bin.lz4`
 
@@ -243,7 +244,7 @@ Current behavior:
 
 ## Archive format
 
-Version manifests may use `versionKind = PARTIAL_RESTORE` for region-scoped restores. The patch payload uses the normal block-change format; the semantic difference is that the active variant advances to this new version instead of moving its head back to the historical target version.
+Version manifests may use `versionKind = PARTIAL_RESTORE` for region-scoped restores. The patch payload uses the normal block/entity-change format; the semantic difference is that the active variant advances to this new version instead of moving its head back to the historical target version.
 
 Project import/export uses zip archives stored by default in the game-root `lumi-projects` folder. Each archive contains:
 

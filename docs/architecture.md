@@ -24,7 +24,7 @@ Important model groups:
 
 - project identity and settings: `BuildProject`, `ProjectVariant`, `ProjectVersion`, `ProjectSettings`
 - world bootstrap metadata: `WorldOriginInfo`
-- history payloads: `StoredBlockChange`, `StatePayload`, `PatchMetadata`, `SnapshotData`, `RecoveryDraft`
+- history payloads: `StoredBlockChange`, `StoredEntityChange`, `StatePayload`, `EntityPayload`, `PatchMetadata`, `SnapshotData`, `RecoveryDraft`
 - user-visible summaries: `ChangeStats`, `PendingChangeSummary`, `VersionDiff`, `MaterialDeltaEntry`
 - operation state: `OperationHandle`, `OperationProgress`, `OperationSnapshot`, `OperationStage`, `WorkspaceHudSnapshot`
 - mutable capture runtime: `TrackedChangeBuffer`, `CaptureSessionState`
@@ -63,7 +63,7 @@ Important adapters:
 - `UndoRedoHistoryManager`: keeps the in-memory per-project action stack that powers live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout or reconciled stabilization deltas into the latest builder action
 - `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
 - `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
-- `WorldMutationCapturePolicy` and `PersistentBlockStatePolicy`: filter runtime-only redstone transitions and normalize piston animation states before they become drafts, undo/redo actions, snapshots, or restore placements
+- `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, and `PersistentBlockStatePolicy`: filter runtime-only block/entity transitions and normalize piston animation states before they become drafts, undo/redo actions, snapshots, or restore placements
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `LumaAccessControl`: centralizes the operator/cheats gate for diagnostic commands, UI entry points, and dedicated-server tracked world actions
@@ -80,12 +80,13 @@ Important adapters:
 
 - WorldEdit capabilities are enabled only when the corresponding WorldEdit API classes are present, such as edit-session events, local sessions, clipboard, and schematic formats.
 - `OptionalIntegrationBootstrap` reflectively loads the WorldEdit edit-session tracker only when those capabilities are present. The tracker registers on WorldEdit's event bus and wraps `EditSession.Stage.BEFORE_CHANGE` extents. It records WorldEdit old/new block transitions directly under `WorldMutationSource.WORLDEDIT`, while still keeping the mutation context active for Minecraft-level fallback capture.
-- FAWE is reported as a detected fallback-capture tool when known FAWE classes or mod ids are present. Lumi does not claim FAWE selection, clipboard, or schematic APIs; block history capture relies on the generic known-tool mutation fallbacks.
-- `ExternalToolMutationOriginDetector` recognizes WorldEdit, FAWE, and Axiom stack frames at Minecraft mutation boundaries without linking those tools. `WorldMutationCaptureGuard` prevents duplicate records so the highest available hook wins: WorldEdit API extent, `Level#setBlock`, `LevelChunk#setBlockState`, then direct `LevelChunkSection#setBlockState`.
-- Axiom capabilities are intentionally conservative. Lumi may report detection or a custom region API, but it does not claim selection, clipboard, or schematic support unless a stable API is available. Because Axiom does not expose a stable operation API, Lumi uses guarded server-side fallbacks: Axiom block-buffer packet applies are captured before Axiom mutates chunk sections directly, and otherwise untracked Axiom mutations can still be recorded from known-tool stack frames.
+- FAWE is reported as a detected fallback-capture tool when known FAWE classes or mod ids are present. Lumi does not claim FAWE selection, clipboard, or schematic APIs; block and entity history capture rely on the generic known-tool mutation fallbacks.
+- `ExternalToolMutationOriginDetector` recognizes WorldEdit, FAWE, Axiom, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica, and Tweakeroo stack frames at Minecraft mutation boundaries without linking those tools. `WorldMutationCaptureGuard` prevents duplicate block records so the highest available hook wins: WorldEdit API extent, `Level#setBlock`, `LevelChunk#setBlockState`, then direct `LevelChunkSection#setBlockState`.
+- Axiom capabilities are intentionally conservative. Lumi may report detection or a custom region API, but it does not claim selection, clipboard, or schematic support unless a stable API is available. Because Axiom does not expose a stable operation API, Lumi uses guarded server-side fallbacks: Axiom block-buffer packet applies are captured before Axiom mutates chunk sections directly, entity lifecycle/update hooks capture Axiom entity edits that reach Minecraft entity APIs, and otherwise untracked Axiom mutations can still be recorded from known-tool stack frames.
+- Axion, AutoBuild, SimpleBuilding, and Effortless Building are reported as fallback-capture tools when their mod ids or known classes are present. Litematica and Tweakeroo are reported as player-driven placement tools because their normal printer/placement paths should be captured through player mutation context rather than as direct world editors.
 - The fallback integration remains always available and represents Lumi's own world-tracking capture path.
 
-External tool mutations use explicit `WorldMutationSource` values such as `WORLDEDIT`, `FAWE`, and `AXIOM` so saved versions can distinguish tool-originated history from generic external capture.
+External tool mutations use explicit `WorldMutationSource` values such as `WORLDEDIT`, `FAWE`, and `AXIOM` where stable tool identities exist. Other recognized builder tools are grouped under `EXTERNAL_TOOL` with an actor label such as `axion`, `autobuild`, or `litematica`.
 
 ### Storage layer
 
@@ -129,12 +130,12 @@ Responsibilities are split as follows:
 
 ## Capture flow
 
-1. A Minecraft mixin intercepts a block mutation. External builder edits that bypass the normal `Level#setBlock` context can still be captured by the guarded Axiom block-buffer fallback, the `LevelChunk#setBlockState` known-tool fallback, or the direct `LevelChunkSection#setBlockState` fallback used by FAWE-style chunk placement.
+1. A Minecraft mixin intercepts a block mutation or entity lifecycle/update mutation. External builder edits that bypass the normal `Level#setBlock` context can still be captured by the guarded Axiom block-buffer fallback, the `LevelChunk#setBlockState` known-tool fallback, or the direct `LevelChunkSection#setBlockState` fallback used by FAWE-style chunk placement.
 2. `WorldMutationContext` accepts only explicit player, explosive, explosion, falling-block, selected mob, and other targeted mutation scopes.
-3. `HistoryCaptureManager` finds matching projects for the block position.
+3. `HistoryCaptureManager` finds matching projects for the block position or entity position.
 4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.
 5. Explicit root mutations define a session-local causal envelope. Chunk baselines inside that envelope are captured lazily when those chunks first need stabilization.
-6. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position.
+6. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position and entity UUID. For entities, the first old full-NBT payload and latest new full-NBT payload win.
 7. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
 8. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
 9. Idle or dirty sessions are flushed into recovery storage.
@@ -146,6 +147,7 @@ Important invariants:
 - the first observed old state is preserved
 - the latest new state wins
 - no-op edits are removed from the buffer
+- entity spawn/remove/update diffs use nullable old/new payloads and are applied through `EntityBatch`
 - restore-originated mutations never re-enter tracked history
 - undo/redo reuses prepared world operations and then adjusts the pending draft separately, so internal replay does not create duplicate capture events
 
@@ -175,9 +177,9 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 6. If direct replay is not valid and the target is `WORLD_ROOT`, restore falls back to tracked baseline chunks for the current workspace. Generator regeneration remains blocked when the stored origin fingerprint does not match the current world.
 7. If direct replay is not valid for a normal version, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
 8. Baseline gaps are added only for the snapshot-based whole-dimension fallback path.
-9. Prepared placements are collapsed by final block position before tick-thread application.
+9. Prepared placements are collapsed by final block position before tick-thread application; entity-only chunk batches are preserved.
 10. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
-11. Chunk commit order is fixed to section blocks -> block entities -> entity batch.
+11. Chunk commit order is fixed to section blocks -> block entities -> entity removals -> entity updates -> entity spawns.
 12. Completion resets the active variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly.
 13. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
 
@@ -191,6 +193,7 @@ Key differences from full restore:
 - Lumi applies only changes inside the selected bounds
 - after apply, Lumi writes a new `PARTIAL_RESTORE` version on the active variant
 - pending draft changes inside the selected region are folded into that version; pending draft changes outside the region are preserved as the recovery draft
+- entity changes are filtered by their old/new entity position and stored alongside block changes in the partial-restore version
 - non-direct cross-lineage partial restore is rejected until a snapshot/baseline target-state planner is implemented
 
 Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never happen on the tick-thread apply path.
@@ -229,7 +232,7 @@ Current guarantees:
 
 ## Storage format summary
 
-The current durable history format is schema v4.
+The current durable history format is project schema v4, patch payload schema v5, and recovery draft schema v4.
 
 Main files:
 

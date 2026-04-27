@@ -5,6 +5,7 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchMetadata;
+import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVersion;
@@ -15,11 +16,13 @@ import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.RestorePlanSummary;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -132,16 +135,16 @@ public final class RestoreService {
                         LumaMod.LOGGER.info(
                                 "Creating safety checkpoint before restore for project {} with {} pending changes",
                                 project.name(),
-                                pendingDraft.changes().size()
+                                pendingDraft.totalChangeCount()
                         );
                         LumaDebugLog.log(
                                 project,
                                 "restore",
                                 "Writing safety checkpoint before restore for project {} with {} draft changes",
                                 project.name(),
-                                pendingDraft.changes().size()
+                                pendingDraft.totalChangeCount()
                         );
-                        progressSink.update(OperationStage.WRITING, 0, pendingDraft.changes().size(), "Writing restore checkpoint");
+                        progressSink.update(OperationStage.WRITING, 0, pendingDraft.totalChangeCount(), "Writing restore checkpoint");
                         this.versionService.writeVersion(
                                 level,
                                 layout,
@@ -306,6 +309,7 @@ public final class RestoreService {
                     List<PreparedChunkBatch> batches = collapsePreparedBatches(this.decodeStoredChanges(
                             level,
                             partialDraft.draft().changes(),
+                            partialDraft.draft().entityChanges(),
                             true
                     ));
                     return new WorldOperationManager.PreparedApplyOperation(
@@ -381,11 +385,18 @@ public final class RestoreService {
 
         Map<String, ProjectVersion> versionMap = this.versionMap(versions);
         boolean applyNewValues = this.isAncestor(versionMap, activeVariant.headVersionId(), targetVersion.id());
-        List<StoredBlockChange> lineageChanges = this.loadVersionChanges(layout, directVersions);
-        progressSink.update(OperationStage.PREPARING, 0, Math.max(1, lineageChanges.size()), "Filtering partial restore region");
+        PatchWorldChanges lineageChanges = this.loadVersionWorldChanges(layout, directVersions);
+        int lineageChangeCount = lineageChanges.blockChanges().size() + lineageChanges.entityChanges().size();
+        progressSink.update(OperationStage.PREPARING, 0, Math.max(1, lineageChangeCount), "Filtering partial restore region");
         List<StoredBlockChange> partialChanges = this.partialRestorePlanner.plan(
                 pendingDraft == null ? List.of() : pendingDraft.changes(),
-                lineageChanges,
+                lineageChanges.blockChanges(),
+                applyNewValues,
+                request.bounds()
+        );
+        List<StoredEntityChange> partialEntityChanges = this.planPartialEntityChanges(
+                pendingDraft == null ? List.of() : pendingDraft.entityChanges(),
+                lineageChanges.entityChanges(),
                 applyNewValues,
                 request.bounds()
         );
@@ -398,7 +409,8 @@ public final class RestoreService {
                 io.github.luma.domain.model.WorldMutationSource.RESTORE,
                 now,
                 now,
-                partialChanges
+                partialChanges,
+                partialEntityChanges
         );
         LumaDebugLog.log(
                 project,
@@ -406,8 +418,8 @@ public final class RestoreService {
                 "Partial restore for project {} target {} filtered {} lineage changes to {} region changes",
                 project.name(),
                 targetVersion.id(),
-                lineageChanges.size(),
-                partialChanges.size()
+                lineageChangeCount,
+                partialChanges.size() + partialEntityChanges.size()
         );
         return new PartialRestoreDraft(draft);
     }
@@ -446,7 +458,7 @@ public final class RestoreService {
                 project.name(),
                 request.targetVersionId(),
                 batchCount,
-                partialDraft.changes().size()
+                partialDraft.totalChangeCount()
         );
     }
 
@@ -462,7 +474,10 @@ public final class RestoreService {
         List<StoredBlockChange> remaining = pendingDraft.changes().stream()
                 .filter(change -> !bounds.contains(change.pos()))
                 .toList();
-        if (remaining.isEmpty()) {
+        List<StoredEntityChange> remainingEntities = pendingDraft.entityChanges().stream()
+                .filter(change -> !this.entityChangeInside(change, bounds))
+                .toList();
+        if (remaining.isEmpty() && remainingEntities.isEmpty()) {
             this.recoveryRepository.deleteDraft(layout);
             return;
         }
@@ -474,7 +489,8 @@ public final class RestoreService {
                 pendingDraft.mutationSource(),
                 pendingDraft.startedAt(),
                 Instant.now(),
-                remaining
+                remaining,
+                remainingEntities
         ));
     }
 
@@ -489,15 +505,22 @@ public final class RestoreService {
     }
 
     private List<StoredBlockChange> loadVersionChanges(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
+        return this.loadVersionWorldChanges(layout, versions).blockChanges();
+    }
+
+    private PatchWorldChanges loadVersionWorldChanges(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
         List<StoredBlockChange> changes = new ArrayList<>();
+        List<StoredEntityChange> entityChanges = new ArrayList<>();
         for (ProjectVersion version : versions) {
             for (String patchId : version.patchIds()) {
                 PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
                         .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-                changes.addAll(this.patchDataRepository.loadChanges(layout, metadata));
+                PatchWorldChanges worldChanges = this.patchDataRepository.loadWorldChanges(layout, metadata);
+                changes.addAll(worldChanges.blockChanges());
+                entityChanges.addAll(worldChanges.entityChanges());
             }
         }
-        return List.copyOf(changes);
+        return new PatchWorldChanges(changes, entityChanges);
     }
 
     private static WorldOperationManager.ProgressSink progressSinkNoOp() {
@@ -634,7 +657,7 @@ public final class RestoreService {
         List<PreparedChunkBatch> batches = new ArrayList<>();
 
         if (pendingDraft != null && !pendingDraft.isEmpty()) {
-            batches.addAll(this.decodeStoredChanges(level, pendingDraft.changes(), false));
+            batches.addAll(this.decodeStoredChanges(level, pendingDraft.changes(), pendingDraft.entityChanges(), false));
             completedSources += 1;
             progressSink.update(
                     OperationStage.PREPARING,
@@ -878,7 +901,8 @@ public final class RestoreService {
         for (String patchId : version.patchIds()) {
             PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
                     .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-            batches.addAll(this.decodeStoredChanges(level, this.patchDataRepository.loadChanges(layout, metadata), applyNewValues));
+            PatchWorldChanges changes = this.patchDataRepository.loadWorldChanges(layout, metadata);
+            batches.addAll(this.decodeStoredChanges(level, changes.blockChanges(), changes.entityChanges(), applyNewValues));
         }
         return batches;
     }
@@ -886,9 +910,11 @@ public final class RestoreService {
     private List<PreparedChunkBatch> decodeStoredChanges(
             ServerLevel level,
             List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
             boolean applyNewValues
     ) throws IOException {
         Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = new LinkedHashMap<>();
+        Map<ChunkPoint, List<StoredEntityChange>> groupedEntities = new LinkedHashMap<>();
         for (StoredBlockChange change : changes) {
             StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
             BlockPos pos = new BlockPos(change.pos().x(), change.pos().y(), change.pos().z());
@@ -900,15 +926,26 @@ public final class RestoreService {
                             target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
                     ));
         }
+        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
+            groupedEntities.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
+        }
 
         List<PreparedChunkBatch> batches = new ArrayList<>();
-        for (Map.Entry<ChunkPoint, List<PreparedBlockPlacement>> entry : grouped.entrySet()) {
-            batches.add(new PreparedChunkBatch(entry.getKey(), List.copyOf(entry.getValue())));
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
+        chunks.addAll(grouped.keySet());
+        chunks.addAll(groupedEntities.keySet());
+        for (ChunkPoint chunk : chunks) {
+            batches.add(new PreparedChunkBatch(
+                    chunk,
+                    List.copyOf(grouped.getOrDefault(chunk, List.of())),
+                    toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues)
+            ));
         }
         LumaDebugLog.log(
                 "restore",
-                "Decoded {} stored changes into {} grouped chunk batches using {} values",
+                "Decoded {} block and {} entity stored changes into {} grouped chunk batches using {} values",
                 changes.size(),
+                entityChanges == null ? 0 : entityChanges.size(),
                 batches.size(),
                 applyNewValues ? "new" : "old"
         );
@@ -994,8 +1031,9 @@ public final class RestoreService {
 
     static List<PreparedChunkBatch> collapsePreparedBatches(List<PreparedChunkBatch> batches) {
         Map<ChunkPoint, LinkedHashMap<Long, PreparedBlockPlacement>> collapsed = new LinkedHashMap<>();
+        Map<ChunkPoint, EntityAccumulator> collapsedEntities = new LinkedHashMap<>();
         for (PreparedChunkBatch batch : batches) {
-            if (batch == null || batch.placements().isEmpty()) {
+            if (batch == null) {
                 continue;
             }
             LinkedHashMap<Long, PreparedBlockPlacement> chunkPlacements = collapsed.computeIfAbsent(
@@ -1006,15 +1044,75 @@ public final class RestoreService {
                 long packedPos = BlockPos.asLong(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ());
                 chunkPlacements.put(packedPos, placement);
             }
+            if (!batch.entityBatch().isEmpty()) {
+                collapsedEntities.computeIfAbsent(batch.chunk(), ignored -> new EntityAccumulator())
+                        .add(batch.entityBatch());
+            }
         }
 
         List<PreparedChunkBatch> result = new ArrayList<>();
-        for (Map.Entry<ChunkPoint, LinkedHashMap<Long, PreparedBlockPlacement>> entry : collapsed.entrySet()) {
-            if (!entry.getValue().isEmpty()) {
-                result.add(new PreparedChunkBatch(entry.getKey(), List.copyOf(entry.getValue().values())));
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
+        chunks.addAll(collapsed.keySet());
+        chunks.addAll(collapsedEntities.keySet());
+        for (ChunkPoint chunk : chunks) {
+            LinkedHashMap<Long, PreparedBlockPlacement> placements = collapsed.getOrDefault(chunk, new LinkedHashMap<>());
+            EntityBatch entityBatch = collapsedEntities.getOrDefault(chunk, EntityAccumulator.EMPTY).toBatch();
+            if (!placements.isEmpty() || !entityBatch.isEmpty()) {
+                result.add(new PreparedChunkBatch(chunk, List.copyOf(placements.values()), entityBatch));
             }
         }
         return result;
+    }
+
+    private static EntityBatch toEntityBatch(List<StoredEntityChange> changes, boolean applyNewValues) {
+        List<net.minecraft.nbt.CompoundTag> spawns = new ArrayList<>();
+        List<String> removals = new ArrayList<>();
+        List<net.minecraft.nbt.CompoundTag> updates = new ArrayList<>();
+        for (StoredEntityChange change : changes) {
+            StoredEntityChange target = applyNewValues ? change : change.inverse();
+            if (target.isSpawn()) {
+                spawns.add(target.newValue().copyTag());
+            } else if (target.isRemove()) {
+                removals.add(target.entityId());
+            } else if (target.isUpdate()) {
+                updates.add(target.newValue().copyTag());
+            }
+        }
+        return new EntityBatch(spawns, removals, updates);
+    }
+
+    private List<StoredEntityChange> planPartialEntityChanges(
+            List<StoredEntityChange> pendingChanges,
+            List<StoredEntityChange> lineageChanges,
+            boolean applyNewValues,
+            io.github.luma.domain.model.Bounds3i bounds
+    ) {
+        Map<String, StoredEntityChange> planned = new LinkedHashMap<>();
+        for (StoredEntityChange change : pendingChanges) {
+            if (this.entityChangeInside(change, bounds)) {
+                planned.put(change.entityId(), change);
+            }
+        }
+        for (StoredEntityChange change : lineageChanges) {
+            StoredEntityChange target = applyNewValues ? change : change.inverse();
+            if (this.entityChangeInside(target, bounds)) {
+                StoredEntityChange current = planned.get(target.entityId());
+                planned.put(target.entityId(), current == null ? target : current.withLatestState(target.newValue()));
+            }
+        }
+        return planned.values().stream()
+                .filter(change -> !change.isNoOp())
+                .toList();
+    }
+
+    private boolean entityChangeInside(StoredEntityChange change, io.github.luma.domain.model.Bounds3i bounds) {
+        if (change == null || bounds == null) {
+            return false;
+        }
+        BlockPos pos = change.newValue() == null
+                ? change.oldValue().blockPos()
+                : change.newValue().blockPos();
+        return bounds.contains(io.github.luma.domain.model.BlockPoint.from(pos));
     }
 
     private static int totalPlacements(List<PreparedChunkBatch> batches) {
@@ -1039,5 +1137,24 @@ public final class RestoreService {
     }
 
     private record ChunkPointAccumulator(int chunkX, int chunkZ) {
+    }
+
+    private static final class EntityAccumulator {
+
+        private static final EntityAccumulator EMPTY = new EntityAccumulator();
+
+        private final List<net.minecraft.nbt.CompoundTag> spawns = new ArrayList<>();
+        private final List<String> removals = new ArrayList<>();
+        private final List<net.minecraft.nbt.CompoundTag> updates = new ArrayList<>();
+
+        private void add(EntityBatch batch) {
+            this.spawns.addAll(batch.entitiesToSpawn());
+            this.removals.addAll(batch.entityIdsToRemove());
+            this.updates.addAll(batch.entitiesToUpdate());
+        }
+
+        private EntityBatch toBatch() {
+            return new EntityBatch(this.spawns, this.removals, this.updates);
+        }
     }
 }
