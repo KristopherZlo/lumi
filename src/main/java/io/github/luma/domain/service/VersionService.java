@@ -310,22 +310,24 @@ public final class VersionService {
         String patchId = ProjectService.patchId(nextIndex);
         ChangeStats stats = ChangeStatsFactory.summarize(draft.changes());
         LumaMod.LOGGER.info(
-                "Preparing version {} for project {}: {} blocks across {} chunks",
+                "Preparing version {} for project {}: {} blocks and {} entities across {} chunks",
                 versionId,
                 project.name(),
                 stats.changedBlocks(),
+                draft.entityChanges().size(),
                 stats.changedChunks()
         );
 
-        progressSink.update(OperationStage.PREPARING, 0, draft.changes().size(), "Preparing version payload");
+        progressSink.update(OperationStage.PREPARING, 0, draft.totalChangeCount(), "Preparing version payload");
         var patchMetadata = this.patchDataRepository.writePayload(
                 layout,
                 patchId,
                 project.id().toString(),
                 versionId,
-                draft.changes()
+                draft.changes(),
+                draft.entityChanges()
         );
-        progressSink.update(OperationStage.WRITING, draft.changes().size(), draft.changes().size(), "Writing patch index");
+        progressSink.update(OperationStage.WRITING, draft.totalChangeCount(), draft.totalChangeCount(), "Writing patch index");
         this.patchMetaRepository.save(layout, patchMetadata);
 
         String snapshotId = "";

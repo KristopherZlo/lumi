@@ -6,8 +6,12 @@ import io.github.luma.domain.model.PatchChunkSlice;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchStats;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
+import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.storage.ProjectLayout;
@@ -32,7 +36,7 @@ import net.minecraft.server.level.ServerLevel;
 public final class PatchDataRepository {
 
     private static final int MAGIC = 0x4C504154;
-    private static final int VERSION = 4;
+    private static final int VERSION = 5;
 
     public PatchMetadata writePayload(
             ProjectLayout layout,
@@ -41,18 +45,36 @@ public final class PatchDataRepository {
             String versionId,
             List<StoredBlockChange> changes
     ) throws IOException {
-        Map<String, List<StoredBlockChange>> grouped = new LinkedHashMap<>();
+        return this.writePayload(layout, patchId, projectId, versionId, changes, List.of());
+    }
+
+    public PatchMetadata writePayload(
+            ProjectLayout layout,
+            String patchId,
+            String projectId,
+            String versionId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges
+    ) throws IOException {
+        changes = changes == null ? List.of() : changes;
+        entityChanges = entityChanges == null ? List.of() : entityChanges;
+        Map<String, ChunkPayload> grouped = new LinkedHashMap<>();
         for (StoredBlockChange change : changes) {
             String key = chunkKey(change);
-            grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(change);
+            grouped.computeIfAbsent(key, ignored -> new ChunkPayload()).blockChanges.add(change);
+        }
+        for (StoredEntityChange change : entityChanges) {
+            String key = chunkKey(change);
+            grouped.computeIfAbsent(key, ignored -> new ChunkPayload()).entityChanges.add(change);
         }
 
-        List<Map.Entry<String, List<StoredBlockChange>>> sortedChunks = new ArrayList<>(grouped.entrySet());
-        sortedChunks.sort(Comparator.comparing(Map.Entry<String, List<StoredBlockChange>>::getKey));
+        List<Map.Entry<String, ChunkPayload>> sortedChunks = new ArrayList<>(grouped.entrySet());
+        sortedChunks.sort(Comparator.comparing(Map.Entry<String, ChunkPayload>::getKey));
         LumaMod.LOGGER.info(
-                "Writing patch payload {} with {} changes across {} chunks",
+                "Writing patch payload {} with {} block changes and {} entity changes across {} chunks",
                 patchId,
                 changes.size(),
+                entityChanges.size(),
                 sortedChunks.size()
         );
 
@@ -64,15 +86,17 @@ public final class PatchDataRepository {
             payload.writeInt(sortedChunks.size());
 
             int chunkIndex = 0;
-            for (Map.Entry<String, List<StoredBlockChange>> entry : sortedChunks) {
+            for (Map.Entry<String, ChunkPayload> entry : sortedChunks) {
                 String[] split = entry.getKey().split(":", 2);
                 int chunkX = Integer.parseInt(split[0]);
                 int chunkZ = Integer.parseInt(split[1]);
 
-                List<StoredBlockChange> chunkChanges = new ArrayList<>(entry.getValue());
+                List<StoredBlockChange> chunkChanges = new ArrayList<>(entry.getValue().blockChanges);
                 chunkChanges.sort(Comparator.comparingInt(change -> packLocalPosition(change.pos())));
+                List<StoredEntityChange> chunkEntityChanges = new ArrayList<>(entry.getValue().entityChanges);
+                chunkEntityChanges.sort(Comparator.comparing(StoredEntityChange::entityId));
 
-                byte[] chunkBytes = this.writeChunk(chunkX, chunkZ, chunkChanges);
+                byte[] chunkBytes = this.writeChunk(chunkX, chunkZ, chunkChanges, chunkEntityChanges);
                 long offset = payloadBuffer.size();
                 payload.write(chunkBytes);
                 slices.add(new PatchChunkSlice(chunkX, chunkZ, chunkChanges.size(), offset, chunkBytes.length));
@@ -93,8 +117,12 @@ public final class PatchDataRepository {
     }
 
     public List<StoredBlockChange> loadChanges(ProjectLayout layout, PatchMetadata metadata) throws IOException {
+        return this.loadWorldChanges(layout, metadata).blockChanges();
+    }
+
+    public PatchWorldChanges loadWorldChanges(ProjectLayout layout, PatchMetadata metadata) throws IOException {
         if (metadata == null) {
-            return List.of();
+            return new PatchWorldChanges(List.of(), List.of());
         }
 
         try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
@@ -102,23 +130,27 @@ public final class PatchDataRepository {
         ))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != MAGIC || (version != 3 && version != VERSION)) {
+            if (magic != MAGIC || (version != 3 && version != 4 && version != VERSION)) {
                 throw new IOException("Unsupported patch payload format for " + metadata.id());
             }
 
             int chunkCount = input.readInt();
             List<StoredBlockChange> changes = new ArrayList<>();
+            List<StoredEntityChange> entityChanges = new ArrayList<>();
             for (int index = 0; index < chunkCount; index++) {
-                changes.addAll(this.readChunk(input, version));
+                PatchWorldChanges chunk = this.readChunk(input, version);
+                changes.addAll(chunk.blockChanges());
+                entityChanges.addAll(chunk.entityChanges());
                 BackgroundThrottle.pauseEvery(index + 1, 8, 250_000L);
             }
-            return changes;
+            return new PatchWorldChanges(changes, entityChanges);
         }
     }
 
     public List<PreparedChunkBatch> decodeBatches(ProjectLayout layout, PatchMetadata metadata, ServerLevel level) throws IOException {
         Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = new LinkedHashMap<>();
-        for (StoredBlockChange change : this.loadChanges(layout, metadata)) {
+        PatchWorldChanges worldChanges = this.loadWorldChanges(layout, metadata);
+        for (StoredBlockChange change : worldChanges.blockChanges()) {
             ChunkPoint chunk = new ChunkPoint(change.pos().x() >> 4, change.pos().z() >> 4);
             grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>())
                     .add(new PreparedBlockPlacement(
@@ -127,15 +159,31 @@ public final class PatchDataRepository {
                             change.newValue().blockEntityTag() == null ? null : change.newValue().blockEntityTag().copy()
                     ));
         }
+        Map<ChunkPoint, List<StoredEntityChange>> groupedEntityChanges = new LinkedHashMap<>();
+        for (StoredEntityChange change : worldChanges.entityChanges()) {
+            groupedEntityChanges.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
+        }
 
         List<PreparedChunkBatch> batches = new ArrayList<>();
-        for (Map.Entry<ChunkPoint, List<PreparedBlockPlacement>> entry : grouped.entrySet()) {
-            batches.add(new PreparedChunkBatch(entry.getKey(), List.copyOf(entry.getValue())));
+        java.util.LinkedHashSet<ChunkPoint> chunks = new java.util.LinkedHashSet<>();
+        chunks.addAll(grouped.keySet());
+        chunks.addAll(groupedEntityChanges.keySet());
+        for (ChunkPoint chunk : chunks) {
+            batches.add(new PreparedChunkBatch(
+                    chunk,
+                    List.copyOf(grouped.getOrDefault(chunk, List.of())),
+                    toEntityBatch(groupedEntityChanges.getOrDefault(chunk, List.of()))
+            ));
         }
         return batches;
     }
 
-    private byte[] writeChunk(int chunkX, int chunkZ, List<StoredBlockChange> changes) throws IOException {
+    private byte[] writeChunk(
+            int chunkX,
+            int chunkZ,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges
+    ) throws IOException {
         ByteArrayOutputStream chunkBuffer = new ByteArrayOutputStream();
         try (DataOutputStream output = new DataOutputStream(chunkBuffer)) {
             output.writeInt(chunkX);
@@ -168,14 +216,18 @@ public final class PatchDataRepository {
                 output.writeInt(blockEntityPaletteId(blockEntityPalette, change.newValue().blockEntityTag()));
             }
 
-            output.writeInt(0); // entities to spawn
-            output.writeInt(0); // entity ids to remove
-            output.writeInt(0); // entities to update
+            output.writeInt(entityChanges.size());
+            for (StoredEntityChange change : entityChanges) {
+                output.writeUTF(change.entityId());
+                output.writeUTF(change.entityType());
+                StorageIo.writeNullableCompound(output, change.oldValue() == null ? null : change.oldValue().copyTag());
+                StorageIo.writeNullableCompound(output, change.newValue() == null ? null : change.newValue().copyTag());
+            }
         }
         return chunkBuffer.toByteArray();
     }
 
-    private List<StoredBlockChange> readChunk(DataInputStream input, int version) throws IOException {
+    private PatchWorldChanges readChunk(DataInputStream input, int version) throws IOException {
         int chunkX = input.readInt();
         int chunkZ = input.readInt();
         int changeCount = input.readInt();
@@ -207,9 +259,13 @@ public final class PatchDataRepository {
             ));
         }
         if (version >= 4) {
-            this.skipEntityLists(input);
+            if (version == 4) {
+                this.skipEntityLists(input);
+            } else {
+                return new PatchWorldChanges(changes, this.readEntityChanges(input));
+            }
         }
-        return changes;
+        return new PatchWorldChanges(changes, List.of());
     }
 
     private void skipEntityLists(DataInputStream input) throws IOException {
@@ -225,6 +281,40 @@ public final class PatchDataRepository {
         for (int index = 0; index < updateCount; index++) {
             StorageIo.readCompound(input);
         }
+    }
+
+    private List<StoredEntityChange> readEntityChanges(DataInputStream input) throws IOException {
+        int entityChangeCount = input.readInt();
+        List<StoredEntityChange> changes = new ArrayList<>();
+        for (int index = 0; index < entityChangeCount; index++) {
+            String entityId = input.readUTF();
+            String entityType = input.readUTF();
+            net.minecraft.nbt.CompoundTag oldTag = StorageIo.readNullableCompound(input);
+            net.minecraft.nbt.CompoundTag newTag = StorageIo.readNullableCompound(input);
+            changes.add(new StoredEntityChange(
+                    entityId,
+                    entityType,
+                    oldTag == null ? null : new EntityPayload(oldTag),
+                    newTag == null ? null : new EntityPayload(newTag)
+            ));
+        }
+        return changes;
+    }
+
+    private static EntityBatch toEntityBatch(List<StoredEntityChange> changes) {
+        List<net.minecraft.nbt.CompoundTag> spawns = new ArrayList<>();
+        List<String> removals = new ArrayList<>();
+        List<net.minecraft.nbt.CompoundTag> updates = new ArrayList<>();
+        for (StoredEntityChange change : changes) {
+            if (change.isSpawn()) {
+                spawns.add(change.newValue().copyTag());
+            } else if (change.isRemove()) {
+                removals.add(change.entityId());
+            } else if (change.isUpdate()) {
+                updates.add(change.newValue().copyTag());
+            }
+        }
+        return new EntityBatch(spawns, removals, updates);
     }
 
     private void writeCompressed(OutputStream output, byte[] bytes) throws IOException {
@@ -252,6 +342,11 @@ public final class PatchDataRepository {
         return (change.pos().x() >> 4) + ":" + (change.pos().z() >> 4);
     }
 
+    private static String chunkKey(StoredEntityChange change) {
+        ChunkPoint chunk = change.chunk();
+        return chunk.x() + ":" + chunk.z();
+    }
+
     private static int packLocalPosition(BlockPoint pos) {
         int normalizedY = pos.y() - Short.MIN_VALUE;
         return (normalizedY << 8) | ((pos.z() & 15) << 4) | (pos.x() & 15);
@@ -263,5 +358,11 @@ public final class PatchDataRepository {
         int localX = packed & 15;
         int localZ = (packed >>> 4) & 15;
         return new BlockPoint((chunkX << 4) + localX, y, (chunkZ << 4) + localZ);
+    }
+
+    private static final class ChunkPayload {
+
+        private final List<StoredBlockChange> blockChanges = new ArrayList<>();
+        private final List<StoredEntityChange> entityChanges = new ArrayList<>();
     }
 }

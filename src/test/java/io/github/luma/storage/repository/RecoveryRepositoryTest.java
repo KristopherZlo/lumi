@@ -1,10 +1,15 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorldMutationSource;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.ListTag;
 import io.github.luma.storage.ProjectLayout;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -95,6 +100,35 @@ class RecoveryRepositoryTest {
         assertEquals("minecraft:air", restored.changes().getFirst().newValue().blockId());
     }
 
+    @Test
+    void roundTripsEntityChangesInRecoveryDraft() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        String entityId = "00000000-0000-0000-0000-000000000020";
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.AXIOM,
+                Instant.parse("2026-04-20T10:00:00Z"),
+                Instant.parse("2026-04-20T10:00:30Z"),
+                List.of(),
+                List.of(new StoredEntityChange(
+                        entityId,
+                        "minecraft:block_display",
+                        null,
+                        entity("minecraft:block_display", entityId, 3.0D)
+                ))
+        );
+
+        this.repository.saveDraft(layout, draft);
+
+        RecoveryDraft restored = this.repository.loadDraft(layout).orElseThrow();
+        assertEquals(1, restored.entityChanges().size());
+        assertEquals(entityId, restored.entityChanges().getFirst().entityId());
+        assertEquals("minecraft:block_display", restored.entityChanges().getFirst().newValue().entityType());
+    }
+
     private static RecoveryDraft draft(String blockId, Instant updatedAt) {
         return new RecoveryDraft(
                 "project",
@@ -113,8 +147,20 @@ class RecoveryRepositoryTest {
     }
 
     private static StatePayload payload(String blockId) {
-        net.minecraft.nbt.CompoundTag state = new net.minecraft.nbt.CompoundTag();
+        CompoundTag state = new CompoundTag();
         state.putString("Name", blockId);
         return new StatePayload(state, null);
+    }
+
+    private static EntityPayload entity(String type, String uuid, double x) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", type);
+        tag.putString("UUID", uuid);
+        ListTag pos = new ListTag();
+        pos.add(DoubleTag.valueOf(x));
+        pos.add(DoubleTag.valueOf(64.0D));
+        pos.add(DoubleTag.valueOf(1.0D));
+        tag.put("Pos", pos);
+        return new EntityPayload(tag);
     }
 }

@@ -1,12 +1,18 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.PatchMetadata;
+import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.storage.ProjectLayout;
 import java.nio.file.Path;
 import java.util.List;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.ListTag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -46,16 +52,56 @@ class PatchDataRepositoryTest {
         assertTrue(metadata.chunks().stream().anyMatch(slice -> slice.chunkX() == 1 && slice.chunkZ() == 0));
     }
 
+    @Test
+    void roundTripsEntityChangesInChunkPayload() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        String entityId = "00000000-0000-0000-0000-000000000030";
+        List<StoredEntityChange> entityChanges = List.of(new StoredEntityChange(
+                entityId,
+                "minecraft:block_display",
+                entity("minecraft:block_display", entityId, 1.0D),
+                entity("minecraft:block_display", entityId, 2.0D)
+        ));
+
+        PatchMetadata metadata = this.repository.writePayload(
+                layout,
+                "patch-entity",
+                "project",
+                "v0002",
+                List.of(),
+                entityChanges
+        );
+        PatchWorldChanges restored = this.repository.loadWorldChanges(layout, metadata);
+
+        assertTrue(restored.blockChanges().isEmpty());
+        assertEquals(1, restored.entityChanges().size());
+        assertEquals(entityId, restored.entityChanges().getFirst().entityId());
+        assertEquals(2.0D, restored.entityChanges().getFirst().newValue()
+                .entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
+    }
+
     private static StatePayload payload(String blockId, net.minecraft.nbt.CompoundTag blockEntity) {
-        net.minecraft.nbt.CompoundTag state = new net.minecraft.nbt.CompoundTag();
+        CompoundTag state = new CompoundTag();
         state.putString("Name", blockId);
         return new StatePayload(state, blockEntity);
     }
 
-    private static net.minecraft.nbt.CompoundTag blockEntity(String id, int items) {
-        net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
+    private static CompoundTag blockEntity(String id, int items) {
+        CompoundTag tag = new CompoundTag();
         tag.putString("id", id);
         tag.putInt("Items", items);
         return tag;
+    }
+
+    private static EntityPayload entity(String type, String uuid, double x) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", type);
+        tag.putString("UUID", uuid);
+        ListTag pos = new ListTag();
+        pos.add(DoubleTag.valueOf(x));
+        pos.add(DoubleTag.valueOf(64.0D));
+        pos.add(DoubleTag.valueOf(1.0D));
+        tag.put("Pos", pos);
+        return new EntityPayload(tag);
     }
 }
