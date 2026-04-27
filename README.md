@@ -22,7 +22,7 @@ It gives builders safety history for a build area.
 
 You can save builds, see changes, restore earlier states, try alternate branches, import/export portable history packages, combine imported branches back into your build, and recover pending edits after a crash.
 
-Lumi only activates for players with operator-level permissions or when cheats are enabled in the world.
+Lumi's UI operations are intended for the local world owner. On dedicated servers, mutating Lumi actions require operator-level permissions; in singleplayer integrated worlds, builder edits are captured for history and live undo/redo immediately.
 
 The normal UI uses builder terms:
 
@@ -69,7 +69,7 @@ Use Lumi if you want to:
 - recovery drafts with WAL compaction
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
 - material delta summaries and integrity checks under focused details/diagnostic screens
-- zip import/export under `More`, including branch-scoped packages with optional previews
+- zip import/export under `More`, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews
 - imported review projects with deletion, cached combine review, and same-area overlays for shared branches
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
@@ -159,7 +159,7 @@ Main files:
 History archives and share packages are written under:
 
 ```text
-<save>/lumi/exports/
+<game>/lumi-projects/
 ```
 
 See [docs/storage-format.md](docs/storage-format.md) for the full format.
@@ -212,7 +212,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 ## Quick Start
 
 1. Open a local singleplayer save.
-2. Make sure cheats are enabled or the player has operator-level permissions.
+2. On dedicated servers, make sure the player has operator-level permissions. In local singleplayer, tracked builder actions start immediately.
 3. Press `U`.
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.

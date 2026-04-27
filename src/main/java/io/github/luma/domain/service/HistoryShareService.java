@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.HistoryPackageImportResult;
+import io.github.luma.domain.model.HistoryPackageFileSummary;
 import io.github.luma.domain.model.ImportedHistoryProjectSummary;
 import io.github.luma.domain.model.ProjectArchiveExportResult;
 import io.github.luma.domain.model.ProjectArchiveManifest;
@@ -163,6 +164,14 @@ public final class HistoryShareService {
         }
         importedProjects.sort(Comparator.comparing(ImportedHistoryProjectSummary::updatedAt).reversed());
         return List.copyOf(importedProjects);
+    }
+
+    public List<HistoryPackageFileSummary> listPackageFiles(MinecraftServer server) throws IOException {
+        return this.projectArchiveService.listPackageFiles(server);
+    }
+
+    public Path ensurePackageFolder(MinecraftServer server) throws IOException {
+        return this.projectArchiveService.ensurePackageRoot(server);
     }
 
     public void deleteImportedProject(

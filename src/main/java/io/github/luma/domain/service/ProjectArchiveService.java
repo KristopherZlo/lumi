@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.HistoryPackageFileSummary;
 import io.github.luma.domain.model.ProjectArchiveExportResult;
 import io.github.luma.domain.model.ProjectArchiveImportResult;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
@@ -8,21 +9,35 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectArchiveRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
+import java.util.function.Supplier;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.level.storage.LevelResource;
 
 public final class ProjectArchiveService {
 
+    public static final String PACKAGE_FOLDER_NAME = "lumi-projects";
     private static final DateTimeFormatter ARCHIVE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT)
             .withZone(ZoneOffset.UTC);
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final ProjectArchiveRepository projectArchiveRepository = new ProjectArchiveRepository();
+    private final Supplier<Path> gameRootSupplier;
+
+    public ProjectArchiveService() {
+        this(() -> FabricLoader.getInstance().getGameDir());
+    }
+
+    ProjectArchiveService(Supplier<Path> gameRootSupplier) {
+        this.gameRootSupplier = gameRootSupplier;
+    }
 
     public ProjectArchiveExportResult exportProject(MinecraftServer server, String projectName, boolean includePreviews) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
@@ -53,7 +68,48 @@ public final class ProjectArchiveService {
     }
 
     public Path exportsRoot(MinecraftServer server) {
-        return server.getWorldPath(LevelResource.ROOT).resolve("lumi").resolve("exports");
+        return this.packageRoot(server);
+    }
+
+    public Path packageRoot(MinecraftServer server) {
+        return this.gameRootSupplier.get().resolve(PACKAGE_FOLDER_NAME).normalize();
+    }
+
+    public List<HistoryPackageFileSummary> listPackageFiles(MinecraftServer server) throws IOException {
+        Path packageRoot = this.packageRoot(server);
+        Files.createDirectories(packageRoot);
+        try (var stream = Files.list(packageRoot)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip"))
+                    .map(this::summarizePackageFile)
+                    .sorted(Comparator.comparing(HistoryPackageFileSummary::updatedAt).reversed())
+                    .toList();
+        }
+    }
+
+    public Path ensurePackageRoot(MinecraftServer server) throws IOException {
+        Path packageRoot = this.packageRoot(server);
+        Files.createDirectories(packageRoot);
+        return packageRoot;
+    }
+
+    private HistoryPackageFileSummary summarizePackageFile(Path archiveFile) {
+        try {
+            return new HistoryPackageFileSummary(
+                    archiveFile.toAbsolutePath().normalize(),
+                    archiveFile.getFileName().toString(),
+                    Files.size(archiveFile),
+                    Files.getLastModifiedTime(archiveFile).toInstant()
+            );
+        } catch (IOException exception) {
+            return new HistoryPackageFileSummary(
+                    archiveFile.toAbsolutePath().normalize(),
+                    archiveFile.getFileName().toString(),
+                    0L,
+                    Instant.EPOCH
+            );
+        }
     }
 
     private String archiveFileName(String projectName, Instant now) {

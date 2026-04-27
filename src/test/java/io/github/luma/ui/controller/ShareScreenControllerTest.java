@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.HistoryPackageImportResult;
+import io.github.luma.domain.model.HistoryPackageFileSummary;
 import io.github.luma.domain.model.ImportedHistoryProjectSummary;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationProgress;
@@ -15,6 +16,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VariantMergeApplyRequest;
 import io.github.luma.domain.model.VariantMergePlan;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -34,8 +36,10 @@ class ShareScreenControllerTest {
 
         assertEquals(1, query.projectLoads);
         assertEquals(1, query.importedProjectLoads);
+        assertEquals(1, query.packageFileLoads);
         assertEquals(0, actions.previewCalls);
         assertEquals("Tower - Shared Roof pass", state.importedProjects().getFirst().projectName());
+        assertEquals("roof-pass.zip", state.packageFiles().getFirst().fileName());
 
         controller.previewMerge("Tower", "Tower - Shared Roof pass", "roof-pass", "main");
         assertEquals(1, actions.previewCalls);
@@ -45,6 +49,7 @@ class ShareScreenControllerTest {
 
         private int projectLoads;
         private int importedProjectLoads;
+        private int packageFileLoads;
 
         @Override
         public boolean hasSingleplayerServer() {
@@ -97,6 +102,22 @@ class ShareScreenControllerTest {
         }
 
         @Override
+        public Path packageFolder() {
+            return Path.of("lumi-projects");
+        }
+
+        @Override
+        public List<HistoryPackageFileSummary> loadPackageFiles() {
+            this.packageFileLoads += 1;
+            return List.of(new HistoryPackageFileSummary(
+                    Path.of("lumi-projects", "roof-pass.zip"),
+                    "roof-pass.zip",
+                    4096L,
+                    instant(180)
+            ));
+        }
+
+        @Override
         public OperationSnapshot loadOperationSnapshot(BuildProject project) {
             return new OperationSnapshot(
                     new OperationHandle("op", project.id().toString(), "import", instant(120), false),
@@ -124,6 +145,10 @@ class ShareScreenControllerTest {
 
         @Override
         public void deleteImportedProject(String targetProjectName, String importedProjectName) {
+        }
+
+        @Override
+        public void openPackageFolder() {
         }
 
         @Override
