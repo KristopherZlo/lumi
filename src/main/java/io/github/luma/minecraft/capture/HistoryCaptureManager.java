@@ -942,6 +942,7 @@ public final class HistoryCaptureManager {
                 result.bufferBefore(),
                 result.bufferAfter()
         );
+        this.recordReconciledUndoRedoChanges(trackedProject, level, result.deltaChanges(), Instant.now());
         if (session.buffer().isEmpty()) {
             this.activeBuffers.remove(projectId);
             this.activeSessions.remove(projectId);
@@ -954,6 +955,30 @@ public final class HistoryCaptureManager {
                     trackedProject.project().name()
             );
             LumaMod.LOGGER.info("Discarded empty active buffer for project {} after reconciliation", trackedProject.project().name());
+        }
+    }
+
+    private void recordReconciledUndoRedoChanges(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            Instant now
+    ) {
+        if (changes == null || changes.isEmpty()) {
+            return;
+        }
+        for (StoredBlockChange change : changes) {
+            if (change == null || change.isNoOp()) {
+                continue;
+            }
+            UndoRedoHistoryManager.getInstance().recordRelatedChange(
+                    trackedProject.project().id().toString(),
+                    level.dimension().identifier().toString(),
+                    change,
+                    now,
+                    SECONDARY_ACTION_JOIN_WINDOW,
+                    SECONDARY_SOURCE_JOIN_RADIUS
+            );
         }
     }
 

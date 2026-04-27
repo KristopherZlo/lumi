@@ -95,7 +95,8 @@ public final class SessionStabilizationService {
                     composedChanges.size(),
                     bufferBefore,
                     bufferAfter,
-                    false
+                    false,
+                    deltaChanges
             );
         } catch (RuntimeException exception) {
             session.requeuePendingChunks(pendingChunks);
@@ -286,15 +287,20 @@ public final class SessionStabilizationService {
             int composedChangeCount,
             int bufferBefore,
             int bufferAfter,
-            boolean inFlight
+            boolean inFlight,
+            List<StoredBlockChange> deltaChanges
     ) {
 
+        public ReconciliationResult {
+            deltaChanges = deltaChanges == null ? List.of() : List.copyOf(deltaChanges);
+        }
+
         public static ReconciliationResult noOp() {
-            return new ReconciliationResult(0, 0, 0, 0, 0, false);
+            return new ReconciliationResult(0, 0, 0, 0, 0, false, List.of());
         }
 
         public static ReconciliationResult busy() {
-            return new ReconciliationResult(0, 0, 0, 0, 0, true);
+            return new ReconciliationResult(0, 0, 0, 0, 0, true, List.of());
         }
     }
 
