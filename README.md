@@ -65,6 +65,7 @@ Use Lumi if you want to:
 - See Changes screen for saved states, branches, and the current build, with manual references hidden under Advanced
 - live undo and redo for the last tracked builder actions with default `Alt+Z` / `Alt+Y` bindings
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit, including reconciled fluid and falling-block deltas from whole-dimension sessions
+- runtime-only redstone state flips and piston animation blocks are ignored so active mechanisms do not pollute pending history or the recent `Alt` action overlay
 - hard restore that moves the active branch head
 - recovery drafts with WAL compaction
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
