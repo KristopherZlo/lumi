@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.BlockChangeRecord;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import java.io.IOException;
 import java.util.List;
@@ -112,7 +113,7 @@ public final class BlockChangeApplier {
             removeEntity(level, entityId);
         }
         for (CompoundTag entityTag : entityBatch.entitiesToUpdate()) {
-            removeEntity(level, entityTag.getString("UUID").orElse(""));
+            removeEntity(level, EntityPayload.readUuid(entityTag).map(UUID::toString).orElse(""));
             spawnEntity(level, entityTag);
         }
         for (CompoundTag entityTag : entityBatch.entitiesToSpawn()) {

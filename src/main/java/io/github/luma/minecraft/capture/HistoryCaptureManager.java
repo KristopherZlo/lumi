@@ -6,9 +6,11 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.storage.ProjectLayout;
@@ -52,6 +54,7 @@ public final class HistoryCaptureManager {
     private static final int STARTUP_CAPTURE_TRACE_LIMIT = 32;
     private static final int CAPTURE_SUMMARY_ENTRY_LIMIT = 4;
     private static final WorldMutationCapturePolicy CAPTURE_POLICY = new WorldMutationCapturePolicy();
+    private static final EntityMutationCapturePolicy ENTITY_CAPTURE_POLICY = new EntityMutationCapturePolicy();
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -253,6 +256,94 @@ public final class HistoryCaptureManager {
         }
     }
 
+    public void recordEntityChange(
+            ServerLevel level,
+            EntityPayload oldPayload,
+            EntityPayload newPayload
+    ) {
+        io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
+        if (!this.canUseMutationSource(level.getServer(), source)) {
+            return;
+        }
+
+        try {
+            Optional<StoredEntityChange> capturedMutation = ENTITY_CAPTURE_POLICY.capture(source, oldPayload, newPayload);
+            if (capturedMutation.isEmpty()) {
+                return;
+            }
+            StoredEntityChange capturedChange = capturedMutation.get();
+            BlockPos pos = this.entityMutationPos(oldPayload, newPayload);
+            Instant now = Instant.now();
+            List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
+            if (matchingProjects.isEmpty()) {
+                if (!allowsAutomaticProjectCreation(source)) {
+                    LumaDebugLog.log(
+                            "capture",
+                            "Skipped {} entity mutation at {} in {} because no tracked workspace exists and the source cannot bootstrap one",
+                            source,
+                            pos,
+                            level.dimension().identifier()
+                    );
+                    return;
+                }
+                this.projectService.ensureWorldProject(level, defaultActor(source));
+                this.invalidateProjectCache(level.getServer());
+                matchingProjects = this.matchingProjects(level, pos);
+                LumaMod.LOGGER.info("Created world workspace automatically for entity mutation in {}", level.dimension().identifier());
+            }
+
+            for (TrackedProject trackedProject : matchingProjects) {
+                if (!this.canCaptureIntoSession(trackedProject, source, pos)) {
+                    continue;
+                }
+                if (!this.ensureTrackedChunk(trackedProject, level, pos, null, null, source, now)) {
+                    continue;
+                }
+
+                String projectId = trackedProject.project().id().toString();
+                TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
+                CaptureSessionState session = this.activeSessions.get(projectId);
+                if (session != null) {
+                    session.addRootChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
+                }
+
+                int pendingBefore = buffer.size();
+                buffer.addEntityChange(capturedChange, now);
+                this.recordUndoRedoEntityAction(trackedProject, level, capturedChange, now);
+                int pendingAfter = buffer.size();
+                this.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
+                LumaDebugLog.log(
+                        trackedProject.project(),
+                        "capture",
+                        "Tracked entity {} mutation {} for project {} at {} pending={} delta={}",
+                        source,
+                        capturedChange.entityId(),
+                        trackedProject.project().name(),
+                        pos,
+                        pendingAfter,
+                        pendingAfter - pendingBefore
+                );
+                this.logBufferProgress(trackedProject.project(), buffer, this.diagnosticsForSession(projectId));
+                if (buffer.isEmpty()) {
+                    this.activeBuffers.remove(projectId);
+                    this.activeSessions.remove(projectId);
+                    this.dirtySessions.remove(projectId);
+                    this.lastDraftFlushes.remove(projectId);
+                    this.clearSessionDiagnostics(projectId);
+                    this.persistenceCoordinator.deleteDraft(
+                            trackedProject.layout(),
+                            projectId,
+                            trackedProject.project().name()
+                    );
+                } else {
+                    this.dirtySessions.add(projectId);
+                }
+            }
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to capture entity change in {}", level.dimension().identifier(), exception);
+        }
+    }
+
     /**
      * Reconciles the pending version draft after an internal undo/redo world
      * operation has already applied the same state transition to the world.
@@ -264,10 +355,22 @@ public final class HistoryCaptureManager {
             String actor,
             Instant now
     ) throws IOException {
+        this.applyUndoRedoAdjustments(server, projectId, changes, List.of(), actor, now);
+    }
+
+    public void applyUndoRedoAdjustments(
+            MinecraftServer server,
+            String projectId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            String actor,
+            Instant now
+    ) throws IOException {
         this.serverThreadExecutor.run(server, () -> this.applyUndoRedoAdjustmentsOnServerThread(
                 server,
                 projectId,
                 changes,
+                entityChanges,
                 actor,
                 now
         ));
@@ -277,10 +380,11 @@ public final class HistoryCaptureManager {
             MinecraftServer server,
             String projectId,
             List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
             String actor,
             Instant now
     ) throws IOException {
-        if (changes == null || changes.isEmpty()) {
+        if ((changes == null || changes.isEmpty()) && (entityChanges == null || entityChanges.isEmpty())) {
             return;
         }
 
@@ -295,10 +399,16 @@ public final class HistoryCaptureManager {
                 now
         );
         CaptureSessionState session = this.activeSessions.get(projectId);
-        for (StoredBlockChange change : changes) {
+        for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
             buffer.addChange(change, now);
             if (session != null) {
                 session.addRootChunk(ChunkPoint.from(change.pos()));
+            }
+        }
+        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
+            buffer.addEntityChange(change, now);
+            if (session != null) {
+                session.addRootChunk(change.chunk());
             }
         }
 
@@ -320,7 +430,7 @@ public final class HistoryCaptureManager {
                     "Adjusted pending buffer for project {} after undo/redo by {} with {} changes; pending={}",
                     trackedProject.project().name(),
                     actor == null || actor.isBlank() ? "player" : actor,
-                    changes.size(),
+                    (changes == null ? 0 : changes.size()) + (entityChanges == null ? 0 : entityChanges.size()),
                     buffer.size()
             );
         }
@@ -637,6 +747,37 @@ public final class HistoryCaptureManager {
                 SECONDARY_ACTION_JOIN_WINDOW,
                 SECONDARY_SOURCE_JOIN_RADIUS
         );
+    }
+
+    private void recordUndoRedoEntityAction(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            StoredEntityChange change,
+            Instant now
+    ) {
+        if (change == null || change.isNoOp()) {
+            return;
+        }
+
+        String actionId = WorldMutationContext.currentActionId();
+        boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
+        if (actionAllowed && !actionId.isBlank()) {
+            UndoRedoHistoryManager.getInstance().recordEntityChange(
+                    trackedProject.project().id().toString(),
+                    level.dimension().identifier().toString(),
+                    actionId,
+                    WorldMutationContext.currentActor(),
+                    change,
+                    now
+            );
+        }
+    }
+
+    private BlockPos entityMutationPos(EntityPayload oldPayload, EntityPayload newPayload) {
+        if (newPayload != null) {
+            return newPayload.blockPos();
+        }
+        return oldPayload == null ? BlockPos.ZERO : oldPayload.blockPos();
     }
 
     private TrackedChangeBuffer getOrCreateBuffer(
@@ -1319,6 +1460,9 @@ public final class HistoryCaptureManager {
             }
             for (var change : buffer.orderedChanges()) {
                 this.addActiveChunk(ChunkPoint.from(change.pos()));
+            }
+            for (var change : buffer.orderedEntityChanges()) {
+                this.addActiveChunk(change.chunk());
             }
         }
 

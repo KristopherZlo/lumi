@@ -2,6 +2,7 @@ package io.github.luma.domain.model;
 
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
@@ -24,13 +25,24 @@ public record EntityPayload(
     }
 
     public ChunkPoint chunk() {
+        BlockPos pos = this.blockPos();
+        return new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
+    }
+
+    public BlockPos blockPos() {
         ListTag pos = this.entityTag.getListOrEmpty("Pos");
         if (pos.size() >= 3) {
-            int chunkX = floorToBlock(pos.getDoubleOr(0, 0.0D)) >> 4;
-            int chunkZ = floorToBlock(pos.getDoubleOr(2, 0.0D)) >> 4;
-            return new ChunkPoint(chunkX, chunkZ);
+            return new BlockPos(
+                    floorToBlock(pos.getDoubleOr(0, 0.0D)),
+                    floorToBlock(pos.getDoubleOr(1, 0.0D)),
+                    floorToBlock(pos.getDoubleOr(2, 0.0D))
+            );
         }
-        return new ChunkPoint(0, 0);
+        return BlockPos.ZERO;
+    }
+
+    public Optional<UUID> uuid() {
+        return readUuid(this.entityTag);
     }
 
     public CompoundTag copyTag() {
@@ -42,7 +54,7 @@ public record EntityPayload(
         return coordinate < truncated ? truncated - 1 : truncated;
     }
 
-    private static Optional<UUID> readUuid(CompoundTag tag) {
+    public static Optional<UUID> readUuid(CompoundTag tag) {
         Optional<int[]> rawUuid = tag.getIntArray("UUID");
         if (rawUuid.isPresent() && rawUuid.get().length == 4) {
             int[] values = rawUuid.get();
