@@ -144,6 +144,7 @@ def testClientModVersions = [
         rrls                 : '5.1.15+mc1.21.11-fabric',
         fastQuit             : '3.1.3+mc1.21.11',
         particleCore         : '0.3.2+1.21.11',
+        axiom                : '5.4.1',
         fabricLanguageKotlin : '1.13.10+kotlin.2.3.20',
         yacl                 : '3.8.2+1.21.11-fabric',
         fzzyConfig           : '0.7.6+1.21.11',
@@ -174,6 +175,7 @@ dependencies {
 
     testClientMods "maven.modrinth:fabric-api:${project.fabric_api_version}"
     testClientMods "maven.modrinth:worldedit:${project.worldedit_version}"
+    testClientMods "maven.modrinth:axiom:${testClientModVersions.axiom}"
     testClientMods "maven.modrinth:fabric-language-kotlin:${testClientModVersions.fabricLanguageKotlin}"
     testClientMods "maven.modrinth:yacl:${testClientModVersions.yacl}"
     testClientMods "maven.modrinth:fzzy-config:${testClientModVersions.fzzyConfig}"
