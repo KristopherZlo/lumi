@@ -1,6 +1,7 @@
 package io.github.luma.mixin;
 
 import io.github.luma.integration.axiom.AxiomBlockBufferCaptureService;
+import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -27,11 +28,28 @@ abstract class AxiomSetBufferPacketMixin {
             @Coerce Object player,
             CallbackInfo ci
     ) {
+        WorldMutationCaptureGuard.pushDirectSectionCaptureSuppression();
         if (!(level instanceof ServerLevel serverLevel)) {
             return;
         }
 
         ServerPlayer serverPlayer = player instanceof ServerPlayer typedPlayer ? typedPlayer : null;
         AxiomBlockBufferCaptureService.getInstance().captureBeforeApply(blockBuffer, serverLevel, serverPlayer);
+    }
+
+    @Inject(
+            method = "applyBlockBufferServer",
+            at = @At("RETURN"),
+            remap = false,
+            require = 0
+    )
+    private static void luma$releaseAxiomBlockBufferCaptureSuppression(
+            @Coerce Object blockBuffer,
+            @Coerce Object level,
+            @Coerce Object changedRegion,
+            @Coerce Object player,
+            CallbackInfo ci
+    ) {
+        WorldMutationCaptureGuard.popDirectSectionCaptureSuppression();
     }
 }
