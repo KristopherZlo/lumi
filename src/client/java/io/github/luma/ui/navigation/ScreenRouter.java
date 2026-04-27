@@ -1,7 +1,12 @@
 package io.github.luma.ui.navigation;
+
+import io.github.luma.ui.screen.AdvancedScreen;
+import io.github.luma.ui.screen.CleanupScreen;
 import io.github.luma.ui.screen.CompareScreen;
 import io.github.luma.ui.screen.CreateProjectScreen;
 import io.github.luma.ui.screen.DashboardScreen;
+import io.github.luma.ui.screen.DiagnosticsScreen;
+import io.github.luma.ui.screen.MoreScreen;
 import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.RecoveryScreen;
 import io.github.luma.ui.screen.SaveDetailsScreen;
@@ -62,6 +67,22 @@ public final class ScreenRouter {
 
     public void openSettings(Screen parent, String projectName) {
         this.client.setScreen(new SettingsScreen(parent, projectName));
+    }
+
+    public void openMore(Screen parent, String projectName) {
+        this.client.setScreen(new MoreScreen(parent, projectName));
+    }
+
+    public void openDiagnostics(Screen parent, String projectName) {
+        this.client.setScreen(new DiagnosticsScreen(parent, projectName));
+    }
+
+    public void openCleanup(Screen parent, String projectName) {
+        this.client.setScreen(new CleanupScreen(parent, projectName));
+    }
+
+    public void openAdvanced(Screen parent, String projectName) {
+        this.client.setScreen(new AdvancedScreen(parent, projectName));
     }
 
     public void openVariants(Screen parent, String projectName) {

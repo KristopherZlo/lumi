@@ -16,7 +16,7 @@ Lumi only works for players with operator-level permissions or when cheats are e
 - Use `Alt+Y` to redo the latest undone Lumi action.
 - Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
 - Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.
-- Use `Projects` in the header to move between dimensions.
+- Use `More` -> `Projects` when you need to switch dimensions or choose another workspace.
 
 ## Legacy Manual Projects
 
@@ -24,18 +24,16 @@ Manual bounded project workflows are not exposed through commands. Use the Lumi 
 
 ## Main Screen
 
-The main project screen is now a home screen first and a history screen second.
-
-The first block is `What do you want to do?`.
+The main screen is `Build History` for the current dimension. It is designed around builder actions instead of internal history terms.
 
 It is meant to answer these questions in a few seconds:
 
 - where you are
 - whether anything changed
 - how to save right now
-- how to restore the latest save
-- how to see saved moments
-- how to try or share ideas
+- how to see changes
+- how to restore from a selected save
+- where ideas and rare tools live
 
 The top block shows:
 
@@ -44,16 +42,15 @@ The top block shows:
 - whether there are unsaved changes
 - added, removed, and changed block counts when a draft exists
 
-The primary action is `Save now`.
+The primary action is `Save build`.
 
 Secondary actions stay short:
 
-- `Go back`
-- `Show them`
+- `See changes`
 - `Ideas`
-- `Share`
+- `More`
 
-Below that, `Saved moments` shows recent save cards for the selected idea.
+Below that, `Recent saves` shows recent save cards for the selected idea.
 
 Each card keeps only the essentials visible:
 
@@ -61,11 +58,10 @@ Each card keeps only the essentials visible:
 - time
 - small isometric preview
 - simple changed-block summary
-- `Look closer`
-- `See changes`
-- `Go back here`
+- `Open`
+- `Restore this save`
 
-Rare tools like the technical graph, diagnostics, and recovery log now stay under `More`.
+Rare tools like import/export, settings, cleanup, diagnostics, manual compare, technical graph, raw references, and legacy limited projects stay under `More` or `More` -> `Advanced`.
 
 Lumi stores new versions as patches first.
 
@@ -103,17 +99,17 @@ The save screen is intentionally small:
 - `Save`
 - `Cancel`
 
-If you need the advanced rewrite flow, open `More` and use `Replace latest save`.
+If you need the advanced rewrite flow, open `More` on the save screen and use `Replace latest save`.
 
 ## Restore
 
 Restore rebuilds the selected state from history data.
 
-Lumi first tries direct replay or rollback on the active variant line.
+Lumi first tries direct replay or rollback on the active idea line.
 
 If that is not valid, it falls back to checkpoint snapshot plus patch chain.
 
-After restore, the active variant head moves to the selected version.
+After restore, the active idea head moves to the selected save.
 
 That means restore behaves like a hard reset for the project.
 
@@ -123,7 +119,7 @@ If you restore `Initial`, Lumi restores only chunks that the current project has
 
 It does not roll back unrelated game state like inventory, time, gamerules, or untouched chunks.
 
-Before an `Initial` restore starts, Lumi shows the planned mode, branch, base version, target version, and affected chunk count in a confirmation block above the scrollable workspace panes.
+Every restore from a save card or save details screen requires confirmation. Before an `Initial` restore starts, Lumi also shows the planned mode, idea, base save, target save, and affected chunk count in a confirmation block above the scrollable workspace panes.
 If the stored generator or datapack fingerprint no longer matches the world, automatic generator regeneration is blocked and Lumi stays on the safer history/baseline path.
 
 Runtime rules:
@@ -146,78 +142,76 @@ From that screen you can:
 
 Recovery is only a stored copy of unsaved changes.
 
-It does not create a hidden variant.
+It does not create a hidden idea.
 
-More technical recovery details are still available, but they are hidden behind `More`.
+Restore and delete actions require confirmation. More technical recovery details are still available, but they are hidden behind `More`.
 
-## Variants
+## Ideas
 
-Variants are separate version heads inside one project.
+Ideas are separate build directions inside one project.
 
-Use the `Variants` screen to:
+Use the `Ideas` screen to:
 
-- see the active variant
-- create a new variant from the current latest save
-- create a new variant from a specific save
-- switch the active variant
-- compare a variant against the current build
+- see the active idea
+- create a new idea from the current build or a selected save
+- switch the active idea
+- open saves for one idea
+- compare an idea against the current build from `More`
 
-When you switch variants, Lumi restores that variant head into the map.
+When you switch ideas, Lumi restores that idea head into the map.
 
 Future saves continue from that head.
 
-## Share
+## Import / Export
 
-`Share` is the current merge-and-share MVP.
+`Import / Export` lives under `More` and is not part of the main Build History screen.
 
-Use the `Share` screen to:
+Use the `Import / Export` screen to:
 
 - import a shared package as a review project
 - review imported packages without leaving the current project
-- export one local variant as a history package
+- export the build history, current idea, or selected save as a package
 - choose whether exported packages include preview PNGs
 - delete imported review packages after you are done with them
-- merge an imported variant into a local target variant
+- combine an imported idea into your current build
 
 Import comes first on the screen because it is the usual starting point.
 
-After a package is imported, Lumi keeps you on `Share`, selects that imported review project, and builds a merge review against the current active local variant automatically.
-That merge review runs in the background and is cached for the selected imported package and target variant, so reopening the same review does not repeat the file scan unless the imported package list changes.
+After a package is imported, Lumi keeps you on `Import / Export`, selects that imported review project, and builds a combine review against the current active local idea automatically.
+That combine review runs in the background and is cached for the selected imported package and target idea, so reopening the same review does not repeat the file scan unless the imported package list changes.
 
-Merge conflicts are grouped into conflict zones instead of one long raw block list.
+Same-area changes are grouped into review zones instead of one long raw block list.
 
 For each zone you can:
 
-- keep local
+- keep mine
 - use imported
 - skip for now
 - show that zone in world
 
-You can also show all conflict zones at once. Failed imports, incompatible packages, and rejected merges are shown on the screen as validation messages instead of only falling back to a generic failure banner.
+You can also show all same-area zones at once. Failed imports, incompatible packages, and rejected combines are shown on the screen as validation messages instead of only falling back to a generic failure banner.
 
-Lumi only enables `Apply merge` when every conflict zone has a decision and the result would still bring in at least one imported change.
+Lumi only enables `Apply combine` when every same-area zone has a decision and the result would still bring in at least one imported change.
 
-## Compare
+## See Changes
 
-Open `Compare` from the main project screen, a save details screen, or the variants screen.
+Open `See changes` from Build History, a save details screen, or the Ideas screen.
 
 You can compare:
 
 - two saves
-- two variants
+- two ideas
 - a saved version against the current build
 
-Current compare output includes:
+Current See Changes output includes:
 
 - added, removed, and changed counts
 - material delta
 - sample of changed positions
 
-The compare screen keeps manual `From` and `To` fields, but the primary output is visual and action-oriented.
+Manual `From` and `To` references are hidden by default. Use `More details` -> `Advanced manual compare` when you need raw reference fields.
 
-It also has presets for common flows like parent, selected version, and active head.
-
-Running `Compare` now turns on the client-side world highlight for the resolved diff immediately.
+Running See Changes turns on the client-side world highlight for the resolved diff immediately.
 Press `H` to hide or show the current overlay without rebuilding the comparison.
 Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
 Dense diff regions render as an exposed translucent shell, so nearby changes stay readable instead of stacking into a solid color slab.
@@ -226,7 +220,7 @@ If compare highlight is not active, holding `Alt` shows the latest 10 tracked Lu
 
 The overlay gives priority to changes near the camera.
 
-## Version Details
+## Save Details
 
 Open a save card to reach the save details screen.
 
@@ -235,35 +229,33 @@ The save details screen shows:
 - the save name
 - isometric preview with automatic empty-margin trimming
 - time
-- variant
 - change summary
 
 Primary actions stay focused:
 
-- `Restore`
-- `Compare to current build`
-- `Compare to previous save`
+- `Restore this save`
+- `See changes`
 
-Advanced actions like refresh preview, replace latest save, create variant from this save, and raw info stay under `More`.
+Advanced actions like refresh preview, replace latest save, create idea from this save, export this save, and raw info stay under `More`.
 
-`Partial restore` is also under `More`. Use it when you want to restore only a bounded region from the selected save. Preview the region first, then apply it. Lumi writes the result as a new save on the active variant instead of moving the variant head back to the older save.
+`Restore selected area` is also under `More`. Use it when you want to restore only a bounded region from the selected save. Min/Max coordinate fields appear only after you choose that action. Preview the region first, then apply it. Lumi writes the result as a new save on the active idea instead of moving the idea head back to the older save.
 
 ## Settings
 
 The settings screen includes:
 
-- change session idle timeout
-- checkpoint frequency
-- checkpoint volume threshold
 - safety snapshot before restore
 - preview generation
+- checkpoint frequency
+- checkpoint volume threshold
+- change session idle timeout
 - debug logging
 
-You can also archive the project there. Auto-version and favorite controls are no longer exposed because those workflows are not part of the supported UI surface.
+Project archive controls are no longer part of normal Settings. Cleanup, diagnostics, import/export, and advanced tools live under `More`. Auto-version and favorite controls are no longer exposed because those workflows are not part of the supported UI surface.
 
 ## Cleanup
 
-Cleanup is a UI workflow. Review the dry-run candidates before applying cleanup.
+Cleanup lives under `More` -> `Cleanup`. Review the dry-run candidates before applying cleanup.
 
 Cleanup can remove orphaned previews, unreferenced snapshots, disposable cache files outside `baseline-chunks`, and stale operation drafts.
 

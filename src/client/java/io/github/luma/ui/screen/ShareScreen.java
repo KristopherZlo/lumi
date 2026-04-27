@@ -63,7 +63,7 @@ public final class ShareScreen extends LumaScreen {
     private int refreshCooldown = 0;
 
     public ShareScreen(Screen parent, String projectName) {
-        super(Component.translatable("luma.screen.share.title", projectName));
+        super(Component.translatable("luma.screen.import_export.title"));
         this.parent = parent;
         this.projectName = projectName;
     }
@@ -87,7 +87,6 @@ public final class ShareScreen extends LumaScreen {
 
         FlowLayout header = LumaUi.actionRow();
         header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        header.child(LumaUi.button(Component.translatable("luma.action.workspaces"), button -> this.router.openDashboard(this)));
         frame.child(header);
 
         if (this.state.project() == null) {
@@ -99,7 +98,7 @@ public final class ShareScreen extends LumaScreen {
         }
 
         FlowLayout titleRow = LumaUi.actionRow();
-        titleRow.child(LumaUi.value(Component.translatable("luma.screen.share.title", this.projectName)));
+        titleRow.child(LumaUi.value(Component.translatable("luma.screen.import_export.title")));
         titleRow.child(LumaUi.chip(Component.translatable(
                 "luma.dashboard.current_dimension",
                 ProjectUiSupport.dimensionLabel(this.state.project().dimensionId())
@@ -113,7 +112,6 @@ public final class ShareScreen extends LumaScreen {
         if (!this.validationMessage.isBlank()) {
             frame.child(LumaUi.danger(Component.literal(this.validationMessage)));
         }
-        frame.child(this.navigationRow());
         if (this.state.operationSnapshot() != null) {
             frame.child(this.operationSection());
         }
@@ -169,7 +167,7 @@ public final class ShareScreen extends LumaScreen {
                 this,
                 this.projectName
         )));
-        ButtonComponent shareButton = LumaUi.button(Component.translatable("luma.tab.share"), button -> this.refresh("luma.status.share_ready"));
+        ButtonComponent shareButton = LumaUi.button(Component.translatable("luma.tab.import_export"), button -> this.refresh("luma.status.share_ready"));
         shareButton.active(false);
         navigation.child(shareButton);
         return navigation;
@@ -177,7 +175,7 @@ public final class ShareScreen extends LumaScreen {
 
     private FlowLayout importSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.share.import_title"),
+                Component.translatable("luma.import_export.import_title"),
                 Component.translatable("luma.share.import_help")
         );
         this.importArchiveInput = UIComponents.textBox(Sizing.fill(100), this.importArchivePath);
@@ -186,7 +184,7 @@ public final class ShareScreen extends LumaScreen {
         section.child(this.importArchiveInput);
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent importButton = LumaUi.primaryButton(Component.translatable("luma.action.import_history"), button -> this.importPackage());
+        ButtonComponent importButton = LumaUi.primaryButton(Component.translatable("luma.action.import_package"), button -> this.importPackage());
         importButton.active(!this.importArchivePath.isBlank() && !this.operationActive());
         actions.child(importButton);
         section.child(actions);
@@ -199,7 +197,7 @@ public final class ShareScreen extends LumaScreen {
 
     private FlowLayout importedPackagesSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.share.packages_title"),
+                Component.translatable("luma.import_export.packages_title"),
                 Component.translatable("luma.share.packages_help")
         );
 
@@ -230,7 +228,7 @@ public final class ShareScreen extends LumaScreen {
                 this,
                 importedProject.projectName()
         )));
-        ButtonComponent reviewButton = LumaUi.button(Component.translatable("luma.action.review_merge"), button -> {
+        ButtonComponent reviewButton = LumaUi.button(Component.translatable("luma.action.combine_with_build"), button -> {
             this.selectedImportedProjectName = importedProject.projectName();
             this.selectedImportedVariantId = importedProject.variantId();
             this.selectedImportedVariantName = importedProject.variantName();
@@ -256,7 +254,7 @@ public final class ShareScreen extends LumaScreen {
 
     private FlowLayout mergePreviewPendingSection() {
         FlowLayout section = LumaUi.insetSection(
-                Component.translatable("luma.share.merge_preview_title"),
+                Component.translatable("luma.import_export.combine_review_title"),
                 Component.translatable("luma.share.merge_preview_loading")
         );
         section.child(LumaUi.caption(Component.translatable(
@@ -270,7 +268,7 @@ public final class ShareScreen extends LumaScreen {
         ProjectVersion commonAncestor = ProjectUiSupport.versionFor(this.state.versions(), this.mergePlan.commonAncestorVersionId());
         FlowLayout section = LumaUi.insetSection(
                 Component.translatable(
-                        "luma.share.merge_review_title",
+                        "luma.import_export.combine_review_title_with_names",
                         this.importedVariantLabel(),
                         ProjectUiSupport.displayVariantName(this.state.variants(), this.selectedTargetVariantId)
                 ),
@@ -335,7 +333,7 @@ public final class ShareScreen extends LumaScreen {
         }
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent mergeButton = LumaUi.primaryButton(Component.translatable("luma.action.merge_variant"), button -> {
+        ButtonComponent mergeButton = LumaUi.primaryButton(Component.translatable("luma.action.apply_combine"), button -> {
             String statusKey = this.controller.startMerge(new VariantMergeApplyRequest(
                         this.projectName,
                         this.selectedImportedProjectName,
@@ -395,7 +393,7 @@ public final class ShareScreen extends LumaScreen {
         card.child(LumaUi.caption(Component.translatable(this.zoneStatusKey(resolution))));
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent keepLocal = LumaUi.button(Component.translatable("luma.action.keep_local"), button -> {
+        ButtonComponent keepLocal = LumaUi.button(Component.translatable("luma.action.keep_mine"), button -> {
             this.conflictResolutions.put(zone.id(), MergeConflictResolution.KEEP_LOCAL);
             this.refresh("luma.status.merge_conflicts_found");
         });
@@ -432,7 +430,7 @@ public final class ShareScreen extends LumaScreen {
 
     private FlowLayout exportSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.share.export_title"),
+                Component.translatable("luma.import_export.export_title"),
                 Component.translatable("luma.share.export_help")
         );
         section.child(LumaUi.caption(Component.translatable(
@@ -455,7 +453,7 @@ public final class ShareScreen extends LumaScreen {
         section.child(previewToggle);
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent exportButton = LumaUi.primaryButton(Component.translatable("luma.action.export_history"), button -> {
+        ButtonComponent exportButton = LumaUi.primaryButton(Component.translatable("luma.action.export_package"), button -> {
             var result = this.controller.exportVariantPackage(this.projectName, this.selectedExportVariantId, this.includePreviews);
             this.validationMessage = this.controller.lastValidationMessage();
             this.lastExportPath = result == null ? "" : result.archiveFile().toString();

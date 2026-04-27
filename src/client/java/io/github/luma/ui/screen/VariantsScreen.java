@@ -48,7 +48,7 @@ public final class VariantsScreen extends LumaScreen {
     }
 
     public VariantsScreen(Screen parent, String projectName, String baseVersionId) {
-        super(Component.translatable("luma.screen.variants.title", projectName));
+        super(Component.translatable("luma.screen.ideas.title", projectName));
         this.parent = parent;
         this.projectName = projectName;
         this.baseVersionId = baseVersionId == null ? "" : baseVersionId;
@@ -73,13 +73,9 @@ public final class VariantsScreen extends LumaScreen {
 
         FlowLayout header = LumaUi.actionRow();
         header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        header.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
-                this.parent,
-                this.projectName
-        )));
         frame.child(header);
 
-        frame.child(LumaUi.value(Component.translatable("luma.screen.variants.title", this.projectName)));
+        frame.child(LumaUi.value(Component.translatable("luma.screen.ideas.title", this.projectName)));
         frame.child(LumaUi.statusBanner(this.bannerText()));
 
         FlowLayout body = LumaUi.screenBody();
@@ -129,11 +125,11 @@ public final class VariantsScreen extends LumaScreen {
 
     private FlowLayout overviewSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.variants.overview_title"),
-                Component.translatable("luma.variants.overview_help")
+                Component.translatable("luma.ideas.overview_title"),
+                Component.translatable("luma.ideas.overview_help")
         );
         section.child(LumaUi.chip(Component.translatable(
-                "luma.project.active_variant",
+                "luma.build.current_idea",
                 ProjectUiSupport.displayVariantName(this.state.variants(), this.state.project().activeVariantId())
         )));
 
@@ -142,13 +138,9 @@ public final class VariantsScreen extends LumaScreen {
                 this,
                 this.projectName
         )));
-        ButtonComponent variantsButton = LumaUi.button(Component.translatable("luma.tab.variants"), button -> this.refresh("luma.status.project_ready"));
+        ButtonComponent variantsButton = LumaUi.button(Component.translatable("luma.tab.ideas"), button -> this.refresh("luma.status.project_ready"));
         variantsButton.active(false);
         navigation.child(variantsButton);
-        navigation.child(LumaUi.button(Component.translatable("luma.tab.share"), button -> this.router.openShare(
-                this,
-                this.projectName
-        )));
         section.child(navigation);
 
         if (this.state.operationSnapshot() != null) {
@@ -159,24 +151,24 @@ public final class VariantsScreen extends LumaScreen {
 
     private FlowLayout createSection(ProjectVersion baseVersion) {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.variants.create_title"),
+                Component.translatable("luma.ideas.create_title"),
                 Component.translatable(
-                        "luma.variants.create_help",
-                        baseVersion == null ? Component.translatable("luma.variants.current_variant_base") : Component.literal(ProjectUiSupport.displayMessage(baseVersion))
+                        "luma.ideas.create_help",
+                        baseVersion == null ? Component.translatable("luma.ideas.current_build_base") : Component.literal(ProjectUiSupport.displayMessage(baseVersion))
                 )
         );
 
         this.variantNameInput = UIComponents.textBox(Sizing.fill(100), this.variantName);
-        this.variantNameInput.setHint(Component.translatable("luma.variant.name_input"));
+        this.variantNameInput.setHint(Component.translatable("luma.idea.name_input"));
         this.variantNameInput.onChanged().subscribe(value -> this.variantName = value);
         section.child(LumaUi.formField(
-                Component.translatable("luma.variant.name_input"),
-                Component.translatable("luma.variants.name_help"),
+                Component.translatable("luma.idea.name_input"),
+                Component.translatable("luma.ideas.name_help"),
                 this.variantNameInput
         ));
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent createButton = LumaUi.primaryButton(Component.translatable("luma.action.variant_create"), button -> {
+        ButtonComponent createButton = LumaUi.primaryButton(Component.translatable("luma.action.create_idea"), button -> {
             String result = this.actionController.createVariant(this.projectName, this.variantName, this.baseVersionId);
             if ("luma.status.variant_created".equals(result)) {
                 this.variantName = "";
@@ -191,12 +183,12 @@ public final class VariantsScreen extends LumaScreen {
 
     private FlowLayout listSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.variants.list_title"),
-                Component.translatable("luma.variants.list_help")
+                Component.translatable("luma.ideas.list_title"),
+                Component.translatable("luma.ideas.list_help")
         );
 
         if (this.state.variants().isEmpty()) {
-            section.child(LumaUi.caption(Component.translatable("luma.variant.empty")));
+            section.child(LumaUi.caption(Component.translatable("luma.idea.empty")));
             return section;
         }
 
@@ -213,10 +205,10 @@ public final class VariantsScreen extends LumaScreen {
         FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
         card.child(LumaUi.value(Component.literal(ProjectUiSupport.displayVariantName(variant))));
         if (headVersion == null) {
-            card.child(LumaUi.caption(Component.translatable("luma.variants.no_head")));
+            card.child(LumaUi.caption(Component.translatable("luma.ideas.no_saves")));
         } else {
             card.child(LumaUi.caption(Component.translatable(
-                    "luma.variants.head_summary",
+                    "luma.ideas.latest_save",
                     ProjectUiSupport.displayMessage(headVersion),
                     ProjectUiSupport.formatTimestamp(headVersion.createdAt())
             )));
@@ -224,29 +216,26 @@ public final class VariantsScreen extends LumaScreen {
 
         FlowLayout meta = LumaUi.actionRow();
         if (active) {
-            meta.child(LumaUi.chip(Component.translatable("luma.variant.active_badge")));
-        }
-        if (variant.baseVersionId() != null && !variant.baseVersionId().isBlank()) {
-            meta.child(LumaUi.chip(Component.translatable("luma.variants.base_badge", variant.baseVersionId())));
+            meta.child(LumaUi.chip(Component.translatable("luma.idea.current_badge")));
         }
         card.child(meta);
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent switchButton = LumaUi.primaryButton(Component.translatable("luma.action.variant_switch"), button -> {
+        ButtonComponent switchButton = LumaUi.primaryButton(Component.translatable("luma.action.switch_idea"), button -> {
             String result = this.actionController.switchVariant(this.projectName, variant.id());
             this.router.openProjectIgnoringRecovery(this.parent, this.projectName, variant.id(), result);
         });
         switchButton.active(!active && !this.operationActive());
         actions.child(switchButton);
 
-        actions.child(LumaUi.button(Component.translatable("luma.action.open_history"), button -> this.router.openProjectIgnoringRecovery(
+        actions.child(LumaUi.button(Component.translatable("luma.action.open_saves"), button -> this.router.openProjectIgnoringRecovery(
                 this.parent,
                 this.projectName,
                 variant.id(),
                 "luma.status.project_ready"
         )));
 
-        ButtonComponent compareButton = LumaUi.button(Component.translatable("luma.variants.compare_current"), button -> this.router.openCompare(
+        ButtonComponent compareButton = LumaUi.button(Component.translatable("luma.action.see_changes"), button -> this.router.openCompare(
                 this,
                 this.projectName,
                 variant.headVersionId(),

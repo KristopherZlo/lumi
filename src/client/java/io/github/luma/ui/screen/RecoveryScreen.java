@@ -27,6 +27,8 @@ public final class RecoveryScreen extends LumaScreen {
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.recovery_ready";
     private boolean showDetails = false;
+    private boolean confirmRestore = false;
+    private boolean confirmDelete = false;
     private String saveMessage = "";
     private TextBoxComponent saveMessageInput;
 
@@ -85,6 +87,12 @@ public final class RecoveryScreen extends LumaScreen {
         var summaryState = draftSummary.get();
         body.child(this.summarySection(summaryState));
         body.child(this.saveSection(summaryState));
+        if (this.confirmRestore) {
+            body.child(this.restoreConfirmationSection());
+        }
+        if (this.confirmDelete) {
+            body.child(this.deleteConfirmationSection());
+        }
         body.child(this.actionSection());
         body.child(this.detailsSection(summaryState));
         body.child(LumaUi.bottomSpacer());
@@ -143,24 +151,63 @@ public final class RecoveryScreen extends LumaScreen {
 
         FlowLayout primary = LumaUi.actionRow();
         primary.child(LumaUi.primaryButton(Component.translatable("luma.action.recovery_restore"), button -> {
-            this.status = this.controller.restoreDraft(this.projectName);
-            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
+            this.confirmRestore = true;
+            this.confirmDelete = false;
+            this.rebuild();
         }));
         primary.child(LumaUi.primaryButton(Component.translatable("luma.action.recovery_save"), button -> {
             this.status = this.controller.saveDraftVersion(this.projectName, this.saveMessage);
             this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
         }));
         primary.child(LumaUi.button(Component.translatable("luma.action.recovery_discard"), button -> {
-            this.status = this.controller.discardDraft(this.projectName);
-            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
+            this.confirmDelete = true;
+            this.confirmRestore = false;
+            this.rebuild();
         }));
         section.child(primary);
         return section;
     }
 
+    private FlowLayout restoreConfirmationSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.recovery.restore_confirm_title"),
+                Component.translatable("luma.recovery.restore_confirm_help")
+        );
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(LumaUi.primaryButton(Component.translatable("luma.action.recovery_restore"), button -> {
+            this.status = this.controller.restoreDraft(this.projectName);
+            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
+        }));
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
+            this.confirmRestore = false;
+            this.rebuild();
+        }));
+        section.child(actions);
+        return section;
+    }
+
+    private FlowLayout deleteConfirmationSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.recovery.delete_confirm_title"),
+                Component.translatable("luma.recovery.delete_confirm_help")
+        );
+        section.child(LumaUi.danger(Component.translatable("luma.recovery.delete_confirm_warning")));
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(LumaUi.primaryButton(Component.translatable("luma.action.delete"), button -> {
+            this.status = this.controller.discardDraft(this.projectName);
+            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
+        }));
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
+            this.confirmDelete = false;
+            this.rebuild();
+        }));
+        section.child(actions);
+        return section;
+    }
+
     private FlowLayout detailsSection(io.github.luma.domain.model.RecoveryDraftSummary summaryState) {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.recovery.details_title"),
+                Component.translatable("luma.more.title"),
                 Component.translatable("luma.recovery.details_help")
         );
 

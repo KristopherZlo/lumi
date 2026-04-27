@@ -106,9 +106,13 @@ The current menu flow is centered around:
 - `RecoveryScreen`
 - `CompareScreen`
 - `SettingsScreen`
+- `MoreScreen`
+- `CleanupScreen`
+- `DiagnosticsScreen`
+- `AdvancedScreen`
 
 Controllers own service access and loading logic. Screens keep transient UI state. `LumaScreen` is the shared non-pausing base class for in-world menus. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
-`ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Share merge previews are requested only by explicit review actions, then cached by imported package and target variant while the screen is open.
+`ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Import / Export combine previews are requested only by explicit review actions, then cached by imported package and target idea while the screen is open.
 Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
 
 LDLib2 is the target UI toolkit for future migration. The published LDLib2 UI docs and source (`https://low-drag-mc.github.io/LowDragMC-Doc/ldlib2/ui/`, `https://github.com/Low-Drag-MC/LDLib2`) are currently NeoForge-oriented around Minecraft `1.21.1`, while Lumi targets Fabric `1.21.11`. Keep LDLib2 behind `UiToolkitRegistry` and reflection-style detection until a compatible Fabric runtime exists. Do not add a hard `fabric.mod.json` or Gradle runtime dependency that makes the Fabric build unlaunchable.
@@ -125,10 +129,10 @@ Current UX assumptions:
 - comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present
 - holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - holding `Alt` while compare highlight is inactive shows the latest 10 tracked Lumi actions with a fading temporary overlay
-- the dashboard is now secondary navigation from the workspace header
-- the workspace home screen is product-first and child-friendly: a LDLib2-style window with numbered cards for keep this moment, go back safely, saved moments, try another idea, and share or combine
-- low-frequency tools such as technical graph, diagnostics, and raw info live behind `More`
-- save composition, save details, variant management, and share/merge review now have dedicated screens instead of sharing one overloaded project page
+- the dashboard is now secondary navigation under `More` -> `Projects`
+- the workspace home screen is Build History: a LDLib2-style window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Ideas`, and `More`
+- low-frequency tools such as import/export, settings, cleanup, diagnostics, technical graph, manual compare, legacy limited projects, and raw info live behind `More` or `Advanced`
+- save composition, save details, idea management, import/export combine review, cleanup, diagnostics, and advanced tools now have dedicated screens instead of sharing one overloaded project page
 
 ## History architecture
 
@@ -146,13 +150,13 @@ Current runtime history behavior:
 - Changes are aggregated into an in-memory recovery draft immediately, then flushed asynchronously through the capture-maintenance executor and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `ProjectArchiveService` owns UI-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
-- `HistoryShareService` builds the `Share` flow on top of the same archive format by exporting one variant lineage, importing it back as a review project, and deleting imported review projects after validating they belong to the same project lineage.
-- `ShareScreenController` keeps history package import/export separate from the main home and variants screens, only asks `VariantMergeService` for a merge preview when the user explicitly reviews one imported package, and moves that preview work through a small background cache so the screen does not block on storage scans.
+- `HistoryShareService` backs the `Import / Export` flow on top of the same archive format by exporting one idea lineage, importing it back as a review project, and deleting imported review projects after validating they belong to the same project lineage.
+- `ShareScreenController` keeps history package import/export separate from Build History and Ideas, only asks `VariantMergeService` for a combine preview when the user explicitly reviews one imported package, and moves that preview work through a small background cache so the screen does not block on storage scans.
 - `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
 - Preview generation now queues lightweight request files on the server side and fulfills them later through the client-side `PreviewCaptureCoordinator`.
-- `RestoreService` prefers direct same-variant patch replay, including `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored version on success without deleting detached versions.
-- `RestoreService` also supports same-lineage partial restore from save details. It filters pending draft and direct patch changes to manual bounds, applies prepared batches through the operation model, then writes a new `PARTIAL_RESTORE` version on the active variant while preserving pending draft changes outside the selected region.
+- `RestoreService` prefers direct same-idea patch replay, including `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active idea head to the restored save on success without deleting detached saves.
+- `RestoreService` also supports same-lineage selected-area restore from save details. It filters pending draft and direct patch changes to manual bounds, applies prepared batches through the operation model, then writes a new `PARTIAL_RESTORE` version on the active idea while preserving pending draft changes outside the selected region.
 - `VariantService` keeps one head pointer per variant.
 - `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, and delegating merged version persistence to `VersionService`.
 - `DiffService` reconstructs version-to-version changes from patch history.

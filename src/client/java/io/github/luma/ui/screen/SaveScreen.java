@@ -76,13 +76,9 @@ public final class SaveScreen extends LumaScreen {
 
         FlowLayout header = LumaUi.actionRow();
         header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        header.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
-                this.parent,
-                this.projectName
-        )));
         frame.child(header);
 
-        frame.child(LumaUi.value(Component.translatable("luma.screen.save.title", this.projectName)));
+        frame.child(LumaUi.value(Component.translatable("luma.screen.save.title")));
         frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
 
         FlowLayout body = LumaUi.screenBody();
@@ -168,7 +164,7 @@ public final class SaveScreen extends LumaScreen {
                 null
         );
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent saveButton = LumaUi.primaryButton(Component.translatable("luma.action.save_version"), button -> {
+        ButtonComponent saveButton = LumaUi.primaryButton(Component.translatable("luma.action.save"), button -> {
             String result = this.controller.saveVersion(this.projectName, this.saveMessage);
             if ("luma.status.save_started".equals(result)) {
                 this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
@@ -205,7 +201,7 @@ public final class SaveScreen extends LumaScreen {
 
     private FlowLayout moreSection(ProjectVersion activeHead, boolean operationActive) {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.save.more_title"),
+                Component.translatable("luma.more.title"),
                 Component.translatable("luma.save.more_help")
         );
         FlowLayout toggle = LumaUi.actionRow();
