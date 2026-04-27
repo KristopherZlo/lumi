@@ -5,8 +5,10 @@ import com.google.gson.reflect.TypeToken;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.storage.GsonProvider;
 import io.github.luma.storage.ProjectLayout;
@@ -33,7 +35,7 @@ import net.jpountz.lz4.LZ4FrameOutputStream;
 public final class RecoveryRepository {
 
     private static final int DRAFT_MAGIC = 0x4C445246;
-    private static final int DRAFT_VERSION = 3;
+    private static final int DRAFT_VERSION = 4;
     private static final long WAL_COMPACT_THRESHOLD_BYTES = 512 * 1024;
     private static final Type JOURNAL_TYPE = new TypeToken<List<RecoveryJournalEntry>>() { }.getType();
 
@@ -45,7 +47,7 @@ public final class RecoveryRepository {
             LumaMod.LOGGER.info(
                     "Compacted recovery WAL for project storage {} with {} changes",
                     layout.root().getFileName(),
-                    draft.changes().size()
+                    draft.totalChangeCount()
             );
         }
     }
@@ -78,7 +80,7 @@ public final class RecoveryRepository {
         LumaMod.LOGGER.info(
                 "Saved operation draft for project storage {} with {} changes",
                 layout.root().getFileName(),
-                draft.changes().size()
+                draft.totalChangeCount()
         );
     }
 
@@ -221,6 +223,13 @@ public final class RecoveryRepository {
                 StorageIo.writeCompound(output, newValue.stateTag());
                 StorageIo.writeNullableCompound(output, newValue.blockEntityTag());
             }
+            output.writeInt(draft.entityChanges().size());
+            for (StoredEntityChange change : draft.entityChanges()) {
+                output.writeUTF(nullToEmpty(change.entityId()));
+                output.writeUTF(nullToEmpty(change.entityType()));
+                StorageIo.writeNullableCompound(output, change.oldValue() == null ? null : change.oldValue().copyTag());
+                StorageIo.writeNullableCompound(output, change.newValue() == null ? null : change.newValue().copyTag());
+            }
         }
         return buffer.toByteArray();
     }
@@ -229,7 +238,7 @@ public final class RecoveryRepository {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != DRAFT_MAGIC || version != DRAFT_VERSION) {
+            if (magic != DRAFT_MAGIC || (version != 3 && version != DRAFT_VERSION)) {
                 throw new IOException("Unsupported recovery draft format");
             }
 
@@ -252,7 +261,33 @@ public final class RecoveryRepository {
                         new StatePayload(StorageIo.readCompound(input), StorageIo.readNullableCompound(input))
                 ));
             }
-            return new RecoveryDraft(projectId, variantId, baseVersionId, actor, mutationSource, startedAt, updatedAt, changes);
+            List<StoredEntityChange> entityChanges = new ArrayList<>();
+            if (version >= 4) {
+                int entityChangeCount = input.readInt();
+                for (int index = 0; index < entityChangeCount; index++) {
+                    String entityId = input.readUTF();
+                    String entityType = input.readUTF();
+                    net.minecraft.nbt.CompoundTag oldTag = StorageIo.readNullableCompound(input);
+                    net.minecraft.nbt.CompoundTag newTag = StorageIo.readNullableCompound(input);
+                    entityChanges.add(new StoredEntityChange(
+                            entityId,
+                            entityType,
+                            oldTag == null ? null : new EntityPayload(oldTag),
+                            newTag == null ? null : new EntityPayload(newTag)
+                    ));
+                }
+            }
+            return new RecoveryDraft(
+                    projectId,
+                    variantId,
+                    baseVersionId,
+                    actor,
+                    mutationSource,
+                    startedAt,
+                    updatedAt,
+                    changes,
+                    entityChanges
+            );
         }
     }
 

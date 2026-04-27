@@ -21,6 +21,7 @@ public final class UndoRedoAction {
     private final Instant startedAt;
     private Instant updatedAt;
     private final LinkedHashMap<Long, StoredBlockChange> changes = new LinkedHashMap<>();
+    private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
 
     public UndoRedoAction(
             String id,
@@ -50,6 +51,7 @@ public final class UndoRedoAction {
         for (StoredBlockChange change : this.changes.values()) {
             copy.changes.put(key(change), change);
         }
+        copy.entityChanges.putAll(this.entityChanges);
         return copy;
     }
 
@@ -71,6 +73,23 @@ public final class UndoRedoAction {
         this.updatedAt = now;
     }
 
+    public void recordEntityChange(StoredEntityChange change, Instant now) {
+        if (change == null || change.entityId() == null || change.entityId().isBlank()) {
+            return;
+        }
+
+        StoredEntityChange current = this.entityChanges.get(change.entityId());
+        StoredEntityChange merged = current == null
+                ? change
+                : current.withLatestState(change.newValue());
+        if (merged.isNoOp()) {
+            this.entityChanges.remove(change.entityId());
+        } else {
+            this.entityChanges.put(change.entityId(), merged);
+        }
+        this.updatedAt = now;
+    }
+
     public boolean canAbsorbRelatedChange(
             String dimensionId,
             StoredBlockChange change,
@@ -78,7 +97,7 @@ public final class UndoRedoAction {
             Duration maxIdle,
             int chunkRadius
     ) {
-        if (change == null || change.isNoOp() || now == null || maxIdle == null || this.changes.isEmpty()) {
+        if (change == null || change.isNoOp() || now == null || maxIdle == null || this.isEmpty()) {
             return false;
         }
         if (!Objects.equals(this.dimensionId, dimensionId)) {
@@ -98,15 +117,22 @@ public final class UndoRedoAction {
                 return true;
             }
         }
+        for (StoredEntityChange existing : this.entityChanges.values()) {
+            ChunkPoint chunk = existing.chunk();
+            if (Math.abs(chunk.x() - targetChunkX) <= chunkRadius
+                    && Math.abs(chunk.z() - targetChunkZ) <= chunkRadius) {
+                return true;
+            }
+        }
         return false;
     }
 
     public boolean isEmpty() {
-        return this.changes.isEmpty();
+        return this.changes.isEmpty() && this.entityChanges.isEmpty();
     }
 
     public int size() {
-        return this.changes.size();
+        return this.changes.size() + this.entityChanges.size();
     }
 
     public List<StoredBlockChange> redoChanges() {
@@ -123,6 +149,24 @@ public final class UndoRedoAction {
         List<StoredBlockChange> inverse = new ArrayList<>();
         for (StoredBlockChange change : this.undoChanges()) {
             inverse.add(new StoredBlockChange(change.pos(), change.newValue(), change.oldValue()));
+        }
+        return List.copyOf(inverse);
+    }
+
+    public List<StoredEntityChange> redoEntityChanges() {
+        return List.copyOf(this.entityChanges.values());
+    }
+
+    public List<StoredEntityChange> undoEntityChanges() {
+        List<StoredEntityChange> ordered = new ArrayList<>(this.entityChanges.values());
+        Collections.reverse(ordered);
+        return List.copyOf(ordered);
+    }
+
+    public List<StoredEntityChange> inverseEntityChanges() {
+        List<StoredEntityChange> inverse = new ArrayList<>();
+        for (StoredEntityChange change : this.undoEntityChanges()) {
+            inverse.add(change.inverse());
         }
         return List.copyOf(inverse);
     }

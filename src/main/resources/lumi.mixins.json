@@ -5,6 +5,7 @@
   "mixins": [
     "ChunkAccessSectionOwnershipMixin",
     "CropBlockMixin",
+    "EntityMutationMixin",
     "AxiomSetBufferPacketMixin",
     "FallingBlockEntityMixin",
     "FallingBlockMixin",
@@ -19,6 +20,7 @@
     "ServerLevelEntityTickMixin",
     "ServerLevelExplosionMixin",
     "ServerGamePacketListenerMixin",
+    "ServerLevelEntityLifecycleMixin",
     "ServerPlayerGameModeMixin",
     "StemBlockMixin",
     "TntBlockMixin"

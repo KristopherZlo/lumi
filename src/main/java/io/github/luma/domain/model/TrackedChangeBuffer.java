@@ -28,6 +28,7 @@ public final class TrackedChangeBuffer {
     private final Instant startedAt;
     private Instant updatedAt;
     private final LinkedHashMap<Long, StoredBlockChange> changes = new LinkedHashMap<>();
+    private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
 
     public TrackedChangeBuffer(
             String id,
@@ -75,6 +76,9 @@ public final class TrackedChangeBuffer {
         for (StoredBlockChange change : draft.changes()) {
             buffer.addChange(change, draft.updatedAt());
         }
+        for (StoredEntityChange change : draft.entityChanges()) {
+            buffer.addEntityChange(change, draft.updatedAt());
+        }
         return buffer;
     }
 
@@ -110,6 +114,22 @@ public final class TrackedChangeBuffer {
         this.updatedAt = now;
     }
 
+    public void addEntityChange(StoredEntityChange change, Instant now) {
+        if (change == null || change.entityId() == null || change.entityId().isBlank()) {
+            return;
+        }
+        StoredEntityChange current = this.entityChanges.get(change.entityId());
+        StoredEntityChange merged = current == null
+                ? change
+                : current.withLatestState(change.newValue());
+        if (merged.isNoOp()) {
+            this.entityChanges.remove(change.entityId());
+        } else {
+            this.entityChanges.put(change.entityId(), merged);
+        }
+        this.updatedAt = now;
+    }
+
     public void replaceChunks(Collection<ChunkPoint> chunks, Collection<StoredBlockChange> replacements, Instant now) {
         if (chunks != null) {
             for (ChunkPoint chunk : chunks) {
@@ -137,6 +157,11 @@ public final class TrackedChangeBuffer {
                 return true;
             }
         }
+        for (StoredEntityChange change : this.entityChanges.values()) {
+            if (change.chunk().equals(chunk)) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -144,6 +169,10 @@ public final class TrackedChangeBuffer {
         LinkedHashMap<String, ChunkPoint> chunks = new LinkedHashMap<>();
         for (StoredBlockChange change : this.changes.values()) {
             ChunkPoint chunk = ChunkPoint.from(change.pos());
+            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+        }
+        for (StoredEntityChange change : this.entityChanges.values()) {
+            ChunkPoint chunk = change.chunk();
             chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
         }
         List<ChunkPoint> ordered = new ArrayList<>(chunks.values());
@@ -160,16 +189,25 @@ public final class TrackedChangeBuffer {
                 this.mutationSource,
                 this.startedAt,
                 this.updatedAt,
-                this.orderedChanges()
+                this.orderedChanges(),
+                this.orderedEntityChanges()
         );
     }
 
     public boolean isEmpty() {
-        return this.changes.isEmpty();
+        return this.changes.isEmpty() && this.entityChanges.isEmpty();
     }
 
     public int size() {
+        return this.changes.size() + this.entityChanges.size();
+    }
+
+    public int blockChangeCount() {
         return this.changes.size();
+    }
+
+    public int entityChangeCount() {
+        return this.entityChanges.size();
     }
 
     public List<StoredBlockChange> orderedChanges() {
@@ -178,6 +216,14 @@ public final class TrackedChangeBuffer {
 
     public Map<Long, StoredBlockChange> rawChanges() {
         return Map.copyOf(this.changes);
+    }
+
+    public List<StoredEntityChange> orderedEntityChanges() {
+        return List.copyOf(this.entityChanges.values());
+    }
+
+    public Map<String, StoredEntityChange> rawEntityChanges() {
+        return Map.copyOf(this.entityChanges);
     }
 
     public String id() {
