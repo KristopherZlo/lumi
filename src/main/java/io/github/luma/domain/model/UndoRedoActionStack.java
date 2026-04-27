@@ -65,6 +65,28 @@ public final class UndoRedoActionStack {
         return this.recordIntoAction(action, change, now);
     }
 
+    public long recordEntityChange(
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            StoredEntityChange change,
+            Instant now
+    ) {
+        if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
+            return this.revision;
+        }
+
+        UndoRedoAction action = this.undoStack.peekFirst();
+        if (action == null || !action.id().equals(actionId)) {
+            action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
+            this.undoStack.addFirst(action);
+            this.trimUndoStack();
+        }
+
+        return this.recordEntityIntoAction(action, change, now);
+    }
+
     public Selection selectUndo() {
         UndoRedoAction action = this.undoStack.peekFirst();
         return action == null ? null : new Selection(action.copy(), this.revision);
@@ -141,6 +163,19 @@ public final class UndoRedoActionStack {
     private long recordIntoAction(UndoRedoAction action, StoredBlockChange change, Instant now) {
         int before = action.size();
         action.recordChange(change, now);
+        if (action.isEmpty()) {
+            this.undoStack.remove(action);
+        }
+        if (before != action.size() || !action.isEmpty()) {
+            this.redoStack.clear();
+            this.revision += 1;
+        }
+        return this.revision;
+    }
+
+    private long recordEntityIntoAction(UndoRedoAction action, StoredEntityChange change, Instant now) {
+        int before = action.size();
+        action.recordEntityChange(change, now);
         if (action.isEmpty()) {
             this.undoStack.remove(action);
         }

@@ -3,6 +3,8 @@ package io.github.luma.domain.model;
 import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.ListTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -92,6 +94,35 @@ class UndoRedoActionStackTest {
         assertEquals(List.of("action-2", "action-1"), stack.recentUndoActions(2).stream().map(UndoRedoAction::id).toList());
     }
 
+    @Test
+    void entityChangesParticipateInUndoRedoActions() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String entityId = "00000000-0000-0000-0000-000000000010";
+
+        stack.recordEntityChange(
+                "action-entity",
+                "Axiom",
+                "project",
+                "minecraft:overworld",
+                new StoredEntityChange(
+                        entityId,
+                        "minecraft:block_display",
+                        entity("minecraft:block_display", entityId, 1.0D),
+                        entity("minecraft:block_display", entityId, 2.0D)
+                ),
+                NOW
+        );
+
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
+        assertNotNull(selection);
+        assertEquals(1, selection.action().size());
+        StoredEntityChange undo = selection.action().undoEntityChanges().getFirst();
+        assertEquals(entityId, undo.entityId());
+        assertEquals(2.0D, undo.newValue().entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
+        assertEquals(1.0D, selection.action().inverseEntityChanges().getFirst().newValue()
+                .entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
+    }
+
     private static StoredBlockChange change(int x, String oldBlock, String newBlock) {
         return new StoredBlockChange(
                 new BlockPoint(x, 64, 1),
@@ -104,5 +135,17 @@ class UndoRedoActionStackTest {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", blockId);
         return tag;
+    }
+
+    private static EntityPayload entity(String type, String uuid, double x) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", type);
+        tag.putString("UUID", uuid);
+        ListTag pos = new ListTag();
+        pos.add(DoubleTag.valueOf(x));
+        pos.add(DoubleTag.valueOf(64.0D));
+        pos.add(DoubleTag.valueOf(1.0D));
+        tag.put("Pos", pos);
+        return new EntityPayload(tag);
     }
 }

@@ -3,6 +3,9 @@ package io.github.luma.domain.model;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.ListTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -112,9 +115,55 @@ class TrackedChangeBufferTest {
                 .collect(java.util.stream.Collectors.toSet()));
     }
 
+    @Test
+    void entityChangesKeepFirstOldPayloadAndLastNewPayload() {
+        Instant now = Instant.parse("2026-04-20T10:15:30Z");
+        TrackedChangeBuffer buffer = TrackedChangeBuffer.create(
+                "session",
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.AXIOM,
+                now
+        );
+
+        String entityId = "00000000-0000-0000-0000-000000000001";
+        buffer.addEntityChange(new StoredEntityChange(
+                entityId,
+                "minecraft:block_display",
+                entity("minecraft:block_display", entityId, 1.0D),
+                entity("minecraft:block_display", entityId, 2.0D)
+        ), now);
+        buffer.addEntityChange(new StoredEntityChange(
+                entityId,
+                "minecraft:block_display",
+                entity("minecraft:block_display", entityId, 2.0D),
+                entity("minecraft:block_display", entityId, 3.0D)
+        ), now.plusSeconds(1));
+
+        assertEquals(1, buffer.entityChangeCount());
+        StoredEntityChange stored = buffer.orderedEntityChanges().getFirst();
+        assertEquals(1.0D, stored.oldValue().entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
+        assertEquals(3.0D, stored.newValue().entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
+        assertTrue(buffer.touchesChunk(new ChunkPoint(0, 0)));
+    }
+
     private static StatePayload payload(String blockId) {
-        net.minecraft.nbt.CompoundTag state = new net.minecraft.nbt.CompoundTag();
+        CompoundTag state = new CompoundTag();
         state.putString("Name", blockId);
         return new StatePayload(state, null);
+    }
+
+    private static EntityPayload entity(String type, String uuid, double x) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", type);
+        tag.putString("UUID", uuid);
+        ListTag pos = new ListTag();
+        pos.add(DoubleTag.valueOf(x));
+        pos.add(DoubleTag.valueOf(64.0D));
+        pos.add(DoubleTag.valueOf(1.0D));
+        tag.put("Pos", pos);
+        return new EntityPayload(tag);
     }
 }

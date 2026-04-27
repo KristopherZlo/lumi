@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import java.time.Duration;
@@ -51,6 +52,20 @@ public final class UndoRedoHistoryManager {
             return;
         }
         this.stack(projectId).recordRelatedChange(dimensionId, change, now, maxIdle, chunkRadius);
+    }
+
+    public synchronized void recordEntityChange(
+            String projectId,
+            String dimensionId,
+            String actionId,
+            String actor,
+            StoredEntityChange change,
+            Instant now
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        this.stack(projectId).recordEntityChange(actionId, actor, projectId, dimensionId, change, now);
     }
 
     public synchronized UndoRedoActionStack.Selection selectUndo(String projectId) {
