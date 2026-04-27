@@ -3,6 +3,7 @@ package io.github.luma.minecraft.capture;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import io.github.luma.storage.repository.SnapshotWriter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -33,6 +34,8 @@ public final class ChunkSnapshotCaptureService {
     private static final Strategy<BlockState> BLOCK_STATE_STRATEGY = Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY);
     private static final String AIR_BLOCK_ID = "minecraft:air";
 
+    private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
+
     public Optional<ChunkSnapshotPayload> captureLoadedChunk(ServerLevel level, ChunkPoint chunk) {
         return this.captureLoadedChunk(level, chunk, null, null, null);
     }
@@ -62,6 +65,9 @@ public final class ChunkSnapshotCaptureService {
             CompoundTag overrideBlockEntity
     ) {
         BlockPos immutableOverridePos = overridePos == null ? null : overridePos.immutable();
+        PersistentBlockStatePolicy.PersistentBlockState normalizedOverride = overrideState == null
+                ? null
+                : this.blockStatePolicy.normalize(overrideState, overrideBlockEntity);
         int overrideSectionY = immutableOverridePos == null ? Integer.MIN_VALUE : immutableOverridePos.getY() >> 4;
         List<ChunkSectionSnapshotPayload> sections = new ArrayList<>();
 
@@ -78,7 +84,7 @@ public final class ChunkSnapshotCaptureService {
                         immutableOverridePos.getX() & 15,
                         immutableOverridePos.getY() & 15,
                         immutableOverridePos.getZ() & 15,
-                        overrideState
+                        normalizedOverride.state()
                 );
             }
             ChunkSectionSnapshotPayload sectionPayload = this.captureSection(sectionCopy, sectionY);
@@ -94,10 +100,10 @@ public final class ChunkSnapshotCaptureService {
                     immutableOverridePos.getX() & 15,
                     immutableOverridePos.getZ() & 15
             );
-            if (overrideBlockEntity == null || overrideState == null || overrideState.isAir()) {
+            if (normalizedOverride == null || normalizedOverride.blockEntityTag() == null || normalizedOverride.state().isAir()) {
                 blockEntities.remove(packedIndex);
             } else {
-                blockEntities.put(packedIndex, overrideBlockEntity.copy());
+                blockEntities.put(packedIndex, normalizedOverride.blockEntityTag());
             }
         }
 
@@ -116,7 +122,8 @@ public final class ChunkSnapshotCaptureService {
         List<CompoundTag> palette = new ArrayList<>(packedData.paletteEntries().size());
         boolean nonAir = false;
         for (BlockState blockState : packedData.paletteEntries()) {
-            CompoundTag tag = NbtUtils.writeBlockState(blockState);
+            BlockState normalizedState = this.blockStatePolicy.normalizeState(blockState);
+            CompoundTag tag = NbtUtils.writeBlockState(normalizedState);
             palette.add(tag);
             if (!AIR_BLOCK_ID.equals(tag.getString("Name").orElse(AIR_BLOCK_ID))) {
                 nonAir = true;
@@ -139,9 +146,16 @@ public final class ChunkSnapshotCaptureService {
                 continue;
             }
             BlockPos pos = entry.getKey();
+            PersistentBlockStatePolicy.PersistentBlockState persistentState = this.blockStatePolicy.normalize(
+                    chunk.getBlockState(pos),
+                    blockEntity.saveWithFullMetadata(level.registryAccess())
+            );
+            if (persistentState.blockEntityTag() == null) {
+                continue;
+            }
             blockEntities.put(
                     SnapshotWriter.packVerticalIndex(pos.getY() - level.getMinY(), pos.getX() & 15, pos.getZ() & 15),
-                    blockEntity.saveWithFullMetadata(level.registryAccess())
+                    persistentState.blockEntityTag()
             );
         }
         return blockEntities;

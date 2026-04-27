@@ -8,6 +8,7 @@ import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotRef;
 import io.github.luma.domain.model.SnapshotSectionData;
+import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import io.github.luma.storage.ProjectLayout;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
@@ -34,6 +35,8 @@ public final class SnapshotWriter {
     private static final int MAGIC = 0x4C534E50;
     private static final int VERSION = 4;
     private static final String AIR_ID = "minecraft:air";
+
+    private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
 
     public SnapshotRef capture(
             ProjectLayout layout,
@@ -221,26 +224,33 @@ public final class SnapshotWriter {
                     int worldZ = (chunk.z() << 4) + localZ;
                     BlockPos pos = new BlockPos(worldX, y, worldZ);
                     SnapshotBlockState override = overrides.get(pos);
-                    BlockState state = override == null ? level.getBlockState(pos) : override.state();
-                    net.minecraft.nbt.CompoundTag stateTag = net.minecraft.nbt.NbtUtils.writeBlockState(state);
-                    int paletteId = paletteMap.computeIfAbsent(stateTag.copy(), ignored -> paletteMap.size());
-                    int localIndex = localIndex(localX, localY, localZ);
-                    indexes[localIndex] = (short) paletteId;
-                    if (!AIR_ID.equals(stateTag.getString("Name"))) {
-                        nonAir = true;
-                    }
-
-                    net.minecraft.nbt.CompoundTag blockEntityTag = null;
+                    BlockState rawState = override == null ? level.getBlockState(pos) : override.state();
+                    net.minecraft.nbt.CompoundTag rawBlockEntityTag = null;
                     if (override != null) {
-                        blockEntityTag = override.blockEntityTag();
+                        rawBlockEntityTag = override.blockEntityTag();
                     } else {
                         BlockEntity blockEntity = level.getBlockEntity(pos);
                         if (blockEntity != null) {
-                            blockEntityTag = blockEntity.saveWithFullMetadata(level.registryAccess());
+                            rawBlockEntityTag = blockEntity.saveWithFullMetadata(level.registryAccess());
                         }
                     }
-                    if (blockEntityTag != null) {
-                        blockEntities.put(packVerticalIndex(y - level.getMinY(), localX, localZ), blockEntityTag.copy());
+                    PersistentBlockStatePolicy.PersistentBlockState persistentState = this.blockStatePolicy.normalize(
+                            rawState,
+                            rawBlockEntityTag
+                    );
+                    net.minecraft.nbt.CompoundTag stateTag = net.minecraft.nbt.NbtUtils.writeBlockState(persistentState.state());
+                    int paletteId = paletteMap.computeIfAbsent(stateTag.copy(), ignored -> paletteMap.size());
+                    int localIndex = localIndex(localX, localY, localZ);
+                    indexes[localIndex] = (short) paletteId;
+                    if (!AIR_ID.equals(stateTag.getString("Name").orElse(AIR_ID))) {
+                        nonAir = true;
+                    }
+
+                    if (persistentState.blockEntityTag() != null) {
+                        blockEntities.put(
+                                packVerticalIndex(y - level.getMinY(), localX, localZ),
+                                persistentState.blockEntityTag()
+                        );
                     }
                 }
             }

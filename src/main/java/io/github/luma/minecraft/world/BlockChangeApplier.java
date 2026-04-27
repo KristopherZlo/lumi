@@ -20,6 +20,8 @@ import net.minecraft.world.level.block.state.BlockState;
 
 public final class BlockChangeApplier {
 
+    private static final PersistentBlockStatePolicy BLOCK_STATE_POLICY = new PersistentBlockStatePolicy();
+
     private BlockChangeApplier() {
     }
 
@@ -43,11 +45,11 @@ public final class BlockChangeApplier {
         BlockPos pos = change.pos().toBlockPos();
         BlockState state = BlockStateNbtCodec.deserializeBlockState(level, change.newState());
         CompoundTag blockEntityTag = BlockStateNbtCodec.deserializeBlockEntity(change.newBlockEntityNbt());
-        applyBlockState(level, pos, state, blockEntityTag);
+        applyPersistentBlockState(level, pos, state, blockEntityTag);
     }
 
     public static void applyStoredChange(ServerLevel level, StoredBlockChange change) throws IOException {
-        applyBlockState(
+        applyPersistentBlockState(
                 level,
                 change.pos().toBlockPos(),
                 BlockStateNbtCodec.deserializeBlockState(level, change.newValue().stateTag()),
@@ -63,7 +65,7 @@ public final class BlockChangeApplier {
         int endIndex = Math.min(batch.placements().size(), startIndex + maxBlocks);
         for (int index = startIndex; index < endIndex; index++) {
             PreparedBlockPlacement placement = batch.placements().get(index);
-            applyBlockState(
+            applyPersistentBlockState(
                     level,
                     placement.pos(),
                     placement.state(),
@@ -84,6 +86,11 @@ public final class BlockChangeApplier {
             applyBlockStateOnly(level, placement.pos(), placement.state(), placement.blockEntityTag());
         }
         return endIndex - startIndex;
+    }
+
+    private static void applyPersistentBlockState(ServerLevel level, BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
+        PersistentBlockStatePolicy.PersistentBlockState persistentState = BLOCK_STATE_POLICY.normalize(state, blockEntityTag);
+        applyRawBlockState(level, pos, persistentState.state(), persistentState.blockEntityTag());
     }
 
     public static void applyChunkBlockEntities(ServerLevel level, ChunkBatch batch) {
@@ -114,6 +121,11 @@ public final class BlockChangeApplier {
     }
 
     public static void applyBlockState(ServerLevel level, BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
+        PersistentBlockStatePolicy.PersistentBlockState persistentState = BLOCK_STATE_POLICY.normalize(state, blockEntityTag);
+        applyRawBlockState(level, pos, persistentState.state(), persistentState.blockEntityTag());
+    }
+
+    private static void applyRawBlockState(ServerLevel level, BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
         if (!requiresUpdate(level, pos, state, blockEntityTag)) {
             return;
         }
@@ -130,6 +142,9 @@ public final class BlockChangeApplier {
     }
 
     public static void applyBlockStateOnly(ServerLevel level, BlockPos pos, BlockState state, CompoundTag targetBlockEntityTag) {
+        PersistentBlockStatePolicy.PersistentBlockState persistentState = BLOCK_STATE_POLICY.normalize(state, targetBlockEntityTag);
+        state = persistentState.state();
+        targetBlockEntityTag = persistentState.blockEntityTag();
         if (!requiresUpdate(level, pos, state, targetBlockEntityTag)) {
             return;
         }
