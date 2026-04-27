@@ -63,6 +63,7 @@ Important adapters:
 - `UndoRedoHistoryManager`: keeps the in-memory per-project action stack that powers live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout or reconciled stabilization deltas into the latest builder action
 - `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
 - `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
+- `WorldMutationCapturePolicy` and `PersistentBlockStatePolicy`: filter runtime-only redstone transitions and normalize piston animation states before they become drafts, undo/redo actions, snapshots, or restore placements
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `LumaAccessControl`: centralizes the operator/cheats gate for diagnostic commands, UI entry points, and dedicated-server tracked world actions
@@ -129,13 +130,14 @@ Responsibilities are split as follows:
 1. A Minecraft mixin intercepts a block mutation.
 2. `WorldMutationContext` accepts only explicit player, explosive, explosion, falling-block, selected mob, and other targeted mutation scopes.
 3. `HistoryCaptureManager` finds matching projects for the block position.
-4. Explicit root mutations define a session-local causal envelope. Chunk baselines inside that envelope are captured lazily when those chunks first need stabilization.
-5. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position.
-6. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
-7. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
-8. Idle or dirty sessions are flushed into recovery storage.
-9. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
-10. In integrated singleplayer worlds, explicit builder actions are allowed into capture and undo/redo immediately even if the permission frame is not operator-shaped yet; dedicated servers keep the operator gate.
+4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.
+5. Explicit root mutations define a session-local causal envelope. Chunk baselines inside that envelope are captured lazily when those chunks first need stabilization.
+6. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position.
+7. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
+8. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
+9. Idle or dirty sessions are flushed into recovery storage.
+10. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
+11. In integrated singleplayer worlds, explicit builder actions are allowed into capture and undo/redo immediately even if the permission frame is not operator-shaped yet; dedicated servers keep the operator gate.
 
 Important invariants:
 

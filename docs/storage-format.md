@@ -149,6 +149,7 @@ Current payload characteristics:
 - chunk-local palettes for block entity payloads
 - backward-compatible entity spawn/remove/update list sections; they are currently written empty for block-only saves
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
+- runtime-only redstone state flips and piston animation states are filtered before new patch payloads are written
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 
@@ -163,6 +164,7 @@ Current snapshot characteristics:
 - only non-empty sections are stored
 - block entities are kept in a sparse side table keyed by local block index
 - schema v4 includes a per-chunk entity snapshot list; it is currently written empty and schema v3 snapshots still load as block-only snapshots
+- `piston_head` and `moving_piston` states are normalized to air during new snapshot capture, and piston bases are stored retracted
 
 They are currently created:
 
