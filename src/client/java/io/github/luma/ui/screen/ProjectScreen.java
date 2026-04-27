@@ -16,12 +16,12 @@ import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.state.ProjectHomeViewState;
-import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.Insets;
-import io.wispforest.owo.ui.core.OwoUIAdapter;
-import io.wispforest.owo.ui.core.Sizing;
+import io.github.luma.ui.framework.component.ButtonComponent;
+import io.github.luma.ui.framework.container.FlowLayout;
+import io.github.luma.ui.framework.container.UIContainers;
+import io.github.luma.ui.framework.core.Insets;
+import io.github.luma.ui.framework.core.LumaUIAdapter;
+import io.github.luma.ui.framework.core.Sizing;
 import java.util.Comparator;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -73,8 +73,8 @@ public final class ProjectScreen extends LumaScreen {
     }
 
     @Override
-    protected OwoUIAdapter<FlowLayout> createAdapter() {
-        return OwoUIAdapter.create(this, UIContainers::verticalFlow);
+    protected LumaUIAdapter<FlowLayout> createAdapter() {
+        return LumaUIAdapter.create(this, UIContainers::verticalFlow);
     }
 
     @Override

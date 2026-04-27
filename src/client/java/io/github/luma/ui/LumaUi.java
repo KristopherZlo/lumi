@@ -1,15 +1,15 @@
 package io.github.luma.ui;
 
-import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.LabelComponent;
-import io.wispforest.owo.ui.component.UIComponents;
-import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.Color;
-import io.wispforest.owo.ui.core.HorizontalAlignment;
-import io.wispforest.owo.ui.core.Insets;
-import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
+import io.github.luma.ui.framework.component.ButtonComponent;
+import io.github.luma.ui.framework.component.LabelComponent;
+import io.github.luma.ui.framework.component.UIComponents;
+import io.github.luma.ui.framework.container.FlowLayout;
+import io.github.luma.ui.framework.container.UIContainers;
+import io.github.luma.ui.framework.core.Color;
+import io.github.luma.ui.framework.core.HorizontalAlignment;
+import io.github.luma.ui.framework.core.Insets;
+import io.github.luma.ui.framework.core.Sizing;
+import io.github.luma.ui.framework.core.Surface;
 import java.util.function.Consumer;
 import net.minecraft.network.chat.Component;
 
@@ -203,7 +203,7 @@ public final class LumaUi {
     public static FlowLayout formField(
             Component label,
             Component help,
-            io.wispforest.owo.ui.core.UIComponent control
+            io.github.luma.ui.framework.core.UIComponent control
     ) {
         FlowLayout field = insetPanel(Sizing.fill(100), Sizing.content());
         field.child(value(label));

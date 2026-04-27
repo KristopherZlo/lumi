@@ -6,13 +6,13 @@ import io.github.luma.ui.controller.DashboardScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.state.DashboardProjectItem;
 import io.github.luma.ui.state.DashboardViewState;
-import io.wispforest.owo.ui.component.UIComponents;
-import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.Insets;
-import io.wispforest.owo.ui.core.OwoUIAdapter;
-import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
+import io.github.luma.ui.framework.component.UIComponents;
+import io.github.luma.ui.framework.container.FlowLayout;
+import io.github.luma.ui.framework.container.UIContainers;
+import io.github.luma.ui.framework.core.Insets;
+import io.github.luma.ui.framework.core.LumaUIAdapter;
+import io.github.luma.ui.framework.core.Sizing;
+import io.github.luma.ui.framework.core.Surface;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -33,8 +33,8 @@ public final class DashboardScreen extends LumaScreen {
     }
 
     @Override
-    protected OwoUIAdapter<FlowLayout> createAdapter() {
-        return OwoUIAdapter.create(this, UIContainers::verticalFlow);
+    protected LumaUIAdapter<FlowLayout> createAdapter() {
+        return LumaUIAdapter.create(this, UIContainers::verticalFlow);
     }
 
     @Override
