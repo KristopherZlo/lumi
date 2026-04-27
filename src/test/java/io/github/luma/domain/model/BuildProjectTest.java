@@ -25,7 +25,7 @@ class BuildProjectTest {
         BuildProject updated = project
                 .withFavorite(true, updatedAt)
                 .withArchived(true, updatedAt)
-                .withSettings(new ProjectSettings(true, 3, 9, 4, 0.5D, false, false, true), updatedAt);
+                .withSettings(new ProjectSettings(true, 3, 9, 4, 0.5D, false, false, true, false), updatedAt);
 
         assertTrue(updated.favorite());
         assertTrue(updated.archived());
@@ -33,6 +33,7 @@ class BuildProjectTest {
         assertTrue(updated.settings().autoVersionsEnabled());
         assertEquals(3, updated.settings().autoVersionMinutes());
         assertTrue(updated.settings().debugLoggingEnabled());
+        assertFalse(updated.settings().workspaceHudVisible());
         assertEquals("tower", updated.name());
         assertEquals("main", updated.activeVariantId());
         assertFalse(project.favorite());

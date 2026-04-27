@@ -217,6 +217,7 @@ public final class SaveScreen extends LumaScreen {
             return section;
         }
 
+        FlowLayout expanded = LumaUi.revealGroup();
         ButtonComponent replaceButton = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> {
             String result = this.controller.amendVersion(this.projectName, this.saveMessage);
             if ("luma.status.amend_started".equals(result)) {
@@ -226,15 +227,16 @@ public final class SaveScreen extends LumaScreen {
             this.refresh(result);
         });
         replaceButton.active(activeHead != null && !operationActive);
-        section.child(replaceButton);
+        expanded.child(replaceButton);
         if (activeHead != null) {
-            section.child(LumaUi.caption(Component.translatable(
+            expanded.child(LumaUi.caption(Component.translatable(
                     "luma.save.replace_help",
                     ProjectUiSupport.displayMessage(activeHead)
             )));
         } else {
-            section.child(LumaUi.caption(Component.translatable("luma.save.replace_unavailable")));
+            expanded.child(LumaUi.caption(Component.translatable("luma.save.replace_unavailable")));
         }
+        section.child(expanded);
         return section;
     }
 

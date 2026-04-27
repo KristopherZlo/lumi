@@ -267,18 +267,20 @@ public final class CompareScreen extends LumaScreen {
         if (!this.showMoreDetails) {
             return section;
         }
-        section.child(this.materialsSection());
-        section.child(this.positionsSection());
-        section.child(LumaUi.caption(Component.translatable(
+
+        FlowLayout expanded = LumaUi.revealGroup();
+        expanded.child(this.materialsSection());
+        expanded.child(this.positionsSection());
+        expanded.child(LumaUi.caption(Component.translatable(
                 "luma.compare.summary",
                 this.displayResolved(this.state.leftResolvedVersionId()),
                 this.displayResolved(this.state.rightResolvedVersionId()),
                 this.state.diff().changedBlockCount(),
                 this.state.diff().changedChunks()
         )));
-        section.child(LumaUi.caption(Component.translatable("luma.compare.left_resolved", this.displayResolved(this.state.leftResolvedVersionId()))));
-        section.child(LumaUi.caption(Component.translatable("luma.compare.right_resolved", this.displayResolved(this.state.rightResolvedVersionId()))));
-        section.child(LumaUi.caption(Component.translatable("luma.compare.raw_chunks", this.state.diff().changedChunks())));
+        expanded.child(LumaUi.caption(Component.translatable("luma.compare.left_resolved", this.displayResolved(this.state.leftResolvedVersionId()))));
+        expanded.child(LumaUi.caption(Component.translatable("luma.compare.right_resolved", this.displayResolved(this.state.rightResolvedVersionId()))));
+        expanded.child(LumaUi.caption(Component.translatable("luma.compare.raw_chunks", this.state.diff().changedChunks())));
         FlowLayout manual = LumaUi.actionRow();
         manual.child(LumaUi.button(Component.translatable(
                 this.showManualCompare ? "luma.action.hide_manual_compare" : "luma.action.manual_compare"
@@ -286,11 +288,14 @@ public final class CompareScreen extends LumaScreen {
             this.showManualCompare = !this.showManualCompare;
             this.rebuild();
         }));
-        section.child(manual);
+        expanded.child(manual);
         if (this.showManualCompare) {
-            section.child(this.referenceSection());
+            FlowLayout manualExpanded = LumaUi.revealGroup();
+            manualExpanded.child(this.referenceSection());
+            expanded.child(manualExpanded);
         }
-        section.child(LumaUi.caption(Component.translatable("luma.compare.hotkey_hint")));
+        expanded.child(LumaUi.caption(Component.translatable("luma.compare.hotkey_hint")));
+        section.child(expanded);
         return section;
     }
 

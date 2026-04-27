@@ -250,6 +250,7 @@ public final class SaveDetailsScreen extends LumaScreen {
             return section;
         }
 
+        FlowLayout expanded = LumaUi.revealGroup();
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent replaceButton = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> this.router.openSave(
                 this,
@@ -270,16 +271,18 @@ public final class SaveDetailsScreen extends LumaScreen {
                 this.projectName,
                 version.id()
         )));
-        section.child(actions);
+        expanded.child(actions);
 
         FlowLayout restoreSelected = LumaUi.actionRow();
         restoreSelected.child(LumaUi.button(Component.translatable("luma.action.restore_selected_area"), button -> {
             this.showPartialRestore = !this.showPartialRestore;
             this.rebuild();
         }));
-        section.child(restoreSelected);
+        expanded.child(restoreSelected);
         if (this.showPartialRestore) {
-            section.child(this.partialRestoreSection(version, operationActive));
+            FlowLayout partialExpanded = LumaUi.revealGroup();
+            partialExpanded.child(this.partialRestoreSection(version, operationActive));
+            expanded.child(partialExpanded);
         }
 
         FlowLayout advanced = LumaUi.actionRow();
@@ -289,10 +292,13 @@ public final class SaveDetailsScreen extends LumaScreen {
             this.showAdvancedInfo = !this.showAdvancedInfo;
             this.rebuild();
         }));
-        section.child(advanced);
+        expanded.child(advanced);
         if (this.showAdvancedInfo) {
-            section.child(this.advancedInfoSection(version));
+            FlowLayout advancedExpanded = LumaUi.revealGroup();
+            advancedExpanded.child(this.advancedInfoSection(version));
+            expanded.child(advancedExpanded);
         }
+        section.child(expanded);
         return section;
     }
 

@@ -29,6 +29,7 @@ public final class SettingsScreen extends LumaScreen {
     private boolean safetySnapshotBeforeRestore;
     private boolean previewGenerationEnabled;
     private boolean debugLoggingEnabled;
+    private boolean workspaceHudEnabled = true;
     private boolean archived;
     private String autoVersionMinutes = "10";
     private String sessionIdleSeconds = "5";
@@ -57,6 +58,7 @@ public final class SettingsScreen extends LumaScreen {
             this.safetySnapshotBeforeRestore = project.settings().safetySnapshotBeforeRestore();
             this.previewGenerationEnabled = project.settings().previewGenerationEnabled();
             this.debugLoggingEnabled = project.settings().debugLoggingEnabled();
+            this.workspaceHudEnabled = project.settings().workspaceHudVisible();
             this.archived = project.archived();
             this.autoVersionMinutes = Integer.toString(project.settings().autoVersionMinutes());
             this.sessionIdleSeconds = Integer.toString(project.settings().sessionIdleSeconds());
@@ -92,6 +94,7 @@ public final class SettingsScreen extends LumaScreen {
 
         body.child(this.safetySection());
         body.child(this.previewSection());
+        body.child(this.hudSection());
         body.child(this.storageSection());
         body.child(this.performanceSection());
         body.child(this.debugSection());
@@ -176,6 +179,20 @@ public final class SettingsScreen extends LumaScreen {
         return section;
     }
 
+    private FlowLayout hudSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.settings.hud_title"),
+                Component.translatable("luma.settings.hud_help")
+        );
+        section.child(this.fieldWithError(
+                Component.translatable("luma.settings.workspace_hud"),
+                Component.translatable("luma.settings.workspace_hud_help"),
+                this.toggleControl(this.workspaceHudEnabled, value -> this.workspaceHudEnabled = value),
+                ""
+        ));
+        return section;
+    }
+
     private FlowLayout debugSection() {
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.settings.debug_title"),
@@ -247,7 +264,8 @@ public final class SettingsScreen extends LumaScreen {
                         parsedSnapshotVolumeThreshold,
                         this.safetySnapshotBeforeRestore,
                         this.previewGenerationEnabled,
-                        this.debugLoggingEnabled
+                        this.debugLoggingEnabled,
+                        this.workspaceHudEnabled
                 ),
                 this.archived
         );
