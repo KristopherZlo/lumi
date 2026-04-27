@@ -33,12 +33,12 @@ It is meant to answer these questions in a few seconds:
 - how to save right now
 - how to see changes
 - how to restore from a selected save
-- where ideas and rare tools live
+- where branches and rare tools live
 
 The top block shows:
 
 - the current dimension
-- the current idea
+- the current branch
 - whether there are unsaved changes
 - added, removed, and changed block counts when a draft exists
 
@@ -47,10 +47,10 @@ The primary action is `Save build`.
 Secondary actions stay short:
 
 - `See changes`
-- `Ideas`
+- `Branches`
 - `More`
 
-Below that, `Recent saves` shows recent save cards for the selected idea.
+Below that, `Recent saves` shows recent save cards for the selected branch.
 
 Each card keeps only the essentials visible:
 
@@ -105,11 +105,11 @@ If you need the advanced rewrite flow, open `More` on the save screen and use `R
 
 Restore rebuilds the selected state from history data.
 
-Lumi first tries direct replay or rollback on the active idea line.
+Lumi first tries direct replay or rollback on the active branch line.
 
 If that is not valid, it falls back to checkpoint snapshot plus patch chain.
 
-After restore, the active idea head moves to the selected save.
+After restore, the active branch head moves to the selected save.
 
 That means restore behaves like a hard reset for the project.
 
@@ -119,7 +119,7 @@ If you restore `Initial`, Lumi restores only chunks that the current project has
 
 It does not roll back unrelated game state like inventory, time, gamerules, or untouched chunks.
 
-Every restore from a save card or save details screen requires confirmation. Before an `Initial` restore starts, Lumi also shows the planned mode, idea, base save, target save, and affected chunk count in a confirmation block above the scrollable workspace panes.
+Every restore from a save card or save details screen requires confirmation. Before an `Initial` restore starts, Lumi also shows the planned mode, branch, base save, target save, and affected chunk count in a confirmation block above the scrollable workspace panes.
 If the stored generator or datapack fingerprint no longer matches the world, automatic generator regeneration is blocked and Lumi stays on the safer history/baseline path.
 
 Runtime rules:
@@ -142,23 +142,23 @@ From that screen you can:
 
 Recovery is only a stored copy of unsaved changes.
 
-It does not create a hidden idea.
+It does not create a hidden branch.
 
 Restore and delete actions require confirmation. More technical recovery details are still available, but they are hidden behind `More`.
 
-## Ideas
+## Branches
 
-Ideas are separate build directions inside one project.
+Branches are separate build directions inside one project.
 
-Use the `Ideas` screen to:
+Use the `Branches` screen to:
 
-- see the active idea
-- create a new idea from the current build or a selected save
-- switch the active idea
-- open saves for one idea
-- compare an idea against the current build from `More`
+- see the active branch
+- create a new branch from the current build or a selected save
+- switch the active branch
+- open saves for one branch
+- compare a branch against the current build from `More`
 
-When you switch ideas, Lumi restores that idea head into the map.
+When you switch branches, Lumi restores that branch head into the map.
 
 Future saves continue from that head.
 
@@ -170,15 +170,15 @@ Use the `Import / Export` screen to:
 
 - import a shared package as a review project
 - review imported packages without leaving the current project
-- export the build history, current idea, or selected save as a package
+- export the build history, current branch, or selected save as a package
 - choose whether exported packages include preview PNGs
 - delete imported review packages after you are done with them
-- combine an imported idea into your current build
+- combine an imported branch into your current build
 
 Import comes first on the screen because it is the usual starting point.
 
-After a package is imported, Lumi keeps you on `Import / Export`, selects that imported review project, and builds a combine review against the current active local idea automatically.
-That combine review runs in the background and is cached for the selected imported package and target idea, so reopening the same review does not repeat the file scan unless the imported package list changes.
+After a package is imported, Lumi keeps you on `Import / Export`, selects that imported review project, and builds a combine review against the current active local branch automatically.
+That combine review runs in the background and is cached for the selected imported package and target branch, so reopening the same review does not repeat the file scan unless the imported package list changes.
 
 Same-area changes are grouped into review zones instead of one long raw block list.
 
@@ -195,12 +195,12 @@ Lumi only enables `Apply combine` when every same-area zone has a decision and t
 
 ## See Changes
 
-Open `See changes` from Build History, a save details screen, or the Ideas screen.
+Open `See changes` from Build History, a save details screen, or the Branches screen.
 
 You can compare:
 
 - two saves
-- two ideas
+- two branches
 - a saved version against the current build
 
 Current See Changes output includes:
@@ -236,9 +236,9 @@ Primary actions stay focused:
 - `Restore this save`
 - `See changes`
 
-Advanced actions like refresh preview, replace latest save, create idea from this save, export this save, and raw info stay under `More`.
+Advanced actions like refresh preview, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
 
-`Restore selected area` is also under `More`. Use it when you want to restore only a bounded region from the selected save. Min/Max coordinate fields appear only after you choose that action. Preview the region first, then apply it. Lumi writes the result as a new save on the active idea instead of moving the idea head back to the older save.
+`Restore selected area` is also under `More`. Use it when you want to restore only a bounded region from the selected save. Min/Max coordinate fields appear only after you choose that action. Preview the region first, then apply it. Lumi writes the result as a new save on the active branch instead of moving the branch head back to the older save.
 
 ## Settings
 
@@ -246,6 +246,7 @@ The settings screen includes:
 
 - safety snapshot before restore
 - preview generation
+- top-right HUD panel visibility
 - checkpoint frequency
 - checkpoint volume threshold
 - change session idle timeout

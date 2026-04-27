@@ -60,7 +60,7 @@ These services should express product rules, not raw Minecraft side effects or r
 Important adapters:
 
 - `HistoryCaptureManager`: captures explicit tracked actions immediately, keeps per-project causal envelopes, and drains dirty-chunk stabilization before drafts are persisted or consumed
-- `UndoRedoHistoryManager`: keeps the in-memory per-project action stack that powers live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout into the latest builder action
+- `UndoRedoHistoryManager`: keeps the in-memory per-project action stack that powers live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout or reconciled stabilization deltas into the latest builder action
 - `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
 - `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
@@ -107,20 +107,20 @@ Responsibilities are split as follows:
 - owo-ui screens keep transient UI state and rendering
 - controllers invoke services and translate failures into status keys
 - view-state records provide immutable inputs to the rendering layer
-- lightweight summary controllers keep the project home, Ideas, and Import / Export routes fast by avoiding diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open
-- `MergePreviewCache` runs Import / Export combine previews in the background and caches them by imported package and target idea while the screen is open
+- lightweight summary controllers keep the project home, Branches, and Import / Export routes fast by avoiding diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open
+- `MergePreviewCache` runs Import / Export combine previews in the background and caches them by imported package and target branch while the screen is open
 - `LumaScreen` extends owo-ui `BaseOwoScreen`, keeps Lumi menus non-pausing, and gives each route a code-driven `OwoUIAdapter`
 - `LumaUi` centralizes compact `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface` rules so screens avoid absolute positioning and keep layout predictable
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
 - obsolete tab-builder scaffolds have been removed; larger workflows now use dedicated screens and narrow view-state records instead of a shared project tab container
-- the project home screen is now a Build History view with one primary action, `Save build`, plus one-click `See changes`, recent saves, `Ideas`, and `More`
-- dedicated screens isolate `Save`, `Save details`, `Ideas`, `Import / Export`, `See Changes`, `Recovered work`, `Settings`, `Cleanup`, `Diagnostics`, and `Advanced` so the main project screen no longer carries rare or technical workflows
-- `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
+- the project home screen is now a Build History view with one primary action, `Save build`, plus one-click `See changes`, recent saves, `Branches`, and `More`
+- dedicated screens isolate `Save`, `Save details`, `Branches`, `Import / Export`, `See Changes`, `Recovered work`, `Settings`, `Cleanup`, `Diagnostics`, and `Advanced` so the main project screen no longer carries rare or technical workflows
+- `WorkspaceHudCoordinator` owns the optional top-right HUD overlay and action-bar progress surface
 - project-facing screens poll lightweight operation snapshots every 10 client ticks so conflicting mutation buttons unlock as soon as the operation becomes terminal, while status text can stay visible briefly
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, prioritizes the nearest changed blocks to the current camera position, and renders only exposed overlay faces so translucent fill does not self-stack through dense diff volumes
 - `CompareOverlayCoordinator` refreshes `current`-world compare overlays on the client tick so live edits appear in the active highlight without rebuilding the screen manually
 - `RecentChangesOverlayRenderer` renders the latest tracked Lumi actions when `Alt` is held and the compare overlay is not active
-- the Import / Export route presents the normal flow: import and export history packages, optionally include preview PNGs in exports, delete imported review packages, review imported packages, resolve same-area zones, show zone overlays, and apply a combined save without cluttering Build History or Ideas
+- the Import / Export route presents the normal flow: import and export history packages, optionally include preview PNGs in exports, delete imported review packages, review imported packages, resolve same-area zones, show zone overlays, and apply a combined save without cluttering Build History or Branches
 
 ## Core runtime flows
 
@@ -132,9 +132,9 @@ Responsibilities are split as follows:
 4. Explicit root mutations define a session-local causal envelope. Chunk baselines inside that envelope are captured lazily when those chunks first need stabilization.
 5. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position.
 6. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
-7. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft.
+7. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
 8. Idle or dirty sessions are flushed into recovery storage.
-9. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
+9. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
 
 Important invariants:
 

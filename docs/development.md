@@ -96,8 +96,8 @@ For the current architecture, responsibility boundaries, and runtime invariants,
 
 The current menu flow is centered around `ScreenRouter`, `LumaScreen`, and focused owo-ui route classes such as `ProjectScreen`, `SaveScreen`, `SaveDetailsScreen`, `CompareScreen`, `VariantsScreen`, and `ShareScreen`. Every in-game menu is code-driven owo-ui using `BaseOwoScreen`, `OwoUIAdapter`, `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface`.
 
-Controllers own service access and loading logic. Screens keep transient UI state and layout composition. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
-`ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Import / Export combine previews are requested only by explicit review actions, then cached by imported package and target idea while the screen is open.
+Controllers own service access and loading logic. Screens keep transient UI state and layout composition. `WorkspaceHudCoordinator` drives the optional top-right HUD overlay and action-bar progress independently of screen lifetime.
+`ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Import / Export combine previews are requested only by explicit review actions, then cached by imported package and target branch while the screen is open.
 Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
 
 owo-lib is the only menu toolkit in this branch. Lumi declares it as a Fabric dependency for Minecraft `1.21.11`.
@@ -108,15 +108,17 @@ Current UX assumptions:
 - pressing `Alt+Z` starts undo for the latest tracked Lumi action in the current dimension workspace
 - pressing `Alt+Y` starts redo for the latest tracked Lumi action in the current dimension workspace
 - nearby short-lived secondary fallout can join the latest tracked undo/redo action instead of disappearing from the live action stack
+- reconciled fluid and falling-block deltas from whole-dimension session stabilization also join the latest nearby undo/redo action when they settle inside the same time/radius window
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
 - pressing `Compare` enables the world highlight immediately for the resolved diff
 - comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present
 - holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - holding `Alt` while compare highlight is inactive shows the latest 10 tracked Lumi actions with a fading temporary overlay
 - the dashboard is now secondary navigation under `More` -> `Projects`
-- the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Ideas`, and `More`
+- the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Branches`, and `More`
+- settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress
 - low-frequency tools such as import/export, settings, cleanup, diagnostics, technical graph, manual compare, legacy limited projects, and raw info live behind `More` or `Advanced`
-- save composition, save details, idea management, import/export combine review, cleanup, diagnostics, and advanced tools now have dedicated screens instead of sharing one overloaded project page
+- save composition, save details, branch management, import/export combine review, cleanup, diagnostics, and advanced tools now have dedicated screens instead of sharing one overloaded project page
 
 ## History architecture
 
@@ -134,13 +136,13 @@ Current runtime history behavior:
 - Changes are aggregated into an in-memory recovery draft immediately, then flushed asynchronously through the capture-maintenance executor and journaled while the session is active.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `ProjectArchiveService` owns UI-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
-- `HistoryShareService` backs the `Import / Export` flow on top of the same archive format by exporting one idea lineage, importing it back as a review project, and deleting imported review projects after validating they belong to the same project lineage.
-- `ShareScreenController` keeps history package import/export separate from Build History and Ideas, only asks `VariantMergeService` for a combine preview when the user explicitly reviews one imported package, and moves that preview work through a small background cache so the screen does not block on storage scans.
+- `HistoryShareService` backs the `Import / Export` flow on top of the same archive format by exporting one branch lineage, importing it back as a review project, and deleting imported review projects after validating they belong to the same project lineage.
+- `ShareScreenController` keeps history package import/export separate from Build History and Branches, only asks `VariantMergeService` for a combine preview when the user explicitly reviews one imported package, and moves that preview work through a small background cache so the screen does not block on storage scans.
 - `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
 - Preview generation now queues lightweight request files on the server side and fulfills them later through the client-side `PreviewCaptureCoordinator`.
-- `RestoreService` prefers direct same-idea patch replay, including `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active idea head to the restored save on success without deleting detached saves.
-- `RestoreService` also supports same-lineage selected-area restore from save details. It filters pending draft and direct patch changes to manual bounds, applies prepared batches through the operation model, then writes a new `PARTIAL_RESTORE` version on the active idea while preserving pending draft changes outside the selected region.
+- `RestoreService` prefers direct same-branch patch replay, including `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored save on success without deleting detached saves.
+- `RestoreService` also supports same-lineage selected-area restore from save details. It filters pending draft and direct patch changes to manual bounds, applies prepared batches through the operation model, then writes a new `PARTIAL_RESTORE` version on the active branch while preserving pending draft changes outside the selected region.
 - `VariantService` keeps one head pointer per variant.
 - `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, and delegating merged version persistence to `VersionService`.
 - `DiffService` reconstructs version-to-version changes from patch history.
@@ -201,7 +203,7 @@ The current repo also ships that policy in [commit-policy.md](commit-policy.md).
 
 ## Coding conventions
 
-- Keep the product wording builder-friendly. Prefer `project`, `version`, `variant`, `compare`, `restore`, and `recovery`.
+- Keep the product wording builder-friendly. Prefer user-facing `branch` wording over `idea` or raw internal variant terms, and keep technical ids behind Advanced surfaces.
 - Keep the mod usable through menus first. Commands are read-only diagnostics/help only.
 - Preserve the singleplayer-first assumption unless a change explicitly expands runtime scope.
 - When touching storage, prefer forward-only adjustments with simple legacy handling for the current local format.
