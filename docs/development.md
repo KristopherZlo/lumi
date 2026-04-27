@@ -88,20 +88,19 @@ The codebase currently follows these top-level areas:
 - `src/main/java/io/github/luma/integration`
   Optional integration contracts, typed capability reporting, WorldEdit edit-session tracking, and fallback status plumbing for external builder tools.
 - `src/client/java/io/github/luma/ui`
-  LDLib2 GDP screen factories, controllers, overlays, and view-state records with router-driven navigation.
+  owo-ui screens, controllers, overlays, and view-state records with router-driven navigation.
 
 For the current architecture, responsibility boundaries, and runtime invariants, see [architecture.md](architecture.md).
 
 ## UI architecture
 
-The current menu flow is centered around `ScreenRouter`, `LdLib2Screens`, and `LdLib2ProjectHomeScreenFactory`. Every in-game menu is created as an LDLib2 `ModularUIScreen` and receives the built-in GDP stylesheet through `StylesheetManager.GDP`.
+The current menu flow is centered around `ScreenRouter`, `LumaScreen`, and focused owo-ui route classes such as `ProjectScreen`, `SaveScreen`, `SaveDetailsScreen`, `CompareScreen`, `VariantsScreen`, and `ShareScreen`. Every in-game menu is code-driven owo-ui using `BaseOwoScreen`, `OwoUIAdapter`, `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface`.
 
-Controllers own service access and loading logic. LDLib2 screen factories keep transient UI state. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
+Controllers own service access and loading logic. Screens keep transient UI state and layout composition. `WorkspaceHudCoordinator` drives the always-on HUD overlay and action-bar progress independently of screen lifetime.
 `ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Import / Export combine previews are requested only by explicit review actions, then cached by imported package and target idea while the screen is open.
 Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
 
-LDLib2 GDP is the only menu toolkit in this branch. The Fabric build still uses reflection instead of a Gradle LDLib2 dependency because the published LDLib2 artifacts and UI docs are currently NeoForge-oriented around Minecraft `1.21.1`, while Lumi targets Fabric `1.21.11`. That compile-time isolation is not a UI fallback: if compatible LDLib2 runtime classes are absent, Lumi reports the missing runtime instead of opening an internal screen.
-`LdLib2InterfaceBlueprint` maps the simple builder flow to LDLib2 element roles (`UIElement`, `Label`, `Button`, `ScrollerView`, and `TabView`), pins the built-in GDP theme (`ldlib2:lss/gdp.lss`), and records compact flex hints for the LDLib2 tree. `LdLib2ReflectiveUi`, `LdLib2Screens`, and `LdLib2ProjectHomeScreenFactory` use that runtime shape for all menu routes.
+owo-lib is the only menu toolkit in this branch. Lumi declares it as a Fabric dependency for Minecraft `1.21.11`.
 
 Current UX assumptions:
 
@@ -115,7 +114,7 @@ Current UX assumptions:
 - holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - holding `Alt` while compare highlight is inactive shows the latest 10 tracked Lumi actions with a fading temporary overlay
 - the dashboard is now secondary navigation under `More` -> `Projects`
-- the workspace home screen is Build History: a LDLib2-style window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Ideas`, and `More`
+- the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Ideas`, and `More`
 - low-frequency tools such as import/export, settings, cleanup, diagnostics, technical graph, manual compare, legacy limited projects, and raw info live behind `More` or `Advanced`
 - save composition, save details, idea management, import/export combine review, cleanup, diagnostics, and advanced tools now have dedicated screens instead of sharing one overloaded project page
 
@@ -169,7 +168,7 @@ Current world-apply runtime types:
 - Lumi is shipped as one distributable mod jar.
 - Support libraries used by the mod are included through Loom jar-in-jar configuration.
 - The textured preview path now uses Lumi's own layered client mesh builder on top of the `1.21.11` render APIs instead of an external meshing runtime dependency.
-- LDLib2 is not packaged until a compatible Fabric `1.21.11` artifact exists; menu screens still require compatible LDLib2 runtime classes and do not include a secondary Minecraft-client renderer.
+- owo-lib is declared as a required Fabric dependency; `owo-sentinel` is included as a last-resort dependency warning helper.
 - Fabric API remains an external required mod.
 - Packaging tasks prune stale legacy `luma-*` outputs from `build/libs` before writing the current `lumi-*` artifacts.
 

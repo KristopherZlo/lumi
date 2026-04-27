@@ -125,7 +125,7 @@ Use Lumi if you want to:
 | Domain service | product logic | `VersionService`, `RestoreService`, `RecoveryService`, `DiffService` |
 | Minecraft adapter | game hooks and map mutation | `HistoryCaptureManager`, `WorldOperationManager`, `BlockChangeApplier` |
 | Storage | file layout and payload I/O | `ProjectLayout`, repositories in `storage/repository` |
-| Client UI | LDLib2 GDP screen factories, controllers, HUD, view state | `LdLib2Screens`, `LdLib2ProjectHomeScreenFactory`, `WorkspaceHudCoordinator` |
+| Client UI | owo-ui screens, controllers, HUD, view state | `ProjectScreen`, `CompareScreen`, `WorkspaceHudCoordinator` |
 
 Rules:
 
@@ -174,9 +174,10 @@ See [docs/storage-format.md](docs/storage-format.md) for the full format.
 Main libraries:
 
 - `cloth-config`
+- `owo-lib`
 - `lz4-java`
 
-LDLib2 GDP is the only menu UI backend in this branch. The Fabric `1.21.11` build keeps LDLib2 isolated behind reflection until a compatible Fabric artifact exists, but that isolation is not a fallback: menu screens require compatible LDLib2 runtime classes and are created as LDLib2 `ModularUIScreen` instances with the built-in GDP stylesheet (`ldlib2:lss/gdp.lss`).
+The client menus are implemented with owo-ui. Lumi depends on `owo-lib` for Fabric `1.21.11`.
 
 Build output is one mod jar.
 
