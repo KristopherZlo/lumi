@@ -1,8 +1,8 @@
 package io.github.luma.ui;
 
-import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.Sizing;
+import io.github.luma.ui.framework.container.FlowLayout;
+import io.github.luma.ui.framework.container.UIContainers;
+import io.github.luma.ui.framework.core.Sizing;
 import net.minecraft.network.chat.Component;
 
 /**

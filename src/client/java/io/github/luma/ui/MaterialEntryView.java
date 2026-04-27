@@ -1,10 +1,10 @@
 package io.github.luma.ui;
 
-import io.wispforest.owo.ui.component.UIComponents;
-import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.UIComponent;
+import io.github.luma.ui.framework.component.UIComponents;
+import io.github.luma.ui.framework.container.FlowLayout;
+import io.github.luma.ui.framework.container.UIContainers;
+import io.github.luma.ui.framework.core.Sizing;
+import io.github.luma.ui.framework.core.UIComponent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;

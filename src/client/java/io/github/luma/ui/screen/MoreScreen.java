@@ -2,10 +2,10 @@ package io.github.luma.ui.screen;
 
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.navigation.ScreenRouter;
-import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.Insets;
-import io.wispforest.owo.ui.core.OwoUIAdapter;
+import io.github.luma.ui.framework.container.FlowLayout;
+import io.github.luma.ui.framework.container.UIContainers;
+import io.github.luma.ui.framework.core.Insets;
+import io.github.luma.ui.framework.core.LumaUIAdapter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -24,8 +24,8 @@ public final class MoreScreen extends LumaScreen {
     }
 
     @Override
-    protected OwoUIAdapter<FlowLayout> createAdapter() {
-        return OwoUIAdapter.create(this, UIContainers::verticalFlow);
+    protected LumaUIAdapter<FlowLayout> createAdapter() {
+        return LumaUIAdapter.create(this, UIContainers::verticalFlow);
     }
 
     @Override
@@ -95,7 +95,7 @@ public final class MoreScreen extends LumaScreen {
             String titleKey,
             String helpKey,
             String buttonKey,
-            java.util.function.Consumer<io.wispforest.owo.ui.component.ButtonComponent> action
+            java.util.function.Consumer<io.github.luma.ui.framework.component.ButtonComponent> action
     ) {
         FlowLayout card = LumaUi.sectionCard(
                 Component.translatable(titleKey),

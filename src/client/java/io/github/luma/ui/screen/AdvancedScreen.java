@@ -8,10 +8,10 @@ import io.github.luma.ui.graph.CommitGraphLayout;
 import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.state.ProjectHomeViewState;
-import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.Insets;
-import io.wispforest.owo.ui.core.OwoUIAdapter;
+import io.github.luma.ui.framework.container.FlowLayout;
+import io.github.luma.ui.framework.container.UIContainers;
+import io.github.luma.ui.framework.core.Insets;
+import io.github.luma.ui.framework.core.LumaUIAdapter;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -33,8 +33,8 @@ public final class AdvancedScreen extends LumaScreen {
     }
 
     @Override
-    protected OwoUIAdapter<FlowLayout> createAdapter() {
-        return OwoUIAdapter.create(this, UIContainers::verticalFlow);
+    protected LumaUIAdapter<FlowLayout> createAdapter() {
+        return LumaUIAdapter.create(this, UIContainers::verticalFlow);
     }
 
     @Override
