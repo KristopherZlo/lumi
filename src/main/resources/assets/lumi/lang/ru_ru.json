@@ -708,7 +708,6 @@
   "luma.cleanup.empty": "Лишних файлов не найдено.",
   "luma.cleanup.candidate": "%s | %s | %s",
   "luma.ui_toolkit.title": "UI toolkit",
-  "luma.ui_toolkit.ldlib2_active": "LDLib2 активен.",
-  "luma.ui_toolkit.fallback_active": "Используется %s, потому что у LDLib2 нет совместимого Fabric 1.21.11 runtime.",
+  "luma.ui_toolkit.ldlib2_active": "LDLib2 GDP обязателен и активен.",
   "luma.ui_toolkit.backend": "%s | %s | %s"
 }

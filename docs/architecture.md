@@ -100,30 +100,28 @@ Important boundaries:
 
 ### Client UI layer
 
-`src/client/java/io/github/luma/ui` follows a `Screen + Controller + ViewState` structure.
+`src/client/java/io/github/luma/ui` follows an `LDLib2 screen factory + Controller + ViewState` structure.
 
 Responsibilities are split as follows:
 
-- screens keep transient UI state and rendering
+- LDLib2 screen factories keep transient UI state and rendering
 - controllers invoke services and translate failures into status keys
 - view-state records provide immutable inputs to the rendering layer
-- lightweight summary controllers keep `ProjectScreen`, `VariantsScreen`, and `ShareScreen` fast by avoiding diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open
+- lightweight summary controllers keep the project home, Ideas, and Import / Export routes fast by avoiding diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open
 - `MergePreviewCache` runs Import / Export combine previews in the background and caches them by imported package and target idea while the screen is open
-- `UiToolkitRegistry` treats LDLib2 as the target UI backend and reports whether the runtime classes needed for LDLib2 `ModularUIScreen`, GDP stylesheets, buttons, labels, and scroll views are present, while the Fabric `1.21.11` build keeps Lumi's packaged Minecraft-client UI renderer available until a compatible LDLib2 runtime is available
-- `LdLib2InterfaceBlueprint` records the target LDLib2 shape for the project home screen in terms of LDLib2 concepts such as window `UIElement`s, `Label`, `Button`, `ScrollerView`, and `TabView`, pins the built-in GDP stylesheet (`ldlib2:lss/gdp.lss`), and keeps compact flex/layout hints without linking the Fabric build to a NeoForge-only artifact
-- `LdLib2ReflectiveUi` and `LdLib2ProjectHomeScreenFactory` create the project home screen as a real LDLib2 `ModularUIScreen` with GDP styling when LDLib2 is available, without hard-linking the Fabric build to a currently incompatible artifact
-- `ProjectWindowLayout` remains the compact internal fallback shape for the project home screen when LDLib2 runtime classes are absent
+- `UiToolkitRegistry` treats LDLib2 GDP as the only UI backend and reports whether the runtime classes needed for LDLib2 `ModularUIScreen`, GDP stylesheets, buttons, labels, text fields, toggles, and scroll views are present
+- `LdLib2InterfaceBlueprint` records the target LDLib2 shape for the project home screen in terms of LDLib2 concepts such as window `UIElement`s, `Label`, `Button`, `ScrollerView`, and `TabView`, pins the built-in GDP stylesheet (`ldlib2:lss/gdp.lss`), and keeps compact flex/layout hints
+- `LdLib2ReflectiveUi`, `LdLib2Screens`, and `LdLib2ProjectHomeScreenFactory` create every Lumi menu as a real LDLib2 `ModularUIScreen` with GDP styling; there is no packaged Minecraft-client UI fallback
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
 - obsolete tab-builder scaffolds have been removed; larger workflows now use dedicated screens and narrow view-state records instead of a shared project tab container
 - the project home screen is now a Build History view with one primary action, `Save build`, plus one-click `See changes`, recent saves, `Ideas`, and `More`
 - dedicated screens isolate `Save`, `Save details`, `Ideas`, `Import / Export`, `See Changes`, `Recovered work`, `Settings`, `Cleanup`, `Diagnostics`, and `Advanced` so the main project screen no longer carries rare or technical workflows
-- `LumaScreen` ensures Lumi screens never pause the game
 - `WorkspaceHudCoordinator` owns the always-on HUD overlay and action-bar progress surface
 - project-facing screens poll lightweight operation snapshots every 10 client ticks so conflicting mutation buttons unlock as soon as the operation becomes terminal, while status text can stay visible briefly
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, prioritizes the nearest changed blocks to the current camera position, and renders only exposed overlay faces so translucent fill does not self-stack through dense diff volumes
 - `CompareOverlayCoordinator` refreshes `current`-world compare overlays on the client tick so live edits appear in the active highlight without rebuilding the screen manually
 - `RecentChangesOverlayRenderer` renders the latest tracked Lumi actions when `Alt` is held and the compare overlay is not active
-- `ShareScreen` now presents the normal `Import / Export` flow: import and export history packages, optionally include preview PNGs in exports, delete imported review packages, review imported packages, resolve same-area zones, show zone overlays, and apply a combined save without cluttering Build History or Ideas
+- the LDLib2 Import / Export route presents the normal flow: import and export history packages, optionally include preview PNGs in exports, delete imported review packages, review imported packages, resolve same-area zones, show zone overlays, and apply a combined save without cluttering Build History or Ideas
 
 ## Core runtime flows
 

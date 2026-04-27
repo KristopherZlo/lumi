@@ -549,8 +549,7 @@
   "luma.cleanup.empty": "No unused files found.",
   "luma.cleanup.candidate": "%s | %s | %s",
   "luma.ui_toolkit.title": "UI toolkit",
-  "luma.ui_toolkit.ldlib2_active": "LDLib2 is active.",
-  "luma.ui_toolkit.fallback_active": "Using %s while LDLib2 has no compatible Fabric 1.21.11 runtime.",
+  "luma.ui_toolkit.ldlib2_active": "LDLib2 GDP is required and active.",
   "luma.ui_toolkit.backend": "%s | %s | %s",
 
   "luma.project.build_title": "Build",

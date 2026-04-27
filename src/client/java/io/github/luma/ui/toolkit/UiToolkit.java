@@ -1,8 +1,7 @@
 package io.github.luma.ui.toolkit;
 
 public enum UiToolkit {
-    LDLIB2("LDLib2"),
-    MINECRAFT("Lumi internal UI");
+    LDLIB2("LDLib2 GDP");
 
     private final String displayName;
 

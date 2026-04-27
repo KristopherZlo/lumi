@@ -1,7 +1,6 @@
 package io.github.luma.ui.toolkit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -10,25 +9,20 @@ import org.junit.jupiter.api.Test;
 final class UiToolkitRegistryTest {
 
     @Test
-    void fallsBackToMinecraftUiWhenLdLib2IsUnavailable() {
-        UiToolkitRegistry registry = new UiToolkitRegistry(List.of(
-                new StaticBackend(UiToolkit.LDLIB2, false, true),
-                new StaticBackend(UiToolkit.MINECRAFT, true, false)
-        ));
+    void keepsLdLib2AsTheOnlyUiTargetWhenUnavailable() {
+        UiToolkitRegistry registry = new UiToolkitRegistry(List.of(new StaticBackend(UiToolkit.LDLIB2, false, true)));
 
         UiToolkitStatus status = registry.status();
 
         assertEquals(UiToolkit.LDLIB2, status.targetToolkit());
-        assertEquals(UiToolkit.MINECRAFT, status.activeToolkit());
-        assertFalse(status.targetActive());
+        assertEquals(UiToolkit.LDLIB2, status.activeToolkit());
+        assertTrue(status.targetActive());
+        assertTrue(status.backends().stream().noneMatch(UiToolkitBackend::available));
     }
 
     @Test
     void activatesLdLib2WhenItIsAvailable() {
-        UiToolkitRegistry registry = new UiToolkitRegistry(List.of(
-                new StaticBackend(UiToolkit.LDLIB2, true, true),
-                new StaticBackend(UiToolkit.MINECRAFT, true, false)
-        ));
+        UiToolkitRegistry registry = new UiToolkitRegistry(List.of(new StaticBackend(UiToolkit.LDLIB2, true, true)));
 
         UiToolkitStatus status = registry.status();
 
