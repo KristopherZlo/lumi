@@ -28,12 +28,12 @@ public final class SimpleActionCard {
         FlowLayout row = screenWidth < 760
                 ? UIContainers.verticalFlow(Sizing.fill(100), Sizing.content())
                 : UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        row.gap(8);
+        row.gap(6);
 
         row.child(LumaUi.stepBadge(this.step));
 
-        FlowLayout text = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        text.gap(3);
+        FlowLayout text = UIContainers.verticalFlow(screenWidth < 760 ? Sizing.fill(100) : Sizing.expand(100), Sizing.content());
+        text.gap(2);
         text.child(LumaUi.value(this.title));
         text.child(LumaUi.caption(this.help));
 

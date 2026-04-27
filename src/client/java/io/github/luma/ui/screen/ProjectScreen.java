@@ -83,7 +83,7 @@ public final class ProjectScreen extends LumaScreen {
         this.ensureSelectedVariant();
 
         root.surface(LumaUi.screenBackdrop());
-        root.padding(Insets.of(10));
+        root.padding(Insets.of(8));
         root.gap(0);
 
         if (this.state.project() == null) {
@@ -307,11 +307,11 @@ public final class ProjectScreen extends LumaScreen {
         FlowLayout hero = this.width < 860
                 ? UIContainers.verticalFlow(Sizing.fill(100), Sizing.content())
                 : UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        hero.gap(8);
+        hero.gap(6);
         hero.child(ProjectUiSupport.versionPreview(this.actionController, this.projectName, version, 96, 72, 96));
 
-        FlowLayout text = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        text.gap(4);
+        FlowLayout text = UIContainers.verticalFlow(this.width < 860 ? Sizing.fill(100) : Sizing.expand(100), Sizing.content());
+        text.gap(3);
         text.child(LumaUi.value(Component.literal(ProjectUiSupport.displayMessage(version))));
         text.child(LumaUi.caption(Component.translatable(
                 "luma.history.version_meta",

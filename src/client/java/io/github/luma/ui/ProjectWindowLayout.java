@@ -11,8 +11,8 @@ import net.minecraft.network.chat.Component;
  */
 public final class ProjectWindowLayout {
 
-    private static final int WIDE_SIDEBAR_WIDTH = 172;
-    private static final int NARROW_SIDEBAR_WIDTH = 136;
+    private static final int WIDE_SIDEBAR_WIDTH = 158;
+    private static final int NARROW_SIDEBAR_WIDTH = 126;
 
     private final FlowLayout root;
     private final FlowLayout sidebar;
@@ -27,11 +27,11 @@ public final class ProjectWindowLayout {
 
         this.sidebar.child(LumaUi.value(Component.literal("Lumi")));
         this.sidebar.child(LumaUi.caption(Component.translatable("luma.window.mode")));
-        this.sidebar.child(LumaUi.chip(place));
-        this.sidebar.child(LumaUi.chip(idea));
+        this.sidebar.child(LumaUi.sidebarChip(place));
+        this.sidebar.child(LumaUi.sidebarChip(idea));
 
-        FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        titleColumn.gap(3);
+        FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        titleColumn.gap(2);
         titleColumn.child(LumaUi.title(title));
         titleColumn.child(LumaUi.caption(Component.translatable("luma.window.home_help")));
         this.titleBar.child(titleColumn);
