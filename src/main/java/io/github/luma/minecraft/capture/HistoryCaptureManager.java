@@ -8,7 +8,6 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
-import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.service.ProjectService;
@@ -52,6 +51,7 @@ public final class HistoryCaptureManager {
     private static final int SECONDARY_SOURCE_JOIN_RADIUS = 2;
     private static final int STARTUP_CAPTURE_TRACE_LIMIT = 32;
     private static final int CAPTURE_SUMMARY_ENTRY_LIMIT = 4;
+    private static final WorldMutationCapturePolicy CAPTURE_POLICY = new WorldMutationCapturePolicy();
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -99,11 +99,28 @@ public final class HistoryCaptureManager {
 
         try {
             Instant now = Instant.now();
-            StoredBlockChange capturedChange = new StoredBlockChange(
-                    io.github.luma.domain.model.BlockPoint.from(pos),
-                    StatePayload.capture(oldState, oldBlockEntity),
-                    StatePayload.capture(newState, newBlockEntity)
+            Optional<WorldMutationCapturePolicy.CapturedMutation> capturedMutation = CAPTURE_POLICY.capture(
+                    source,
+                    pos,
+                    oldState,
+                    newState,
+                    oldBlockEntity,
+                    newBlockEntity
             );
+            if (capturedMutation.isEmpty()) {
+                LumaDebugLog.log(
+                        "capture",
+                        "Skipped {} mutation at {} in {} because it is runtime-only or transient: {} -> {}",
+                        source,
+                        pos,
+                        level.dimension().identifier(),
+                        oldState,
+                        newState
+                );
+                return;
+            }
+            WorldMutationCapturePolicy.CapturedMutation mutation = capturedMutation.get();
+            StoredBlockChange capturedChange = mutation.change();
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
             if (matchingProjects.isEmpty()) {
                 if (!allowsAutomaticProjectCreation(source)) {
@@ -147,7 +164,7 @@ public final class HistoryCaptureManager {
                 if (!this.canCaptureIntoSession(trackedProject, source, pos)) {
                     continue;
                 }
-                if (!this.ensureTrackedChunk(trackedProject, level, pos, oldState, oldBlockEntity, source, now)) {
+                if (!this.ensureTrackedChunk(trackedProject, level, pos, mutation.oldState(), mutation.oldBlockEntity(), source, now)) {
                     continue;
                 }
                 String projectId = trackedProject.project().id().toString();
@@ -158,7 +175,7 @@ public final class HistoryCaptureManager {
                 }
                 ChunkPoint chunk = ChunkPoint.from(pos);
                 if (this.isExplicitRootSource(source)) {
-                    this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
+                    this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
                     session.addRootChunk(chunk);
                 } else if (this.usesDeferredStabilization(trackedProject.project(), source)) {
                     if (!session.isWithinStabilizationEnvelope(chunk)) {
@@ -174,7 +191,7 @@ public final class HistoryCaptureManager {
                         );
                         continue;
                     }
-                    this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
+                    this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
                     session.markDirtyChunk(chunk);
                     this.dirtySessions.add(projectId);
                     LumaDebugLog.log(
@@ -195,7 +212,14 @@ public final class HistoryCaptureManager {
                 this.recordUndoRedoAction(trackedProject, level, capturedChange, now);
                 int pendingAfter = buffer.size();
                 CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
-                diagnostics.record(source, pos, oldState, newState, oldBlockEntity != null, newBlockEntity != null);
+                diagnostics.record(
+                        source,
+                        pos,
+                        mutation.oldState(),
+                        mutation.newState(),
+                        mutation.oldBlockEntity() != null,
+                        mutation.newBlockEntity() != null
+                );
                 this.logAcceptedCaptureTrace(trackedProject.project(), buffer, diagnostics, pendingBefore, pendingAfter);
                 LumaDebugLog.log(
                         trackedProject.project(),
@@ -1112,26 +1136,7 @@ public final class HistoryCaptureManager {
     }
 
     public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
-        if (source == null) {
-            return false;
-        }
-        return switch (source) {
-            case PLAYER,
-                    ENTITY,
-                    EXPLOSION,
-                    FLUID,
-                    FIRE,
-                    GROWTH,
-                    BLOCK_UPDATE,
-                    PISTON,
-                    FALLING_BLOCK,
-                    EXPLOSIVE,
-                    MOB,
-                    EXTERNAL_TOOL,
-                    WORLDEDIT,
-                    AXIOM -> true;
-            case RESTORE, SYSTEM -> false;
-        };
+        return CAPTURE_POLICY.shouldCaptureMutation(source);
     }
 
     public static boolean allowsAutomaticProjectCreation(io.github.luma.domain.model.WorldMutationSource source) {
@@ -1193,13 +1198,13 @@ public final class HistoryCaptureManager {
                     FIRE,
                     GROWTH,
                     BLOCK_UPDATE,
-                    PISTON,
                     MOB,
                     EXPLOSIVE,
                     EXTERNAL_TOOL,
                     WORLDEDIT,
                     AXIOM -> true;
             case FLUID,
+                    PISTON,
                     FALLING_BLOCK -> false;
             case RESTORE, SYSTEM -> false;
         };
@@ -1215,7 +1220,6 @@ public final class HistoryCaptureManager {
                     FIRE,
                     GROWTH,
                     BLOCK_UPDATE,
-                    PISTON,
                     FALLING_BLOCK,
                     MOB -> true;
             case PLAYER,
@@ -1224,6 +1228,7 @@ public final class HistoryCaptureManager {
                     EXTERNAL_TOOL,
                     WORLDEDIT,
                     AXIOM,
+                    PISTON,
                     RESTORE,
                     SYSTEM -> false;
         };

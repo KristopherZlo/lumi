@@ -19,7 +19,7 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.FIRE));
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.GROWTH));
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.BLOCK_UPDATE));
-        assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.PISTON));
+        assertFalse(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.PISTON));
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.FALLING_BLOCK));
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.EXPLOSIVE));
         assertTrue(HistoryCaptureManager.shouldCaptureMutation(WorldMutationSource.MOB));
@@ -82,7 +82,7 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FIRE));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.BLOCK_UPDATE));
-        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.PISTON));
+        assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.PISTON));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.MOB));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXPLOSIVE));
@@ -101,7 +101,7 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FIRE));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.GROWTH));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.BLOCK_UPDATE));
-        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.PISTON));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.PISTON));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FALLING_BLOCK));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.MOB));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.PLAYER));
