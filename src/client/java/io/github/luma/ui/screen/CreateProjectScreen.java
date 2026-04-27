@@ -104,15 +104,15 @@ public final class CreateProjectScreen extends LumaScreen {
         FlowLayout row = LumaUi.actionRow();
         row.child(LumaUi.caption(Component.translatable(labelKey)));
 
-        var xBox = UIComponents.textBox(Sizing.fixed(60), x);
+        var xBox = UIComponents.textBox(Sizing.fixed(52), x);
         xBox.onChanged().subscribe(onX::accept);
         row.child(xBox);
 
-        var yBox = UIComponents.textBox(Sizing.fixed(60), y);
+        var yBox = UIComponents.textBox(Sizing.fixed(52), y);
         yBox.onChanged().subscribe(onY::accept);
         row.child(yBox);
 
-        var zBox = UIComponents.textBox(Sizing.fixed(60), z);
+        var zBox = UIComponents.textBox(Sizing.fixed(52), z);
         zBox.onChanged().subscribe(onZ::accept);
         row.child(zBox);
         return row;

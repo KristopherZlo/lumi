@@ -45,9 +45,16 @@ final class UiToolkitRegistryTest {
         assertTrue(blueprint.elementTypes().contains("ScrollerView"));
         assertTrue(blueprint.projectHome().stream().anyMatch(role -> "window".equals(role.id())));
         assertTrue(blueprint.projectHome().stream().anyMatch(role -> "sidebar".equals(role.id())));
+        assertEquals(LdLib2InterfaceBlueprint.GDP_STYLESHEET, blueprint.stylesheetLocation());
+        assertTrue(blueprint.projectHome().stream()
+                .filter(role -> "window".equals(role.id()))
+                .anyMatch(role -> role.hasClass("panel_bg")));
         assertEquals(5, blueprint.projectHome().stream()
                 .filter(role -> role.id().endsWith("-action"))
                 .count());
+        assertTrue(blueprint.projectHome().stream()
+                .filter(role -> role.id().endsWith("-action"))
+                .allMatch(role -> role.hasLayoutRule("height", "18")));
     }
 
     private record StaticBackend(UiToolkit toolkit, boolean available, boolean primaryTarget)

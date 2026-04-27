@@ -145,11 +145,11 @@ public final class SaveDetailsScreen extends LumaScreen {
         FlowLayout hero = this.width < 860
                 ? UIContainers.verticalFlow(Sizing.fill(100), Sizing.content())
                 : UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        hero.gap(10);
-        hero.child(ProjectUiSupport.versionPreview(this.controller, this.projectName, version, 212, 112, 168));
+        hero.gap(6);
+        hero.child(ProjectUiSupport.versionPreview(this.controller, this.projectName, version, 188, 104, 148));
 
-        FlowLayout text = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        text.gap(6);
+        FlowLayout text = UIContainers.verticalFlow(this.width < 860 ? Sizing.fill(100) : Sizing.expand(100), Sizing.content());
+        text.gap(4);
         text.child(LumaUi.value(Component.literal(ProjectUiSupport.displayMessage(version))));
 
         FlowLayout meta = LumaUi.actionRow();
@@ -406,21 +406,21 @@ public final class SaveDetailsScreen extends LumaScreen {
         FlowLayout row = LumaUi.actionRow();
         row.child(LumaUi.caption(Component.translatable(labelKey)));
 
-        var xBox = UIComponents.textBox(Sizing.fixed(60), x);
+        var xBox = UIComponents.textBox(Sizing.fixed(52), x);
         xBox.onChanged().subscribe(value -> {
             onX.accept(value);
             this.partialRestoreSummary = null;
         });
         row.child(xBox);
 
-        var yBox = UIComponents.textBox(Sizing.fixed(60), y);
+        var yBox = UIComponents.textBox(Sizing.fixed(52), y);
         yBox.onChanged().subscribe(value -> {
             onY.accept(value);
             this.partialRestoreSummary = null;
         });
         row.child(yBox);
 
-        var zBox = UIComponents.textBox(Sizing.fixed(60), z);
+        var zBox = UIComponents.textBox(Sizing.fixed(52), z);
         zBox.onChanged().subscribe(value -> {
             onZ.accept(value);
             this.partialRestoreSummary = null;

@@ -34,11 +34,14 @@ public final class LdLib2ToolkitBackend implements UiToolkitBackend {
     @Override
     public List<String> notes() {
         String targetElements = "Target elements: " + String.join(", ", this.blueprint.elementTypes()) + ".";
+        String theme = "Built-in LDLib2 theme target: " + this.blueprint.builtInThemeName()
+                + " (" + this.blueprint.stylesheetLocation() + ").";
         if (this.available) {
-            return List.of("LDLib2 UI classes detected.", targetElements);
+            return List.of("LDLib2 UI classes detected.", theme, targetElements);
         }
         return List.of(
                 "LDLib2 is the target UI backend, but no compatible Fabric 1.21.11 runtime classes are present.",
+                theme,
                 targetElements
         );
     }

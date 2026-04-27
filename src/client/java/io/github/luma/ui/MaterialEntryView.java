@@ -21,10 +21,10 @@ public final class MaterialEntryView {
 
     public static FlowLayout row(String blockId, Component summary) {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        row.gap(6);
+        row.gap(4);
         row.child(icon(blockId));
 
-        FlowLayout text = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        FlowLayout text = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
         text.child(LumaUi.caption(summary));
         row.child(text);
         return row;
@@ -37,7 +37,7 @@ public final class MaterialEntryView {
         }
 
         var icon = UIComponents.item(stack);
-        icon.sizing(Sizing.fixed(18), Sizing.fixed(18));
+        icon.sizing(Sizing.fixed(16), Sizing.fixed(16));
         return icon;
     }
 
