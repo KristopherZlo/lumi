@@ -18,7 +18,7 @@ import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayRenderer;
 import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
 import io.github.luma.ui.screen.DashboardScreen;
-import io.github.luma.ui.screen.ProjectScreen;
+import io.github.luma.ui.screen.ProjectScreenFactory;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -114,7 +114,7 @@ public final class LumaClient implements ClientModInitializer {
                 }
 
                 String projectName = this.projectService.ensureWorldProject(level, client.getUser().getName()).name();
-                client.setScreen(new ProjectScreen(client.screen, projectName));
+                client.setScreen(ProjectScreenFactory.create(client.screen, projectName));
             } catch (IllegalStateException exception) {
                 client.gui.setOverlayMessage(Component.translatable("luma.status.admin_required"), false);
             } catch (Exception exception) {

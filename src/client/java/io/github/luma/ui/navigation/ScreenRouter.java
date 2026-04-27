@@ -7,7 +7,7 @@ import io.github.luma.ui.screen.CreateProjectScreen;
 import io.github.luma.ui.screen.DashboardScreen;
 import io.github.luma.ui.screen.DiagnosticsScreen;
 import io.github.luma.ui.screen.MoreScreen;
-import io.github.luma.ui.screen.ProjectScreen;
+import io.github.luma.ui.screen.ProjectScreenFactory;
 import io.github.luma.ui.screen.RecoveryScreen;
 import io.github.luma.ui.screen.SaveDetailsScreen;
 import io.github.luma.ui.screen.SaveScreen;
@@ -30,23 +30,23 @@ public final class ScreenRouter {
     }
 
     public void openProject(Screen parent, String projectName) {
-        this.client.setScreen(new ProjectScreen(parent, projectName));
+        this.client.setScreen(ProjectScreenFactory.create(parent, projectName));
     }
 
     public void openProject(Screen parent, String projectName, String variantId) {
-        this.client.setScreen(new ProjectScreen(parent, projectName, variantId, "luma.status.project_ready"));
+        this.client.setScreen(ProjectScreenFactory.create(parent, projectName, variantId, "luma.status.project_ready"));
     }
 
     public void openProjectIgnoringRecovery(Screen parent, String projectName) {
-        this.client.setScreen(new ProjectScreen(parent, projectName));
+        this.client.setScreen(ProjectScreenFactory.create(parent, projectName));
     }
 
     public void openProjectIgnoringRecovery(Screen parent, String projectName, String statusKey) {
-        this.client.setScreen(new ProjectScreen(parent, projectName, statusKey));
+        this.client.setScreen(ProjectScreenFactory.create(parent, projectName, statusKey));
     }
 
     public void openProjectIgnoringRecovery(Screen parent, String projectName, String variantId, String statusKey) {
-        this.client.setScreen(new ProjectScreen(parent, projectName, variantId, statusKey));
+        this.client.setScreen(ProjectScreenFactory.create(parent, projectName, variantId, statusKey));
     }
 
     public void openRecovery(Screen parent, String projectName) {

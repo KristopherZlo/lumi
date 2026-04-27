@@ -6,7 +6,12 @@ public final class LdLib2ToolkitBackend implements UiToolkitBackend {
 
     private static final List<String> REQUIRED_CLASSES = List.of(
             "com.lowdragmc.lowdraglib2.gui.ui.UI",
-            "com.lowdragmc.lowdraglib2.gui.ui.ModularUI"
+            "com.lowdragmc.lowdraglib2.gui.ui.ModularUI",
+            "com.lowdragmc.lowdraglib2.gui.holder.ModularUIScreen",
+            "com.lowdragmc.lowdraglib2.gui.ui.elements.Button",
+            "com.lowdragmc.lowdraglib2.gui.ui.elements.Label",
+            "com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView",
+            "com.lowdragmc.lowdraglib2.gui.ui.style.StylesheetManager"
     );
 
     private final boolean available;
