@@ -20,6 +20,7 @@ class ProjectSettingsTest {
         assertTrue(settings.safetySnapshotBeforeRestore());
         assertTrue(settings.previewGenerationEnabled());
         assertFalse(settings.debugLoggingEnabled());
+        assertTrue(settings.workspaceHudVisible());
     }
 
     @Test
@@ -32,7 +33,8 @@ class ProjectSettingsTest {
                 -3.0D,
                 false,
                 false,
-                true
+                true,
+                null
         ));
 
         assertTrue(settings.autoVersionsEnabled());
@@ -43,5 +45,23 @@ class ProjectSettingsTest {
         assertFalse(settings.safetySnapshotBeforeRestore());
         assertFalse(settings.previewGenerationEnabled());
         assertTrue(settings.debugLoggingEnabled());
+        assertTrue(settings.workspaceHudVisible());
+    }
+
+    @Test
+    void sanitizePreservesWorkspaceHudVisibility() {
+        ProjectSettings settings = ProjectSettings.sanitize(new ProjectSettings(
+                false,
+                10,
+                5,
+                10,
+                0.20D,
+                true,
+                true,
+                false,
+                false
+        ));
+
+        assertFalse(settings.workspaceHudVisible());
     }
 }

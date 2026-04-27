@@ -160,34 +160,44 @@ public final class WorkspaceHudCoordinator {
 
     private void render(GuiGraphics drawContext, net.minecraft.client.DeltaTracker tickCounter) {
         Minecraft client = Minecraft.getInstance();
-        if (client.options.hideGui || this.workspaceSnapshot == null) {
+        if (client.options.hideGui || this.workspaceSnapshot == null || !this.workspaceSnapshot.workspaceHudEnabled()) {
             return;
         }
 
         String titleText = "Lumi";
         String placeText = client.level == null ? "Overworld" : this.dimensionLabel(client.level.dimension().identifier().toString());
-        String ideaText = this.workspaceSnapshot.activeVariantId() == null || this.workspaceSnapshot.activeVariantId().isBlank()
+        String branchText = this.workspaceSnapshot.activeVariantId() == null || this.workspaceSnapshot.activeVariantId().isBlank()
                 ? ""
-                : "idea: " + this.workspaceSnapshot.activeVariantId();
+                : "branch: " + this.workspaceSnapshot.activeVariantId();
+        String counterLabel = "Unsaved:";
         String plusText = "+" + this.workspaceSnapshot.plusCount();
         String minusText = "-" + this.workspaceSnapshot.minusCount();
 
         int titleWidth = client.font.width(titleText);
         int placeWidth = client.font.width(placeText);
-        int ideaWidth = ideaText.isBlank() ? 0 : client.font.width(ideaText);
-        int countersWidth = client.font.width("Unsaved: " + plusText) + 8 + client.font.width(minusText);
-        int boxWidth = Math.max(Math.max(titleWidth, placeWidth), Math.max(ideaWidth, countersWidth)) + 12;
+        int branchWidth = branchText.isBlank() ? 0 : client.font.width(branchText);
+        int counterLabelWidth = client.font.width(counterLabel);
+        int plusWidth = client.font.width(plusText);
+        int minusWidth = client.font.width(minusText);
+        int countersWidth = counterLabelWidth + 4 + plusWidth + 8 + minusWidth;
+        int boxHeight = branchText.isBlank() ? 34 : 44;
+        int boxWidth = Math.max(Math.max(titleWidth, placeWidth), Math.max(branchWidth, countersWidth)) + 12;
         int x = drawContext.guiWidth() - boxWidth - 8;
         int y = 8;
 
-        drawContext.fill(x, y, x + boxWidth, y + 44, 0x7A0B1016);
+        drawContext.fill(x, y, x + boxWidth, y + boxHeight, 0x7A0B1016);
         drawContext.drawString(client.font, titleText, x + 6, y + 4, 0xFFF3F7FA, true);
         drawContext.drawString(client.font, placeText, x + 6, y + 14, 0xFF98A6B3, false);
-        if (!ideaText.isBlank()) {
-            drawContext.drawString(client.font, ideaText, x + 6, y + 24, 0xFF98A6B3, false);
+        int counterY = y + 24;
+        if (!branchText.isBlank()) {
+            drawContext.drawString(client.font, branchText, x + 6, y + 24, 0xFF98A6B3, false);
+            counterY = y + 34;
         }
-        drawContext.drawString(client.font, "Unsaved: " + plusText, x + 6, y + 34, 0xFF69E38A, false);
-        drawContext.drawString(client.font, minusText, x + 22 + client.font.width("Unsaved: " + plusText), y + 34, 0xFFFF7373, false);
+        int counterX = x + 6;
+        drawContext.drawString(client.font, counterLabel, counterX, counterY, 0xFF98A6B3, false);
+        int plusX = counterX + counterLabelWidth + 4;
+        drawContext.drawString(client.font, plusText, plusX, counterY, 0xFF69E38A, false);
+        drawContext.drawString(client.font, minusText, plusX + plusWidth + 8, counterY, 0xFFFF7373, false);
     }
 
     private String fingerprint(OperationSnapshot snapshot) {

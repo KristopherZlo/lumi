@@ -45,7 +45,8 @@ public final class WorkspaceHudController {
                     project.activeVariantId(),
                     pending,
                     operationSnapshot,
-                    LumaDebugLog.enabled(project)
+                    LumaDebugLog.enabled(project),
+                    project.settings().workspaceHudVisible()
             );
         } catch (Exception exception) {
             return null;

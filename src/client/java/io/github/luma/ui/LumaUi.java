@@ -6,6 +6,7 @@ import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Color;
+import io.wispforest.owo.ui.core.Easing;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
@@ -46,8 +47,8 @@ public final class LumaUi {
     public static FlowLayout screenFrame() {
         FlowLayout layout = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
         layout.surface(windowSurface());
-        layout.padding(Insets.of(6));
-        layout.gap(6);
+        layout.padding(Insets.of(5));
+        layout.gap(5);
         return layout;
     }
 
@@ -69,30 +70,30 @@ public final class LumaUi {
     public static FlowLayout windowSidebar(int width) {
         FlowLayout sidebar = UIContainers.verticalFlow(Sizing.fixed(width), Sizing.fill(100));
         sidebar.surface(Surface.flat(SIDEBAR_FILL).and(Surface.outline(0xFF272528)));
-        sidebar.padding(Insets.of(8));
-        sidebar.gap(6);
+        sidebar.padding(Insets.of(6));
+        sidebar.gap(5);
         return sidebar;
     }
 
     public static FlowLayout windowContent() {
         FlowLayout content = UIContainers.verticalFlow(Sizing.expand(100), Sizing.fill(100));
-        content.padding(Insets.of(8));
-        content.gap(6);
+        content.padding(Insets.of(6));
+        content.gap(5);
         return content;
     }
 
     public static FlowLayout titleBar() {
         FlowLayout titleBar = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         titleBar.surface(Surface.flat(TITLEBAR_FILL).and(Surface.outline(PANEL_BORDER)));
-        titleBar.padding(Insets.of(6));
-        titleBar.gap(6);
+        titleBar.padding(Insets.of(5));
+        titleBar.gap(5);
         return titleBar;
     }
 
     public static FlowLayout screenBody() {
         FlowLayout layout = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
         layout.padding(Insets.bottom(10));
-        layout.gap(6);
+        layout.gap(5);
         return layout;
     }
 
@@ -118,15 +119,15 @@ public final class LumaUi {
     public static FlowLayout panel(Sizing horizontal, Sizing vertical) {
         FlowLayout layout = UIContainers.verticalFlow(horizontal, vertical);
         layout.surface(Surface.flat(PANEL_FILL).and(Surface.outline(PANEL_BORDER)));
-        layout.padding(Insets.of(8));
-        layout.gap(6);
+        layout.padding(Insets.of(6));
+        layout.gap(5);
         return layout;
     }
 
     public static FlowLayout insetPanel(Sizing horizontal, Sizing vertical) {
         FlowLayout layout = UIContainers.verticalFlow(horizontal, vertical);
         layout.surface(Surface.flat(INSET_FILL).and(Surface.outline(INSET_BORDER)));
-        layout.padding(Insets.of(5));
+        layout.padding(Insets.of(4));
         layout.gap(4);
         return layout;
     }
@@ -134,7 +135,7 @@ public final class LumaUi {
     public static FlowLayout chip(Component text) {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
-        chip.padding(Insets.of(2));
+        chip.padding(Insets.of(1));
         chip.child(compactCaption(text));
         return chip;
     }
@@ -151,8 +152,8 @@ public final class LumaUi {
     public static FlowLayout statusBanner(Component text) {
         FlowLayout banner = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
         banner.surface(Surface.flat(STATUS_FILL).and(Surface.outline(STATUS_BORDER)));
-        banner.padding(Insets.of(6));
-        banner.gap(4);
+        banner.padding(Insets.of(5));
+        banner.gap(3);
         banner.child(accent(text));
         return banner;
     }
@@ -214,11 +215,19 @@ public final class LumaUi {
     public static FlowLayout statChip(Component label, Component value) {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
-        chip.padding(Insets.of(2));
-        chip.gap(3);
+        chip.padding(Insets.of(1));
+        chip.gap(2);
         chip.child(statValue(value));
         chip.child(statLabel(label));
         return chip;
+    }
+
+    public static FlowLayout revealGroup() {
+        FlowLayout group = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        group.gap(4);
+        group.margins(Insets.top(-4));
+        group.margins().animate(160, Easing.CUBIC, Insets.none()).forwards();
+        return group;
     }
 
     public static FlowLayout actionRow() {
@@ -245,7 +254,7 @@ public final class LumaUi {
         ButtonComponent button = UIComponents.button(text, onPress);
         button.renderer(ButtonComponent.Renderer.flat(fill, hover, disabled));
         button.textShadow(false);
-        button.sizing(Sizing.content(6), Sizing.fixed(20));
+        button.sizing(Sizing.content(5), Sizing.fixed(18));
         return button;
     }
 
@@ -282,10 +291,10 @@ public final class LumaUi {
     }
 
     private static LabelComponent statValue(Component text) {
-        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false).maxWidth(72);
+        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false).maxWidth(56);
     }
 
     private static LabelComponent statLabel(Component text) {
-        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(108);
+        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(86);
     }
 }

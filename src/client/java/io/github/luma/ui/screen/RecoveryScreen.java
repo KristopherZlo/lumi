@@ -224,9 +224,11 @@ public final class RecoveryScreen extends LumaScreen {
             return section;
         }
 
-        section.child(LumaUi.caption(Component.translatable("luma.variant.entry_base", this.safeText(summaryState.baseVersionId()))));
-        section.child(LumaUi.caption(Component.translatable("luma.variant.entry_head", this.safeText(summaryState.headVersionId()))));
-        section.child(LumaUi.caption(Component.translatable("luma.log.entry_variant", this.safeText(summaryState.variantId()))));
+        FlowLayout expanded = LumaUi.revealGroup();
+        expanded.child(LumaUi.caption(Component.translatable("luma.variant.entry_base", this.safeText(summaryState.baseVersionId()))));
+        expanded.child(LumaUi.caption(Component.translatable("luma.variant.entry_head", this.safeText(summaryState.headVersionId()))));
+        expanded.child(LumaUi.caption(Component.translatable("luma.log.entry_variant", this.safeText(summaryState.variantId()))));
+        section.child(expanded);
         return section;
     }
 

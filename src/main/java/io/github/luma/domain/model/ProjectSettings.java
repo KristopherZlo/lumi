@@ -8,11 +8,12 @@ public record ProjectSettings(
         double snapshotVolumeThreshold,
         boolean safetySnapshotBeforeRestore,
         boolean previewGenerationEnabled,
-        boolean debugLoggingEnabled
+        boolean debugLoggingEnabled,
+        Boolean workspaceHudEnabled
 ) {
 
     public static ProjectSettings defaults() {
-        return new ProjectSettings(false, 10, 5, 10, 0.20D, true, true, false);
+        return new ProjectSettings(false, 10, 5, 10, 0.20D, true, true, false, true);
     }
 
     public static ProjectSettings sanitize(ProjectSettings settings) {
@@ -28,7 +29,12 @@ public record ProjectSettings(
                 settings.snapshotVolumeThreshold() <= 0.0D ? 0.20D : settings.snapshotVolumeThreshold(),
                 settings.safetySnapshotBeforeRestore(),
                 settings.previewGenerationEnabled(),
-                settings.debugLoggingEnabled()
+                settings.debugLoggingEnabled(),
+                settings.workspaceHudEnabled() == null ? true : settings.workspaceHudEnabled()
         );
+    }
+
+    public boolean workspaceHudVisible() {
+        return !Boolean.FALSE.equals(this.workspaceHudEnabled);
     }
 }

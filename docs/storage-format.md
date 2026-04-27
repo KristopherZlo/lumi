@@ -78,8 +78,19 @@ Stores the project metadata, including:
 - dimension id
 - active and main variant ids
 - timestamps
-- project settings
+- project settings:
+  - `autoVersionsEnabled`
+  - `autoVersionMinutes`
+  - `sessionIdleSeconds`
+  - `snapshotEveryVersions`
+  - `snapshotVolumeThreshold`
+  - `safetySnapshotBeforeRestore`
+  - `previewGenerationEnabled`
+  - `debugLoggingEnabled`
+  - `workspaceHudEnabled`
 - legacy favorite flag and archive flag
+
+Older project files may omit `workspaceHudEnabled`; Lumi treats the missing value as `true` so existing workspaces keep the top-right panel visible until the user disables it in Settings.
 
 ### `variants.json`
 

@@ -14,7 +14,8 @@ public record WorkspaceHudSnapshot(
         String activeVariantId,
         PendingChangeSummary pendingChanges,
         OperationSnapshot operationSnapshot,
-        boolean debugEnabled
+        boolean debugEnabled,
+        boolean workspaceHudEnabled
 ) {
 
     public int plusCount() {
