@@ -8,8 +8,10 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryDraftSummary;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -87,14 +89,14 @@ public final class RecoveryService {
         LumaMod.LOGGER.info(
                 "Starting recovery draft restore for project {} with {} changes",
                 project.name(),
-                draft.changes().size()
+                draft.totalChangeCount()
         );
         LumaDebugLog.log(
                 project,
                 "recovery",
                 "Starting recovery restore for project {} with {} changes from {}",
                 project.name(),
-                draft.changes().size(),
+                draft.totalChangeCount(),
                 frozenDraft.isPresent() ? "frozen live buffer" : "persisted draft"
         );
 
@@ -114,8 +116,8 @@ public final class RecoveryService {
                 "blocks",
                 LumaDebugLog.enabled(project),
                 progressSink -> {
-                    progressSink.update(OperationStage.PREPARING, 0, draft.changes().size(), "Decoding recovery draft");
-                    List<PreparedChunkBatch> batches = this.decodeDraft(level, draft.changes(), progressSink);
+                    progressSink.update(OperationStage.PREPARING, 0, draft.totalChangeCount(), "Decoding recovery draft");
+                    List<PreparedChunkBatch> batches = this.decodeDraft(level, draft, progressSink);
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,
                             () -> {
@@ -131,7 +133,7 @@ public final class RecoveryService {
                                 LumaMod.LOGGER.info(
                                         "Completed recovery draft restore for project {} with {} changes",
                                         project.name(),
-                                        draft.changes().size()
+                                        draft.totalChangeCount()
                                 );
                             }
                     );
@@ -164,37 +166,68 @@ public final class RecoveryService {
 
     private List<PreparedChunkBatch> decodeDraft(
             ServerLevel level,
-            List<StoredBlockChange> changes,
+            RecoveryDraft draft,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
-        Map<String, List<PreparedBlockPlacement>> grouped = new LinkedHashMap<>();
+        List<StoredBlockChange> changes = draft.changes();
+        List<StoredEntityChange> entityChanges = draft.entityChanges();
+        Map<io.github.luma.domain.model.ChunkPoint, List<PreparedBlockPlacement>> grouped = new LinkedHashMap<>();
+        Map<io.github.luma.domain.model.ChunkPoint, List<StoredEntityChange>> groupedEntities = new LinkedHashMap<>();
         int index = 0;
         for (StoredBlockChange change : changes) {
-            String chunkKey = (change.pos().x() >> 4) + ":" + (change.pos().z() >> 4);
-            grouped.computeIfAbsent(chunkKey, ignored -> new ArrayList<>())
+            io.github.luma.domain.model.ChunkPoint chunk = new io.github.luma.domain.model.ChunkPoint(
+                    change.pos().x() >> 4,
+                    change.pos().z() >> 4
+            );
+            grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>())
                     .add(new PreparedBlockPlacement(
                             new BlockPos(change.pos().x(), change.pos().y(), change.pos().z()),
                             io.github.luma.minecraft.world.BlockStateNbtCodec.deserializeBlockState(level, change.newValue().stateTag()),
                             change.newValue().blockEntityTag() == null ? null : change.newValue().blockEntityTag().copy()
                     ));
             index += 1;
-            progressSink.update(OperationStage.PREPARING, index, changes.size(), "Decoded recovery draft");
+            progressSink.update(OperationStage.PREPARING, index, draft.totalChangeCount(), "Decoded recovery draft");
+        }
+        for (StoredEntityChange change : entityChanges) {
+            groupedEntities.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
+            index += 1;
+            progressSink.update(OperationStage.PREPARING, index, draft.totalChangeCount(), "Decoded recovery draft");
         }
 
         List<PreparedChunkBatch> batches = new ArrayList<>();
-        for (Map.Entry<String, List<PreparedBlockPlacement>> entry : grouped.entrySet()) {
-            String[] split = entry.getKey().split(":", 2);
+        java.util.LinkedHashSet<io.github.luma.domain.model.ChunkPoint> chunks = new java.util.LinkedHashSet<>();
+        chunks.addAll(grouped.keySet());
+        chunks.addAll(groupedEntities.keySet());
+        for (io.github.luma.domain.model.ChunkPoint chunk : chunks) {
             batches.add(new PreparedChunkBatch(
-                    new io.github.luma.domain.model.ChunkPoint(Integer.parseInt(split[0]), Integer.parseInt(split[1])),
-                    List.copyOf(entry.getValue())
+                    chunk,
+                    List.copyOf(grouped.getOrDefault(chunk, List.of())),
+                    toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()))
             ));
         }
         LumaDebugLog.log(
                 "recovery",
-                "Decoded recovery draft with {} changes into {} chunk batches",
+                "Decoded recovery draft with {} block and {} entity changes into {} chunk batches",
                 changes.size(),
+                entityChanges.size(),
                 batches.size()
         );
         return batches;
+    }
+
+    private static EntityBatch toEntityBatch(List<StoredEntityChange> changes) {
+        List<net.minecraft.nbt.CompoundTag> spawns = new ArrayList<>();
+        List<String> removals = new ArrayList<>();
+        List<net.minecraft.nbt.CompoundTag> updates = new ArrayList<>();
+        for (StoredEntityChange change : changes) {
+            if (change.isSpawn()) {
+                spawns.add(change.newValue().copyTag());
+            } else if (change.isRemove()) {
+                removals.add(change.entityId());
+            } else if (change.isUpdate()) {
+                updates.add(change.newValue().copyTag());
+            }
+        }
+        return new EntityBatch(spawns, removals, updates);
     }
 }

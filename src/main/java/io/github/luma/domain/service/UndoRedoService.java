@@ -8,11 +8,13 @@ import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.world.BlockStateNbtCodec;
+import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -62,10 +64,17 @@ public final class UndoRedoService {
         List<StoredBlockChange> targetChanges = direction == Direction.UNDO
                 ? action.undoChanges()
                 : action.redoChanges();
+        List<StoredEntityChange> targetEntityChanges = direction == Direction.UNDO
+                ? action.undoEntityChanges()
+                : action.redoEntityChanges();
         List<StoredBlockChange> pendingAdjustments = direction == Direction.UNDO
                 ? action.inverseChanges()
                 : action.redoChanges();
+        List<StoredEntityChange> pendingEntityAdjustments = direction == Direction.UNDO
+                ? action.inverseEntityChanges()
+                : action.redoEntityChanges();
         String label = direction == Direction.UNDO ? "undo-action" : "redo-action";
+        int totalChanges = targetChanges.size() + targetEntityChanges.size();
 
         return this.worldOperationManager.startPreparedApplyOperation(
                 level,
@@ -74,8 +83,8 @@ public final class UndoRedoService {
                 "blocks",
                 LumaDebugLog.enabled(project),
                 progressSink -> {
-                    progressSink.update(OperationStage.PREPARING, 0, targetChanges.size(), "Decoding " + direction.label());
-                    List<PreparedChunkBatch> batches = this.decodeBatches(level, targetChanges, direction, progressSink);
+                    progressSink.update(OperationStage.PREPARING, 0, totalChanges, "Decoding " + direction.label());
+                    List<PreparedChunkBatch> batches = this.decodeBatches(level, targetChanges, targetEntityChanges, direction, progressSink);
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,
                             () -> {
@@ -88,14 +97,16 @@ public final class UndoRedoService {
                                         level.getServer(),
                                         project.id().toString(),
                                         pendingAdjustments,
+                                        pendingEntityAdjustments,
                                         action.actor(),
                                         Instant.now()
                                 );
                                 LumaMod.LOGGER.info(
-                                        "Completed {} for project {} with {} block changes",
+                                        "Completed {} for project {} with {} block and {} entity changes",
                                         direction.label(),
                                         project.name(),
-                                        targetChanges.size()
+                                        targetChanges.size(),
+                                        targetEntityChanges.size()
                                 );
                             }
                     );
@@ -106,10 +117,12 @@ public final class UndoRedoService {
     private List<PreparedChunkBatch> decodeBatches(
             ServerLevel level,
             List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
             Direction direction,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = new LinkedHashMap<>();
+        Map<ChunkPoint, List<StoredEntityChange>> groupedEntities = new LinkedHashMap<>();
         int index = 0;
         for (StoredBlockChange change : changes) {
             StatePayload target = direction == Direction.UNDO ? change.oldValue() : change.newValue();
@@ -123,12 +136,46 @@ public final class UndoRedoService {
             index += 1;
             progressSink.update(OperationStage.PREPARING, index, changes.size(), "Decoded " + direction.label());
         }
+        for (StoredEntityChange change : entityChanges) {
+            groupedEntities.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
+            index += 1;
+            progressSink.update(
+                    OperationStage.PREPARING,
+                    index,
+                    changes.size() + entityChanges.size(),
+                    "Decoded " + direction.label()
+            );
+        }
 
         List<PreparedChunkBatch> batches = new ArrayList<>();
-        for (Map.Entry<ChunkPoint, List<PreparedBlockPlacement>> entry : grouped.entrySet()) {
-            batches.add(new PreparedChunkBatch(entry.getKey(), List.copyOf(entry.getValue())));
+        java.util.LinkedHashSet<ChunkPoint> chunks = new java.util.LinkedHashSet<>();
+        chunks.addAll(grouped.keySet());
+        chunks.addAll(groupedEntities.keySet());
+        for (ChunkPoint chunk : chunks) {
+            batches.add(new PreparedChunkBatch(
+                    chunk,
+                    List.copyOf(grouped.getOrDefault(chunk, List.of())),
+                    toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), direction)
+            ));
         }
         return batches;
+    }
+
+    private static EntityBatch toEntityBatch(List<StoredEntityChange> changes, Direction direction) {
+        List<net.minecraft.nbt.CompoundTag> spawns = new ArrayList<>();
+        List<String> removals = new ArrayList<>();
+        List<net.minecraft.nbt.CompoundTag> updates = new ArrayList<>();
+        for (StoredEntityChange change : changes) {
+            StoredEntityChange target = direction == Direction.UNDO ? change.inverse() : change;
+            if (target.isSpawn()) {
+                spawns.add(target.newValue().copyTag());
+            } else if (target.isRemove()) {
+                removals.add(target.entityId());
+            } else if (target.isUpdate()) {
+                updates.add(target.newValue().copyTag());
+            }
+        }
+        return new EntityBatch(spawns, removals, updates);
     }
 
     private enum Direction {
