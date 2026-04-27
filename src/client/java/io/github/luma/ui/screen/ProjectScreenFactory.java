@@ -17,6 +17,6 @@ public final class ProjectScreenFactory {
 
     public static Screen create(Screen parent, String projectName, String selectedVariantId, String statusKey) {
         return LdLib2ProjectHomeScreenFactory.create(parent, projectName, selectedVariantId, statusKey)
-                .orElseGet(() -> new ProjectScreen(parent, projectName, selectedVariantId, statusKey));
+                .orElseThrow(() -> new IllegalStateException("LDLib2 runtime is required for the Lumi project screen."));
     }
 }
