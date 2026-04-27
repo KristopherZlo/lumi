@@ -19,7 +19,7 @@ Shared world-level metadata is stored at:
 Project history archives and share packages exported from the UI are stored at:
 
 ```text
-<world>/lumi/exports/
+<game>/lumi-projects/
 ```
 
 Example:
@@ -243,7 +243,7 @@ Current behavior:
 
 Version manifests may use `versionKind = PARTIAL_RESTORE` for region-scoped restores. The patch payload uses the normal block-change format; the semantic difference is that the active variant advances to this new version instead of moving its head back to the historical target version.
 
-Project import/export uses a zip archive with:
+Project import/export uses zip archives stored by default in the game-root `lumi-projects` folder. Each archive contains:
 
 - `manifest.json`
 - `project/project.json`

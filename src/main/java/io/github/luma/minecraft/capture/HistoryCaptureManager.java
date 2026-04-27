@@ -92,7 +92,7 @@ public final class HistoryCaptureManager {
             CompoundTag newBlockEntity
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (!shouldCaptureMutation(source) || !this.canUseMutationSource(source)) {
+        if (!shouldCaptureMutation(source) || !this.canUseMutationSource(level.getServer(), source)) {
             return;
         }
 
@@ -528,8 +528,20 @@ public final class HistoryCaptureManager {
         this.projectCaches.remove(this.cacheKey(server));
     }
 
-    private boolean canUseMutationSource(io.github.luma.domain.model.WorldMutationSource source) {
-        return !this.isExplicitRootSource(source) || WorldMutationContext.currentAccessAllowed();
+    private boolean canUseMutationSource(MinecraftServer server, io.github.luma.domain.model.WorldMutationSource source) {
+        return canUseMutationSource(
+                server != null && server.isDedicatedServer(),
+                WorldMutationContext.currentAccessAllowed(),
+                source
+        );
+    }
+
+    static boolean canUseMutationSource(
+            boolean dedicatedServer,
+            boolean accessAllowed,
+            io.github.luma.domain.model.WorldMutationSource source
+    ) {
+        return !isExplicitRootSource(source) || accessAllowed || !dedicatedServer;
     }
 
     private void recordUndoRedoAction(
@@ -543,7 +555,8 @@ public final class HistoryCaptureManager {
         }
 
         String actionId = WorldMutationContext.currentActionId();
-        if (WorldMutationContext.currentAccessAllowed() && !actionId.isBlank()) {
+        boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
+        if (actionAllowed && !actionId.isBlank()) {
             UndoRedoHistoryManager.getInstance().recordChange(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
@@ -846,7 +859,7 @@ public final class HistoryCaptureManager {
         this.sessionDiagnostics.remove(projectId);
     }
 
-    private boolean isExplicitRootSource(io.github.luma.domain.model.WorldMutationSource source) {
+    private static boolean isExplicitRootSource(io.github.luma.domain.model.WorldMutationSource source) {
         if (source == null) {
             return false;
         }

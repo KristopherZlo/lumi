@@ -1,6 +1,7 @@
 package io.github.luma.ui.screen;
 
 import io.github.luma.domain.model.HistoryPackageImportResult;
+import io.github.luma.domain.model.HistoryPackageFileSummary;
 import io.github.luma.domain.model.ImportedHistoryProjectSummary;
 import io.github.luma.domain.model.MergeConflictResolution;
 import io.github.luma.domain.model.MergeConflictZone;
@@ -28,6 +29,7 @@ import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,7 +46,7 @@ public final class ShareScreen extends LumaScreen {
     private final ShareScreenController controller = new ShareScreenController();
     private final ScreenRouter router = new ScreenRouter();
     private LumaScrollContainer<FlowLayout> bodyScroll;
-    private ShareViewState state = new ShareViewState(null, List.of(), List.of(), List.of(), null, "luma.status.share_ready");
+    private ShareViewState state = new ShareViewState(null, List.of(), List.of(), List.of(), null, List.of(), null, "luma.status.share_ready");
     private String status = "luma.status.share_ready";
     private String importArchivePath = "";
     private String selectedExportVariantId = "";
@@ -120,9 +122,9 @@ public final class ShareScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         frame.child(this.bodyScroll);
 
+        body.child(this.exportSection());
         body.child(this.importSection());
         body.child(this.importedPackagesSection());
-        body.child(this.exportSection());
         body.child(LumaUi.bottomSpacer());
     }
 
@@ -178,6 +180,7 @@ public final class ShareScreen extends LumaScreen {
                 Component.translatable("luma.import_export.import_title"),
                 Component.translatable("luma.share.import_help")
         );
+        section.child(this.packageFolderSection());
         this.importArchiveInput = UIComponents.textBox(Sizing.fill(100), this.importArchivePath);
         this.importArchiveInput.setHint(Component.translatable("luma.share.import_path"));
         this.importArchiveInput.onChanged().subscribe(value -> this.importArchivePath = value);
@@ -192,7 +195,59 @@ public final class ShareScreen extends LumaScreen {
         if (!this.lastImportedProjectName.isBlank()) {
             section.child(LumaUi.caption(Component.translatable("luma.share.import_ready", this.lastImportedProjectName)));
         }
+        section.child(this.packageFilesSection());
         return section;
+    }
+
+    private FlowLayout packageFolderSection() {
+        FlowLayout folder = LumaUi.insetSection(
+                Component.translatable("luma.share.package_folder_title"),
+                Component.translatable("luma.share.package_folder_help")
+        );
+        Path packageFolder = this.state.packageFolder();
+        if (packageFolder != null) {
+            folder.child(LumaUi.caption(Component.translatable("luma.share.package_folder_path", packageFolder.toString())));
+        }
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(LumaUi.button(Component.translatable("luma.action.open_packages_folder"), button -> {
+            this.validationMessage = "";
+            this.refresh(this.controller.openPackageFolder());
+        }));
+        folder.child(actions);
+        return folder;
+    }
+
+    private FlowLayout packageFilesSection() {
+        FlowLayout section = LumaUi.insetSection(
+                Component.translatable("luma.share.package_files_title"),
+                Component.translatable("luma.share.package_files_help")
+        );
+        if (this.state.packageFiles().isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.share.package_files_empty")));
+            return section;
+        }
+        for (HistoryPackageFileSummary packageFile : this.state.packageFiles()) {
+            section.child(this.packageFileCard(packageFile));
+        }
+        return section;
+    }
+
+    private FlowLayout packageFileCard(HistoryPackageFileSummary packageFile) {
+        FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        card.child(LumaUi.value(Component.literal(packageFile.fileName())));
+        card.child(LumaUi.caption(Component.translatable(
+                "luma.share.package_file_entry",
+                this.formatBytes(packageFile.sizeBytes()),
+                ProjectUiSupport.formatTimestamp(packageFile.updatedAt())
+        )));
+        FlowLayout actions = LumaUi.actionRow();
+        ButtonComponent importButton = LumaUi.button(Component.translatable("luma.action.import_package"), button -> this.importPackage(
+                packageFile.archiveFile().toString()
+        ));
+        importButton.active(!this.operationActive());
+        actions.child(importButton);
+        card.child(actions);
+        return card;
     }
 
     private FlowLayout importedPackagesSection() {
@@ -516,7 +571,11 @@ public final class ShareScreen extends LumaScreen {
     }
 
     private void importPackage() {
-        HistoryPackageImportResult result = this.controller.importVariantPackage(this.projectName, this.importArchivePath);
+        this.importPackage(this.importArchivePath);
+    }
+
+    private void importPackage(String archivePath) {
+        HistoryPackageImportResult result = this.controller.importVariantPackage(this.projectName, archivePath);
         this.validationMessage = this.controller.lastValidationMessage();
         if (result == null) {
             this.refresh("luma.status.operation_failed");
@@ -532,6 +591,16 @@ public final class ShareScreen extends LumaScreen {
             this.selectedTargetVariantId = this.state.project().activeVariantId();
         }
         this.refreshMergePreview();
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1024L) {
+            return bytes + " B";
+        }
+        if (bytes < 1024L * 1024L) {
+            return (bytes / 1024L) + " KB";
+        }
+        return (bytes / (1024L * 1024L)) + " MB";
     }
 
     private void deleteImportedProject(ImportedHistoryProjectSummary importedProject) {

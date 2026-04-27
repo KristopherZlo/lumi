@@ -6,6 +6,7 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
 import io.github.luma.domain.model.HistoryPackageImportResult;
+import io.github.luma.domain.model.HistoryPackageFileSummary;
 import io.github.luma.domain.model.ImportedHistoryProjectSummary;
 import io.github.luma.domain.model.MergeConflictZone;
 import io.github.luma.domain.model.OperationSnapshot;
@@ -21,10 +22,12 @@ import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.domain.service.VariantMergeService;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.ShareViewState;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Util;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
@@ -51,7 +54,7 @@ public final class ShareScreenController {
 
     public ShareViewState loadState(String projectName, String status) {
         if (!this.query.hasSingleplayerServer()) {
-            return new ShareViewState(null, List.of(), List.of(), List.of(), null, "luma.status.singleplayer_only");
+            return new ShareViewState(null, List.of(), List.of(), List.of(), null, List.of(), null, "luma.status.singleplayer_only");
         }
 
         try {
@@ -64,11 +67,13 @@ public final class ShareScreenController {
                     loadedVersions,
                     loadedVariants,
                     this.query.loadImportedProjects(projectName),
+                    this.query.packageFolder(),
+                    this.query.loadPackageFiles(),
                     this.query.loadOperationSnapshot(project),
                     status == null || status.isBlank() ? "luma.status.share_ready" : status
             );
         } catch (Exception exception) {
-            return new ShareViewState(null, List.of(), List.of(), List.of(), null, "luma.status.project_failed");
+            return new ShareViewState(null, List.of(), List.of(), List.of(), null, List.of(), null, "luma.status.project_failed");
         }
     }
 
@@ -220,6 +225,18 @@ public final class ShareScreenController {
         return "luma.status.compare_overlay_cleared";
     }
 
+    public String openPackageFolder() {
+        try {
+            this.actions.openPackageFolder();
+            this.clearValidationMessage();
+            return "luma.status.package_folder_opened";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Opening package folder failed", exception);
+            this.captureValidationMessage(exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
     public String lastValidationMessage() {
         return this.lastValidationMessage;
     }
@@ -260,6 +277,10 @@ public final class ShareScreenController {
 
         List<ImportedHistoryProjectSummary> loadImportedProjects(String projectName) throws Exception;
 
+        Path packageFolder() throws Exception;
+
+        List<HistoryPackageFileSummary> loadPackageFiles() throws Exception;
+
         OperationSnapshot loadOperationSnapshot(BuildProject project) throws Exception;
     }
 
@@ -270,6 +291,8 @@ public final class ShareScreenController {
         HistoryPackageImportResult importVariantPackage(String projectName, String archivePath) throws Exception;
 
         void deleteImportedProject(String targetProjectName, String importedProjectName) throws Exception;
+
+        void openPackageFolder() throws Exception;
 
         VariantMergePlan previewMerge(
                 String targetProjectName,
@@ -332,6 +355,16 @@ public final class ShareScreenController {
         }
 
         @Override
+        public Path packageFolder() throws Exception {
+            return this.historyShareService.ensurePackageFolder(this.server());
+        }
+
+        @Override
+        public List<HistoryPackageFileSummary> loadPackageFiles() throws Exception {
+            return this.historyShareService.listPackageFiles(this.server());
+        }
+
+        @Override
         public OperationSnapshot loadOperationSnapshot(BuildProject project) throws Exception {
             return this.operationSnapshotViewService.loadVisibleSnapshot(this.server(), project.id().toString());
         }
@@ -361,6 +394,12 @@ public final class ShareScreenController {
         @Override
         public void deleteImportedProject(String targetProjectName, String importedProjectName) throws Exception {
             this.historyShareService.deleteImportedProject(this.server(), targetProjectName, importedProjectName);
+        }
+
+        @Override
+        public void openPackageFolder() throws Exception {
+            Path packageFolder = this.historyShareService.ensurePackageFolder(this.server());
+            Util.getPlatform().openFile(packageFolder.toFile());
         }
 
         @Override
