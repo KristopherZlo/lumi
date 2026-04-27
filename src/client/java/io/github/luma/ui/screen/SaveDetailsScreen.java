@@ -59,6 +59,8 @@ public final class SaveDetailsScreen extends LumaScreen {
     private String status = "luma.status.project_ready";
     private boolean showMoreOptions = false;
     private boolean pendingRestoreConfirmation = false;
+    private boolean showPartialRestore = false;
+    private boolean showAdvancedInfo = false;
     private String partialMinX = "";
     private String partialMinY = "";
     private String partialMinZ = "";
@@ -95,10 +97,6 @@ public final class SaveDetailsScreen extends LumaScreen {
 
         FlowLayout header = LumaUi.actionRow();
         header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        header.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
-                this.parent,
-                this.projectName
-        )));
         frame.child(header);
 
         if (version == null) {
@@ -198,23 +196,6 @@ public final class SaveDetailsScreen extends LumaScreen {
         }
         section.child(stats);
 
-        if (this.state.materialDelta().isEmpty()) {
-            section.child(LumaUi.caption(Component.translatable("luma.materials.empty")));
-            return section;
-        }
-
-        int limit = Math.min(MATERIAL_LIMIT, this.state.materialDelta().size());
-        for (int index = 0; index < limit; index++) {
-            var entry = this.state.materialDelta().get(index);
-            section.child(MaterialEntryView.row(
-                    entry.blockId(),
-                    Component.translatable(
-                            "luma.compare.material_entry",
-                            entry.blockId(),
-                            entry.delta()
-                    )
-            ));
-        }
         return section;
     }
 
@@ -225,11 +206,11 @@ public final class SaveDetailsScreen extends LumaScreen {
         );
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent restoreButton = LumaUi.primaryButton(Component.translatable("luma.action.restore"), button -> this.restoreVersion(version, versionVariant));
+        ButtonComponent restoreButton = LumaUi.primaryButton(Component.translatable("luma.action.restore_this_save"), button -> this.restoreVersion(version, versionVariant));
         restoreButton.active(!operationActive);
         actions.child(restoreButton);
 
-        actions.child(LumaUi.button(Component.translatable("luma.action.compare_with_current"), button -> this.router.openCompare(
+        actions.child(LumaUi.button(Component.translatable("luma.action.see_changes"), button -> this.router.openCompare(
                 this,
                 this.projectName,
                 version.id(),
@@ -237,7 +218,7 @@ public final class SaveDetailsScreen extends LumaScreen {
                 version.id()
         )));
 
-        ButtonComponent comparePrevious = LumaUi.button(Component.translatable("luma.action.compare_with_parent"), button -> this.router.openCompare(
+        ButtonComponent comparePrevious = LumaUi.button(Component.translatable("luma.action.see_previous_changes"), button -> this.router.openCompare(
                 this,
                 this.projectName,
                 this.parentVersionId(version.id()),
@@ -285,7 +266,7 @@ public final class SaveDetailsScreen extends LumaScreen {
             this.refresh(this.controller.refreshPreview(this.projectName, version.id()));
         }));
 
-        actions.child(LumaUi.button(Component.translatable("luma.save_details.create_variant"), button -> this.router.openVariants(
+        actions.child(LumaUi.button(Component.translatable("luma.save_details.create_idea"), button -> this.router.openVariants(
                 this,
                 this.projectName,
                 version.id()
@@ -299,9 +280,51 @@ public final class SaveDetailsScreen extends LumaScreen {
         )));
         section.child(secondary);
 
-        section.child(this.partialRestoreSection(version, operationActive));
+        FlowLayout restoreSelected = LumaUi.actionRow();
+        restoreSelected.child(LumaUi.button(Component.translatable("luma.action.restore_selected_area"), button -> {
+            this.showPartialRestore = !this.showPartialRestore;
+            this.rebuild();
+        }));
+        section.child(restoreSelected);
+        if (this.showPartialRestore) {
+            section.child(this.partialRestoreSection(version, operationActive));
+        }
 
-        section.child(LumaUi.caption(Component.translatable("luma.save_details.raw_info_title")));
+        FlowLayout advanced = LumaUi.actionRow();
+        advanced.child(LumaUi.button(Component.translatable(
+                this.showAdvancedInfo ? "luma.action.hide_advanced_info" : "luma.action.advanced_info"
+        ), button -> {
+            this.showAdvancedInfo = !this.showAdvancedInfo;
+            this.rebuild();
+        }));
+        section.child(advanced);
+        if (this.showAdvancedInfo) {
+            section.child(this.advancedInfoSection(version));
+        }
+        return section;
+    }
+
+    private FlowLayout advancedInfoSection(ProjectVersion version) {
+        FlowLayout section = LumaUi.insetSection(
+                Component.translatable("luma.save_details.advanced_info_title"),
+                Component.translatable("luma.save_details.advanced_info_help")
+        );
+        if (this.state.materialDelta().isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.materials.empty")));
+        } else {
+            int limit = Math.min(MATERIAL_LIMIT, this.state.materialDelta().size());
+            for (int index = 0; index < limit; index++) {
+                var entry = this.state.materialDelta().get(index);
+                section.child(MaterialEntryView.row(
+                        entry.blockId(),
+                        Component.translatable(
+                                "luma.compare.material_entry",
+                                entry.blockId(),
+                                entry.delta()
+                        )
+                ));
+            }
+        }
         section.child(LumaUi.caption(Component.translatable("luma.save_details.raw_info_id", version.id())));
         section.child(LumaUi.caption(Component.translatable("luma.save_details.raw_info_author", ProjectUiSupport.safeText(version.author()))));
         section.child(LumaUi.caption(Component.translatable(
@@ -475,18 +498,24 @@ public final class SaveDetailsScreen extends LumaScreen {
     }
 
     private FlowLayout restoreConfirmationSection(ProjectVersion version, ProjectVariant versionVariant, boolean operationActive) {
+        boolean rootRestore = version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT;
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.restore.initial_confirm_title", version.id()),
-                Component.translatable("luma.restore.initial_confirm_help")
+                Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
+                Component.translatable("luma.restore.confirm_help")
         );
-        section.child(LumaUi.danger(Component.translatable("luma.restore.initial_confirm_warning")));
+        if (this.state.project().settings().safetySnapshotBeforeRestore()) {
+            section.child(LumaUi.caption(Component.translatable("luma.restore.confirm_safety")));
+        }
+        if (rootRestore) {
+            section.child(LumaUi.danger(Component.translatable("luma.restore.initial_confirm_warning")));
+        }
         section.child(LumaUi.caption(Component.translatable(
-                "luma.restore.initial_confirm_target",
+                "luma.restore.confirm_target",
                 ProjectUiSupport.displayVariantName(versionVariant),
-                version.id()
+                ProjectUiSupport.displayMessage(version)
         )));
 
-        RestorePlanSummary summary = this.controller.restorePlanSummary(this.projectName, version.id());
+        RestorePlanSummary summary = rootRestore ? this.controller.restorePlanSummary(this.projectName, version.id()) : null;
         if (summary != null) {
             section.child(LumaUi.caption(Component.translatable(
                     "luma.restore.plan_mode",
@@ -509,7 +538,7 @@ public final class SaveDetailsScreen extends LumaScreen {
             this.pendingRestoreConfirmation = false;
             this.rebuild();
         }));
-        ButtonComponent confirmButton = LumaUi.primaryButton(Component.translatable("luma.action.confirm_initial_restore"), button -> {
+        ButtonComponent confirmButton = LumaUi.primaryButton(Component.translatable("luma.action.restore"), button -> {
             this.pendingRestoreConfirmation = false;
             this.executeRestore(version, versionVariant);
         });
@@ -524,13 +553,8 @@ public final class SaveDetailsScreen extends LumaScreen {
             return;
         }
 
-        if (version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT) {
-            this.pendingRestoreConfirmation = true;
-            this.refresh("luma.status.initial_restore_confirmation_required");
-            return;
-        }
-
-        this.executeRestore(version, versionVariant);
+        this.pendingRestoreConfirmation = true;
+        this.refresh("luma.status.restore_confirmation_required");
     }
 
     private void executeRestore(ProjectVersion version, ProjectVariant versionVariant) {

@@ -164,29 +164,30 @@ public final class WorkspaceHudCoordinator {
             return;
         }
 
-        String titleText = this.workspaceSnapshot.projectName() == null || this.workspaceSnapshot.projectName().isBlank()
-                ? this.workspaceSnapshot.workspaceLabel()
-                : this.workspaceSnapshot.projectName();
-        String branchText = this.workspaceSnapshot.activeVariantId() == null || this.workspaceSnapshot.activeVariantId().isBlank()
+        String titleText = "Lumi";
+        String placeText = client.level == null ? "Overworld" : this.dimensionLabel(client.level.dimension().identifier().toString());
+        String ideaText = this.workspaceSnapshot.activeVariantId() == null || this.workspaceSnapshot.activeVariantId().isBlank()
                 ? ""
-                : "branch: " + this.workspaceSnapshot.activeVariantId();
+                : "idea: " + this.workspaceSnapshot.activeVariantId();
         String plusText = "+" + this.workspaceSnapshot.plusCount();
         String minusText = "-" + this.workspaceSnapshot.minusCount();
 
         int titleWidth = client.font.width(titleText);
-        int branchWidth = branchText.isBlank() ? 0 : client.font.width(branchText);
-        int countersWidth = client.font.width(plusText) + 8 + client.font.width(minusText);
-        int boxWidth = Math.max(titleWidth, Math.max(branchWidth, countersWidth)) + 12;
+        int placeWidth = client.font.width(placeText);
+        int ideaWidth = ideaText.isBlank() ? 0 : client.font.width(ideaText);
+        int countersWidth = client.font.width("Unsaved: " + plusText) + 8 + client.font.width(minusText);
+        int boxWidth = Math.max(Math.max(titleWidth, placeWidth), Math.max(ideaWidth, countersWidth)) + 12;
         int x = drawContext.guiWidth() - boxWidth - 8;
         int y = 8;
 
-        drawContext.fill(x, y, x + boxWidth, y + 34, 0x7A0B1016);
+        drawContext.fill(x, y, x + boxWidth, y + 44, 0x7A0B1016);
         drawContext.drawString(client.font, titleText, x + 6, y + 4, 0xFFF3F7FA, true);
-        if (!branchText.isBlank()) {
-            drawContext.drawString(client.font, branchText, x + 6, y + 14, 0xFF98A6B3, false);
+        drawContext.drawString(client.font, placeText, x + 6, y + 14, 0xFF98A6B3, false);
+        if (!ideaText.isBlank()) {
+            drawContext.drawString(client.font, ideaText, x + 6, y + 24, 0xFF98A6B3, false);
         }
-        drawContext.drawString(client.font, plusText, x + 6, y + 24, 0xFF69E38A, false);
-        drawContext.drawString(client.font, minusText, x + 14 + client.font.width(plusText), y + 24, 0xFFFF7373, false);
+        drawContext.drawString(client.font, "Unsaved: " + plusText, x + 6, y + 34, 0xFF69E38A, false);
+        drawContext.drawString(client.font, minusText, x + 22 + client.font.width("Unsaved: " + plusText), y + 34, 0xFFFF7373, false);
     }
 
     private String fingerprint(OperationSnapshot snapshot) {
@@ -234,6 +235,14 @@ public final class WorkspaceHudCoordinator {
             case FINALIZING -> "Finalizing";
             case COMPLETED -> "Completed";
             case FAILED -> "Failed";
+        };
+    }
+
+    private String dimensionLabel(String dimensionId) {
+        return switch (dimensionId) {
+            case "minecraft:the_nether" -> "Nether";
+            case "minecraft:the_end" -> "End";
+            default -> "Overworld";
         };
     }
 

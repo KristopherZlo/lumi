@@ -1,9 +1,8 @@
 package io.github.luma.ui.screen;
 
-import io.github.luma.domain.model.ProjectIntegrityReport;
 import io.github.luma.domain.model.ProjectSettings;
-import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.LumaScrollContainer;
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.SettingsScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -12,7 +11,6 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -66,8 +64,6 @@ public final class SettingsScreen extends LumaScreen {
             this.snapshotVolumeThreshold = Double.toString(project.settings().snapshotVolumeThreshold());
             this.loaded = true;
         }
-        ProjectIntegrityReport integrity = this.controller.loadIntegrity(this.projectName);
-
         root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
         root.gap(0);
@@ -94,12 +90,11 @@ public final class SettingsScreen extends LumaScreen {
             return;
         }
 
-        body.child(this.captureSection());
-        body.child(this.snapshotSection());
+        body.child(this.safetySection());
         body.child(this.previewSection());
+        body.child(this.storageSection());
+        body.child(this.performanceSection());
         body.child(this.debugSection());
-        body.child(this.projectStateSection());
-        body.child(this.diagnosticsSection(integrity));
 
         FlowLayout actions = LumaUi.sectionCard(
                 Component.translatable("luma.settings.save_title"),
@@ -107,6 +102,7 @@ public final class SettingsScreen extends LumaScreen {
         );
         FlowLayout buttons = LumaUi.actionRow();
         buttons.child(LumaUi.primaryButton(Component.translatable("luma.action.save_settings"), button -> this.save()));
+        buttons.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.onClose()));
         actions.child(buttons);
         body.child(actions);
         body.child(LumaUi.bottomSpacer());
@@ -117,10 +113,10 @@ public final class SettingsScreen extends LumaScreen {
         this.client.setScreen(this.parent);
     }
 
-    private FlowLayout captureSection() {
+    private FlowLayout performanceSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.settings.capture_title"),
-                Component.translatable("luma.settings.capture_help")
+                Component.translatable("luma.settings.performance_title"),
+                Component.translatable("luma.settings.performance_help")
         );
         section.child(this.fieldWithError(
                 Component.translatable("luma.settings.idle_seconds"),
@@ -131,10 +127,10 @@ public final class SettingsScreen extends LumaScreen {
         return section;
     }
 
-    private FlowLayout snapshotSection() {
+    private FlowLayout safetySection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.settings.snapshots_title"),
-                Component.translatable("luma.settings.snapshot_mode_hint")
+                Component.translatable("luma.settings.safety_title"),
+                Component.translatable("luma.settings.safety_help")
         );
 
         section.child(this.fieldWithError(
@@ -143,6 +139,14 @@ public final class SettingsScreen extends LumaScreen {
                 this.toggleControl(this.safetySnapshotBeforeRestore, value -> this.safetySnapshotBeforeRestore = value),
                 ""
         ));
+        return section;
+    }
+
+    private FlowLayout storageSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.settings.storage_title"),
+                Component.translatable("luma.settings.storage_help")
+        );
         section.child(this.fieldWithError(
                 Component.translatable("luma.settings.snapshot_every"),
                 Component.translatable("luma.settings.snapshot_every_help"),
@@ -183,42 +187,6 @@ public final class SettingsScreen extends LumaScreen {
                 this.toggleControl(this.debugLoggingEnabled, value -> this.debugLoggingEnabled = value),
                 ""
         ));
-        return section;
-    }
-
-    private FlowLayout projectStateSection() {
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.settings.project_state_title"),
-                Component.translatable("luma.settings.project_state_help")
-        );
-        section.child(this.fieldWithError(
-                Component.translatable("luma.action.archive"),
-                Component.translatable("luma.settings.archive_help"),
-                this.toggleControl(this.archived, value -> this.archived = value),
-                ""
-        ));
-        return section;
-    }
-
-    private FlowLayout diagnosticsSection(ProjectIntegrityReport integrity) {
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.project.diagnostics_title"),
-                Component.translatable("luma.settings.diagnostics_help")
-        );
-        FlowLayout integrityCard = LumaUi.insetSection(
-                Component.translatable("luma.project.integrity_title"),
-                Component.translatable(integrity.valid() ? "luma.integrity.valid" : "luma.integrity.invalid")
-        );
-        for (String error : integrity.errors()) {
-            integrityCard.child(LumaUi.danger(Component.translatable("luma.integrity.error", error)));
-        }
-        for (String warning : integrity.warnings()) {
-            integrityCard.child(LumaUi.caption(Component.translatable("luma.integrity.warning", warning)));
-        }
-        if (integrity.errors().isEmpty() && integrity.warnings().isEmpty()) {
-            integrityCard.child(LumaUi.caption(Component.translatable("luma.project.integrity_clean")));
-        }
-        section.child(integrityCard);
         return section;
     }
 

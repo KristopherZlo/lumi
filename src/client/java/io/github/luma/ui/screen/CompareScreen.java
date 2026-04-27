@@ -54,6 +54,7 @@ public final class CompareScreen extends LumaScreen {
     private String rightReference;
     private String status = "luma.status.compare_ready";
     private boolean showMoreDetails = false;
+    private boolean showManualCompare = false;
 
     public CompareScreen(Screen parent, String projectName, String leftReference, String rightReference) {
         this(parent, projectName, leftReference, rightReference, "");
@@ -66,6 +67,7 @@ public final class CompareScreen extends LumaScreen {
         this.leftReference = leftReference == null ? "" : leftReference;
         this.rightReference = rightReference == null ? "" : rightReference;
         this.contextVersionId = contextVersionId == null ? "" : contextVersionId;
+        this.showManualCompare = this.leftReference.isBlank() && this.rightReference.isBlank();
     }
 
     @Override
@@ -99,19 +101,17 @@ public final class CompareScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         frame.child(this.bodyScroll);
 
-        body.child(this.referenceSection());
         if (this.state.diff() == null) {
             body.child(LumaUi.emptyState(
                     Component.translatable("luma.compare.empty_title"),
                     Component.translatable("luma.compare.empty")
             ));
+            body.child(this.referenceSection());
             body.child(LumaUi.bottomSpacer());
             return;
         }
 
         body.child(this.summarySection());
-        body.child(this.materialsSection());
-        body.child(this.positionsSection());
         body.child(this.moreDetailsSection());
         body.child(LumaUi.bottomSpacer());
     }
@@ -123,8 +123,8 @@ public final class CompareScreen extends LumaScreen {
 
     private FlowLayout referenceSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.compare.setup_title"),
-                Component.translatable("luma.compare.setup_help")
+                Component.translatable("luma.compare.manual_title"),
+                Component.translatable("luma.compare.manual_help")
         );
 
         boolean narrow = this.width < 760;
@@ -202,7 +202,7 @@ public final class CompareScreen extends LumaScreen {
         overlayButton.active(!this.state.diff().changedBlocks().isEmpty() || CompareOverlayRenderer.hasData());
         actions.child(overlayButton);
 
-        ButtonComponent restoreButton = LumaUi.button(Component.translatable("luma.action.restore"), button -> this.restoreComparedSave());
+        ButtonComponent restoreButton = LumaUi.button(Component.translatable("luma.action.restore_this_save"), button -> this.restoreComparedSave());
         restoreButton.active(this.restorableVersion() != null);
         actions.child(restoreButton);
 
@@ -266,17 +266,15 @@ public final class CompareScreen extends LumaScreen {
     }
 
     private FlowLayout moreDetailsSection() {
-        if (!this.showMoreDetails) {
-            return LumaUi.sectionCard(
-                    Component.translatable("luma.compare.more_title"),
-                    Component.translatable("luma.compare.more_help")
-            );
-        }
-
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.compare.more_title"),
                 Component.translatable("luma.compare.more_help")
         );
+        if (!this.showMoreDetails) {
+            return section;
+        }
+        section.child(this.materialsSection());
+        section.child(this.positionsSection());
         section.child(LumaUi.caption(Component.translatable(
                 "luma.compare.summary",
                 this.displayResolved(this.state.leftResolvedVersionId()),
@@ -287,12 +285,24 @@ public final class CompareScreen extends LumaScreen {
         section.child(LumaUi.caption(Component.translatable("luma.compare.left_resolved", this.displayResolved(this.state.leftResolvedVersionId()))));
         section.child(LumaUi.caption(Component.translatable("luma.compare.right_resolved", this.displayResolved(this.state.rightResolvedVersionId()))));
         section.child(LumaUi.caption(Component.translatable("luma.compare.raw_chunks", this.state.diff().changedChunks())));
+        FlowLayout manual = LumaUi.actionRow();
+        manual.child(LumaUi.button(Component.translatable(
+                this.showManualCompare ? "luma.action.hide_manual_compare" : "luma.action.manual_compare"
+        ), button -> {
+            this.showManualCompare = !this.showManualCompare;
+            this.rebuild();
+        }));
+        section.child(manual);
+        if (this.showManualCompare) {
+            section.child(this.referenceSection());
+        }
+        section.child(LumaUi.caption(Component.translatable("luma.compare.hotkey_hint")));
         return section;
     }
 
     private Component compareTitle() {
         if (this.state.diff() == null) {
-            return Component.translatable("luma.screen.compare.title", this.projectName);
+            return Component.translatable("luma.screen.changes.title");
         }
         return Component.translatable(
                 "luma.compare.title_with_refs",
@@ -418,6 +428,10 @@ public final class CompareScreen extends LumaScreen {
         }
         if (CompareScreenController.CURRENT_WORLD_REFERENCE.equals(resolvedReference)) {
             return Component.translatable("luma.compare.current_world_label").getString();
+        }
+        ProjectVersion version = this.versionFor(resolvedReference);
+        if (version != null) {
+            return ProjectUiSupport.displayMessage(version);
         }
         return resolvedReference;
     }

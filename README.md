@@ -18,20 +18,20 @@
 
 Lumi is a Fabric mod for Minecraft `1.21.11`.
 
-It gives builders version control for a build area.
+It gives builders safety history for a build area.
 
-You can save builds, compare changes, restore earlier states, try alternate variants, share a portable history package, merge imported ideas back into a local variant, and recover pending edits after a crash.
+You can save builds, see changes, restore earlier states, try alternate ideas, import/export portable history packages, combine imported ideas back into your build, and recover pending edits after a crash.
 
 Lumi only activates for players with operator-level permissions or when cheats are enabled in the world.
 
-The mod uses builder terms:
+The normal UI uses builder terms:
 
-- `project`
-- `version`
-- `variant`
-- `compare`
+- `Build History`
+- `Save`
+- `Idea`
+- `See changes`
 - `restore`
-- `recovery`
+- `Recovered work`
 
 ## What It Solves
 
@@ -40,7 +40,7 @@ Use Lumi if you want to:
 - try a redesign without losing the stable version
 - check what changed since the last save
 - go back to an older state without copying full save folders
-- keep separate variants for alternate ideas
+- keep separate ideas for alternate build directions
 - recover work after a crash or bad edit
 
 ## Core Model
@@ -57,20 +57,20 @@ Use Lumi if you want to:
 ## Current Features
 
 - automatic dimension projects
-- child-friendly home UI built around `Save now`, `Go back`, `Saved moments`, `Ideas`, and `Share`
-- lightweight saved-moment, idea, and share navigation with live background-operation refresh while screens stay open
+- builder-first Build History UI built around `Save build`, `See changes`, recent saves, `Ideas`, and `More`
+- lightweight save, idea, import/export, cleanup, diagnostics, and advanced navigation with live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
 - dedicated save screen with optional `Replace latest save`
-- save details screen with isometric preview, compare, restore, and variant actions
-- compare against parent, other versions, branch heads, or live game state
+- save details screen with isometric preview, restore, see-changes, and idea actions
+- See Changes screen for saved states, ideas, and the current build, with manual references hidden under Advanced
 - live undo and redo for the last tracked builder actions with default `Alt+Z` / `Alt+Y` bindings
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit
-- hard restore that moves the active variant head
+- hard restore that moves the active idea head
 - recovery drafts with WAL compaction
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
-- material delta summaries and integrity checks
-- zip import/export for project history, including variant-scoped share packages with optional previews
-- imported review projects with deletion, cached merge review, and conflict-zone overlays for shared variants
+- material delta summaries and integrity checks under focused details/diagnostic screens
+- zip import/export under `More`, including idea-scoped packages with optional previews
+- imported review projects with deletion, cached combine review, and same-area overlays for shared ideas
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus supported entity and explosion edits
@@ -214,14 +214,14 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 1. Open a local singleplayer save.
 2. Make sure cheats are enabled or the player has operator-level permissions.
 3. Press `U`.
-4. Open or create the project for the current dimension.
+4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
 6. Use `Alt+Z` / `Alt+Y` to undo or redo the latest tracked Lumi action.
 7. Hold `Alt` to preview the latest 10 tracked actions when the compare overlay is not active.
-   Compare against `current` now enables the world highlight immediately and refreshes it automatically while you keep editing.
-8. Use `Save now` when you want a safe restore point.
-9. Open a save when you want details, compare, restore, or create a new variant from it.
-10. Use `Variants`, `Recovered work`, and `Settings` as needed.
+   Seeing changes against `Current build` enables the world highlight immediately and refreshes it automatically while you keep editing.
+8. Use `Save build` when you want a safe restore point.
+9. Open a save when you want details, restore, see changes, or create an idea from it.
+10. Use `Ideas` for alternate build directions and `More` for import/export, settings, cleanup, diagnostics, and advanced tools.
 
 ## Scope
 
@@ -229,7 +229,7 @@ Current scope:
 
 - singleplayer / integrated-server first
 - menu flow first, commands limited to diagnostics/help
-- merge currently works through imported review projects for the same project lineage, with background merge preview, block-level conflict detection, and validation messages before Lumi writes a merged save
+- combine currently works through imported review projects for the same project lineage, with background review, block-level same-area detection, and validation messages before Lumi writes a combined save
 - partial restore is available from save details with manual bounds
 - compare overlay marks changed positions, not a full 3D preview
 
