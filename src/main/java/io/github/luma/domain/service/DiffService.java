@@ -3,11 +3,14 @@ package io.github.luma.domain.service;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
+import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.VersionDiff;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.storage.ProjectLayout;
@@ -50,6 +53,8 @@ public final class DiffService {
 
         Map<BlockPoint, StateAccumulator> leftStates = this.collectVersionStates(layout, versionMap, ancestor, left);
         Map<BlockPoint, StateAccumulator> rightStates = this.collectVersionStates(layout, versionMap, ancestor, right);
+        Map<String, EntityStateAccumulator> leftEntityStates = this.collectEntityVersionStates(layout, versionMap, ancestor, left);
+        Map<String, EntityStateAccumulator> rightEntityStates = this.collectEntityVersionStates(layout, versionMap, ancestor, right);
 
         Set<BlockPoint> allPositions = new HashSet<>();
         allPositions.addAll(leftStates.keySet());
@@ -71,11 +76,15 @@ public final class DiffService {
             changedBlocks.add(this.diffEntry(pos, leftState, rightState));
             changedChunks.add(chunkKey(pos));
         }
+        List<StoredEntityChange> changedEntities = this.diffEntityStates(leftEntityStates, rightEntityStates);
+        for (StoredEntityChange change : changedEntities) {
+            changedChunks.add(chunkKey(change.chunk()));
+        }
 
         changedBlocks.sort(java.util.Comparator.comparing((DiffBlockEntry entry) -> entry.pos().x())
                 .thenComparing(entry -> entry.pos().y())
                 .thenComparing(entry -> entry.pos().z()));
-        return new VersionDiff(left.id(), right.id(), changedBlocks, changedChunks.size());
+        return new VersionDiff(left.id(), right.id(), changedBlocks, changedChunks.size(), changedEntities);
     }
 
     public VersionDiff compareVersionToParent(MinecraftServer server, String projectName, String versionId) throws IOException {
@@ -85,18 +94,23 @@ public final class DiffService {
         if (version.parentVersionId() == null || version.parentVersionId().isBlank()) {
             List<DiffBlockEntry> changedBlocks = new ArrayList<>();
             Set<Long> changedChunks = new HashSet<>();
-            for (StoredBlockChange change : this.loadPatchChanges(layout, version.patchIds())) {
+            PatchWorldChanges worldChanges = this.loadPatchWorldChanges(layout, version.patchIds());
+            for (StoredBlockChange change : worldChanges.blockChanges()) {
                 if (this.statesEqual(change.oldValue(), change.newValue())) {
                     continue;
                 }
                 changedBlocks.add(this.diffEntry(change.pos(), change.oldValue(), change.newValue()));
                 changedChunks.add(chunkKey(change.pos()));
             }
+            List<StoredEntityChange> changedEntities = this.changedEntityChanges(worldChanges.entityChanges());
+            for (StoredEntityChange change : changedEntities) {
+                changedChunks.add(chunkKey(change.chunk()));
+            }
 
             changedBlocks.sort(java.util.Comparator.comparing((DiffBlockEntry entry) -> entry.pos().x())
                     .thenComparing(entry -> entry.pos().y())
                     .thenComparing(entry -> entry.pos().z()));
-            return new VersionDiff(version.id(), version.id(), changedBlocks, changedChunks.size());
+            return new VersionDiff(version.id(), version.id(), changedBlocks, changedChunks.size(), changedEntities);
         }
 
         return this.compareVersions(server, projectName, version.parentVersionId(), version.id());
@@ -125,7 +139,7 @@ public final class DiffService {
             return baseDiff;
         }
 
-        return this.applyDraft(baseDiff, draft.changes());
+        return this.applyDraft(baseDiff, draft.changes(), draft.entityChanges());
     }
 
     public List<ProjectVersion> listVersions(MinecraftServer server, String projectName) throws IOException {
@@ -186,7 +200,7 @@ public final class DiffService {
         List<ProjectVersion> path = this.pathFromAncestor(versionMap, ancestor, target);
         Map<BlockPoint, StateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
-            for (StoredBlockChange change : this.loadPatchChanges(layout, version.patchIds())) {
+            for (StoredBlockChange change : this.loadPatchWorldChanges(layout, version.patchIds()).blockChanges()) {
                 states.compute(change.pos(), (pos, current) -> current == null
                         ? new StateAccumulator(change.oldValue(), change.newValue())
                         : current.withFinalState(change.newValue()));
@@ -210,6 +224,51 @@ public final class DiffService {
             path.add(reversed.get(index));
         }
         return path;
+    }
+
+    private Map<String, EntityStateAccumulator> collectEntityVersionStates(
+            ProjectLayout layout,
+            Map<String, ProjectVersion> versionMap,
+            ProjectVersion ancestor,
+            ProjectVersion target
+    ) throws IOException {
+        List<ProjectVersion> path = this.pathFromAncestor(versionMap, ancestor, target);
+        Map<String, EntityStateAccumulator> states = new LinkedHashMap<>();
+        for (ProjectVersion version : path) {
+            for (StoredEntityChange change : this.loadPatchWorldChanges(layout, version.patchIds()).entityChanges()) {
+                states.compute(change.entityId(), (entityId, current) -> current == null
+                        ? new EntityStateAccumulator(change.oldValue(), change.newValue(), change.entityType())
+                        : current.withFinalState(change.newValue(), change.entityType()));
+            }
+        }
+        return states;
+    }
+
+    private List<StoredEntityChange> diffEntityStates(
+            Map<String, EntityStateAccumulator> leftStates,
+            Map<String, EntityStateAccumulator> rightStates
+    ) {
+        List<StoredEntityChange> changedEntities = new ArrayList<>();
+        Set<String> entityIds = new HashSet<>();
+        entityIds.addAll(leftStates.keySet());
+        entityIds.addAll(rightStates.keySet());
+        for (String entityId : entityIds) {
+            EntityPayload leftState = leftStates.containsKey(entityId)
+                    ? leftStates.get(entityId).finalState()
+                    : rightStates.get(entityId).initialState();
+            EntityPayload rightState = rightStates.containsKey(entityId)
+                    ? rightStates.get(entityId).finalState()
+                    : leftStates.get(entityId).initialState();
+            if (Objects.equals(leftState, rightState)) {
+                continue;
+            }
+            String entityType = rightStates.containsKey(entityId)
+                    ? rightStates.get(entityId).entityType()
+                    : leftStates.get(entityId).entityType();
+            changedEntities.add(new StoredEntityChange(entityId, entityType, leftState, rightState));
+        }
+        changedEntities.sort(java.util.Comparator.comparing(StoredEntityChange::entityId));
+        return List.copyOf(changedEntities);
     }
 
     private ChangeType changeType(StatePayload leftState, StatePayload rightState) {
@@ -254,7 +313,11 @@ public final class DiffService {
         return leftState.equalsState(rightState);
     }
 
-    private VersionDiff applyDraft(VersionDiff baseDiff, List<StoredBlockChange> changes) {
+    VersionDiff applyDraft(
+            VersionDiff baseDiff,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges
+    ) {
         Map<BlockPoint, DiffBlockEntry> changed = new LinkedHashMap<>();
         for (DiffBlockEntry entry : baseDiff.changedBlocks()) {
             changed.put(entry.pos(), entry);
@@ -290,17 +353,24 @@ public final class DiffService {
         for (DiffBlockEntry entry : result) {
             changedChunks.add(chunkKey(entry.pos()));
         }
+        List<StoredEntityChange> changedEntities = VersionService.mergeEntityChanges(baseDiff.changedEntities(), entityChanges);
+        for (StoredEntityChange change : changedEntities) {
+            changedChunks.add(chunkKey(change.chunk()));
+        }
 
-        return new VersionDiff(baseDiff.leftVersionId(), "current", result, changedChunks.size());
+        return new VersionDiff(baseDiff.leftVersionId(), "current", result, changedChunks.size(), changedEntities);
     }
 
-    private List<StoredBlockChange> loadPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
+    private PatchWorldChanges loadPatchWorldChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
         List<StoredBlockChange> changes = new ArrayList<>();
+        List<StoredEntityChange> entityChanges = new ArrayList<>();
         for (String patchId : patchIds) {
             PatchMetadataHolder metadata = this.loadPatchMetadata(layout, patchId);
-            changes.addAll(this.patchDataRepository.loadChanges(layout, metadata.metadata()));
+            PatchWorldChanges worldChanges = this.patchDataRepository.loadWorldChanges(layout, metadata.metadata());
+            changes.addAll(worldChanges.blockChanges());
+            entityChanges.addAll(worldChanges.entityChanges());
         }
-        return changes;
+        return new PatchWorldChanges(changes, entityChanges);
     }
 
     private PatchMetadataHolder loadPatchMetadata(ProjectLayout layout, String patchId) throws IOException {
@@ -314,6 +384,10 @@ public final class DiffService {
         long chunkX = pos.x() >> 4;
         long chunkZ = pos.z() >> 4;
         return (chunkX << 32) ^ (chunkZ & 0xffffffffL);
+    }
+
+    private static long chunkKey(io.github.luma.domain.model.ChunkPoint chunk) {
+        return (((long) chunk.x()) << 32) ^ (((long) chunk.z()) & 0xffffffffL);
     }
 
     private DiffBlockEntry diffEntry(BlockPoint pos, StatePayload leftState, StatePayload rightState) {
@@ -335,10 +409,28 @@ public final class DiffService {
         return state == null || "minecraft:air".equals(state.blockId());
     }
 
+    private List<StoredEntityChange> changedEntityChanges(List<StoredEntityChange> changes) {
+        return (changes == null ? List.<StoredEntityChange>of() : changes).stream()
+                .filter(change -> !change.isNoOp())
+                .sorted(java.util.Comparator.comparing(StoredEntityChange::entityId))
+                .toList();
+    }
+
     private record StateAccumulator(StatePayload initialState, StatePayload finalState) {
 
         private StateAccumulator withFinalState(StatePayload state) {
             return new StateAccumulator(this.initialState, state);
+        }
+    }
+
+    private record EntityStateAccumulator(EntityPayload initialState, EntityPayload finalState, String entityType) {
+
+        private EntityStateAccumulator withFinalState(EntityPayload state, String type) {
+            return new EntityStateAccumulator(
+                    this.initialState,
+                    state,
+                    type == null || type.isBlank() ? this.entityType : type
+            );
         }
     }
 
