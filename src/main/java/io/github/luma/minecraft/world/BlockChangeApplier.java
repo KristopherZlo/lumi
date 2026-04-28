@@ -99,9 +99,25 @@ public final class BlockChangeApplier {
             return;
         }
 
-        for (Map.Entry<BlockPos, CompoundTag> entry : batch.blockEntities().entrySet()) {
+        applyBlockEntities(level, List.copyOf(batch.blockEntities().entrySet()), 0, batch.blockEntities().size());
+    }
+
+    public static int applyBlockEntities(
+            ServerLevel level,
+            List<Map.Entry<BlockPos, CompoundTag>> blockEntities,
+            int startIndex,
+            int maxBlockEntities
+    ) {
+        if (blockEntities == null || blockEntities.isEmpty() || maxBlockEntities <= 0 || startIndex >= blockEntities.size()) {
+            return 0;
+        }
+
+        int endIndex = Math.min(blockEntities.size(), startIndex + maxBlockEntities);
+        for (int index = startIndex; index < endIndex; index++) {
+            Map.Entry<BlockPos, CompoundTag> entry = blockEntities.get(index);
             applyBlockEntity(level, entry.getKey(), entry.getValue());
         }
+        return endIndex - startIndex;
     }
 
     public static void applyEntityBatch(ServerLevel level, EntityBatch entityBatch) {
@@ -109,16 +125,45 @@ public final class BlockChangeApplier {
             return;
         }
 
-        for (String entityId : entityBatch.entityIdsToRemove()) {
-            removeEntity(level, entityId);
+        applyEntityBatch(level, entityBatch, 0, entityOperationCount(entityBatch));
+    }
+
+    public static int applyEntityBatch(ServerLevel level, EntityBatch entityBatch, int startIndex, int maxEntities) {
+        if (entityBatch == null || entityBatch.isEmpty() || maxEntities <= 0 || startIndex >= entityOperationCount(entityBatch)) {
+            return 0;
         }
-        for (CompoundTag entityTag : entityBatch.entitiesToUpdate()) {
-            removeEntity(level, EntityPayload.readUuid(entityTag).map(UUID::toString).orElse(""));
-            spawnEntity(level, entityTag);
+
+        int total = entityOperationCount(entityBatch);
+        int endIndex = Math.min(total, startIndex + maxEntities);
+        int removalCount = entityBatch.entityIdsToRemove().size();
+        int updateCount = entityBatch.entitiesToUpdate().size();
+        for (int index = startIndex; index < endIndex; index++) {
+            if (index < removalCount) {
+                removeEntity(level, entityBatch.entityIdsToRemove().get(index));
+                continue;
+            }
+
+            int updateIndex = index - removalCount;
+            if (updateIndex < updateCount) {
+                CompoundTag entityTag = entityBatch.entitiesToUpdate().get(updateIndex);
+                removeEntity(level, EntityPayload.readUuid(entityTag).map(UUID::toString).orElse(""));
+                spawnEntity(level, entityTag);
+                continue;
+            }
+
+            int spawnIndex = updateIndex - updateCount;
+            spawnEntity(level, entityBatch.entitiesToSpawn().get(spawnIndex));
         }
-        for (CompoundTag entityTag : entityBatch.entitiesToSpawn()) {
-            spawnEntity(level, entityTag);
+        return endIndex - startIndex;
+    }
+
+    public static int entityOperationCount(EntityBatch entityBatch) {
+        if (entityBatch == null) {
+            return 0;
         }
+        return entityBatch.entityIdsToRemove().size()
+                + entityBatch.entitiesToUpdate().size()
+                + entityBatch.entitiesToSpawn().size();
     }
 
     public static void applyBlockState(ServerLevel level, BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
@@ -170,6 +215,10 @@ public final class BlockChangeApplier {
         BlockState currentState = level.getBlockState(pos);
         if (!currentState.equals(targetState)) {
             return true;
+        }
+
+        if (targetBlockEntityTag == null && !currentState.hasBlockEntity()) {
+            return false;
         }
 
         BlockEntity currentBlockEntity = level.getBlockEntity(pos);

@@ -86,12 +86,13 @@ public final class WorldEditEditSessionTracker {
         public <B extends BlockStateHolder<B>> boolean setBlock(BlockVector3 location, B block) throws WorldEditException {
             BlockPos pos = FabricAdapter.toBlockPos(location);
             BlockState oldState = this.level.getBlockState(pos);
-            CompoundTag oldBlockEntity = this.blockEntityTag(pos);
+            CompoundTag oldBlockEntity = this.blockEntityTag(pos, oldState);
             WorldMutationContext.pushExternalSource(WorldMutationSource.WORLDEDIT, this.actor, this.actionId);
             try {
                 boolean changed = super.setBlock(location, block);
                 if (changed) {
-                    this.recordChange(pos, oldState, oldBlockEntity);
+                    BlockState newState = this.level.getBlockState(pos);
+                    this.recordChange(pos, oldState, newState, oldBlockEntity);
                 }
                 return changed;
             } finally {
@@ -99,18 +100,21 @@ public final class WorldEditEditSessionTracker {
             }
         }
 
-        private void recordChange(BlockPos pos, BlockState oldState, CompoundTag oldBlockEntity) {
+        private void recordChange(BlockPos pos, BlockState oldState, BlockState newState, CompoundTag oldBlockEntity) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     this.level,
                     pos,
                     oldState,
-                    this.level.getBlockState(pos),
+                    newState,
                     oldBlockEntity,
-                    this.blockEntityTag(pos)
+                    this.blockEntityTag(pos, newState)
             );
         }
 
-        private CompoundTag blockEntityTag(BlockPos pos) {
+        private CompoundTag blockEntityTag(BlockPos pos, BlockState state) {
+            if (state == null || !state.hasBlockEntity()) {
+                return null;
+            }
             BlockEntity blockEntity = this.level.getBlockEntity(pos);
             return blockEntity == null ? null : blockEntity.saveWithFullMetadata(this.level.registryAccess());
         }

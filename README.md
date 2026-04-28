@@ -230,7 +230,7 @@ Run the local in-world regression suite from a singleplayer save with cheats ena
 /lumi testing singleplayer
 ```
 
-This creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk. The run reports phase progress in chat, keeps a pass/fail report instead of stopping on the first failed check, and writes a detailed log under `<save>/lumi/test-logs/`.
+This creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk. The run reports phase progress in chat, keeps a pass/fail report instead of stopping on the first failed check, checks a lightweight performance budget for scoped operations and synchronous tick work, and writes a detailed log under `<save>/lumi/test-logs/`.
 
 Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` artifacts so the folder only keeps the current `lumi-*` outputs.
 

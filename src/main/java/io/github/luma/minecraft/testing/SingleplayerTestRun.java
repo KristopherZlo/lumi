@@ -60,6 +60,7 @@ final class SingleplayerTestRun {
     private final HistoryShareService shareService = new HistoryShareService();
     private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final SingleplayerPerformanceMonitor performanceMonitor = new SingleplayerPerformanceMonitor();
 
     private Phase phase = Phase.CREATE_PROJECT;
     private Phase announcedPhase;
@@ -98,12 +99,18 @@ final class SingleplayerTestRun {
     }
 
     void tick(MinecraftServer server) {
-        if (this.done || this.waitingForOperation(server)) {
+        if (this.done) {
             return;
         }
 
-        this.announcePhase(server);
+        Phase measuredPhase = this.phase;
+        long startedAt = System.nanoTime();
         try {
+            if (this.waitingForOperation(server)) {
+                return;
+            }
+
+            this.announcePhase(server);
             switch (this.phase) {
                 case CREATE_PROJECT -> this.createProject(server);
                 case CAPTURE_DRAFT -> this.captureDraft(server);
@@ -121,10 +128,13 @@ final class SingleplayerTestRun {
                 case CHECK_PARTIAL_RESTORE -> this.checkPartialRestore(server);
                 case START_RESTORE_INITIAL -> this.startRestoreInitial();
                 case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
+                case CHECK_PERFORMANCE -> this.checkPerformanceBudget(server);
                 case CLEANUP -> this.finish(server);
             }
         } catch (Exception exception) {
             this.handlePhaseException(server, exception);
+        } finally {
+            this.performanceMonitor.recordSyncSlice(measuredPhase.title(), System.nanoTime() - startedAt);
         }
     }
 
@@ -225,9 +235,14 @@ final class SingleplayerTestRun {
     }
 
     private void checkAmend(MinecraftServer server) throws Exception {
-        this.check("Amend kept the project at two versions", () -> this.projectService.loadVersions(server, this.project.name()).size() == 2);
+        this.check("Amend created replacement version v0003 and kept detached v0002 for safety", () ->
+                this.projectService.loadVersions(server, this.project.name()).size() == 3);
+        this.check("Amend moved the main branch head to v0003", () ->
+                this.projectService.loadVariants(server, this.project.name()).stream()
+                        .filter(variant -> variant.main())
+                        .anyMatch(variant -> ProjectService.versionId(3).equals(variant.headVersionId())));
         VersionDiff diff = this.value("Amended version diff can be built", () ->
-                this.diffService.compareVersionToParent(server, this.project.name(), ProjectService.versionId(2)));
+                this.diffService.compareVersionToParent(server, this.project.name(), ProjectService.versionId(3)));
         if (diff != null) {
             this.check(diff.changedBlockCount() >= 4, "Amended version merged the new block changes");
         }
@@ -253,9 +268,9 @@ final class SingleplayerTestRun {
     private void checkBranchSave(MinecraftServer server) throws Exception {
         this.project = this.projectService.loadProject(server, this.project.name());
         this.check(this.branch != null && this.branch.id().equals(this.project.activeVariantId()), "Testing branch is active");
-        this.check("Branch save created version v0003", () -> this.projectService.loadVersions(server, this.project.name()).size() == 3);
+        this.check("Branch save created version v0004", () -> this.projectService.loadVersions(server, this.project.name()).size() == 4);
         this.check("Branch diff is non-empty", () ->
-                this.diffService.compareVersions(server, this.project.name(), ProjectService.versionId(2), ProjectService.versionId(3))
+                this.diffService.compareVersions(server, this.project.name(), ProjectService.versionId(3), ProjectService.versionId(4))
                         .changedBlockCount() >= 1);
         var projectArchive = this.value("Project history package can be exported", () ->
                 this.archiveService.exportProject(server, this.project.name(), false));
@@ -273,7 +288,7 @@ final class SingleplayerTestRun {
     }
 
     private void startPartialRestore() throws Exception {
-        PartialRestoreRequest request = this.partialRestoreRequest(ProjectService.versionId(2), this.volume.markerA());
+        PartialRestoreRequest request = this.partialRestoreRequest(ProjectService.versionId(3), this.volume.markerA());
         var plan = this.value("Partial restore plan can be summarized", () ->
                 this.restoreService.summarizePartialRestorePlan(this.level, request));
         if (plan != null) {
@@ -286,7 +301,7 @@ final class SingleplayerTestRun {
 
     private void checkPartialRestore(MinecraftServer server) throws Exception {
         this.checkBlock(this.volume.markerA(), Blocks.STONE, "Partial restore reverted marker A to the saved stone state");
-        this.check("Partial restore wrote version v0004", () -> this.projectService.loadVersions(server, this.project.name()).size() == 4);
+        this.check("Partial restore wrote version v0005", () -> this.projectService.loadVersions(server, this.project.name()).size() == 5);
         this.completePhase(server, Phase.START_RESTORE_INITIAL);
     }
 
@@ -304,6 +319,16 @@ final class SingleplayerTestRun {
     private void checkRestoreInitial(MinecraftServer server) throws Exception {
         this.check(this.volume.isAir(this.level), "Full restore returned the test volume to initial air");
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
+        this.completePhase(server, Phase.CHECK_PERFORMANCE);
+    }
+
+    private void checkPerformanceBudget(MinecraftServer server) {
+        for (String line : this.performanceMonitor.summaryLines()) {
+            this.log.info(line);
+        }
+        for (SingleplayerPerformanceMonitor.PerformanceCheck check : this.performanceMonitor.checks()) {
+            this.check(check.passed(), check.label() + " (" + check.detail() + ")");
+        }
         this.completePhase(server, Phase.CLEANUP);
     }
 
@@ -345,6 +370,7 @@ final class SingleplayerTestRun {
         }
 
         OperationSnapshot operation = snapshot.get();
+        this.performanceMonitor.recordOperationSnapshot(operation);
         if (!operation.terminal()) {
             this.reportOperationProgress(server, operation);
             return true;
@@ -542,7 +568,7 @@ final class SingleplayerTestRun {
         CHECK_REDO("Verify live redo", "check the world after redo completes"),
         START_SAVE("Queue save", "save the pending tracked work"),
         CHECK_SAVE("Verify save", "inspect version, patch, draft isolation, and cleanup dry-run"),
-        START_AMEND("Queue amend", "replace the latest save with more tracked work"),
+        START_AMEND("Queue amend", "replace the active branch head with merged tracked work"),
         CHECK_AMEND("Verify amend", "inspect amended history and world state"),
         START_BRANCH_SAVE("Branch and save", "create a branch, switch to it, and save divergent work"),
         CHECK_BRANCH_SAVE("Verify branch and export", "compare branch history and export packages"),
@@ -550,6 +576,7 @@ final class SingleplayerTestRun {
         CHECK_PARTIAL_RESTORE("Verify partial restore", "check selected-area restore output"),
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
+        CHECK_PERFORMANCE("Performance budget", "verify the test run stayed within low-load limits"),
         CLEANUP("Cleanup and report", "remove test blocks, archive the test project, and write the log");
 
         private final String title;
@@ -588,7 +615,7 @@ final class SingleplayerTestRun {
                 case START_BRANCH_SAVE -> START_RESTORE_INITIAL;
                 case CHECK_BRANCH_SAVE -> START_PARTIAL_RESTORE;
                 case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
-                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CLEANUP -> CLEANUP;
+                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CHECK_PERFORMANCE, CLEANUP -> CLEANUP;
             };
         }
     }

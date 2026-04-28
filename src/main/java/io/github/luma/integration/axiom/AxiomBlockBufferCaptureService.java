@@ -54,7 +54,7 @@ public final class AxiomBlockBufferCaptureService {
 
         BlockPos pos = mutation.pos();
         BlockState oldState = level.getBlockState(pos);
-        CompoundTag oldBlockEntity = this.blockEntityTag(level, pos);
+        CompoundTag oldBlockEntity = this.blockEntityTag(level, pos, oldState);
         WorldMutationContext.pushExternalSource(WorldMutationSource.AXIOM, actor, actionId);
         try {
             HistoryCaptureManager.getInstance().recordBlockChange(
@@ -70,7 +70,10 @@ public final class AxiomBlockBufferCaptureService {
         }
     }
 
-    private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos) {
+    private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos, BlockState state) {
+        if (state == null || !state.hasBlockEntity()) {
+            return null;
+        }
         BlockEntity blockEntity = level.getBlockEntity(pos);
         return blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
     }

@@ -1,17 +1,31 @@
 package io.github.luma.domain.service;
 
+import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.ExternalSourceInfo;
+import io.github.luma.domain.model.PreviewInfo;
+import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import java.time.Instant;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class RestoreServiceTest {
+
+    private static final Instant NOW = Instant.parse("2026-04-28T00:00:00Z");
 
     @Test
     void collapsePreparedBatchesKeepsOnlyLastPlacementPerBlock() {
@@ -51,5 +65,83 @@ class RestoreServiceTest {
 
         assertEquals(1, collapsed.size());
         assertEquals(1, collapsed.getFirst().entityBatch().entitiesToSpawn().size());
+    }
+
+    @Test
+    void directRestoreAcceptsSharedAncestorFromBranchBase() {
+        RestoreService service = new RestoreService();
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", ""),
+                version("v0002", "main", "v0001"),
+                version("v0003", "main", "v0001"),
+                version("v0004", "feature", "v0003")
+        );
+        List<ProjectVariant> variants = List.of(
+                new ProjectVariant("main", "main", "v0001", "v0003", true, NOW),
+                new ProjectVariant("feature", "feature", "v0003", "v0004", false, NOW)
+        );
+
+        List<ProjectVersion> direct = service.directRestorePatchVersions(
+                project("feature"),
+                versions,
+                variants,
+                versions.get(2)
+        );
+
+        assertNotNull(direct);
+        assertEquals(List.of("v0004"), direct.stream().map(ProjectVersion::id).toList());
+    }
+
+    @Test
+    void directRestoreRejectsDetachedTargetOutsideActiveLineage() {
+        RestoreService service = new RestoreService();
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", ""),
+                version("v0002", "main", "v0001"),
+                version("v0003", "main", "v0001"),
+                version("v0004", "feature", "v0003")
+        );
+        List<ProjectVariant> variants = List.of(
+                new ProjectVariant("main", "main", "v0001", "v0003", true, NOW),
+                new ProjectVariant("feature", "feature", "v0003", "v0004", false, NOW)
+        );
+
+        List<ProjectVersion> direct = service.directRestorePatchVersions(
+                project("feature"),
+                versions,
+                variants,
+                versions.get(1)
+        );
+
+        assertNull(direct);
+    }
+
+    private static BuildProject project(String activeVariantId) {
+        return BuildProject.create(
+                        "project",
+                        "minecraft:overworld",
+                        new Bounds3i(new BlockPoint(0, 0, 0), new BlockPoint(1, 1, 1)),
+                        new BlockPoint(0, 0, 0),
+                        NOW
+                )
+                .withActiveVariantId(activeVariantId, NOW);
+    }
+
+    private static ProjectVersion version(String id, String variantId, String parentVersionId) {
+        return new ProjectVersion(
+                id,
+                "project",
+                variantId,
+                parentVersionId,
+                "",
+                List.of(),
+                VersionKind.MANUAL,
+                "tester",
+                id,
+                ChangeStats.empty(),
+                PreviewInfo.none(),
+                ExternalSourceInfo.manual(),
+                NOW
+        );
     }
 }

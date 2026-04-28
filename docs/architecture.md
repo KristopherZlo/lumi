@@ -173,7 +173,7 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 2. The client requires explicit user confirmation before restoring an `INITIAL` or `WORLD_ROOT` version.
 3. The confirmation UI shows a lightweight `RestorePlanSummary` with mode, branch, base version, target version, and affected chunk count before any world mutation starts.
 4. Active capture is frozen and an optional safety checkpoint is written first.
-5. When the target lies on the current active variant lineage, `RestoreService` prefers a direct patch replay path, including restores to `WORLD_ROOT`:
+5. When the target lies on the current active variant lineage, `RestoreService` prefers a direct patch replay path, including shared branch-base ancestors and restores to `WORLD_ROOT`:
    reverse patch application for ancestor restores, forward patch application for descendant restores, plus rollback of any pending draft.
 6. If direct replay is not valid and the target is `WORLD_ROOT`, restore falls back to tracked baseline chunks for the current workspace. Generator regeneration remains blocked when the stored origin fingerprint does not match the current world.
 7. If direct replay is not valid for a normal version, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
@@ -186,7 +186,7 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 
 ## Partial Restore Flow
 
-Partial restore is a region-scoped restore workflow. The UI builds a `PartialRestoreRequest` with explicit bounds and a region source, then `RestoreService.partialRestore(...)` filters the same-lineage patch replay plan off the server tick.
+Partial restore is a region-scoped restore workflow. The UI builds a `PartialRestoreRequest` with explicit bounds and a region source, then `RestoreService.partialRestore(...)` filters the same-lineage patch replay plan off the server tick. Same-lineage targets may be shared ancestors from another variant, such as the main save a branch was created from.
 
 Key differences from full restore:
 
