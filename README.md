@@ -66,9 +66,9 @@ Use Lumi if you want to:
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, restore, see-changes, and branch actions
 - See Changes screen for saved states, branches, and the current build, with manual references hidden under Advanced
-- live undo and redo for the last tracked builder actions with default `Alt+Z` / `Alt+Y` bindings
+- live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi overlay key
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit, including reconciled fluid and falling-block deltas from whole-dimension sessions
-- runtime-only redstone state flips and piston animation blocks are ignored so active mechanisms do not pollute pending history or the recent `Alt` action overlay
+- runtime-only redstone state flips and piston animation blocks are ignored so active mechanisms do not pollute pending history or the recent action overlay
 - hard restore that moves the active branch head
 - region-scoped partial restore from save details, written back as a new `PARTIAL_RESTORE` save
 - recovery drafts with WAL compaction
@@ -80,7 +80,7 @@ Use Lumi if you want to:
 - conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica/Tweakeroo placement paths, and known tool stacks that reach Minecraft block or entity mutation paths
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus builder-relevant entity spawn/remove/update and supported explosion edits
-- temporary `Alt` overlay for the latest 10 undo actions, or redo actions while `Alt+Y` is held, when compare highlight is not active
+- temporary overlay-key preview for the latest 10 undo actions, or redo actions while the overlay key plus redo is held, when compare highlight is not active
 
 ## How It Works
 
@@ -244,8 +244,8 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 3. Press `U`.
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
-6. Use `Alt+Z` / `Alt+Y` to undo or redo the latest tracked Lumi action.
-7. Hold `Alt` to preview the latest 10 undo actions, or hold `Alt+Y` to preview redo actions, when the compare overlay is not active.
+6. Use the Lumi overlay key plus `Z` / `Y` to undo or redo the latest tracked Lumi action. The default overlay key is `Left Alt`.
+7. Hold the Lumi overlay key to preview the latest 10 undo actions, or hold overlay key plus `Y` to preview redo actions, when the compare overlay is not active.
    Seeing changes against `Current build` enables the world highlight immediately and refreshes it automatically while you keep editing.
 8. Use `Save build` when you want a safe restore point.
 9. Open a save when you want details, restore, see changes, or create a branch from it.

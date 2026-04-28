@@ -12,9 +12,9 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 
 - Press `U` to open the project for the current dimension.
 - If that project does not exist yet, Lumi creates it.
-- Use `Alt+Z` to undo the latest tracked Lumi action.
-- Use `Alt+Y` to redo the latest undone Lumi action.
-- Hold `Alt` to preview undo targets, or `Alt+Y` to preview redo targets, when compare highlight is not active.
+- Use the Lumi overlay key plus `Z` to undo the latest tracked Lumi action. The default overlay key is `Left Alt`.
+- Use the Lumi overlay key plus `Y` to redo the latest undone Lumi action.
+- Hold the Lumi overlay key to preview undo targets, or overlay key plus `Y` to preview redo targets, when compare highlight is not active.
 - Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
 - Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.
 - Use `More` -> `Projects` when you need to switch dimensions or choose another workspace.
@@ -83,7 +83,7 @@ Lumi does not record its own restore apply pass as normal history.
 Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
 Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi keeps a one-chunk halo around the root chunk, captures per-chunk baselines lazily as fallout reaches those chunks, then reconciles later fallout such as falling gravel and fluid spread against the current world before the draft is flushed, saved, or frozen.
 Secondary effects such as falling gravel, fire spread, fluid spread, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay inside that same causal envelope.
-Runtime-only redstone state flips are ignored. Piston animation blocks such as `minecraft:piston_head` and `minecraft:moving_piston` are normalized out of new history storage so active mechanisms do not clutter saves or the recent `Alt` action overlay.
+Runtime-only redstone state flips are ignored. Piston animation blocks such as `minecraft:piston_head` and `minecraft:moving_piston` are normalized out of new history storage so active mechanisms do not clutter saves or the recent action overlay.
 
 For automatic dimension projects, the first node is `Initial`.
 
@@ -219,7 +219,7 @@ Press `H` to hide or show the current overlay without rebuilding the comparison.
 Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
 Dense diff regions render as an exposed translucent shell, so nearby changes stay readable instead of stacking into a solid color slab.
 If one side of the comparison is the `current` build, that active highlight refreshes automatically while you keep editing.
-If compare highlight is not active, holding `Alt` shows the latest 10 undo actions instead. Holding `Alt+Y` switches that temporary overlay to redo actions, fading from the newest action to older ones.
+If compare highlight is not active, holding the Lumi overlay key shows the latest 10 undo actions instead. Holding the overlay key plus `Y` switches that temporary overlay to redo actions, fading from the newest action to older ones.
 
 The overlay gives priority to changes near the camera.
 

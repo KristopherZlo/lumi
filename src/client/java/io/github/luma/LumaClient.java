@@ -5,11 +5,11 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import com.mojang.blaze3d.platform.InputConstants;
+import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
-import io.github.luma.domain.service.ProjectService;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
-import io.github.luma.ui.controller.ClientProjectAccess;
+import io.github.luma.ui.controller.ClientWorkspaceOpenService;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
@@ -18,9 +18,6 @@ import io.github.luma.ui.overlay.CompareOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayRenderer;
 import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
-import io.github.luma.ui.screen.DashboardScreen;
-import io.github.luma.ui.screen.ProjectScreen;
-import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 public final class LumaClient implements ClientModInitializer {
@@ -39,9 +36,10 @@ public final class LumaClient implements ClientModInitializer {
     private KeyMapping redoKey;
     private KeyMapping toggleCompareOverlayKey;
     private KeyMapping compareOverlayXrayKey;
-    private final ProjectService projectService = new ProjectService();
+    private final KeyBindingState keyBindingState = new KeyBindingState();
     private final UndoRedoKeyChordTracker undoRedoKeyChordTracker = new UndoRedoKeyChordTracker();
     private final UndoRedoKeyController undoRedoKeyController = new UndoRedoKeyController();
+    private final ClientWorkspaceOpenService workspaceOpenService = new ClientWorkspaceOpenService();
 
     @Override
     public void onInitializeClient() {
@@ -83,18 +81,18 @@ public final class LumaClient implements ClientModInitializer {
     }
 
     private void onEndTick(Minecraft client) {
-        boolean altHeld = isAltHeld(client);
+        boolean overlayHold = this.keyBindingState.isDown(client, this.compareOverlayXrayKey);
         WorkspaceHudCoordinator.getInstance().tick(client);
         PreviewCaptureCoordinator.getInstance().tick(client);
         UndoRedoKeyChordTracker.TickResult undoRedoKeys = this.undoRedoKeyChordTracker.tick(
                 client,
-                altHeld,
+                overlayHold,
                 this.undoKey,
                 this.redoKey
         );
-        CompareOverlayRenderer.setXrayEnabled(this.compareOverlayXrayKey.isDown());
+        CompareOverlayRenderer.setXrayEnabled(overlayHold);
         CompareOverlayCoordinator.getInstance().tick(client);
-        RecentChangesOverlayCoordinator.getInstance().tick(client, altHeld, undoRedoKeys.previewTarget());
+        RecentChangesOverlayCoordinator.getInstance().tick(client, overlayHold, undoRedoKeys.previewTarget());
         while (this.toggleCompareOverlayKey.consumeClick()) {
             CompareOverlayRenderer.toggleVisibility();
         }
@@ -106,33 +104,7 @@ public final class LumaClient implements ClientModInitializer {
         }
 
         while (this.openDashboardKey.consumeClick()) {
-            if (client.player == null) {
-                continue;
-            }
-
-            try {
-                var server = ClientProjectAccess.requireSingleplayerServer(client);
-                var level = server.getLevel(client.level == null ? net.minecraft.world.level.Level.OVERWORLD : client.level.dimension());
-                if (level == null) {
-                    level = server.overworld();
-                }
-
-                String projectName = this.projectService.ensureWorldProject(level, client.getUser().getName()).name();
-                client.setScreen(new ProjectScreen(client.screen, projectName));
-            } catch (IllegalStateException exception) {
-                client.gui.setOverlayMessage(Component.translatable("luma.status.admin_required"), false);
-            } catch (Exception exception) {
-                client.setScreen(new DashboardScreen(client.screen));
-            }
+            this.workspaceOpenService.openCurrentWorkspace(client, client.screen);
         }
-    }
-
-    private static boolean isAltHeld(Minecraft client) {
-        if (client == null || client.getWindow() == null) {
-            return false;
-        }
-        var window = client.getWindow();
-        return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
-                || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
     }
 }

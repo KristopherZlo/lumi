@@ -1,25 +1,33 @@
 package io.github.luma.client.input;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 
 /**
- * Tracks the held Alt modifier and undo/redo keys as one-shot key chords.
+ * Tracks the held Lumi overlay modifier and undo/redo keys as one-shot key chords.
  */
 public final class UndoRedoKeyChordTracker {
 
+    private final KeyBindingState keyBindingState;
     private boolean undoHeld;
     private boolean redoHeld;
 
-    public TickResult tick(Minecraft client, boolean altHeld, KeyMapping undoKey, KeyMapping redoKey) {
+    public UndoRedoKeyChordTracker() {
+        this(new KeyBindingState());
+    }
+
+    UndoRedoKeyChordTracker(KeyBindingState keyBindingState) {
+        this.keyBindingState = keyBindingState;
+    }
+
+    public TickResult tick(Minecraft client, boolean modifierHeld, KeyMapping undoKey, KeyMapping redoKey) {
         boolean undoClicked = this.consumeClicks(undoKey);
         boolean redoClicked = this.consumeClicks(redoKey);
-        boolean currentUndoHeld = altHeld && this.isBindingDown(client, undoKey);
-        boolean currentRedoHeld = altHeld && this.isBindingDown(client, redoKey);
-        boolean undoRequested = altHeld && (undoClicked || (currentUndoHeld && !this.undoHeld));
-        boolean redoRequested = altHeld && (redoClicked || (currentRedoHeld && !this.redoHeld));
+        boolean currentUndoHeld = modifierHeld && this.keyBindingState.isDown(client, undoKey);
+        boolean currentRedoHeld = modifierHeld && this.keyBindingState.isDown(client, redoKey);
+        boolean undoRequested = modifierHeld && (undoClicked || (currentUndoHeld && !this.undoHeld));
+        boolean redoRequested = modifierHeld && (redoClicked || (currentRedoHeld && !this.redoHeld));
 
         TickResult result = new TickResult(
                 undoRequested,
@@ -40,20 +48,6 @@ public final class UndoRedoKeyChordTracker {
             clicked = true;
         }
         return clicked;
-    }
-
-    private boolean isBindingDown(Minecraft client, KeyMapping key) {
-        if (key.isDown()) {
-            return true;
-        }
-        if (client == null || client.getWindow() == null || key.isUnbound()) {
-            return false;
-        }
-        InputConstants.Key boundKey = InputConstants.getKey(key.saveString());
-        if (boundKey.getType() != InputConstants.Type.KEYSYM) {
-            return false;
-        }
-        return InputConstants.isKeyDown(client.getWindow(), boundKey.getValue());
     }
 
     public record TickResult(

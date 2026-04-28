@@ -14,7 +14,7 @@ The architecture is intentionally optimized around three requirements:
 
 ### Bootstrap layer
 
-`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations once per server tick, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown.
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, queues shared world-origin metadata bootstrap on a low-priority background thread after integrated-server start, advances world operations once per server tick, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown.
 
 ### Domain model layer
 
@@ -73,6 +73,7 @@ Important adapters:
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
 - `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
 - `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, and restore workflows, with chat progress and durable pass/fail logs
+- `WorldBootstrapService`: runs startup-only world-origin and root-version metadata checks off the server-start path so storage scans do not delay initial world entry
 
 ### Optional integration layer
 
@@ -116,6 +117,7 @@ Responsibilities are split as follows:
 - lightweight summary controllers keep the project home, Branches, and Import / Export routes fast by avoiding diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open
 - `MergePreviewCache` runs Import / Export combine previews in the background and caches them by imported package and target branch while the screen is open
 - `LumaScreen` extends owo-ui `BaseOwoScreen`, keeps Lumi menus non-pausing, and gives each route a code-driven `OwoUIAdapter`
+- `ClientWorkspaceOpenService` opens the current workspace through a lightweight loading screen and schedules project metadata preparation away from the client tick that handled the key press
 - `LumaUi` centralizes compact `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface` rules so screens avoid absolute positioning and keep layout predictable
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
 - obsolete tab-builder scaffolds have been removed; larger workflows now use dedicated screens and narrow view-state records instead of a shared project tab container
@@ -125,7 +127,7 @@ Responsibilities are split as follows:
 - project-facing screens poll lightweight operation snapshots every 10 client ticks so conflicting mutation buttons unlock as soon as the operation becomes terminal, while status text can stay visible briefly
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, prioritizes the nearest changed blocks to the current camera position, and renders only exposed overlay faces so translucent fill does not self-stack through dense diff volumes
 - `CompareOverlayCoordinator` refreshes `current`-world compare overlays on the client tick so live edits appear in the active highlight without rebuilding the screen manually
-- `RecentChangesOverlayRenderer` renders latest undo actions when `Alt` is held, or redo actions while `Alt+Y` is held, when the compare overlay is not active
+- `RecentChangesOverlayRenderer` renders latest undo actions when the remappable Lumi overlay key is held, or redo actions while overlay key plus redo is held, when the compare overlay is not active. It renders outlines only on the recent-action path to avoid unsafe translucent quad submission in the world render event.
 - the Import / Export route presents the normal flow: export history packages first, list importable zips from the game-root `lumi-projects` folder, import packages as review projects, optionally include preview PNGs in exports, delete imported review packages, resolve same-area zones, show zone overlays, and apply a combined save without cluttering Build History or Branches
 
 ## Core runtime flows
@@ -231,6 +233,7 @@ Current guarantees:
 - restore/apply budgets adapt downward when a tick slice exceeds its budget and recover gradually when slices stay cheap
 - block entities and entity diffs have explicit per-tick caps instead of running as unbounded chunk tail work
 - preview generation no longer samples or rasterizes on the server; the server only queues request metadata and the client later performs the textured off-screen render with the built-in preview mesh path
+- startup world-origin metadata bootstrap is low-priority background work and must not block initial server start or the first client render path
 - operation progress is observable through `OperationSnapshot`
 - client HUD state is polled separately from screen rendering so non-pausing menus, the top-right diff overlay, and the action-bar progress bar keep updating while screens are open
 
@@ -288,6 +291,7 @@ The current test suite is organized around:
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
 - Fabric GameTest scaffolding for server and client smoke tests, with a production client GameTest task for headless CI
 - `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, integrity, and cleanup services while reporting progress and logging pass/fail checks
+- `scripts/compare-runtime-load.ps1` for repeated no-Lumi versus Lumi launch comparisons based on wall-clock time, server tick-delay warnings, long tick reports, WARN/ERROR counts, Lumi warnings, and render pipeline failures
 
 When extending history or storage behavior, update both tests and documentation in the same change.
 
