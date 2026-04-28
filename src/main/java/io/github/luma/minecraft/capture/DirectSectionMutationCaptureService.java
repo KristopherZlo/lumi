@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.integration.common.ExternalToolMutationDetector;
 import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import net.minecraft.core.BlockPos;
@@ -13,8 +14,8 @@ public final class DirectSectionMutationCaptureService {
 
     private static final DirectSectionMutationCaptureService INSTANCE = new DirectSectionMutationCaptureService();
 
-    private final ExternalToolMutationOriginDetector detector;
-    private final ChunkSectionOwnershipRegistry ownershipRegistry;
+    private final ExternalToolMutationDetector detector;
+    private final ChunkSectionOwnerLookup ownershipRegistry;
 
     public static DirectSectionMutationCaptureService getInstance() {
         return INSTANCE;
@@ -25,8 +26,8 @@ public final class DirectSectionMutationCaptureService {
     }
 
     DirectSectionMutationCaptureService(
-            ExternalToolMutationOriginDetector detector,
-            ChunkSectionOwnershipRegistry ownershipRegistry
+            ExternalToolMutationDetector detector,
+            ChunkSectionOwnerLookup ownershipRegistry
     ) {
         this.detector = detector;
         this.ownershipRegistry = ownershipRegistry;
@@ -43,13 +44,13 @@ public final class DirectSectionMutationCaptureService {
             return PendingDirectSectionMutation.skipped();
         }
 
-        var operation = this.detector.detectOperation();
-        if (operation.isEmpty()) {
+        var owner = this.ownershipRegistry.ownerOf(section);
+        if (owner.isEmpty()) {
             return PendingDirectSectionMutation.skipped();
         }
 
-        var owner = this.ownershipRegistry.ownerOf(section);
-        if (owner.isEmpty()) {
+        var operation = this.detector.detectOperation();
+        if (operation.isEmpty()) {
             return PendingDirectSectionMutation.skipped();
         }
 
@@ -59,7 +60,7 @@ public final class DirectSectionMutationCaptureService {
         return new PendingDirectSectionMutation(
                 pos,
                 oldState,
-                this.blockEntityTag(sectionOwner.level(), pos),
+                this.blockEntityTag(sectionOwner.level(), pos, oldState),
                 operation.get()
         );
     }
@@ -81,6 +82,7 @@ public final class DirectSectionMutationCaptureService {
         }
 
         ServerLevel level = owner.get().level();
+        BlockState appliedState = section.getBlockState(localX, localY, localZ);
         WorldMutationContext.pushExternalSource(
                 mutation.operation().source(),
                 mutation.operation().actor(),
@@ -91,16 +93,19 @@ public final class DirectSectionMutationCaptureService {
                     level,
                     mutation.pos(),
                     mutation.oldState(),
-                    section.getBlockState(localX, localY, localZ),
+                    appliedState,
                     mutation.oldBlockEntity(),
-                    this.blockEntityTag(level, mutation.pos())
+                    this.blockEntityTag(level, mutation.pos(), appliedState)
             );
         } finally {
             WorldMutationContext.popSource();
         }
     }
 
-    private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos) {
+    private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos, BlockState state) {
+        if (state == null || !state.hasBlockEntity()) {
+            return null;
+        }
         BlockEntity blockEntity = level.getBlockEntity(pos);
         return blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
     }

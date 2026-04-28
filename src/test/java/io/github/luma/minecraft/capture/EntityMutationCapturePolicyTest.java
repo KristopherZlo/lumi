@@ -59,6 +59,14 @@ class EntityMutationCapturePolicyTest {
         assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.AXIOM, "minecraft:zombie"));
     }
 
+    @Test
+    void externalToolFallbackInspectsBuilderRelevantEntitiesOnly() {
+        assertTrue(this.policy.shouldInspectExternalToolFallback("minecraft:armor_stand"));
+        assertTrue(this.policy.shouldInspectExternalToolFallback("minecraft:block_display"));
+        assertFalse(this.policy.shouldInspectExternalToolFallback("minecraft:zombie"));
+        assertFalse(this.policy.shouldInspectExternalToolFallback("minecraft:item"));
+    }
+
     private static EntityPayload entity(String type, String uuid, double x) {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", type);

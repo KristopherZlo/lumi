@@ -59,8 +59,7 @@ abstract class LevelChunkSetBlockStateMixin {
 
         LevelChunk chunk = (LevelChunk) (Object) this;
         BlockState oldState = chunk.getBlockState(pos);
-        BlockEntity blockEntity = chunk.getBlockEntity(pos);
-        CompoundTag oldBlockEntity = blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
+        CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, pos, oldState);
         WorldMutationCaptureGuard.pushChunkSetBlockBoundary();
         LUMA_PENDING_TOOL_MUTATIONS.get().push(new PendingExternalToolBlockMutation(
                 pos.immutable(),
@@ -94,8 +93,8 @@ abstract class LevelChunkSetBlockStateMixin {
             }
 
             LevelChunk chunk = (LevelChunk) (Object) this;
-            BlockEntity blockEntity = chunk.getBlockEntity(mutation.pos());
-            CompoundTag newBlockEntity = blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
+            BlockState appliedState = chunk.getBlockState(mutation.pos());
+            CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, mutation.pos(), appliedState);
             WorldMutationContext.pushExternalSource(
                     mutation.operation().source(),
                     mutation.operation().actor(),
@@ -106,7 +105,7 @@ abstract class LevelChunkSetBlockStateMixin {
                     serverLevel,
                     mutation.pos(),
                     mutation.oldState(),
-                    chunk.getBlockState(mutation.pos()),
+                    appliedState,
                     mutation.oldBlockEntity(),
                     newBlockEntity
             );
@@ -116,6 +115,15 @@ abstract class LevelChunkSetBlockStateMixin {
             }
             WorldMutationCaptureGuard.popChunkSetBlockBoundary();
         }
+    }
+
+    @Unique
+    private CompoundTag luma$blockEntityTag(ServerLevel serverLevel, LevelChunk chunk, BlockPos pos, BlockState state) {
+        if (state == null || !state.hasBlockEntity()) {
+            return null;
+        }
+        BlockEntity blockEntity = chunk.getBlockEntity(pos);
+        return blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
     }
 
     @Unique

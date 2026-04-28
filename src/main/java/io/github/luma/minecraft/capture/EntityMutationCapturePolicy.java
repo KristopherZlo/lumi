@@ -58,6 +58,10 @@ public final class EntityMutationCapturePolicy {
         return BUILDER_RELEVANT_ENTITY_TYPES.contains(entityType);
     }
 
+    boolean shouldInspectExternalToolFallback(String entityType) {
+        return BUILDER_RELEVANT_ENTITY_TYPES.contains(entityType);
+    }
+
     boolean shouldCaptureMutation(WorldMutationSource source, EntityPayload oldValue, EntityPayload newValue) {
         return this.shouldInspectMutation(source, this.entityType(oldValue, newValue));
     }
