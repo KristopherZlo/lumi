@@ -4,7 +4,7 @@
   "key.lumi.redo": "Redo last Lumi action",
   "key.lumi.open_dashboard": "Open current workspace",
   "key.lumi.toggle_compare_overlay": "Show or hide compare highlight",
-  "key.lumi.compare_overlay_xray": "See compare highlight through blocks",
+  "key.lumi.compare_overlay_xray": "Hold Lumi overlay / compare x-ray",
 
   "luma.common.yes": "Yes",
   "luma.common.no": "No",
@@ -99,6 +99,7 @@
 
   "luma.screen.dashboard.title": "Projects",
   "luma.screen.project.title": "Build History: %s",
+  "luma.screen.opening_workspace.title": "Opening workspace",
   "luma.screen.recovery.title": "Recovered work",
   "luma.screen.compare.title": "Changes",
   "luma.screen.changes.title": "Changes",
@@ -378,8 +379,10 @@
   "luma.status.singleplayer_only": "This workflow is currently supported in local singleplayer only.",
   "luma.status.admin_required": "Lumi requires operator rights or cheats enabled in this world.",
   "luma.status.dashboard_ready": "Dashboard loaded.",
+  "luma.status.opening_workspace": "Opening workspace...",
   "luma.status.dashboard_failed": "Dashboard could not be loaded.",
   "luma.status.project_ready": "Project loaded.",
+  "luma.status.project_open_failed": "Lumi could not open the current workspace.",
   "luma.status.project_failed": "Workspace data could not be loaded.",
   "luma.status.operation_failed": "The requested operation failed.",
   "luma.status.version_saved": "Save created.",
@@ -680,7 +683,9 @@
   "luma.compare.more_help": "Materials, areas, and advanced compare stay here.",
   "luma.compare.manual_title": "Manual compare",
   "luma.compare.manual_help": "Advanced: compare two raw save references manually.",
-  "luma.compare.hotkey_hint": "H: show/hide highlight | Left Alt: x-ray highlight",
+  "luma.compare.hotkey_hint": "H: show/hide highlight | hold overlay key: x-ray highlight",
+  "luma.workspace.opening_title": "Opening Build History",
+  "luma.workspace.opening_help": "Lumi is preparing workspace metadata in the background.",
   "luma.compare.raw_chunks": "Changed chunks: %s",
 
   "luma.recovery.save_title": "Save the recovered work",
