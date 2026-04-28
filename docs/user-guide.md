@@ -253,7 +253,7 @@ Open a save card to reach the save details screen.
 The save details screen shows:
 
 - the save name
-- isometric preview with automatic empty-margin trimming and zoom controls
+- isometric preview with automatic empty-margin trimming, zoom controls, and automatic loading when the async preview render finishes
 - time
 - change summary
 

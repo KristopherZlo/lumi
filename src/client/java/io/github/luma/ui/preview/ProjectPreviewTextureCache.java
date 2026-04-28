@@ -13,16 +13,21 @@ import net.minecraft.resources.Identifier;
 
 public final class ProjectPreviewTextureCache {
 
-    private static final Map<String, Identifier> LOADED_TEXTURES = new HashMap<>();
+    private static final Map<String, CachedTexture> LOADED_TEXTURES = new HashMap<>();
 
     private ProjectPreviewTextureCache() {
     }
 
     public static Identifier load(String projectName, String versionId, Path previewPath) throws IOException {
         String key = cacheKey(projectName, versionId);
-        Identifier existing = LOADED_TEXTURES.get(key);
+        PreviewFileFingerprint fingerprint = PreviewFileFingerprint.read(previewPath);
+        CachedTexture existing = LOADED_TEXTURES.get(key);
+        if (existing != null && existing.fingerprint().equals(fingerprint)) {
+            return existing.textureId();
+        }
         if (existing != null) {
-            return existing;
+            Minecraft.getInstance().getTextureManager().release(existing.textureId());
+            LOADED_TEXTURES.remove(key);
         }
 
         NativeImage image;
@@ -37,15 +42,15 @@ public final class ProjectPreviewTextureCache {
         DynamicTexture texture = new DynamicTexture(() -> "luma-preview-" + key, image);
         texture.upload();
         Minecraft.getInstance().getTextureManager().register(textureId, texture);
-        LOADED_TEXTURES.put(key, textureId);
+        LOADED_TEXTURES.put(key, new CachedTexture(textureId, fingerprint));
         return textureId;
     }
 
     public static void release(String projectName, String versionId) {
         String key = cacheKey(projectName, versionId);
-        Identifier textureId = LOADED_TEXTURES.remove(key);
-        if (textureId != null) {
-            Minecraft.getInstance().getTextureManager().release(textureId);
+        CachedTexture texture = LOADED_TEXTURES.remove(key);
+        if (texture != null) {
+            Minecraft.getInstance().getTextureManager().release(texture.textureId());
         }
     }
 
@@ -55,5 +60,24 @@ public final class ProjectPreviewTextureCache {
 
     private static String sanitize(String value) {
         return value.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9/_-]+", "-");
+    }
+
+    private record CachedTexture(Identifier textureId, PreviewFileFingerprint fingerprint) {
+    }
+
+    private record PreviewFileFingerprint(
+            Path path,
+            long size,
+            long modifiedAtMillis
+    ) {
+
+        private static PreviewFileFingerprint read(Path path) throws IOException {
+            Path normalized = path.toAbsolutePath().normalize();
+            return new PreviewFileFingerprint(
+                    normalized,
+                    Files.size(normalized),
+                    Files.getLastModifiedTime(normalized).toMillis()
+            );
+        }
     }
 }
