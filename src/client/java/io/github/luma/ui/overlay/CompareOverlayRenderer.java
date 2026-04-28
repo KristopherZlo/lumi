@@ -25,8 +25,8 @@ public final class CompareOverlayRenderer {
 
     private static final String CURRENT_WORLD_REFERENCE = "current";
     private static final int MAX_RENDERED_BLOCKS = 2048;
-    private static final float FILL_ALPHA = 48.0F;
-    private static final float OUTLINE_ALPHA = 0.9F;
+    private static final float FILL_ALPHA = 72.0F;
+    private static final float OUTLINE_WIDTH = 2.75F;
     private static final float INSET = 0.002F;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
@@ -358,7 +358,7 @@ public final class CompareOverlayRenderer {
                     entry.pos().y() - camera.y,
                     entry.pos().z() - camera.z,
                     color.argb(),
-                    OUTLINE_ALPHA
+                    OUTLINE_WIDTH
             );
         }
     }

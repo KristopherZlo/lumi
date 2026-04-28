@@ -80,7 +80,7 @@ Use Lumi if you want to:
 - conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica/Tweakeroo placement paths, and known tool stacks that reach Minecraft block or entity mutation paths
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus builder-relevant entity spawn/remove/update and supported explosion edits
-- temporary overlay-key preview for the latest 10 undo actions, or redo actions while the overlay key plus redo is held, with translucent exposed sides when compare highlight is not active
+- temporary overlay-key preview for the latest 10 undo actions, or redo actions while the overlay key plus redo is held, with translucent exposed sides and thicker outlines when compare highlight is not active
 
 ## How It Works
 
@@ -248,7 +248,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
 6. Use the Lumi overlay key plus `Z` / `Y` to undo or redo the latest tracked Lumi action while no screen is open. The default overlay key is `Left Alt`, and changing that key changes these chords too.
-7. Hold the Lumi overlay key to preview the latest 10 undo actions, or hold overlay key plus `Y` to preview redo actions, when the compare overlay is not active. The preview renders translucent exposed sides as well as outlines.
+7. Hold the Lumi overlay key to preview the latest 10 undo actions, or hold overlay key plus `Y` to preview redo actions, when the compare overlay is not active. The preview renders translucent exposed sides as well as thicker outlines.
    Seeing changes against `Current build` enables the world highlight immediately and refreshes it automatically while you keep editing.
 8. Use `Save build` when you want a safe restore point.
 9. Open a save when you want details, restore, see changes, or create a branch from it.

@@ -24,10 +24,11 @@ public final class RecentChangesOverlayRenderer {
 
     private static final int MAX_RENDERED_BLOCKS = 2048;
     private static final int MAX_ACTIONS = 10;
-    private static final int BASE_ALPHA = 80;
-    private static final int ALPHA_STEP = 8;
-    private static final float FILL_ALPHA_SCALE = 0.45F;
-    private static final int MIN_FILL_ALPHA = 12;
+    private static final int BASE_ALPHA = 112;
+    private static final int ALPHA_STEP = 10;
+    private static final float FILL_ALPHA_SCALE = 0.55F;
+    private static final int MIN_FILL_ALPHA = 24;
+    private static final float OUTLINE_WIDTH = 2.75F;
     private static final float INSET = 0.002F;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
@@ -222,7 +223,7 @@ public final class RecentChangesOverlayRenderer {
                     entry.pos().y() - camera.y,
                     entry.pos().z() - camera.z,
                     0xFFFF9C3A,
-                    Math.max(0.08F, entry.alpha() / 255.0F));
+                    OUTLINE_WIDTH);
         }
     }
 
