@@ -21,15 +21,12 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -69,7 +66,7 @@ public final class HistoryCaptureManager {
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final CaptureSessionRegistry sessionRegistry = new CaptureSessionRegistry();
-    private final Map<String, CaptureSessionDiagnostics> sessionDiagnostics = new HashMap<>();
+    private final CaptureDiagnosticsRegistry diagnosticsRegistry = new CaptureDiagnosticsRegistry();
 
     private HistoryCaptureManager() {
     }
@@ -996,11 +993,11 @@ public final class HistoryCaptureManager {
     }
 
     private CaptureSessionDiagnostics diagnosticsForSession(String projectId) {
-        return this.sessionDiagnostics.computeIfAbsent(projectId, ignored -> new CaptureSessionDiagnostics());
+        return this.diagnosticsRegistry.forSession(projectId);
     }
 
     private void clearSessionDiagnostics(String projectId) {
-        this.sessionDiagnostics.remove(projectId);
+        this.diagnosticsRegistry.clear(projectId);
     }
 
     private static boolean isExplicitRootSource(io.github.luma.domain.model.WorldMutationSource source) {
@@ -1211,13 +1208,6 @@ public final class HistoryCaptureManager {
         return pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
 
-    private static String blockId(BlockState state) {
-        if (state == null) {
-            return "minecraft:air";
-        }
-        return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-    }
-
     public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
         return CAPTURE_POLICY.shouldCaptureMutation(source);
     }
@@ -1248,130 +1238,5 @@ public final class HistoryCaptureManager {
 
     public static String defaultActor(io.github.luma.domain.model.WorldMutationSource source) {
         return SOURCE_POLICY.defaultActor(source);
-    }
-
-    private static final class CaptureSessionDiagnostics {
-
-        private int acceptedMutations;
-        private final Map<String, ChunkPoint> activeChunks = new LinkedHashMap<>();
-        private final Map<String, Integer> sourceCounts = new LinkedHashMap<>();
-        private final Map<String, Integer> transitionCounts = new LinkedHashMap<>();
-        private BlockPos lastPos;
-        private ChunkPoint lastChunk = new ChunkPoint(0, 0);
-        private String lastSource = "unknown";
-        private String lastOldBlockId = "minecraft:air";
-        private String lastNewBlockId = "minecraft:air";
-        private boolean lastOldBlockEntity;
-        private boolean lastNewBlockEntity;
-
-        private void record(
-                io.github.luma.domain.model.WorldMutationSource source,
-                BlockPos pos,
-                BlockState oldState,
-                BlockState newState,
-                boolean oldBlockEntity,
-                boolean newBlockEntity
-        ) {
-            this.acceptedMutations += 1;
-            String sourceKey = source == null ? "unknown" : source.name();
-            String transitionKey = blockId(oldState) + " -> " + blockId(newState);
-            this.sourceCounts.merge(sourceKey, 1, Integer::sum);
-            this.transitionCounts.merge(transitionKey, 1, Integer::sum);
-            this.lastPos = pos == null ? null : pos.immutable();
-            this.lastChunk = pos == null ? new ChunkPoint(0, 0) : new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
-            this.addActiveChunk(this.lastChunk);
-            this.lastSource = sourceKey;
-            this.lastOldBlockId = blockId(oldState);
-            this.lastNewBlockId = blockId(newState);
-            this.lastOldBlockEntity = oldBlockEntity;
-            this.lastNewBlockEntity = newBlockEntity;
-        }
-
-        private void seedFromBuffer(TrackedChangeBuffer buffer) {
-            if (!this.activeChunks.isEmpty() || buffer == null || buffer.isEmpty()) {
-                return;
-            }
-            for (var change : buffer.orderedChanges()) {
-                this.addActiveChunk(ChunkPoint.from(change.pos()));
-            }
-            for (var change : buffer.orderedEntityChanges()) {
-                this.addActiveChunk(change.chunk());
-            }
-        }
-
-        private boolean isWithinActiveRegion(ChunkPoint chunk, int radius) {
-            if (chunk == null || this.activeChunks.isEmpty()) {
-                return false;
-            }
-            for (int chunkX = chunk.x() - radius; chunkX <= chunk.x() + radius; chunkX++) {
-                for (int chunkZ = chunk.z() - radius; chunkZ <= chunk.z() + radius; chunkZ++) {
-                    if (this.activeChunks.containsKey(key(new ChunkPoint(chunkX, chunkZ)))) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        private void addActiveChunk(ChunkPoint chunk) {
-            this.activeChunks.putIfAbsent(key(chunk), chunk);
-        }
-
-        private int acceptedMutations() {
-            return this.acceptedMutations;
-        }
-
-        private String lastSource() {
-            return this.lastSource;
-        }
-
-        private BlockPos lastPos() {
-            return this.lastPos;
-        }
-
-        private ChunkPoint lastChunk() {
-            return this.lastChunk;
-        }
-
-        private String lastOldBlockId() {
-            return this.lastOldBlockId;
-        }
-
-        private String lastNewBlockId() {
-            return this.lastNewBlockId;
-        }
-
-        private boolean lastOldBlockEntity() {
-            return this.lastOldBlockEntity;
-        }
-
-        private boolean lastNewBlockEntity() {
-            return this.lastNewBlockEntity;
-        }
-
-        private String describeTopSources(int limit) {
-            return this.describeTopCounts(this.sourceCounts, limit);
-        }
-
-        private String describeTopTransitions(int limit) {
-            return this.describeTopCounts(this.transitionCounts, limit);
-        }
-
-        private String describeTopCounts(Map<String, Integer> counts, int limit) {
-            if (counts.isEmpty()) {
-                return "none";
-            }
-            return counts.entrySet().stream()
-                    .sorted(Map.Entry.<String, Integer>comparingByValue(Comparator.reverseOrder())
-                            .thenComparing(Map.Entry.comparingByKey()))
-                    .limit(limit)
-                    .map(entry -> entry.getKey() + "=" + entry.getValue())
-                    .reduce((left, right) -> left + ", " + right)
-                    .orElse("none");
-        }
-
-        private static String key(ChunkPoint chunk) {
-            return chunk.x() + ":" + chunk.z();
-        }
     }
 }
