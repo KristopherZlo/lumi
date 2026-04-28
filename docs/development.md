@@ -78,6 +78,18 @@ Run the integrated-world runtime regression suite from a local singleplayer save
 
 The command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, integrity, and cleanup services through the server tick loop. It reports phase progress in chat, records pass/fail checks without stopping at the first failed assertion, and writes a detailed log under `<world>/lumi/test-logs/`.
 
+Compare runtime load between a no-Lumi baseline launch and a Lumi launch:
+
+```powershell
+.\scripts\compare-runtime-load.ps1 `
+  -BaselineCommand "path\to\baseline-launch.bat" `
+  -LumiCommand ".\scripts\run-test-client.ps1 -GradleTasks runClientGameTest" `
+  -Runs 3 `
+  -FailOnRegression
+```
+
+The harness writes raw logs plus `summary.json` and `summary.md` under `build/runtime-load/<timestamp>/`. It compares wall-clock time, `Can't keep up!` tick-delay reports, long server tick warnings, WARN/ERROR counts, Lumi WARN counts, and render pipeline failures. The baseline command should launch the same world/profile without the Lumi mod so the comparison measures Lumi's overhead rather than unrelated modpack or world-generation cost.
+
 Enable verbose runtime tracing for debugging:
 
 - per workspace: `Settings -> Debug -> Debug logging`
@@ -115,16 +127,16 @@ owo-lib is the only menu toolkit in this branch. Lumi declares it as a Fabric de
 Current UX assumptions:
 
 - pressing `U` opens the current dimension workspace directly
-- pressing `Alt+Z` starts undo for the latest tracked Lumi action in the current dimension workspace
-- pressing `Alt+Y` starts redo for the latest tracked Lumi action in the current dimension workspace
+- pressing the Lumi overlay key plus `Z` starts undo for the latest tracked Lumi action in the current dimension workspace; the default overlay key is `Left Alt`
+- pressing the Lumi overlay key plus `Y` starts redo for the latest tracked Lumi action in the current dimension workspace
 - nearby short-lived secondary fallout can join the latest tracked undo/redo action instead of disappearing from the live action stack
 - reconciled fluid and falling-block deltas from whole-dimension session stabilization also join the latest nearby undo/redo action when they settle inside the same time/radius window
 - runtime-only redstone state flips and piston animation states do not become live undo/redo actions
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
 - pressing `Compare` enables the world highlight immediately for the resolved diff
 - comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present
-- holding the compare x-ray key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
-- holding `Alt` while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay; holding `Alt+Y` previews redo actions
+- holding the compare x-ray / Lumi overlay key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
+- holding the same remappable overlay key while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay; holding the overlay key plus redo previews redo actions
 - the dashboard is now secondary navigation under `More` -> `Projects`
 - the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Branches`, and `More`
 - settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress, and settings persist immediately on valid field changes
