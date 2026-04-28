@@ -7,7 +7,6 @@ import io.github.luma.domain.model.MergeConflictResolution;
 import io.github.luma.domain.model.MergeConflictZone;
 import io.github.luma.domain.model.MergeConflictZoneResolution;
 import io.github.luma.domain.model.ProjectVariant;
-import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VariantMergeApplyRequest;
 import io.github.luma.domain.model.VariantMergePlan;
 import io.github.luma.ui.LumaScrollContainer;
@@ -18,7 +17,7 @@ import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.controller.MergePreviewStatus;
 import io.github.luma.ui.controller.ShareScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
-import io.github.luma.ui.overlay.CompareOverlayRenderer;
+import io.github.luma.ui.screen.section.ShareMergeReviewSection;
 import io.github.luma.ui.state.ShareViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
@@ -45,6 +44,7 @@ public final class ShareScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final ShareScreenController controller = new ShareScreenController();
     private final ScreenRouter router = new ScreenRouter();
+    private final ShareMergeReviewSection mergeReviewSections = new ShareMergeReviewSection(new MergeReviewActions());
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private ShareViewState state = new ShareViewState(null, List.of(), List.of(), List.of(), null, List.of(), null, "luma.status.share_ready");
     private String status = "luma.status.share_ready";
@@ -298,189 +298,26 @@ public final class ShareScreen extends LumaScreen {
         card.child(actions);
 
         if (selected) {
+            ShareMergeReviewSection.Model model = this.mergeReviewModel();
             if (this.mergePreviewPending && this.mergePlan == null) {
-                card.child(this.mergePreviewPendingSection());
+                card.child(this.mergeReviewSections.pendingSection(model));
             } else if (this.mergePlan != null) {
-                card.child(this.mergeReviewSection());
+                card.child(this.mergeReviewSections.reviewSection(model));
             }
         }
         return card;
     }
 
-    private FlowLayout mergePreviewPendingSection() {
-        FlowLayout section = LumaUi.insetSection(
-                Component.translatable("luma.import_export.combine_review_title"),
-                Component.translatable("luma.share.merge_preview_loading")
+    private ShareMergeReviewSection.Model mergeReviewModel() {
+        return new ShareMergeReviewSection.Model(
+                this.state,
+                this.mergePlan,
+                this.selectedTargetVariantId,
+                this.selectedImportedVariantId,
+                this.selectedImportedVariantName,
+                this.conflictResolutions,
+                this.operationActive()
         );
-        section.child(LumaUi.caption(Component.translatable(
-                "luma.share.target_variant",
-                ProjectUiSupport.displayVariantName(this.state.variants(), this.selectedTargetVariantId)
-        )));
-        return section;
-    }
-
-    private FlowLayout mergeReviewSection() {
-        ProjectVersion commonAncestor = ProjectUiSupport.versionFor(this.state.versions(), this.mergePlan.commonAncestorVersionId());
-        FlowLayout section = LumaUi.insetSection(
-                Component.translatable(
-                        "luma.import_export.combine_review_title_with_names",
-                        this.importedVariantLabel(),
-                        ProjectUiSupport.displayVariantName(this.state.variants(), this.selectedTargetVariantId)
-                ),
-                Component.translatable(
-                        "luma.share.merge_ancestor",
-                        commonAncestor == null
-                                ? ProjectUiSupport.safeText(this.mergePlan.commonAncestorVersionId())
-                                : ProjectUiSupport.displayMessage(commonAncestor)
-                )
-        );
-
-        section.child(LumaUi.caption(Component.translatable(
-                "luma.share.target_variant",
-                ProjectUiSupport.displayVariantName(this.state.variants(), this.selectedTargetVariantId)
-        )));
-        section.child(this.variantButtons(this.selectedTargetVariantId, variantId -> {
-            this.selectedTargetVariantId = variantId;
-            this.conflictResolutions.clear();
-            this.refreshMergePreview();
-        }));
-
-        FlowLayout stats = LumaUi.actionRow();
-        stats.child(LumaUi.statChip(Component.translatable("luma.share.source_changes"), Component.literal(Integer.toString(this.mergePlan.sourceChangedBlocks()))));
-        stats.child(LumaUi.statChip(Component.translatable("luma.share.target_changes"), Component.literal(Integer.toString(this.mergePlan.targetChangedBlocks()))));
-        stats.child(LumaUi.statChip(Component.translatable("luma.share.merge_changes"), Component.literal(Integer.toString(this.mergePlan.mergeBlockCount()))));
-        stats.child(LumaUi.statChip(Component.translatable("luma.share.conflicts"), Component.literal(Integer.toString(this.mergePlan.conflictPositions().size()))));
-        section.child(stats);
-
-        if (this.mergePlan.hasConflicts()) {
-            section.child(LumaUi.danger(Component.translatable(
-                    "luma.share.merge_conflicts",
-                    this.mergePlan.conflictPositions().size(),
-                    this.mergePlan.conflictChunkCount()
-            )));
-            FlowLayout conflictOverlayActions = LumaUi.actionRow();
-            conflictOverlayActions.child(LumaUi.button(Component.translatable("luma.action.show_all_conflicts"), button -> {
-                String statusKey = this.controller.showConflictZonesOverlay(
-                            this.selectedImportedProjectName,
-                            this.selectedImportedVariantId,
-                            this.selectedTargetVariantId,
-                            this.mergePlan
-                    );
-                this.validationMessage = this.controller.lastValidationMessage();
-                this.refresh(statusKey);
-            }));
-            section.child(conflictOverlayActions);
-            for (MergeConflictZone zone : this.mergePlan.conflictZones()) {
-                section.child(this.conflictZoneCard(zone));
-            }
-        } else if (this.mergePlan.mergeChanges().isEmpty()) {
-            section.child(LumaUi.caption(Component.translatable("luma.share.merge_no_changes")));
-        }
-
-        if (CompareOverlayRenderer.hasData()) {
-            FlowLayout overlayActions = LumaUi.actionRow();
-            overlayActions.child(LumaUi.button(Component.translatable("luma.action.hide_highlight"), button -> {
-                String statusKey = this.controller.clearConflictZoneOverlay();
-                this.validationMessage = this.controller.lastValidationMessage();
-                this.refresh(statusKey);
-            }));
-            section.child(overlayActions);
-        }
-
-        FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent mergeButton = LumaUi.primaryButton(Component.translatable("luma.action.apply_combine"), button -> {
-            String statusKey = this.controller.startMerge(new VariantMergeApplyRequest(
-                        this.projectName,
-                        this.selectedImportedProjectName,
-                        this.selectedImportedVariantId,
-                        this.selectedTargetVariantId,
-                        this.conflictZoneResolutions()
-                ));
-            this.validationMessage = this.controller.lastValidationMessage();
-            this.refresh(statusKey);
-        });
-        mergeButton.active(this.mergePlan.canApply(this.conflictZoneResolutions()) && !this.operationActive());
-        actions.child(mergeButton);
-        section.child(actions);
-
-        boolean allZonesResolved = this.mergePlan.conflictZones().stream()
-                .allMatch(zone -> this.conflictResolutions.containsKey(zone.id()));
-        if (this.mergePlan.canApply(this.conflictZoneResolutions())) {
-            section.child(LumaUi.caption(Component.translatable(
-                    "luma.share.merge_ready",
-                    this.mergePlan.effectiveMergeBlockCount(this.conflictZoneResolutions())
-            )));
-        } else if (allZonesResolved && this.mergePlan.effectiveMergeBlockCount(this.conflictZoneResolutions()) == 0) {
-            section.child(LumaUi.caption(Component.translatable("luma.share.merge_no_changes")));
-        } else if (this.mergePlan.hasConflicts()) {
-            section.child(LumaUi.caption(Component.translatable("luma.share.merge_unresolved_help")));
-        }
-        return section;
-    }
-
-    private FlowLayout conflictZoneCard(MergeConflictZone zone) {
-        MergeConflictResolution resolution = this.conflictResolutions.get(zone.id());
-
-        FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
-        card.child(LumaUi.value(Component.translatable("luma.share.zone_title", this.zoneLabel(zone))));
-        card.child(LumaUi.caption(Component.translatable(
-                "luma.share.zone_summary",
-                zone.chunkCount(),
-                zone.blockCount()
-        )));
-        card.child(LumaUi.caption(Component.translatable(
-                "luma.share.zone_bounds",
-                zone.bounds().min().x(),
-                zone.bounds().min().y(),
-                zone.bounds().min().z(),
-                zone.bounds().max().x(),
-                zone.bounds().max().y(),
-                zone.bounds().max().z()
-        )));
-        for (var pos : zone.samplePositions(3)) {
-            card.child(LumaUi.caption(Component.translatable(
-                    "luma.share.zone_position",
-                    pos.x(),
-                    pos.y(),
-                    pos.z()
-            )));
-        }
-        card.child(LumaUi.caption(Component.translatable(this.zoneStatusKey(resolution))));
-
-        FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent keepLocal = LumaUi.button(Component.translatable("luma.action.keep_mine"), button -> {
-            this.conflictResolutions.put(zone.id(), MergeConflictResolution.KEEP_LOCAL);
-            this.refresh("luma.status.merge_conflicts_found");
-        });
-        keepLocal.active(resolution != MergeConflictResolution.KEEP_LOCAL);
-        actions.child(keepLocal);
-
-        ButtonComponent useImported = LumaUi.button(Component.translatable("luma.action.use_imported"), button -> {
-            this.conflictResolutions.put(zone.id(), MergeConflictResolution.USE_IMPORTED);
-            this.refresh("luma.status.merge_conflicts_found");
-        });
-        useImported.active(resolution != MergeConflictResolution.USE_IMPORTED);
-        actions.child(useImported);
-
-        ButtonComponent skip = LumaUi.button(Component.translatable("luma.action.skip_for_now"), button -> {
-            this.conflictResolutions.remove(zone.id());
-            this.refresh("luma.status.merge_conflicts_found");
-        });
-        skip.active(resolution != null);
-        actions.child(skip);
-
-        actions.child(LumaUi.button(Component.translatable("luma.action.show_highlight"), button -> {
-            String statusKey = this.controller.showConflictZoneOverlay(
-                        this.selectedImportedProjectName,
-                        this.selectedImportedVariantId,
-                        this.selectedTargetVariantId,
-                        zone
-                );
-            this.validationMessage = this.controller.lastValidationMessage();
-            this.refresh(statusKey);
-        }));
-        card.child(actions);
-        return card;
     }
 
     private FlowLayout exportSection() {
@@ -667,26 +504,6 @@ public final class ShareScreen extends LumaScreen {
                 : "luma.status.merge_preview_failed");
     }
 
-    private List<MergeConflictZoneResolution> conflictZoneResolutions() {
-        return this.conflictResolutions.entrySet().stream()
-                .map(entry -> new MergeConflictZoneResolution(entry.getKey(), entry.getValue()))
-                .toList();
-    }
-
-    private String zoneStatusKey(MergeConflictResolution resolution) {
-        if (resolution == null) {
-            return "luma.share.zone_status_unresolved";
-        }
-        return switch (resolution) {
-            case KEEP_LOCAL -> "luma.share.zone_status_keep_local";
-            case USE_IMPORTED -> "luma.share.zone_status_use_imported";
-        };
-    }
-
-    private String zoneLabel(MergeConflictZone zone) {
-        return zone.id().startsWith("zone-") ? zone.id().substring("zone-".length()) : zone.id();
-    }
-
     private String mergeStatusKey(VariantMergePlan plan) {
         if (plan == null) {
             return "luma.status.operation_failed";
@@ -698,13 +515,6 @@ public final class ShareScreen extends LumaScreen {
             return "luma.status.merge_no_changes";
         }
         return "luma.status.merge_preview_ready";
-    }
-
-    private String importedVariantLabel() {
-        if (this.selectedImportedVariantName != null && !this.selectedImportedVariantName.isBlank()) {
-            return this.selectedImportedVariantName;
-        }
-        return ProjectUiSupport.safeText(this.selectedImportedVariantId);
     }
 
     private void ensureSelections() {
@@ -753,6 +563,72 @@ public final class ShareScreen extends LumaScreen {
     private void restoreScroll(double scrollProgress) {
         if (this.bodyScroll != null) {
             this.bodyScroll.restoreProgress(scrollProgress);
+        }
+    }
+
+    private final class MergeReviewActions implements ShareMergeReviewSection.Actions {
+
+        @Override
+        public void selectTargetVariant(String variantId) {
+            selectedTargetVariantId = variantId;
+            conflictResolutions.clear();
+            refreshMergePreview();
+        }
+
+        @Override
+        public void showAllConflicts(VariantMergePlan mergePlan) {
+            String statusKey = controller.showConflictZonesOverlay(
+                    selectedImportedProjectName,
+                    selectedImportedVariantId,
+                    selectedTargetVariantId,
+                    mergePlan
+            );
+            validationMessage = controller.lastValidationMessage();
+            refresh(statusKey);
+        }
+
+        @Override
+        public void clearOverlay() {
+            String statusKey = controller.clearConflictZoneOverlay();
+            validationMessage = controller.lastValidationMessage();
+            refresh(statusKey);
+        }
+
+        @Override
+        public void setZoneResolution(String zoneId, MergeConflictResolution resolution) {
+            conflictResolutions.put(zoneId, resolution);
+            refresh("luma.status.merge_conflicts_found");
+        }
+
+        @Override
+        public void clearZoneResolution(String zoneId) {
+            conflictResolutions.remove(zoneId);
+            refresh("luma.status.merge_conflicts_found");
+        }
+
+        @Override
+        public void showZoneHighlight(MergeConflictZone zone) {
+            String statusKey = controller.showConflictZoneOverlay(
+                    selectedImportedProjectName,
+                    selectedImportedVariantId,
+                    selectedTargetVariantId,
+                    zone
+            );
+            validationMessage = controller.lastValidationMessage();
+            refresh(statusKey);
+        }
+
+        @Override
+        public void applyMerge(List<MergeConflictZoneResolution> resolutions) {
+            String statusKey = controller.startMerge(new VariantMergeApplyRequest(
+                    projectName,
+                    selectedImportedProjectName,
+                    selectedImportedVariantId,
+                    selectedTargetVariantId,
+                    resolutions
+            ));
+            validationMessage = controller.lastValidationMessage();
+            refresh(statusKey);
         }
     }
 }
