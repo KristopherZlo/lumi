@@ -4,7 +4,7 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.integration.OptionalIntegrationBootstrap;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.command.LumaCommands;
-import io.github.luma.domain.service.ProjectService;
+import io.github.luma.minecraft.bootstrap.WorldBootstrapService;
 import io.github.luma.minecraft.testing.SingleplayerTestingService;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -27,7 +27,7 @@ public final class LumaMod implements ModInitializer {
     public static final String MOD_NAME = "Lumi";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_NAME);
     private final LumaCommands commands = new LumaCommands();
-    private final ProjectService projectService = new ProjectService();
+    private final WorldBootstrapService worldBootstrapService = new WorldBootstrapService();
     private final OptionalIntegrationBootstrap optionalIntegrations = new OptionalIntegrationBootstrap();
 
     @Override
@@ -39,14 +39,9 @@ public final class LumaMod implements ModInitializer {
             SingleplayerTestingService.getInstance().tick(server);
             HistoryCaptureManager.getInstance().flushIdleSessions(server);
         });
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            try {
-                this.projectService.bootstrapWorld(server);
-            } catch (Exception exception) {
-                LOGGER.warn("Failed to bootstrap world origin metadata", exception);
-            }
-        });
+        ServerLifecycleEvents.SERVER_STARTED.register(this.worldBootstrapService::bootstrap);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            this.worldBootstrapService.close();
             HistoryCaptureManager.getInstance().flushAll(server);
             WorldOperationManager.getInstance().shutdown();
         });
