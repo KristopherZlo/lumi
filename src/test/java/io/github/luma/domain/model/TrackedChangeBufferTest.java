@@ -116,6 +116,31 @@ class TrackedChangeBufferTest {
     }
 
     @Test
+    void contentFingerprintIgnoresTimestampOnlyChanges() {
+        Instant now = Instant.parse("2026-04-20T10:15:30Z");
+        TrackedChangeBuffer buffer = TrackedChangeBuffer.create(
+                "session",
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                now
+        );
+        StoredBlockChange change = new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:stone"),
+                payload("minecraft:dirt")
+        );
+
+        buffer.addChange(change, now);
+        int firstFingerprint = buffer.contentFingerprint();
+        buffer.replaceChunks(List.of(new ChunkPoint(0, 0)), List.of(change), now.plusSeconds(20));
+
+        assertEquals(firstFingerprint, buffer.contentFingerprint());
+    }
+
+    @Test
     void entityChangesKeepFirstOldPayloadAndLastNewPayload() {
         Instant now = Instant.parse("2026-04-20T10:15:30Z");
         TrackedChangeBuffer buffer = TrackedChangeBuffer.create(

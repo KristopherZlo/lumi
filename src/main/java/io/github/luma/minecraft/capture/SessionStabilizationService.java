@@ -78,13 +78,14 @@ public final class SessionStabilizationService {
             }
 
             List<StoredBlockChange> deltaChanges = this.deltaChanges(project, session, capturedChunks.captured());
-            List<StoredBlockChange> composedChanges = composeChanges(
-                    session.currentChunkChanges(processedChunks),
-                    deltaChanges
-            );
+            List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
+            List<StoredBlockChange> composedChanges = composeChanges(currentChanges, deltaChanges);
             int bufferBefore = session.buffer().size();
-            session.replaceChunkChanges(processedChunks, composedChanges, Instant.now());
-            int bufferAfter = session.buffer().size();
+            boolean bufferChanged = !currentChanges.equals(composedChanges);
+            if (bufferChanged) {
+                session.replaceChunkChanges(processedChunks, composedChanges, Instant.now());
+            }
+            int bufferAfter = bufferChanged ? session.buffer().size() : bufferBefore;
             session.finishReconciliation(processedChunks);
             if (!capturedChunks.missingChunks().isEmpty()) {
                 session.requeuePendingChunks(capturedChunks.missingChunks());
@@ -96,6 +97,7 @@ public final class SessionStabilizationService {
                     bufferBefore,
                     bufferAfter,
                     false,
+                    bufferChanged,
                     deltaChanges
             );
         } catch (RuntimeException exception) {
@@ -288,6 +290,7 @@ public final class SessionStabilizationService {
             int bufferBefore,
             int bufferAfter,
             boolean inFlight,
+            boolean bufferChanged,
             List<StoredBlockChange> deltaChanges
     ) {
 
@@ -296,11 +299,11 @@ public final class SessionStabilizationService {
         }
 
         public static ReconciliationResult noOp() {
-            return new ReconciliationResult(0, 0, 0, 0, 0, false, List.of());
+            return new ReconciliationResult(0, 0, 0, 0, 0, false, false, List.of());
         }
 
         public static ReconciliationResult busy() {
-            return new ReconciliationResult(0, 0, 0, 0, 0, true, List.of());
+            return new ReconciliationResult(0, 0, 0, 0, 0, true, false, List.of());
         }
     }
 

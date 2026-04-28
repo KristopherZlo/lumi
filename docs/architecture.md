@@ -142,7 +142,7 @@ Responsibilities are split as follows:
 6. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position and entity UUID. For entities, the first old full-NBT payload and latest new full-NBT payload win.
 7. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
 8. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
-9. Idle or dirty sessions are flushed into recovery storage.
+9. Idle or dirty sessions are flushed into recovery storage only when the live buffer fingerprint changed since the last queued draft flush.
 10. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
 11. In integrated singleplayer worlds, explicit builder actions are allowed into capture and undo/redo immediately even if the permission frame is not operator-shaped yet; dedicated servers keep the operator gate.
 
@@ -209,7 +209,7 @@ Recovery is designed to survive crash-like exits without rewriting one large dra
 Current strategy:
 
 - active sessions live in memory as `CaptureSessionState`, which owns the mutable `TrackedChangeBuffer`, chunk envelope, compact session-start chunk baselines, and pending stabilization state
-- periodic flushes enqueue immutable `RecoveryDraft` snapshots to a dedicated capture-maintenance executor
+- periodic flushes enqueue immutable `RecoveryDraft` snapshots to a dedicated capture-maintenance executor, skipping repeated stabilization cycles that leave the live buffer unchanged
 - that executor appends `recovery/draft.wal.lz4` entries and performs WAL compaction into `recovery/draft.bin.lz4`
 - first-touch whole-dimension baseline writes are queued through the same executor after the server thread copies a compact chunk snapshot payload
 - in-progress save/amend drafts move to `recovery/operation-draft.bin.lz4` so new edits can start a separate live draft
@@ -289,8 +289,8 @@ The current test suite is organized around:
 - project layout and storage path invariants
 - recovery draft isolation between live capture and save/amend operations
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
-- Fabric GameTest scaffolding for server and client smoke tests, with a production client GameTest task for headless CI
-- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, integrity, and cleanup services while reporting progress and logging pass/fail checks
+- Fabric GameTest scaffolding for server smoke tests and a client GameTest that opens a consistent singleplayer world, runs the integrated Lumi runtime suite, and then captures a smoke screenshot
+- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, player block interaction, integrity, and cleanup services while reporting progress and logging pass/fail checks
 - `scripts/compare-runtime-load.ps1` for repeated no-Lumi versus Lumi launch comparisons based on wall-clock time, server tick-delay warnings, long tick reports, WARN/ERROR counts, Lumi warnings, and render pipeline failures
 
 When extending history or storage behavior, update both tests and documentation in the same change.

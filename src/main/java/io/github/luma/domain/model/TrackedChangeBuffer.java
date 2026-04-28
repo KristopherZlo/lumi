@@ -210,6 +210,19 @@ public final class TrackedChangeBuffer {
         return this.entityChanges.size();
     }
 
+    public int contentFingerprint() {
+        int result = 1;
+        for (Map.Entry<Long, StoredBlockChange> entry : this.changes.entrySet()) {
+            result = (31 * result) + Long.hashCode(entry.getKey());
+            result = (31 * result) + entry.getValue().hashCode();
+        }
+        for (Map.Entry<String, StoredEntityChange> entry : this.entityChanges.entrySet()) {
+            result = (31 * result) + entry.getKey().hashCode();
+            result = (31 * result) + entry.getValue().hashCode();
+        }
+        return result;
+    }
+
     public List<StoredBlockChange> orderedChanges() {
         return List.copyOf(this.changes.values());
     }

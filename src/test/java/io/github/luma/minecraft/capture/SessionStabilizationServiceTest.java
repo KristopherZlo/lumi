@@ -26,12 +26,14 @@ class SessionStabilizationServiceTest {
                 0,
                 1,
                 false,
+                true,
                 deltas
         );
 
         deltas.clear();
 
         assertEquals(1, result.deltaChanges().size());
+        assertTrue(result.bufferChanged());
         assertThrows(UnsupportedOperationException.class, () -> result.deltaChanges().add(changeAt(2)));
     }
 

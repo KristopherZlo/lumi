@@ -70,6 +70,7 @@ public final class HistoryCaptureManager {
     private final Map<String, CaptureSessionDiagnostics> sessionDiagnostics = new HashMap<>();
     private final Map<String, CachedProjects> projectCaches = new HashMap<>();
     private final Map<String, Instant> lastDraftFlushes = new HashMap<>();
+    private final Map<String, Integer> lastDraftFingerprints = new HashMap<>();
     private final Set<String> dirtySessions = new HashSet<>();
 
     private HistoryCaptureManager() {
@@ -240,6 +241,7 @@ public final class HistoryCaptureManager {
                     this.activeSessions.remove(projectId);
                     this.dirtySessions.remove(projectId);
                     this.lastDraftFlushes.remove(projectId);
+                    this.lastDraftFingerprints.remove(projectId);
                     this.clearSessionDiagnostics(projectId);
                     this.persistenceCoordinator.deleteDraft(
                             trackedProject.layout(),
@@ -329,6 +331,7 @@ public final class HistoryCaptureManager {
                     this.activeSessions.remove(projectId);
                     this.dirtySessions.remove(projectId);
                     this.lastDraftFlushes.remove(projectId);
+                    this.lastDraftFingerprints.remove(projectId);
                     this.clearSessionDiagnostics(projectId);
                     this.persistenceCoordinator.deleteDraft(
                             trackedProject.layout(),
@@ -417,6 +420,7 @@ public final class HistoryCaptureManager {
             this.activeSessions.remove(projectId);
             this.dirtySessions.remove(projectId);
             this.lastDraftFlushes.remove(projectId);
+            this.lastDraftFingerprints.remove(projectId);
             this.clearSessionDiagnostics(projectId);
             this.persistenceCoordinator.deleteDraft(
                     trackedProject.layout(),
@@ -481,6 +485,7 @@ public final class HistoryCaptureManager {
         this.activeSessions.remove(projectId);
         this.dirtySessions.remove(projectId);
         this.lastDraftFlushes.remove(projectId);
+        this.lastDraftFingerprints.remove(projectId);
         this.clearSessionDiagnostics(projectId);
         if (session == null) {
             if (trackedProject == null) {
@@ -539,6 +544,7 @@ public final class HistoryCaptureManager {
         this.activeSessions.remove(projectId);
         this.dirtySessions.remove(projectId);
         this.lastDraftFlushes.remove(projectId);
+        this.lastDraftFingerprints.remove(projectId);
         this.clearSessionDiagnostics(projectId);
         if (session != null) {
             LumaMod.LOGGER.info("Consumed in-memory buffer for project {} with {} pending changes", projectId, session.size());
@@ -578,6 +584,7 @@ public final class HistoryCaptureManager {
         this.activeSessions.remove(projectId);
         this.dirtySessions.remove(projectId);
         this.lastDraftFlushes.remove(projectId);
+        this.lastDraftFingerprints.remove(projectId);
         this.clearSessionDiagnostics(projectId);
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         if (trackedProject != null) {
@@ -651,6 +658,19 @@ public final class HistoryCaptureManager {
                 if (!this.activeBuffers.containsKey(projectId) || session.isEmpty()) {
                     continue;
                 }
+                int draftFingerprint = session.contentFingerprint();
+                if (this.lastDraftFingerprints.get(projectId) instanceof Integer lastFingerprint
+                        && lastFingerprint == draftFingerprint) {
+                    this.dirtySessions.remove(projectId);
+                    this.lastDraftFlushes.put(projectId, now);
+                    LumaDebugLog.log(
+                            trackedProject.project(),
+                            "capture",
+                            "Skipped unchanged live draft flush for project {} after stabilization",
+                            trackedProject.project().name()
+                    );
+                    continue;
+                }
                 this.persistenceCoordinator.enqueueDraftFlush(
                         trackedProject.layout(),
                         projectId,
@@ -659,6 +679,7 @@ public final class HistoryCaptureManager {
                 );
                 this.dirtySessions.remove(projectId);
                 this.lastDraftFlushes.put(projectId, now);
+                this.lastDraftFingerprints.put(projectId, draftFingerprint);
                 LumaDebugLog.log(
                         trackedProject.project(),
                         "capture",
@@ -1132,32 +1153,14 @@ public final class HistoryCaptureManager {
             return;
         }
         String projectId = trackedProject.project().id().toString();
-        LumaDebugLog.log(
-                trackedProject.project(),
-                "capture",
-                "Reconciled {} dirty chunks for project {}: delta={} composed={} buffer {} -> {}",
-                result.chunkCount(),
-                trackedProject.project().name(),
-                result.deltaChangeCount(),
-                result.composedChangeCount(),
-                result.bufferBefore(),
-                result.bufferAfter()
-        );
-        LumaMod.LOGGER.info(
-                "Reconciled {} dirty chunks for project {}: delta={} composed={} buffer {} -> {}",
-                result.chunkCount(),
-                trackedProject.project().name(),
-                result.deltaChangeCount(),
-                result.composedChangeCount(),
-                result.bufferBefore(),
-                result.bufferAfter()
-        );
+        this.logReconciliation(trackedProject, result);
         this.recordReconciledUndoRedoChanges(trackedProject, level, result.deltaChanges(), Instant.now());
         if (session.buffer().isEmpty()) {
             this.activeBuffers.remove(projectId);
             this.activeSessions.remove(projectId);
             this.dirtySessions.remove(projectId);
             this.lastDraftFlushes.remove(projectId);
+            this.lastDraftFingerprints.remove(projectId);
             this.clearSessionDiagnostics(projectId);
             this.persistenceCoordinator.deleteDraft(
                     trackedProject.layout(),
@@ -1165,6 +1168,35 @@ public final class HistoryCaptureManager {
                     trackedProject.project().name()
             );
             LumaMod.LOGGER.info("Discarded empty active buffer for project {} after reconciliation", trackedProject.project().name());
+        }
+    }
+
+    private void logReconciliation(
+            TrackedProject trackedProject,
+            SessionStabilizationService.ReconciliationResult result
+    ) {
+        String message = "Reconciled {} dirty chunks for project {}: delta={} composed={} buffer {} -> {}";
+        LumaDebugLog.log(
+                trackedProject.project(),
+                "capture",
+                message,
+                result.chunkCount(),
+                trackedProject.project().name(),
+                result.deltaChangeCount(),
+                result.composedChangeCount(),
+                result.bufferBefore(),
+                result.bufferAfter()
+        );
+        if (result.bufferChanged()) {
+            LumaMod.LOGGER.info(
+                    message,
+                    result.chunkCount(),
+                    trackedProject.project().name(),
+                    result.deltaChangeCount(),
+                    result.composedChangeCount(),
+                    result.bufferBefore(),
+                    result.bufferAfter()
+            );
         }
     }
 
