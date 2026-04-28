@@ -78,20 +78,21 @@ Run the integrated-world runtime regression suite from a local singleplayer save
 
 The command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, player block interaction, integrity, and cleanup services through the server tick loop. It verifies adjacent block fallout such as a flower removed after its support block is broken, reports phase progress in chat, records pass/fail checks without stopping at the first failed assertion, and writes a detailed log under `<world>/lumi/test-logs/`.
 
-`runClientGameTest` starts a consistent singleplayer world and invokes the same runtime suite automatically before taking its smoke screenshot. Use that task in load comparisons when you need repeatable game actions rather than a client startup-only sample.
+`runClientGameTest` starts a consistent singleplayer world and invokes the same runtime suite automatically before taking its smoke screenshot. `runBaselineClientGameTest` starts a separate consistent singleplayer world with the small `lumi-baseline-gametest` action mod and explicitly removes Lumi's dev source-set from the launch config before startup. Use those tasks in load comparisons when you need repeatable game actions rather than a client startup-only sample.
 
 Compare runtime load between a no-Lumi baseline launch and a Lumi launch:
 
 ```powershell
 .\scripts\compare-runtime-load.ps1 `
-  -BaselineCommand "path\to\baseline-launch.bat" `
+  -BaselineCommand "powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-baseline-client.ps1" `
   -LumiCommand "powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-test-client.ps1 -GradleTasks runClientGameTest" `
   -Runs 3 `
+  -RequireBaselineActionRun `
   -RequireLumiActionRun `
   -FailOnRegression
 ```
 
-The harness writes raw logs plus `summary.json` and `summary.md` under `build/runtime-load/<timestamp>/`. It compares wall-clock time, `Can't keep up!` tick-delay reports, long server tick warnings, WARN/ERROR counts, Lumi WARN counts, render pipeline failures, and Lumi singleplayer action-suite results. By default the Lumi run appends new content from `run/test-client/logs/latest.log` and `build/run/clientGameTest/logs/latest.log`; pass `-LumiExtraLogs` or `-BaselineExtraLogs` to attach additional game logs. `-RequireLumiActionRun` fails the comparison when the Lumi command did not actually run the singleplayer runtime suite or when that suite reported failed checks. The baseline command should launch the same world/profile without the Lumi mod so the comparison measures Lumi's overhead rather than unrelated modpack or world-generation cost.
+The harness writes raw logs plus `summary.json` and `summary.md` under `build/runtime-load/<timestamp>/`. It compares wall-clock time, `Can't keep up!` tick-delay reports, long server tick warnings, WARN/ERROR counts, Lumi WARN counts, render pipeline failures, baseline gameplay checks, and Lumi singleplayer action-suite results. By default the baseline run appends new content from `build/run/baselineClientGameTest/logs/latest.log`, and the Lumi run appends new content from `run/test-client/logs/latest.log` and `build/run/clientGameTest/logs/latest.log`; pass `-LumiExtraLogs` or `-BaselineExtraLogs` to attach additional game logs. `-RequireBaselineActionRun` and `-RequireLumiActionRun` fail the comparison when the expected gameplay suite did not run or reported failed checks. The baseline command should launch the same Minecraft/Fabric stack without the Lumi mod so the comparison measures Lumi's overhead rather than unrelated modpack or world-generation cost.
 
 Enable verbose runtime tracing for debugging:
 

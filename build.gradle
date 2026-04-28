@@ -29,6 +29,8 @@ repositories {
     mavenCentral()
 }
 
+sourceSets.create('baselineGametest')
+
 loom {
     splitEnvironmentSourceSets()
 
@@ -47,6 +49,15 @@ loom {
             programArg '--username'
             programArg providers.gradleProperty('lumi.testUsername').orElse('LumiTestClient').get()
         }
+
+        baselineClientGameTest {
+            inherit client
+            configName = 'Lumi Baseline Client GameTest'
+            runDir = 'build/run/baselineClientGameTest'
+            source sourceSets.baselineGametest
+            vmArg '-Dfabric.client.gametest'
+            vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
+        }
     }
 }
 
@@ -61,6 +72,14 @@ fabricApi {
 }
 
 sourceSets {
+    baselineGametest {
+        compileClasspath += sourceSets.main.compileClasspath
+        compileClasspath += sourceSets.client.compileClasspath
+        runtimeClasspath += output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+        runtimeClasspath += sourceSets.client.runtimeClasspath
+    }
+
     test {
         compileClasspath += sourceSets.client.output
         runtimeClasspath += sourceSets.client.output
@@ -284,9 +303,57 @@ tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.Client
     useXVFB = true
 }
 
-['runClient', 'runTestClient', 'runGameTest', 'runClientGameTest', 'runProductionClientGameTest'].each { taskName ->
+['runClient', 'runTestClient', 'runGameTest', 'runClientGameTest', 'runBaselineClientGameTest', 'runProductionClientGameTest'].each { taskName ->
     tasks.named(taskName).configure {
         dependsOn(purgeDevRuntimeSelfMods)
+    }
+}
+
+tasks.named('runBaselineClientGameTest').configure {
+    classpath = classpath.filter { file ->
+        def path = file.absolutePath.replace('\\', '/')
+        !path.endsWith('/build/classes/java/main')
+                && !path.endsWith('/build/resources/main')
+                && !path.endsWith('/build/classes/java/client')
+                && !path.endsWith('/build/resources/client')
+                && !path.endsWith('/build/classes/java/gametest')
+                && !path.endsWith('/build/resources/gametest')
+    }
+
+    doFirst {
+        def launchConfig = layout.projectDirectory.file('.gradle/loom-cache/launch.cfg').asFile
+        if (!launchConfig.exists()) {
+            throw new GradleException("Missing Loom launch config: ${launchConfig}")
+        }
+
+        def baselineGroup = [
+                layout.buildDirectory.dir('classes/java/baselineGametest').get().asFile.absolutePath,
+                layout.buildDirectory.dir('resources/baselineGametest').get().asFile.absolutePath
+        ].join(';')
+        def excludedGroups = [
+                '/build/classes/java/main',
+                '/build/resources/main',
+                '/build/classes/java/client',
+                '/build/resources/client',
+                '/build/classes/java/gametest',
+                '/build/resources/gametest'
+        ]
+
+        def lines = launchConfig.readLines('UTF-8').collect { line ->
+            if (!line.trim().startsWith('fabric.classPathGroups=')) {
+                return line
+            }
+
+            def prefix = line.takeWhile { it == '\t' || it == ' ' }
+            def value = line.trim().substring('fabric.classPathGroups='.length())
+            def groups = value.split(';;') as List<String>
+            def keptGroups = groups.findAll { group ->
+                def normalized = group.replace('\\', '/')
+                !excludedGroups.any { normalized.contains(it) }
+            }
+            return prefix + 'fabric.classPathGroups=' + ([baselineGroup] + keptGroups).join(';;')
+        }
+        launchConfig.setText(lines.join(System.lineSeparator()) + System.lineSeparator(), 'UTF-8')
     }
 }
 

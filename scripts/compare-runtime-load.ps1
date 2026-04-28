@@ -14,14 +14,18 @@ param(
 
     [string]$OutputRoot,
 
-    [string[]]$BaselineExtraLogs = @(),
+    [string[]]$BaselineExtraLogs = @(
+        "build\run\baselineClientGameTest\logs\latest.log"
+    ),
 
     [string[]]$LumiExtraLogs = @(
         "run\test-client\logs\latest.log",
         "build\run\clientGameTest\logs\latest.log"
     ),
 
-    [switch]$RequireLumiActionRun
+    [switch]$RequireLumiActionRun,
+
+    [switch]$RequireBaselineActionRun
 )
 
 $ErrorActionPreference = "Stop"
@@ -179,8 +183,15 @@ function Measure-Log {
     )
     $actionMatches = [regex]::Matches(
         $content,
-        "Lumi singleplayer testing (?<result>passed|completed with failures): (?<passed>\d+) passed, (?<failed>\d+) failed"
+        "(?:Lumi singleplayer testing|Lumi baseline gameplay testing) (?<result>passed|completed with failures): (?<passed>\d+) passed, (?<failed>\d+) failed"
     )
+    $uniqueActionMatches = [System.Collections.Generic.List[object]]::new()
+    $seenActionLines = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($match in $actionMatches) {
+        if ($seenActionLines.Add($match.Value)) {
+            $uniqueActionMatches.Add($match)
+        }
+    }
 
     $maxKeepUpMs = 0
     $totalKeepUpMs = 0
@@ -198,7 +209,7 @@ function Measure-Log {
 
     $actionChecksPassed = 0
     $actionChecksFailed = 0
-    foreach ($match in $actionMatches) {
+    foreach ($match in $uniqueActionMatches) {
         $actionChecksPassed += [int]$match.Groups["passed"].Value
         $actionChecksFailed += [int]$match.Groups["failed"].Value
     }
@@ -216,7 +227,7 @@ function Measure-Log {
         ErrorCount = ([regex]::Matches($content, "\bERROR\b")).Count
         LumiWarnCount = ([regex]::Matches($content, "\(Lumi\).*\bWARN\b|\bWARN\b.*\(Lumi\)")).Count
         RenderPipelineFailures = ([regex]::Matches($content, "render pipeline failure|Not building!")).Count
-        ActionRuns = $actionMatches.Count
+        ActionRuns = $uniqueActionMatches.Count
         ActionChecksPassed = $actionChecksPassed
         ActionChecksFailed = $actionChecksFailed
     }
@@ -321,6 +332,8 @@ function Write-MarkdownSummary {
         "",
         "Lumi command: ``$($Result.Lumi.Command)``",
         "",
+        "Baseline action checks: $($Result.Baseline.Summary.ActionChecksPassed) passed, $($Result.Baseline.Summary.ActionChecksFailed) failed",
+        "",
         "Lumi action checks: $($Result.Lumi.Summary.ActionChecksPassed) passed, $($Result.Lumi.Summary.ActionChecksFailed) failed",
         "",
         "Raw logs and JSON: ``$($Result.OutputDirectory)``"
@@ -367,13 +380,19 @@ $hasFailedRuns = $baselineSummary.FailedRuns -gt 0 -or $lumiSummary.FailedRuns -
 $hasRegression = $lumiSummary.MaxKeepUpMs -gt ($baselineSummary.MaxKeepUpMs + $KeepUpRegressionMs) `
     -or $lumiSummary.MaxLongTickMs -gt ($baselineSummary.MaxLongTickMs + $KeepUpRegressionMs) `
     -or $lumiSummary.RenderPipelineFailures -gt $baselineSummary.RenderPipelineFailures
-$missingRequiredActionRun = $RequireLumiActionRun `
+$missingRequiredLumiActionRun = $RequireLumiActionRun `
     -and ($lumiSummary.ActionRuns -eq 0 -or $lumiSummary.ActionChecksFailed -gt 0)
+$missingRequiredBaselineActionRun = $RequireBaselineActionRun `
+    -and ($baselineSummary.ActionRuns -eq 0 -or $baselineSummary.ActionChecksFailed -gt 0)
 
-if ($missingRequiredActionRun) {
+if ($missingRequiredLumiActionRun) {
     Write-Error "Lumi action run is required but no passing singleplayer action suite result was found."
 }
 
-if ($hasFailedRuns -or ($FailOnRegression -and $hasRegression) -or $missingRequiredActionRun) {
+if ($missingRequiredBaselineActionRun) {
+    Write-Error "Baseline action run is required but no passing baseline gameplay suite result was found."
+}
+
+if ($hasFailedRuns -or ($FailOnRegression -and $hasRegression) -or $missingRequiredLumiActionRun -or $missingRequiredBaselineActionRun) {
     exit 1
 }
