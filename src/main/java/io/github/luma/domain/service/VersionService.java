@@ -15,7 +15,10 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.PatchWorldChanges;
+import io.github.luma.domain.model.StoredChangeAccumulator;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
@@ -476,42 +479,43 @@ public final class VersionService {
     }
 
     static List<StoredBlockChange> mergeChanges(List<StoredBlockChange> baseChanges, List<StoredBlockChange> overlayChanges) {
-        Instant now = Instant.now();
-        TrackedChangeBuffer buffer = TrackedChangeBuffer.create(
-                "merge",
-                "project",
-                "variant",
-                "",
-                "merge",
-                io.github.luma.domain.model.WorldMutationSource.SYSTEM,
-                now
-        );
-        for (StoredBlockChange change : baseChanges == null ? List.<StoredBlockChange>of() : baseChanges) {
-            buffer.addChange(change, now);
-        }
-        for (StoredBlockChange change : overlayChanges == null ? List.<StoredBlockChange>of() : overlayChanges) {
-            buffer.addChange(change, now);
-        }
-        return buffer.orderedChanges();
+        StoredChangeAccumulator accumulator = new StoredChangeAccumulator();
+        accumulator.addBlockChanges(baseChanges);
+        accumulator.addBlockChanges(overlayChanges);
+        return accumulator.blockChanges();
     }
 
-    private RecoveryDraft buildAmendedDraft(
+    static List<StoredEntityChange> mergeEntityChanges(
+            List<StoredEntityChange> baseChanges,
+            List<StoredEntityChange> overlayChanges
+    ) {
+        StoredChangeAccumulator accumulator = new StoredChangeAccumulator();
+        accumulator.addEntityChanges(baseChanges);
+        accumulator.addEntityChanges(overlayChanges);
+        return accumulator.entityChanges();
+    }
+
+    RecoveryDraft buildAmendedDraft(
             ProjectLayout layout,
             BuildProject project,
             ProjectVariant activeVariant,
             ProjectVersion headVersion,
             RecoveryDraft draft
     ) throws IOException {
-        List<StoredBlockChange> headChanges = this.loadPatchChanges(layout, headVersion.patchIds());
-        List<StoredBlockChange> mergedChanges = mergeChanges(headChanges, draft.changes());
+        PatchWorldChanges headChanges = this.loadPatchWorldChanges(layout, headVersion.patchIds());
+        List<StoredBlockChange> mergedChanges = mergeChanges(headChanges.blockChanges(), draft.changes());
+        List<StoredEntityChange> mergedEntityChanges = mergeEntityChanges(headChanges.entityChanges(), draft.entityChanges());
         LumaDebugLog.log(
                 project,
                 "save",
-                "Merged amend draft for project {}: head={} changes, overlay={} changes, merged={}",
+                "Merged amend draft for project {}: head={} blocks/{} entities, overlay={} blocks/{} entities, merged={} blocks/{} entities",
                 project.name(),
-                headChanges.size(),
+                headChanges.blockChanges().size(),
+                headChanges.entityChanges().size(),
                 draft.changes().size(),
-                mergedChanges.size()
+                draft.entityChanges().size(),
+                mergedChanges.size(),
+                mergedEntityChanges.size()
         );
         return new RecoveryDraft(
                 project.id().toString(),
@@ -521,20 +525,24 @@ public final class VersionService {
                 draft.mutationSource(),
                 draft.startedAt(),
                 draft.updatedAt(),
-                mergedChanges
+                mergedChanges,
+                mergedEntityChanges
         );
     }
 
-    private List<StoredBlockChange> loadPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
-        List<StoredBlockChange> changes = new ArrayList<>();
+    private PatchWorldChanges loadPatchWorldChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
+        List<StoredBlockChange> blockChanges = new ArrayList<>();
+        List<StoredEntityChange> entityChanges = new ArrayList<>();
         for (String patchId : patchIds) {
             Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
             if (metadata.isEmpty()) {
                 continue;
             }
-            changes.addAll(this.patchDataRepository.loadChanges(layout, metadata.get()));
+            PatchWorldChanges changes = this.patchDataRepository.loadWorldChanges(layout, metadata.get());
+            blockChanges.addAll(changes.blockChanges());
+            entityChanges.addAll(changes.entityChanges());
         }
-        return changes;
+        return new PatchWorldChanges(blockChanges, entityChanges);
     }
 
     private boolean shouldCreateSnapshot(
