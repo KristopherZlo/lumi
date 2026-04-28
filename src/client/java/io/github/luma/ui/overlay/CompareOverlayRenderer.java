@@ -269,7 +269,6 @@ public final class CompareOverlayRenderer {
             return;
         }
         var matrices = context.matrices();
-        var consumers = context.consumers();
         if (matrices == null) {
             OverlayDiagnostics.getInstance().log(
                     state.debugEnabled(),
@@ -277,20 +276,6 @@ public final class CompareOverlayRenderer {
                     "compare-overlay",
                     "Render skipped reason={} changedBlocks={} surfaceBlocks={} visible={} xray={}",
                     "null-matrices",
-                    state.changedBlocks().size(),
-                    state.surfaceBlockCount(),
-                    state.visible(),
-                    xrayEnabled
-            );
-            return;
-        }
-        if (consumers == null) {
-            OverlayDiagnostics.getInstance().log(
-                    state.debugEnabled(),
-                    "compare-skip-null-consumers",
-                    "compare-overlay",
-                    "Render skipped reason={} changedBlocks={} surfaceBlocks={} visible={} xray={}",
-                    "null-consumers",
                     state.changedBlocks().size(),
                     state.surfaceBlockCount(),
                     state.visible(),
@@ -319,7 +304,8 @@ public final class CompareOverlayRenderer {
         );
 
         var fillType = CompareOverlayRenderTypes.fill(xrayEnabled);
-        VertexConsumer fillConsumer = consumers.getBuffer(fillType);
+        var fillBuffer = OverlayImmediateRenderer.begin(fillType);
+        VertexConsumer fillConsumer = fillBuffer;
         int filledFaceCount = 0;
         int fillAlpha = Math.round(FILL_ALPHA);
         for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
@@ -348,16 +334,18 @@ public final class CompareOverlayRenderer {
                     fillAlpha
             );
         }
+        boolean fillDrawn = OverlayImmediateRenderer.draw(fillType, fillBuffer);
 
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),
                 "compare-fill-pass",
                 "compare-overlay",
-                "Fill pass blocks={} faces={} vertices={} alpha={} renderType={} consumer={} xray={} outset={}",
+                "Fill pass blocks={} faces={} vertices={} alpha={} drawn={} renderType={} consumer={} xray={} outset={}",
                 visibleSurfaceBlocks.size(),
                 filledFaceCount,
                 filledFaceCount * 4,
                 fillAlpha,
+                fillDrawn,
                 fillType,
                 fillConsumer.getClass().getName(),
                 xrayEnabled,
@@ -365,7 +353,8 @@ public final class CompareOverlayRenderer {
         );
 
         var outlineType = CompareOverlayRenderTypes.outline(xrayEnabled);
-        VertexConsumer lineConsumer = consumers.getBuffer(outlineType);
+        var lineBuffer = OverlayImmediateRenderer.begin(outlineType);
+        VertexConsumer lineConsumer = lineBuffer;
         for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
             DiffBlockEntry entry = surfaceBlock.entry();
             ColorChannels color = ColorChannels.of(entry.changeType());
@@ -380,6 +369,7 @@ public final class CompareOverlayRenderer {
                     OUTLINE_WIDTH
             );
         }
+        OverlayImmediateRenderer.draw(outlineType, lineBuffer);
     }
 
     private record ColorChannels(int red, int green, int blue, int argb) {

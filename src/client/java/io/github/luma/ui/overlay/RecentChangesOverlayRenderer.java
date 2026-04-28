@@ -146,7 +146,6 @@ public final class RecentChangesOverlayRenderer {
             return;
         }
         var matrices = context.matrices();
-        var consumers = context.consumers();
         if (matrices == null) {
             OverlayDiagnostics.getInstance().log(
                     state.debugEnabled(),
@@ -154,18 +153,6 @@ public final class RecentChangesOverlayRenderer {
                     "recent-overlay",
                     "Render skipped reason={} entries={} surfaceEntries={}",
                     "null-matrices",
-                    state.entries().size(),
-                    state.surfaceEntryCount()
-            );
-            return;
-        }
-        if (consumers == null) {
-            OverlayDiagnostics.getInstance().log(
-                    state.debugEnabled(),
-                    "recent-skip-null-consumers",
-                    "recent-overlay",
-                    "Render skipped reason={} entries={} surfaceEntries={}",
-                    "null-consumers",
                     state.entries().size(),
                     state.surfaceEntryCount()
             );
@@ -187,7 +174,8 @@ public final class RecentChangesOverlayRenderer {
         );
 
         var fillType = CompareOverlayRenderTypes.fill(false);
-        VertexConsumer fillConsumer = consumers.getBuffer(fillType);
+        var fillBuffer = OverlayImmediateRenderer.begin(fillType);
+        VertexConsumer fillConsumer = fillBuffer;
         int filledFaceCount = 0;
         int minFillAlpha = Integer.MAX_VALUE;
         int maxFillAlpha = Integer.MIN_VALUE;
@@ -222,24 +210,27 @@ public final class RecentChangesOverlayRenderer {
             minFillAlpha = 0;
             maxFillAlpha = 0;
         }
+        boolean fillDrawn = OverlayImmediateRenderer.draw(fillType, fillBuffer);
 
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),
                 "recent-fill-pass",
                 "recent-overlay",
-                "Fill pass entries={} faces={} vertices={} alphaRange={}..{} renderType={} consumer={} outset={}",
+                "Fill pass entries={} faces={} vertices={} alphaRange={}..{} drawn={} renderType={} consumer={} outset={}",
                 visibleSurfaceEntries.size(),
                 filledFaceCount,
                 filledFaceCount * 4,
                 minFillAlpha,
                 maxFillAlpha,
+                fillDrawn,
                 fillType,
                 fillConsumer.getClass().getName(),
                 FACE_OUTSET
         );
 
         var outlineType = CompareOverlayRenderTypes.outline(false);
-        VertexConsumer lineConsumer = consumers.getBuffer(outlineType);
+        var lineBuffer = OverlayImmediateRenderer.begin(outlineType);
+        VertexConsumer lineConsumer = lineBuffer;
         for (SurfaceEntry surfaceEntry : visibleSurfaceEntries) {
             RecentChangeEntry entry = surfaceEntry.entry();
             ShapeRenderer.renderShape(
@@ -252,6 +243,7 @@ public final class RecentChangesOverlayRenderer {
                     0xFFFF9C3A,
                     OUTLINE_WIDTH);
         }
+        OverlayImmediateRenderer.draw(outlineType, lineBuffer);
     }
 
     private static List<RecentChangeEntry> flatten(List<UndoRedoAction> actions) {
