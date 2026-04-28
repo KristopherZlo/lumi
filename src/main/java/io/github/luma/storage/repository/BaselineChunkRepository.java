@@ -11,13 +11,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import net.minecraft.server.level.ServerLevel;
 
 public final class BaselineChunkRepository {
 
     private static final String FILE_PREFIX = "chunk_";
     private final SnapshotWriter snapshotWriter = new SnapshotWriter();
-    private final SnapshotReader snapshotReader = new SnapshotReader();
 
     public boolean writeIfMissing(
             ProjectLayout layout,
@@ -65,20 +63,6 @@ public final class BaselineChunkRepository {
         return chunks;
     }
 
-    public void restore(ProjectLayout layout, ChunkPoint chunk, ServerLevel level) throws IOException {
-        for (var batch : this.snapshotReader.decodeBatches(this.file(layout, chunk), level)) {
-            io.github.luma.minecraft.world.BlockChangeApplier.applyPreparedBatch(level, batch, 0, batch.placements().size());
-        }
-    }
-
-    public List<io.github.luma.minecraft.world.PreparedChunkBatch> decodeBatches(
-            ProjectLayout layout,
-            ChunkPoint chunk,
-            ServerLevel level
-    ) throws IOException {
-        return this.snapshotReader.decodeBatches(this.file(layout, chunk), level);
-    }
-
     public List<ChunkPoint> listMissingChunks(ProjectLayout layout, Collection<ChunkPoint> restoredChunks) throws IOException {
         Set<ChunkPoint> restored = Set.copyOf(restoredChunks);
         List<ChunkPoint> missing = new ArrayList<>();
@@ -88,12 +72,6 @@ public final class BaselineChunkRepository {
             }
         }
         return missing;
-    }
-
-    public void restoreMissing(ProjectLayout layout, ServerLevel level, Collection<ChunkPoint> restoredChunks) throws IOException {
-        for (ChunkPoint chunk : this.listMissingChunks(layout, restoredChunks)) {
-            this.restore(layout, chunk, level);
-        }
     }
 
     public Path filePath(ProjectLayout layout, ChunkPoint chunk) {

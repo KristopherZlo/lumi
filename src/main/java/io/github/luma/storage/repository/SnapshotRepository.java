@@ -52,16 +52,6 @@ public final class SnapshotRepository {
         this.writer.writeFile(snapshotFile, this.writer.captureData(projectId, chunks, level, now, adaptOverrides(overrides)));
     }
 
-    public void restore(ProjectLayout layout, SnapshotRef snapshot, ServerLevel level) throws IOException {
-        this.restoreFile(layout.snapshotFile(snapshot.id()), level);
-    }
-
-    public void restoreFile(Path snapshotFile, ServerLevel level) throws IOException {
-        for (var batch : this.reader.decodeBatches(snapshotFile, level)) {
-            io.github.luma.minecraft.world.BlockChangeApplier.applyPreparedBatch(level, batch, 0, batch.placements().size());
-        }
-    }
-
     public CompoundTag loadSnapshotTag(Path snapshotFile) throws IOException {
         throw new UnsupportedOperationException("Raw snapshot tags are not available for storage v3");
     }

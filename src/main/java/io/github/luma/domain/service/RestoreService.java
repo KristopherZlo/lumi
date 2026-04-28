@@ -24,6 +24,7 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.SnapshotBatchPreparer;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
@@ -72,6 +73,7 @@ public final class RestoreService {
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final VersionService versionService = new VersionService();
     private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
+    private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
@@ -592,7 +594,10 @@ public final class RestoreService {
         List<PreparedChunkBatch> batches = new ArrayList<>();
         int index = 0;
         for (ChunkPoint chunk : trackedChunks) {
-            batches.addAll(this.baselineChunkRepository.decodeBatches(layout, chunk, level));
+            batches.addAll(this.snapshotBatchPreparer.prepare(
+                    this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
+                    level
+            ));
             index += 1;
             progressSink.update(
                     OperationStage.PREPARING,
@@ -866,13 +871,19 @@ public final class RestoreService {
         List<PreparedChunkBatch> batches = new ArrayList<>();
 
         for (io.github.luma.domain.model.ChunkPoint chunk : plan.baselineGaps()) {
-            batches.addAll(this.baselineChunkRepository.decodeBatches(layout, chunk, level));
+            batches.addAll(this.snapshotBatchPreparer.prepare(
+                    this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
+                    level
+            ));
             completedSources += 1;
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded baseline chunk " + chunk.x() + ":" + chunk.z());
         }
 
         if (plan.anchor().snapshotId() != null && !plan.anchor().snapshotId().isBlank()) {
-            batches.addAll(this.snapshotReader.decodeBatches(layout.snapshotFile(plan.anchor().snapshotId()), level));
+            batches.addAll(this.snapshotBatchPreparer.prepare(
+                    this.snapshotReader.readFile(layout.snapshotFile(plan.anchor().snapshotId())),
+                    level
+            ));
             completedSources += 1;
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded anchor snapshot");
         }
