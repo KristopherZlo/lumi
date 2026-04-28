@@ -299,8 +299,6 @@ public final class CompareOverlayRenderer {
             return;
         }
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        VertexConsumer fillConsumer = consumers.getBuffer(CompareOverlayRenderTypes.fill(xrayEnabled));
-        VertexConsumer lineConsumer = consumers.getBuffer(CompareOverlayRenderTypes.outline(xrayEnabled));
         List<CompareOverlaySurfaceResolver.SurfaceBlock> visibleSurfaceBlocks = state.visibleSurfaceBlocks(
                 camera.x,
                 camera.y,
@@ -319,6 +317,8 @@ public final class CompareOverlayRenderer {
                 camera.y,
                 camera.z
         );
+
+        VertexConsumer fillConsumer = consumers.getBuffer(CompareOverlayRenderTypes.fill(xrayEnabled));
         for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
             DiffBlockEntry entry = surfaceBlock.entry();
             ColorChannels color = ColorChannels.of(entry.changeType());
@@ -344,6 +344,12 @@ public final class CompareOverlayRenderer {
                     color.blue(),
                     Math.round(FILL_ALPHA)
             );
+        }
+
+        VertexConsumer lineConsumer = consumers.getBuffer(CompareOverlayRenderTypes.outline(xrayEnabled));
+        for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
+            DiffBlockEntry entry = surfaceBlock.entry();
+            ColorChannels color = ColorChannels.of(entry.changeType());
             ShapeRenderer.renderShape(
                     matrices,
                     lineConsumer,

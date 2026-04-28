@@ -171,8 +171,6 @@ public final class RecentChangesOverlayRenderer {
             return;
         }
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        VertexConsumer fillConsumer = consumers.getBuffer(CompareOverlayRenderTypes.fill(false));
-        VertexConsumer lineConsumer = consumers.getBuffer(CompareOverlayRenderTypes.outline(false));
         List<SurfaceEntry> visibleSurfaceEntries = state.visibleSurfaceEntries(camera.x, camera.y, camera.z);
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),
@@ -186,6 +184,8 @@ public final class RecentChangesOverlayRenderer {
                 camera.y,
                 camera.z
         );
+
+        VertexConsumer fillConsumer = consumers.getBuffer(CompareOverlayRenderTypes.fill(false));
         for (SurfaceEntry surfaceEntry : visibleSurfaceEntries) {
             RecentChangeEntry entry = surfaceEntry.entry();
             float minX = (float) (entry.pos().x() - camera.x) + INSET;
@@ -209,6 +209,11 @@ public final class RecentChangesOverlayRenderer {
                     0x3A,
                     Math.max(MIN_FILL_ALPHA, Math.round(entry.alpha() * FILL_ALPHA_SCALE))
             );
+        }
+
+        VertexConsumer lineConsumer = consumers.getBuffer(CompareOverlayRenderTypes.outline(false));
+        for (SurfaceEntry surfaceEntry : visibleSurfaceEntries) {
+            RecentChangeEntry entry = surfaceEntry.entry();
             ShapeRenderer.renderShape(
                     matrices,
                     lineConsumer,
