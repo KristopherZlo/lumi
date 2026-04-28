@@ -64,6 +64,13 @@ Run client GameTests:
 .\scripts\run-test-client.ps1 -GradleTasks runClientGameTest
 ```
 
+Run the idle startup-only client GameTests:
+
+```powershell
+.\scripts\run-baseline-idle-client.ps1
+.\scripts\run-idle-client.ps1
+```
+
 CI can run the headless production client GameTest task:
 
 ```powershell
@@ -93,6 +100,14 @@ Compare runtime load between a no-Lumi baseline launch and a Lumi launch:
 ```
 
 The harness writes raw logs plus `summary.json` and `summary.md` under `build/runtime-load/<timestamp>/`. It compares wall-clock time, `Can't keep up!` tick-delay reports, long server tick warnings, WARN/ERROR counts, Lumi WARN counts, render pipeline failures, baseline gameplay checks, and Lumi singleplayer action-suite results. By default the baseline run appends new content from `build/run/baselineClientGameTest/logs/latest.log`, and the Lumi run appends new content from `run/test-client/logs/latest.log` and `build/run/clientGameTest/logs/latest.log`; pass `-LumiExtraLogs` or `-BaselineExtraLogs` to attach additional game logs. `-RequireBaselineActionRun` and `-RequireLumiActionRun` fail the comparison when the expected gameplay suite did not run or reported failed checks. The baseline command should launch the same Minecraft/Fabric stack without the Lumi mod so the comparison measures Lumi's overhead rather than unrelated modpack or world-generation cost.
+
+For startup-only overhead, use the idle wrapper. It launches the same singleplayer world shape, waits for chunk rendering plus a short idle window, and does not run the full Lumi project/history workflow:
+
+```powershell
+.\scripts\compare-idle-startup-load.ps1 -Runs 3
+```
+
+Idle summaries are written under `build/runtime-load-idle/<timestamp>/`. Use this before optimizing startup cost, and use the full runtime comparison when validating history workflow cost.
 
 Enable verbose runtime tracing for debugging:
 

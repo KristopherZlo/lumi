@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "lumi-baseline-idle-gametest",
+  "version": "1.0.0",
+  "name": "Lumi Baseline Idle Game Tests",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "io.github.luma.baselineidlegametest.BaselineIdleClientGameTests"
+    ]
+  },
+  "depends": {
+    "fabric-client-gametest-api-v1": "*"
+  }
+}
