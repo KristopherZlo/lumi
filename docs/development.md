@@ -152,8 +152,8 @@ owo-lib is the only menu toolkit in this branch. Lumi declares it as a Fabric de
 Current UX assumptions:
 
 - pressing `U` opens the current dimension workspace directly
-- pressing the Lumi overlay key plus `Z` starts undo for the latest tracked Lumi action in the current dimension workspace; the default overlay key is `Left Alt`
-- pressing the Lumi overlay key plus `Y` starts redo for the latest tracked Lumi action in the current dimension workspace
+- pressing the Lumi overlay key plus `Z` starts undo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; the default overlay key is `Left Alt`, and remapping it changes this chord too
+- pressing the Lumi overlay key plus `Y` starts redo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; if undo and redo are pressed in the same tick, undo wins and redo must be pressed again
 - nearby short-lived secondary fallout can join the latest tracked undo/redo action instead of disappearing from the live action stack
 - reconciled fluid and falling-block deltas from whole-dimension session stabilization also join the latest nearby undo/redo action when they settle inside the same time/radius window
 - runtime-only redstone state flips and piston animation states do not become live undo/redo actions
@@ -161,7 +161,7 @@ Current UX assumptions:
 - pressing `Compare` enables the world highlight immediately for the resolved diff
 - comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present
 - holding the compare x-ray / Lumi overlay key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
-- holding the same remappable overlay key while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay; holding the overlay key plus redo previews redo actions
+- holding the same remappable overlay key while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay that renders translucent exposed sides as well as outlines; holding the overlay key plus redo previews redo actions
 - the dashboard is now secondary navigation under `More` -> `Projects`
 - the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Branches`, and `More`
 - settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress, and settings persist immediately on valid field changes

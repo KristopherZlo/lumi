@@ -96,17 +96,26 @@ public final class LumaClient implements ClientModInitializer {
 
     private void onEndTick(Minecraft client) {
         boolean overlayHold = this.keyBindingState.isDown(client, this.compareOverlayXrayKey);
+        boolean shortcutInputActive = client != null
+                && client.screen == null
+                && client.player != null
+                && client.level != null;
         WorkspaceHudCoordinator.getInstance().tick(client);
         PreviewCaptureCoordinator.getInstance().tick(client);
         UndoRedoKeyChordTracker.TickResult undoRedoKeys = this.undoRedoKeyChordTracker.tick(
                 client,
+                shortcutInputActive,
                 overlayHold,
                 this.undoKey,
                 this.redoKey
         );
         CompareOverlayRenderer.setXrayEnabled(overlayHold);
         CompareOverlayCoordinator.getInstance().tick(client);
-        RecentChangesOverlayCoordinator.getInstance().tick(client, overlayHold, undoRedoKeys.previewTarget());
+        RecentChangesOverlayCoordinator.getInstance().tick(
+                client,
+                shortcutInputActive && overlayHold,
+                undoRedoKeys.previewTarget()
+        );
         while (this.toggleCompareOverlayKey.consumeClick()) {
             CompareOverlayRenderer.toggleVisibility();
         }

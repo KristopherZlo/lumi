@@ -1,6 +1,5 @@
 package io.github.luma.ui.overlay;
 
-import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
@@ -191,7 +190,6 @@ public final class CompareOverlayRenderer {
     private static void renderOverlay(WorldRenderContext context, OverlayState state) {
         boolean xrayEnabled = XRAY_ENABLED.get();
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        PoseStack matrices = context.matrices();
         VertexConsumer fillConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.fill(xrayEnabled));
         VertexConsumer lineConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.outline(xrayEnabled));
         for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : state.visibleSurfaceBlocks(camera.x, camera.y, camera.z)) {
@@ -204,9 +202,23 @@ public final class CompareOverlayRenderer {
             float maxY = minY + 1.0F - (INSET * 2.0F);
             float maxZ = minZ + 1.0F - (INSET * 2.0F);
 
-            renderFilledBox(matrices, fillConsumer, minX, minY, minZ, maxX, maxY, maxZ, surfaceBlock, color, FILL_ALPHA);
+            OverlayFaceRenderer.renderFilledBox(
+                    context.matrices(),
+                    fillConsumer,
+                    minX,
+                    minY,
+                    minZ,
+                    maxX,
+                    maxY,
+                    maxZ,
+                    surfaceBlock,
+                    color.red(),
+                    color.green(),
+                    color.blue(),
+                    Math.round(FILL_ALPHA)
+            );
             ShapeRenderer.renderShape(
-                    matrices,
+                    context.matrices(),
                     lineConsumer,
                     Shapes.block(),
                     entry.pos().x() - camera.x,
@@ -216,66 +228,6 @@ public final class CompareOverlayRenderer {
                     OUTLINE_ALPHA
             );
         }
-    }
-
-    private static void renderFilledBox(
-            PoseStack matrices,
-            VertexConsumer consumer,
-            float minX,
-            float minY,
-            float minZ,
-            float maxX,
-            float maxY,
-            float maxZ,
-            CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock,
-            ColorChannels color,
-            float alpha
-    ) {
-        PoseStack.Pose pose = matrices.last();
-        int alphaChannel = Math.round(alpha);
-
-        if (surfaceBlock.northExposed()) {
-            addQuad(pose, consumer, color, alphaChannel, minX, minY, minZ, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ);
-        }
-        if (surfaceBlock.southExposed()) {
-            addQuad(pose, consumer, color, alphaChannel, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
-        }
-        if (surfaceBlock.westExposed()) {
-            addQuad(pose, consumer, color, alphaChannel, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
-        }
-        if (surfaceBlock.eastExposed()) {
-            addQuad(pose, consumer, color, alphaChannel, maxX, minY, minZ, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ);
-        }
-        if (surfaceBlock.downExposed()) {
-            addQuad(pose, consumer, color, alphaChannel, minX, minY, minZ, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ);
-        }
-        if (surfaceBlock.upExposed()) {
-            addQuad(pose, consumer, color, alphaChannel, minX, maxY, minZ, maxX, maxY, minZ, maxX, maxY, maxZ, minX, maxY, maxZ);
-        }
-    }
-
-    private static void addQuad(
-            PoseStack.Pose pose,
-            VertexConsumer consumer,
-            ColorChannels color,
-            int alpha,
-            float x1,
-            float y1,
-            float z1,
-            float x2,
-            float y2,
-            float z2,
-            float x3,
-            float y3,
-            float z3,
-            float x4,
-            float y4,
-            float z4
-    ) {
-        consumer.addVertex(pose, x1, y1, z1).setColor(color.red(), color.green(), color.blue(), alpha);
-        consumer.addVertex(pose, x2, y2, z2).setColor(color.red(), color.green(), color.blue(), alpha);
-        consumer.addVertex(pose, x3, y3, z3).setColor(color.red(), color.green(), color.blue(), alpha);
-        consumer.addVertex(pose, x4, y4, z4).setColor(color.red(), color.green(), color.blue(), alpha);
     }
 
     private record ColorChannels(int red, int green, int blue, int argb) {

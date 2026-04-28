@@ -21,13 +21,46 @@ public final class UndoRedoKeyChordTracker {
         this.keyBindingState = keyBindingState;
     }
 
-    public TickResult tick(Minecraft client, boolean modifierHeld, KeyMapping undoKey, KeyMapping redoKey) {
+    public TickResult tick(
+            Minecraft client,
+            boolean inputActive,
+            boolean modifierHeld,
+            KeyMapping undoKey,
+            KeyMapping redoKey
+    ) {
         boolean undoClicked = this.consumeClicks(undoKey);
         boolean redoClicked = this.consumeClicks(redoKey);
-        boolean currentUndoHeld = modifierHeld && this.keyBindingState.isDown(client, undoKey);
-        boolean currentRedoHeld = modifierHeld && this.keyBindingState.isDown(client, redoKey);
+        return this.tick(
+                inputActive,
+                modifierHeld,
+                this.keyBindingState.isDown(client, undoKey),
+                this.keyBindingState.isDown(client, redoKey),
+                undoClicked,
+                redoClicked
+        );
+    }
+
+    TickResult tick(
+            boolean inputActive,
+            boolean modifierHeld,
+            boolean undoKeyDown,
+            boolean redoKeyDown,
+            boolean undoClicked,
+            boolean redoClicked
+    ) {
+        if (!inputActive) {
+            this.undoHeld = false;
+            this.redoHeld = false;
+            return TickResult.idle();
+        }
+
+        boolean currentUndoHeld = modifierHeld && undoKeyDown;
+        boolean currentRedoHeld = modifierHeld && redoKeyDown;
         boolean undoRequested = modifierHeld && (undoClicked || (currentUndoHeld && !this.undoHeld));
         boolean redoRequested = modifierHeld && (redoClicked || (currentRedoHeld && !this.redoHeld));
+        if (undoRequested && redoRequested) {
+            redoRequested = false;
+        }
 
         TickResult result = new TickResult(
                 undoRequested,
@@ -43,6 +76,9 @@ public final class UndoRedoKeyChordTracker {
     }
 
     private boolean consumeClicks(KeyMapping key) {
+        if (key == null) {
+            return false;
+        }
         boolean clicked = false;
         while (key.consumeClick()) {
             clicked = true;
@@ -55,5 +91,8 @@ public final class UndoRedoKeyChordTracker {
             boolean redoPressed,
             RecentChangesOverlayCoordinator.PreviewTarget previewTarget
     ) {
+        public static TickResult idle() {
+            return new TickResult(false, false, RecentChangesOverlayCoordinator.PreviewTarget.UNDO);
+        }
     }
 }
