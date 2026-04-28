@@ -15,8 +15,44 @@ public record VariantMergePlan(
         int sourceChangedBlocks,
         int targetChangedBlocks,
         List<StoredBlockChange> mergeChanges,
+        List<StoredEntityChange> mergeEntityChanges,
         List<MergeConflictZone> conflictZones
 ) {
+
+    public VariantMergePlan(
+            String sourceProjectName,
+            String sourceVariantId,
+            String sourceHeadVersionId,
+            String targetProjectName,
+            String targetVariantId,
+            String targetHeadVersionId,
+            String commonAncestorVersionId,
+            int sourceChangedBlocks,
+            int targetChangedBlocks,
+            List<StoredBlockChange> mergeChanges,
+            List<MergeConflictZone> conflictZones
+    ) {
+        this(
+                sourceProjectName,
+                sourceVariantId,
+                sourceHeadVersionId,
+                targetProjectName,
+                targetVariantId,
+                targetHeadVersionId,
+                commonAncestorVersionId,
+                sourceChangedBlocks,
+                targetChangedBlocks,
+                mergeChanges,
+                List.of(),
+                conflictZones
+        );
+    }
+
+    public VariantMergePlan {
+        mergeChanges = mergeChanges == null ? List.of() : List.copyOf(mergeChanges);
+        mergeEntityChanges = mergeEntityChanges == null ? List.of() : List.copyOf(mergeEntityChanges);
+        conflictZones = conflictZones == null ? List.of() : List.copyOf(conflictZones);
+    }
 
     public boolean hasConflicts() {
         return !this.conflictZones.isEmpty();
@@ -24,6 +60,14 @@ public record VariantMergePlan(
 
     public int mergeBlockCount() {
         return this.mergeChanges.size();
+    }
+
+    public int mergeEntityCount() {
+        return this.mergeEntityChanges.size();
+    }
+
+    public int mergeChangeCount() {
+        return this.mergeBlockCount() + this.mergeEntityCount();
     }
 
     public List<BlockPoint> conflictPositions() {
@@ -57,7 +101,7 @@ public record VariantMergePlan(
 
     public boolean canApply(List<MergeConflictZoneResolution> resolutions) {
         if (!this.hasConflicts()) {
-            return !this.mergeChanges.isEmpty();
+            return this.mergeChangeCount() > 0;
         }
         var resolutionMap = this.resolutionMap(resolutions);
         for (MergeConflictZone zone : this.conflictZones) {
@@ -65,7 +109,7 @@ public record VariantMergePlan(
                 return false;
             }
         }
-        return this.effectiveMergeBlockCount(resolutions) > 0;
+        return this.effectiveMergeBlockCount(resolutions) + this.mergeEntityCount() > 0;
     }
 
     private LinkedHashMap<String, MergeConflictResolution> resolutionMap(List<MergeConflictZoneResolution> resolutions) {

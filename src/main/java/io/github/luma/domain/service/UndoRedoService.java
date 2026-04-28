@@ -3,28 +3,20 @@ package io.github.luma.domain.service;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BuildProject;
-import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
-import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
-import io.github.luma.minecraft.world.BlockStateNbtCodec;
-import io.github.luma.minecraft.world.EntityBatch;
-import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.io.IOException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -34,6 +26,7 @@ public final class UndoRedoService {
 
     private final ProjectService projectService = new ProjectService();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+    private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     public OperationHandle undo(ServerLevel level, String projectName) throws IOException {
@@ -84,7 +77,18 @@ public final class UndoRedoService {
                 LumaDebugLog.enabled(project),
                 progressSink -> {
                     progressSink.update(OperationStage.PREPARING, 0, totalChanges, "Decoding " + direction.label());
-                    List<PreparedChunkBatch> batches = this.decodeBatches(level, targetChanges, targetEntityChanges, direction, progressSink);
+                    List<PreparedChunkBatch> batches = this.batchPreparer.prepare(
+                            level,
+                            targetChanges,
+                            targetEntityChanges,
+                            direction == Direction.REDO,
+                            (completed, total) -> progressSink.update(
+                                    OperationStage.PREPARING,
+                                    completed,
+                                    total,
+                                    "Decoded " + direction.label()
+                            )
+                    );
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,
                             () -> {
@@ -112,70 +116,6 @@ public final class UndoRedoService {
                     );
                 }
         );
-    }
-
-    private List<PreparedChunkBatch> decodeBatches(
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            Direction direction,
-            WorldOperationManager.ProgressSink progressSink
-    ) throws IOException {
-        Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = new LinkedHashMap<>();
-        Map<ChunkPoint, List<StoredEntityChange>> groupedEntities = new LinkedHashMap<>();
-        int index = 0;
-        for (StoredBlockChange change : changes) {
-            StatePayload target = direction == Direction.UNDO ? change.oldValue() : change.newValue();
-            ChunkPoint chunk = ChunkPoint.from(change.pos());
-            grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>())
-                    .add(new PreparedBlockPlacement(
-                            new BlockPos(change.pos().x(), change.pos().y(), change.pos().z()),
-                            BlockStateNbtCodec.deserializeBlockState(level, target.stateTag()),
-                            target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
-                    ));
-            index += 1;
-            progressSink.update(OperationStage.PREPARING, index, changes.size(), "Decoded " + direction.label());
-        }
-        for (StoredEntityChange change : entityChanges) {
-            groupedEntities.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
-            index += 1;
-            progressSink.update(
-                    OperationStage.PREPARING,
-                    index,
-                    changes.size() + entityChanges.size(),
-                    "Decoded " + direction.label()
-            );
-        }
-
-        List<PreparedChunkBatch> batches = new ArrayList<>();
-        java.util.LinkedHashSet<ChunkPoint> chunks = new java.util.LinkedHashSet<>();
-        chunks.addAll(grouped.keySet());
-        chunks.addAll(groupedEntities.keySet());
-        for (ChunkPoint chunk : chunks) {
-            batches.add(new PreparedChunkBatch(
-                    chunk,
-                    List.copyOf(grouped.getOrDefault(chunk, List.of())),
-                    toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), direction)
-            ));
-        }
-        return batches;
-    }
-
-    private static EntityBatch toEntityBatch(List<StoredEntityChange> changes, Direction direction) {
-        List<net.minecraft.nbt.CompoundTag> spawns = new ArrayList<>();
-        List<String> removals = new ArrayList<>();
-        List<net.minecraft.nbt.CompoundTag> updates = new ArrayList<>();
-        for (StoredEntityChange change : changes) {
-            StoredEntityChange target = direction == Direction.UNDO ? change.inverse() : change;
-            if (target.isSpawn()) {
-                spawns.add(target.newValue().copyTag());
-            } else if (target.isRemove()) {
-                removals.add(target.entityId());
-            } else if (target.isUpdate()) {
-                updates.add(target.newValue().copyTag());
-            }
-        }
-        return new EntityBatch(spawns, removals, updates);
     }
 
     private enum Direction {
