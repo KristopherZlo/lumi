@@ -13,7 +13,6 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.service.ProjectService;
-import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
@@ -58,6 +57,11 @@ public final class HistoryCaptureManager {
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
+    private final TrackedProjectCatalog trackedProjectCatalog = new TrackedProjectCatalog(
+            this.projectService,
+            this.projectRepository,
+            this.variantRepository
+    );
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
@@ -66,7 +70,6 @@ public final class HistoryCaptureManager {
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final CaptureSessionRegistry sessionRegistry = new CaptureSessionRegistry();
     private final Map<String, CaptureSessionDiagnostics> sessionDiagnostics = new HashMap<>();
-    private final Map<String, CachedProjects> projectCaches = new HashMap<>();
 
     private HistoryCaptureManager() {
     }
@@ -582,10 +585,10 @@ public final class HistoryCaptureManager {
         Instant now = Instant.now();
         List<String> sessionsToFinalize = new ArrayList<>();
         Map<String, Integer> idleThresholds = new HashMap<>();
-        Map<String, TrackedProject> trackedProjects = new HashMap<>();
+            Map<String, TrackedProject> trackedProjects = new HashMap<>();
 
         try {
-            for (TrackedProject trackedProject : this.loadTrackedProjects(server)) {
+            for (TrackedProject trackedProject : this.trackedProjectCatalog.loadAll(server)) {
                 String projectId = trackedProject.project().id().toString();
                 trackedProjects.put(projectId, trackedProject);
                 idleThresholds.put(projectId, trackedProject.project().settings().sessionIdleSeconds());
@@ -690,7 +693,7 @@ public final class HistoryCaptureManager {
     }
 
     public void invalidateProjectCache(MinecraftServer server) {
-        this.projectCaches.remove(this.cacheKey(server));
+        this.trackedProjectCatalog.invalidate(server);
     }
 
     private boolean canUseMutationSource(MinecraftServer server, io.github.luma.domain.model.WorldMutationSource source) {
@@ -843,64 +846,11 @@ public final class HistoryCaptureManager {
     }
 
     private TrackedProject findTrackedProject(MinecraftServer server, String projectId) throws IOException {
-        for (TrackedProject trackedProject : this.loadTrackedProjects(server)) {
-            if (trackedProject.project().id().toString().equals(projectId)) {
-                return trackedProject;
-            }
-        }
-        return null;
-    }
-
-    private List<TrackedProject> loadTrackedProjects(MinecraftServer server) throws IOException {
-        return this.loadTrackedProjectCache(server).projects();
-    }
-
-    private ProjectTrackingIndex<TrackedProject> loadTrackedProjectIndex(MinecraftServer server) throws IOException {
-        return this.loadTrackedProjectCache(server).index();
-    }
-
-    private CachedProjects loadTrackedProjectCache(MinecraftServer server) throws IOException {
-        String cacheKey = this.cacheKey(server);
-        CachedProjects cachedProjects = this.projectCaches.get(cacheKey);
-        if (cachedProjects != null && Duration.between(cachedProjects.loadedAt(), Instant.now()).getSeconds() < 5) {
-            return cachedProjects;
-        }
-
-        List<TrackedProject> trackedProjects = new ArrayList<>();
-        java.nio.file.Path projectsRoot = this.projectService.projectsRoot(server);
-        if (java.nio.file.Files.exists(projectsRoot)) {
-            try (var stream = java.nio.file.Files.list(projectsRoot)) {
-                for (var path : stream.filter(java.nio.file.Files::isDirectory).toList()) {
-                    ProjectLayout layout = new ProjectLayout(path);
-                    BuildProject project = this.projectRepository.load(layout).orElse(null);
-                    if (project == null || project.archived()) {
-                        continue;
-                    }
-                    trackedProjects.add(new TrackedProject(layout, project, this.variantRepository.loadAll(layout)));
-                }
-            }
-        }
-
-        List<ProjectTrackingIndex.Entry<TrackedProject>> indexEntries = new ArrayList<>();
-        for (TrackedProject trackedProject : trackedProjects) {
-            indexEntries.add(new ProjectTrackingIndex.Entry<>(
-                    trackedProject.project().dimensionId(),
-                    trackedProject.project().bounds(),
-                    trackedProject
-            ));
-        }
-        CachedProjects refreshed = new CachedProjects(
-                Instant.now(),
-                List.copyOf(trackedProjects),
-                ProjectTrackingIndex.build(indexEntries)
-        );
-        this.projectCaches.put(cacheKey, refreshed);
-        return refreshed;
+        return this.trackedProjectCatalog.find(server, projectId);
     }
 
     private List<TrackedProject> matchingProjects(ServerLevel level, BlockPos pos) throws IOException {
-        return this.loadTrackedProjectIndex(level.getServer())
-                .matching(level.dimension().identifier().toString(), pos);
+        return this.trackedProjectCatalog.matching(level, pos);
     }
 
     private void captureChunkBaseline(
@@ -1043,10 +993,6 @@ public final class HistoryCaptureManager {
                 trackedProject.project().name()
         );
         return false;
-    }
-
-    private String cacheKey(MinecraftServer server) {
-        return server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().toString();
     }
 
     private CaptureSessionDiagnostics diagnosticsForSession(String projectId) {
@@ -1302,16 +1248,6 @@ public final class HistoryCaptureManager {
 
     public static String defaultActor(io.github.luma.domain.model.WorldMutationSource source) {
         return SOURCE_POLICY.defaultActor(source);
-    }
-
-    private record TrackedProject(ProjectLayout layout, BuildProject project, List<ProjectVariant> variants) {
-    }
-
-    private record CachedProjects(
-            Instant loadedAt,
-            List<TrackedProject> projects,
-            ProjectTrackingIndex<TrackedProject> index
-    ) {
     }
 
     private static final class CaptureSessionDiagnostics {
