@@ -83,6 +83,7 @@ Tracked history includes:
 - supported explosion edits
 
 Lumi does not record its own restore apply pass as normal history.
+When TNT is primed by a tracked builder action, Lumi keeps that action context through the fuse delay and records the resulting block damage with the same history step.
 Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
 Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi keeps a one-chunk halo around the root chunk, captures per-chunk baselines lazily as fallout reaches those chunks, then reconciles later fallout such as falling gravel and fluid spread against the current world before the draft is flushed, saved, frozen, or used to choose a live undo/redo action.
 Secondary effects such as falling gravel, fire spread, fluid spread, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay inside that same causal envelope.
