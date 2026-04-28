@@ -94,17 +94,18 @@ Use Lumi if you want to:
 6. Whole-dimension sessions keep a causal chunk envelope rooted in explicit builder edits. The root chunk defines a one-chunk halo envelope, and Lumi captures per-chunk baselines lazily when a chunk inside that envelope first needs stabilization.
 7. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
 8. `TrackedChangeBuffer` merges explicit and targeted realtime block changes by position and entity changes by UUID immediately.
-8. First-touch whole-dimension baseline capture copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
-9. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
-10. Recovery draft data flushes on an interval, but the WAL append and compaction run asynchronously on that same capture-maintenance executor.
+9. First-touch whole-dimension baseline capture copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
+10. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
+11. Recovery draft data flushes on an interval, but the WAL append and compaction run asynchronously on that same capture-maintenance executor.
 
 ### Save
 
 1. `VersionService` consumes the active draft.
 2. Patch payloads are prepared off-thread.
 3. Metadata is written after payload files exist.
-4. Preview generation queues a lightweight request in project storage.
-5. The client later fulfills that request with a textured isometric off-screen render and updates the version metadata.
+4. Amend-on-head preserves block and entity diffs from the replaced head.
+5. Preview generation queues a lightweight request in project storage.
+6. The client later fulfills that request with a textured isometric off-screen render and updates the version metadata.
 
 ### Restore
 
@@ -120,9 +121,11 @@ Use Lumi if you want to:
 
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Recovery WAL writes, WAL compaction, and baseline chunk compression stay off the server-tick capture path.
+- Snapshot capture copies compact loaded-chunk payloads on the server thread, then writes them asynchronously through storage.
+- Storage repositories read and write payloads; Minecraft-layer preparers build tick-ready apply batches.
 - Large WorldEdit/Axiom edits avoid block-entity NBT serialization for ordinary blocks, and capture project matching uses a cached dimension/chunk index.
 - Partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file.
-- Restore apply uses adaptive tick budgets and caps block-entity/entity tail work per tick.
+- Restore apply uses adaptive tick budgets, caps block-entity/entity tail work per tick, and reports progress for entity-only batches.
 - One map operation is expected at a time per save.
 - Progress is exposed through operation state.
 - Lumi screens do not pause the game.

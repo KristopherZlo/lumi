@@ -174,6 +174,7 @@ Current payload characteristics:
 - runtime-only redstone state flips and piston animation states are filtered before new patch payloads are written
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
+Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
 Partial restore uses the metadata chunk index to load only v6 chunk frames that intersect the selected bounds. Legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream.
 
 ### `snapshots/<snapshotId>.bin.lz4`
@@ -189,6 +190,8 @@ Current snapshot characteristics:
 - schema v4 includes a per-chunk entity snapshot list; it is currently written empty and schema v3 snapshots still load as block-only snapshots
 - `piston_head` and `moving_piston` states are normalized to air during new snapshot capture, and piston bases are stored retracted
 - restore planning can list snapshot chunks by scanning the length-prefixed structure and skipping NBT payload bytes, without materializing `SnapshotData` or deserializing block/entity tags
+- live chunk capture is performed on the Minecraft server thread into immutable compact payloads; snapshot storage only serializes and reads those prepared payloads
+- snapshot readers return persisted payloads, while Minecraft-layer preparers convert them into apply batches off the tick-thread path
 
 They are currently created:
 
