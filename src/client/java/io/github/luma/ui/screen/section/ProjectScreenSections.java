@@ -239,7 +239,9 @@ public final class ProjectScreenSections {
         boolean current = ProjectUiSupport.isVariantHead(model.state().variants(), version);
         boolean operationActive = model.state().operationSnapshot() != null && !model.state().operationSnapshot().terminal();
 
-        FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        FlowLayout card = current
+                ? LumaUi.activeInsetPanel(Sizing.fill(100), Sizing.content())
+                : LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
         FlowLayout hero = model.width() < 860
                 ? UIContainers.verticalFlow(Sizing.fill(100), Sizing.content())
                 : UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());

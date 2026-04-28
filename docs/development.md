@@ -125,6 +125,7 @@ Enable verbose runtime tracing for debugging:
 - accepted capture sessions keep the first 32 per-mutation traces behind debug logging, while info level stays focused on buffer checkpoints, queued/completed maintenance work, and reconcile summaries
 - whole-dimension stabilization now logs dirty-chunk reconcile summaries before draft flush/save/freeze, so startup diagnostics and reconcile summaries should be inspected together when ambient fallout looks suspicious
 - client overlay diagnostics log overlay-key state, compare/recent coordinator skip reasons, render callback health, selected surface counts, fill-pass face/vertex/alpha/render-type details, and render failures under `overlay-input`, `overlay-render`, `compare-overlay`, and `recent-overlay`
+- compare and recent-action overlay geometry is drawn as immediate `END_MAIN` world-render quads/lines so fill buffers are flushed in the same callback instead of relying on the shared world `MultiBufferSource`
 
 ## Repository layout
 

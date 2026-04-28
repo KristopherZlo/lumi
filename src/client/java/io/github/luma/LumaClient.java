@@ -86,9 +86,9 @@ public final class LumaClient implements ClientModInitializer {
 
         long eventRegistrationStartedAt = StartupProfiler.start();
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
-        WorldRenderEvents.BEFORE_DEBUG_RENDER.register(CompareOverlayRenderer::render);
-        WorldRenderEvents.BEFORE_DEBUG_RENDER.register(RecentChangesOverlayRenderer::render);
-        OverlayDiagnostics.getInstance().clientRenderCallbacksRegistered("BEFORE_DEBUG_RENDER");
+        WorldRenderEvents.END_MAIN.register(CompareOverlayRenderer::render);
+        WorldRenderEvents.END_MAIN.register(RecentChangesOverlayRenderer::render);
+        OverlayDiagnostics.getInstance().clientRenderCallbacksRegistered("END_MAIN");
         StartupProfiler.logElapsed("client.fabric-events", eventRegistrationStartedAt);
         long hudStartedAt = StartupProfiler.start();
         WorkspaceHudCoordinator.getInstance().registerHud();

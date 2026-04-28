@@ -5,7 +5,6 @@ import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.service.ProjectService;
-import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.ui.state.VariantsViewState;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -64,7 +63,6 @@ public final class VariantsScreenController {
 
         private final Minecraft client = Minecraft.getInstance();
         private final ProjectService projectService = new ProjectService();
-        private final VersionLineageService versionLineageService = new VersionLineageService();
         private final OperationSnapshotViewService operationSnapshotViewService = new OperationSnapshotViewService();
 
         @Override
@@ -84,10 +82,7 @@ public final class VariantsScreenController {
 
         @Override
         public List<ProjectVersion> loadVersions(String projectName, List<ProjectVariant> variants) throws Exception {
-            return this.versionLineageService.reachableVersions(
-                    this.projectService.loadVersions(this.server(), projectName),
-                    variants
-            );
+            return this.projectService.loadVersions(this.server(), projectName);
         }
 
         @Override

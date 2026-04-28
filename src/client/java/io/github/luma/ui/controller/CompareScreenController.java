@@ -7,7 +7,6 @@ import io.github.luma.domain.model.VersionDiff;
 import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ProjectService;
-import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.CompareViewState;
@@ -26,7 +25,6 @@ public final class CompareScreenController {
     private final DiffService diffService = new DiffService();
     private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
     private final ProjectService projectService = new ProjectService();
-    private final VersionLineageService versionLineageService = new VersionLineageService();
 
     public static boolean isCurrentWorldReference(String reference) {
         if (reference == null) {
@@ -72,10 +70,7 @@ public final class CompareScreenController {
         try {
             var server = ClientProjectAccess.requireSingleplayerServer(this.client);
             var variants = new ArrayList<>(this.diffService.listVariants(server, projectName));
-            var versions = new ArrayList<>(this.versionLineageService.reachableVersions(
-                    this.diffService.listVersions(server, projectName),
-                    variants
-            ));
+            var versions = new ArrayList<>(this.diffService.listVersions(server, projectName));
             versions.sort(Comparator.comparing(ProjectVersion::createdAt).reversed());
             var project = this.projectService.loadProject(server, projectName);
             boolean debugEnabled = LumaDebugLog.enabled(project);

@@ -90,6 +90,7 @@
   "luma.action.confirm_initial_restore": "Restore Initial",
   "luma.action.preview_partial_restore": "Preview partial restore",
   "luma.action.apply_partial_restore": "Apply partial restore",
+  "luma.action.buy_me_a_coffee": "Buy me a coffee",
 
   "luma.tab.history": "History",
   "luma.tab.variants": "Branches",
@@ -464,6 +465,7 @@
   "luma.screen.import_export.title": "Import / Export",
 
   "luma.window.mode": "Build history window",
+  "luma.window.support": "Support",
   "luma.window.home_help": "Choose the next step for this build.",
   "luma.simple.step": "Step %s",
   "luma.simple.workspace_title": "%s",
