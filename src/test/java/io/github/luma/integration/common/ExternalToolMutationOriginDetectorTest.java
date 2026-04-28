@@ -2,6 +2,7 @@ package io.github.luma.integration.common;
 
 import io.github.luma.domain.model.WorldMutationSource;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +24,22 @@ class ExternalToolMutationOriginDetectorTest {
         assertFalse(ExternalToolMutationOriginDetector.isExternalToolClassName(
                 "io.github.luma.integration.axiom.AxiomBlockBufferCaptureService"
         ));
+    }
+
+    @Test
+    void skipsStackInspectionWhenNoExternalToolsAreAvailable() {
+        AtomicBoolean inspectedStack = new AtomicBoolean(false);
+        ExternalToolMutationOriginDetector detector = new ExternalToolMutationOriginDetector(
+                () -> {
+                    inspectedStack.set(true);
+                    return List.of("com.sk89q.worldedit.EditSession");
+                },
+                System::nanoTime,
+                () -> false
+        );
+
+        assertTrue(detector.detectOperation().isEmpty());
+        assertFalse(inspectedStack.get());
     }
 
     @Test
