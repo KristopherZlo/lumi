@@ -3,7 +3,7 @@
   "key.lumi.undo": "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0435\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 Lumi",
   "key.lumi.redo": "\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0435\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 Lumi",
   "key.lumi.open_dashboard": "Открыть текущее рабочее пространство",
-  "key.lumi.quick_save": "Быстрое сохранение",
+  "key.lumi.quick_save": "Клавиша быстрого сохранения",
   "key.lumi.toggle_compare_overlay": "Show or hide compare highlight",
   "key.lumi.compare_overlay_xray": "Удерживать оверлей Lumi / x-ray сравнения",
 

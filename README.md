@@ -63,7 +63,7 @@ Use Lumi if you want to:
 - builder-first Build History UI built around `Save build`, `See changes`, recent saves, `Branches`, and `More`
 - lightweight save, branch, import/export, cleanup, diagnostics, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
-- remappable quick-save control, default `J`, that opens a standalone save-name dialog without entering Build History
+- remappable quick-save chord, default `Left Alt+S`, that opens a standalone save-name dialog without entering Build History
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, restore, see-changes, and branch actions
 - See Changes screen for saved states, branches, and the current build, with manual references hidden under Advanced
@@ -251,7 +251,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 6. Use the Lumi overlay key plus `Z` / `Y` to undo or redo the latest tracked Lumi action while no screen is open. The default overlay key is `Left Alt`, and changing that key changes these chords too.
 7. Hold the Lumi overlay key to preview the latest 10 undo actions, or hold overlay key plus `Y` to preview redo actions, when the compare overlay is not active. The preview renders translucent exposed sides as well as thicker outlines.
    Seeing changes against `Current build` enables the world highlight immediately and refreshes it automatically while you keep editing.
-8. Press `J` to open Quick save when you only need to name and save the current build. The binding is listed under Minecraft `Controls` -> `Lumi`.
+8. Press the Lumi overlay key plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
 9. Use `Save build` when you want the full save screen with suggestions or replace-latest tools.
 10. Open a save when you want details, restore, see changes, or create a branch from it.
 11. Use `Branches` for alternate build directions and `More` for import/export, settings, cleanup, diagnostics, and advanced tools.

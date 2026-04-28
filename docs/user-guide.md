@@ -12,7 +12,7 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 
 - Press `U` to open the project for the current dimension.
 - If that project does not exist yet, Lumi creates it.
-- Press `J` to open Quick save while no screen is open. This key is remappable in Minecraft `Controls` under `Lumi`.
+- Press the Lumi overlay key plus `S` to open Quick save while no screen is open. The default chord is `Left Alt+S`, and both keys are remappable in Minecraft `Controls` under `Lumi`.
 - Use the Lumi overlay key plus `Z` to undo the latest tracked Lumi action while no screen is open. The default overlay key is `Left Alt`.
 - Use the Lumi overlay key plus `Y` to redo the latest undone Lumi action while no screen is open.
 - Hold the Lumi overlay key to preview undo targets, or overlay key plus `Y` to preview redo targets, when compare highlight is not active. Changing the overlay key changes both the preview hold and these undo/redo chords.
@@ -93,7 +93,7 @@ That node is a metadata-backed `WORLD_ROOT`.
 
 ## Save And Amend
 
-Use Quick save when you only need a name, cancel, and save action. It opens as a standalone dialog from the remappable `Quick save` control and saves to the current dimension workspace.
+Use Quick save when you only need a name, cancel, and save action. It opens as a standalone dialog from the remappable Lumi overlay key plus `Quick save key` chord and saves to the current dimension workspace.
 
 Open the `Save` screen from the main action on the project home screen.
 
