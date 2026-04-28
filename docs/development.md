@@ -64,6 +64,13 @@ Run client GameTests:
 .\scripts\run-test-client.ps1 -GradleTasks runClientGameTest
 ```
 
+Run the idle startup-only client GameTests:
+
+```powershell
+.\scripts\run-baseline-idle-client.ps1
+.\scripts\run-idle-client.ps1
+```
+
 CI can run the headless production client GameTest task:
 
 ```powershell
@@ -76,9 +83,9 @@ Run the integrated-world runtime regression suite from a local singleplayer save
 /lumi testing singleplayer
 ```
 
-The command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, player block interaction, integrity, and cleanup services through the server tick loop. It verifies adjacent block fallout such as a flower removed after its support block is broken, reports phase progress in chat, records pass/fail checks without stopping at the first failed assertion, and writes a detailed log under `<world>/lumi/test-logs/`.
+The command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, gameplay interaction, integrity, and cleanup services through the server tick loop. Its gameplay phase covers adjacent block fallout, bulk block placement, block entities, redstone updates, fluid placement, multi-block doors, oriented block states, crop/farmland states, openable blocks, item entities, and a builder-relevant entity spawn, then verifies that tracked block/entity actions reached the live recovery draft. It reports phase progress in chat, records pass/fail checks without stopping at the first failed assertion, and writes a detailed log under `<world>/lumi/test-logs/`.
 
-`runClientGameTest` starts a consistent singleplayer world and invokes the same runtime suite automatically before taking its smoke screenshot. `runBaselineClientGameTest` starts a separate consistent singleplayer world with the small `lumi-baseline-gametest` action mod and explicitly removes Lumi's dev source-set from the launch config before startup. Use those tasks in load comparisons when you need repeatable game actions rather than a client startup-only sample.
+`runClientGameTest` starts a consistent singleplayer world and invokes the same runtime suite automatically before taking its smoke screenshot. `runBaselineClientGameTest` starts a separate consistent singleplayer world with the small `lumi-baseline-gametest` action mod and explicitly removes Lumi's dev source-set from the launch config before startup. The baseline action mod runs the same broad gameplay surface without Lumi history capture, so load comparisons include player block break, adjacent fallout, bulk block placement, block entities, redstone, fluids, multi-block and stateful blocks, crops, and entity lifecycle work rather than a client startup-only sample.
 
 Compare runtime load between a no-Lumi baseline launch and a Lumi launch:
 
@@ -93,6 +100,14 @@ Compare runtime load between a no-Lumi baseline launch and a Lumi launch:
 ```
 
 The harness writes raw logs plus `summary.json` and `summary.md` under `build/runtime-load/<timestamp>/`. It compares wall-clock time, `Can't keep up!` tick-delay reports, long server tick warnings, WARN/ERROR counts, Lumi WARN counts, render pipeline failures, baseline gameplay checks, and Lumi singleplayer action-suite results. By default the baseline run appends new content from `build/run/baselineClientGameTest/logs/latest.log`, and the Lumi run appends new content from `run/test-client/logs/latest.log` and `build/run/clientGameTest/logs/latest.log`; pass `-LumiExtraLogs` or `-BaselineExtraLogs` to attach additional game logs. `-RequireBaselineActionRun` and `-RequireLumiActionRun` fail the comparison when the expected gameplay suite did not run or reported failed checks. The baseline command should launch the same Minecraft/Fabric stack without the Lumi mod so the comparison measures Lumi's overhead rather than unrelated modpack or world-generation cost.
+
+For startup-only overhead, use the idle wrapper. It launches the same singleplayer world shape, waits for chunk rendering plus a short idle window, and does not run the full Lumi project/history workflow:
+
+```powershell
+.\scripts\compare-idle-startup-load.ps1 -Runs 3
+```
+
+Idle summaries are written under `build/runtime-load-idle/<timestamp>/`. Use this before optimizing startup cost, and use the full runtime comparison when validating history workflow cost.
 
 Enable verbose runtime tracing for debugging:
 

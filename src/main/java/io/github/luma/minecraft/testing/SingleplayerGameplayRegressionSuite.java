@@ -8,17 +8,24 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.RedstoneLampBlock;
+import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 /**
  * Real integrated-world gameplay actions used by the Lumi runtime suite.
@@ -31,6 +38,11 @@ final class SingleplayerGameplayRegressionSuite {
             new BlockEntityScenario(),
             new RedstoneScenario(),
             new FluidScenario(),
+            new DoorScenario(),
+            new OrientationScenario(),
+            new CropScenario(),
+            new OpenableScenario(),
+            new ItemEntityScenario(),
             new EntitySpawnScenario()
     );
 
@@ -126,6 +138,10 @@ final class SingleplayerGameplayRegressionSuite {
 
         private void expectEntityChange(Entity entity) {
             this.expectedEntityChanges += 1;
+            this.trackSpawnedEntity(entity);
+        }
+
+        private void trackSpawnedEntity(Entity entity) {
             this.spawnedEntities.add(entity);
         }
 
@@ -247,6 +263,92 @@ final class SingleplayerGameplayRegressionSuite {
             context.checks.check(entity.hasCustomName(), "gameplay updated entity custom name");
             context.checks.check(entity.isCurrentlyGlowing(), "gameplay updated entity glowing state");
             context.expectEntityChange(entity);
+        }
+    }
+
+    private static final class DoorScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos lower = context.volume.min().offset(4, 0, 4);
+            BlockPos upper = lower.above();
+            context.trackedPlayerAction(() -> {
+                context.level.setBlock(lower, Blocks.OAK_DOOR.defaultBlockState()
+                        .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER), 3);
+                context.level.setBlock(upper, Blocks.OAK_DOOR.defaultBlockState()
+                        .setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER), 3);
+            });
+            context.checks.check(context.level.getBlockState(lower).is(Blocks.OAK_DOOR),
+                    "gameplay placed lower door block");
+            context.checks.check(context.level.getBlockState(upper).is(Blocks.OAK_DOOR),
+                    "gameplay placed upper door block");
+            context.expectDraftBlock(lower);
+            context.expectDraftBlock(upper);
+        }
+    }
+
+    private static final class OrientationScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos stairs = context.volume.min().offset(4, 2, 1);
+            context.trackedPlayerAction(() -> context.level.setBlock(stairs, Blocks.OAK_STAIRS.defaultBlockState()
+                    .setValue(StairBlock.FACING, Direction.EAST), 3));
+            context.checks.check(context.level.getBlockState(stairs).getValue(StairBlock.FACING) == Direction.EAST,
+                    "gameplay preserved oriented stair state");
+            context.expectDraftBlock(stairs);
+        }
+    }
+
+    private static final class CropScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos farmland = context.volume.min().offset(2, 0, 4);
+            BlockPos crop = farmland.above();
+            context.trackedPlayerAction(() -> {
+                context.level.setBlock(farmland, Blocks.FARMLAND.defaultBlockState(), 3);
+                context.level.setBlock(crop, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7), 3);
+            });
+            context.checks.check(context.level.getBlockState(farmland).is(Blocks.FARMLAND),
+                    "gameplay placed farmland");
+            context.checks.check(context.level.getBlockState(crop).getValue(CropBlock.AGE) == 7,
+                    "gameplay preserved mature crop state");
+            context.expectDraftBlock(farmland);
+            context.expectDraftBlock(crop);
+        }
+    }
+
+    private static final class OpenableScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos trapdoor = context.volume.min().offset(4, 2, 4);
+            context.trackedPlayerAction(() -> context.level.setBlock(trapdoor, Blocks.OAK_TRAPDOOR.defaultBlockState()
+                    .setValue(TrapDoorBlock.OPEN, true), 3));
+            context.checks.check(context.level.getBlockState(trapdoor).getValue(TrapDoorBlock.OPEN),
+                    "gameplay preserved open trapdoor state");
+            context.expectDraftBlock(trapdoor);
+        }
+    }
+
+    private static final class ItemEntityScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos marker = context.volume.min().offset(1, 2, 1);
+            ItemEntity item = new ItemEntity(
+                    context.level,
+                    marker.getX() + 0.5D,
+                    marker.getY() + 0.5D,
+                    marker.getZ() + 0.5D,
+                    new ItemStack(Items.OAK_PLANKS, 8)
+            );
+            context.trackedPlayerAction(() -> context.level.addFreshEntity(item));
+            context.checks.check(!item.isRemoved(), "gameplay spawned item entity");
+            item.discard();
+            context.checks.check(item.isRemoved(), "gameplay removed item entity");
+            context.trackSpawnedEntity(item);
         }
     }
 }

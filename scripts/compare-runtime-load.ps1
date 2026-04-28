@@ -183,7 +183,7 @@ function Measure-Log {
     )
     $actionMatches = [regex]::Matches(
         $content,
-        "(?:Lumi singleplayer testing|Lumi baseline gameplay testing) (?<result>passed|completed with failures): (?<passed>\d+) passed, (?<failed>\d+) failed"
+        "(?:Lumi singleplayer testing|Lumi baseline gameplay testing|Lumi idle startup testing|Lumi baseline idle startup testing) (?<result>passed|completed with failures): (?<passed>\d+) passed, (?<failed>\d+) failed"
     )
     $uniqueActionMatches = [System.Collections.Generic.List[object]]::new()
     $seenActionLines = [System.Collections.Generic.HashSet[string]]::new()
