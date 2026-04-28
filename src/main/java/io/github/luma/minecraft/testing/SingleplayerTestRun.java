@@ -60,6 +60,7 @@ final class SingleplayerTestRun {
     private final HistoryShareService shareService = new HistoryShareService();
     private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final SingleplayerPerformanceMonitor performanceMonitor = new SingleplayerPerformanceMonitor();
 
     private Phase phase = Phase.CREATE_PROJECT;
     private Phase announcedPhase;
@@ -98,12 +99,18 @@ final class SingleplayerTestRun {
     }
 
     void tick(MinecraftServer server) {
-        if (this.done || this.waitingForOperation(server)) {
+        if (this.done) {
             return;
         }
 
-        this.announcePhase(server);
+        Phase measuredPhase = this.phase;
+        long startedAt = System.nanoTime();
         try {
+            if (this.waitingForOperation(server)) {
+                return;
+            }
+
+            this.announcePhase(server);
             switch (this.phase) {
                 case CREATE_PROJECT -> this.createProject(server);
                 case CAPTURE_DRAFT -> this.captureDraft(server);
@@ -121,10 +128,13 @@ final class SingleplayerTestRun {
                 case CHECK_PARTIAL_RESTORE -> this.checkPartialRestore(server);
                 case START_RESTORE_INITIAL -> this.startRestoreInitial();
                 case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
+                case CHECK_PERFORMANCE -> this.checkPerformanceBudget(server);
                 case CLEANUP -> this.finish(server);
             }
         } catch (Exception exception) {
             this.handlePhaseException(server, exception);
+        } finally {
+            this.performanceMonitor.recordSyncSlice(measuredPhase.title(), System.nanoTime() - startedAt);
         }
     }
 
@@ -309,6 +319,16 @@ final class SingleplayerTestRun {
     private void checkRestoreInitial(MinecraftServer server) throws Exception {
         this.check(this.volume.isAir(this.level), "Full restore returned the test volume to initial air");
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
+        this.completePhase(server, Phase.CHECK_PERFORMANCE);
+    }
+
+    private void checkPerformanceBudget(MinecraftServer server) {
+        for (String line : this.performanceMonitor.summaryLines()) {
+            this.log.info(line);
+        }
+        for (SingleplayerPerformanceMonitor.PerformanceCheck check : this.performanceMonitor.checks()) {
+            this.check(check.passed(), check.label() + " (" + check.detail() + ")");
+        }
         this.completePhase(server, Phase.CLEANUP);
     }
 
@@ -350,6 +370,7 @@ final class SingleplayerTestRun {
         }
 
         OperationSnapshot operation = snapshot.get();
+        this.performanceMonitor.recordOperationSnapshot(operation);
         if (!operation.terminal()) {
             this.reportOperationProgress(server, operation);
             return true;
@@ -555,6 +576,7 @@ final class SingleplayerTestRun {
         CHECK_PARTIAL_RESTORE("Verify partial restore", "check selected-area restore output"),
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
+        CHECK_PERFORMANCE("Performance budget", "verify the test run stayed within low-load limits"),
         CLEANUP("Cleanup and report", "remove test blocks, archive the test project, and write the log");
 
         private final String title;
@@ -593,7 +615,7 @@ final class SingleplayerTestRun {
                 case START_BRANCH_SAVE -> START_RESTORE_INITIAL;
                 case CHECK_BRANCH_SAVE -> START_PARTIAL_RESTORE;
                 case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
-                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CLEANUP -> CLEANUP;
+                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CHECK_PERFORMANCE, CLEANUP -> CLEANUP;
             };
         }
     }

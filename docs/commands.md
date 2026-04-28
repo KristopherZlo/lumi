@@ -34,7 +34,7 @@ Runs an integrated-server regression suite against the real in-world Lumi servic
 
 The suite shows phase progress in chat, records every check as pass/fail, and keeps running after failed checks when the next workflow can still be exercised. Hard workflow errors are logged, then the runner skips to the next safe phase or cleanup.
 
-The suite creates a temporary bounded project, then exercises project creation, initial snapshots, capture, recovery draft summaries, current diff, material delta, live undo/redo, save, amend, branch creation/switching, branch save, version compare, project export, branch export, partial restore, full restore, integrity inspection, and cleanup inspection. It removes the test blocks and archives the temporary project when the run finishes or fails.
+The suite creates a temporary bounded project, then exercises project creation, initial snapshots, capture, recovery draft summaries, current diff, material delta, live undo/redo, save, amend, branch creation/switching, branch save, version compare, project export, branch export, partial restore, full restore, integrity inspection, and cleanup inspection. It also checks a lightweight performance budget so undo/redo and restore operations remain scoped instead of replaying broad world data, and so the suite does not introduce large synchronous tick slices. It removes the test blocks and archives the temporary project when the run finishes or fails.
 
 Each run writes a detailed log to:
 
