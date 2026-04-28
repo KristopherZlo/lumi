@@ -42,11 +42,11 @@ Key services:
 - `HistoryShareService`: export variant-scoped history packages, import them back as review projects for the same project lineage, and delete imported review packages after lineage validation
 - `ProjectCleanupService`: compute safe cleanup candidates from reachable history metadata and active operation state
 - `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy
-- `RestoreService`: build restore plans, decode world-root baseline restores, and prepare chunk batches
+- `RestoreService`: build restore plans and orchestrate prepared chunk batches through Minecraft-layer preparers
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching
 - `VariantMergeService`: compare imported variant lineage against a local target variant, group overlapping conflicts into chunk-connected zones, and write merged saves through the normal patch-first history path
-- `DiffService`: reconstruct version or live-world differences using structured state payload comparison before formatting UI-facing diff entries
+- `DiffService`: reconstruct version or live-world block and entity differences using structured state payload comparison before formatting UI-facing diff entries
 - `PreviewCaptureRequestService`: queue preview capture jobs without blocking save durability
 - `PreviewCaptureRequestRepository`: persist preview capture requests so the server can queue work and the client can render later
 - `ProjectIntegrityService`: validate storage consistency
@@ -64,12 +64,14 @@ Important adapters:
 - `UndoRedoHistoryManager`: keeps the in-memory per-project undo and redo action stacks that power live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout or reconciled stabilization deltas into the latest builder action
 - `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
 - `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
+- `SnapshotCaptureService`: marshals checkpoint snapshot capture onto the server thread and leaves serialization/persistence to storage writers
 - `ChunkSectionOwnershipRegistry`: keeps a weak chunk-section owner index for direct section mutation fallback capture, with per-chunk section-array caching so repeated chunk reads during spawn generation do not re-register every section; direct section fallback resolves that server owner before stack inspection, so client chunk loading and unowned generation sections do not pay external-tool stack sampling costs
 - `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, and `PersistentBlockStatePolicy`: filter runtime-only block/entity transitions and normalize piston animation states before they become drafts, undo/redo actions, snapshots, or restore placements; unknown-stack entity fallback detection is scoped to builder-relevant persistent entity types so ordinary mob movement does not sample external-tool stacks
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
 - `LumaAccessControl`: centralizes the operator/cheats gate for diagnostic commands, UI entry points, and dedicated-server tracked world actions
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick with adaptive block budgets and bounded block-entity/entity passes
+- `WorldChangeBatchPreparer` and `SnapshotBatchPreparer`: convert persisted block/entity changes and snapshot payloads into tick-ready prepared batches before apply begins
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
 - `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
@@ -101,6 +103,7 @@ Important boundaries:
 - `ProjectLayout` is the single source of truth for project-relative paths
 - metadata repositories read and write lightweight manifests
 - payload repositories read and write compressed binary history data
+- repositories do not depend on `ServerLevel`, block-state codecs, or apply-batch runtime types
 - preview request repositories persist lightweight capture jobs for the client renderer
 - `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export
 - `ProjectCleanupRepository` owns file scanning and deletion for conservative storage cleanup
@@ -164,10 +167,11 @@ Important invariants:
 4. `WorldOperationManager` executes background preparation off the tick thread.
 5. `PatchDataRepository` writes the binary patch payload.
 6. `PatchMetaRepository` writes the lightweight patch index.
-7. `VersionService` evaluates snapshot policy and optionally asks `SnapshotWriter` for a checkpoint snapshot. Whole-dimension projects use root/cadence checkpoints, not per-save volume snapshots.
+7. `VersionService` evaluates snapshot policy and optionally asks `SnapshotCaptureService` for a server-thread checkpoint capture, then persists the prepared payload through the snapshot writer. Whole-dimension projects use root/cadence checkpoints, not per-save volume snapshots.
 8. `VersionRepository` writes the final version manifest only after payload files exist.
-9. Preview generation stores a lightweight request after save durability completes.
-10. The client preview coordinator later builds a local layered preview mesh, renders a textured isometric frame into an off-screen target, and writes the PNG plus preview metadata.
+9. Amend-on-head merges both block and entity changes into the replacement draft before writing the amended version.
+10. Preview generation stores a lightweight request after save durability completes.
+11. The client preview coordinator later builds a local layered preview mesh, renders a textured isometric frame into an off-screen target, and writes the PNG plus preview metadata.
 
 For automatic dimension workspaces, the history chain starts with a metadata-backed `WORLD_ROOT` version. It records the world origin context instead of a normal patch/snapshot payload.
 
@@ -182,11 +186,13 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 6. If direct replay is not valid and the target is `WORLD_ROOT`, restore falls back to tracked baseline chunks for the current workspace. Generator regeneration remains blocked when the stored origin fingerprint does not match the current world.
 7. If direct replay is not valid for a normal version, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
 8. Baseline gaps are added only for the snapshot-based whole-dimension fallback path.
-9. Prepared placements are collapsed by final block position before tick-thread application; entity-only chunk batches are preserved.
-10. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
-11. Chunk commit order is fixed to section blocks -> bounded block-entity slices -> bounded entity removals -> bounded entity updates -> bounded entity spawns.
-12. Completion resets the active variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly.
-13. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
+9. Persisted patch, baseline, and snapshot payloads are decoded off-thread and converted by Minecraft-layer preparers before any tick-thread apply work starts.
+10. Prepared placements are collapsed by final block position before tick-thread application; entity-only chunk batches are preserved.
+11. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
+12. Chunk commit order is fixed to section blocks -> bounded block-entity slices -> bounded entity removals -> bounded entity updates -> bounded entity spawns.
+13. Progress uses total work units: block placements, block-entity tail writes, entity removals, entity updates, and entity spawns. Entity-only operations do not complete early.
+14. Completion resets the active variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly.
+15. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
 
 ## Partial Restore Flow
 
@@ -233,6 +239,7 @@ Current guarantees:
 - the world-operation executor is single-threaded and low priority
 - restore/apply budgets adapt downward when a tick slice exceeds its budget and recover gradually when slices stay cheap
 - block entities and entity diffs have explicit per-tick caps instead of running as unbounded chunk tail work
+- entity-only restore, undo/redo, and recovery batches remain visible to the operation model because progress counts entity work as first-class work units
 - preview generation no longer samples or rasterizes on the server; the server only queues request metadata and the client later performs the textured off-screen render with the built-in preview mesh path
 - startup world-origin metadata bootstrap is low-priority background work and must not block initial server start or the first client render path
 - operation progress is observable through `OperationSnapshot`

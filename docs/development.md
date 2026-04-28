@@ -7,6 +7,8 @@
 - Java target: `21`
 - Build tool: Gradle with Fabric Loom
 
+If the local shell defaults to an older JDK, point `JAVA_HOME` at a JDK 21 installation before running Gradle. Gradle will fail before compilation on Java 11.
+
 ## Common tasks
 
 Build the mod:
@@ -50,6 +52,7 @@ This now includes regression checks for:
 - material delta summarization on large diffs
 - project tracking index membership checks, chunk-addressable patch selective reads, and snapshot chunk-list scans
 - entity diff merge, entity policy filtering, recovery/patch round-trips, and entity-only restore batches
+- entity-preserving amend, imported-branch merge projection, version diff projection, and entity-only operation progress
 - lightweight home, variants, and share controller loading plus operation-state normalization
 
 Run server GameTests:
@@ -191,18 +194,19 @@ Current runtime history behavior:
 - `HistoryShareService` backs the `Import / Export` flow on top of the same archive format by exporting one branch lineage to `lumi-projects`, importing it back as a review project, listing available package zips, and deleting imported review projects after validating they belong to the same project lineage.
 - `ShareScreenController` keeps history package import/export separate from Build History and Branches, only asks `VariantMergeService` for a combine preview when the user explicitly reviews one imported package, and moves that preview work through a small background cache so the screen does not block on storage scans.
 - `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
-- `VersionService` stores new versions as patch-first history, supports amend-on-head, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
+- `VersionService` stores new versions as patch-first history, supports amend-on-head without dropping entity diffs, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
 - Preview generation now queues lightweight request files on the server side and fulfills them later through the client-side `PreviewCaptureCoordinator`.
-- `RestoreService` prefers direct same-lineage patch replay, including shared branch-base ancestors and `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored save on success without deleting detached saves. Direct patch replay and pending-draft rollback carry entity batches as well as block placements.
+- `RestoreService` prefers direct same-lineage patch replay, including shared branch-base ancestors and `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored save on success without deleting detached saves. Persisted block/entity changes are read by repositories, prepared by Minecraft-layer batch preparers, and then applied through the operation model; repositories do not assemble tick-runtime batches.
 - `RestoreService` also supports same-lineage selected-area restore from save details, including a branch restoring a bounded area from the save it was branched from. It filters pending draft and direct patch block/entity changes to manual bounds, reads only intersecting v6 patch chunk frames when possible, applies prepared batches through the operation model, then writes a new `PARTIAL_RESTORE` version on the active branch while preserving pending draft changes outside the selected region.
 - `VariantService` keeps one head pointer per variant.
-- `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, and delegating merged version persistence to `VersionService`.
-- `DiffService` reconstructs version-to-version changes from patch history.
+- `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, carrying non-conflicting entity changes, rejecting unresolved entity conflicts explicitly, and delegating merged version persistence to `VersionService`.
+- `DiffService` reconstructs version-to-version block and entity changes from patch history.
 
 The current history pipeline is intentionally split into:
 
 - async preparation, compression, and decoding work away from the server tick
 - bounded chunk-batch application on the server tick through `WorldOperationManager`, including adaptive block budgets and explicit block-entity/entity caps
+- operation progress based on block placements, block-entity tail work, and entity operations, so entity-only restore, undo/redo, and recovery batches do not complete early
 - operation snapshots that surface progress to the UI instead of pretending a long task finished immediately
 - optional debug tracing for capture, save, restore, recovery, compare, HUD, and background operations
 

@@ -11,6 +11,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -150,7 +151,7 @@ public final class SessionStabilizationService {
         return List.copyOf(changes);
     }
 
-    private List<StoredBlockChange> diffChunk(
+    List<StoredBlockChange> diffChunk(
             ChunkSnapshotPayload baseline,
             ChunkSnapshotPayload live,
             Bounds3i bounds
@@ -176,32 +177,77 @@ public final class SessionStabilizationService {
 
         Map<Integer, ChunkSectionSnapshotPayload> baselineSections = indexSections(baseline);
         Map<Integer, ChunkSectionSnapshotPayload> liveSections = indexSections(live);
-        for (int y = minY; y <= maxY; y++) {
-            int sectionY = y >> 4;
+        int minSectionY = minY >> 4;
+        int maxSectionY = maxY >> 4;
+        for (int sectionY = minSectionY; sectionY <= maxSectionY; sectionY++) {
             ChunkSectionSnapshotPayload baselineSection = baselineSections.get(sectionY);
             ChunkSectionSnapshotPayload liveSection = liveSections.get(sectionY);
-            int localY = y & 15;
-            for (int z = minZ; z <= maxZ; z++) {
-                int localZ = z & 15;
-                for (int x = minX; x <= maxX; x++) {
-                    int localX = x & 15;
-                    CompoundTag baselineState = this.readStateTag(baselineSection, localX, localY, localZ);
-                    CompoundTag liveState = this.readStateTag(liveSection, localX, localY, localZ);
-                    CompoundTag baselineBlockEntity = this.readBlockEntityTag(baseline, y, localX, localZ);
-                    CompoundTag liveBlockEntity = this.readBlockEntityTag(live, y, localX, localZ);
-                    if (Objects.equals(baselineState, liveState)
-                            && Objects.equals(baselineBlockEntity, liveBlockEntity)) {
-                        continue;
+            if (this.sectionsEqual(baselineSection, liveSection)
+                    && this.blockEntitiesEqualInSection(baseline, live, sectionY)) {
+                continue;
+            }
+
+            int sectionMinY = Math.max(minY, sectionY << 4);
+            int sectionMaxY = Math.min(maxY, (sectionY << 4) + 15);
+            for (int y = sectionMinY; y <= sectionMaxY; y++) {
+                int localY = y & 15;
+                for (int z = minZ; z <= maxZ; z++) {
+                    int localZ = z & 15;
+                    for (int x = minX; x <= maxX; x++) {
+                        int localX = x & 15;
+                        CompoundTag baselineState = this.readStateTag(baselineSection, localX, localY, localZ);
+                        CompoundTag liveState = this.readStateTag(liveSection, localX, localY, localZ);
+                        CompoundTag baselineBlockEntity = this.readBlockEntityTag(baseline, y, localX, localZ);
+                        CompoundTag liveBlockEntity = this.readBlockEntityTag(live, y, localX, localZ);
+                        if (Objects.equals(baselineState, liveState)
+                                && Objects.equals(baselineBlockEntity, liveBlockEntity)) {
+                            continue;
+                        }
+                        changes.add(new StoredBlockChange(
+                                new io.github.luma.domain.model.BlockPoint(x, y, z),
+                                payload(baselineState, baselineBlockEntity),
+                                payload(liveState, liveBlockEntity)
+                        ));
                     }
-                    changes.add(new StoredBlockChange(
-                            new io.github.luma.domain.model.BlockPoint(x, y, z),
-                            payload(baselineState, baselineBlockEntity),
-                            payload(liveState, liveBlockEntity)
-                    ));
                 }
             }
         }
         return changes;
+    }
+
+    private boolean sectionsEqual(ChunkSectionSnapshotPayload baseline, ChunkSectionSnapshotPayload live) {
+        if (baseline == live) {
+            return true;
+        }
+        if (baseline == null || live == null) {
+            return false;
+        }
+        return baseline.sectionY() == live.sectionY()
+                && baseline.bitsPerEntry() == live.bitsPerEntry()
+                && Objects.equals(baseline.palette(), live.palette())
+                && Arrays.equals(baseline.packedStorage(), live.packedStorage());
+    }
+
+    private boolean blockEntitiesEqualInSection(
+            ChunkSnapshotPayload baseline,
+            ChunkSnapshotPayload live,
+            int sectionY
+    ) {
+        return Objects.equals(
+                this.blockEntitiesInSection(baseline, sectionY),
+                this.blockEntitiesInSection(live, sectionY)
+        );
+    }
+
+    private Map<Integer, CompoundTag> blockEntitiesInSection(ChunkSnapshotPayload chunk, int sectionY) {
+        LinkedHashMap<Integer, CompoundTag> blockEntities = new LinkedHashMap<>();
+        for (Map.Entry<Integer, CompoundTag> entry : chunk.blockEntities().entrySet()) {
+            int worldY = chunk.minBuildHeight() + (entry.getKey() >> 8);
+            if ((worldY >> 4) == sectionY) {
+                blockEntities.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return blockEntities;
     }
 
     private CapturedChunks captureLiveChunks(ServerLevel level, List<ChunkPoint> chunks) {

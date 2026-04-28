@@ -55,6 +55,7 @@ public final class HistoryCaptureManager {
     private static final int CAPTURE_SUMMARY_ENTRY_LIMIT = 4;
     private static final WorldMutationCapturePolicy CAPTURE_POLICY = new WorldMutationCapturePolicy();
     private static final EntityMutationCapturePolicy ENTITY_CAPTURE_POLICY = new EntityMutationCapturePolicy();
+    private static final MutationSourcePolicy SOURCE_POLICY = new MutationSourcePolicy();
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -741,7 +742,7 @@ public final class HistoryCaptureManager {
             boolean accessAllowed,
             io.github.luma.domain.model.WorldMutationSource source
     ) {
-        return !isExplicitRootSource(source) || accessAllowed || !dedicatedServer;
+        return SOURCE_POLICY.canUse(dedicatedServer, accessAllowed, source);
     }
 
     private void recordUndoRedoAction(
@@ -1090,22 +1091,11 @@ public final class HistoryCaptureManager {
     }
 
     private static boolean isExplicitRootSource(io.github.luma.domain.model.WorldMutationSource source) {
-        if (source == null) {
-            return false;
-        }
-        return switch (source) {
-            case PLAYER, ENTITY, EXPLOSIVE, EXTERNAL_TOOL, WORLDEDIT, FAWE, AXIOM -> true;
-            case EXPLOSION, FLUID, FIRE, GROWTH, BLOCK_UPDATE, PISTON, FALLING_BLOCK, MOB, RESTORE, SYSTEM -> false;
-        };
+        return SOURCE_POLICY.isExplicitRootSource(source);
     }
 
     private boolean usesDeferredStabilization(BuildProject project, io.github.luma.domain.model.WorldMutationSource source) {
-        if (project == null || source == null) {
-            return false;
-        }
-        return project.tracksWholeDimension()
-                && (source == io.github.luma.domain.model.WorldMutationSource.FLUID
-                || source == io.github.luma.domain.model.WorldMutationSource.FALLING_BLOCK);
+        return SOURCE_POLICY.usesDeferredStabilization(project, source);
     }
 
     private void captureSessionChunkBaseline(
@@ -1324,102 +1314,19 @@ public final class HistoryCaptureManager {
     }
 
     public static boolean allowsAutomaticProjectCreation(io.github.luma.domain.model.WorldMutationSource source) {
-        if (source == null) {
-            return false;
-        }
-        return switch (source) {
-            case PLAYER,
-                    ENTITY,
-                    EXPLOSIVE,
-                    EXTERNAL_TOOL,
-                    WORLDEDIT,
-                    FAWE,
-                    AXIOM -> true;
-            case EXPLOSION,
-                    FLUID,
-                    FIRE,
-                    GROWTH,
-                    BLOCK_UPDATE,
-                    PISTON,
-                    FALLING_BLOCK,
-                    MOB,
-                    RESTORE,
-                    SYSTEM -> false;
-        };
+        return SOURCE_POLICY.allowsAutomaticProjectCreation(source);
     }
 
     public static boolean allowsSessionBootstrap(io.github.luma.domain.model.WorldMutationSource source) {
-        if (source == null) {
-            return false;
-        }
-        return switch (source) {
-            case PLAYER,
-                    ENTITY,
-                    EXPLOSIVE,
-                    EXTERNAL_TOOL,
-                    WORLDEDIT,
-                    FAWE,
-                    AXIOM -> true;
-            case EXPLOSION,
-                    FLUID,
-                    FIRE,
-                    GROWTH,
-                    BLOCK_UPDATE,
-                    PISTON,
-                    FALLING_BLOCK,
-                    MOB,
-                    RESTORE,
-                    SYSTEM -> false;
-        };
+        return SOURCE_POLICY.allowsSessionBootstrap(source);
     }
 
     public static boolean allowsTrackedChunkExpansion(io.github.luma.domain.model.WorldMutationSource source) {
-        if (source == null) {
-            return false;
-        }
-        return switch (source) {
-            case PLAYER,
-                    ENTITY,
-                    EXPLOSION,
-                    FIRE,
-                    GROWTH,
-                    BLOCK_UPDATE,
-                    MOB,
-                    EXPLOSIVE,
-                    EXTERNAL_TOOL,
-                    WORLDEDIT,
-                    FAWE,
-                    AXIOM -> true;
-            case FLUID,
-                    PISTON,
-                    FALLING_BLOCK -> false;
-            case RESTORE, SYSTEM -> false;
-        };
+        return SOURCE_POLICY.allowsTrackedChunkExpansion(source);
     }
 
     static boolean requiresActiveRegionMembership(io.github.luma.domain.model.WorldMutationSource source) {
-        if (source == null) {
-            return false;
-        }
-        return switch (source) {
-            case EXPLOSION,
-                    FLUID,
-                    FIRE,
-                    GROWTH,
-                    BLOCK_UPDATE,
-                    FALLING_BLOCK,
-                    MOB -> true;
-            case PLAYER,
-                    ENTITY,
-                    EXPLOSIVE,
-                    EXTERNAL_TOOL,
-                    WORLDEDIT,
-                    FAWE,
-                    AXIOM,
-                    PISTON,
-                    RESTORE,
-                    SYSTEM -> false;
-        };
+        return SOURCE_POLICY.requiresActiveRegionMembership(source);
     }
 
     static boolean isWithinChunkRadius(ChunkPoint first, ChunkPoint second, int radius) {
@@ -1431,27 +1338,7 @@ public final class HistoryCaptureManager {
     }
 
     public static String defaultActor(io.github.luma.domain.model.WorldMutationSource source) {
-        if (source == null) {
-            return "world";
-        }
-        return switch (source) {
-            case PLAYER -> "player";
-            case ENTITY -> "entity";
-            case EXPLOSION -> "explosion";
-            case FLUID -> "fluid";
-            case FIRE -> "fire";
-            case GROWTH -> "growth";
-            case BLOCK_UPDATE -> "block-update";
-            case PISTON -> "piston";
-            case FALLING_BLOCK -> "falling-block";
-            case EXPLOSIVE -> "explosive";
-            case MOB -> "mob";
-            case EXTERNAL_TOOL -> "external-tool";
-            case WORLDEDIT -> "worldedit";
-            case FAWE -> "fawe";
-            case AXIOM -> "axiom";
-            case RESTORE, SYSTEM -> "world";
-        };
+        return SOURCE_POLICY.defaultActor(source);
     }
 
     private record TrackedProject(ProjectLayout layout, BuildProject project, List<ProjectVariant> variants) {
