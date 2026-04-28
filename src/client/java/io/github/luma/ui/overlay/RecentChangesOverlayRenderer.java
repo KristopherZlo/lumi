@@ -186,7 +186,11 @@ public final class RecentChangesOverlayRenderer {
                 camera.z
         );
 
-        VertexConsumer fillConsumer = consumers.getBuffer(CompareOverlayRenderTypes.fill(false));
+        var fillType = CompareOverlayRenderTypes.fill(false);
+        VertexConsumer fillConsumer = consumers.getBuffer(fillType);
+        int filledFaceCount = 0;
+        int minFillAlpha = Integer.MAX_VALUE;
+        int maxFillAlpha = Integer.MIN_VALUE;
         for (SurfaceEntry surfaceEntry : visibleSurfaceEntries) {
             RecentChangeEntry entry = surfaceEntry.entry();
             float minX = (float) (entry.pos().x() - camera.x) - FACE_OUTSET;
@@ -195,7 +199,10 @@ public final class RecentChangesOverlayRenderer {
             float maxX = (float) (entry.pos().x() + 1.0D - camera.x) + FACE_OUTSET;
             float maxY = (float) (entry.pos().y() + 1.0D - camera.y) + FACE_OUTSET;
             float maxZ = (float) (entry.pos().z() + 1.0D - camera.z) + FACE_OUTSET;
-            OverlayFaceRenderer.renderFilledBox(
+            int fillAlpha = Math.max(MIN_FILL_ALPHA, Math.round(entry.alpha() * FILL_ALPHA_SCALE));
+            minFillAlpha = Math.min(minFillAlpha, fillAlpha);
+            maxFillAlpha = Math.max(maxFillAlpha, fillAlpha);
+            filledFaceCount += OverlayFaceRenderer.renderFilledBox(
                     matrices,
                     fillConsumer,
                     minX,
@@ -208,11 +215,31 @@ public final class RecentChangesOverlayRenderer {
                     0xFF,
                     0x9C,
                     0x3A,
-                    Math.max(MIN_FILL_ALPHA, Math.round(entry.alpha() * FILL_ALPHA_SCALE))
+                    fillAlpha
             );
         }
+        if (visibleSurfaceEntries.isEmpty()) {
+            minFillAlpha = 0;
+            maxFillAlpha = 0;
+        }
 
-        VertexConsumer lineConsumer = consumers.getBuffer(CompareOverlayRenderTypes.outline(false));
+        OverlayDiagnostics.getInstance().log(
+                state.debugEnabled(),
+                "recent-fill-pass",
+                "recent-overlay",
+                "Fill pass entries={} faces={} vertices={} alphaRange={}..{} renderType={} consumer={} outset={}",
+                visibleSurfaceEntries.size(),
+                filledFaceCount,
+                filledFaceCount * 4,
+                minFillAlpha,
+                maxFillAlpha,
+                fillType,
+                fillConsumer.getClass().getName(),
+                FACE_OUTSET
+        );
+
+        var outlineType = CompareOverlayRenderTypes.outline(false);
+        VertexConsumer lineConsumer = consumers.getBuffer(outlineType);
         for (SurfaceEntry surfaceEntry : visibleSurfaceEntries) {
             RecentChangeEntry entry = surfaceEntry.entry();
             ShapeRenderer.renderShape(

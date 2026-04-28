@@ -8,7 +8,7 @@ final class OverlayFaceRenderer {
     private OverlayFaceRenderer() {
     }
 
-    static void renderFilledBox(
+    static int renderFilledBox(
             PoseStack matrices,
             VertexConsumer consumer,
             float minX,
@@ -24,25 +24,33 @@ final class OverlayFaceRenderer {
             int alpha
     ) {
         PoseStack.Pose pose = matrices.last();
+        int renderedFaces = 0;
 
         if (surfaceBlock.northExposed()) {
             addQuad(pose, consumer, red, green, blue, alpha, minX, minY, minZ, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ);
+            renderedFaces += 1;
         }
         if (surfaceBlock.southExposed()) {
             addQuad(pose, consumer, red, green, blue, alpha, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+            renderedFaces += 1;
         }
         if (surfaceBlock.westExposed()) {
             addQuad(pose, consumer, red, green, blue, alpha, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+            renderedFaces += 1;
         }
         if (surfaceBlock.eastExposed()) {
             addQuad(pose, consumer, red, green, blue, alpha, maxX, minY, minZ, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ);
+            renderedFaces += 1;
         }
         if (surfaceBlock.downExposed()) {
             addQuad(pose, consumer, red, green, blue, alpha, minX, minY, minZ, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ);
+            renderedFaces += 1;
         }
         if (surfaceBlock.upExposed()) {
             addQuad(pose, consumer, red, green, blue, alpha, minX, maxY, minZ, maxX, maxY, minZ, maxX, maxY, maxZ, minX, maxY, maxZ);
+            renderedFaces += 1;
         }
+        return renderedFaces;
     }
 
     private static void addQuad(

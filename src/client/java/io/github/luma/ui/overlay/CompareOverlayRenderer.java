@@ -318,7 +318,10 @@ public final class CompareOverlayRenderer {
                 camera.z
         );
 
-        VertexConsumer fillConsumer = consumers.getBuffer(CompareOverlayRenderTypes.fill(xrayEnabled));
+        var fillType = CompareOverlayRenderTypes.fill(xrayEnabled);
+        VertexConsumer fillConsumer = consumers.getBuffer(fillType);
+        int filledFaceCount = 0;
+        int fillAlpha = Math.round(FILL_ALPHA);
         for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
             DiffBlockEntry entry = surfaceBlock.entry();
             ColorChannels color = ColorChannels.of(entry.changeType());
@@ -329,7 +332,7 @@ public final class CompareOverlayRenderer {
             float maxY = (float) (entry.pos().y() + 1.0D - camera.y) + FACE_OUTSET;
             float maxZ = (float) (entry.pos().z() + 1.0D - camera.z) + FACE_OUTSET;
 
-            OverlayFaceRenderer.renderFilledBox(
+            filledFaceCount += OverlayFaceRenderer.renderFilledBox(
                     matrices,
                     fillConsumer,
                     minX,
@@ -342,11 +345,27 @@ public final class CompareOverlayRenderer {
                     color.red(),
                     color.green(),
                     color.blue(),
-                    Math.round(FILL_ALPHA)
+                    fillAlpha
             );
         }
 
-        VertexConsumer lineConsumer = consumers.getBuffer(CompareOverlayRenderTypes.outline(xrayEnabled));
+        OverlayDiagnostics.getInstance().log(
+                state.debugEnabled(),
+                "compare-fill-pass",
+                "compare-overlay",
+                "Fill pass blocks={} faces={} vertices={} alpha={} renderType={} consumer={} xray={} outset={}",
+                visibleSurfaceBlocks.size(),
+                filledFaceCount,
+                filledFaceCount * 4,
+                fillAlpha,
+                fillType,
+                fillConsumer.getClass().getName(),
+                xrayEnabled,
+                FACE_OUTSET
+        );
+
+        var outlineType = CompareOverlayRenderTypes.outline(xrayEnabled);
+        VertexConsumer lineConsumer = consumers.getBuffer(outlineType);
         for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
             DiffBlockEntry entry = surfaceBlock.entry();
             ColorChannels color = ColorChannels.of(entry.changeType());

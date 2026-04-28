@@ -124,7 +124,7 @@ Enable verbose runtime tracing for debugging:
 - global JVM flag: `-Dlumi.debug=true`
 - accepted capture sessions keep the first 32 per-mutation traces behind debug logging, while info level stays focused on buffer checkpoints, queued/completed maintenance work, and reconcile summaries
 - whole-dimension stabilization now logs dirty-chunk reconcile summaries before draft flush/save/freeze, so startup diagnostics and reconcile summaries should be inspected together when ambient fallout looks suspicious
-- client overlay diagnostics log overlay-key state, compare/recent coordinator skip reasons, render callback health, selected surface counts, and render failures under `overlay-input`, `overlay-render`, `compare-overlay`, and `recent-overlay`
+- client overlay diagnostics log overlay-key state, compare/recent coordinator skip reasons, render callback health, selected surface counts, fill-pass face/vertex/alpha/render-type details, and render failures under `overlay-input`, `overlay-render`, `compare-overlay`, and `recent-overlay`
 
 ## Repository layout
 
