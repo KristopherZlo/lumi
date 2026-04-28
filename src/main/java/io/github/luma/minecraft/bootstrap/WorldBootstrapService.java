@@ -15,9 +15,13 @@ import net.minecraft.server.MinecraftServer;
  */
 public final class WorldBootstrapService implements AutoCloseable {
 
+    private static final int PLAYER_JOIN_BOOTSTRAP_DELAY_TICKS = 20 * 10;
+
     private final ProjectService projectService;
     private ExecutorService executor;
     private final AtomicReference<CompletableFuture<Void>> pendingBootstrap = new AtomicReference<>();
+    private MinecraftServer scheduledServer;
+    private int ticksUntilBootstrap = -1;
 
     public WorldBootstrapService() {
         this(new ProjectService(), Executors.newSingleThreadExecutor(new BootstrapThreadFactory()));
@@ -29,6 +33,47 @@ public final class WorldBootstrapService implements AutoCloseable {
     }
 
     public void bootstrap(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        CompletableFuture<Void> previous = this.pendingBootstrap.get();
+        if (previous != null && !previous.isDone()) {
+            return;
+        }
+
+        this.scheduledServer = server;
+        this.ticksUntilBootstrap = PLAYER_JOIN_BOOTSTRAP_DELAY_TICKS;
+    }
+
+    public void tick(MinecraftServer server) {
+        if (server == null || this.scheduledServer != server || this.ticksUntilBootstrap < 0) {
+            return;
+        }
+        if (server.getPlayerList().getPlayerCount() <= 0) {
+            return;
+        }
+        this.ticksUntilBootstrap -= 1;
+        if (this.ticksUntilBootstrap > 0) {
+            return;
+        }
+
+        this.scheduledServer = null;
+        this.ticksUntilBootstrap = -1;
+        this.startBootstrap(server);
+    }
+
+    @Override
+    public synchronized void close() {
+        this.scheduledServer = null;
+        this.ticksUntilBootstrap = -1;
+        CompletableFuture<Void> pending = this.pendingBootstrap.getAndSet(null);
+        if (pending != null) {
+            pending.cancel(false);
+        }
+        this.executor.shutdownNow();
+    }
+
+    private void startBootstrap(MinecraftServer server) {
         CompletableFuture<Void> previous = this.pendingBootstrap.get();
         if (previous != null && !previous.isDone()) {
             return;
@@ -36,15 +81,6 @@ public final class WorldBootstrapService implements AutoCloseable {
 
         CompletableFuture<Void> next = CompletableFuture.runAsync(() -> this.bootstrapNow(server), this.executor());
         this.pendingBootstrap.set(next);
-    }
-
-    @Override
-    public synchronized void close() {
-        CompletableFuture<Void> pending = this.pendingBootstrap.getAndSet(null);
-        if (pending != null) {
-            pending.cancel(false);
-        }
-        this.executor.shutdownNow();
     }
 
     private void bootstrapNow(MinecraftServer server) {

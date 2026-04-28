@@ -108,6 +108,7 @@ For startup-only overhead, use the idle wrapper. It launches the same singleplay
 ```
 
 Idle summaries are written under `build/runtime-load-idle/<timestamp>/`. Use this before optimizing startup cost, and use the full runtime comparison when validating history workflow cost.
+World-origin metadata bootstrap is intentionally delayed until after the first player has entered the world and a short idle window has elapsed, so idle startup comparisons should not include Lumi storage bootstrap work unless a test explicitly opens a workspace immediately.
 
 Enable verbose runtime tracing for debugging:
 

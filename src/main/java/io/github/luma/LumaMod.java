@@ -38,6 +38,7 @@ public final class LumaMod implements ModInitializer {
             WorldOperationManager.getInstance().tick(server);
             SingleplayerTestingService.getInstance().tick(server);
             HistoryCaptureManager.getInstance().flushIdleSessions(server);
+            this.worldBootstrapService.tick(server);
         });
         ServerLifecycleEvents.SERVER_STARTED.register(this.worldBootstrapService::bootstrap);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {

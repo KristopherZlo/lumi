@@ -14,7 +14,7 @@ The architecture is intentionally optimized around three requirements:
 
 ### Bootstrap layer
 
-`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, queues shared world-origin metadata bootstrap on a low-priority background thread after integrated-server start, advances world operations once per server tick, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown.
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, schedules shared world-origin metadata bootstrap on a low-priority background thread after the first player has entered the world and a short idle delay has elapsed, advances world operations once per server tick, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown.
 
 ### Domain model layer
 
