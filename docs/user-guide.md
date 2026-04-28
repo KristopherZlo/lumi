@@ -18,6 +18,7 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 - Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
 - Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.
 - Use `More` -> `Projects` when you need to switch dimensions or choose another workspace.
+- Press `Esc` from any Lumi screen to close the Lumi UI and return to the game.
 
 ## Legacy Manual Projects
 

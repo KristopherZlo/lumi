@@ -44,6 +44,7 @@ public final class VariantsScreen extends LumaScreen {
     private String status = "luma.status.project_ready";
     private String variantName = "";
     private TextBoxComponent variantNameInput;
+    private ButtonComponent createVariantButton;
     private int refreshCooldown = 0;
 
     public VariantsScreen(Screen parent, String projectName) {
@@ -153,9 +154,13 @@ public final class VariantsScreen extends LumaScreen {
                 )
         );
 
+        this.createVariantButton = null;
         this.variantNameInput = UIComponents.textBox(Sizing.fill(100), this.variantName);
         this.variantNameInput.setHint(Component.translatable("luma.idea.name_input"));
-        this.variantNameInput.onChanged().subscribe(value -> this.variantName = value);
+        this.variantNameInput.onChanged().subscribe(value -> {
+            this.variantName = value == null ? "" : value;
+            this.updateCreateButtonActive();
+        });
         section.child(LumaUi.formField(
                 Component.translatable("luma.idea.name_input"),
                 Component.translatable("luma.ideas.name_help"),
@@ -163,15 +168,15 @@ public final class VariantsScreen extends LumaScreen {
         ));
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent createButton = LumaUi.primaryButton(Component.translatable("luma.action.create_idea"), button -> {
-            String result = this.actionController.createVariant(this.projectName, this.variantName, this.baseVersionId);
+        this.createVariantButton = LumaUi.primaryButton(Component.translatable("luma.action.create_idea"), button -> {
+            String result = this.actionController.createVariant(this.projectName, this.variantName.trim(), this.baseVersionId);
             if ("luma.status.variant_created".equals(result)) {
                 this.variantName = "";
             }
             this.refresh(result);
         });
-        createButton.active(!this.variantName.isBlank());
-        actions.child(createButton);
+        this.updateCreateButtonActive();
+        actions.child(this.createVariantButton);
         section.child(actions);
         return section;
     }
@@ -280,6 +285,12 @@ public final class VariantsScreen extends LumaScreen {
 
     private boolean operationActive() {
         return ScreenOperationStateSupport.blocksMutationActions(this.state.operationSnapshot());
+    }
+
+    private void updateCreateButtonActive() {
+        if (this.createVariantButton != null) {
+            this.createVariantButton.active(!this.variantName.trim().isBlank() && !this.operationActive());
+        }
     }
 
     private Component bannerText() {
