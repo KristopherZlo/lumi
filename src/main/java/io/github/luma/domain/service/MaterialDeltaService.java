@@ -9,14 +9,12 @@ import java.util.Map;
 
 public final class MaterialDeltaService {
 
-    private final DiffService diffService = new DiffService();
-
     public List<MaterialDeltaEntry> summarize(VersionDiff diff) {
         Map<String, int[]> counts = new HashMap<>();
 
         for (var block : diff.changedBlocks()) {
-            String leftBlockId = this.diffService.extractBlockId(block.leftState());
-            String rightBlockId = this.diffService.extractBlockId(block.rightState());
+            String leftBlockId = block.leftBlockId();
+            String rightBlockId = block.rightBlockId();
 
             counts.computeIfAbsent(leftBlockId, ignored -> new int[2])[0] += 1;
             counts.computeIfAbsent(rightBlockId, ignored -> new int[2])[1] += 1;

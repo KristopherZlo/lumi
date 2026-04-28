@@ -15,19 +15,25 @@ import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.storage.ProjectLayout;
+import java.io.ByteArrayInputStream;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.jpountz.lz4.LZ4FrameInputStream;
 import net.jpountz.lz4.LZ4FrameOutputStream;
 import net.minecraft.core.BlockPos;
@@ -36,7 +42,7 @@ import net.minecraft.server.level.ServerLevel;
 public final class PatchDataRepository {
 
     private static final int MAGIC = 0x4C504154;
-    private static final int VERSION = 5;
+    private static final int VERSION = 6;
 
     public PatchMetadata writePayload(
             ProjectLayout layout,
@@ -78,34 +84,26 @@ public final class PatchDataRepository {
                 sortedChunks.size()
         );
 
-        ByteArrayOutputStream payloadBuffer = new ByteArrayOutputStream();
-        List<PatchChunkSlice> slices = new ArrayList<>();
-        try (DataOutputStream payload = new DataOutputStream(payloadBuffer)) {
-            payload.writeInt(MAGIC);
-            payload.writeInt(VERSION);
-            payload.writeInt(sortedChunks.size());
+        List<ChunkFrame> frames = new ArrayList<>();
+        int chunkIndex = 0;
+        for (Map.Entry<String, ChunkPayload> entry : sortedChunks) {
+            String[] split = entry.getKey().split(":", 2);
+            int chunkX = Integer.parseInt(split[0]);
+            int chunkZ = Integer.parseInt(split[1]);
 
-            int chunkIndex = 0;
-            for (Map.Entry<String, ChunkPayload> entry : sortedChunks) {
-                String[] split = entry.getKey().split(":", 2);
-                int chunkX = Integer.parseInt(split[0]);
-                int chunkZ = Integer.parseInt(split[1]);
+            List<StoredBlockChange> chunkChanges = new ArrayList<>(entry.getValue().blockChanges);
+            chunkChanges.sort(Comparator.comparingInt(change -> packLocalPosition(change.pos())));
+            List<StoredEntityChange> chunkEntityChanges = new ArrayList<>(entry.getValue().entityChanges);
+            chunkEntityChanges.sort(Comparator.comparing(StoredEntityChange::entityId));
 
-                List<StoredBlockChange> chunkChanges = new ArrayList<>(entry.getValue().blockChanges);
-                chunkChanges.sort(Comparator.comparingInt(change -> packLocalPosition(change.pos())));
-                List<StoredEntityChange> chunkEntityChanges = new ArrayList<>(entry.getValue().entityChanges);
-                chunkEntityChanges.sort(Comparator.comparing(StoredEntityChange::entityId));
-
-                byte[] chunkBytes = this.writeChunk(chunkX, chunkZ, chunkChanges, chunkEntityChanges);
-                long offset = payloadBuffer.size();
-                payload.write(chunkBytes);
-                slices.add(new PatchChunkSlice(chunkX, chunkZ, chunkChanges.size(), offset, chunkBytes.length));
-                chunkIndex += 1;
-                BackgroundThrottle.pauseEvery(chunkIndex, 8, 250_000L);
-            }
+            byte[] chunkBytes = this.writeChunk(chunkX, chunkZ, chunkChanges, chunkEntityChanges);
+            frames.add(new ChunkFrame(chunkX, chunkZ, chunkChanges.size(), chunkBytes.length, this.compressFrame(chunkBytes)));
+            chunkIndex += 1;
+            BackgroundThrottle.pauseEvery(chunkIndex, 8, 250_000L);
         }
 
-        StorageIo.writeAtomically(layout.patchDataFile(patchId), output -> this.writeCompressed(output, payloadBuffer.toByteArray()));
+        List<PatchChunkSlice> slices = new ArrayList<>();
+        StorageIo.writeAtomically(layout.patchDataFile(patchId), output -> this.writeChunkAddressablePayload(output, frames, slices));
         return new PatchMetadata(
                 patchId,
                 projectId,
@@ -125,12 +123,47 @@ public final class PatchDataRepository {
             return new PatchWorldChanges(List.of(), List.of());
         }
 
+        Path dataFile = layout.patchDataFile(metadata.id());
+        if (this.isChunkAddressablePayload(dataFile)) {
+            return this.loadChunkAddressableWorldChanges(dataFile);
+        }
+
+        return this.loadLegacyWorldChanges(dataFile, metadata);
+    }
+
+    public PatchWorldChanges loadWorldChanges(
+            ProjectLayout layout,
+            PatchMetadata metadata,
+            Collection<ChunkPoint> chunks
+    ) throws IOException {
+        if (metadata == null || chunks == null || chunks.isEmpty()) {
+            return new PatchWorldChanges(List.of(), List.of());
+        }
+
+        Set<ChunkPoint> requestedChunks = new HashSet<>(chunks);
+        Path dataFile = layout.patchDataFile(metadata.id());
+        if (this.isChunkAddressablePayload(dataFile) && metadata.chunks() != null && !metadata.chunks().isEmpty()) {
+            return this.loadChunkAddressableWorldChanges(dataFile, metadata, requestedChunks);
+        }
+
+        PatchWorldChanges worldChanges = this.loadWorldChanges(layout, metadata);
+        return new PatchWorldChanges(
+                worldChanges.blockChanges().stream()
+                        .filter(change -> requestedChunks.contains(ChunkPoint.from(change.pos())))
+                        .toList(),
+                worldChanges.entityChanges().stream()
+                        .filter(change -> requestedChunks.contains(change.chunk()))
+                        .toList()
+        );
+    }
+
+    private PatchWorldChanges loadLegacyWorldChanges(Path dataFile, PatchMetadata metadata) throws IOException {
         try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
-                new BufferedInputStream(Files.newInputStream(layout.patchDataFile(metadata.id())))
+                new BufferedInputStream(Files.newInputStream(dataFile))
         ))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != MAGIC || (version != 3 && version != 4 && version != VERSION)) {
+            if (magic != MAGIC || (version != 3 && version != 4 && version != 5)) {
                 throw new IOException("Unsupported patch payload format for " + metadata.id());
             }
 
@@ -145,6 +178,48 @@ public final class PatchDataRepository {
             }
             return new PatchWorldChanges(changes, entityChanges);
         }
+    }
+
+    private PatchWorldChanges loadChunkAddressableWorldChanges(Path dataFile) throws IOException {
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(dataFile)))) {
+            this.readChunkAddressableHeader(input, dataFile);
+            int chunkCount = input.readInt();
+            List<StoredBlockChange> changes = new ArrayList<>();
+            List<StoredEntityChange> entityChanges = new ArrayList<>();
+            for (int index = 0; index < chunkCount; index++) {
+                PatchWorldChanges chunk = this.readChunkFrame(input);
+                changes.addAll(chunk.blockChanges());
+                entityChanges.addAll(chunk.entityChanges());
+                BackgroundThrottle.pauseEvery(index + 1, 8, 250_000L);
+            }
+            return new PatchWorldChanges(changes, entityChanges);
+        }
+    }
+
+    private PatchWorldChanges loadChunkAddressableWorldChanges(
+            Path dataFile,
+            PatchMetadata metadata,
+            Set<ChunkPoint> requestedChunks
+    ) throws IOException {
+        List<PatchChunkSlice> selectedSlices = metadata.chunks().stream()
+                .filter(slice -> requestedChunks.contains(slice.chunk()))
+                .sorted(Comparator.comparingLong(PatchChunkSlice::dataOffsetBytes))
+                .toList();
+        if (selectedSlices.isEmpty()) {
+            return new PatchWorldChanges(List.of(), List.of());
+        }
+
+        List<StoredBlockChange> changes = new ArrayList<>();
+        List<StoredEntityChange> entityChanges = new ArrayList<>();
+        try (RandomAccessFile input = new RandomAccessFile(dataFile.toFile(), "r")) {
+            for (PatchChunkSlice slice : selectedSlices) {
+                input.seek(slice.dataOffsetBytes());
+                PatchWorldChanges chunk = this.readChunkFrame(input);
+                changes.addAll(chunk.blockChanges());
+                entityChanges.addAll(chunk.entityChanges());
+            }
+        }
+        return new PatchWorldChanges(changes, entityChanges);
     }
 
     public List<PreparedChunkBatch> decodeBatches(ProjectLayout layout, PatchMetadata metadata, ServerLevel level) throws IOException {
@@ -225,6 +300,91 @@ public final class PatchDataRepository {
             }
         }
         return chunkBuffer.toByteArray();
+    }
+
+    private void writeChunkAddressablePayload(
+            OutputStream output,
+            List<ChunkFrame> frames,
+            List<PatchChunkSlice> slices
+    ) throws IOException {
+        try (DataOutputStream data = new DataOutputStream(new BufferedOutputStream(output))) {
+            data.writeInt(MAGIC);
+            data.writeInt(VERSION);
+            data.writeInt(frames.size());
+            long offset = 12L;
+            for (ChunkFrame frame : frames) {
+                slices.add(new PatchChunkSlice(
+                        frame.chunkX(),
+                        frame.chunkZ(),
+                        frame.changeCount(),
+                        offset,
+                        frame.frameLength()
+                ));
+                data.writeInt(frame.chunkX());
+                data.writeInt(frame.chunkZ());
+                data.writeInt(frame.uncompressedLength());
+                data.writeInt(frame.compressedBytes().length);
+                data.write(frame.compressedBytes());
+                offset += frame.frameLength();
+            }
+        }
+    }
+
+    private boolean isChunkAddressablePayload(Path dataFile) throws IOException {
+        if (!Files.exists(dataFile) || Files.size(dataFile) < 8L) {
+            return false;
+        }
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(dataFile)))) {
+            int magic = input.readInt();
+            int version = input.readInt();
+            return magic == MAGIC && version == VERSION;
+        }
+    }
+
+    private void readChunkAddressableHeader(DataInputStream input, Path dataFile) throws IOException {
+        int magic = input.readInt();
+        int version = input.readInt();
+        if (magic != MAGIC || version != VERSION) {
+            throw new IOException("Unsupported patch payload format for " + dataFile.getFileName());
+        }
+    }
+
+    private PatchWorldChanges readChunkFrame(DataInputStream input) throws IOException {
+        int chunkX = input.readInt();
+        int chunkZ = input.readInt();
+        int uncompressedLength = input.readInt();
+        int compressedLength = input.readInt();
+        byte[] compressedBytes = new byte[compressedLength];
+        input.readFully(compressedBytes);
+        return this.readDecompressedChunkFrame(chunkX, chunkZ, uncompressedLength, compressedBytes);
+    }
+
+    private PatchWorldChanges readChunkFrame(RandomAccessFile input) throws IOException {
+        int chunkX = input.readInt();
+        int chunkZ = input.readInt();
+        int uncompressedLength = input.readInt();
+        int compressedLength = input.readInt();
+        byte[] compressedBytes = new byte[compressedLength];
+        input.readFully(compressedBytes);
+        return this.readDecompressedChunkFrame(chunkX, chunkZ, uncompressedLength, compressedBytes);
+    }
+
+    private PatchWorldChanges readDecompressedChunkFrame(
+            int expectedChunkX,
+            int expectedChunkZ,
+            int expectedLength,
+            byte[] compressedBytes
+    ) throws IOException {
+        byte[] chunkBytes = this.decompressFrame(compressedBytes, expectedLength);
+        try (DataInputStream chunkInput = new DataInputStream(new ByteArrayInputStream(chunkBytes))) {
+            PatchWorldChanges changes = this.readChunk(chunkInput, VERSION);
+            for (StoredBlockChange change : changes.blockChanges()) {
+                if ((change.pos().x() >> 4) != expectedChunkX || (change.pos().z() >> 4) != expectedChunkZ) {
+                    throw new IOException("Patch chunk frame coordinate mismatch");
+                }
+            }
+            return changes;
+        }
     }
 
     private PatchWorldChanges readChunk(DataInputStream input, int version) throws IOException {
@@ -317,10 +477,24 @@ public final class PatchDataRepository {
         return new EntityBatch(spawns, removals, updates);
     }
 
-    private void writeCompressed(OutputStream output, byte[] bytes) throws IOException {
-        try (LZ4FrameOutputStream compressed = new LZ4FrameOutputStream(new BufferedOutputStream(output))) {
+    private byte[] compressFrame(byte[] bytes) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (LZ4FrameOutputStream compressed = new LZ4FrameOutputStream(output)) {
             compressed.write(bytes);
         }
+        return output.toByteArray();
+    }
+
+    private byte[] decompressFrame(byte[] bytes, int expectedLength) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream(Math.max(0, expectedLength));
+        try (LZ4FrameInputStream input = new LZ4FrameInputStream(new ByteArrayInputStream(bytes))) {
+            input.transferTo(output);
+        }
+        byte[] decompressed = output.toByteArray();
+        if (expectedLength >= 0 && decompressed.length != expectedLength) {
+            throw new IOException("Patch chunk frame length mismatch");
+        }
+        return decompressed;
     }
 
     private int paletteId(LinkedHashMap<net.minecraft.nbt.CompoundTag, Integer> palette, net.minecraft.nbt.CompoundTag tag) {
@@ -364,5 +538,18 @@ public final class PatchDataRepository {
 
         private final List<StoredBlockChange> blockChanges = new ArrayList<>();
         private final List<StoredEntityChange> entityChanges = new ArrayList<>();
+    }
+
+    private record ChunkFrame(
+            int chunkX,
+            int chunkZ,
+            int changeCount,
+            int uncompressedLength,
+            byte[] compressedBytes
+    ) {
+
+        private int frameLength() {
+            return 16 + this.compressedBytes.length;
+        }
     }
 }

@@ -34,11 +34,19 @@ public final class CompareScreenController {
         }
 
         String normalized = reference.trim().toLowerCase();
+        if (normalized.equals("\u0442\u0435\u043a\u0443\u0449\u0438\u0439")
+                || normalized.equals("\u0442\u0435\u043a\u0443\u0449\u0438\u0439 \u043c\u0438\u0440")
+                || normalized.equals("\u043c\u0438\u0440")) {
+            return true;
+        }
         return normalized.equals(CURRENT_WORLD_REFERENCE)
                 || normalized.equals("current-world")
                 || normalized.equals("current world")
                 || normalized.equals("live")
                 || normalized.equals("world")
+                || normalized.equals("текущий")
+                || normalized.equals("текущий мир")
+                || normalized.equals("мир")
                 || normalized.equals("текущий")
                 || normalized.equals("текущий мир")
                 || normalized.equals("мир");
@@ -259,7 +267,9 @@ public final class CompareScreenController {
                             case ADDED -> io.github.luma.domain.model.ChangeType.REMOVED;
                             case REMOVED -> io.github.luma.domain.model.ChangeType.ADDED;
                             case CHANGED -> io.github.luma.domain.model.ChangeType.CHANGED;
-                        }
+                        },
+                        entry.rightBlockId(),
+                        entry.leftBlockId()
                 ))
                 .toList();
         return new VersionDiff(CURRENT_WORLD_REFERENCE, diff.leftVersionId(), changedBlocks, diff.changedChunks());

@@ -1,6 +1,5 @@
 package io.github.luma.ui.overlay;
 
-import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BlockPoint;
@@ -24,7 +23,6 @@ public final class RecentChangesOverlayRenderer {
     private static final int MAX_ACTIONS = 10;
     private static final int BASE_ALPHA = 80;
     private static final int ALPHA_STEP = 8;
-    private static final float INSET = 0.002F;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
 
@@ -59,21 +57,11 @@ public final class RecentChangesOverlayRenderer {
 
     private static void renderOverlay(WorldRenderContext context, OverlayState state) {
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        PoseStack matrices = context.matrices();
-        VertexConsumer fillConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.fill(false));
         VertexConsumer lineConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.outline(false));
         for (SurfaceEntry surfaceEntry : state.visibleSurfaceEntries(camera.x, camera.y, camera.z)) {
             RecentChangeEntry entry = surfaceEntry.entry();
-            float minX = (float) (entry.pos().x() - camera.x) + INSET;
-            float minY = (float) (entry.pos().y() - camera.y) + INSET;
-            float minZ = (float) (entry.pos().z() - camera.z) + INSET;
-            float maxX = minX + 1.0F - (INSET * 2.0F);
-            float maxY = minY + 1.0F - (INSET * 2.0F);
-            float maxZ = minZ + 1.0F - (INSET * 2.0F);
-
-            renderFilledBox(matrices, fillConsumer, minX, minY, minZ, maxX, maxY, maxZ, surfaceEntry, entry.alpha());
             ShapeRenderer.renderShape(
-                    matrices,
+                    context.matrices(),
                     lineConsumer,
                     Shapes.block(),
                     entry.pos().x() - camera.x,
@@ -106,61 +94,6 @@ public final class RecentChangesOverlayRenderer {
             }
         }
         return List.copyOf(flattened.values());
-    }
-
-    private static void renderFilledBox(
-            PoseStack matrices,
-            VertexConsumer consumer,
-            float minX,
-            float minY,
-            float minZ,
-            float maxX,
-            float maxY,
-            float maxZ,
-            SurfaceEntry surfaceEntry,
-            int alpha) {
-        PoseStack.Pose pose = matrices.last();
-
-        if (surfaceEntry.northExposed()) {
-            addQuad(pose, consumer, alpha, minX, minY, minZ, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ);
-        }
-        if (surfaceEntry.southExposed()) {
-            addQuad(pose, consumer, alpha, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
-        }
-        if (surfaceEntry.westExposed()) {
-            addQuad(pose, consumer, alpha, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
-        }
-        if (surfaceEntry.eastExposed()) {
-            addQuad(pose, consumer, alpha, maxX, minY, minZ, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ);
-        }
-        if (surfaceEntry.downExposed()) {
-            addQuad(pose, consumer, alpha, minX, minY, minZ, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ);
-        }
-        if (surfaceEntry.upExposed()) {
-            addQuad(pose, consumer, alpha, minX, maxY, minZ, maxX, maxY, minZ, maxX, maxY, maxZ, minX, maxY, maxZ);
-        }
-    }
-
-    private static void addQuad(
-            PoseStack.Pose pose,
-            VertexConsumer consumer,
-            int alpha,
-            float x1,
-            float y1,
-            float z1,
-            float x2,
-            float y2,
-            float z2,
-            float x3,
-            float y3,
-            float z3,
-            float x4,
-            float y4,
-            float z4) {
-        consumer.addVertex(pose, x1, y1, z1).setColor(0xFF, 0x9C, 0x3A, alpha);
-        consumer.addVertex(pose, x2, y2, z2).setColor(0xFF, 0x9C, 0x3A, alpha);
-        consumer.addVertex(pose, x3, y3, z3).setColor(0xFF, 0x9C, 0x3A, alpha);
-        consumer.addVertex(pose, x4, y4, z4).setColor(0xFF, 0x9C, 0x3A, alpha);
     }
 
     private static List<RecentChangeEntry> selectNearestEntries(
@@ -212,13 +145,7 @@ public final class RecentChangesOverlayRenderer {
     }
 
     private record SurfaceEntry(
-            RecentChangeEntry entry,
-            boolean northExposed,
-            boolean southExposed,
-            boolean westExposed,
-            boolean eastExposed,
-            boolean downExposed,
-            boolean upExposed) {
+            RecentChangeEntry entry) {
     }
 
     private static final class OverlayState {
@@ -273,14 +200,7 @@ public final class RecentChangesOverlayRenderer {
                 if (entry == null) {
                     continue;
                 }
-                resolved.add(new SurfaceEntry(
-                        entry,
-                        surfaceBlock.northExposed(),
-                        surfaceBlock.southExposed(),
-                        surfaceBlock.westExposed(),
-                        surfaceBlock.eastExposed(),
-                        surfaceBlock.downExposed(),
-                        surfaceBlock.upExposed()));
+                resolved.add(new SurfaceEntry(entry));
             }
             this.cachedVisibleEntries = List.copyOf(resolved);
             return this.cachedVisibleEntries;

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PatchDataRepositoryTest {
@@ -50,6 +51,36 @@ class PatchDataRepositoryTest {
         assertEquals(changes, restored);
         assertTrue(metadata.chunks().stream().anyMatch(slice -> slice.chunkX() == 0 && slice.chunkZ() == 0));
         assertTrue(metadata.chunks().stream().anyMatch(slice -> slice.chunkX() == 1 && slice.chunkZ() == 0));
+        assertTrue(metadata.chunks().stream().allMatch(slice -> slice.dataOffsetBytes() >= 12L));
+        assertTrue(metadata.chunks().stream().allMatch(slice -> slice.dataLengthBytes() > 16));
+    }
+
+    @Test
+    void loadsSelectedChunksFromChunkAddressablePayload() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        List<StoredBlockChange> changes = List.of(
+                new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:gold_block", null)
+                ),
+                new StoredBlockChange(
+                        new BlockPoint(17, 64, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:diamond_block", null)
+                )
+        );
+
+        PatchMetadata metadata = this.repository.writePayload(layout, "patch-selective", "project", "v0003", changes);
+        PatchWorldChanges selected = this.repository.loadWorldChanges(
+                layout,
+                metadata,
+                List.of(new io.github.luma.domain.model.ChunkPoint(1, 0))
+        );
+
+        assertEquals(1, selected.blockChanges().size());
+        assertEquals(new BlockPoint(17, 64, 1), selected.blockChanges().getFirst().pos());
+        assertFalse(selected.blockChanges().stream().anyMatch(change -> change.pos().equals(new BlockPoint(1, 64, 1))));
     }
 
     @Test
