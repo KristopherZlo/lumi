@@ -14,7 +14,7 @@ The architecture is intentionally optimized around three requirements:
 
 ### Bootstrap layer
 
-`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, queues shared world-origin metadata bootstrap on a low-priority background thread after integrated-server start, advances world operations once per server tick, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown.
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, schedules shared world-origin metadata bootstrap on a low-priority background thread after the first player has entered the world and a short idle delay has elapsed, advances world operations once per server tick, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown.
 
 ### Domain model layer
 
@@ -84,7 +84,7 @@ Important adapters:
 - WorldEdit capabilities are enabled only when the corresponding WorldEdit API classes are present, such as edit-session events, local sessions, clipboard, and schematic formats.
 - `OptionalIntegrationBootstrap` reflectively loads the WorldEdit edit-session tracker only when those capabilities are present. The tracker registers on WorldEdit's event bus and wraps `EditSession.Stage.BEFORE_CHANGE` extents. It records WorldEdit old/new block transitions directly under `WorldMutationSource.WORLDEDIT`, lazily serializing block-entity NBT only for block states that can own a block entity, while still keeping the mutation context active for Minecraft-level fallback capture.
 - FAWE is reported as a detected fallback-capture tool when known FAWE classes or mod ids are present. Lumi does not claim FAWE selection, clipboard, or schematic APIs; block and entity history capture rely on the generic known-tool mutation fallbacks.
-- `ExternalToolMutationOriginDetector` recognizes WorldEdit, FAWE, Axiom, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica, and Tweakeroo stack frames at Minecraft mutation boundaries without linking those tools. `WorldMutationCaptureGuard` prevents duplicate block records so the highest available hook wins: WorldEdit API extent, `Level#setBlock`, `LevelChunk#setBlockState`, then direct `LevelChunkSection#setBlockState`.
+- `ExternalToolMutationOriginDetector` recognizes WorldEdit, FAWE, Axiom, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica, and Tweakeroo stack frames at Minecraft mutation boundaries without linking those tools. It first checks cached integration availability, so vanilla startup and world generation do not sample per-mutation stack traces when no known external builder tool is present. `WorldMutationCaptureGuard` prevents duplicate block records so the highest available hook wins: WorldEdit API extent, `Level#setBlock`, `LevelChunk#setBlockState`, then direct `LevelChunkSection#setBlockState`.
 - Axiom capabilities are intentionally conservative. Lumi may report detection or a custom region API, but it does not claim selection, clipboard, or schematic support unless a stable API is available. Because Axiom does not expose a stable operation API, Lumi uses guarded server-side fallbacks: Axiom block-buffer packet applies are captured before Axiom mutates chunk sections directly with the same lazy block-entity capture rule, entity lifecycle/update hooks capture Axiom entity edits that reach Minecraft entity APIs, and otherwise untracked Axiom mutations can still be recorded from known-tool stack frames.
 - Axion, AutoBuild, SimpleBuilding, and Effortless Building are reported as fallback-capture tools when their mod ids or known classes are present. Litematica and Tweakeroo are reported as player-driven placement tools because their normal printer/placement paths should be captured through player mutation context rather than as direct world editors.
 - The fallback integration remains always available and represents Lumi's own world-tracking capture path.
@@ -275,6 +275,7 @@ There is also a project-scoped debug layer:
 - `ProjectSettings.debugLoggingEnabled` turns on verbose tracing for one workspace
 - `-Dlumi.debug=true` turns it on globally
 - debug logs cover capture, save, restore, recovery, compare, compare overlay cache rebuilds, HUD refresh, and world-operation queue/application steps
+- `-Dlumi.startupProfile=true` is a separate startup diagnostic flag for idle launch profiling. It logs bootstrap/client initializer timings and aggregate chunk-section ownership counters without turning on full capture debug logs.
 
 Logs are part of the support surface. New background or storage work should not be introduced without meaningful logs.
 

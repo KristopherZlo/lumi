@@ -33,6 +33,10 @@ sourceSets.create('baselineGametest')
 sourceSets.create('idleGametest')
 sourceSets.create('baselineIdleGametest')
 
+def lumiStartupProfileEnabled = providers.gradleProperty('lumi.startupProfile')
+        .map { it.toBoolean() }
+        .orElse(false)
+
 loom {
     splitEnvironmentSourceSets()
 
@@ -50,6 +54,9 @@ loom {
             runDir = 'run/test-client'
             programArg '--username'
             programArg providers.gradleProperty('lumi.testUsername').orElse('LumiTestClient').get()
+            if (lumiStartupProfileEnabled.get()) {
+                vmArg '-Dlumi.startupProfile=true'
+            }
         }
 
         baselineClientGameTest {
@@ -68,6 +75,9 @@ loom {
             source sourceSets.idleGametest
             vmArg '-Dfabric.client.gametest'
             vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
+            if (lumiStartupProfileEnabled.get()) {
+                vmArg '-Dlumi.startupProfile=true'
+            }
         }
 
         baselineIdleClientGameTest {

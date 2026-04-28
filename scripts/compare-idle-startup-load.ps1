@@ -6,6 +6,8 @@ param(
 
     [switch]$FailOnRegression,
 
+    [switch]$StartupProfile,
+
     [string]$OutputRoot
 )
 
@@ -17,9 +19,14 @@ if (-not $OutputRoot) {
     $OutputRoot = Join-Path $repoRoot "build\runtime-load-idle"
 }
 
+$lumiCommand = "powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-idle-client.ps1"
+if ($StartupProfile) {
+    $lumiCommand += " -StartupProfile"
+}
+
 & $compareScript `
     -BaselineCommand "powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-baseline-idle-client.ps1" `
-    -LumiCommand "powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-idle-client.ps1" `
+    -LumiCommand $lumiCommand `
     -Runs $Runs `
     -KeepUpRegressionMs $KeepUpRegressionMs `
     -OutputRoot $OutputRoot `

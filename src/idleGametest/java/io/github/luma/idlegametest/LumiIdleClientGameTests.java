@@ -1,5 +1,6 @@
 package io.github.luma.idlegametest;
 
+import io.github.luma.minecraft.capture.ChunkSectionOwnershipRegistry;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -15,6 +16,7 @@ public final class LumiIdleClientGameTests implements FabricClientGameTest {
         try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
             singleplayer.getClientWorld().waitForChunksRender();
             context.waitTicks(IDLE_TICKS);
+            ChunkSectionOwnershipRegistry.getInstance().logStartupProfile("idle-client-ready");
             this.report();
             context.takeScreenshot("lumi-idle-client-smoke");
         } catch (RuntimeException | Error exception) {

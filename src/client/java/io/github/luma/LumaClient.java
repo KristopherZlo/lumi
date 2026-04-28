@@ -9,6 +9,7 @@ import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
+import io.github.luma.debug.StartupProfiler;
 import io.github.luma.ui.controller.ClientWorkspaceOpenService;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -22,6 +23,7 @@ import org.lwjgl.glfw.GLFW;
 
 public final class LumaClient implements ClientModInitializer {
 
+    private static final long CLASS_LOAD_STARTED_AT = StartupProfiler.start();
     private static final KeyMapping.Category KEY_CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "general")
     );
@@ -41,8 +43,14 @@ public final class LumaClient implements ClientModInitializer {
     private final UndoRedoKeyController undoRedoKeyController = new UndoRedoKeyController();
     private final ClientWorkspaceOpenService workspaceOpenService = new ClientWorkspaceOpenService();
 
+    static {
+        StartupProfiler.logElapsed("client.class-load", CLASS_LOAD_STARTED_AT);
+    }
+
     @Override
     public void onInitializeClient() {
+        long startedAt = StartupProfiler.start();
+        long keyBindingsStartedAt = StartupProfiler.start();
         this.openDashboardKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 OPEN_DASHBOARD_KEY,
                 InputConstants.Type.KEYSYM,
@@ -73,11 +81,17 @@ public final class LumaClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_LEFT_ALT,
                 KEY_CATEGORY
         ));
+        StartupProfiler.logElapsed("client.key-bindings", keyBindingsStartedAt);
 
+        long eventRegistrationStartedAt = StartupProfiler.start();
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
         WorldRenderEvents.END_MAIN.register(CompareOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(RecentChangesOverlayRenderer::render);
+        StartupProfiler.logElapsed("client.fabric-events", eventRegistrationStartedAt);
+        long hudStartedAt = StartupProfiler.start();
         WorkspaceHudCoordinator.getInstance().registerHud();
+        StartupProfiler.logElapsed("client.hud-registration", hudStartedAt);
+        StartupProfiler.logElapsed("client.onInitializeClient", startedAt);
     }
 
     private void onEndTick(Minecraft client) {

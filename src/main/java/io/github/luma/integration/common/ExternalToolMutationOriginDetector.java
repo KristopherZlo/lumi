@@ -5,8 +5,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
@@ -85,11 +87,13 @@ public final class ExternalToolMutationOriginDetector {
     );
     private static final ExternalToolMutationOriginDetector INSTANCE = new ExternalToolMutationOriginDetector(
             ExternalToolMutationOriginDetector::currentStackClassNames,
-            System::nanoTime
+            System::nanoTime,
+            new DetectionAvailability(new ExternalToolIntegrationRegistry())::isAvailable
     );
 
     private final Supplier<List<String>> stackClassNames;
     private final LongSupplier nanoTime;
+    private final BooleanSupplier detectionAvailable;
     private final long operationIdleTimeoutNanos;
     private final ThreadLocal<ObservedOperation> currentOperation = new ThreadLocal<>();
 
@@ -98,12 +102,25 @@ public final class ExternalToolMutationOriginDetector {
     }
 
     ExternalToolMutationOriginDetector(Supplier<List<String>> stackClassNames, LongSupplier nanoTime) {
-        this.stackClassNames = stackClassNames;
-        this.nanoTime = nanoTime;
+        this(stackClassNames, nanoTime, () -> true);
+    }
+
+    ExternalToolMutationOriginDetector(
+            Supplier<List<String>> stackClassNames,
+            LongSupplier nanoTime,
+            BooleanSupplier detectionAvailable
+    ) {
+        this.stackClassNames = Objects.requireNonNull(stackClassNames, "stackClassNames");
+        this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
+        this.detectionAvailable = Objects.requireNonNull(detectionAvailable, "detectionAvailable");
         this.operationIdleTimeoutNanos = OPERATION_IDLE_TIMEOUT.toNanos();
     }
 
     public Optional<ObservedExternalToolOperation> detectOperation() {
+        if (!this.detectionAvailable.getAsBoolean()) {
+            return Optional.empty();
+        }
+
         List<String> classNames = this.stackClassNames.get();
         if (classNames == null || classNames.isEmpty()) {
             return Optional.empty();
@@ -144,6 +161,27 @@ public final class ExternalToolMutationOriginDetector {
             classNames.add(stackTrace[i].getClassName());
         }
         return classNames;
+    }
+
+    private static final class DetectionAvailability {
+
+        private final ExternalToolIntegrationRegistry registry;
+        private volatile Boolean available;
+
+        private DetectionAvailability(ExternalToolIntegrationRegistry registry) {
+            this.registry = Objects.requireNonNull(registry, "registry");
+        }
+
+        private boolean isAvailable() {
+            Boolean cached = this.available;
+            if (cached != null) {
+                return cached;
+            }
+
+            boolean detected = this.registry.stackTraceDetectionAvailable();
+            this.available = detected;
+            return detected;
+        }
     }
 
     private record ToolProfile(

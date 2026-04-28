@@ -49,6 +49,18 @@ public final class ExternalToolIntegrationRegistry {
         );
     }
 
+    public boolean stackTraceDetectionAvailable() {
+        return this.worldEditStatus().available()
+                || this.faweStatus().available()
+                || this.axiomStatus().available()
+                || this.axionStatus().available()
+                || this.autoBuildStatus().available()
+                || this.simpleBuildingStatus().available()
+                || this.effortlessBuildingStatus().available()
+                || this.litematicaStatus().available()
+                || this.tweakerooStatus().available();
+    }
+
     public IntegrationStatus worldEditStatus() {
         boolean modDetected = this.modLoaded.test(WORLDEDIT_MOD_ID);
         boolean corePresent = this.anyClassPresent(
