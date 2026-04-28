@@ -64,4 +64,12 @@ public final class GlobalDispatcher {
         }
         return total;
     }
+
+    public int totalWorkUnits() {
+        int total = 0;
+        for (LocalQueue queue : this.localQueues) {
+            total += queue.totalWorkUnits();
+        }
+        return total;
+    }
 }
