@@ -13,10 +13,10 @@ import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.SnapshotCaptureService;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
-import io.github.luma.storage.repository.SnapshotWriter;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import io.github.luma.storage.repository.WorldOriginRepository;
@@ -45,7 +45,7 @@ public final class ProjectService {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
-    private final SnapshotWriter snapshotWriter = new SnapshotWriter();
+    private final SnapshotCaptureService snapshotCaptureService = new SnapshotCaptureService();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
@@ -142,7 +142,7 @@ public final class ProjectService {
 
         String versionId = versionId(1);
         String snapshotId = snapshotId(1);
-        this.snapshotWriter.capture(
+        this.snapshotCaptureService.capture(
                 layout,
                 project.id().toString(),
                 snapshotId,

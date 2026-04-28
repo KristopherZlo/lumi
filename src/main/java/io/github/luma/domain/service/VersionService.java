@@ -22,6 +22,7 @@ import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.SnapshotCaptureService;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
@@ -29,7 +30,6 @@ import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
-import io.github.luma.storage.repository.SnapshotWriter;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
@@ -54,7 +54,7 @@ public final class VersionService {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
-    private final SnapshotWriter snapshotWriter = new SnapshotWriter();
+    private final SnapshotCaptureService snapshotCaptureService = new SnapshotCaptureService();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
@@ -354,7 +354,7 @@ public final class VersionService {
                     versionId,
                     snapshotChunks.size()
             );
-            this.snapshotWriter.capture(
+            this.snapshotCaptureService.capture(
                     layout,
                     project.id().toString(),
                     snapshotId,

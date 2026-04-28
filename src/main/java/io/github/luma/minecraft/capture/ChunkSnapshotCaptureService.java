@@ -40,6 +40,14 @@ public final class ChunkSnapshotCaptureService {
         return this.captureLoadedChunk(level, chunk, null, null, null);
     }
 
+    public Optional<ChunkSnapshotPayload> captureChunk(ServerLevel level, ChunkPoint chunk) {
+        if (level == null || chunk == null) {
+            return Optional.empty();
+        }
+        LevelChunk levelChunk = level.getChunk(chunk.x(), chunk.z());
+        return Optional.of(this.capture(level, levelChunk, null, null, null));
+    }
+
     public Optional<ChunkSnapshotPayload> captureLoadedChunk(
             ServerLevel level,
             ChunkPoint chunk,
