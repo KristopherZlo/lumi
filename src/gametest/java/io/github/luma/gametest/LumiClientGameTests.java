@@ -10,7 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 @SuppressWarnings("UnstableApiUsage")
 public final class LumiClientGameTests implements FabricClientGameTest {
 
-    private static final int SINGLEPLAYER_RUNTIME_TIMEOUT_TICKS = 20 * 120;
+    private static final int SINGLEPLAYER_RUNTIME_TIMEOUT_TICKS = 20 * 240;
 
     @Override
     public void runTest(ClientGameTestContext context) {

@@ -43,7 +43,8 @@ final class SingleplayerGameplayRegressionSuite {
             new CropScenario(),
             new OpenableScenario(),
             new ItemEntityScenario(),
-            new EntitySpawnScenario()
+            new EntitySpawnScenario(),
+            new WaterBridgeScenario()
     );
 
     GameplayRegressionReport run(
@@ -67,6 +68,7 @@ final class SingleplayerGameplayRegressionSuite {
     record GameplayRegressionReport(
             List<GameplayCheck> checks,
             Set<BlockPoint> expectedDraftBlocks,
+            Set<BlockPoint> latestUndoRedoBlocks,
             int expectedEntityChanges,
             List<Entity> spawnedEntities
     ) {
@@ -105,7 +107,9 @@ final class SingleplayerGameplayRegressionSuite {
         private final SingleplayerTestVolume volume;
         private final String actor;
         private final GameplayChecks checks;
+        private final SingleplayerPlayerActionDriver playerActions;
         private final Set<BlockPoint> expectedDraftBlocks = new LinkedHashSet<>();
+        private final Set<BlockPoint> latestUndoRedoBlocks = new LinkedHashSet<>();
         private final List<Entity> spawnedEntities = new ArrayList<>();
         private int expectedEntityChanges;
 
@@ -121,6 +125,7 @@ final class SingleplayerGameplayRegressionSuite {
             this.volume = volume;
             this.actor = actor;
             this.checks = checks;
+            this.playerActions = new SingleplayerPlayerActionDriver(level, player);
         }
 
         private void trackedPlayerAction(Runnable runnable) {
@@ -136,6 +141,11 @@ final class SingleplayerGameplayRegressionSuite {
             this.expectedDraftBlocks.add(BlockPoint.from(pos));
         }
 
+        private void expectLatestUndoRedoBlock(BlockPos pos) {
+            this.latestUndoRedoBlocks.add(BlockPoint.from(pos));
+            this.expectDraftBlock(pos);
+        }
+
         private void expectEntityChange(Entity entity) {
             this.expectedEntityChanges += 1;
             this.trackSpawnedEntity(entity);
@@ -149,6 +159,7 @@ final class SingleplayerGameplayRegressionSuite {
             return new GameplayRegressionReport(
                     this.checks.results(),
                     Set.copyOf(this.expectedDraftBlocks),
+                    Set.copyOf(this.latestUndoRedoBlocks),
                     this.expectedEntityChanges,
                     List.copyOf(this.spawnedEntities)
             );
@@ -181,8 +192,8 @@ final class SingleplayerGameplayRegressionSuite {
         public void run(GameplayScenarioContext context) {
             List<BlockPos> placedBlocks = new ArrayList<>();
             context.trackedPlayerAction(() -> {
-                for (int x = 0; x < SingleplayerTestVolume.WIDTH; x++) {
-                    for (int z = 0; z < SingleplayerTestVolume.DEPTH; z++) {
+                for (int x = 0; x < 5; x++) {
+                    for (int z = 0; z < 5; z++) {
                         BlockPos pos = context.volume.min().offset(x, SingleplayerTestVolume.HEIGHT - 1, z);
                         context.level.setBlock(pos, Blocks.COPPER_BLOCK.defaultBlockState(), 3);
                         placedBlocks.add(pos);
@@ -349,6 +360,45 @@ final class SingleplayerGameplayRegressionSuite {
             item.discard();
             context.checks.check(item.isRemoved(), "gameplay removed item entity");
             context.trackSpawnedEntity(item);
+        }
+    }
+
+    private static final class WaterBridgeScenario implements GameplayScenario {
+
+        private static final int BRIDGE_LENGTH = 6;
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos anchor = context.volume.min().offset(1, 2, 8);
+            List<BlockPos> bridge = new ArrayList<>();
+            WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+                context.level.setBlock(anchor, Blocks.STONE.defaultBlockState(), 3);
+                for (int index = 1; index <= BRIDGE_LENGTH; index++) {
+                    BlockPos water = anchor.offset(index, -1, 0);
+                    context.level.setBlock(water.below(), Blocks.STONE.defaultBlockState(), 3);
+                    context.level.setBlock(water, Blocks.WATER.defaultBlockState(), 3);
+                }
+            });
+
+            BlockPos clicked = anchor;
+            boolean placedAll = true;
+            for (int index = 1; index <= BRIDGE_LENGTH; index++) {
+                BlockPos expected = anchor.offset(index, 0, 0);
+                placedAll = context.playerActions.placeAgainst(clicked, Direction.EAST, Blocks.SPRUCE_PLANKS, expected)
+                        && placedAll;
+                bridge.add(expected);
+                clicked = expected;
+            }
+
+            context.checks.check(placedAll, "gameplay player placed a bridge over water through gameMode useItemOn");
+            long verified = bridge.stream()
+                    .filter(pos -> context.level.getBlockState(pos).is(Blocks.SPRUCE_PLANKS))
+                    .filter(pos -> context.level.getFluidState(pos.below()).isSource())
+                    .count();
+            context.checks.check(verified == BRIDGE_LENGTH,
+                    "gameplay water bridge verified " + verified + "/" + BRIDGE_LENGTH + " planks above source water");
+            bridge.forEach(context::expectDraftBlock);
+            context.expectLatestUndoRedoBlock(bridge.getLast());
         }
     }
 }

@@ -9,9 +9,9 @@ import net.minecraft.server.level.ServerLevel;
  */
 final class SingleplayerTestVolume {
 
-    static final int WIDTH = 5;
-    static final int HEIGHT = 4;
-    static final int DEPTH = 5;
+    static final int WIDTH = 11;
+    static final int HEIGHT = 6;
+    static final int DEPTH = 11;
 
     private final BlockPos min;
     private final BlockPos max;

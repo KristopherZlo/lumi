@@ -7,6 +7,7 @@ import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.VersionDiff;
@@ -45,6 +46,8 @@ import net.minecraft.world.level.storage.LevelResource;
 final class SingleplayerTestRun {
 
     private static final String ACTOR = "Lumi singleplayer testing";
+    private static final int PREVIEW_WAIT_TIMEOUT_TICKS = 20 * 60;
+    private static final int EXPLOSION_WAIT_TIMEOUT_TICKS = 20 * 10;
 
     private final String serverKey;
     private final ServerLevel level;
@@ -73,6 +76,11 @@ final class SingleplayerTestRun {
     private BuildProject project;
     private ProjectVariant branch;
     private SingleplayerGameplayRegressionSuite.GameplayRegressionReport gameplayReport;
+    private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
+    private String gameplaySaveVersionId = "";
+    private int previewWaitTicks;
+    private int explosionWaitTicks;
+    private boolean gameplaySaveValidated;
     private int phaseStartPasses;
     private int phaseStartFailures;
     private boolean done;
@@ -138,6 +146,18 @@ final class SingleplayerTestRun {
                 case START_RESTORE_INITIAL -> this.startRestoreInitial();
                 case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
                 case CHECK_PLAYER_INTERACTIONS -> this.checkPlayerInteractions(server);
+                case START_GAMEPLAY_UNDO -> this.startGameplayUndo();
+                case CHECK_GAMEPLAY_UNDO -> this.checkGameplayUndo();
+                case START_GAMEPLAY_REDO -> this.startGameplayRedo();
+                case CHECK_GAMEPLAY_REDO -> this.checkGameplayRedo();
+                case START_GAMEPLAY_SAVE -> this.startGameplaySave(server);
+                case CHECK_GAMEPLAY_SAVE -> this.checkGameplaySave(server);
+                case START_EXPLOSION_INTERACTION -> this.startExplosionInteraction(server);
+                case CHECK_EXPLOSION_CAPTURE -> this.checkExplosionCapture(server);
+                case START_EXPLOSION_UNDO -> this.startExplosionUndo();
+                case CHECK_EXPLOSION_UNDO -> this.checkExplosionUndo();
+                case START_EXPLOSION_REDO -> this.startExplosionRedo();
+                case CHECK_EXPLOSION_REDO -> this.checkExplosionRedo();
                 case START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS -> this.startRestoreInitialAfterPlayerInteractions();
                 case CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS -> this.checkRestoreInitialAfterPlayerInteractions(server);
                 case CHECK_PERFORMANCE -> this.checkPerformanceBudget(server);
@@ -355,8 +375,133 @@ final class SingleplayerTestRun {
             }
             this.check(draft.entityChanges().size() >= report.expectedEntityChanges(),
                     "Gameplay draft includes builder-relevant entity changes");
+            this.check(draft.totalChangeCount() <= 128,
+                    "Gameplay draft stayed scoped instead of growing into unrelated world noise");
         }
-        this.completePhase(server, Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
+        this.completePhase(server, Phase.START_GAMEPLAY_UNDO);
+    }
+
+    private void startGameplayUndo() throws Exception {
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued gameplay bridge undo operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_GAMEPLAY_UNDO);
+    }
+
+    private void checkGameplayUndo() {
+        if (this.gameplayReport != null) {
+            for (BlockPoint expectedBlock : this.gameplayReport.latestUndoRedoBlocks()) {
+                this.checkAir(expectedBlock.toBlockPos(), "Gameplay undo removed bridge block " + this.format(expectedBlock.toBlockPos()));
+            }
+        }
+        this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_REDO);
+    }
+
+    private void startGameplayRedo() throws Exception {
+        this.pendingOperation = this.undoRedoService.redo(this.level, this.project.name());
+        this.log.info("Queued gameplay bridge redo operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_GAMEPLAY_REDO);
+    }
+
+    private void checkGameplayRedo() {
+        if (this.gameplayReport != null) {
+            for (BlockPoint expectedBlock : this.gameplayReport.latestUndoRedoBlocks()) {
+                this.checkBlock(expectedBlock.toBlockPos(), Blocks.SPRUCE_PLANKS,
+                        "Gameplay redo restored bridge block " + this.format(expectedBlock.toBlockPos()));
+            }
+        }
+        this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_SAVE);
+    }
+
+    private void startGameplaySave(MinecraftServer server) throws Exception {
+        this.gameplaySaveVersionId = ProjectService.versionId(this.projectService.loadVersions(server, this.project.name()).size() + 1);
+        this.previewWaitTicks = 0;
+        this.gameplaySaveValidated = false;
+        this.pendingOperation = this.versionService.startSaveVersion(this.level, this.project.name(), "Singleplayer gameplay save", ACTOR);
+        this.log.info("Queued gameplay save operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_GAMEPLAY_SAVE);
+    }
+
+    private void checkGameplaySave(MinecraftServer server) throws Exception {
+        if (!this.gameplaySaveValidated) {
+            this.check("Gameplay save created " + this.gameplaySaveVersionId, () ->
+                    this.projectService.loadVersions(server, this.project.name()).stream()
+                            .anyMatch(version -> this.gameplaySaveVersionId.equals(version.id())));
+            VersionDiff diff = this.value("Gameplay saved version diff can be built", () ->
+                    this.diffService.compareVersionToParent(server, this.project.name(), this.gameplaySaveVersionId));
+            if (diff != null) {
+                this.check(diff.changedBlockCount() >= Math.max(1, this.gameplayReport == null ? 0 : this.gameplayReport.latestUndoRedoBlocks().size()),
+                        "Gameplay saved patch includes the water bridge");
+            }
+            this.check("Gameplay save consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
+            this.gameplaySaveValidated = true;
+        }
+
+        ProjectVersion savedVersion = this.versionById(server, this.gameplaySaveVersionId);
+        if (savedVersion == null || !this.previewReady(server, savedVersion)) {
+            if (++this.previewWaitTicks < PREVIEW_WAIT_TIMEOUT_TICKS) {
+                return;
+            }
+            this.check(false, "Gameplay save preview was rendered within the timeout");
+        } else {
+            this.check(true, "Gameplay save preview PNG and metadata were written");
+        }
+        this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
+    }
+
+    private void startExplosionInteraction(MinecraftServer server) {
+        this.explosionWaitTicks = 0;
+        this.explosionReport = new SingleplayerExplosionRegressionScenario().start(this.level, this.player, this.volume);
+        this.check(this.explosionReport.placed(), "Player placed TNT through gameMode useItemOn");
+        this.check(this.explosionReport.ignited(), "Player ignited TNT through gameMode useItemOn");
+        this.completePhase(server, Phase.CHECK_EXPLOSION_CAPTURE);
+    }
+
+    private void checkExplosionCapture(MinecraftServer server) throws Exception {
+        if (this.explosionReport != null && !this.explosionReport.exploded(this.level)) {
+            if (++this.explosionWaitTicks < EXPLOSION_WAIT_TIMEOUT_TICKS) {
+                return;
+            }
+        }
+        this.check(this.explosionReport != null && this.explosionReport.exploded(this.level),
+                "Controlled TNT explosion changed the fixture");
+
+        RecoveryDraft draft = this.value("Explosion recovery draft can be loaded", () ->
+                HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
+        if (draft != null && this.explosionReport != null) {
+            Set<BlockPoint> capturedBlocks = new HashSet<>();
+            for (var change : draft.changes()) {
+                capturedBlocks.add(change.pos());
+            }
+            this.check(this.explosionReport.witnessBlocks().stream()
+                            .map(BlockPoint::from)
+                            .anyMatch(capturedBlocks::contains),
+                    "Explosion draft includes at least one blast witness block");
+        }
+        this.completePhase(server, Phase.START_EXPLOSION_UNDO);
+    }
+
+    private void startExplosionUndo() throws Exception {
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued explosion undo operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_EXPLOSION_UNDO);
+    }
+
+    private void checkExplosionUndo() {
+        this.check(this.explosionReport != null && this.explosionReport.restoredAfterUndo(this.level),
+                "Explosion undo restored TNT and blast witness blocks");
+        this.completePhase(this.level.getServer(), Phase.START_EXPLOSION_REDO);
+    }
+
+    private void startExplosionRedo() throws Exception {
+        this.pendingOperation = this.undoRedoService.redo(this.level, this.project.name());
+        this.log.info("Queued explosion redo operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_EXPLOSION_REDO);
+    }
+
+    private void checkExplosionRedo() {
+        this.check(this.explosionReport != null && this.explosionReport.removedAfterRedo(this.level),
+                "Explosion redo removed TNT and blast witness blocks again");
+        this.completePhase(this.level.getServer(), Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
     }
 
     private void startRestoreInitialAfterPlayerInteractions() throws Exception {
@@ -382,6 +527,7 @@ final class SingleplayerTestRun {
             this.gameplayReport.cleanup();
             this.gameplayReport = null;
         }
+        this.explosionReport = null;
         this.check("Gameplay restore consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
         this.completePhase(server, Phase.CHECK_PERFORMANCE);
@@ -521,6 +667,7 @@ final class SingleplayerTestRun {
             }
             this.gameplayReport = null;
         }
+        this.explosionReport = null;
         try {
             this.clearVolume();
         } catch (Exception exception) {
@@ -568,6 +715,28 @@ final class SingleplayerTestRun {
 
     private void checkAir(BlockPos pos, String label) {
         this.check(this.level.getBlockState(pos).isAir(), label);
+    }
+
+    private ProjectVersion versionById(MinecraftServer server, String versionId) throws Exception {
+        for (ProjectVersion version : this.projectService.loadVersions(server, this.project.name())) {
+            if (version.id().equals(versionId)) {
+                return version;
+            }
+        }
+        return null;
+    }
+
+    private boolean previewReady(MinecraftServer server, ProjectVersion version) throws Exception {
+        if (version == null
+                || version.preview() == null
+                || version.preview().fileName() == null
+                || version.preview().fileName().isBlank()
+                || version.preview().width() <= 0
+                || version.preview().height() <= 0) {
+            return false;
+        }
+        Path previewFile = this.projectService.resolveLayout(server, this.project.name()).previewFile(version.id());
+        return Files.exists(previewFile) && Files.size(previewFile) > 0L;
     }
 
     private boolean check(String label, CheckedBooleanSupplier assertion) {
@@ -649,7 +818,19 @@ final class SingleplayerTestRun {
         CHECK_PARTIAL_RESTORE("Verify partial restore", "check selected-area restore output"),
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
-        CHECK_PLAYER_INTERACTIONS("Gameplay interactions", "exercise broad block, stateful block, fluid, and entity actions"),
+        CHECK_PLAYER_INTERACTIONS("Gameplay interactions", "exercise broad block, stateful block, fluid, entity, and water-bridge actions"),
+        START_GAMEPLAY_UNDO("Queue gameplay undo", "undo the latest water-bridge placement through the operation model"),
+        CHECK_GAMEPLAY_UNDO("Verify gameplay undo", "check that the latest water-bridge placement was removed"),
+        START_GAMEPLAY_REDO("Queue gameplay redo", "redo the latest water-bridge placement through the operation model"),
+        CHECK_GAMEPLAY_REDO("Verify gameplay redo", "check that the latest water-bridge placement returned"),
+        START_GAMEPLAY_SAVE("Queue gameplay save", "save the player-built gameplay draft"),
+        CHECK_GAMEPLAY_SAVE("Verify gameplay save", "check gameplay save output and preview fulfillment"),
+        START_EXPLOSION_INTERACTION("TNT interaction", "place and ignite TNT through player game-mode actions"),
+        CHECK_EXPLOSION_CAPTURE("Verify TNT capture", "wait for the controlled explosion and inspect its draft"),
+        START_EXPLOSION_UNDO("Queue TNT undo", "undo the controlled explosion through the operation model"),
+        CHECK_EXPLOSION_UNDO("Verify TNT undo", "check that the controlled explosion was restored"),
+        START_EXPLOSION_REDO("Queue TNT redo", "redo the controlled explosion through the operation model"),
+        CHECK_EXPLOSION_REDO("Verify TNT redo", "check that the controlled explosion was replayed"),
         START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS(
                 "Queue gameplay rollback",
                 "plan and start restore to initial after broad gameplay actions"
@@ -698,6 +879,10 @@ final class SingleplayerTestRun {
                 case CHECK_BRANCH_SAVE -> START_PARTIAL_RESTORE;
                 case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
                 case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CHECK_PLAYER_INTERACTIONS,
+                     START_GAMEPLAY_UNDO, CHECK_GAMEPLAY_UNDO, START_GAMEPLAY_REDO, CHECK_GAMEPLAY_REDO,
+                     START_GAMEPLAY_SAVE, CHECK_GAMEPLAY_SAVE, START_EXPLOSION_INTERACTION,
+                     CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
+                     START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,
                      START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS, CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS,
                      CHECK_PERFORMANCE, CLEANUP -> CLEANUP;
             };
