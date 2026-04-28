@@ -48,16 +48,17 @@ public final class CompareOverlayRenderer {
     ) {
         boolean resolvedDebug = debugEnabled || LumaDebugLog.globalEnabled();
         List<DiffBlockEntry> resolvedBlocks = changedBlocks == null ? List.of() : List.copyOf(changedBlocks);
-        ACTIVE_STATE.set(new OverlayState(projectName, leftVersionId, rightVersionId, resolvedBlocks, resolvedDebug, true));
-        if (debugEnabled || LumaDebugLog.globalEnabled()) {
-            LumaDebugLog.log(
-                    "compare-overlay",
-                    "Activated compare overlay {} -> {} with {} changed blocks",
-                    leftVersionId,
-                    rightVersionId,
-                    resolvedBlocks.size()
-            );
-        }
+        OverlayState state = new OverlayState(projectName, leftVersionId, rightVersionId, resolvedBlocks, resolvedDebug, true);
+        ACTIVE_STATE.set(state);
+        OverlayDiagnostics.getInstance().logNow(
+                resolvedDebug,
+                "compare-overlay",
+                "Activated compare overlay {} -> {} with changedBlocks={} surfaceBlocks={}",
+                leftVersionId,
+                rightVersionId,
+                resolvedBlocks.size(),
+                state.surfaceBlockCount()
+        );
     }
 
     public static void clear() {
@@ -113,14 +114,26 @@ public final class CompareOverlayRenderer {
         }
 
         boolean resolvedDebug = debugEnabled || current.debugEnabled() || LumaDebugLog.globalEnabled();
-        ACTIVE_STATE.set(new OverlayState(
+        OverlayState replacement = new OverlayState(
                 projectName,
                 leftVersionId,
                 rightVersionId,
                 changedBlocks == null ? List.of() : List.copyOf(changedBlocks),
                 resolvedDebug,
                 current.visible()
-        ));
+        );
+        ACTIVE_STATE.set(replacement);
+        OverlayDiagnostics.getInstance().log(
+                resolvedDebug,
+                "compare-refresh",
+                "compare-overlay",
+                "Refreshed compare overlay {} -> {} with changedBlocks={} surfaceBlocks={} visible={}",
+                leftVersionId,
+                rightVersionId,
+                replacement.changedBlocks().size(),
+                replacement.surfaceBlockCount(),
+                replacement.visible()
+        );
     }
 
     public static boolean toggleVisibility() {
@@ -182,12 +195,58 @@ public final class CompareOverlayRenderer {
 
     public static void render(WorldRenderContext context) {
         OverlayState state = ACTIVE_STATE.get();
-        if (state == null || !state.visible() || state.changedBlocks().isEmpty()) {
+        if (state == null) {
+            OverlayDiagnostics.getInstance().log(
+                    false,
+                    "compare-skip-no-state",
+                    "compare-overlay",
+                    "Render skipped reason={} changedBlocks={} surfaceBlocks={} visible={} xray={}",
+                    "no-state",
+                    0,
+                    0,
+                    false,
+                    XRAY_ENABLED.get()
+            );
+            return;
+        }
+        if (!state.visible()) {
+            OverlayDiagnostics.getInstance().log(
+                    state.debugEnabled(),
+                    "compare-skip-hidden",
+                    "compare-overlay",
+                    "Render skipped reason={} changedBlocks={} surfaceBlocks={} visible={} xray={}",
+                    "hidden",
+                    state.changedBlocks().size(),
+                    state.surfaceBlockCount(),
+                    false,
+                    XRAY_ENABLED.get()
+            );
+            return;
+        }
+        if (state.changedBlocks().isEmpty()) {
+            OverlayDiagnostics.getInstance().log(
+                    state.debugEnabled(),
+                    "compare-skip-empty-diff",
+                    "compare-overlay",
+                    "Render skipped reason={} changedBlocks={} surfaceBlocks={} visible={} xray={}",
+                    "empty-diff",
+                    0,
+                    state.surfaceBlockCount(),
+                    true,
+                    XRAY_ENABLED.get()
+            );
             return;
         }
         try {
             renderOverlay(context, state);
-        } catch (IllegalStateException exception) {
+        } catch (RuntimeException exception) {
+            OverlayDiagnostics.getInstance().logNow(
+                    state.debugEnabled(),
+                    "compare-overlay",
+                    "Render failed with {}: {}",
+                    exception.getClass().getSimpleName(),
+                    exception.getMessage()
+            );
             ACTIVE_STATE.compareAndSet(state, state.withVisible(false));
             LumaMod.LOGGER.warn("Disabled compare overlay after a render pipeline failure", exception);
         }
@@ -195,10 +254,72 @@ public final class CompareOverlayRenderer {
 
     private static void renderOverlay(WorldRenderContext context, OverlayState state) {
         boolean xrayEnabled = XRAY_ENABLED.get();
+        if (context == null) {
+            OverlayDiagnostics.getInstance().log(
+                    state.debugEnabled(),
+                    "compare-skip-null-context",
+                    "compare-overlay",
+                    "Render skipped reason={} changedBlocks={} surfaceBlocks={} visible={} xray={}",
+                    "null-context",
+                    state.changedBlocks().size(),
+                    state.surfaceBlockCount(),
+                    state.visible(),
+                    xrayEnabled
+            );
+            return;
+        }
+        var matrices = context.matrices();
+        var consumers = context.consumers();
+        if (matrices == null) {
+            OverlayDiagnostics.getInstance().log(
+                    state.debugEnabled(),
+                    "compare-skip-null-matrices",
+                    "compare-overlay",
+                    "Render skipped reason={} changedBlocks={} surfaceBlocks={} visible={} xray={}",
+                    "null-matrices",
+                    state.changedBlocks().size(),
+                    state.surfaceBlockCount(),
+                    state.visible(),
+                    xrayEnabled
+            );
+            return;
+        }
+        if (consumers == null) {
+            OverlayDiagnostics.getInstance().log(
+                    state.debugEnabled(),
+                    "compare-skip-null-consumers",
+                    "compare-overlay",
+                    "Render skipped reason={} changedBlocks={} surfaceBlocks={} visible={} xray={}",
+                    "null-consumers",
+                    state.changedBlocks().size(),
+                    state.surfaceBlockCount(),
+                    state.visible(),
+                    xrayEnabled
+            );
+            return;
+        }
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        VertexConsumer fillConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.fill(xrayEnabled));
-        VertexConsumer lineConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.outline(xrayEnabled));
-        for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : state.visibleSurfaceBlocks(camera.x, camera.y, camera.z)) {
+        VertexConsumer fillConsumer = consumers.getBuffer(CompareOverlayRenderTypes.fill(xrayEnabled));
+        VertexConsumer lineConsumer = consumers.getBuffer(CompareOverlayRenderTypes.outline(xrayEnabled));
+        List<CompareOverlaySurfaceResolver.SurfaceBlock> visibleSurfaceBlocks = state.visibleSurfaceBlocks(
+                camera.x,
+                camera.y,
+                camera.z
+        );
+        OverlayDiagnostics.getInstance().log(
+                state.debugEnabled(),
+                "compare-frame",
+                "compare-overlay",
+                "Render frame changedBlocks={} surfaceBlocks={} renderedBlocks={} xray={} camera={}:{}:{}",
+                state.changedBlocks().size(),
+                state.surfaceBlockCount(),
+                visibleSurfaceBlocks.size(),
+                xrayEnabled,
+                camera.x,
+                camera.y,
+                camera.z
+        );
+        for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
             DiffBlockEntry entry = surfaceBlock.entry();
             ColorChannels color = ColorChannels.of(entry.changeType());
             float minX = (float) (entry.pos().x() - camera.x) + INSET;
@@ -209,7 +330,7 @@ public final class CompareOverlayRenderer {
             float maxZ = minZ + 1.0F - (INSET * 2.0F);
 
             OverlayFaceRenderer.renderFilledBox(
-                    context.matrices(),
+                    matrices,
                     fillConsumer,
                     minX,
                     minY,
@@ -224,7 +345,7 @@ public final class CompareOverlayRenderer {
                     Math.round(FILL_ALPHA)
             );
             ShapeRenderer.renderShape(
-                    context.matrices(),
+                    matrices,
                     lineConsumer,
                     Shapes.block(),
                     entry.pos().x() - camera.x,
@@ -397,6 +518,10 @@ public final class CompareOverlayRenderer {
 
         private List<DiffBlockEntry> changedBlocks() {
             return this.changedBlocks;
+        }
+
+        private int surfaceBlockCount() {
+            return this.surfaceBlocksByPosition.size();
         }
 
         private synchronized List<CompareOverlaySurfaceResolver.SurfaceBlock> visibleSurfaceBlocks(
