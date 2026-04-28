@@ -125,6 +125,7 @@ Responsibilities are split as follows:
 - lightweight summary controllers keep the project home, Branches, and Import / Export routes fast by avoiding diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open
 - `MergePreviewCache` runs Import / Export combine previews in the background and caches them by imported package and target branch while the screen is open
 - `LumaScreen` extends owo-ui `BaseOwoScreen`, keeps Lumi menus non-pausing, and gives each route a code-driven `OwoUIAdapter`
+- `CompareScreenSections` owns the Compare route's repeated section composition, while `CompareScreen` keeps route lifecycle, transient selection state, and action callbacks
 - `ClientWorkspaceOpenService` opens the current workspace through a lightweight loading screen and schedules project metadata preparation away from the client tick that handled the key press
 - `LumaUi` centralizes compact `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface` rules so screens avoid absolute positioning and keep layout predictable
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
