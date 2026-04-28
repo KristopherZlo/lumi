@@ -218,6 +218,14 @@ Run tests:
 .\gradlew.bat test
 ```
 
+Run the local in-world regression suite from a singleplayer save with cheats enabled:
+
+```mcfunction
+/lumi testing singleplayer
+```
+
+This creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk.
+
 Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` artifacts so the folder only keeps the current `lumi-*` outputs.
 
 ## Quick Start
@@ -239,7 +247,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 Current scope:
 
 - singleplayer / integrated-server first
-- menu flow first, commands limited to diagnostics/help
+- menu flow first, with commands limited to diagnostics/help and the explicit `/lumi testing singleplayer` runtime test suite
 - combine currently works through imported review projects for the same project lineage, with background review, block-level same-area detection, and validation messages before Lumi writes a combined save
 - partial restore is available from save details with manual bounds
 - compare overlay marks changed positions, not a full 3D preview

@@ -5,6 +5,7 @@ import io.github.luma.integration.OptionalIntegrationBootstrap;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.command.LumaCommands;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.minecraft.testing.SingleplayerTestingService;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.api.ModInitializer;
@@ -35,6 +36,7 @@ public final class LumaMod implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> this.commands.register(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             WorldOperationManager.getInstance().tick(server);
+            SingleplayerTestingService.getInstance().tick(server);
             HistoryCaptureManager.getInstance().flushIdleSessions(server);
         });
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {

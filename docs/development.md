@@ -69,6 +69,14 @@ CI can run the headless production client GameTest task:
 .\scripts\run-test-client.ps1 -GradleTasks runProductionClientGameTest
 ```
 
+Run the integrated-world runtime regression suite from a local singleplayer save with cheats enabled:
+
+```mcfunction
+/lumi testing singleplayer
+```
+
+The command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, integrity, and cleanup services through the server tick loop.
+
 Enable verbose runtime tracing for debugging:
 
 - per workspace: `Settings -> Debug -> Debug logging`

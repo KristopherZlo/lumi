@@ -14,7 +14,7 @@ The architecture is intentionally optimized around three requirements:
 
 ### Bootstrap layer
 
-`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations once per server tick, flushes idle capture sessions, and persists active sessions on server shutdown.
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations once per server tick, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown.
 
 ### Domain model layer
 
@@ -70,7 +70,8 @@ Important adapters:
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
-- `LumaCommands`: read-only diagnostic command interface
+- `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
+- `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, and restore workflows
 
 ### Optional integration layer
 
@@ -282,6 +283,7 @@ The current test suite is organized around:
 - recovery draft isolation between live capture and save/amend operations
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
 - Fabric GameTest scaffolding for server and client smoke tests, with a production client GameTest task for headless CI
+- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, integrity, and cleanup services
 
 When extending history or storage behavior, update both tests and documentation in the same change.
 
