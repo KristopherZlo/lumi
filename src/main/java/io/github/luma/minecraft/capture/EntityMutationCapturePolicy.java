@@ -42,7 +42,7 @@ public final class EntityMutationCapturePolicy {
         return change.isNoOp() ? Optional.empty() : Optional.of(change);
     }
 
-    boolean shouldCaptureMutation(WorldMutationSource source, EntityPayload oldValue, EntityPayload newValue) {
+    boolean shouldInspectMutation(WorldMutationSource source, String entityType) {
         if (source == null || source == WorldMutationSource.RESTORE || source == WorldMutationSource.SYSTEM) {
             return false;
         }
@@ -55,7 +55,11 @@ public final class EntityMutationCapturePolicy {
         if (source != WorldMutationSource.PLAYER) {
             return false;
         }
-        return BUILDER_RELEVANT_ENTITY_TYPES.contains(this.entityType(oldValue, newValue));
+        return BUILDER_RELEVANT_ENTITY_TYPES.contains(entityType);
+    }
+
+    boolean shouldCaptureMutation(WorldMutationSource source, EntityPayload oldValue, EntityPayload newValue) {
+        return this.shouldInspectMutation(source, this.entityType(oldValue, newValue));
     }
 
     private String entityId(EntityPayload oldValue, EntityPayload newValue) {

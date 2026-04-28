@@ -1,15 +1,18 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import java.util.Optional;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
 public final class EntityMutationTracker {
 
     private static final EntitySnapshotService SNAPSHOT_SERVICE = new EntitySnapshotService();
+    private static final EntityMutationCapturePolicy CAPTURE_POLICY = new EntityMutationCapturePolicy();
     private static final ExternalToolMutationOriginDetector TOOL_DETECTOR = ExternalToolMutationOriginDetector.getInstance();
 
     private EntityMutationTracker() {
@@ -20,13 +23,19 @@ public final class EntityMutationTracker {
             return PendingEntityMutation.empty();
         }
 
+        String entityType = entityType(entity);
+        WorldMutationSource source = WorldMutationContext.currentSource();
         ObservedExternalToolOperation operation = null;
-        if (!HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource())) {
+        if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
             Optional<ObservedExternalToolOperation> detected = TOOL_DETECTOR.detectOperation();
             if (detected.isEmpty()) {
                 return PendingEntityMutation.empty();
             }
             operation = detected.get();
+            source = operation.source();
+        }
+        if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
+            return PendingEntityMutation.empty();
         }
 
         return new PendingEntityMutation(level, SNAPSHOT_SERVICE.capture(level, entity), operation);
@@ -44,7 +53,17 @@ public final class EntityMutationTracker {
         if (level == null || entity == null) {
             return;
         }
-        ObservedExternalToolOperation operation = operationForCurrentContext();
+        String entityType = entityType(entity);
+        WorldMutationSource source = WorldMutationContext.currentSource();
+        ObservedExternalToolOperation operation = null;
+        if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
+            Optional<ObservedExternalToolOperation> detected = TOOL_DETECTOR.detectOperation();
+            if (detected.isEmpty()) {
+                return;
+            }
+            operation = detected.get();
+            source = operation.source();
+        }
         EntityPayload newPayload = SNAPSHOT_SERVICE.capture(level, entity);
         record(level, null, newPayload, operation);
     }
@@ -53,11 +72,11 @@ public final class EntityMutationTracker {
         return captureBefore(entity);
     }
 
-    private static ObservedExternalToolOperation operationForCurrentContext() {
-        if (HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource())) {
-            return null;
+    private static String entityType(Entity entity) {
+        if (entity == null || entity.getType() == null) {
+            return "";
         }
-        return TOOL_DETECTOR.detectOperation().orElse(null);
+        return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
     }
 
     private static void record(

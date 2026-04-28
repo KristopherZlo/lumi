@@ -46,6 +46,19 @@ class EntityMutationCapturePolicyTest {
         ).isPresent());
     }
 
+    @Test
+    void inspectionSkipsSourcesThatCanNeverRecordEntityHistory() {
+        assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.FALLING_BLOCK, "minecraft:falling_block"));
+        assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.MOB, "minecraft:zombie"));
+    }
+
+    @Test
+    void inspectionKeepsPlayerBuilderEntitiesAndExternalToolEntities() {
+        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.PLAYER, "minecraft:armor_stand"));
+        assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.PLAYER, "minecraft:zombie"));
+        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.AXIOM, "minecraft:zombie"));
+    }
+
     private static EntityPayload entity(String type, String uuid, double x) {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", type);

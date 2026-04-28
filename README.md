@@ -80,7 +80,7 @@ Use Lumi if you want to:
 - conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica/Tweakeroo placement paths, and known tool stacks that reach Minecraft block or entity mutation paths
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus builder-relevant entity spawn/remove/update and supported explosion edits
-- temporary `Alt` overlay for the latest 10 tracked actions when compare highlight is not active
+- temporary `Alt` overlay for the latest 10 undo actions, or redo actions while `Alt+Y` is held, when compare highlight is not active
 
 ## How It Works
 
@@ -90,9 +90,10 @@ Use Lumi if you want to:
 2. `HistoryCaptureManager` finds matching projects.
 3. Explicit builder-driven sources can bootstrap a dimension project on demand, but ambient world-settling sources do not.
 4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.
-5. Whole-dimension sessions keep a causal chunk envelope rooted in explicit builder edits. The root chunk defines a one-chunk halo envelope, and Lumi captures per-chunk baselines lazily when a chunk inside that envelope first needs stabilization.
-6. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
-7. `TrackedChangeBuffer` merges explicit and targeted realtime block changes by position and entity changes by UUID immediately.
+5. `EntityMutationCapturePolicy` rejects non-entity-history sources before Lumi asks Minecraft to serialize entity NBT, so transient falling-block or mob internals cannot crash capture.
+6. Whole-dimension sessions keep a causal chunk envelope rooted in explicit builder edits. The root chunk defines a one-chunk halo envelope, and Lumi captures per-chunk baselines lazily when a chunk inside that envelope first needs stabilization.
+7. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
+8. `TrackedChangeBuffer` merges explicit and targeted realtime block changes by position and entity changes by UUID immediately.
 8. First-touch whole-dimension baseline capture copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
 9. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
 10. Recovery draft data flushes on an interval, but the WAL append and compaction run asynchronously on that same capture-maintenance executor.
@@ -164,6 +165,12 @@ Main files:
 - `recovery/draft.wal.lz4`
 - `recovery/journal.json`
 
+Runtime test reports from `/lumi testing singleplayer` are written under:
+
+```text
+<save>/lumi/test-logs/
+```
+
 History archives and share packages are written under:
 
 ```text
@@ -217,6 +224,14 @@ Run tests:
 .\gradlew.bat test
 ```
 
+Run the local in-world regression suite from a singleplayer save with cheats enabled:
+
+```mcfunction
+/lumi testing singleplayer
+```
+
+This creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk. The run reports phase progress in chat, keeps a pass/fail report instead of stopping on the first failed check, and writes a detailed log under `<save>/lumi/test-logs/`.
+
 Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` artifacts so the folder only keeps the current `lumi-*` outputs.
 
 ## Quick Start
@@ -227,7 +242,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
 6. Use `Alt+Z` / `Alt+Y` to undo or redo the latest tracked Lumi action.
-7. Hold `Alt` to preview the latest 10 tracked actions when the compare overlay is not active.
+7. Hold `Alt` to preview the latest 10 undo actions, or hold `Alt+Y` to preview redo actions, when the compare overlay is not active.
    Seeing changes against `Current build` enables the world highlight immediately and refreshes it automatically while you keep editing.
 8. Use `Save build` when you want a safe restore point.
 9. Open a save when you want details, restore, see changes, or create a branch from it.
@@ -238,7 +253,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 Current scope:
 
 - singleplayer / integrated-server first
-- menu flow first, commands limited to diagnostics/help
+- menu flow first, with commands limited to diagnostics/help and the explicit `/lumi testing singleplayer` runtime test suite
 - combine currently works through imported review projects for the same project lineage, with background review, block-level same-area detection, and validation messages before Lumi writes a combined save
 - partial restore is available from save details with manual bounds
 - compare overlay marks changed positions, not a full 3D preview

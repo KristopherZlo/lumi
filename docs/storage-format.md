@@ -16,6 +16,12 @@ Shared world-level metadata is stored at:
 <world>/lumi/world-origin.json
 ```
 
+Runtime test logs are stored at:
+
+```text
+<world>/lumi/test-logs/
+```
+
 Project history archives and share packages exported from the UI are stored at:
 
 ```text
@@ -67,6 +73,20 @@ Important fields:
 Automatic dimension workspaces use this manifest to define the meaning of the `WORLD_ROOT` / `Initial` history node.
 Legacy manifests without `createdWithLumi` are treated as `createdWithLumi = false`, so automatic generator-based restore strategies stay disabled unless the world was positively marked by Lumi.
 Once written, origin fingerprints are preserved as the original restore-safety baseline. Later datapack or generator changes are compared against these stored values instead of overwriting them during startup.
+
+### `test-logs/singleplayer-<timestamp>.log`
+
+Stores the detailed report for `/lumi testing singleplayer`.
+
+Each log includes:
+
+- start and finish timestamps
+- total passed and failed checks
+- phase progress messages
+- per-check PASS/FAIL entries
+- stack traces for unexpected phase or operation errors
+
+These logs are diagnostic artifacts only. They are not referenced by project history, cleanup policies, import/export packages, or restore workflows.
 
 ### `project.json`
 

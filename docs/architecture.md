@@ -14,7 +14,7 @@ The architecture is intentionally optimized around three requirements:
 
 ### Bootstrap layer
 
-`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations once per server tick, flushes idle capture sessions, and persists active sessions on server shutdown.
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, bootstraps shared world-origin metadata on integrated-server start, advances world operations once per server tick, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown.
 
 ### Domain model layer
 
@@ -60,7 +60,7 @@ These services should express product rules, not raw Minecraft side effects or r
 Important adapters:
 
 - `HistoryCaptureManager`: captures explicit tracked actions immediately, keeps per-project causal envelopes, and drains dirty-chunk stabilization before drafts are persisted or consumed
-- `UndoRedoHistoryManager`: keeps the in-memory per-project action stack that powers live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout or reconciled stabilization deltas into the latest builder action
+- `UndoRedoHistoryManager`: keeps the in-memory per-project undo and redo action stacks that power live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout or reconciled stabilization deltas into the latest builder action
 - `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
 - `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
 - `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, and `PersistentBlockStatePolicy`: filter runtime-only block/entity transitions and normalize piston animation states before they become drafts, undo/redo actions, snapshots, or restore placements
@@ -70,7 +70,8 @@ Important adapters:
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
-- `LumaCommands`: read-only diagnostic command interface
+- `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
+- `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, and restore workflows, with chat progress and durable pass/fail logs
 
 ### Optional integration layer
 
@@ -123,7 +124,7 @@ Responsibilities are split as follows:
 - project-facing screens poll lightweight operation snapshots every 10 client ticks so conflicting mutation buttons unlock as soon as the operation becomes terminal, while status text can stay visible briefly
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, prioritizes the nearest changed blocks to the current camera position, and renders only exposed overlay faces so translucent fill does not self-stack through dense diff volumes
 - `CompareOverlayCoordinator` refreshes `current`-world compare overlays on the client tick so live edits appear in the active highlight without rebuilding the screen manually
-- `RecentChangesOverlayRenderer` renders the latest tracked Lumi actions when `Alt` is held and the compare overlay is not active
+- `RecentChangesOverlayRenderer` renders latest undo actions when `Alt` is held, or redo actions while `Alt+Y` is held, when the compare overlay is not active
 - the Import / Export route presents the normal flow: export history packages first, list importable zips from the game-root `lumi-projects` folder, import packages as review projects, optionally include preview PNGs in exports, delete imported review packages, resolve same-area zones, show zone overlays, and apply a combined save without cluttering Build History or Branches
 
 ## Core runtime flows
@@ -247,6 +248,7 @@ Main files:
 - `recovery/draft.wal.lz4`: append-only recovery log
 - `recovery/operation-draft.bin.lz4`: isolated save/amend draft fallback
 - `recovery/journal.json`: user-facing workflow log
+- `test-logs/singleplayer-<timestamp>.log`: local runtime test report for `/lumi testing singleplayer`
 
 See [storage-format.md](storage-format.md) for the exact layout.
 
@@ -282,6 +284,7 @@ The current test suite is organized around:
 - recovery draft isolation between live capture and save/amend operations
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
 - Fabric GameTest scaffolding for server and client smoke tests, with a production client GameTest task for headless CI
+- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, integrity, and cleanup services while reporting progress and logging pass/fail checks
 
 When extending history or storage behavior, update both tests and documentation in the same change.
 
