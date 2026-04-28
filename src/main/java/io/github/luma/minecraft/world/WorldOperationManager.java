@@ -272,8 +272,8 @@ public final class WorldOperationManager {
             );
         }
 
-        public int totalPlacements() {
-            return this.localQueue == null ? 0 : this.localQueue.totalPlacements();
+        public int totalWorkUnits() {
+            return this.localQueue == null ? 0 : this.localQueue.totalWorkUnits();
         }
     }
 
@@ -491,7 +491,7 @@ public final class WorldOperationManager {
         private int entityIndex = 0;
         private boolean blockEntitiesApplied = false;
         private boolean entitiesApplied = false;
-        private int appliedBlocks = 0;
+        private int appliedWorkUnits = 0;
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -531,24 +531,24 @@ public final class WorldOperationManager {
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op",
-                        "Prepared operation {} loaded {} placements across {} ready chunk batches",
+                        "Prepared operation {} loaded {} work units across {} ready chunk batches",
                         this.handle().label(),
-                        this.prepared.totalPlacements(),
+                        this.prepared.totalWorkUnits(),
                         this.prepared.localQueue().completedCount()
                 );
                 this.progressSink().update(
                         OperationStage.APPLYING,
                         0,
-                        this.prepared.totalPlacements(),
+                        this.prepared.totalWorkUnits(),
                         "Applying prepared batches"
                 );
-                if (this.prepared.totalPlacements() == 0) {
+                if (this.prepared.totalWorkUnits() == 0) {
                     return this.advanceCompletion();
                 }
             }
 
-            int processedThisTick = 0;
-            while (processedThisTick < maxBlocks && System.nanoTime() < deadlineNanos) {
+            int processedWorkThisTick = 0;
+            while (processedWorkThisTick < maxBlocks && System.nanoTime() < deadlineNanos) {
                 if (this.currentBatch == null) {
                     this.currentBatch = this.dispatcher.pollNext();
                     if (this.currentBatch == null) {
@@ -579,7 +579,7 @@ public final class WorldOperationManager {
                 WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
                 int processed;
                 try {
-                    processed = this.applyCurrentChunk(Math.min(maxBlocks - processedThisTick, 128));
+                    processed = this.applyCurrentChunk(Math.min(maxBlocks - processedWorkThisTick, 128));
                 } finally {
                     WorldMutationContext.popSource();
                 }
@@ -588,13 +588,13 @@ public final class WorldOperationManager {
                     break;
                 }
 
-                this.appliedBlocks += processed;
-                processedThisTick += processed;
+                this.appliedWorkUnits += processed;
+                processedWorkThisTick += processed;
 
                 this.progressSink().update(
                         OperationStage.APPLYING,
-                        this.appliedBlocks,
-                        this.prepared.totalPlacements(),
+                        this.appliedWorkUnits,
+                        this.prepared.totalWorkUnits(),
                         this.currentBatch == null
                                 ? "Applying queued chunks"
                                 : "Applying chunk " + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
@@ -603,10 +603,10 @@ public final class WorldOperationManager {
                     LumaDebugLog.log(
                             this.handle(),
                             "world-op",
-                            "Finished chunk batch {}:{} after applying {} total placements so far",
+                            "Finished chunk batch {}:{} after applying {} total work units so far",
                             this.currentBatch.chunk().x(),
                             this.currentBatch.chunk().z(),
-                            this.appliedBlocks
+                            this.appliedWorkUnits
                     );
                     this.prepared.historyStore().record(this.currentBatch);
                     this.prepared.batchProcessor().postProcessSet(this.currentBatch);
@@ -619,16 +619,16 @@ public final class WorldOperationManager {
             if (this.currentBatch == null && (this.dispatcher == null || !this.dispatcher.hasPending())) {
                 this.progressSink().update(
                         OperationStage.FINALIZING,
-                        this.appliedBlocks,
-                        this.prepared.totalPlacements(),
+                        this.appliedWorkUnits,
+                        this.prepared.totalWorkUnits(),
                         "Finalizing"
                 );
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op",
-                        "Finalizing prepared operation {} after {} applied placements",
+                        "Finalizing prepared operation {} after {} applied work units",
                         this.handle().label(),
-                        this.appliedBlocks
+                        this.appliedWorkUnits
                 );
                 return this.advanceCompletion();
             }
@@ -640,8 +640,8 @@ public final class WorldOperationManager {
             if (this.completionFuture == null) {
                 this.progressSink().update(
                         OperationStage.FINALIZING,
-                        this.appliedBlocks,
-                        this.prepared.totalPlacements(),
+                        this.appliedWorkUnits,
+                        this.prepared.totalWorkUnits(),
                         "Finalizing"
                 );
                 this.completionFuture = CompletableFuture.runAsync(() -> {
@@ -704,7 +704,7 @@ public final class WorldOperationManager {
                     if (this.blockEntityIndex >= this.currentBlockEntities.size()) {
                         this.blockEntitiesApplied = true;
                     }
-                    return 0;
+                    return processed;
                 }
             }
 
@@ -724,7 +724,7 @@ public final class WorldOperationManager {
                 if (this.entityIndex >= entityOperationCount) {
                     this.entitiesApplied = true;
                 }
-                return 0;
+                return processed;
             }
 
             return 0;

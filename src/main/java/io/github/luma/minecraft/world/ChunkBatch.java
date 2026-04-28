@@ -72,6 +72,12 @@ public record ChunkBatch(
         return total;
     }
 
+    public int totalWorkUnits() {
+        return this.totalPlacements()
+                + this.blockEntities.size()
+                + BlockChangeApplier.entityOperationCount(this.entityBatch);
+    }
+
     private static int localIndex(BlockPos pos) {
         return ((pos.getY() & 15) << 8) | ((pos.getZ() & 15) << 4) | (pos.getX() & 15);
     }

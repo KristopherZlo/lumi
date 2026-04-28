@@ -23,6 +23,9 @@ public final class RecentChangesOverlayRenderer {
     private static final int MAX_ACTIONS = 10;
     private static final int BASE_ALPHA = 80;
     private static final int ALPHA_STEP = 8;
+    private static final float FILL_ALPHA_SCALE = 0.45F;
+    private static final int MIN_FILL_ALPHA = 12;
+    private static final float INSET = 0.002F;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
 
@@ -57,9 +60,31 @@ public final class RecentChangesOverlayRenderer {
 
     private static void renderOverlay(WorldRenderContext context, OverlayState state) {
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
+        VertexConsumer fillConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.fill(false));
         VertexConsumer lineConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.outline(false));
         for (SurfaceEntry surfaceEntry : state.visibleSurfaceEntries(camera.x, camera.y, camera.z)) {
             RecentChangeEntry entry = surfaceEntry.entry();
+            float minX = (float) (entry.pos().x() - camera.x) + INSET;
+            float minY = (float) (entry.pos().y() - camera.y) + INSET;
+            float minZ = (float) (entry.pos().z() - camera.z) + INSET;
+            float maxX = minX + 1.0F - (INSET * 2.0F);
+            float maxY = minY + 1.0F - (INSET * 2.0F);
+            float maxZ = minZ + 1.0F - (INSET * 2.0F);
+            OverlayFaceRenderer.renderFilledBox(
+                    context.matrices(),
+                    fillConsumer,
+                    minX,
+                    minY,
+                    minZ,
+                    maxX,
+                    maxY,
+                    maxZ,
+                    surfaceEntry.surfaceBlock(),
+                    0xFF,
+                    0x9C,
+                    0x3A,
+                    Math.max(MIN_FILL_ALPHA, Math.round(entry.alpha() * FILL_ALPHA_SCALE))
+            );
             ShapeRenderer.renderShape(
                     context.matrices(),
                     lineConsumer,
@@ -145,7 +170,8 @@ public final class RecentChangesOverlayRenderer {
     }
 
     private record SurfaceEntry(
-            RecentChangeEntry entry) {
+            RecentChangeEntry entry,
+            CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock) {
     }
 
     private static final class OverlayState {
@@ -200,7 +226,7 @@ public final class RecentChangesOverlayRenderer {
                 if (entry == null) {
                     continue;
                 }
-                resolved.add(new SurfaceEntry(entry));
+                resolved.add(new SurfaceEntry(entry, surfaceBlock));
             }
             this.cachedVisibleEntries = List.copyOf(resolved);
             return this.cachedVisibleEntries;

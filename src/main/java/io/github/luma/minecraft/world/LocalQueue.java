@@ -13,6 +13,7 @@ public final class LocalQueue {
     private final Deque<ChunkBatch> completed = new ArrayDeque<>();
     private final Deque<QueuedChunkBatch> incomplete = new ArrayDeque<>();
     private int totalPlacements = 0;
+    private int totalWorkUnits = 0;
 
     public static LocalQueue completed(List<ChunkBatch> batches) {
         LocalQueue queue = new LocalQueue();
@@ -29,6 +30,7 @@ public final class LocalQueue {
             return;
         }
         this.totalPlacements += batch.totalPlacements();
+        this.totalWorkUnits += batch.totalWorkUnits();
         if (batch.state() == BatchState.COMPLETE) {
             this.completed.addLast(batch);
         } else {
@@ -59,6 +61,10 @@ public final class LocalQueue {
 
     public int totalPlacements() {
         return this.totalPlacements;
+    }
+
+    public int totalWorkUnits() {
+        return this.totalWorkUnits;
     }
 
     public int incompleteWaitingCount() {
