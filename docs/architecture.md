@@ -289,8 +289,8 @@ The current test suite is organized around:
 - project layout and storage path invariants
 - recovery draft isolation between live capture and save/amend operations
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
-- Fabric GameTest scaffolding for server smoke tests, a Lumi client GameTest that opens a consistent singleplayer world, runs the integrated Lumi runtime suite, and then captures a smoke screenshot, plus a no-Lumi baseline client GameTest that runs vanilla block/entity gameplay actions through `lumi-baseline-gametest`
-- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, player block interaction, integrity, and cleanup services while reporting progress and logging pass/fail checks
+- Fabric GameTest scaffolding for server smoke tests, a Lumi client GameTest that opens a consistent singleplayer world, runs the integrated Lumi runtime suite, and then captures a smoke screenshot, plus a no-Lumi baseline client GameTest that runs the same broad vanilla gameplay surface through `lumi-baseline-gametest`
+- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, gameplay interaction, integrity, and cleanup services while reporting progress and logging pass/fail checks
 - `scripts/compare-runtime-load.ps1` for repeated no-Lumi versus Lumi launch comparisons based on wall-clock time, server tick-delay warnings, long tick reports, WARN/ERROR counts, Lumi warnings, render pipeline failures, and required gameplay-suite result lines
 
 When extending history or storage behavior, update both tests and documentation in the same change.

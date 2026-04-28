@@ -28,7 +28,9 @@ import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -330,32 +332,32 @@ final class SingleplayerTestRun {
     }
 
     private void checkPlayerInteractions(MinecraftServer server) throws Exception {
-        BlockPos support = this.volume.min().offset(2, 1, 3);
-        BlockPos flower = support.above();
-        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
-            this.level.setBlock(support, Blocks.GRASS_BLOCK.defaultBlockState(), 3);
-            this.level.setBlock(flower, Blocks.DANDELION.defaultBlockState(), 3);
-        });
+        SingleplayerGameplayRegressionSuite.GameplayRegressionReport report =
+                new SingleplayerGameplayRegressionSuite().run(this.level, this.player, this.volume, ACTOR);
+        try {
+            for (SingleplayerGameplayRegressionSuite.GameplayCheck check : report.checks()) {
+                this.check(check.passed(), check.label());
+            }
 
-        boolean destroyed = this.player.gameMode.destroyBlock(support);
-        this.check(destroyed, "Player destroyBlock removed grass support");
-        this.checkAir(support, "Player break removed support block immediately");
-        this.checkAir(flower, "Adjacent flower was removed immediately after support break");
-
-        RecoveryDraft draft = this.value("Live recovery draft can be loaded after player interaction", () ->
-                HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
-        if (draft != null) {
-            this.check(draft.changes().stream().anyMatch(change -> change.pos().equals(BlockPoint.from(support))),
-                    "Player interaction draft includes support block");
-            this.check(draft.changes().stream().anyMatch(change -> change.pos().equals(BlockPoint.from(flower))),
-                    "Player interaction draft includes adjacent flower block");
+            RecoveryDraft draft = this.value("Live recovery draft can be loaded after gameplay actions", () ->
+                    HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
+            if (draft != null) {
+                Set<BlockPoint> capturedBlocks = new HashSet<>();
+                for (var change : draft.changes()) {
+                    capturedBlocks.add(change.pos());
+                }
+                for (BlockPoint expectedBlock : report.expectedDraftBlocks()) {
+                    this.check(capturedBlocks.contains(expectedBlock),
+                            "Gameplay draft includes block " + this.format(expectedBlock.toBlockPos()));
+                }
+                this.check(draft.entityChanges().size() >= report.expectedEntityChanges(),
+                        "Gameplay draft includes builder-relevant entity changes");
+            }
+        } finally {
+            HistoryCaptureManager.getInstance().discardSession(server, this.project.id().toString());
+            report.cleanup();
+            this.clearVolume();
         }
-
-        HistoryCaptureManager.getInstance().discardSession(server, this.project.id().toString());
-        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
-            this.level.setBlock(support, Blocks.AIR.defaultBlockState(), 3);
-            this.level.setBlock(flower, Blocks.AIR.defaultBlockState(), 3);
-        });
         this.completePhase(server, Phase.CHECK_PERFORMANCE);
     }
 
@@ -613,7 +615,7 @@ final class SingleplayerTestRun {
         CHECK_PARTIAL_RESTORE("Verify partial restore", "check selected-area restore output"),
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
-        CHECK_PLAYER_INTERACTIONS("Player interactions", "break a support block and verify adjacent block updates"),
+        CHECK_PLAYER_INTERACTIONS("Gameplay interactions", "exercise player block, block-entity, redstone, fluid, bulk, and entity actions"),
         CHECK_PERFORMANCE("Performance budget", "verify the test run stayed within low-load limits"),
         CLEANUP("Cleanup and report", "remove test blocks, archive the test project, and write the log");
 
