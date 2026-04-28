@@ -315,7 +315,9 @@ public final class ProjectScreenSections {
     private List<ProjectVersion> variantVersions(Model model, String variantId) {
         return model.state().versions().stream()
                 .filter(version -> variantId.equals(version.variantId()))
-                .sorted(Comparator.comparing(ProjectVersion::createdAt).reversed())
+                .sorted(Comparator
+                        .comparing((ProjectVersion version) -> !ProjectUiSupport.isVariantHead(model.state().variants(), version))
+                        .thenComparing(ProjectVersion::createdAt, Comparator.reverseOrder()))
                 .toList();
     }
 
