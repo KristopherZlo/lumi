@@ -2,6 +2,7 @@ package io.github.luma.baselinegametest;
 
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -9,11 +10,17 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.RedstoneLampBlock;
+import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 final class BaselineGameplaySuite {
 
@@ -23,6 +30,11 @@ final class BaselineGameplaySuite {
             new BlockEntityScenario(),
             new RedstoneScenario(),
             new FluidScenario(),
+            new DoorScenario(),
+            new OrientationScenario(),
+            new CropScenario(),
+            new OpenableScenario(),
+            new ItemEntityScenario(),
             new EntityLifecycleScenario()
     );
 
@@ -30,7 +42,7 @@ final class BaselineGameplaySuite {
         ServerLevel level = server.overworld();
         ServerPlayer player = this.firstPlayer(server);
         BlockPos origin = player.blockPosition().offset(4, 8, 4);
-        BaselineWorldSlice slice = new BaselineWorldSlice(level, origin);
+        BaselineWorldSlice slice = new BaselineWorldSlice(level, origin, this.scenarios.size());
         slice.clear();
         for (int index = 0; index < this.scenarios.size(); index++) {
             BaselineScenario scenario = this.scenarios.get(index);
@@ -54,10 +66,11 @@ final class BaselineGameplaySuite {
     private record BaselineScenarioContext(ServerLevel level, ServerPlayer player, BlockPos origin) {
     }
 
-    private record BaselineWorldSlice(ServerLevel level, BlockPos origin) {
+    private record BaselineWorldSlice(ServerLevel level, BlockPos origin, int scenarioCount) {
 
         void clear() {
-            for (BlockPos pos : BlockPos.betweenClosed(this.origin, this.origin.offset(8, 36, 8))) {
+            BlockPos max = this.origin.offset(8, (this.scenarioCount * 6) + 6, 8);
+            for (BlockPos pos : BlockPos.betweenClosed(this.origin, max)) {
                 this.level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
             }
         }
@@ -163,6 +176,78 @@ final class BaselineGameplaySuite {
             checks.check(entity.isCurrentlyGlowing(), "baseline updated entity glowing state");
             entity.discard();
             checks.check(entity.isRemoved(), "baseline removed an entity");
+        }
+    }
+
+    private static final class DoorScenario implements BaselineScenario {
+
+        @Override
+        public void run(BaselineScenarioContext context, BaselineChecks checks) {
+            BlockPos lower = context.origin().offset(1, 1, 1);
+            BlockPos upper = lower.above();
+            context.level().setBlock(lower, Blocks.OAK_DOOR.defaultBlockState()
+                    .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER), 3);
+            context.level().setBlock(upper, Blocks.OAK_DOOR.defaultBlockState()
+                    .setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER), 3);
+            checks.check(context.level().getBlockState(lower).is(Blocks.OAK_DOOR), "baseline placed lower door block");
+            checks.check(context.level().getBlockState(upper).is(Blocks.OAK_DOOR), "baseline placed upper door block");
+        }
+    }
+
+    private static final class OrientationScenario implements BaselineScenario {
+
+        @Override
+        public void run(BaselineScenarioContext context, BaselineChecks checks) {
+            BlockPos stairs = context.origin().offset(1, 1, 1);
+            context.level().setBlock(stairs, Blocks.OAK_STAIRS.defaultBlockState()
+                    .setValue(StairBlock.FACING, Direction.EAST), 3);
+            checks.check(context.level().getBlockState(stairs).getValue(StairBlock.FACING) == Direction.EAST,
+                    "baseline preserved oriented stair state");
+        }
+    }
+
+    private static final class CropScenario implements BaselineScenario {
+
+        @Override
+        public void run(BaselineScenarioContext context, BaselineChecks checks) {
+            BlockPos farmland = context.origin().offset(1, 1, 1);
+            BlockPos crop = farmland.above();
+            context.level().setBlock(farmland, Blocks.FARMLAND.defaultBlockState(), 3);
+            context.level().setBlock(crop, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7), 3);
+            checks.check(context.level().getBlockState(farmland).is(Blocks.FARMLAND), "baseline placed farmland");
+            checks.check(context.level().getBlockState(crop).getValue(CropBlock.AGE) == 7,
+                    "baseline preserved mature crop state");
+        }
+    }
+
+    private static final class OpenableScenario implements BaselineScenario {
+
+        @Override
+        public void run(BaselineScenarioContext context, BaselineChecks checks) {
+            BlockPos trapdoor = context.origin().offset(1, 1, 1);
+            context.level().setBlock(trapdoor, Blocks.OAK_TRAPDOOR.defaultBlockState()
+                    .setValue(TrapDoorBlock.OPEN, true), 3);
+            checks.check(context.level().getBlockState(trapdoor).getValue(TrapDoorBlock.OPEN),
+                    "baseline preserved open trapdoor state");
+        }
+    }
+
+    private static final class ItemEntityScenario implements BaselineScenario {
+
+        @Override
+        public void run(BaselineScenarioContext context, BaselineChecks checks) {
+            BlockPos marker = context.origin().offset(1, 1, 1);
+            ItemEntity item = new ItemEntity(
+                    context.level(),
+                    marker.getX() + 0.5D,
+                    marker.getY() + 0.5D,
+                    marker.getZ() + 0.5D,
+                    new ItemStack(Items.OAK_PLANKS, 8)
+            );
+            context.level().addFreshEntity(item);
+            checks.check(!item.isRemoved(), "baseline spawned item entity");
+            item.discard();
+            checks.check(item.isRemoved(), "baseline removed item entity");
         }
     }
 }
