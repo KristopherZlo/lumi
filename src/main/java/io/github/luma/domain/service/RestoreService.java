@@ -640,7 +640,7 @@ public final class RestoreService {
     ) throws IOException {
         List<ProjectVersion> directVersions = this.directRestorePatchVersions(project, versions, variants, targetVersion);
         if (directVersions == null) {
-            LumaDebugLog.log(project, "restore", "Direct restore unavailable for project {} because active head is missing", project.name());
+            LumaDebugLog.log(project, "restore", "Direct restore unavailable for project {} because target is not on the active lineage", project.name());
             return Optional.empty();
         }
 
@@ -697,7 +697,7 @@ public final class RestoreService {
         return Optional.of(collapsed);
     }
 
-    private List<ProjectVersion> directRestorePatchVersions(
+    List<ProjectVersion> directRestorePatchVersions(
             io.github.luma.domain.model.BuildProject project,
             List<ProjectVersion> versions,
             List<ProjectVariant> variants,
@@ -708,9 +708,6 @@ public final class RestoreService {
                 .findFirst()
                 .orElse(null);
         if (activeVariant == null || activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
-            return null;
-        }
-        if (!targetVersion.variantId().equals(activeVariant.id())) {
             return null;
         }
 

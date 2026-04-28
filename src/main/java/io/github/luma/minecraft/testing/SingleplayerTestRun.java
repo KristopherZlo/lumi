@@ -225,9 +225,14 @@ final class SingleplayerTestRun {
     }
 
     private void checkAmend(MinecraftServer server) throws Exception {
-        this.check("Amend kept the project at two versions", () -> this.projectService.loadVersions(server, this.project.name()).size() == 2);
+        this.check("Amend created replacement version v0003 and kept detached v0002 for safety", () ->
+                this.projectService.loadVersions(server, this.project.name()).size() == 3);
+        this.check("Amend moved the main branch head to v0003", () ->
+                this.projectService.loadVariants(server, this.project.name()).stream()
+                        .filter(variant -> variant.main())
+                        .anyMatch(variant -> ProjectService.versionId(3).equals(variant.headVersionId())));
         VersionDiff diff = this.value("Amended version diff can be built", () ->
-                this.diffService.compareVersionToParent(server, this.project.name(), ProjectService.versionId(2)));
+                this.diffService.compareVersionToParent(server, this.project.name(), ProjectService.versionId(3)));
         if (diff != null) {
             this.check(diff.changedBlockCount() >= 4, "Amended version merged the new block changes");
         }
@@ -253,9 +258,9 @@ final class SingleplayerTestRun {
     private void checkBranchSave(MinecraftServer server) throws Exception {
         this.project = this.projectService.loadProject(server, this.project.name());
         this.check(this.branch != null && this.branch.id().equals(this.project.activeVariantId()), "Testing branch is active");
-        this.check("Branch save created version v0003", () -> this.projectService.loadVersions(server, this.project.name()).size() == 3);
+        this.check("Branch save created version v0004", () -> this.projectService.loadVersions(server, this.project.name()).size() == 4);
         this.check("Branch diff is non-empty", () ->
-                this.diffService.compareVersions(server, this.project.name(), ProjectService.versionId(2), ProjectService.versionId(3))
+                this.diffService.compareVersions(server, this.project.name(), ProjectService.versionId(3), ProjectService.versionId(4))
                         .changedBlockCount() >= 1);
         var projectArchive = this.value("Project history package can be exported", () ->
                 this.archiveService.exportProject(server, this.project.name(), false));
@@ -273,7 +278,7 @@ final class SingleplayerTestRun {
     }
 
     private void startPartialRestore() throws Exception {
-        PartialRestoreRequest request = this.partialRestoreRequest(ProjectService.versionId(2), this.volume.markerA());
+        PartialRestoreRequest request = this.partialRestoreRequest(ProjectService.versionId(3), this.volume.markerA());
         var plan = this.value("Partial restore plan can be summarized", () ->
                 this.restoreService.summarizePartialRestorePlan(this.level, request));
         if (plan != null) {
@@ -286,7 +291,7 @@ final class SingleplayerTestRun {
 
     private void checkPartialRestore(MinecraftServer server) throws Exception {
         this.checkBlock(this.volume.markerA(), Blocks.STONE, "Partial restore reverted marker A to the saved stone state");
-        this.check("Partial restore wrote version v0004", () -> this.projectService.loadVersions(server, this.project.name()).size() == 4);
+        this.check("Partial restore wrote version v0005", () -> this.projectService.loadVersions(server, this.project.name()).size() == 5);
         this.completePhase(server, Phase.START_RESTORE_INITIAL);
     }
 
@@ -542,7 +547,7 @@ final class SingleplayerTestRun {
         CHECK_REDO("Verify live redo", "check the world after redo completes"),
         START_SAVE("Queue save", "save the pending tracked work"),
         CHECK_SAVE("Verify save", "inspect version, patch, draft isolation, and cleanup dry-run"),
-        START_AMEND("Queue amend", "replace the latest save with more tracked work"),
+        START_AMEND("Queue amend", "replace the active branch head with merged tracked work"),
         CHECK_AMEND("Verify amend", "inspect amended history and world state"),
         START_BRANCH_SAVE("Branch and save", "create a branch, switch to it, and save divergent work"),
         CHECK_BRANCH_SAVE("Verify branch and export", "compare branch history and export packages"),
