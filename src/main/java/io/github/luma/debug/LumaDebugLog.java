@@ -40,6 +40,13 @@ public final class LumaDebugLog {
         LumaMod.LOGGER.info("[debug:{}] " + message, prepend(category, arguments));
     }
 
+    public static void log(boolean enabled, String category, String message, Object... arguments) {
+        if (!enabled && !globalEnabled()) {
+            return;
+        }
+        LumaMod.LOGGER.info("[debug:{}] " + message, prepend(category, arguments));
+    }
+
     public static void log(ProjectSettings settings, String category, String message, Object... arguments) {
         if (!enabled(settings)) {
             return;

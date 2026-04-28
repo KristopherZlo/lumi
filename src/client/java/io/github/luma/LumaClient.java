@@ -18,6 +18,7 @@ import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.overlay.CompareOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayRenderer;
+import io.github.luma.ui.overlay.OverlayDiagnostics;
 import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
 import org.lwjgl.glfw.GLFW;
 
@@ -87,6 +88,7 @@ public final class LumaClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
         WorldRenderEvents.BEFORE_DEBUG_RENDER.register(CompareOverlayRenderer::render);
         WorldRenderEvents.BEFORE_DEBUG_RENDER.register(RecentChangesOverlayRenderer::render);
+        OverlayDiagnostics.getInstance().clientRenderCallbacksRegistered("BEFORE_DEBUG_RENDER");
         StartupProfiler.logElapsed("client.fabric-events", eventRegistrationStartedAt);
         long hudStartedAt = StartupProfiler.start();
         WorkspaceHudCoordinator.getInstance().registerHud();
@@ -115,6 +117,15 @@ public final class LumaClient implements ClientModInitializer {
                 client,
                 shortcutInputActive && overlayHold,
                 undoRedoKeys.previewTarget()
+        );
+        OverlayDiagnostics.getInstance().clientTick(
+                client,
+                overlayHold,
+                shortcutInputActive,
+                undoRedoKeys.previewTarget(),
+                undoRedoKeys.undoPressed(),
+                undoRedoKeys.redoPressed(),
+                this.compareOverlayXrayKey
         );
         while (this.toggleCompareOverlayKey.consumeClick()) {
             CompareOverlayRenderer.toggleVisibility();
