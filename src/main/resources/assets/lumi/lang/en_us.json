@@ -3,6 +3,7 @@
   "key.lumi.undo": "Undo last Lumi action",
   "key.lumi.redo": "Redo last Lumi action",
   "key.lumi.open_dashboard": "Open current workspace",
+  "key.lumi.quick_save": "Quick save",
   "key.lumi.toggle_compare_overlay": "Show or hide compare highlight",
   "key.lumi.compare_overlay_xray": "Hold Lumi overlay / compare x-ray",
 
@@ -100,6 +101,7 @@
 
   "luma.screen.dashboard.title": "Projects",
   "luma.screen.project.title": "Build History: %s",
+  "luma.screen.quick_save.title": "Quick save",
   "luma.screen.opening_workspace.title": "Opening workspace",
   "luma.screen.recovery.title": "Recovered work",
   "luma.screen.compare.title": "Changes",
@@ -400,6 +402,9 @@
   "luma.status.restore_confirmation_required": "Confirm restore before Lumi changes the world.",
   "luma.status.variant_created": "Branch created.",
   "luma.status.variant_switched": "Branch switched.",
+  "luma.status.quick_save_ready": "Name this save, then save it to the current workspace.",
+  "luma.status.quick_save_name_required": "Enter a save name first.",
+  "luma.status.no_changes_to_save": "There are no unsaved changes to save.",
   "luma.status.preview_refreshed": "Preview refreshed.",
   "luma.status.preview_requested": "Preview refresh queued.",
   "luma.status.recovery_ready": "Recovery actions are available.",
@@ -570,6 +575,7 @@
   "luma.save.summary_help": "Lumi saves the current build state in this dimension.",
   "luma.save.name_input": "Save name",
   "luma.save.name_help": "Describe what you are about to keep.",
+  "luma.quick_save.name_help": "Name the restore point you are creating now.",
   "luma.save.actions_title": "Save build",
   "luma.save.suggestions_title": "Quick names",
   "luma.save.suggestions_help": "Use one if it fits, or write your own.",

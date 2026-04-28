@@ -20,6 +20,7 @@ import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayRenderer;
 import io.github.luma.ui.overlay.OverlayDiagnostics;
 import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
+import io.github.luma.ui.screen.QuickSaveScreen;
 import org.lwjgl.glfw.GLFW;
 
 public final class LumaClient implements ClientModInitializer {
@@ -29,12 +30,14 @@ public final class LumaClient implements ClientModInitializer {
             Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "general")
     );
     private static final String OPEN_DASHBOARD_KEY = "key.lumi.open_dashboard";
+    private static final String QUICK_SAVE_KEY = "key.lumi.quick_save";
     private static final String UNDO_KEY = "key.lumi.undo";
     private static final String REDO_KEY = "key.lumi.redo";
     private static final String TOGGLE_COMPARE_OVERLAY_KEY = "key.lumi.toggle_compare_overlay";
     private static final String COMPARE_OVERLAY_XRAY_KEY = "key.lumi.compare_overlay_xray";
 
     private KeyMapping openDashboardKey;
+    private KeyMapping quickSaveKey;
     private KeyMapping undoKey;
     private KeyMapping redoKey;
     private KeyMapping toggleCompareOverlayKey;
@@ -56,6 +59,12 @@ public final class LumaClient implements ClientModInitializer {
                 OPEN_DASHBOARD_KEY,
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_U,
+                KEY_CATEGORY
+        ));
+        this.quickSaveKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                QUICK_SAVE_KEY,
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_J,
                 KEY_CATEGORY
         ));
         this.undoKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
@@ -135,6 +144,12 @@ public final class LumaClient implements ClientModInitializer {
         }
         if (undoRedoKeys.redoPressed()) {
             this.undoRedoKeyController.redo(client);
+        }
+
+        while (this.quickSaveKey.consumeClick()) {
+            if (shortcutInputActive) {
+                client.setScreen(new QuickSaveScreen());
+            }
         }
 
         while (this.openDashboardKey.consumeClick()) {

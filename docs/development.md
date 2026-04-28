@@ -149,6 +149,7 @@ For the current architecture, responsibility boundaries, and runtime invariants,
 The current menu flow is centered around `ScreenRouter`, `LumaScreen`, and focused owo-ui route classes such as `ProjectScreen`, `SaveScreen`, `SaveDetailsScreen`, `CompareScreen`, `VariantsScreen`, and `ShareScreen`. Every in-game menu is code-driven owo-ui using `BaseOwoScreen`, `OwoUIAdapter`, `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface`.
 
 Controllers own service access and loading logic. Screens keep transient UI state and route lifecycle, while larger routes can delegate repeated layout sections to screen-section builders such as `CompareScreenSections`, `ProjectScreenSections`, focused Save details partial-restore components, and `ShareMergeReviewSection`. `WorkspaceHudCoordinator` drives the optional top-right HUD overlay and action-bar progress independently of screen lifetime.
+Escape is handled by `LumaScreen` as a global close-to-game action for Lumi UI routes; route-specific back/navigation controls should not be required to leave the UI.
 `ProjectHomeScreenController`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, cleanup, diagnostics, heavy archive validation, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Import / Export lists lightweight zip summaries from the game-root `lumi-projects` folder, while combine previews are requested only by explicit review actions and cached by imported package and target branch while the screen is open.
 Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
 
@@ -157,6 +158,7 @@ owo-lib is the only menu toolkit in this branch. Lumi declares it as a Fabric de
 Current UX assumptions:
 
 - pressing `U` opens the current dimension workspace directly
+- pressing `J` opens the standalone Quick save dialog while no client screen is open; the key is remappable in Minecraft Controls and saves through the current dimension workspace without opening Build History
 - pressing the Lumi overlay key plus `Z` starts undo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; the default overlay key is `Left Alt`, and remapping it changes this chord too
 - pressing the Lumi overlay key plus `Y` starts redo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; if undo and redo are pressed in the same tick, undo wins and redo must be pressed again
 - nearby short-lived secondary fallout can join the latest tracked undo/redo action instead of disappearing from the live action stack
