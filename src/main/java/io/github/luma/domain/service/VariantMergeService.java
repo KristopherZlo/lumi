@@ -5,17 +5,20 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.MergeConflictResolution;
 import io.github.luma.domain.model.MergeConflictZone;
 import io.github.luma.domain.model.MergeConflictZoneResolution;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
+import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.VariantMergeApplyRequest;
 import io.github.luma.domain.model.VariantMergePlan;
 import io.github.luma.domain.model.VersionKind;
@@ -116,7 +119,8 @@ public final class VariantMergeService {
                 request.sourceVariantId()
         );
         List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, request.conflictResolutions());
-        if (mergeChanges.isEmpty()) {
+        List<StoredEntityChange> mergeEntityChanges = plan.mergeEntityChanges();
+        if (mergeChanges.isEmpty() && mergeEntityChanges.isEmpty()) {
             throw new IllegalArgumentException("Imported variant does not add any new changes");
         }
 
@@ -127,7 +131,8 @@ public final class VariantMergeService {
                 "blocks",
                 LumaDebugLog.enabled(targetProject),
                 progressSink -> {
-                    progressSink.update(OperationStage.PREPARING, 0, mergeChanges.size(), "Preparing merge");
+                    int totalChanges = mergeChanges.size() + mergeEntityChanges.size();
+                    progressSink.update(OperationStage.PREPARING, 0, totalChanges, "Preparing merge");
                     RecoveryDraft draft = new RecoveryDraft(
                             targetProject.id().toString(),
                             plan.targetVariantId(),
@@ -136,7 +141,8 @@ public final class VariantMergeService {
                             WorldMutationSource.SYSTEM,
                             Instant.now(),
                             Instant.now(),
-                            mergeChanges
+                            mergeChanges,
+                            mergeEntityChanges
                     );
                     ProjectVersion mergedVersion = this.versionService.writeVersion(
                             level,
@@ -186,6 +192,18 @@ public final class VariantMergeService {
         String ancestorVersionId = this.findSharedAncestor(targetVersionMap, sourceVersionMap, sourceVariant.headVersionId());
         Map<BlockPoint, StateAccumulator> targetStates = this.collectStates(targetLayout, targetVersionMap, ancestorVersionId, targetVariant.headVersionId());
         Map<BlockPoint, StateAccumulator> sourceStates = this.collectStates(sourceLayout, sourceVersionMap, ancestorVersionId, sourceVariant.headVersionId());
+        Map<String, EntityStateAccumulator> targetEntityStates = this.collectEntityStates(
+                targetLayout,
+                targetVersionMap,
+                ancestorVersionId,
+                targetVariant.headVersionId()
+        );
+        Map<String, EntityStateAccumulator> sourceEntityStates = this.collectEntityStates(
+                sourceLayout,
+                sourceVersionMap,
+                ancestorVersionId,
+                sourceVariant.headVersionId()
+        );
 
         List<StoredBlockChange> mergeChanges = new ArrayList<>();
         LinkedHashMap<BlockPoint, StoredBlockChange> conflictChanges = new LinkedHashMap<>();
@@ -209,6 +227,7 @@ public final class VariantMergeService {
                 mergeChanges.add(new StoredBlockChange(pos, targetFinal, sourceFinal));
             }
         }
+        List<StoredEntityChange> mergeEntityChanges = this.collectMergeEntityChanges(targetEntityStates, sourceEntityStates);
 
         return new VariantMergePlan(
                 sourceProject.name(),
@@ -221,6 +240,7 @@ public final class VariantMergeService {
                 sourceStates.size(),
                 targetStates.size(),
                 List.copyOf(mergeChanges),
+                mergeEntityChanges,
                 this.buildConflictZones(conflictChanges.values())
         );
     }
@@ -359,6 +379,36 @@ public final class VariantMergeService {
         return List.copyOf(zones);
     }
 
+    private List<StoredEntityChange> collectMergeEntityChanges(
+            Map<String, EntityStateAccumulator> targetStates,
+            Map<String, EntityStateAccumulator> sourceStates
+    ) {
+        List<StoredEntityChange> mergeChanges = new ArrayList<>();
+        LinkedHashSet<String> entityIds = new LinkedHashSet<>();
+        entityIds.addAll(targetStates.keySet());
+        entityIds.addAll(sourceStates.keySet());
+        for (String entityId : entityIds) {
+            EntityPayload ancestorState = this.resolveAncestorEntityState(entityId, targetStates, sourceStates);
+            EntityPayload targetFinal = targetStates.containsKey(entityId) ? targetStates.get(entityId).finalState() : ancestorState;
+            EntityPayload sourceFinal = sourceStates.containsKey(entityId) ? sourceStates.get(entityId).finalState() : ancestorState;
+            boolean targetChanged = !Objects.equals(ancestorState, targetFinal);
+            boolean sourceChanged = !Objects.equals(ancestorState, sourceFinal);
+            if (!sourceChanged) {
+                continue;
+            }
+            if (targetChanged && !Objects.equals(targetFinal, sourceFinal)) {
+                throw new IllegalArgumentException("Imported variant has entity conflicts that cannot be resolved yet");
+            }
+            if (!Objects.equals(targetFinal, sourceFinal)) {
+                String entityType = sourceStates.containsKey(entityId)
+                        ? sourceStates.get(entityId).entityType()
+                        : targetStates.get(entityId).entityType();
+                mergeChanges.add(new StoredEntityChange(entityId, entityType, targetFinal, sourceFinal));
+            }
+        }
+        return List.copyOf(mergeChanges);
+    }
+
     private Map<BlockPoint, StateAccumulator> collectStates(
             ProjectLayout layout,
             Map<String, ProjectVersion> versionMap,
@@ -368,7 +418,7 @@ public final class VariantMergeService {
         List<ProjectVersion> path = this.pathFromAncestor(versionMap, ancestorVersionId, targetHeadVersionId);
         Map<BlockPoint, StateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
-            for (StoredBlockChange change : this.loadPatchChanges(layout, version.patchIds())) {
+            for (StoredBlockChange change : this.loadPatchWorldChanges(layout, version.patchIds()).blockChanges()) {
                 states.compute(change.pos(), (pos, current) -> current == null
                         ? new StateAccumulator(change.oldValue(), change.newValue())
                         : current.withFinalState(change.newValue()));
@@ -397,14 +447,35 @@ public final class VariantMergeService {
         return path;
     }
 
-    private List<StoredBlockChange> loadPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
-        List<StoredBlockChange> changes = new ArrayList<>();
+    private Map<String, EntityStateAccumulator> collectEntityStates(
+            ProjectLayout layout,
+            Map<String, ProjectVersion> versionMap,
+            String ancestorVersionId,
+            String targetHeadVersionId
+    ) throws IOException {
+        List<ProjectVersion> path = this.pathFromAncestor(versionMap, ancestorVersionId, targetHeadVersionId);
+        Map<String, EntityStateAccumulator> states = new LinkedHashMap<>();
+        for (ProjectVersion version : path) {
+            for (StoredEntityChange change : this.loadPatchWorldChanges(layout, version.patchIds()).entityChanges()) {
+                states.compute(change.entityId(), (entityId, current) -> current == null
+                        ? new EntityStateAccumulator(change.oldValue(), change.newValue(), change.entityType())
+                        : current.withFinalState(change.newValue(), change.entityType()));
+            }
+        }
+        return states;
+    }
+
+    private PatchWorldChanges loadPatchWorldChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
+        List<StoredBlockChange> blockChanges = new ArrayList<>();
+        List<StoredEntityChange> entityChanges = new ArrayList<>();
         for (String patchId : patchIds) {
             var metadata = this.patchMetaRepository.load(layout, patchId)
                     .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-            changes.addAll(this.patchDataRepository.loadChanges(layout, metadata));
+            PatchWorldChanges changes = this.patchDataRepository.loadWorldChanges(layout, metadata);
+            blockChanges.addAll(changes.blockChanges());
+            entityChanges.addAll(changes.entityChanges());
         }
-        return changes;
+        return new PatchWorldChanges(blockChanges, entityChanges);
     }
 
     private StatePayload resolveAncestorState(
@@ -416,6 +487,17 @@ public final class VariantMergeService {
             return targetStates.get(pos).initialState();
         }
         return sourceStates.get(pos).initialState();
+    }
+
+    private EntityPayload resolveAncestorEntityState(
+            String entityId,
+            Map<String, EntityStateAccumulator> targetStates,
+            Map<String, EntityStateAccumulator> sourceStates
+    ) {
+        if (targetStates.containsKey(entityId)) {
+            return targetStates.get(entityId).initialState();
+        }
+        return sourceStates.get(entityId).initialState();
     }
 
     private boolean statesEqual(StatePayload left, StatePayload right) {
@@ -464,6 +546,17 @@ public final class VariantMergeService {
 
         private StateAccumulator withFinalState(StatePayload state) {
             return new StateAccumulator(this.initialState, state);
+        }
+    }
+
+    private record EntityStateAccumulator(EntityPayload initialState, EntityPayload finalState, String entityType) {
+
+        private EntityStateAccumulator withFinalState(EntityPayload state, String type) {
+            return new EntityStateAccumulator(
+                    this.initialState,
+                    state,
+                    type == null || type.isBlank() ? this.entityType : type
+            );
         }
     }
 }
