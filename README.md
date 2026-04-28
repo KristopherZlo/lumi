@@ -67,7 +67,7 @@ Use Lumi if you want to:
 - save details screen with isometric preview, restore, see-changes, and branch actions
 - See Changes screen for saved states, branches, and the current build, with manual references hidden under Advanced
 - live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi overlay key; changing the overlay key changes these chords too
-- short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit, including reconciled fluid and falling-block deltas from whole-dimension sessions
+- short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit; undo/redo drains already-dirty stabilization chunks first so poured fluid, contact-created source blocks, and falling-block deltas from whole-dimension sessions can join before the action is selected
 - runtime-only redstone state flips and piston animation blocks are ignored so active mechanisms do not pollute pending history or the recent action overlay
 - hard restore that moves the active branch head
 - region-scoped partial restore from save details, written back as a new `PARTIAL_RESTORE` save
@@ -95,7 +95,7 @@ Use Lumi if you want to:
 7. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
 8. `TrackedChangeBuffer` merges explicit and targeted realtime block changes by position and entity changes by UUID immediately.
 9. First-touch whole-dimension baseline capture copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
-10. Before draft snapshots, idle flushes, save, amend, or freeze persist anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
+10. Before draft snapshots, idle flushes, save, amend, undo/redo selection, or freeze persist or consume anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
 11. Recovery draft data flushes on an interval, but the WAL append and compaction run asynchronously on that same capture-maintenance executor.
 
 ### Save

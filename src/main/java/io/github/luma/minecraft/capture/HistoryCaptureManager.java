@@ -699,8 +699,30 @@ public final class HistoryCaptureManager {
         }
     }
 
+    /**
+     * Reconciles already-dirty causal chunks before live undo/redo chooses the
+     * next action, so settled fluid and falling-block fallout can join it.
+     */
+    public void drainUndoRedoStabilization(MinecraftServer server, String projectId) throws IOException {
+        this.serverThreadExecutor.run(server, () -> this.drainUndoRedoStabilizationOnServerThread(server, projectId));
+    }
+
     public void invalidateProjectCache(MinecraftServer server) {
         this.trackedProjectCatalog.invalidate(server);
+    }
+
+    private void drainUndoRedoStabilizationOnServerThread(MinecraftServer server, String projectId) throws IOException {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        CaptureSessionState sessionState = this.sessionRegistry.session(projectId);
+        if (trackedProject == null || sessionState == null || !sessionState.hasPendingReconciliation()) {
+            return;
+        }
+
+        this.reconcileSession(server, trackedProject, sessionState, false);
     }
 
     private boolean canUseMutationSource(MinecraftServer server, io.github.luma.domain.model.WorldMutationSource source) {

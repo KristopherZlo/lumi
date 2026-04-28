@@ -81,7 +81,7 @@ Tracked history includes:
 
 Lumi does not record its own restore apply pass as normal history.
 Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
-Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi keeps a one-chunk halo around the root chunk, captures per-chunk baselines lazily as fallout reaches those chunks, then reconciles later fallout such as falling gravel and fluid spread against the current world before the draft is flushed, saved, or frozen.
+Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi keeps a one-chunk halo around the root chunk, captures per-chunk baselines lazily as fallout reaches those chunks, then reconciles later fallout such as falling gravel and fluid spread against the current world before the draft is flushed, saved, frozen, or used to choose a live undo/redo action.
 Secondary effects such as falling gravel, fire spread, fluid spread, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay inside that same causal envelope.
 Runtime-only redstone state flips are ignored. Piston animation blocks such as `minecraft:piston_head` and `minecraft:moving_piston` are normalized out of new history storage so active mechanisms do not clutter saves or the recent action overlay.
 

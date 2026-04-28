@@ -26,11 +26,13 @@ public final class UndoRedoService {
 
     private final ProjectService projectService = new ProjectService();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+    private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     public OperationHandle undo(ServerLevel level, String projectName) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
+        this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
         UndoRedoActionStack.Selection selection = this.historyManager.selectUndo(project.id().toString());
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to undo");
@@ -40,6 +42,7 @@ public final class UndoRedoService {
 
     public OperationHandle redo(ServerLevel level, String projectName) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
+        this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
         UndoRedoActionStack.Selection selection = this.historyManager.selectRedo(project.id().toString());
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to redo");
@@ -97,7 +100,7 @@ public final class UndoRedoService {
                                 } else {
                                     this.historyManager.completeRedo(project.id().toString(), selection);
                                 }
-                                HistoryCaptureManager.getInstance().applyUndoRedoAdjustments(
+                                this.captureManager.applyUndoRedoAdjustments(
                                         level.getServer(),
                                         project.id().toString(),
                                         pendingAdjustments,

@@ -29,8 +29,7 @@ public final class ProjectSidebarNavigation {
             ProjectWindowLayout window,
             Screen currentScreen,
             String projectName,
-            ProjectWorkspaceTab activeTab,
-            Runnable onBack
+            ProjectWorkspaceTab activeTab
     ) {
         FlowLayout tabs = LumaUi.sidebarTabs();
         this.addTab(tabs, Component.translatable("luma.tab.history"), ProjectWorkspaceTab.HISTORY, activeTab, () ->
@@ -43,7 +42,6 @@ public final class ProjectSidebarNavigation {
                 this.router.openSettings(currentScreen, projectName));
         this.addTab(tabs, Component.translatable("luma.action.more"), ProjectWorkspaceTab.MORE, activeTab, () ->
                 this.router.openMore(currentScreen, projectName));
-        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.action.back"), false, button -> onBack.run()));
 
         window.sidebar().child(tabs);
         window.sidebar().child(LumaUi.sidebarSpacer());

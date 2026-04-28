@@ -98,7 +98,7 @@ public final class ProjectScreen extends LumaScreen {
                 this.state.variants()
         );
         root.child(window.root());
-        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.HISTORY, this::onClose);
+        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.HISTORY);
         window.content().child(LumaUi.statusBanner(this.bannerText()));
 
         ProjectScreenSections.Model model = this.sectionModel();
