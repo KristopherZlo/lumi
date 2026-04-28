@@ -61,6 +61,10 @@ final class StorageIo {
     }
 
     static void quarantineCorruptedFile(Path file, Exception exception) throws IOException {
+        quarantineCorruptedFile(file, exception, "malformed storage file");
+    }
+
+    static void quarantineCorruptedFile(Path file, Exception exception, String description) throws IOException {
         String corruptName = file.getFileName().toString() + ".corrupt-" + System.currentTimeMillis();
         Path corruptFile = file.resolveSibling(corruptName);
         try {
@@ -68,7 +72,7 @@ final class StorageIo {
         } catch (IOException moveException) {
             Files.deleteIfExists(file);
         }
-        LumaMod.LOGGER.warn("Quarantined malformed binary file {}", file, exception);
+        LumaMod.LOGGER.warn("Quarantined {} {}", description, file, exception);
     }
 
     private static byte[] serializeCompound(CompoundTag tag) throws IOException {

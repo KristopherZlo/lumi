@@ -248,6 +248,7 @@ Current guarantees:
 - entity-only restore, undo/redo, and recovery batches remain visible to the operation model because progress counts entity work as first-class work units
 - preview generation no longer samples or rasterizes on the server; the server only queues request metadata and the client later performs the textured off-screen render with the built-in preview mesh path
 - startup world-origin metadata bootstrap is low-priority background work and must not block initial server start or the first client render path
+- malformed `world-origin.json` files are quarantined and regenerated from the current world so a damaged manifest cannot prevent the current workspace UI from opening
 - operation progress is observable through `OperationSnapshot`
 - client HUD state is polled separately from screen rendering so non-pausing menus, the top-right diff overlay, and the action-bar progress bar keep updating while screens are open
 

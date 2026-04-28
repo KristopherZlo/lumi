@@ -1,5 +1,6 @@
 package io.github.luma.storage.repository;
 
+import com.google.gson.JsonSyntaxException;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.storage.GsonProvider;
 import java.io.IOException;
@@ -31,12 +32,20 @@ public final class WorldOriginRepository {
     private static final int CURRENT_SCHEMA_VERSION = 2;
 
     public Optional<WorldOriginInfo> load(MinecraftServer server) throws IOException {
-        Path file = this.file(server);
+        return this.loadFile(this.file(server));
+    }
+
+    Optional<WorldOriginInfo> loadFile(Path file) throws IOException {
         if (!Files.exists(file)) {
             return Optional.empty();
         }
 
-        return Optional.of(GsonProvider.gson().fromJson(Files.readString(file), WorldOriginInfo.class));
+        try {
+            return Optional.ofNullable(GsonProvider.gson().fromJson(Files.readString(file), WorldOriginInfo.class));
+        } catch (JsonSyntaxException exception) {
+            StorageIo.quarantineCorruptedFile(file, exception, "malformed world-origin manifest");
+            return Optional.empty();
+        }
     }
 
     public WorldOriginInfo ensure(MinecraftServer server) throws IOException {
