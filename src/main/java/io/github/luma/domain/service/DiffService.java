@@ -25,13 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import net.minecraft.server.MinecraftServer;
 
 public final class DiffService {
-
-    private static final Pattern BLOCK_NAME_PATTERN = Pattern.compile("Name:\\s*\"([^\"]+)\"");
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -141,16 +137,7 @@ public final class DiffService {
     }
 
     public String extractBlockId(String state) {
-        if (state == null || state.isBlank()) {
-            return "minecraft:air";
-        }
-
-        Matcher matcher = BLOCK_NAME_PATTERN.matcher(state);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-
-        return "minecraft:unknown";
+        return DiffBlockEntry.blockIdFromSnbt(state);
     }
 
     private ProjectVersion resolveVersion(ProjectLayout layout, List<ProjectVersion> versions, String versionId) throws IOException {
@@ -288,7 +275,9 @@ public final class DiffService {
                     change.pos(),
                     leftState,
                     rightState,
-                    this.changeType(leftState, rightState)
+                    this.changeType(leftState, rightState),
+                    existing == null ? change.oldValue().blockId() : existing.leftBlockId(),
+                    change.newValue().blockId()
             ));
         }
 
@@ -332,7 +321,9 @@ public final class DiffService {
                 pos,
                 this.toStateString(leftState),
                 this.toStateString(rightState),
-                this.changeType(leftState, rightState)
+                this.changeType(leftState, rightState),
+                leftState == null ? "minecraft:air" : leftState.blockId(),
+                rightState == null ? "minecraft:air" : rightState.blockId()
         );
     }
 

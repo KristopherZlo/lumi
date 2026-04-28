@@ -120,6 +120,9 @@ Use Lumi if you want to:
 
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Recovery WAL writes, WAL compaction, and baseline chunk compression stay off the server-tick capture path.
+- Large WorldEdit/Axiom edits avoid block-entity NBT serialization for ordinary blocks, and capture project matching uses a cached dimension/chunk index.
+- Partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file.
+- Restore apply uses adaptive tick budgets and caps block-entity/entity tail work per tick.
 - One map operation is expected at a time per save.
 - Progress is exposed through operation state.
 - Lumi screens do not pause the game.

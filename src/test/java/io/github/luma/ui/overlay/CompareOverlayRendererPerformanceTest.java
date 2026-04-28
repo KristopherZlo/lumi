@@ -40,6 +40,23 @@ class CompareOverlayRendererPerformanceTest {
         assertWithin(Duration.ofMillis(1500), elapsedNanos, "Compare overlay nearest-entry selection regressed");
     }
 
+    @Test
+    void nearestEntrySelectionHandlesVeryLargeDiffs() {
+        List<DiffBlockEntry> changedBlocks = this.syntheticEntries(500_000);
+
+        long startedAt = System.nanoTime();
+        List<DiffBlockEntry> selection = CompareOverlayRenderer.selectNearestEntries(
+                changedBlocks,
+                128.0D,
+                96.0D,
+                128.0D
+        );
+        long elapsedNanos = System.nanoTime() - startedAt;
+
+        assertEquals(2048, selection.size());
+        assertWithin(Duration.ofMillis(2500), elapsedNanos, "Compare overlay very-large selection regressed");
+    }
+
     private List<DiffBlockEntry> syntheticEntries(int count) {
         List<DiffBlockEntry> entries = new ArrayList<>(count);
         for (int index = 0; index < count; index++) {
