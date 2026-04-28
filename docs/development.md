@@ -109,6 +109,11 @@ For startup-only overhead, use the idle wrapper. It launches the same singleplay
 
 Idle summaries are written under `build/runtime-load-idle/<timestamp>/`. Use this before optimizing startup cost, and use the full runtime comparison when validating history workflow cost.
 World-origin metadata bootstrap is intentionally delayed until after the first player has entered the world and a short idle window has elapsed, so idle startup comparisons should not include Lumi storage bootstrap work unless a test explicitly opens a workspace immediately.
+Pass `-StartupProfile` to the idle wrapper to enable `-Dlumi.startupProfile=true` for the Lumi run. This logs client initializer timings and aggregated `ChunkSectionOwnershipRegistry` counters without enabling noisy per-project debug tracing:
+
+```powershell
+.\scripts\compare-idle-startup-load.ps1 -Runs 1 -StartupProfile
+```
 
 Enable verbose runtime tracing for debugging:
 

@@ -1,6 +1,7 @@
 package io.github.luma;
 
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.StartupProfiler;
 import io.github.luma.integration.OptionalIntegrationBootstrap;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.command.LumaCommands;
@@ -32,8 +33,14 @@ public final class LumaMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        long startedAt = StartupProfiler.start();
+        long integrationsStartedAt = StartupProfiler.start();
         this.optionalIntegrations.initialize();
+        StartupProfiler.logElapsed("main.optional-integrations", integrationsStartedAt);
+        long commandsStartedAt = StartupProfiler.start();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> this.commands.register(dispatcher));
+        StartupProfiler.logElapsed("main.command-registration-callback", commandsStartedAt);
+        long eventsStartedAt = StartupProfiler.start();
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             WorldOperationManager.getInstance().tick(server);
             SingleplayerTestingService.getInstance().tick(server);
@@ -46,9 +53,11 @@ public final class LumaMod implements ModInitializer {
             HistoryCaptureManager.getInstance().flushAll(server);
             WorldOperationManager.getInstance().shutdown();
         });
+        StartupProfiler.logElapsed("main.fabric-events", eventsStartedAt);
         LOGGER.info("{} bootstrap initialized", MOD_NAME);
         if (LumaDebugLog.globalEnabled()) {
             LOGGER.info("{} global debug logging is enabled via -Dlumi.debug=true", MOD_NAME);
         }
+        StartupProfiler.logElapsed("main.onInitialize", startedAt);
     }
 }
