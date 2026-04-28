@@ -24,12 +24,12 @@ public final class RecentChangesOverlayRenderer {
 
     private static final int MAX_RENDERED_BLOCKS = 2048;
     private static final int MAX_ACTIONS = 10;
-    private static final int BASE_ALPHA = 112;
-    private static final int ALPHA_STEP = 10;
-    private static final float FILL_ALPHA_SCALE = 0.55F;
-    private static final int MIN_FILL_ALPHA = 24;
+    private static final int BASE_ALPHA = 136;
+    private static final int ALPHA_STEP = 12;
+    private static final float FILL_ALPHA_SCALE = 0.62F;
+    private static final int MIN_FILL_ALPHA = 36;
     private static final float OUTLINE_WIDTH = 2.75F;
-    private static final float INSET = 0.002F;
+    private static final float FACE_OUTSET = 0.003F;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
 
@@ -189,12 +189,12 @@ public final class RecentChangesOverlayRenderer {
         VertexConsumer fillConsumer = consumers.getBuffer(CompareOverlayRenderTypes.fill(false));
         for (SurfaceEntry surfaceEntry : visibleSurfaceEntries) {
             RecentChangeEntry entry = surfaceEntry.entry();
-            float minX = (float) (entry.pos().x() - camera.x) + INSET;
-            float minY = (float) (entry.pos().y() - camera.y) + INSET;
-            float minZ = (float) (entry.pos().z() - camera.z) + INSET;
-            float maxX = minX + 1.0F - (INSET * 2.0F);
-            float maxY = minY + 1.0F - (INSET * 2.0F);
-            float maxZ = minZ + 1.0F - (INSET * 2.0F);
+            float minX = (float) (entry.pos().x() - camera.x) - FACE_OUTSET;
+            float minY = (float) (entry.pos().y() - camera.y) - FACE_OUTSET;
+            float minZ = (float) (entry.pos().z() - camera.z) - FACE_OUTSET;
+            float maxX = (float) (entry.pos().x() + 1.0D - camera.x) + FACE_OUTSET;
+            float maxY = (float) (entry.pos().y() + 1.0D - camera.y) + FACE_OUTSET;
+            float maxZ = (float) (entry.pos().z() + 1.0D - camera.z) + FACE_OUTSET;
             OverlayFaceRenderer.renderFilledBox(
                     matrices,
                     fillConsumer,

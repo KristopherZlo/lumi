@@ -25,9 +25,9 @@ public final class CompareOverlayRenderer {
 
     private static final String CURRENT_WORLD_REFERENCE = "current";
     private static final int MAX_RENDERED_BLOCKS = 2048;
-    private static final float FILL_ALPHA = 72.0F;
+    private static final float FILL_ALPHA = 112.0F;
     private static final float OUTLINE_WIDTH = 2.75F;
-    private static final float INSET = 0.002F;
+    private static final float FACE_OUTSET = 0.003F;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
     private static final AtomicBoolean XRAY_ENABLED = new AtomicBoolean(false);
@@ -322,12 +322,12 @@ public final class CompareOverlayRenderer {
         for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
             DiffBlockEntry entry = surfaceBlock.entry();
             ColorChannels color = ColorChannels.of(entry.changeType());
-            float minX = (float) (entry.pos().x() - camera.x) + INSET;
-            float minY = (float) (entry.pos().y() - camera.y) + INSET;
-            float minZ = (float) (entry.pos().z() - camera.z) + INSET;
-            float maxX = minX + 1.0F - (INSET * 2.0F);
-            float maxY = minY + 1.0F - (INSET * 2.0F);
-            float maxZ = minZ + 1.0F - (INSET * 2.0F);
+            float minX = (float) (entry.pos().x() - camera.x) - FACE_OUTSET;
+            float minY = (float) (entry.pos().y() - camera.y) - FACE_OUTSET;
+            float minZ = (float) (entry.pos().z() - camera.z) - FACE_OUTSET;
+            float maxX = (float) (entry.pos().x() + 1.0D - camera.x) + FACE_OUTSET;
+            float maxY = (float) (entry.pos().y() + 1.0D - camera.y) + FACE_OUTSET;
+            float maxZ = (float) (entry.pos().z() + 1.0D - camera.z) + FACE_OUTSET;
 
             OverlayFaceRenderer.renderFilledBox(
                     matrices,
