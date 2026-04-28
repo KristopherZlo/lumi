@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import com.mojang.blaze3d.platform.InputConstants;
+import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
@@ -39,6 +40,7 @@ public final class LumaClient implements ClientModInitializer {
     private KeyMapping toggleCompareOverlayKey;
     private KeyMapping compareOverlayXrayKey;
     private final ProjectService projectService = new ProjectService();
+    private final UndoRedoKeyChordTracker undoRedoKeyChordTracker = new UndoRedoKeyChordTracker();
     private final UndoRedoKeyController undoRedoKeyController = new UndoRedoKeyController();
 
     @Override
@@ -84,21 +86,23 @@ public final class LumaClient implements ClientModInitializer {
         boolean altHeld = isAltHeld(client);
         WorkspaceHudCoordinator.getInstance().tick(client);
         PreviewCaptureCoordinator.getInstance().tick(client);
+        UndoRedoKeyChordTracker.TickResult undoRedoKeys = this.undoRedoKeyChordTracker.tick(
+                client,
+                altHeld,
+                this.undoKey,
+                this.redoKey
+        );
         CompareOverlayRenderer.setXrayEnabled(this.compareOverlayXrayKey.isDown());
         CompareOverlayCoordinator.getInstance().tick(client);
-        RecentChangesOverlayCoordinator.getInstance().tick(client, altHeld);
+        RecentChangesOverlayCoordinator.getInstance().tick(client, altHeld, undoRedoKeys.previewTarget());
         while (this.toggleCompareOverlayKey.consumeClick()) {
             CompareOverlayRenderer.toggleVisibility();
         }
-        while (this.undoKey.consumeClick()) {
-            if (altHeld) {
-                this.undoRedoKeyController.undo(client);
-            }
+        if (undoRedoKeys.undoPressed()) {
+            this.undoRedoKeyController.undo(client);
         }
-        while (this.redoKey.consumeClick()) {
-            if (altHeld) {
-                this.undoRedoKeyController.redo(client);
-            }
+        if (undoRedoKeys.redoPressed()) {
+            this.undoRedoKeyController.redo(client);
         }
 
         while (this.openDashboardKey.consumeClick()) {

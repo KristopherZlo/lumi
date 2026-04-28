@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.LumaMod;
 import io.github.luma.domain.model.EntityPayload;
 import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
@@ -28,7 +29,12 @@ public final class EntitySnapshotService {
         }
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
-        if (!entity.save(output)) {
+        try {
+            if (!entity.save(output)) {
+                return null;
+            }
+        } catch (RuntimeException exception) {
+            LumaMod.LOGGER.warn("Skipped unsafe entity snapshot for {}", this.entityType(entity), exception);
             return null;
         }
 
@@ -43,5 +49,12 @@ public final class EntitySnapshotService {
             tag.putString("UUID", entity.getUUID().toString());
         }
         return new EntityPayload(tag);
+    }
+
+    private String entityType(Entity entity) {
+        if (entity == null || entity.getType() == null) {
+            return "unknown";
+        }
+        return net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
     }
 }

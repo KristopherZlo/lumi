@@ -88,6 +88,10 @@ public final class UndoRedoHistoryManager {
         return this.stack(projectId).recentUndoActions(count);
     }
 
+    public synchronized List<UndoRedoAction> recentRedoActions(String projectId, int count) {
+        return this.stack(projectId).recentRedoActions(count);
+    }
+
     public synchronized void clearProject(String projectId) {
         if (projectId == null || projectId.isBlank()) {
             return;

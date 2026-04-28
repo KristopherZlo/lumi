@@ -41,6 +41,7 @@ class UndoRedoActionStackTest {
 
         assertFalse(stack.canUndo());
         assertTrue(stack.canRedo());
+        assertEquals(List.of("action-1"), stack.recentRedoActions(1).stream().map(UndoRedoAction::id).toList());
 
         UndoRedoActionStack.Selection redo = stack.selectRedo();
         stack.completeRedo(redo);

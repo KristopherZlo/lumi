@@ -128,12 +128,20 @@ public final class UndoRedoActionStack {
     }
 
     public List<UndoRedoAction> recentUndoActions(int count) {
-        if (count <= 0 || this.undoStack.isEmpty()) {
+        return this.recentActions(this.undoStack, count);
+    }
+
+    public List<UndoRedoAction> recentRedoActions(int count) {
+        return this.recentActions(this.redoStack, count);
+    }
+
+    private List<UndoRedoAction> recentActions(Deque<UndoRedoAction> stack, int count) {
+        if (count <= 0 || stack.isEmpty()) {
             return List.of();
         }
 
         List<UndoRedoAction> actions = new ArrayList<>();
-        for (UndoRedoAction action : this.undoStack) {
+        for (UndoRedoAction action : stack) {
             actions.add(action.copy());
             if (actions.size() >= count) {
                 break;

@@ -14,6 +14,7 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 - If that project does not exist yet, Lumi creates it.
 - Use `Alt+Z` to undo the latest tracked Lumi action.
 - Use `Alt+Y` to redo the latest undone Lumi action.
+- Hold `Alt` to preview undo targets, or `Alt+Y` to preview redo targets, when compare highlight is not active.
 - Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
 - Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.
 - Use `More` -> `Projects` when you need to switch dimensions or choose another workspace.
@@ -218,7 +219,7 @@ Press `H` to hide or show the current overlay without rebuilding the comparison.
 Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
 Dense diff regions render as an exposed translucent shell, so nearby changes stay readable instead of stacking into a solid color slab.
 If one side of the comparison is the `current` build, that active highlight refreshes automatically while you keep editing.
-If compare highlight is not active, holding `Alt` shows the latest 10 tracked Lumi actions instead, fading from the newest action to older ones.
+If compare highlight is not active, holding `Alt` shows the latest 10 undo actions instead. Holding `Alt+Y` switches that temporary overlay to redo actions, fading from the newest action to older ones.
 
 The overlay gives priority to changes near the camera.
 
