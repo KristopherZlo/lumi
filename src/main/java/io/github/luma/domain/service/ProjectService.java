@@ -83,7 +83,9 @@ public final class ProjectService {
         this.ensureWorldOrigin(level.getServer());
 
         for (BuildProject project : this.projectRepository.loadAll(root)) {
-            if (project.tracksWholeDimension() && project.dimensionId().equals(level.dimension().identifier().toString())) {
+            if (!project.archived()
+                    && project.tracksWholeDimension()
+                    && project.dimensionId().equals(level.dimension().identifier().toString())) {
                 ProjectLayout existingLayout = this.resolveLayout(level.getServer(), project.name());
                 this.ensureWorldRootVersion(existingLayout, project, author, Instant.now());
                 return project;

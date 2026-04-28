@@ -60,7 +60,7 @@ These services should express product rules, not raw Minecraft side effects or r
 
 Important adapters:
 
-- `HistoryCaptureManager`: facade for mixin capture entrypoints; it captures explicit tracked actions immediately, coordinates per-project causal envelopes, and drains dirty-chunk stabilization before drafts are persisted or consumed
+- `HistoryCaptureManager`: facade for mixin capture entrypoints; it captures explicit tracked actions immediately, coordinates per-project causal envelopes, and drains dirty-chunk stabilization before drafts are persisted, consumed, or selected for live undo/redo
 - `CaptureSessionRegistry`: owns active capture buffers, active session state, dirty-session flags, and live-draft flush fingerprints for the capture facade
 - `CaptureDiagnosticsRegistry`: owns capture diagnostics state used for accepted-mutation traces and progress summaries
 - `TrackedProjectCatalog`: loads active project metadata, caches tracked-project membership, and exposes the dimension/chunk index used by capture matching
@@ -151,7 +151,7 @@ Responsibilities are split as follows:
 5. Explicit root mutations define a session-local causal envelope. Chunk baselines inside that envelope are captured lazily when those chunks first need stabilization.
 6. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position and entity UUID. For entities, the first old full-NBT payload and latest new full-NBT payload win.
 7. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
-8. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, or consuming the draft, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
+8. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, consuming the draft, or choosing a live undo/redo action, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
 9. Idle or dirty sessions are flushed into recovery storage only when the live buffer fingerprint changed since the last queued draft flush.
 10. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
 11. In integrated singleplayer worlds, explicit builder actions are allowed into capture and undo/redo immediately even if the permission frame is not operator-shaped yet; dedicated servers keep the operator gate.
@@ -248,6 +248,7 @@ Current guarantees:
 - entity-only restore, undo/redo, and recovery batches remain visible to the operation model because progress counts entity work as first-class work units
 - preview generation no longer samples or rasterizes on the server; the server only queues request metadata and the client later performs the textured off-screen render with the built-in preview mesh path
 - startup world-origin metadata bootstrap is low-priority background work and must not block initial server start or the first client render path
+- malformed `world-origin.json` files are quarantined and regenerated from the current world so a damaged manifest cannot prevent the current workspace UI from opening
 - operation progress is observable through `OperationSnapshot`
 - client HUD state is polled separately from screen rendering so non-pausing menus, the top-right diff overlay, and the action-bar progress bar keep updating while screens are open
 

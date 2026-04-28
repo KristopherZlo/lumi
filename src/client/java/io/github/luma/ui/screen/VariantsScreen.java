@@ -88,7 +88,7 @@ public final class VariantsScreen extends LumaScreen {
                 this.state.variants()
         );
         root.child(window.root());
-        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.VARIANTS, this::onClose);
+        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.VARIANTS);
         window.content().child(LumaUi.statusBanner(this.bannerText()));
 
         FlowLayout body = LumaUi.screenBody();

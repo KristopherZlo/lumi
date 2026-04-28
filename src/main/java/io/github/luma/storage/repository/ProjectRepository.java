@@ -56,13 +56,39 @@ public final class ProjectRepository {
     }
 
     public Optional<ProjectLayout> findLayoutByProjectName(Path projectsRoot, String projectName) throws IOException {
-        try (var stream = Files.list(projectsRoot)) {
-            return stream
-                    .filter(Files::isDirectory)
-                    .filter(path -> path.getFileName().toString().equalsIgnoreCase(projectName + ".mbp"))
-                    .map(ProjectLayout::new)
-                    .findFirst();
+        if (projectName == null || projectName.isBlank() || !Files.exists(projectsRoot)) {
+            return Optional.empty();
         }
+
+        String rawFolderName = projectName + ".mbp";
+        String safeFolderName = ProjectLayout.of(projectsRoot, projectName).root().getFileName().toString();
+        List<Path> projectDirs;
+        try (var stream = Files.list(projectsRoot)) {
+            projectDirs = stream
+                    .filter(Files::isDirectory)
+                    .toList();
+        }
+
+        Optional<ProjectLayout> directMatch = projectDirs.stream()
+                .filter(path -> {
+                    String folderName = path.getFileName().toString();
+                    return folderName.equalsIgnoreCase(rawFolderName)
+                            || folderName.equalsIgnoreCase(safeFolderName);
+                })
+                .map(ProjectLayout::new)
+                .findFirst();
+        if (directMatch.isPresent()) {
+            return directMatch;
+        }
+
+        for (Path path : projectDirs) {
+            ProjectLayout layout = new ProjectLayout(path);
+            Optional<BuildProject> project = this.load(layout);
+            if (project.isPresent() && project.get().name().equalsIgnoreCase(projectName)) {
+                return Optional.of(layout);
+            }
+        }
+        return Optional.empty();
     }
 
     private BuildProject normalize(BuildProject project) {

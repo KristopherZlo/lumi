@@ -61,7 +61,7 @@ public final class MoreScreen extends LumaScreen {
                 this.state.variants()
         );
         root.child(window.root());
-        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.MORE, this::onClose);
+        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.MORE);
         window.content().child(LumaUi.caption(Component.translatable("luma.more.help")));
         FlowLayout body = LumaUi.screenBody();
         window.content().child(LumaUi.screenScroll(body));

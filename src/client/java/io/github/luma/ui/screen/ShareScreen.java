@@ -104,7 +104,7 @@ public final class ShareScreen extends LumaScreen {
                 this.state.variants()
         );
         root.child(window.root());
-        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.IMPORT_EXPORT, this::onClose);
+        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.IMPORT_EXPORT);
         window.content().child(LumaUi.statusBanner(this.bannerText()));
         if (!this.validationMessage.isBlank()) {
             window.content().child(LumaUi.danger(Component.literal(this.validationMessage)));
