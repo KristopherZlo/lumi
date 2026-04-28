@@ -1,7 +1,10 @@
 package io.github.luma.mixin;
 
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ExplosionParticleInfo;
 import net.minecraft.core.particles.ParticleOptions;
@@ -22,7 +25,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 abstract class ServerLevelExplosionMixin {
 
     @Unique
-    private int luma$serverExplosionDepth = 0;
+    private static final ExplosiveEntityContextRegistry LUMA_EXPLOSIVE_CONTEXTS =
+            ExplosiveEntityContextRegistry.getInstance();
+
+    @Unique
+    private final Deque<Boolean> luma$contextualExplosionStack = new ArrayDeque<>();
 
     @Inject(
             method = "explode(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/damagesource/DamageSource;Lnet/minecraft/world/level/ExplosionDamageCalculator;DDDFZLnet/minecraft/world/level/Level$ExplosionInteraction;Lnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/util/random/WeightedList;Lnet/minecraft/core/Holder;)V",
@@ -44,8 +51,11 @@ abstract class ServerLevelExplosionMixin {
             Holder<SoundEvent> sound,
             CallbackInfo ci
     ) {
-        this.luma$serverExplosionDepth += 1;
-        WorldMutationContext.pushSource(WorldMutationSource.EXPLOSION);
+        boolean contextual = LUMA_EXPLOSIVE_CONTEXTS.pushContext(entity);
+        this.luma$contextualExplosionStack.push(contextual);
+        if (!contextual) {
+            WorldMutationContext.pushSource(WorldMutationSource.EXPLOSION);
+        }
     }
 
     @Inject(
@@ -68,11 +78,14 @@ abstract class ServerLevelExplosionMixin {
             Holder<SoundEvent> sound,
             CallbackInfo ci
     ) {
-        if (this.luma$serverExplosionDepth <= 0) {
+        if (this.luma$contextualExplosionStack.isEmpty()) {
             return;
         }
 
-        this.luma$serverExplosionDepth -= 1;
+        boolean contextual = this.luma$contextualExplosionStack.pop();
+        if (contextual) {
+            LUMA_EXPLOSIVE_CONTEXTS.forget(entity);
+        }
         WorldMutationContext.popSource();
     }
 }

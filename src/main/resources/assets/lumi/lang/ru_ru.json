@@ -405,6 +405,7 @@
   "luma.settings.error_positive_decimal": "Введи число больше нуля.",
 
   "luma.status.singleplayer_only": "Этот workflow сейчас поддерживается только в локальном singleplayer.",
+  "luma.status.admin_required": "Lumi нужны права оператора или включённые читы в этом мире.",
   "luma.status.dashboard_ready": "Dashboard загружен.",
   "luma.status.opening_workspace": "Открываем рабочее пространство...",
   "luma.status.dashboard_failed": "Не удалось загрузить dashboard.",
@@ -425,6 +426,10 @@
   "luma.status.restore_confirmation_required": "Подтверди восстановление перед тем, как Lumi изменит мир.",
   "luma.status.variant_created": "Бренч создан.",
   "luma.status.variant_switched": "Бренч переключён.",
+  "luma.status.variant_name_required": "Сначала введи название бренча.",
+  "luma.status.variant_already_exists": "Бренч с таким названием уже существует.",
+  "luma.status.variant_base_missing": "Выбранное сохранение больше не найдено.",
+  "luma.status.variant_switch_requires_saved_draft": "Сначала сохрани или отбрось recovery-черновик, затем переключай бренч.",
   "luma.status.preview_refreshed": "Превью обновлено.",
   "luma.status.preview_requested": "Обновление превью поставлено в очередь.",
   "luma.status.recovery_ready": "Доступны действия восстановления.",

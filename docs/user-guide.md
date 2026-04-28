@@ -83,6 +83,7 @@ Tracked history includes:
 - supported explosion edits
 
 Lumi does not record its own restore apply pass as normal history.
+When TNT is primed by a tracked builder action, Lumi keeps that action context through the fuse delay and records the resulting block damage with the same history step.
 Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
 Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi keeps a one-chunk halo around the root chunk, captures per-chunk baselines lazily as fallout reaches those chunks, then reconciles later fallout such as falling gravel and fluid spread against the current world before the draft is flushed, saved, frozen, or used to choose a live undo/redo action.
 Secondary effects such as falling gravel, fire spread, fluid spread, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay inside that same causal envelope.
@@ -164,7 +165,16 @@ Use the `Branches` screen to:
 - open saves for one branch
 - compare a branch against the current build from `More`
 
-When you switch branches, Lumi restores that branch head into the map.
+Creating a branch only adds a new branch head from the selected save or the
+active branch's saved head. It does not consume, discard, or freeze unsaved
+recovery draft edits. Lumi keeps branch names as written and generates a stable
+internal id automatically when several names normalize to the same id.
+
+When you switch branches, Lumi restores that branch head into the map and keeps
+the selected branch active even if that head started from a save on another
+branch.
+If a recovery draft is still pending, save or discard it before switching
+branches so Lumi does not overwrite unsaved work.
 
 Future saves continue from that head.
 

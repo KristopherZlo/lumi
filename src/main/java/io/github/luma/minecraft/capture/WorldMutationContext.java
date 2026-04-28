@@ -42,6 +42,20 @@ public final class WorldMutationContext {
         ));
     }
 
+    public static void pushSource(
+            WorldMutationSource source,
+            String actor,
+            String actionId,
+            boolean accessAllowed
+    ) {
+        SOURCE_STACK.get().push(new Frame(
+                source == null ? WorldMutationSource.SYSTEM : source,
+                actor == null || actor.isBlank() ? "world" : actor,
+                actionId == null || actionId.isBlank() ? "" : actionId,
+                accessAllowed
+        ));
+    }
+
     public static void pushPlayerSource(WorldMutationSource source, String actor, boolean accessAllowed) {
         SOURCE_STACK.get().push(new Frame(
                 source == null ? WorldMutationSource.PLAYER : source,
