@@ -75,7 +75,7 @@ Run the integrated-world runtime regression suite from a local singleplayer save
 /lumi testing singleplayer
 ```
 
-The command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, integrity, and cleanup services through the server tick loop.
+The command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, integrity, and cleanup services through the server tick loop. It reports phase progress in chat, records pass/fail checks without stopping at the first failed assertion, and writes a detailed log under `<world>/lumi/test-logs/`.
 
 Enable verbose runtime tracing for debugging:
 

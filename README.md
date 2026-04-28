@@ -165,6 +165,12 @@ Main files:
 - `recovery/draft.wal.lz4`
 - `recovery/journal.json`
 
+Runtime test reports from `/lumi testing singleplayer` are written under:
+
+```text
+<save>/lumi/test-logs/
+```
+
 History archives and share packages are written under:
 
 ```text
@@ -224,7 +230,7 @@ Run the local in-world regression suite from a singleplayer save with cheats ena
 /lumi testing singleplayer
 ```
 
-This creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk.
+This creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk. The run reports phase progress in chat, keeps a pass/fail report instead of stopping on the first failed check, and writes a detailed log under `<save>/lumi/test-logs/`.
 
 Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` artifacts so the folder only keeps the current `lumi-*` outputs.
 

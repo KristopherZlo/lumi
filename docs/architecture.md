@@ -71,7 +71,7 @@ Important adapters:
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
 - `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
 - `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
-- `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, and restore workflows
+- `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, and restore workflows, with chat progress and durable pass/fail logs
 
 ### Optional integration layer
 
@@ -248,6 +248,7 @@ Main files:
 - `recovery/draft.wal.lz4`: append-only recovery log
 - `recovery/operation-draft.bin.lz4`: isolated save/amend draft fallback
 - `recovery/journal.json`: user-facing workflow log
+- `test-logs/singleplayer-<timestamp>.log`: local runtime test report for `/lumi testing singleplayer`
 
 See [storage-format.md](storage-format.md) for the exact layout.
 
@@ -283,7 +284,7 @@ The current test suite is organized around:
 - recovery draft isolation between live capture and save/amend operations
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
 - Fabric GameTest scaffolding for server and client smoke tests, with a production client GameTest task for headless CI
-- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, integrity, and cleanup services
+- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, integrity, and cleanup services while reporting progress and logging pass/fail checks
 
 When extending history or storage behavior, update both tests and documentation in the same change.
 

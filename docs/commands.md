@@ -32,7 +32,15 @@ Shows:
 
 Runs an integrated-server regression suite against the real in-world Lumi services. The command is singleplayer-only, refuses to start while another Lumi world operation is active, and needs an empty `5x4x5` air volume above the player's current chunk.
 
+The suite shows phase progress in chat, records every check as pass/fail, and keeps running after failed checks when the next workflow can still be exercised. Hard workflow errors are logged, then the runner skips to the next safe phase or cleanup.
+
 The suite creates a temporary bounded project, then exercises project creation, initial snapshots, capture, recovery draft summaries, current diff, material delta, live undo/redo, save, amend, branch creation/switching, branch save, version compare, project export, branch export, partial restore, full restore, integrity inspection, and cleanup inspection. It removes the test blocks and archives the temporary project when the run finishes or fails.
+
+Each run writes a detailed log to:
+
+```text
+<save>/lumi/test-logs/singleplayer-<timestamp>.log
+```
 
 ## Removed Command Workflows
 

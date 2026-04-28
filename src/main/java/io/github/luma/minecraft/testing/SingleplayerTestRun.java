@@ -6,6 +6,7 @@ import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.VersionDiff;
 import io.github.luma.domain.service.DiffService;
@@ -24,6 +25,7 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
@@ -44,6 +46,7 @@ final class SingleplayerTestRun {
     private final ServerLevel level;
     private final ServerPlayer player;
     private final SingleplayerTestVolume volume;
+    private final SingleplayerTestLog log = new SingleplayerTestLog();
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
     private final RestoreService restoreService = new RestoreService();
@@ -59,10 +62,13 @@ final class SingleplayerTestRun {
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     private Phase phase = Phase.CREATE_PROJECT;
+    private Phase announcedPhase;
     private OperationHandle pendingOperation;
+    private String lastOperationProgressKey = "";
     private BuildProject project;
     private ProjectVariant branch;
-    private int checks;
+    private int phaseStartPasses;
+    private int phaseStartFailures;
     private boolean done;
 
     SingleplayerTestRun(MinecraftServer server, ServerLevel level, ServerPlayer player, SingleplayerTestVolume volume) {
@@ -70,6 +76,7 @@ final class SingleplayerTestRun {
         this.level = level;
         this.player = player;
         this.volume = volume;
+        this.log.info("Reserved test volume " + this.describeVolume());
     }
 
     boolean matches(MinecraftServer server) {
@@ -85,57 +92,55 @@ final class SingleplayerTestRun {
     }
 
     void message(MinecraftServer server, String text) {
+        this.log.info(text);
         ServerPlayer target = server.getPlayerList().getPlayer(this.player.getUUID());
         SingleplayerTestingService.send(target, text);
     }
 
-    void tick(MinecraftServer server) throws Exception {
+    void tick(MinecraftServer server) {
         if (this.done || this.waitingForOperation(server)) {
             return;
         }
 
-        switch (this.phase) {
-            case CREATE_PROJECT -> this.createProject(server);
-            case CAPTURE_DRAFT -> this.captureDraft(server);
-            case START_UNDO -> this.startUndo();
-            case CHECK_UNDO -> this.checkUndo();
-            case START_REDO -> this.startRedo();
-            case CHECK_REDO -> this.checkRedo();
-            case START_SAVE -> this.startSave();
-            case CHECK_SAVE -> this.checkSave(server);
-            case START_AMEND -> this.startAmend();
-            case CHECK_AMEND -> this.checkAmend(server);
-            case START_BRANCH_SAVE -> this.startBranchSave(server);
-            case CHECK_BRANCH_SAVE -> this.checkBranchSave(server);
-            case START_PARTIAL_RESTORE -> this.startPartialRestore();
-            case CHECK_PARTIAL_RESTORE -> this.checkPartialRestore(server);
-            case START_RESTORE_INITIAL -> this.startRestoreInitial();
-            case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
-            case CLEANUP -> this.finish(server);
+        this.announcePhase(server);
+        try {
+            switch (this.phase) {
+                case CREATE_PROJECT -> this.createProject(server);
+                case CAPTURE_DRAFT -> this.captureDraft(server);
+                case START_UNDO -> this.startUndo();
+                case CHECK_UNDO -> this.checkUndo();
+                case START_REDO -> this.startRedo();
+                case CHECK_REDO -> this.checkRedo();
+                case START_SAVE -> this.startSave();
+                case CHECK_SAVE -> this.checkSave(server);
+                case START_AMEND -> this.startAmend();
+                case CHECK_AMEND -> this.checkAmend(server);
+                case START_BRANCH_SAVE -> this.startBranchSave(server);
+                case CHECK_BRANCH_SAVE -> this.checkBranchSave(server);
+                case START_PARTIAL_RESTORE -> this.startPartialRestore();
+                case CHECK_PARTIAL_RESTORE -> this.checkPartialRestore(server);
+                case START_RESTORE_INITIAL -> this.startRestoreInitial();
+                case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
+                case CLEANUP -> this.finish(server);
+            }
+        } catch (Exception exception) {
+            this.handlePhaseException(server, exception);
         }
     }
 
     void fail(MinecraftServer server, Exception exception) {
-        try {
-            this.clearVolume();
-            if (this.project != null) {
-                HistoryCaptureManager.getInstance().discardSession(server, this.project.id().toString());
-                this.projectService.setArchived(server, this.project.name(), true);
-            }
-        } catch (Exception cleanupException) {
-            exception.addSuppressed(cleanupException);
-        }
-        this.message(server, "Lumi singleplayer testing failed in " + this.phase + ": " + exception.getMessage());
+        this.log.fail(this.phase.title(), "Unhandled test runner failure", exception);
+        this.cleanup(server);
+        this.finishWithSummary(server);
     }
 
     private void createProject(MinecraftServer server) throws Exception {
         String projectName = "Lumi Testing Singleplayer " + System.currentTimeMillis();
         this.project = this.projectService.createProject(this.level, projectName, this.volume.min(), this.volume.max(), ACTOR);
-        this.check(this.projectService.loadVersions(server, projectName).size() == 1, "initial version exists");
-        this.check(this.projectService.loadVariants(server, projectName).size() == 1, "main branch exists");
-        this.check(this.integrityService.inspect(server, projectName).valid(), "new project integrity is valid");
-        this.message(server, "Lumi testing: project, initial snapshot, branch metadata, and integrity passed");
-        this.phase = Phase.CAPTURE_DRAFT;
+        this.check("Initial version v0001 was created", () -> this.projectService.loadVersions(server, projectName).size() == 1);
+        this.check("Main branch metadata was created", () -> this.projectService.loadVariants(server, projectName).size() == 1);
+        this.check("Fresh project integrity report is valid", () -> this.integrityService.inspect(server, projectName).valid());
+        this.completePhase(server, Phase.CAPTURE_DRAFT);
     }
 
     private void captureDraft(MinecraftServer server) throws Exception {
@@ -148,54 +153,62 @@ final class SingleplayerTestRun {
             WorldMutationContext.popSource();
         }
 
-        var draft = this.recoveryService.loadDraft(server, this.project.name()).orElseThrow();
-        this.check(draft.totalChangeCount() >= 3, "recovery draft captured block and block-entity changes");
-        VersionDiff currentDiff = this.diffService.compareVersionToCurrentState(server, this.project.name(), ProjectService.versionId(1));
-        this.check(currentDiff.changedBlockCount() >= 3, "current-state diff includes pending draft");
-        this.check(!this.materialDeltaService.summarize(currentDiff).isEmpty(), "material delta summarizes pending draft");
-        this.message(server, "Lumi testing: capture, recovery draft, current diff, and material delta passed");
-        this.phase = Phase.START_UNDO;
+        RecoveryDraft draft = this.value("Recovery draft can be loaded after builder edits", () ->
+                this.recoveryService.loadDraft(server, this.project.name()).orElse(null));
+        if (draft != null) {
+            this.check(draft.totalChangeCount() >= 3, "Recovery draft captured block and block-entity changes");
+        }
+        VersionDiff currentDiff = this.value("Current-state diff can be built from pending draft", () ->
+                this.diffService.compareVersionToCurrentState(server, this.project.name(), ProjectService.versionId(1)));
+        if (currentDiff != null) {
+            this.check(currentDiff.changedBlockCount() >= 3, "Current-state diff includes pending draft blocks");
+            this.check(!this.materialDeltaService.summarize(currentDiff).isEmpty(), "Material delta summarizes pending draft blocks");
+        }
+        this.completePhase(server, Phase.START_UNDO);
     }
 
     private void startUndo() throws Exception {
         this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
-        this.phase = Phase.CHECK_UNDO;
+        this.log.info("Queued live undo operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_UNDO);
     }
 
     private void checkUndo() {
-        this.checkAir(this.volume.markerA(), "undo restored marker A");
-        this.checkAir(this.volume.markerB(), "undo restored marker B");
-        this.checkAir(this.volume.markerC(), "undo restored marker C");
-        this.message(this.level.getServer(), "Lumi testing: live undo passed");
-        this.phase = Phase.START_REDO;
+        this.checkAir(this.volume.markerA(), "Undo restored marker A to air");
+        this.checkAir(this.volume.markerB(), "Undo restored marker B to air");
+        this.checkAir(this.volume.markerC(), "Undo restored marker C to air");
+        this.completePhase(this.level.getServer(), Phase.START_REDO);
     }
 
     private void startRedo() throws Exception {
         this.pendingOperation = this.undoRedoService.redo(this.level, this.project.name());
-        this.phase = Phase.CHECK_REDO;
+        this.log.info("Queued live redo operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_REDO);
     }
 
     private void checkRedo() {
-        this.checkBlock(this.volume.markerA(), Blocks.STONE, "redo restored stone");
-        this.checkBlock(this.volume.markerB(), Blocks.BARREL, "redo restored barrel");
-        this.checkBlock(this.volume.markerC(), Blocks.GLASS, "redo restored glass");
-        this.message(this.level.getServer(), "Lumi testing: live redo passed");
-        this.phase = Phase.START_SAVE;
+        this.checkBlock(this.volume.markerA(), Blocks.STONE, "Redo restored marker A to stone");
+        this.checkBlock(this.volume.markerB(), Blocks.BARREL, "Redo restored marker B to barrel");
+        this.checkBlock(this.volume.markerC(), Blocks.GLASS, "Redo restored marker C to glass");
+        this.completePhase(this.level.getServer(), Phase.START_SAVE);
     }
 
     private void startSave() throws Exception {
         this.pendingOperation = this.versionService.startSaveVersion(this.level, this.project.name(), "Singleplayer test save", ACTOR);
-        this.phase = Phase.CHECK_SAVE;
+        this.log.info("Queued save operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_SAVE);
     }
 
     private void checkSave(MinecraftServer server) throws Exception {
-        this.check(this.projectService.loadVersions(server, this.project.name()).size() == 2, "manual save created v0002");
-        VersionDiff diff = this.diffService.compareVersionToParent(server, this.project.name(), ProjectService.versionId(2));
-        this.check(diff.changedBlockCount() >= 3, "saved version has patch changes");
-        this.check(this.recoveryService.loadDraft(server, this.project.name()).isEmpty(), "save consumed recovery draft");
-        this.check(this.cleanupService.inspect(server, this.project.name()).dryRun(), "cleanup inspect is dry-run");
-        this.message(server, "Lumi testing: save, patch diff, draft isolation, and cleanup inspect passed");
-        this.phase = Phase.START_AMEND;
+        this.check("Manual save created version v0002", () -> this.projectService.loadVersions(server, this.project.name()).size() == 2);
+        VersionDiff diff = this.value("Saved version diff can be built", () ->
+                this.diffService.compareVersionToParent(server, this.project.name(), ProjectService.versionId(2)));
+        if (diff != null) {
+            this.check(diff.changedBlockCount() >= 3, "Saved version patch includes captured blocks");
+        }
+        this.check("Save consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
+        this.check("Cleanup inspection runs as dry-run", () -> this.cleanupService.inspect(server, this.project.name()).dryRun());
+        this.completePhase(server, Phase.START_AMEND);
     }
 
     private void startAmend() throws Exception {
@@ -207,17 +220,20 @@ final class SingleplayerTestRun {
             WorldMutationContext.popSource();
         }
         this.pendingOperation = this.versionService.startAmendVersion(this.level, this.project.name(), "Singleplayer test amend", ACTOR);
-        this.phase = Phase.CHECK_AMEND;
+        this.log.info("Queued amend operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_AMEND);
     }
 
     private void checkAmend(MinecraftServer server) throws Exception {
-        this.check(this.projectService.loadVersions(server, this.project.name()).size() == 2, "amend kept version count");
-        VersionDiff diff = this.diffService.compareVersionToParent(server, this.project.name(), ProjectService.versionId(2));
-        this.check(diff.changedBlockCount() >= 4, "amended version merged new changes");
-        this.checkBlock(this.volume.markerC(), Blocks.OAK_PLANKS, "amended world has oak planks");
-        this.checkBlock(this.volume.markerD(), Blocks.COPPER_BLOCK, "amended world has copper block");
-        this.message(server, "Lumi testing: amend passed");
-        this.phase = Phase.START_BRANCH_SAVE;
+        this.check("Amend kept the project at two versions", () -> this.projectService.loadVersions(server, this.project.name()).size() == 2);
+        VersionDiff diff = this.value("Amended version diff can be built", () ->
+                this.diffService.compareVersionToParent(server, this.project.name(), ProjectService.versionId(2)));
+        if (diff != null) {
+            this.check(diff.changedBlockCount() >= 4, "Amended version merged the new block changes");
+        }
+        this.checkBlock(this.volume.markerC(), Blocks.OAK_PLANKS, "Amended world marker C is oak planks");
+        this.checkBlock(this.volume.markerD(), Blocks.COPPER_BLOCK, "Amended world marker D is copper block");
+        this.completePhase(server, Phase.START_BRANCH_SAVE);
     }
 
     private void startBranchSave(MinecraftServer server) throws Exception {
@@ -230,58 +246,86 @@ final class SingleplayerTestRun {
             WorldMutationContext.popSource();
         }
         this.pendingOperation = this.versionService.startSaveVersion(this.level, this.project.name(), "Singleplayer test branch save", ACTOR);
-        this.phase = Phase.CHECK_BRANCH_SAVE;
+        this.log.info("Queued branch save operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_BRANCH_SAVE);
     }
 
     private void checkBranchSave(MinecraftServer server) throws Exception {
         this.project = this.projectService.loadProject(server, this.project.name());
-        this.check(this.branch.id().equals(this.project.activeVariantId()), "test branch is active");
-        this.check(this.projectService.loadVersions(server, this.project.name()).size() == 3, "branch save created v0003");
-        this.check(this.diffService.compareVersions(server, this.project.name(), ProjectService.versionId(2), ProjectService.versionId(3)).changedBlockCount() >= 1, "branch diff is non-empty");
-        var projectArchive = this.archiveService.exportProject(server, this.project.name(), false);
-        var branchArchive = this.shareService.exportVariantPackage(server, this.project.name(), this.branch.id(), false);
-        this.check(Files.exists(projectArchive.archiveFile()) && !projectArchive.manifest().entries().isEmpty(), "project archive exported");
-        this.check(Files.exists(branchArchive.archiveFile()) && branchArchive.manifest().scopeOrDefault().variantScope(), "branch archive exported");
-        Files.deleteIfExists(projectArchive.archiveFile());
-        Files.deleteIfExists(branchArchive.archiveFile());
-        this.message(server, "Lumi testing: branch, compare, project export, and branch export passed");
-        this.phase = Phase.START_PARTIAL_RESTORE;
+        this.check(this.branch != null && this.branch.id().equals(this.project.activeVariantId()), "Testing branch is active");
+        this.check("Branch save created version v0003", () -> this.projectService.loadVersions(server, this.project.name()).size() == 3);
+        this.check("Branch diff is non-empty", () ->
+                this.diffService.compareVersions(server, this.project.name(), ProjectService.versionId(2), ProjectService.versionId(3))
+                        .changedBlockCount() >= 1);
+        var projectArchive = this.value("Project history package can be exported", () ->
+                this.archiveService.exportProject(server, this.project.name(), false));
+        var branchArchive = this.value("Branch history package can be exported", () ->
+                this.shareService.exportVariantPackage(server, this.project.name(), this.branch.id(), false));
+        if (projectArchive != null) {
+            this.check(Files.exists(projectArchive.archiveFile()) && !projectArchive.manifest().entries().isEmpty(), "Project export produced a non-empty zip");
+            Files.deleteIfExists(projectArchive.archiveFile());
+        }
+        if (branchArchive != null) {
+            this.check(Files.exists(branchArchive.archiveFile()) && branchArchive.manifest().scopeOrDefault().variantScope(), "Branch export produced a variant-scoped zip");
+            Files.deleteIfExists(branchArchive.archiveFile());
+        }
+        this.completePhase(server, Phase.START_PARTIAL_RESTORE);
     }
 
     private void startPartialRestore() throws Exception {
         PartialRestoreRequest request = this.partialRestoreRequest(ProjectService.versionId(2), this.volume.markerA());
-        var plan = this.restoreService.summarizePartialRestorePlan(this.level, request);
-        this.check(plan.mode() != RestorePlanMode.NO_OP && plan.changedBlocks() >= 1, "partial restore plan is actionable");
+        var plan = this.value("Partial restore plan can be summarized", () ->
+                this.restoreService.summarizePartialRestorePlan(this.level, request));
+        if (plan != null) {
+            this.check(plan.mode() != RestorePlanMode.NO_OP && plan.changedBlocks() >= 1, "Partial restore plan is actionable");
+        }
         this.pendingOperation = this.restoreService.partialRestore(this.level, request);
-        this.phase = Phase.CHECK_PARTIAL_RESTORE;
+        this.log.info("Queued partial restore operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_PARTIAL_RESTORE);
     }
 
     private void checkPartialRestore(MinecraftServer server) throws Exception {
-        this.checkBlock(this.volume.markerA(), Blocks.STONE, "partial restore reverted marker A");
-        this.check(this.projectService.loadVersions(server, this.project.name()).size() == 4, "partial restore wrote v0004");
-        this.message(server, "Lumi testing: partial restore passed");
-        this.phase = Phase.START_RESTORE_INITIAL;
+        this.checkBlock(this.volume.markerA(), Blocks.STONE, "Partial restore reverted marker A to the saved stone state");
+        this.check("Partial restore wrote version v0004", () -> this.projectService.loadVersions(server, this.project.name()).size() == 4);
+        this.completePhase(server, Phase.START_RESTORE_INITIAL);
     }
 
     private void startRestoreInitial() throws Exception {
-        var plan = this.restoreService.summarizeRestorePlan(this.level, this.project.name(), ProjectService.versionId(1));
-        this.check(plan.mode() != RestorePlanMode.NO_OP, "initial restore plan is actionable");
+        var plan = this.value("Initial restore plan can be summarized", () ->
+                this.restoreService.summarizeRestorePlan(this.level, this.project.name(), ProjectService.versionId(1)));
+        if (plan != null) {
+            this.check(plan.mode() != RestorePlanMode.NO_OP, "Initial restore plan is actionable");
+        }
         this.pendingOperation = this.restoreService.restore(this.level, this.project.name(), ProjectService.versionId(1));
-        this.phase = Phase.CHECK_RESTORE_INITIAL;
+        this.log.info("Queued full restore operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_RESTORE_INITIAL);
     }
 
     private void checkRestoreInitial(MinecraftServer server) throws Exception {
-        this.check(this.volume.isAir(this.level), "full restore returned test volume to initial air");
-        this.check(this.integrityService.inspect(server, this.project.name()).valid(), "final project integrity is valid");
-        this.phase = Phase.CLEANUP;
+        this.check(this.volume.isAir(this.level), "Full restore returned the test volume to initial air");
+        this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
+        this.completePhase(server, Phase.CLEANUP);
     }
 
-    private void finish(MinecraftServer server) throws Exception {
-        this.clearVolume();
-        HistoryCaptureManager.getInstance().discardSession(server, this.project.id().toString());
-        this.projectService.setArchived(server, this.project.name(), true);
+    private void finish(MinecraftServer server) {
+        this.cleanup(server);
+        this.finishWithSummary(server);
+    }
+
+    private void finishWithSummary(MinecraftServer server) {
         this.done = true;
-        this.message(server, "Lumi singleplayer testing passed " + this.checks + " checks. Temporary project archived: " + this.project.name());
+        String result = this.log.failed() ? "completed with failures" : "passed";
+        this.log.info("Final result: " + result + ", checks=" + this.log.totalChecks()
+                + ", passed=" + this.log.passedChecks() + ", failed=" + this.log.failedChecks());
+        Path logPath = this.writeLog(server);
+        result = this.log.failed() ? "completed with failures" : "passed";
+        String logText = logPath == null ? "Log write failed" : "Log: " + logPath.toAbsolutePath().normalize();
+        SingleplayerTestingService.send(
+                server.getPlayerList().getPlayer(this.player.getUUID()),
+                "Lumi singleplayer testing " + result + ": "
+                        + this.log.passedChecks() + " passed, "
+                        + this.log.failedChecks() + " failed. " + logText
+        );
     }
 
     private boolean waitingForOperation(MinecraftServer server) {
@@ -295,17 +339,75 @@ final class SingleplayerTestRun {
             if (this.worldOperationManager.hasActiveOperation(server)) {
                 return true;
             }
-            throw new IllegalStateException("World operation disappeared before completion: " + this.pendingOperation.label());
+            this.recordFailure("World operation produced no terminal snapshot: " + this.pendingOperation.label());
+            this.pendingOperation = null;
+            return false;
         }
+
         OperationSnapshot operation = snapshot.get();
         if (!operation.terminal()) {
+            this.reportOperationProgress(server, operation);
             return true;
         }
         if (operation.failed()) {
-            throw new IllegalStateException(operation.detail());
+            this.recordFailure("World operation failed: " + this.pendingOperation.label() + " - " + operation.detail());
+        } else {
+            this.log.info("Operation completed: " + this.pendingOperation.label() + " " + this.pendingOperation.id());
         }
         this.pendingOperation = null;
+        this.lastOperationProgressKey = "";
         return false;
+    }
+
+    private void reportOperationProgress(MinecraftServer server, OperationSnapshot operation) {
+        String key = operation.stage() + ":"
+                + operation.progress().completedUnits() + ":"
+                + operation.progress().totalUnits() + ":"
+                + operation.detail();
+        if (key.equals(this.lastOperationProgressKey)) {
+            return;
+        }
+        this.lastOperationProgressKey = key;
+        this.message(server, "Lumi testing operation - "
+                + operation.handle().label()
+                + ": " + operation.stage()
+                + " " + operation.progress().completedUnits()
+                + "/" + operation.progress().totalUnits()
+                + " " + operation.progress().unitLabel()
+                + (operation.detail() == null || operation.detail().isBlank() ? "" : " - " + operation.detail()));
+    }
+
+    private void announcePhase(MinecraftServer server) {
+        if (this.announcedPhase == this.phase) {
+            return;
+        }
+        this.announcedPhase = this.phase;
+        this.phaseStartPasses = this.log.passedChecks();
+        this.phaseStartFailures = this.log.failedChecks();
+        this.lastOperationProgressKey = "";
+        this.message(server, "Lumi testing [" + this.phase.stepNumber() + "/" + Phase.totalSteps() + "] "
+                + this.phase.title() + " - " + this.phase.description());
+    }
+
+    private void completePhase(MinecraftServer server, Phase nextPhase) {
+        int passed = this.log.passedChecks() - this.phaseStartPasses;
+        int failed = this.log.failedChecks() - this.phaseStartFailures;
+        String status = failed == 0 ? "passed" : "completed with " + failed + " failure(s)";
+        this.message(server, "Lumi testing [" + this.phase.stepNumber() + "/" + Phase.totalSteps() + "] "
+                + this.phase.title() + " " + status + " (" + passed + " pass, " + failed + " fail)");
+        this.phase = nextPhase;
+    }
+
+    private void handlePhaseException(MinecraftServer server, Exception exception) {
+        this.log.fail(this.phase.title(), "Unexpected phase error", exception);
+        this.message(server, "Lumi testing failure in " + this.phase.title() + ": " + this.errorMessage(exception));
+        Phase nextPhase = this.phase.recoveryPhase(this.project != null);
+        if (nextPhase == this.phase || nextPhase == Phase.CLEANUP) {
+            this.phase = Phase.CLEANUP;
+            return;
+        }
+        this.message(server, "Lumi testing continues at " + nextPhase.title());
+        this.phase = nextPhase;
     }
 
     private PartialRestoreRequest partialRestoreRequest(String targetVersionId, BlockPos pos) {
@@ -319,12 +421,46 @@ final class SingleplayerTestRun {
         );
     }
 
+    private void cleanup(MinecraftServer server) {
+        try {
+            this.clearVolume();
+        } catch (Exception exception) {
+            this.log.fail(Phase.CLEANUP.title(), "Test volume cleanup failed", exception);
+        }
+        if (this.project == null) {
+            return;
+        }
+        try {
+            HistoryCaptureManager.getInstance().discardSession(server, this.project.id().toString());
+        } catch (Exception exception) {
+            this.log.fail(Phase.CLEANUP.title(), "Recovery draft cleanup failed", exception);
+        }
+        try {
+            this.projectService.setArchived(server, this.project.name(), true);
+        } catch (Exception exception) {
+            this.log.fail(Phase.CLEANUP.title(), "Temporary project archive failed", exception);
+        }
+    }
+
     private void clearVolume() {
         WorldMutationContext.runWithSource(io.github.luma.domain.model.WorldMutationSource.RESTORE, () -> {
             for (BlockPos pos : BlockPos.betweenClosed(this.volume.min(), this.volume.max())) {
                 this.level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
             }
         });
+    }
+
+    private Path writeLog(MinecraftServer server) {
+        try {
+            return this.log.write(server);
+        } catch (Exception exception) {
+            this.log.fail(Phase.CLEANUP.title(), "Writing test log failed", exception);
+            SingleplayerTestingService.send(
+                    server.getPlayerList().getPlayer(this.player.getUUID()),
+                    "Lumi singleplayer testing could not write its log: " + this.errorMessage(exception)
+            );
+            return null;
+        }
     }
 
     private void checkBlock(BlockPos pos, Block block, String label) {
@@ -335,34 +471,125 @@ final class SingleplayerTestRun {
         this.check(this.level.getBlockState(pos).isAir(), label);
     }
 
-    private void check(boolean condition, String label) {
-        if (!condition) {
-            throw new IllegalStateException("Check failed: " + label);
+    private boolean check(String label, CheckedBooleanSupplier assertion) {
+        try {
+            return this.check(assertion.getAsBoolean(), label);
+        } catch (Exception exception) {
+            this.log.fail(this.phase.title(), label, exception);
+            this.message(this.level.getServer(), "Lumi testing failure - " + this.phase.title() + ": " + label);
+            return false;
         }
-        this.checks += 1;
+    }
+
+    private boolean check(boolean condition, String label) {
+        if (condition) {
+            this.log.pass(this.phase.title(), label);
+            return true;
+        }
+        this.recordFailure(label);
+        return false;
+    }
+
+    private <T> T value(String label, CheckedSupplier<T> supplier) {
+        try {
+            T value = supplier.get();
+            if (value == null) {
+                this.recordFailure(label + " returned no value");
+                return null;
+            }
+            this.log.pass(this.phase.title(), label);
+            return value;
+        } catch (Exception exception) {
+            this.log.fail(this.phase.title(), label, exception);
+            this.message(this.level.getServer(), "Lumi testing failure - " + this.phase.title() + ": " + label);
+            return null;
+        }
+    }
+
+    private void recordFailure(String label) {
+        this.log.fail(this.phase.title(), label);
+        this.message(this.level.getServer(), "Lumi testing failure - " + this.phase.title() + ": " + label);
     }
 
     private String format(BlockPos pos) {
         return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
+    private String errorMessage(Throwable throwable) {
+        if (throwable == null) {
+            return "unknown error";
+        }
+        String message = throwable.getMessage();
+        return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
+    }
+
+    @FunctionalInterface
+    private interface CheckedBooleanSupplier {
+        boolean getAsBoolean() throws Exception;
+    }
+
+    @FunctionalInterface
+    private interface CheckedSupplier<T> {
+        T get() throws Exception;
+    }
+
     private enum Phase {
-        CREATE_PROJECT,
-        CAPTURE_DRAFT,
-        START_UNDO,
-        CHECK_UNDO,
-        START_REDO,
-        CHECK_REDO,
-        START_SAVE,
-        CHECK_SAVE,
-        START_AMEND,
-        CHECK_AMEND,
-        START_BRANCH_SAVE,
-        CHECK_BRANCH_SAVE,
-        START_PARTIAL_RESTORE,
-        CHECK_PARTIAL_RESTORE,
-        START_RESTORE_INITIAL,
-        CHECK_RESTORE_INITIAL,
-        CLEANUP
+        CREATE_PROJECT("Project setup", "create the temporary project and initial snapshot"),
+        CAPTURE_DRAFT("Capture and pending diff", "record builder edits and inspect pending history"),
+        START_UNDO("Queue live undo", "start undo through the operation model"),
+        CHECK_UNDO("Verify live undo", "check the world after undo completes"),
+        START_REDO("Queue live redo", "start redo through the operation model"),
+        CHECK_REDO("Verify live redo", "check the world after redo completes"),
+        START_SAVE("Queue save", "save the pending tracked work"),
+        CHECK_SAVE("Verify save", "inspect version, patch, draft isolation, and cleanup dry-run"),
+        START_AMEND("Queue amend", "replace the latest save with more tracked work"),
+        CHECK_AMEND("Verify amend", "inspect amended history and world state"),
+        START_BRANCH_SAVE("Branch and save", "create a branch, switch to it, and save divergent work"),
+        CHECK_BRANCH_SAVE("Verify branch and export", "compare branch history and export packages"),
+        START_PARTIAL_RESTORE("Queue partial restore", "plan and start a selected-area restore"),
+        CHECK_PARTIAL_RESTORE("Verify partial restore", "check selected-area restore output"),
+        START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
+        CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
+        CLEANUP("Cleanup and report", "remove test blocks, archive the test project, and write the log");
+
+        private final String title;
+        private final String description;
+
+        Phase(String title, String description) {
+            this.title = title;
+            this.description = description;
+        }
+
+        String title() {
+            return this.title;
+        }
+
+        String description() {
+            return this.description;
+        }
+
+        int stepNumber() {
+            return this.ordinal() + 1;
+        }
+
+        static int totalSteps() {
+            return Phase.values().length;
+        }
+
+        Phase recoveryPhase(boolean projectExists) {
+            if (!projectExists) {
+                return CLEANUP;
+            }
+            return switch (this) {
+                case CREATE_PROJECT, CAPTURE_DRAFT -> CLEANUP;
+                case START_UNDO, CHECK_UNDO, START_REDO, CHECK_REDO -> START_SAVE;
+                case START_SAVE, CHECK_SAVE -> CLEANUP;
+                case START_AMEND, CHECK_AMEND -> START_BRANCH_SAVE;
+                case START_BRANCH_SAVE -> START_RESTORE_INITIAL;
+                case CHECK_BRANCH_SAVE -> START_PARTIAL_RESTORE;
+                case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
+                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CLEANUP -> CLEANUP;
+            };
+        }
     }
 }
