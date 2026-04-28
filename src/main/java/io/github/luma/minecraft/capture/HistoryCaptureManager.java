@@ -24,12 +24,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -66,13 +64,9 @@ public final class HistoryCaptureManager {
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
-    private final Map<String, TrackedChangeBuffer> activeBuffers = new HashMap<>();
-    private final Map<String, CaptureSessionState> activeSessions = new HashMap<>();
+    private final CaptureSessionRegistry sessionRegistry = new CaptureSessionRegistry();
     private final Map<String, CaptureSessionDiagnostics> sessionDiagnostics = new HashMap<>();
     private final Map<String, CachedProjects> projectCaches = new HashMap<>();
-    private final Map<String, Instant> lastDraftFlushes = new HashMap<>();
-    private final Map<String, Integer> lastDraftFingerprints = new HashMap<>();
-    private final Set<String> dirtySessions = new HashSet<>();
 
     private HistoryCaptureManager() {
     }
@@ -174,7 +168,7 @@ public final class HistoryCaptureManager {
                 }
                 String projectId = trackedProject.project().id().toString();
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
-                CaptureSessionState session = this.activeSessions.get(projectId);
+                CaptureSessionState session = this.sessionRegistry.session(projectId);
                 if (session == null) {
                     continue;
                 }
@@ -198,7 +192,7 @@ public final class HistoryCaptureManager {
                     }
                     this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
                     session.markDirtyChunk(chunk);
-                    this.dirtySessions.add(projectId);
+                    this.sessionRegistry.markDirty(projectId);
                     LumaDebugLog.log(
                         trackedProject.project(),
                         "capture",
@@ -238,11 +232,7 @@ public final class HistoryCaptureManager {
                 );
                 this.logBufferProgress(trackedProject.project(), buffer, diagnostics);
                 if (buffer.isEmpty()) {
-                    this.activeBuffers.remove(projectId);
-                    this.activeSessions.remove(projectId);
-                    this.dirtySessions.remove(projectId);
-                    this.lastDraftFlushes.remove(projectId);
-                    this.lastDraftFingerprints.remove(projectId);
+                    this.sessionRegistry.close(projectId);
                     this.clearSessionDiagnostics(projectId);
                     this.persistenceCoordinator.deleteDraft(
                             trackedProject.layout(),
@@ -251,7 +241,7 @@ public final class HistoryCaptureManager {
                     );
                     LumaMod.LOGGER.info("Discarded empty active buffer for project {}", trackedProject.project().name());
                 } else {
-                    this.dirtySessions.add(projectId);
+                    this.sessionRegistry.markDirty(projectId);
                 }
             }
         } catch (Exception exception) {
@@ -305,7 +295,7 @@ public final class HistoryCaptureManager {
 
                 String projectId = trackedProject.project().id().toString();
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
-                CaptureSessionState session = this.activeSessions.get(projectId);
+                CaptureSessionState session = this.sessionRegistry.session(projectId);
                 if (session != null) {
                     session.addRootChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
                 }
@@ -328,11 +318,7 @@ public final class HistoryCaptureManager {
                 );
                 this.logBufferProgress(trackedProject.project(), buffer, this.diagnosticsForSession(projectId));
                 if (buffer.isEmpty()) {
-                    this.activeBuffers.remove(projectId);
-                    this.activeSessions.remove(projectId);
-                    this.dirtySessions.remove(projectId);
-                    this.lastDraftFlushes.remove(projectId);
-                    this.lastDraftFingerprints.remove(projectId);
+                    this.sessionRegistry.close(projectId);
                     this.clearSessionDiagnostics(projectId);
                     this.persistenceCoordinator.deleteDraft(
                             trackedProject.layout(),
@@ -340,7 +326,7 @@ public final class HistoryCaptureManager {
                             trackedProject.project().name()
                     );
                 } else {
-                    this.dirtySessions.add(projectId);
+                    this.sessionRegistry.markDirty(projectId);
                 }
             }
         } catch (Exception exception) {
@@ -402,7 +388,7 @@ public final class HistoryCaptureManager {
                 io.github.luma.domain.model.WorldMutationSource.PLAYER,
                 now
         );
-        CaptureSessionState session = this.activeSessions.get(projectId);
+        CaptureSessionState session = this.sessionRegistry.session(projectId);
         for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
             buffer.addChange(change, now);
             if (session != null) {
@@ -417,11 +403,7 @@ public final class HistoryCaptureManager {
         }
 
         if (buffer.isEmpty()) {
-            this.activeBuffers.remove(projectId);
-            this.activeSessions.remove(projectId);
-            this.dirtySessions.remove(projectId);
-            this.lastDraftFlushes.remove(projectId);
-            this.lastDraftFingerprints.remove(projectId);
+            this.sessionRegistry.close(projectId);
             this.clearSessionDiagnostics(projectId);
             this.persistenceCoordinator.deleteDraft(
                     trackedProject.layout(),
@@ -430,7 +412,7 @@ public final class HistoryCaptureManager {
             );
             LumaMod.LOGGER.info("Discarded empty active buffer for project {} after undo/redo", trackedProject.project().name());
         } else {
-            this.dirtySessions.add(projectId);
+            this.sessionRegistry.markDirty(projectId);
             LumaMod.LOGGER.info(
                     "Adjusted pending buffer for project {} after undo/redo by {} with {} changes; pending={}",
                     trackedProject.project().name(),
@@ -450,7 +432,7 @@ public final class HistoryCaptureManager {
     }
 
     private Optional<RecoveryDraft> snapshotDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
-        TrackedChangeBuffer buffer = this.activeBuffers.get(projectId);
+        TrackedChangeBuffer buffer = this.sessionRegistry.buffer(projectId);
         if (buffer != null) {
             return buffer.isEmpty() ? Optional.empty() : Optional.of(buffer.toDraft());
         }
@@ -475,23 +457,16 @@ public final class HistoryCaptureManager {
 
     private Optional<TrackedChangeBuffer> freezeSessionOnServerThread(MinecraftServer server, String projectId) throws IOException {
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
-        CaptureSessionState sessionState = this.activeSessions.get(projectId);
+        CaptureSessionState sessionState = this.sessionRegistry.session(projectId);
         if (trackedProject != null && sessionState != null) {
             this.reconcileSession(server, trackedProject, sessionState, true);
         }
         if (trackedProject != null) {
             this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
         }
-        TrackedChangeBuffer session = this.activeBuffers.remove(projectId);
-        boolean persistedDraftIsCurrent = session != null
-                && !session.isEmpty()
-                && !this.dirtySessions.contains(projectId)
-                && this.lastDraftFingerprints.get(projectId) instanceof Integer persistedFingerprint
-                && persistedFingerprint == session.contentFingerprint();
-        this.activeSessions.remove(projectId);
-        this.dirtySessions.remove(projectId);
-        this.lastDraftFlushes.remove(projectId);
-        this.lastDraftFingerprints.remove(projectId);
+        TrackedChangeBuffer session = this.sessionRegistry.removeBuffer(projectId);
+        boolean persistedDraftIsCurrent = this.sessionRegistry.matchesPersistedDraft(projectId, session);
+        this.sessionRegistry.close(projectId);
         this.clearSessionDiagnostics(projectId);
         if (session == null) {
             if (trackedProject == null) {
@@ -546,18 +521,15 @@ public final class HistoryCaptureManager {
 
     private Optional<TrackedChangeBuffer> consumeSessionOnServerThread(MinecraftServer server, String projectId) throws IOException {
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
-        CaptureSessionState sessionState = this.activeSessions.get(projectId);
+        CaptureSessionState sessionState = this.sessionRegistry.session(projectId);
         if (trackedProject != null && sessionState != null) {
             this.reconcileSession(server, trackedProject, sessionState, true);
         }
         if (trackedProject != null) {
             this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
         }
-        TrackedChangeBuffer session = this.activeBuffers.remove(projectId);
-        this.activeSessions.remove(projectId);
-        this.dirtySessions.remove(projectId);
-        this.lastDraftFlushes.remove(projectId);
-        this.lastDraftFingerprints.remove(projectId);
+        TrackedChangeBuffer session = this.sessionRegistry.removeBuffer(projectId);
+        this.sessionRegistry.close(projectId);
         this.clearSessionDiagnostics(projectId);
         if (session != null) {
             LumaMod.LOGGER.info("Consumed in-memory buffer for project {} with {} pending changes", projectId, session.size());
@@ -593,11 +565,7 @@ public final class HistoryCaptureManager {
     }
 
     private void discardSessionOnServerThread(MinecraftServer server, String projectId) throws IOException {
-        this.activeBuffers.remove(projectId);
-        this.activeSessions.remove(projectId);
-        this.dirtySessions.remove(projectId);
-        this.lastDraftFlushes.remove(projectId);
-        this.lastDraftFingerprints.remove(projectId);
+        this.sessionRegistry.close(projectId);
         this.clearSessionDiagnostics(projectId);
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         if (trackedProject != null) {
@@ -626,7 +594,7 @@ public final class HistoryCaptureManager {
             LumaMod.LOGGER.warn("Failed to load tracked projects for idle flush", exception);
         }
 
-        for (Map.Entry<String, TrackedChangeBuffer> entry : List.copyOf(this.activeBuffers.entrySet())) {
+        for (Map.Entry<String, TrackedChangeBuffer> entry : this.sessionRegistry.activeBufferEntries()) {
             String projectId = entry.getKey();
             TrackedChangeBuffer session = entry.getValue();
             int idleSeconds = idleThresholds.getOrDefault(projectId, 5);
@@ -646,11 +614,11 @@ public final class HistoryCaptureManager {
                 continue;
             }
 
-            if (!this.dirtySessions.contains(projectId)) {
+            if (!this.sessionRegistry.isDirty(projectId)) {
                 continue;
             }
 
-            Instant lastFlush = this.lastDraftFlushes.get(projectId);
+            Instant lastFlush = this.sessionRegistry.lastDraftFlush(projectId);
             if (lastFlush != null && Duration.between(lastFlush, now).compareTo(ACTIVE_DRAFT_FLUSH_INTERVAL) < 0) {
                 continue;
             }
@@ -661,21 +629,19 @@ public final class HistoryCaptureManager {
             }
 
             try {
-                CaptureSessionState sessionState = this.activeSessions.get(projectId);
+                CaptureSessionState sessionState = this.sessionRegistry.session(projectId);
                 if (trackedProject != null && sessionState != null) {
                     this.reconcileSession(server, trackedProject, sessionState, false);
                     if (sessionState.hasPendingReconciliation()) {
                         continue;
                     }
                 }
-                if (!this.activeBuffers.containsKey(projectId) || session.isEmpty()) {
+                if (!this.sessionRegistry.hasBuffer(projectId) || session.isEmpty()) {
                     continue;
                 }
                 int draftFingerprint = session.contentFingerprint();
-                if (this.lastDraftFingerprints.get(projectId) instanceof Integer lastFingerprint
-                        && lastFingerprint == draftFingerprint) {
-                    this.dirtySessions.remove(projectId);
-                    this.lastDraftFlushes.put(projectId, now);
+                if (this.sessionRegistry.hasDraftFingerprint(projectId, draftFingerprint)) {
+                    this.sessionRegistry.recordUnchangedFlush(projectId, now);
                     LumaDebugLog.log(
                             trackedProject.project(),
                             "capture",
@@ -690,9 +656,7 @@ public final class HistoryCaptureManager {
                         trackedProject.project().name(),
                         session.toDraft()
                 );
-                this.dirtySessions.remove(projectId);
-                this.lastDraftFlushes.put(projectId, now);
-                this.lastDraftFingerprints.put(projectId, draftFingerprint);
+                this.sessionRegistry.recordDraftFlush(projectId, now, draftFingerprint);
                 LumaDebugLog.log(
                         trackedProject.project(),
                         "capture",
@@ -716,7 +680,7 @@ public final class HistoryCaptureManager {
     }
 
     public void flushAll(MinecraftServer server) {
-        for (String projectId : List.copyOf(this.activeBuffers.keySet())) {
+        for (String projectId : this.sessionRegistry.activeProjectIds()) {
             try {
                 this.freezeSession(server, projectId);
             } catch (IOException exception) {
@@ -820,10 +784,10 @@ public final class HistoryCaptureManager {
             Instant now
     ) throws IOException {
         String projectId = trackedProject.project().id().toString();
-        TrackedChangeBuffer existing = this.activeBuffers.get(projectId);
+        TrackedChangeBuffer existing = this.sessionRegistry.buffer(projectId);
         CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
         if (existing != null) {
-            this.activeSessions.computeIfAbsent(projectId, ignored -> CaptureSessionState.create(existing));
+            this.sessionRegistry.ensureSession(projectId, existing);
             diagnostics.seedFromBuffer(existing);
             return existing;
         }
@@ -852,8 +816,11 @@ public final class HistoryCaptureManager {
                         now
                 ));
 
-        this.activeBuffers.put(projectId, buffer);
-        this.activeSessions.put(projectId, resumedDraft ? CaptureSessionState.resume(buffer) : CaptureSessionState.create(buffer));
+        this.sessionRegistry.open(
+                projectId,
+                buffer,
+                resumedDraft ? CaptureSessionState.resume(buffer) : CaptureSessionState.create(buffer)
+        );
         diagnostics.seedFromBuffer(buffer);
         LumaMod.LOGGER.info(
                 "Opened active buffer for project {} on variant {} from base {} using {} source",
@@ -1010,7 +977,7 @@ public final class HistoryCaptureManager {
             Instant now
     ) throws IOException {
         ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
-        CaptureSessionState session = this.activeSessions.get(trackedProject.project().id().toString());
+        CaptureSessionState session = this.sessionRegistry.session(trackedProject.project().id().toString());
         if (session != null && session.hasBaselineChunk(chunk)) {
             return true;
         }
@@ -1043,12 +1010,12 @@ public final class HistoryCaptureManager {
             BlockPos pos
     ) {
         String projectId = trackedProject.project().id().toString();
-        if (this.activeBuffers.containsKey(projectId)) {
+        if (this.sessionRegistry.hasBuffer(projectId)) {
             if (!requiresActiveRegionMembership(source)) {
                 return true;
             }
             ChunkPoint chunk = ChunkPoint.from(pos);
-            CaptureSessionState sessionState = this.activeSessions.get(projectId);
+            CaptureSessionState sessionState = this.sessionRegistry.session(projectId);
             if (sessionState != null && sessionState.isWithinStabilizationEnvelope(chunk)) {
                 return true;
             }
@@ -1158,11 +1125,7 @@ public final class HistoryCaptureManager {
         this.logReconciliation(trackedProject, result);
         this.recordReconciledUndoRedoChanges(trackedProject, level, result.deltaChanges(), Instant.now());
         if (session.buffer().isEmpty()) {
-            this.activeBuffers.remove(projectId);
-            this.activeSessions.remove(projectId);
-            this.dirtySessions.remove(projectId);
-            this.lastDraftFlushes.remove(projectId);
-            this.lastDraftFingerprints.remove(projectId);
+            this.sessionRegistry.close(projectId);
             this.clearSessionDiagnostics(projectId);
             this.persistenceCoordinator.deleteDraft(
                     trackedProject.layout(),
