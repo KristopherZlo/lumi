@@ -19,6 +19,8 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
@@ -40,6 +42,10 @@ public final class WorldOperationManager {
     private static final int RESTORE_MAX_BLOCKS_PER_TICK = 4096;
     private static final long RESTORE_MIN_NANOS_PER_TICK = 2_000_000L;
     private static final long RESTORE_MAX_NANOS_PER_TICK = 8_000_000L;
+    private static final int MAX_BLOCK_ENTITIES_PER_TICK = 64;
+    private static final int MAX_ENTITY_OPERATIONS_PER_TICK = 32;
+    private static final double MIN_ADAPTIVE_SCALE = 0.25D;
+    private static final double MAX_ADAPTIVE_SCALE = 1.25D;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
 
     private ExecutorService backgroundExecutor = createExecutor();
@@ -160,11 +166,12 @@ public final class WorldOperationManager {
         }
 
         try {
-            int maxBlocks = this.currentBlockBudget(operation);
-            long deadlineNanos = this.currentDeadline(operation);
-            if (operation.advance(maxBlocks, deadlineNanos)) {
+            TickBudget budget = this.currentTickBudget(operation);
+            long startedAt = System.nanoTime();
+            if (operation.advance(budget.maxBlocks(), startedAt + budget.maxNanos())) {
                 this.complete(server, operation);
             }
+            operation.recordAdvanceCost(System.nanoTime() - startedAt, budget.maxNanos());
         } catch (Exception exception) {
             operation.fail(exception);
             this.complete(server, operation);
@@ -186,19 +193,16 @@ public final class WorldOperationManager {
         }
     }
 
-    private int currentBlockBudget(ActiveOperation operation) {
+    private TickBudget currentTickBudget(ActiveOperation operation) {
         double fraction = operation.snapshot().progress().fraction();
-        int minBudget = this.isRestoreOperation(operation) ? RESTORE_MIN_BLOCKS_PER_TICK : MIN_BLOCKS_PER_TICK;
-        int maxBudget = this.isRestoreOperation(operation) ? RESTORE_MAX_BLOCKS_PER_TICK : MAX_BLOCKS_PER_TICK;
-        return minBudget + (int) Math.round((maxBudget - minBudget) * fraction);
-    }
-
-    private long currentDeadline(ActiveOperation operation) {
-        double fraction = operation.snapshot().progress().fraction();
-        long minBudget = this.isRestoreOperation(operation) ? RESTORE_MIN_NANOS_PER_TICK : MIN_NANOS_PER_TICK;
-        long maxBudget = this.isRestoreOperation(operation) ? RESTORE_MAX_NANOS_PER_TICK : MAX_NANOS_PER_TICK;
-        long budget = minBudget + Math.round((maxBudget - minBudget) * fraction);
-        return System.nanoTime() + budget;
+        int minBlocks = this.isRestoreOperation(operation) ? RESTORE_MIN_BLOCKS_PER_TICK : MIN_BLOCKS_PER_TICK;
+        int maxBlocks = this.isRestoreOperation(operation) ? RESTORE_MAX_BLOCKS_PER_TICK : MAX_BLOCKS_PER_TICK;
+        long minNanos = this.isRestoreOperation(operation) ? RESTORE_MIN_NANOS_PER_TICK : MIN_NANOS_PER_TICK;
+        long maxNanos = this.isRestoreOperation(operation) ? RESTORE_MAX_NANOS_PER_TICK : MAX_NANOS_PER_TICK;
+        double adaptiveScale = operation.adaptiveScale();
+        int blocks = Math.max(1, (int) Math.round((minBlocks + ((maxBlocks - minBlocks) * fraction)) * adaptiveScale));
+        long nanos = Math.max(250_000L, Math.round((minNanos + ((maxNanos - minNanos) * fraction)) * adaptiveScale));
+        return new TickBudget(blocks, nanos);
     }
 
     private boolean isRestoreOperation(ActiveOperation operation) {
@@ -273,6 +277,9 @@ public final class WorldOperationManager {
         }
     }
 
+    private record TickBudget(int maxBlocks, long maxNanos) {
+    }
+
     private abstract static class ActiveOperation {
 
         private final ServerLevel level;
@@ -281,6 +288,7 @@ public final class WorldOperationManager {
         private volatile OperationSnapshot snapshot;
         private volatile OperationStage lastLoggedStage;
         private volatile int lastLoggedPercent = -1;
+        private volatile double adaptiveScale = 1.0D;
 
         private ActiveOperation(ServerLevel level, OperationHandle handle, String unitLabel) {
             this.level = level;
@@ -314,6 +322,23 @@ public final class WorldOperationManager {
 
         public OperationSnapshot snapshot() {
             return this.snapshot;
+        }
+
+        protected double adaptiveScale() {
+            return this.adaptiveScale;
+        }
+
+        protected void recordAdvanceCost(long elapsedNanos, long budgetNanos) {
+            if (budgetNanos <= 0L || elapsedNanos <= 0L) {
+                return;
+            }
+            if (elapsedNanos > budgetNanos && this.adaptiveScale > MIN_ADAPTIVE_SCALE) {
+                this.adaptiveScale = Math.max(MIN_ADAPTIVE_SCALE, this.adaptiveScale * 0.75D);
+                return;
+            }
+            if (elapsedNanos < budgetNanos / 2L && this.adaptiveScale < MAX_ADAPTIVE_SCALE) {
+                this.adaptiveScale = Math.min(MAX_ADAPTIVE_SCALE, this.adaptiveScale * 1.08D);
+            }
         }
 
         protected ProgressSink progressSink() {
@@ -458,9 +483,12 @@ public final class WorldOperationManager {
         private GlobalDispatcher dispatcher;
         private ChunkBatch currentBatch;
         private List<SectionBatch> currentSections = List.of();
+        private List<Map.Entry<BlockPos, CompoundTag>> currentBlockEntities = List.of();
         private CompletableFuture<Void> completionFuture;
         private int sectionIndex = 0;
         private int placementIndex = 0;
+        private int blockEntityIndex = 0;
+        private int entityIndex = 0;
         private boolean blockEntitiesApplied = false;
         private boolean entitiesApplied = false;
         private int appliedBlocks = 0;
@@ -526,20 +554,25 @@ public final class WorldOperationManager {
                     if (this.currentBatch == null) {
                         break;
                     }
+                    this.currentBatch = this.prepared.batchProcessor().processSet(this.currentBatch);
                     this.currentSections = this.currentBatch.orderedSections();
+                    this.currentBlockEntities = List.copyOf(this.currentBatch.blockEntities().entrySet());
                     this.sectionIndex = 0;
                     this.placementIndex = 0;
+                    this.blockEntityIndex = 0;
+                    this.entityIndex = 0;
                     this.blockEntitiesApplied = false;
                     this.entitiesApplied = false;
-                    this.currentBatch = this.prepared.batchProcessor().processSet(this.currentBatch);
                     LumaDebugLog.log(
                             this.handle(),
                             "world-op",
-                            "Applying chunk batch {}:{} with {} placements across {} sections",
+                            "Applying chunk batch {}:{} with {} placements across {} sections, {} block entities, and {} entity operations",
                             this.currentBatch.chunk().x(),
                             this.currentBatch.chunk().z(),
                             this.currentBatch.totalPlacements(),
-                            this.currentSections.size()
+                            this.currentSections.size(),
+                            this.currentBlockEntities.size(),
+                            BlockChangeApplier.entityOperationCount(this.currentBatch.entityBatch())
                     );
                 }
 
@@ -579,6 +612,7 @@ public final class WorldOperationManager {
                     this.prepared.batchProcessor().postProcessSet(this.currentBatch);
                     this.currentBatch = null;
                     this.currentSections = List.of();
+                    this.currentBlockEntities = List.of();
                 }
             }
 
@@ -657,13 +691,40 @@ public final class WorldOperationManager {
             }
 
             if (!this.blockEntitiesApplied) {
-                BlockChangeApplier.applyChunkBlockEntities(this.level(), this.currentBatch);
-                this.blockEntitiesApplied = true;
+                if (this.currentBlockEntities.isEmpty()) {
+                    this.blockEntitiesApplied = true;
+                } else {
+                    int processed = BlockChangeApplier.applyBlockEntities(
+                            this.level(),
+                            this.currentBlockEntities,
+                            this.blockEntityIndex,
+                            Math.min(maxBlocks, MAX_BLOCK_ENTITIES_PER_TICK)
+                    );
+                    this.blockEntityIndex += processed;
+                    if (this.blockEntityIndex >= this.currentBlockEntities.size()) {
+                        this.blockEntitiesApplied = true;
+                    }
+                    return 0;
+                }
             }
 
             if (!this.entitiesApplied) {
-                BlockChangeApplier.applyEntityBatch(this.level(), this.currentBatch.entityBatch());
-                this.entitiesApplied = true;
+                int entityOperationCount = BlockChangeApplier.entityOperationCount(this.currentBatch.entityBatch());
+                if (entityOperationCount <= 0) {
+                    this.entitiesApplied = true;
+                    return 0;
+                }
+                int processed = BlockChangeApplier.applyEntityBatch(
+                        this.level(),
+                        this.currentBatch.entityBatch(),
+                        this.entityIndex,
+                        Math.min(maxBlocks, MAX_ENTITY_OPERATIONS_PER_TICK)
+                );
+                this.entityIndex += processed;
+                if (this.entityIndex >= entityOperationCount) {
+                    this.entitiesApplied = true;
+                }
+                return 0;
             }
 
             return 0;

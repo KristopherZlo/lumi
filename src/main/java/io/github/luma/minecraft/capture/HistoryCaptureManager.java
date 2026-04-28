@@ -850,28 +850,19 @@ public final class HistoryCaptureManager {
         return null;
     }
 
-    private boolean matches(ServerLevel level, BuildProject project, BlockPos pos) {
-        if (!project.dimensionId().equals(level.dimension().identifier().toString())) {
-            return false;
-        }
-
-        if (project.tracksWholeDimension() || project.bounds() == null) {
-            return true;
-        }
-
-        return pos.getX() >= project.bounds().min().x()
-                && pos.getX() <= project.bounds().max().x()
-                && pos.getY() >= project.bounds().min().y()
-                && pos.getY() <= project.bounds().max().y()
-                && pos.getZ() >= project.bounds().min().z()
-                && pos.getZ() <= project.bounds().max().z();
+    private List<TrackedProject> loadTrackedProjects(MinecraftServer server) throws IOException {
+        return this.loadTrackedProjectCache(server).projects();
     }
 
-    private List<TrackedProject> loadTrackedProjects(MinecraftServer server) throws IOException {
+    private ProjectTrackingIndex<TrackedProject> loadTrackedProjectIndex(MinecraftServer server) throws IOException {
+        return this.loadTrackedProjectCache(server).index();
+    }
+
+    private CachedProjects loadTrackedProjectCache(MinecraftServer server) throws IOException {
         String cacheKey = this.cacheKey(server);
         CachedProjects cachedProjects = this.projectCaches.get(cacheKey);
         if (cachedProjects != null && Duration.between(cachedProjects.loadedAt(), Instant.now()).getSeconds() < 5) {
-            return cachedProjects.projects();
+            return cachedProjects;
         }
 
         List<TrackedProject> trackedProjects = new ArrayList<>();
@@ -889,18 +880,26 @@ public final class HistoryCaptureManager {
             }
         }
 
-        this.projectCaches.put(cacheKey, new CachedProjects(Instant.now(), trackedProjects));
-        return trackedProjects;
+        List<ProjectTrackingIndex.Entry<TrackedProject>> indexEntries = new ArrayList<>();
+        for (TrackedProject trackedProject : trackedProjects) {
+            indexEntries.add(new ProjectTrackingIndex.Entry<>(
+                    trackedProject.project().dimensionId(),
+                    trackedProject.project().bounds(),
+                    trackedProject
+            ));
+        }
+        CachedProjects refreshed = new CachedProjects(
+                Instant.now(),
+                List.copyOf(trackedProjects),
+                ProjectTrackingIndex.build(indexEntries)
+        );
+        this.projectCaches.put(cacheKey, refreshed);
+        return refreshed;
     }
 
     private List<TrackedProject> matchingProjects(ServerLevel level, BlockPos pos) throws IOException {
-        List<TrackedProject> matching = new ArrayList<>();
-        for (TrackedProject trackedProject : this.loadTrackedProjects(level.getServer())) {
-            if (this.matches(level, trackedProject.project(), pos)) {
-                matching.add(trackedProject);
-            }
-        }
-        return matching;
+        return this.loadTrackedProjectIndex(level.getServer())
+                .matching(level.dimension().identifier().toString(), pos);
     }
 
     private void captureChunkBaseline(
@@ -1414,7 +1413,11 @@ public final class HistoryCaptureManager {
     private record TrackedProject(ProjectLayout layout, BuildProject project, List<ProjectVariant> variants) {
     }
 
-    private record CachedProjects(Instant loadedAt, List<TrackedProject> projects) {
+    private record CachedProjects(
+            Instant loadedAt,
+            List<TrackedProject> projects,
+            ProjectTrackingIndex<TrackedProject> index
+    ) {
     }
 
     private static final class CaptureSessionDiagnostics {
