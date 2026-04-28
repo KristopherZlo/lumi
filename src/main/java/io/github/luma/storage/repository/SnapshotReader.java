@@ -98,12 +98,46 @@ public final class SnapshotReader {
     }
 
     public List<ChunkPoint> loadChunks(Path snapshotFile) throws IOException {
-        SnapshotData snapshot = this.readFile(snapshotFile);
         List<ChunkPoint> chunks = new ArrayList<>();
-        for (SnapshotChunkData chunk : snapshot.chunks()) {
-            chunks.add(chunk.chunk());
+        try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
+                new BufferedInputStream(Files.newInputStream(snapshotFile))
+        ))) {
+            int magic = input.readInt();
+            int version = input.readInt();
+            if (magic != MAGIC || (version != 3 && version != VERSION)) {
+                throw new IOException("Unsupported snapshot format: " + snapshotFile.getFileName());
+            }
+
+            input.readUTF();
+            input.readLong();
+            input.readInt();
+            input.readInt();
+            int chunkCount = input.readInt();
+
+            for (int chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+                int chunkX = input.readInt();
+                int chunkZ = input.readInt();
+                chunks.add(new ChunkPoint(chunkX, chunkZ));
+
+                int sectionCount = input.readInt();
+                int blockEntityCount = input.readInt();
+                for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
+                    this.skipSection(input);
+                }
+                for (int blockEntityIndex = 0; blockEntityIndex < blockEntityCount; blockEntityIndex++) {
+                    input.readInt();
+                    skipCompound(input);
+                }
+                if (version >= 4) {
+                    int entityCount = input.readInt();
+                    for (int entityIndex = 0; entityIndex < entityCount; entityIndex++) {
+                        skipCompound(input);
+                    }
+                }
+                BackgroundThrottle.pauseEvery(chunkIndex + 1, 16, 150_000L);
+            }
         }
-        return chunks;
+        return List.copyOf(chunks);
     }
 
     public List<PreparedChunkBatch> decodeBatches(Path snapshotFile, ServerLevel level) throws IOException {
@@ -164,6 +198,21 @@ public final class SnapshotReader {
                 SnapshotWriter.packVerticalIndex(y - minBuildHeight, localX, localZ)
         );
         return tag == null ? null : tag.copy();
+    }
+
+    private void skipSection(DataInputStream input) throws IOException {
+        input.readInt();
+        int paletteSize = input.readInt();
+        for (int paletteIndex = 0; paletteIndex < paletteSize; paletteIndex++) {
+            skipCompound(input);
+        }
+        int paletteIndexCount = input.readInt();
+        input.skipNBytes((long) paletteIndexCount * Short.BYTES);
+    }
+
+    private static void skipCompound(DataInputStream input) throws IOException {
+        int length = input.readInt();
+        input.skipNBytes(length);
     }
 
     private static net.minecraft.nbt.CompoundTag createAirTag() {

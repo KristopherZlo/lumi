@@ -158,21 +158,23 @@ Metadata reads must not require deserializing the full payload.
 
 ### `patches/<patchId>.bin.lz4`
 
-Patch payloads are the primary history format for tracked saves. New payloads use binary schema v5.
+Patch payloads are the primary history format for tracked saves. New payloads use binary schema v6. The filename suffix remains `.bin.lz4`, but v6 is not one monolithic LZ4 frame. It is a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames. The chunk offsets and lengths in `PatchChunkSlice` are physical file offsets for those frames, so readers can seek directly to selected chunks.
 
 Current payload characteristics:
 
-- LZ4 frame compressed binary stream
+- chunk-addressable per-chunk LZ4 frames for schema v6
 - chunk-sorted records
 - per-chunk local-position ordering
 - chunk-local palettes for block states
 - chunk-local palettes for block entity payloads
 - per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload
 - block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
+- schema v3-v5 legacy payloads still load from the older single LZ4 stream format
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
 - runtime-only redstone state flips and piston animation states are filtered before new patch payloads are written
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
+Partial restore uses the metadata chunk index to load only v6 chunk frames that intersect the selected bounds. Legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream.
 
 ### `snapshots/<snapshotId>.bin.lz4`
 
@@ -186,6 +188,7 @@ Current snapshot characteristics:
 - block entities are kept in a sparse side table keyed by local block index
 - schema v4 includes a per-chunk entity snapshot list; it is currently written empty and schema v3 snapshots still load as block-only snapshots
 - `piston_head` and `moving_piston` states are normalized to air during new snapshot capture, and piston bases are stored retracted
+- restore planning can list snapshot chunks by scanning the length-prefixed structure and skipping NBT payload bytes, without materializing `SnapshotData` or deserializing block/entity tags
 
 They are currently created:
 

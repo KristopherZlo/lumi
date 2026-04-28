@@ -104,6 +104,39 @@ class SnapshotStorageTest {
         assertArrayEquals(indexes, restoredSection.paletteIndexes());
     }
 
+    @Test
+    void loadsChunkListWithoutMaterializingSnapshotData() throws Exception {
+        short[] indexes = new short[4096];
+        SnapshotData snapshot = new SnapshotData(
+                "project",
+                Instant.parse("2026-04-20T10:00:00Z"),
+                0,
+                15,
+                List.of(
+                        new SnapshotChunkData(
+                                2,
+                                3,
+                                List.of(new SnapshotSectionData(0, List.of(state("minecraft:stone")), indexes)),
+                                Map.of(SnapshotWriter.packVerticalIndex(5, 1, 0), blockEntity("minecraft:chest"))
+                        ),
+                        new SnapshotChunkData(
+                                -1,
+                                4,
+                                List.of(new SnapshotSectionData(0, List.of(state("minecraft:gold_block")), indexes)),
+                                Map.of()
+                        )
+                )
+        );
+
+        Path file = this.tempDir.resolve("chunk-list.bin.lz4");
+        this.writer.writeFile(file, snapshot);
+
+        assertEquals(
+                List.of(new io.github.luma.domain.model.ChunkPoint(2, 3), new io.github.luma.domain.model.ChunkPoint(-1, 4)),
+                this.reader.loadChunks(file)
+        );
+    }
+
     private static net.minecraft.nbt.CompoundTag state(String blockId) {
         net.minecraft.nbt.CompoundTag state = new net.minecraft.nbt.CompoundTag();
         state.putString("Name", blockId);

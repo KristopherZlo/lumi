@@ -385,7 +385,11 @@ public final class RestoreService {
 
         Map<String, ProjectVersion> versionMap = this.versionMap(versions);
         boolean applyNewValues = this.isAncestor(versionMap, activeVariant.headVersionId(), targetVersion.id());
-        PatchWorldChanges lineageChanges = this.loadVersionWorldChanges(layout, directVersions);
+        PatchWorldChanges lineageChanges = this.loadVersionWorldChanges(
+                layout,
+                directVersions,
+                this.chunksIntersecting(request.bounds())
+        );
         int lineageChangeCount = lineageChanges.blockChanges().size() + lineageChanges.entityChanges().size();
         progressSink.update(OperationStage.PREPARING, 0, Math.max(1, lineageChangeCount), "Filtering partial restore region");
         List<StoredBlockChange> partialChanges = this.partialRestorePlanner.plan(
@@ -509,13 +513,23 @@ public final class RestoreService {
     }
 
     private PatchWorldChanges loadVersionWorldChanges(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
+        return this.loadVersionWorldChanges(layout, versions, null);
+    }
+
+    private PatchWorldChanges loadVersionWorldChanges(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            List<ChunkPoint> selectedChunks
+    ) throws IOException {
         List<StoredBlockChange> changes = new ArrayList<>();
         List<StoredEntityChange> entityChanges = new ArrayList<>();
         for (ProjectVersion version : versions) {
             for (String patchId : version.patchIds()) {
                 PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
                         .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-                PatchWorldChanges worldChanges = this.patchDataRepository.loadWorldChanges(layout, metadata);
+                PatchWorldChanges worldChanges = selectedChunks == null
+                        ? this.patchDataRepository.loadWorldChanges(layout, metadata)
+                        : this.patchDataRepository.loadWorldChanges(layout, metadata, selectedChunks);
                 changes.addAll(worldChanges.blockChanges());
                 entityChanges.addAll(worldChanges.entityChanges());
             }
@@ -1110,6 +1124,24 @@ public final class RestoreService {
                 ? change.oldValue().blockPos()
                 : change.newValue().blockPos();
         return bounds.contains(io.github.luma.domain.model.BlockPoint.from(pos));
+    }
+
+    private List<ChunkPoint> chunksIntersecting(io.github.luma.domain.model.Bounds3i bounds) {
+        if (bounds == null) {
+            return List.of();
+        }
+
+        List<ChunkPoint> chunks = new ArrayList<>();
+        int minChunkX = Math.floorDiv(bounds.min().x(), 16);
+        int maxChunkX = Math.floorDiv(bounds.max().x(), 16);
+        int minChunkZ = Math.floorDiv(bounds.min().z(), 16);
+        int maxChunkZ = Math.floorDiv(bounds.max().z(), 16);
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                chunks.add(new ChunkPoint(chunkX, chunkZ));
+            }
+        }
+        return chunks;
     }
 
     private static int totalPlacements(List<PreparedChunkBatch> batches) {
