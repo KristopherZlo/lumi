@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.testing;
 
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationSnapshot;
@@ -9,6 +10,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.VersionDiff;
+import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.HistoryShareService;
 import io.github.luma.domain.service.MaterialDeltaService;
@@ -88,6 +90,10 @@ final class SingleplayerTestRun {
         return this.done;
     }
 
+    boolean passed() {
+        return this.done && !this.log.failed();
+    }
+
     String describeVolume() {
         return this.format(this.volume.min()) + " -> " + this.format(this.volume.max());
     }
@@ -128,6 +134,7 @@ final class SingleplayerTestRun {
                 case CHECK_PARTIAL_RESTORE -> this.checkPartialRestore(server);
                 case START_RESTORE_INITIAL -> this.startRestoreInitial();
                 case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
+                case CHECK_PLAYER_INTERACTIONS -> this.checkPlayerInteractions(server);
                 case CHECK_PERFORMANCE -> this.checkPerformanceBudget(server);
                 case CLEANUP -> this.finish(server);
             }
@@ -154,7 +161,7 @@ final class SingleplayerTestRun {
     }
 
     private void captureDraft(MinecraftServer server) throws Exception {
-        WorldMutationContext.pushPlayerSource(io.github.luma.domain.model.WorldMutationSource.PLAYER, ACTOR, true);
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
         try {
             this.level.setBlock(this.volume.markerA(), Blocks.STONE.defaultBlockState(), 3);
             this.level.setBlock(this.volume.markerB(), Blocks.BARREL.defaultBlockState(), 3);
@@ -222,7 +229,7 @@ final class SingleplayerTestRun {
     }
 
     private void startAmend() throws Exception {
-        WorldMutationContext.pushPlayerSource(io.github.luma.domain.model.WorldMutationSource.PLAYER, ACTOR, true);
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
         try {
             this.level.setBlock(this.volume.markerC(), Blocks.OAK_PLANKS.defaultBlockState(), 3);
             this.level.setBlock(this.volume.markerD(), Blocks.COPPER_BLOCK.defaultBlockState(), 3);
@@ -254,7 +261,7 @@ final class SingleplayerTestRun {
     private void startBranchSave(MinecraftServer server) throws Exception {
         this.branch = this.variantService.createVariant(server, this.project.name(), "Testing branch", "");
         this.variantService.switchVariant(this.level, this.project.name(), this.branch.id(), false);
-        WorldMutationContext.pushPlayerSource(io.github.luma.domain.model.WorldMutationSource.PLAYER, ACTOR, true);
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
         try {
             this.level.setBlock(this.volume.markerA(), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
         } finally {
@@ -319,6 +326,36 @@ final class SingleplayerTestRun {
     private void checkRestoreInitial(MinecraftServer server) throws Exception {
         this.check(this.volume.isAir(this.level), "Full restore returned the test volume to initial air");
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
+        this.completePhase(server, Phase.CHECK_PLAYER_INTERACTIONS);
+    }
+
+    private void checkPlayerInteractions(MinecraftServer server) throws Exception {
+        BlockPos support = this.volume.min().offset(2, 1, 3);
+        BlockPos flower = support.above();
+        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+            this.level.setBlock(support, Blocks.GRASS_BLOCK.defaultBlockState(), 3);
+            this.level.setBlock(flower, Blocks.DANDELION.defaultBlockState(), 3);
+        });
+
+        boolean destroyed = this.player.gameMode.destroyBlock(support);
+        this.check(destroyed, "Player destroyBlock removed grass support");
+        this.checkAir(support, "Player break removed support block immediately");
+        this.checkAir(flower, "Adjacent flower was removed immediately after support break");
+
+        RecoveryDraft draft = this.value("Live recovery draft can be loaded after player interaction", () ->
+                HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
+        if (draft != null) {
+            this.check(draft.changes().stream().anyMatch(change -> change.pos().equals(BlockPoint.from(support))),
+                    "Player interaction draft includes support block");
+            this.check(draft.changes().stream().anyMatch(change -> change.pos().equals(BlockPoint.from(flower))),
+                    "Player interaction draft includes adjacent flower block");
+        }
+
+        HistoryCaptureManager.getInstance().discardSession(server, this.project.id().toString());
+        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+            this.level.setBlock(support, Blocks.AIR.defaultBlockState(), 3);
+            this.level.setBlock(flower, Blocks.AIR.defaultBlockState(), 3);
+        });
         this.completePhase(server, Phase.CHECK_PERFORMANCE);
     }
 
@@ -469,7 +506,7 @@ final class SingleplayerTestRun {
     }
 
     private void clearVolume() {
-        WorldMutationContext.runWithSource(io.github.luma.domain.model.WorldMutationSource.RESTORE, () -> {
+        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
             for (BlockPos pos : BlockPos.betweenClosed(this.volume.min(), this.volume.max())) {
                 this.level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
             }
@@ -576,6 +613,7 @@ final class SingleplayerTestRun {
         CHECK_PARTIAL_RESTORE("Verify partial restore", "check selected-area restore output"),
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
+        CHECK_PLAYER_INTERACTIONS("Player interactions", "break a support block and verify adjacent block updates"),
         CHECK_PERFORMANCE("Performance budget", "verify the test run stayed within low-load limits"),
         CLEANUP("Cleanup and report", "remove test blocks, archive the test project, and write the log");
 
@@ -615,7 +653,7 @@ final class SingleplayerTestRun {
                 case START_BRANCH_SAVE -> START_RESTORE_INITIAL;
                 case CHECK_BRANCH_SAVE -> START_PARTIAL_RESTORE;
                 case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
-                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CHECK_PERFORMANCE, CLEANUP -> CLEANUP;
+                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CHECK_PLAYER_INTERACTIONS, CHECK_PERFORMANCE, CLEANUP -> CLEANUP;
             };
         }
     }
