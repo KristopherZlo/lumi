@@ -11,9 +11,6 @@ import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
-import io.github.luma.minecraft.world.EntityBatch;
-import io.github.luma.minecraft.world.PreparedBlockPlacement;
-import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.storage.ProjectLayout;
 import java.io.ByteArrayInputStream;
 import java.io.BufferedInputStream;
@@ -36,8 +33,6 @@ import java.util.Map;
 import java.util.Set;
 import net.jpountz.lz4.LZ4FrameInputStream;
 import net.jpountz.lz4.LZ4FrameOutputStream;
-import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
 
 public final class PatchDataRepository {
 
@@ -220,37 +215,6 @@ public final class PatchDataRepository {
             }
         }
         return new PatchWorldChanges(changes, entityChanges);
-    }
-
-    public List<PreparedChunkBatch> decodeBatches(ProjectLayout layout, PatchMetadata metadata, ServerLevel level) throws IOException {
-        Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = new LinkedHashMap<>();
-        PatchWorldChanges worldChanges = this.loadWorldChanges(layout, metadata);
-        for (StoredBlockChange change : worldChanges.blockChanges()) {
-            ChunkPoint chunk = new ChunkPoint(change.pos().x() >> 4, change.pos().z() >> 4);
-            grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>())
-                    .add(new PreparedBlockPlacement(
-                            new BlockPos(change.pos().x(), change.pos().y(), change.pos().z()),
-                            io.github.luma.minecraft.world.BlockStateNbtCodec.deserializeBlockState(level, change.newValue().stateTag()),
-                            change.newValue().blockEntityTag() == null ? null : change.newValue().blockEntityTag().copy()
-                    ));
-        }
-        Map<ChunkPoint, List<StoredEntityChange>> groupedEntityChanges = new LinkedHashMap<>();
-        for (StoredEntityChange change : worldChanges.entityChanges()) {
-            groupedEntityChanges.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
-        }
-
-        List<PreparedChunkBatch> batches = new ArrayList<>();
-        java.util.LinkedHashSet<ChunkPoint> chunks = new java.util.LinkedHashSet<>();
-        chunks.addAll(grouped.keySet());
-        chunks.addAll(groupedEntityChanges.keySet());
-        for (ChunkPoint chunk : chunks) {
-            batches.add(new PreparedChunkBatch(
-                    chunk,
-                    List.copyOf(grouped.getOrDefault(chunk, List.of())),
-                    toEntityBatch(groupedEntityChanges.getOrDefault(chunk, List.of()))
-            ));
-        }
-        return batches;
     }
 
     private byte[] writeChunk(
@@ -459,22 +423,6 @@ public final class PatchDataRepository {
             ));
         }
         return changes;
-    }
-
-    private static EntityBatch toEntityBatch(List<StoredEntityChange> changes) {
-        List<net.minecraft.nbt.CompoundTag> spawns = new ArrayList<>();
-        List<String> removals = new ArrayList<>();
-        List<net.minecraft.nbt.CompoundTag> updates = new ArrayList<>();
-        for (StoredEntityChange change : changes) {
-            if (change.isSpawn()) {
-                spawns.add(change.newValue().copyTag());
-            } else if (change.isRemove()) {
-                removals.add(change.entityId());
-            } else if (change.isUpdate()) {
-                updates.add(change.newValue().copyTag());
-            }
-        }
-        return new EntityBatch(spawns, removals, updates);
     }
 
     private byte[] compressFrame(byte[] bytes) throws IOException {

@@ -14,7 +14,6 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.RestorePlanSummary;
-import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -25,6 +24,8 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.SnapshotBatchPreparer;
+import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
@@ -72,6 +73,8 @@ public final class RestoreService {
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final VersionService versionService = new VersionService();
     private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
+    private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
+    private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     /**
@@ -591,7 +594,10 @@ public final class RestoreService {
         List<PreparedChunkBatch> batches = new ArrayList<>();
         int index = 0;
         for (ChunkPoint chunk : trackedChunks) {
-            batches.addAll(this.baselineChunkRepository.decodeBatches(layout, chunk, level));
+            batches.addAll(this.snapshotBatchPreparer.prepare(
+                    this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
+                    level
+            ));
             index += 1;
             progressSink.update(
                     OperationStage.PREPARING,
@@ -865,19 +871,25 @@ public final class RestoreService {
         List<PreparedChunkBatch> batches = new ArrayList<>();
 
         for (io.github.luma.domain.model.ChunkPoint chunk : plan.baselineGaps()) {
-            batches.addAll(this.baselineChunkRepository.decodeBatches(layout, chunk, level));
+            batches.addAll(this.snapshotBatchPreparer.prepare(
+                    this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
+                    level
+            ));
             completedSources += 1;
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded baseline chunk " + chunk.x() + ":" + chunk.z());
         }
 
         if (plan.anchor().snapshotId() != null && !plan.anchor().snapshotId().isBlank()) {
-            batches.addAll(this.snapshotReader.decodeBatches(layout.snapshotFile(plan.anchor().snapshotId()), level));
+            batches.addAll(this.snapshotBatchPreparer.prepare(
+                    this.snapshotReader.readFile(layout.snapshotFile(plan.anchor().snapshotId())),
+                    level
+            ));
             completedSources += 1;
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded anchor snapshot");
         }
 
         for (PatchMetadata patch : plan.patchChain()) {
-            batches.addAll(this.patchDataRepository.decodeBatches(layout, patch, level));
+            batches.addAll(this.batchPreparer.prepareNewValues(level, this.patchDataRepository.loadWorldChanges(layout, patch)));
             completedSources += 1;
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded patch " + patch.id());
         }
@@ -924,34 +936,7 @@ public final class RestoreService {
             List<StoredEntityChange> entityChanges,
             boolean applyNewValues
     ) throws IOException {
-        Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = new LinkedHashMap<>();
-        Map<ChunkPoint, List<StoredEntityChange>> groupedEntities = new LinkedHashMap<>();
-        for (StoredBlockChange change : changes) {
-            StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
-            BlockPos pos = new BlockPos(change.pos().x(), change.pos().y(), change.pos().z());
-            ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
-            grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>())
-                    .add(new PreparedBlockPlacement(
-                            pos,
-                            io.github.luma.minecraft.world.BlockStateNbtCodec.deserializeBlockState(level, target == null ? null : target.stateTag()),
-                            target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
-                    ));
-        }
-        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
-            groupedEntities.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
-        }
-
-        List<PreparedChunkBatch> batches = new ArrayList<>();
-        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
-        chunks.addAll(grouped.keySet());
-        chunks.addAll(groupedEntities.keySet());
-        for (ChunkPoint chunk : chunks) {
-            batches.add(new PreparedChunkBatch(
-                    chunk,
-                    List.copyOf(grouped.getOrDefault(chunk, List.of())),
-                    toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues)
-            ));
-        }
+        List<PreparedChunkBatch> batches = this.batchPreparer.prepare(level, changes, entityChanges, applyNewValues);
         LumaDebugLog.log(
                 "restore",
                 "Decoded {} block and {} entity stored changes into {} grouped chunk batches using {} values",
@@ -1073,23 +1058,6 @@ public final class RestoreService {
             }
         }
         return result;
-    }
-
-    private static EntityBatch toEntityBatch(List<StoredEntityChange> changes, boolean applyNewValues) {
-        List<net.minecraft.nbt.CompoundTag> spawns = new ArrayList<>();
-        List<String> removals = new ArrayList<>();
-        List<net.minecraft.nbt.CompoundTag> updates = new ArrayList<>();
-        for (StoredEntityChange change : changes) {
-            StoredEntityChange target = applyNewValues ? change : change.inverse();
-            if (target.isSpawn()) {
-                spawns.add(target.newValue().copyTag());
-            } else if (target.isRemove()) {
-                removals.add(target.entityId());
-            } else if (target.isUpdate()) {
-                updates.add(target.newValue().copyTag());
-            }
-        }
-        return new EntityBatch(spawns, removals, updates);
     }
 
     private List<StoredEntityChange> planPartialEntityChanges(
