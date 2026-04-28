@@ -13,7 +13,7 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
-public final class ChunkSectionOwnershipRegistry {
+public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLookup {
 
     private static final ChunkSectionOwnershipRegistry INSTANCE = new ChunkSectionOwnershipRegistry();
 

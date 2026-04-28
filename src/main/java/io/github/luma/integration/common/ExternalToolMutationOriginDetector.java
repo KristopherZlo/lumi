@@ -12,7 +12,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
-public final class ExternalToolMutationOriginDetector {
+public final class ExternalToolMutationOriginDetector implements ExternalToolMutationDetector {
 
     private static final Duration OPERATION_IDLE_TIMEOUT = Duration.ofMillis(750);
     private static final int STACK_TRACE_LIMIT = 96;

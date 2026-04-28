@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.integration.common.ExternalToolMutationDetector;
 import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import net.minecraft.core.BlockPos;
@@ -13,8 +14,8 @@ public final class DirectSectionMutationCaptureService {
 
     private static final DirectSectionMutationCaptureService INSTANCE = new DirectSectionMutationCaptureService();
 
-    private final ExternalToolMutationOriginDetector detector;
-    private final ChunkSectionOwnershipRegistry ownershipRegistry;
+    private final ExternalToolMutationDetector detector;
+    private final ChunkSectionOwnerLookup ownershipRegistry;
 
     public static DirectSectionMutationCaptureService getInstance() {
         return INSTANCE;
@@ -25,8 +26,8 @@ public final class DirectSectionMutationCaptureService {
     }
 
     DirectSectionMutationCaptureService(
-            ExternalToolMutationOriginDetector detector,
-            ChunkSectionOwnershipRegistry ownershipRegistry
+            ExternalToolMutationDetector detector,
+            ChunkSectionOwnerLookup ownershipRegistry
     ) {
         this.detector = detector;
         this.ownershipRegistry = ownershipRegistry;
@@ -43,13 +44,13 @@ public final class DirectSectionMutationCaptureService {
             return PendingDirectSectionMutation.skipped();
         }
 
-        var operation = this.detector.detectOperation();
-        if (operation.isEmpty()) {
+        var owner = this.ownershipRegistry.ownerOf(section);
+        if (owner.isEmpty()) {
             return PendingDirectSectionMutation.skipped();
         }
 
-        var owner = this.ownershipRegistry.ownerOf(section);
-        if (owner.isEmpty()) {
+        var operation = this.detector.detectOperation();
+        if (operation.isEmpty()) {
             return PendingDirectSectionMutation.skipped();
         }
 
