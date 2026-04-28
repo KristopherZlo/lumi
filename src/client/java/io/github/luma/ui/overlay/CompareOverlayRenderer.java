@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShapeRenderer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.shapes.Shapes;
 
@@ -174,6 +175,11 @@ public final class CompareOverlayRenderer {
         return state == null ? 0 : state.changedBlocks().size();
     }
 
+    static int visibleSurfaceBlockCountForTest(double cameraX, double cameraY, double cameraZ) {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null ? 0 : state.visibleSurfaceBlocks(cameraX, cameraY, cameraZ).size();
+    }
+
     public static void render(WorldRenderContext context) {
         OverlayState state = ACTIVE_STATE.get();
         if (state == null || !state.visible() || state.changedBlocks().isEmpty()) {
@@ -280,7 +286,7 @@ public final class CompareOverlayRenderer {
         private final String leftVersionId;
         private final String rightVersionId;
         private final List<DiffBlockEntry> changedBlocks;
-        private final Set<Long> changedBlockPositions;
+        private final Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocksByPosition;
         private final CompareOverlaySpatialIndex spatialIndex;
         private final boolean debugEnabled;
         private final boolean visible;
@@ -302,8 +308,7 @@ public final class CompareOverlayRenderer {
                     leftVersionId,
                     rightVersionId,
                     changedBlocks,
-                    SURFACE_RESOLVER.indexPositions(changedBlocks),
-                    CompareOverlaySpatialIndex.build(changedBlocks),
+                    buildSurfaceBlocksByPosition(changedBlocks),
                     debugEnabled,
                     visible
             );
@@ -314,7 +319,7 @@ public final class CompareOverlayRenderer {
                 String leftVersionId,
                 String rightVersionId,
                 List<DiffBlockEntry> changedBlocks,
-                Set<Long> changedBlockPositions,
+                Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocksByPosition,
                 CompareOverlaySpatialIndex spatialIndex,
                 boolean debugEnabled,
                 boolean visible
@@ -323,10 +328,33 @@ public final class CompareOverlayRenderer {
             this.leftVersionId = leftVersionId;
             this.rightVersionId = rightVersionId;
             this.changedBlocks = List.copyOf(changedBlocks);
-            this.changedBlockPositions = changedBlockPositions;
+            this.surfaceBlocksByPosition = surfaceBlocksByPosition;
             this.spatialIndex = spatialIndex;
             this.debugEnabled = debugEnabled;
             this.visible = visible;
+        }
+
+        private OverlayState(
+                String projectName,
+                String leftVersionId,
+                String rightVersionId,
+                List<DiffBlockEntry> changedBlocks,
+                Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocksByPosition,
+                boolean debugEnabled,
+                boolean visible
+        ) {
+            this(
+                    projectName,
+                    leftVersionId,
+                    rightVersionId,
+                    changedBlocks,
+                    surfaceBlocksByPosition,
+                    CompareOverlaySpatialIndex.build(surfaceBlocksByPosition.values().stream()
+                            .map(CompareOverlaySurfaceResolver.SurfaceBlock::entry)
+                            .toList()),
+                    debugEnabled,
+                    visible
+            );
         }
 
         private String projectName() {
@@ -355,7 +383,7 @@ public final class CompareOverlayRenderer {
                     this.leftVersionId,
                     this.rightVersionId,
                     this.changedBlocks,
-                    this.changedBlockPositions,
+                    this.surfaceBlocksByPosition,
                     this.spatialIndex,
                     this.debugEnabled,
                     nextVisible
@@ -390,7 +418,14 @@ public final class CompareOverlayRenderer {
             this.cachedCameraBlockZ = cameraBlockZ;
             long startedAt = System.nanoTime();
             List<DiffBlockEntry> nearestEntries = this.spatialIndex.selectNearestEntries(cameraX, cameraY, cameraZ);
-            this.cachedVisibleSurfaceBlocks = SURFACE_RESOLVER.resolve(nearestEntries, this.changedBlockPositions);
+            List<CompareOverlaySurfaceResolver.SurfaceBlock> nearestSurfaceBlocks = new ArrayList<>(nearestEntries.size());
+            for (DiffBlockEntry entry : nearestEntries) {
+                CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock = this.surfaceBlocksByPosition.get(pack(entry.pos()));
+                if (surfaceBlock != null) {
+                    nearestSurfaceBlocks.add(surfaceBlock);
+                }
+            }
+            this.cachedVisibleSurfaceBlocks = List.copyOf(nearestSurfaceBlocks);
             if (this.debugEnabled) {
                 LumaDebugLog.log(
                         "compare-overlay",
@@ -407,6 +442,25 @@ public final class CompareOverlayRenderer {
                 );
             }
             return this.cachedVisibleSurfaceBlocks;
+        }
+
+        private static Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> buildSurfaceBlocksByPosition(
+                List<DiffBlockEntry> changedBlocks
+        ) {
+            Set<Long> changedBlockPositions = SURFACE_RESOLVER.indexPositions(changedBlocks);
+            List<CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocks = SURFACE_RESOLVER.resolve(
+                    changedBlocks,
+                    changedBlockPositions
+            );
+            Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> indexed = new LinkedHashMap<>();
+            for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : surfaceBlocks) {
+                indexed.put(pack(surfaceBlock.entry().pos()), surfaceBlock);
+            }
+            return Map.copyOf(indexed);
+        }
+
+        private static long pack(io.github.luma.domain.model.BlockPoint pos) {
+            return BlockPos.asLong(pos.x(), pos.y(), pos.z());
         }
     }
 

@@ -2,6 +2,7 @@ package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotRef;
@@ -24,7 +25,7 @@ import net.jpountz.lz4.LZ4FrameOutputStream;
 public final class SnapshotWriter {
 
     private static final int MAGIC = 0x4C534E50;
-    private static final int VERSION = 4;
+    private static final int VERSION = 5;
 
     public void writeFile(Path snapshotFile, SnapshotData snapshot) throws IOException {
         StorageIo.writeAtomically(snapshotFile, output -> this.writeCompressed(output, snapshot));
@@ -101,7 +102,10 @@ public final class SnapshotWriter {
                     StorageIo.writeCompound(data, entry.getValue());
                 }
 
-                data.writeInt(0); // chunk entity snapshots
+                data.writeInt(chunk.entitySnapshots().size());
+                for (EntityPayload entitySnapshot : chunk.entitySnapshots()) {
+                    StorageIo.writeCompound(data, entitySnapshot.copyTag());
+                }
             }
         }
     }
@@ -132,7 +136,13 @@ public final class SnapshotWriter {
                     section.unpackPaletteIndexes()
             ));
         }
-        return new SnapshotChunkData(chunk.chunkX(), chunk.chunkZ(), sections, chunk.blockEntities());
+        return new SnapshotChunkData(
+                chunk.chunkX(),
+                chunk.chunkZ(),
+                sections,
+                chunk.blockEntities(),
+                chunk.entitySnapshots()
+        );
     }
 
     public static int packVerticalIndex(int relativeY, int localX, int localZ) {

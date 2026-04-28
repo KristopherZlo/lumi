@@ -57,6 +57,7 @@ public final class VariantMergeService {
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final VersionService versionService = new VersionService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final VersionLineageService lineageService = new VersionLineageService();
 
     public VariantMergePlan previewMerge(
             MinecraftServer server,
@@ -187,9 +188,13 @@ public final class VariantMergeService {
             throw new IllegalArgumentException("Source variant has no saved head");
         }
 
-        Map<String, ProjectVersion> targetVersionMap = this.versionMap(targetVersions);
-        Map<String, ProjectVersion> sourceVersionMap = this.versionMap(sourceVersions);
-        String ancestorVersionId = this.findSharedAncestor(targetVersionMap, sourceVersionMap, sourceVariant.headVersionId());
+        Map<String, ProjectVersion> targetVersionMap = this.lineageService.versionMap(targetVersions);
+        Map<String, ProjectVersion> sourceVersionMap = this.lineageService.versionMap(sourceVersions);
+        String ancestorVersionId = this.lineageService.sharedSavedAncestorId(
+                targetVersionMap,
+                sourceVersionMap,
+                sourceVariant.headVersionId()
+        );
         Map<BlockPoint, StateAccumulator> targetStates = this.collectStates(targetLayout, targetVersionMap, ancestorVersionId, targetVariant.headVersionId());
         Map<BlockPoint, StateAccumulator> sourceStates = this.collectStates(sourceLayout, sourceVersionMap, ancestorVersionId, sourceVariant.headVersionId());
         Map<String, EntityStateAccumulator> targetEntityStates = this.collectEntityStates(
@@ -292,32 +297,6 @@ public final class VariantMergeService {
                 .orElseThrow(() -> new IllegalArgumentException(label + " variant not found: " + variantId));
     }
 
-    private String findSharedAncestor(
-            Map<String, ProjectVersion> targetVersionMap,
-            Map<String, ProjectVersion> sourceVersionMap,
-            String sourceHeadVersionId
-    ) {
-        ProjectVersion cursor = sourceVersionMap.get(sourceHeadVersionId);
-        while (cursor != null) {
-            ProjectVersion targetCandidate = targetVersionMap.get(cursor.id());
-            if (targetCandidate != null && targetCandidate.equals(cursor)) {
-                return targetCandidate.id();
-            }
-            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                    ? null
-                    : sourceVersionMap.get(cursor.parentVersionId());
-        }
-        throw new IllegalArgumentException("Imported variant does not share a common saved ancestor with the target project");
-    }
-
-    private Map<String, ProjectVersion> versionMap(List<ProjectVersion> versions) {
-        Map<String, ProjectVersion> versionMap = new LinkedHashMap<>();
-        for (ProjectVersion version : versions) {
-            versionMap.put(version.id(), version);
-        }
-        return versionMap;
-    }
-
     private List<MergeConflictZone> buildConflictZones(java.util.Collection<StoredBlockChange> conflictingChanges) {
         if (conflictingChanges.isEmpty()) {
             return List.of();
@@ -415,7 +394,7 @@ public final class VariantMergeService {
             String ancestorVersionId,
             String targetHeadVersionId
     ) throws IOException {
-        List<ProjectVersion> path = this.pathFromAncestor(versionMap, ancestorVersionId, targetHeadVersionId);
+        List<ProjectVersion> path = this.lineageService.pathFromAncestor(versionMap, ancestorVersionId, targetHeadVersionId);
         Map<BlockPoint, StateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
             for (StoredBlockChange change : this.loadPatchWorldChanges(layout, version.patchIds()).blockChanges()) {
@@ -427,33 +406,13 @@ public final class VariantMergeService {
         return states;
     }
 
-    private List<ProjectVersion> pathFromAncestor(
-            Map<String, ProjectVersion> versionMap,
-            String ancestorVersionId,
-            String targetHeadVersionId
-    ) {
-        List<ProjectVersion> reversed = new ArrayList<>();
-        ProjectVersion cursor = versionMap.get(targetHeadVersionId);
-        while (cursor != null && !cursor.id().equals(ancestorVersionId)) {
-            reversed.add(cursor);
-            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                    ? null
-                    : versionMap.get(cursor.parentVersionId());
-        }
-        List<ProjectVersion> path = new ArrayList<>(reversed.size());
-        for (int index = reversed.size() - 1; index >= 0; index--) {
-            path.add(reversed.get(index));
-        }
-        return path;
-    }
-
     private Map<String, EntityStateAccumulator> collectEntityStates(
             ProjectLayout layout,
             Map<String, ProjectVersion> versionMap,
             String ancestorVersionId,
             String targetHeadVersionId
     ) throws IOException {
-        List<ProjectVersion> path = this.pathFromAncestor(versionMap, ancestorVersionId, targetHeadVersionId);
+        List<ProjectVersion> path = this.lineageService.pathFromAncestor(versionMap, ancestorVersionId, targetHeadVersionId);
         Map<String, EntityStateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
             for (StoredEntityChange change : this.loadPatchWorldChanges(layout, version.patchIds()).entityChanges()) {

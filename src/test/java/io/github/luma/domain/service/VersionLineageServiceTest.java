@@ -8,6 +8,7 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionKind;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -71,6 +72,45 @@ class VersionLineageServiceTest {
 
         assertNotNull(resolved);
         assertEquals("v0002", resolved.id());
+    }
+
+    @Test
+    void resolvesCommonAncestorAndPathFromAncestor() {
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", Instant.parse("2026-04-21T10:00:00Z")),
+                version("v0002", "main", "v0001", Instant.parse("2026-04-21T10:01:00Z")),
+                version("v0003", "main", "v0002", Instant.parse("2026-04-21T10:02:00Z")),
+                version("v0004", "feature", "v0002", Instant.parse("2026-04-21T10:03:00Z"))
+        );
+        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
+
+        ProjectVersion ancestor = this.lineageService.commonAncestor(
+                versionMap,
+                versionMap.get("v0003"),
+                versionMap.get("v0004")
+        );
+        List<ProjectVersion> path = this.lineageService.pathFromAncestor(
+                versionMap,
+                ancestor,
+                versionMap.get("v0003")
+        );
+
+        assertEquals("v0002", ancestor.id());
+        assertEquals(List.of("v0003"), path.stream().map(ProjectVersion::id).toList());
+        assertTrue(this.lineageService.isAncestor(versionMap, "v0002", "v0003"));
+        assertFalse(this.lineageService.isAncestor(versionMap, "v0004", "v0003"));
+    }
+
+    @Test
+    void resolvesSharedSavedAncestorAcrossImportedMaps() {
+        ProjectVersion root = version("v0001", "main", "", Instant.parse("2026-04-21T10:00:00Z"));
+        ProjectVersion sourceHead = version("v0002", "feature", "v0001", Instant.parse("2026-04-21T10:01:00Z"));
+        Map<String, ProjectVersion> targetVersionMap = this.lineageService.versionMap(List.of(root));
+        Map<String, ProjectVersion> sourceVersionMap = this.lineageService.versionMap(List.of(root, sourceHead));
+
+        String ancestorId = this.lineageService.sharedSavedAncestorId(targetVersionMap, sourceVersionMap, "v0002");
+
+        assertEquals("v0001", ancestorId);
     }
 
     private static ProjectVersion version(String id, String variantId, String parentVersionId, Instant createdAt) {

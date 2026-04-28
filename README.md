@@ -121,7 +121,7 @@ Use Lumi if you want to:
 
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Recovery WAL writes, WAL compaction, and baseline chunk compression stay off the server-tick capture path.
-- Snapshot capture copies compact loaded-chunk payloads on the server thread, then writes them asynchronously through storage.
+- Snapshot capture copies compact loaded-chunk payloads, including entity snapshots, on the server thread, then writes them asynchronously through storage.
 - Storage repositories read and write payloads; Minecraft-layer preparers build tick-ready apply batches.
 - Large WorldEdit/Axiom edits avoid block-entity NBT serialization for ordinary blocks, and capture project matching uses a cached dimension/chunk index.
 - Partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file.

@@ -3,6 +3,7 @@ package io.github.luma.minecraft.capture;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import io.github.luma.storage.repository.SnapshotWriter;
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -21,6 +23,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 import net.minecraft.world.level.chunk.Strategy;
+import net.minecraft.world.phys.AABB;
 
 /**
  * Captures already-loaded chunk state into an immutable compact payload.
@@ -35,6 +38,7 @@ public final class ChunkSnapshotCaptureService {
     private static final String AIR_BLOCK_ID = "minecraft:air";
 
     private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
+    private final EntitySnapshotService entitySnapshotService = new EntitySnapshotService();
 
     public Optional<ChunkSnapshotPayload> captureLoadedChunk(ServerLevel level, ChunkPoint chunk) {
         return this.captureLoadedChunk(level, chunk, null, null, null);
@@ -45,7 +49,7 @@ public final class ChunkSnapshotCaptureService {
             return Optional.empty();
         }
         LevelChunk levelChunk = level.getChunk(chunk.x(), chunk.z());
-        return Optional.of(this.capture(level, levelChunk, null, null, null));
+        return Optional.of(this.capture(level, levelChunk, null, null, null, EntitySnapshotOverride.none()));
     }
 
     public Optional<ChunkSnapshotPayload> captureLoadedChunk(
@@ -55,6 +59,36 @@ public final class ChunkSnapshotCaptureService {
             BlockState overrideState,
             CompoundTag overrideBlockEntity
     ) {
+        return this.captureLoadedChunk(level, chunk, overridePos, overrideState, overrideBlockEntity, EntitySnapshotOverride.none());
+    }
+
+    public Optional<ChunkSnapshotPayload> captureLoadedChunk(
+            ServerLevel level,
+            ChunkPoint chunk,
+            BlockPos overridePos,
+            BlockState overrideState,
+            CompoundTag overrideBlockEntity,
+            EntityPayload oldEntityPayload,
+            EntityPayload newEntityPayload
+    ) {
+        return this.captureLoadedChunk(
+                level,
+                chunk,
+                overridePos,
+                overrideState,
+                overrideBlockEntity,
+                new EntitySnapshotOverride(oldEntityPayload, newEntityPayload)
+        );
+    }
+
+    private Optional<ChunkSnapshotPayload> captureLoadedChunk(
+            ServerLevel level,
+            ChunkPoint chunk,
+            BlockPos overridePos,
+            BlockState overrideState,
+            CompoundTag overrideBlockEntity,
+            EntitySnapshotOverride entityOverride
+    ) {
         if (level == null || chunk == null) {
             return Optional.empty();
         }
@@ -62,7 +96,7 @@ public final class ChunkSnapshotCaptureService {
         if (levelChunk == null) {
             return Optional.empty();
         }
-        return Optional.of(this.capture(level, levelChunk, overridePos, overrideState, overrideBlockEntity));
+        return Optional.of(this.capture(level, levelChunk, overridePos, overrideState, overrideBlockEntity, entityOverride));
     }
 
     private ChunkSnapshotPayload capture(
@@ -70,7 +104,8 @@ public final class ChunkSnapshotCaptureService {
             LevelChunk chunk,
             BlockPos overridePos,
             BlockState overrideState,
-            CompoundTag overrideBlockEntity
+            CompoundTag overrideBlockEntity,
+            EntitySnapshotOverride entityOverride
     ) {
         BlockPos immutableOverridePos = overridePos == null ? null : overridePos.immutable();
         PersistentBlockStatePolicy.PersistentBlockState normalizedOverride = overrideState == null
@@ -121,7 +156,8 @@ public final class ChunkSnapshotCaptureService {
                 level.getMinY(),
                 level.getMaxY(),
                 sections,
-                blockEntities
+                blockEntities,
+                this.captureEntities(level, chunk, entityOverride)
         );
     }
 
@@ -167,5 +203,39 @@ public final class ChunkSnapshotCaptureService {
             );
         }
         return blockEntities;
+    }
+
+    private List<EntityPayload> captureEntities(
+            ServerLevel level,
+            LevelChunk chunk,
+            EntitySnapshotOverride entityOverride
+    ) {
+        int chunkX = chunk.getPos().x;
+        int chunkZ = chunk.getPos().z;
+        AABB bounds = new AABB(
+                chunkX << 4,
+                level.getMinY(),
+                chunkZ << 4,
+                (chunkX << 4) + 16,
+                level.getMaxY() + 1,
+                (chunkZ << 4) + 16
+        );
+
+        List<EntityPayload> snapshots = new ArrayList<>();
+        for (Entity entity : level.getEntities((Entity) null, bounds, entity -> this.isInChunk(entity, chunkX, chunkZ))) {
+            EntityPayload payload = this.entitySnapshotService.capture(level, entity);
+            if (payload != null) {
+                snapshots.add(payload);
+            }
+        }
+        return (entityOverride == null ? EntitySnapshotOverride.none() : entityOverride).applyTo(snapshots);
+    }
+
+    private boolean isInChunk(Entity entity, int chunkX, int chunkZ) {
+        if (entity == null || entity.isRemoved()) {
+            return false;
+        }
+        BlockPos pos = entity.blockPosition();
+        return (pos.getX() >> 4) == chunkX && (pos.getZ() >> 4) == chunkZ;
     }
 }

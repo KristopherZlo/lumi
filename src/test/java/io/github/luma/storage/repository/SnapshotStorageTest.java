@@ -2,21 +2,28 @@ package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import net.jpountz.lz4.LZ4FrameOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 class SnapshotStorageTest {
+
+    private static final int SNAPSHOT_MAGIC = 0x4C534E50;
 
     @TempDir
     Path tempDir;
@@ -32,6 +39,10 @@ class SnapshotStorageTest {
 
         LinkedHashMap<Integer, net.minecraft.nbt.CompoundTag> blockEntities = new LinkedHashMap<>();
         blockEntities.put(SnapshotWriter.packVerticalIndex(5, 1, 0), blockEntity("minecraft:chest"));
+        List<EntityPayload> entitySnapshots = List.of(entity(
+                "minecraft:item",
+                "00000000-0000-0000-0000-000000000001"
+        ));
 
         SnapshotData snapshot = new SnapshotData(
                 "project",
@@ -46,7 +57,8 @@ class SnapshotStorageTest {
                                 List.of(state("minecraft:stone"), state("minecraft:gold_block")),
                                 indexes
                         )),
-                        blockEntities
+                        blockEntities,
+                        entitySnapshots
                 ))
         );
 
@@ -62,6 +74,7 @@ class SnapshotStorageTest {
         assertEquals(2, restoredChunk.chunkX());
         assertEquals(3, restoredChunk.chunkZ());
         assertEquals(blockEntities, restoredChunk.blockEntities());
+        assertEquals(entitySnapshots, restoredChunk.entitySnapshots());
         assertEquals(1, restoredChunk.sections().size());
         SnapshotSectionData restoredSection = restoredChunk.sections().getFirst();
         assertEquals(0, restoredSection.sectionY());
@@ -87,7 +100,8 @@ class SnapshotStorageTest {
                         packIndexes(indexes, 2),
                         2
                 )),
-                Map.of(SnapshotWriter.packVerticalIndex(5, 1, 0), blockEntity("minecraft:chest"))
+                Map.of(SnapshotWriter.packVerticalIndex(5, 1, 0), blockEntity("minecraft:chest")),
+                List.of(entity("minecraft:item", "00000000-0000-0000-0000-000000000002"))
         );
 
         Path file = this.tempDir.resolve("prepared.bin.lz4");
@@ -98,6 +112,7 @@ class SnapshotStorageTest {
         assertEquals(4, restoredChunk.chunkX());
         assertEquals(-2, restoredChunk.chunkZ());
         assertEquals(payload.blockEntities(), restoredChunk.blockEntities());
+        assertEquals(payload.entitySnapshots(), restoredChunk.entitySnapshots());
         assertEquals(1, restoredChunk.sections().size());
         SnapshotSectionData restoredSection = restoredChunk.sections().getFirst();
         assertEquals(List.of(state("minecraft:air"), state("minecraft:stone"), state("minecraft:gold_block")), restoredSection.palette());
@@ -137,6 +152,34 @@ class SnapshotStorageTest {
         );
     }
 
+    @Test
+    void readsVersionFourSnapshotsAsBlockOnly() throws Exception {
+        Path file = this.tempDir.resolve("legacy-v4.bin.lz4");
+        try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(
+                new BufferedOutputStream(Files.newOutputStream(file))
+        ))) {
+            data.writeInt(SNAPSHOT_MAGIC);
+            data.writeInt(4);
+            data.writeUTF("project");
+            data.writeLong(Instant.parse("2026-04-20T10:00:00Z").toEpochMilli());
+            data.writeInt(0);
+            data.writeInt(15);
+            data.writeInt(1);
+            data.writeInt(7);
+            data.writeInt(8);
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(1);
+            StorageIo.writeCompound(data, entity("minecraft:item", "00000000-0000-0000-0000-000000000003").copyTag());
+        }
+
+        SnapshotData restored = this.reader.readFile(file);
+
+        assertEquals(1, restored.chunks().size());
+        assertEquals(List.of(), restored.chunks().getFirst().entitySnapshots());
+        assertEquals(List.of(new io.github.luma.domain.model.ChunkPoint(7, 8)), this.reader.loadChunks(file));
+    }
+
     private static net.minecraft.nbt.CompoundTag state(String blockId) {
         net.minecraft.nbt.CompoundTag state = new net.minecraft.nbt.CompoundTag();
         state.putString("Name", blockId);
@@ -147,6 +190,13 @@ class SnapshotStorageTest {
         net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
         tag.putString("id", id);
         return tag;
+    }
+
+    private static EntityPayload entity(String type, String uuid) {
+        net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
+        tag.putString("id", type);
+        tag.putString("UUID", uuid);
+        return new EntityPayload(tag);
     }
 
     private static long[] packIndexes(short[] indexes, int bitsPerEntry) {

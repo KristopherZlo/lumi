@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
@@ -66,7 +67,11 @@ public final class SnapshotBatchPreparer {
                 }
             }
         }
-        return new PreparedChunkBatch(new ChunkPoint(chunk.chunkX(), chunk.chunkZ()), placements);
+        return new PreparedChunkBatch(
+                new ChunkPoint(chunk.chunkX(), chunk.chunkZ()),
+                placements,
+                this.prepareEntitySnapshots(chunk.entitySnapshots())
+        );
     }
 
     private CompoundTag readBlockEntity(SnapshotChunkData chunk, int minBuildHeight, int y, int localX, int localZ) {
@@ -78,6 +83,19 @@ public final class SnapshotBatchPreparer {
 
     private static int packVerticalIndex(int relativeY, int localX, int localZ) {
         return (relativeY << 8) | (localZ << 4) | localX;
+    }
+
+    private EntityBatch prepareEntitySnapshots(List<EntityPayload> entitySnapshots) {
+        if (entitySnapshots == null || entitySnapshots.isEmpty()) {
+            return EntityBatch.empty();
+        }
+        return new EntityBatch(
+                List.of(),
+                List.of(),
+                entitySnapshots.stream()
+                        .map(EntityPayload::copyTag)
+                        .toList()
+        );
     }
 
     private static CompoundTag createAirTag() {
