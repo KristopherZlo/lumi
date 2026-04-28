@@ -27,6 +27,9 @@ public final class EntityMutationTracker {
         WorldMutationSource source = WorldMutationContext.currentSource();
         ObservedExternalToolOperation operation = null;
         if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
+            if (!CAPTURE_POLICY.shouldInspectExternalToolFallback(entityType)) {
+                return PendingEntityMutation.empty();
+            }
             Optional<ObservedExternalToolOperation> detected = TOOL_DETECTOR.detectOperation();
             if (detected.isEmpty()) {
                 return PendingEntityMutation.empty();
@@ -57,6 +60,9 @@ public final class EntityMutationTracker {
         WorldMutationSource source = WorldMutationContext.currentSource();
         ObservedExternalToolOperation operation = null;
         if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
+            if (!CAPTURE_POLICY.shouldInspectExternalToolFallback(entityType)) {
+                return;
+            }
             Optional<ObservedExternalToolOperation> detected = TOOL_DETECTOR.detectOperation();
             if (detected.isEmpty()) {
                 return;

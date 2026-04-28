@@ -482,6 +482,11 @@ public final class HistoryCaptureManager {
             this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
         }
         TrackedChangeBuffer session = this.activeBuffers.remove(projectId);
+        boolean persistedDraftIsCurrent = session != null
+                && !session.isEmpty()
+                && !this.dirtySessions.contains(projectId)
+                && this.lastDraftFingerprints.get(projectId) instanceof Integer persistedFingerprint
+                && persistedFingerprint == session.contentFingerprint();
         this.activeSessions.remove(projectId);
         this.dirtySessions.remove(projectId);
         this.lastDraftFlushes.remove(projectId);
@@ -502,6 +507,13 @@ public final class HistoryCaptureManager {
         }
 
         if (trackedProject != null && !session.isEmpty()) {
+            if (persistedDraftIsCurrent) {
+                LumaMod.LOGGER.info(
+                        "Skipped shutdown draft rewrite for project {} because the active buffer is already persisted",
+                        trackedProject.project().name()
+                );
+                return Optional.of(session);
+            }
             LumaDebugLog.log(
                     trackedProject.project(),
                     "capture",

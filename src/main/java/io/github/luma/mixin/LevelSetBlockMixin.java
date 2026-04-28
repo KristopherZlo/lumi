@@ -47,8 +47,7 @@ abstract class LevelSetBlockMixin {
         }
 
         BlockState oldState = serverLevel.getBlockState(pos);
-        BlockEntity blockEntity = serverLevel.getBlockEntity(pos);
-        CompoundTag oldBlockEntity = blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
+        CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, pos, oldState);
         WorldMutationCaptureGuard.pushLevelSetBlockBoundary();
         LUMA_PENDING_MUTATIONS.get().push(new PendingBlockMutation(
                 pos.immutable(),
@@ -76,23 +75,28 @@ abstract class LevelSetBlockMixin {
                 return;
             }
 
-            BlockEntity blockEntity = serverLevel.getBlockEntity(mutation.pos());
-            CompoundTag newBlockEntity = blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
-            this.luma$recordMutation(serverLevel, mutation, newBlockEntity);
+            BlockState appliedState = serverLevel.getBlockState(mutation.pos());
+            CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, mutation.pos(), appliedState);
+            this.luma$recordMutation(serverLevel, mutation, appliedState, newBlockEntity);
         } finally {
             WorldMutationCaptureGuard.popLevelSetBlockBoundary();
         }
     }
 
     @Unique
-    private void luma$recordMutation(ServerLevel serverLevel, PendingBlockMutation mutation, CompoundTag newBlockEntity) {
+    private void luma$recordMutation(
+            ServerLevel serverLevel,
+            PendingBlockMutation mutation,
+            BlockState appliedState,
+            CompoundTag newBlockEntity
+    ) {
         ObservedExternalToolOperation operation = mutation.operation();
         if (operation == null) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     serverLevel,
                     mutation.pos(),
                     mutation.oldState(),
-                    serverLevel.getBlockState(mutation.pos()),
+                    appliedState,
                     mutation.oldBlockEntity(),
                     newBlockEntity
             );
@@ -105,13 +109,22 @@ abstract class LevelSetBlockMixin {
                     serverLevel,
                     mutation.pos(),
                     mutation.oldState(),
-                    serverLevel.getBlockState(mutation.pos()),
+                    appliedState,
                     mutation.oldBlockEntity(),
                     newBlockEntity
             );
         } finally {
             WorldMutationContext.popSource();
         }
+    }
+
+    @Unique
+    private CompoundTag luma$blockEntityTag(ServerLevel serverLevel, BlockPos pos, BlockState state) {
+        if (state == null || !state.hasBlockEntity()) {
+            return null;
+        }
+        BlockEntity blockEntity = serverLevel.getBlockEntity(pos);
+        return blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
     }
 
     @Unique

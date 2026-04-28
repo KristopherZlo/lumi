@@ -60,7 +60,7 @@ public final class DirectSectionMutationCaptureService {
         return new PendingDirectSectionMutation(
                 pos,
                 oldState,
-                this.blockEntityTag(sectionOwner.level(), pos),
+                this.blockEntityTag(sectionOwner.level(), pos, oldState),
                 operation.get()
         );
     }
@@ -82,6 +82,7 @@ public final class DirectSectionMutationCaptureService {
         }
 
         ServerLevel level = owner.get().level();
+        BlockState appliedState = section.getBlockState(localX, localY, localZ);
         WorldMutationContext.pushExternalSource(
                 mutation.operation().source(),
                 mutation.operation().actor(),
@@ -92,16 +93,19 @@ public final class DirectSectionMutationCaptureService {
                     level,
                     mutation.pos(),
                     mutation.oldState(),
-                    section.getBlockState(localX, localY, localZ),
+                    appliedState,
                     mutation.oldBlockEntity(),
-                    this.blockEntityTag(level, mutation.pos())
+                    this.blockEntityTag(level, mutation.pos(), appliedState)
             );
         } finally {
             WorldMutationContext.popSource();
         }
     }
 
-    private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos) {
+    private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos, BlockState state) {
+        if (state == null || !state.hasBlockEntity()) {
+            return null;
+        }
         BlockEntity blockEntity = level.getBlockEntity(pos);
         return blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
     }
