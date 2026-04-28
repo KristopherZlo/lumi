@@ -289,7 +289,17 @@ public final class HistoryCaptureManager {
                 if (!this.canCaptureIntoSession(trackedProject, source, pos)) {
                     continue;
                 }
-                if (!this.ensureTrackedChunk(trackedProject, level, pos, null, null, source, now)) {
+                if (!this.ensureTrackedChunk(
+                        trackedProject,
+                        level,
+                        pos,
+                        null,
+                        null,
+                        capturedChange.oldValue(),
+                        capturedChange.newValue(),
+                        source,
+                        now
+                )) {
                     continue;
                 }
 
@@ -858,6 +868,19 @@ public final class HistoryCaptureManager {
             CompoundTag oldBlockEntity,
             Instant now
     ) throws IOException {
+        this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, null, null, now);
+    }
+
+    private void captureChunkBaseline(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            EntityPayload oldEntityPayload,
+            EntityPayload newEntityPayload,
+            Instant now
+    ) throws IOException {
         ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
         if (this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
             LumaDebugLog.log(
@@ -887,7 +910,9 @@ public final class HistoryCaptureManager {
                         chunk,
                         pos,
                         oldState,
-                        oldBlockEntity
+                        oldBlockEntity,
+                        oldEntityPayload,
+                        newEntityPayload
                 )
                 .orElseThrow(() -> new IOException(
                         "Chunk %d:%d is not available for baseline capture in %s".formatted(
@@ -923,6 +948,20 @@ public final class HistoryCaptureManager {
             io.github.luma.domain.model.WorldMutationSource source,
             Instant now
     ) throws IOException {
+        return this.ensureTrackedChunk(trackedProject, level, pos, oldState, oldBlockEntity, null, null, source, now);
+    }
+
+    private boolean ensureTrackedChunk(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            EntityPayload oldEntityPayload,
+            EntityPayload newEntityPayload,
+            io.github.luma.domain.model.WorldMutationSource source,
+            Instant now
+    ) throws IOException {
         ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
         CaptureSessionState session = this.sessionRegistry.session(trackedProject.project().id().toString());
         if (session != null && session.hasBaselineChunk(chunk)) {
@@ -947,7 +986,16 @@ public final class HistoryCaptureManager {
             return false;
         }
 
-        this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, now);
+        this.captureChunkBaseline(
+                trackedProject,
+                level,
+                pos,
+                oldState,
+                oldBlockEntity,
+                oldEntityPayload,
+                newEntityPayload,
+                now
+        );
         return true;
     }
 

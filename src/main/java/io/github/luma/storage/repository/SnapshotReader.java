@@ -2,6 +2,7 @@ package io.github.luma.storage.repository;
 
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotRef;
@@ -22,7 +23,7 @@ import net.jpountz.lz4.LZ4FrameInputStream;
 public final class SnapshotReader {
 
     private static final int MAGIC = 0x4C534E50;
-    private static final int VERSION = 4;
+    private static final int VERSION = 5;
 
     public SnapshotData load(ProjectLayout layout, SnapshotRef snapshot) throws IOException {
         return this.readFile(layout.snapshotFile(snapshot.id()));
@@ -34,7 +35,7 @@ public final class SnapshotReader {
         ))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != MAGIC || (version != 3 && version != VERSION)) {
+            if (magic != MAGIC || !isSupportedVersion(version)) {
                 throw new IOException("Unsupported snapshot format: " + snapshotFile.getFileName());
             }
 
@@ -71,14 +72,9 @@ public final class SnapshotReader {
                 for (int blockEntityIndex = 0; blockEntityIndex < blockEntityCount; blockEntityIndex++) {
                     blockEntities.put(input.readInt(), StorageIo.readCompound(input));
                 }
-                if (version >= 4) {
-                    int entityCount = input.readInt();
-                    for (int entityIndex = 0; entityIndex < entityCount; entityIndex++) {
-                        StorageIo.readCompound(input);
-                    }
-                }
+                List<EntityPayload> entitySnapshots = this.readEntitySnapshots(input, version);
 
-                chunks.add(new SnapshotChunkData(chunkX, chunkZ, sections, blockEntities));
+                chunks.add(new SnapshotChunkData(chunkX, chunkZ, sections, blockEntities, entitySnapshots));
                 BackgroundThrottle.pauseEvery(chunkIndex + 1, 4, 300_000L);
             }
 
@@ -98,7 +94,7 @@ public final class SnapshotReader {
         ))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != MAGIC || (version != 3 && version != VERSION)) {
+            if (magic != MAGIC || !isSupportedVersion(version)) {
                 throw new IOException("Unsupported snapshot format: " + snapshotFile.getFileName());
             }
 
@@ -144,9 +140,33 @@ public final class SnapshotReader {
         input.skipNBytes((long) paletteIndexCount * Short.BYTES);
     }
 
+    private List<EntityPayload> readEntitySnapshots(DataInputStream input, int version) throws IOException {
+        if (version < 4) {
+            return List.of();
+        }
+
+        int entityCount = input.readInt();
+        if (entityCount <= 0) {
+            return List.of();
+        }
+
+        List<EntityPayload> entitySnapshots = new ArrayList<>(version >= VERSION ? entityCount : 0);
+        for (int entityIndex = 0; entityIndex < entityCount; entityIndex++) {
+            net.minecraft.nbt.CompoundTag tag = StorageIo.readCompound(input);
+            if (version >= VERSION) {
+                entitySnapshots.add(new EntityPayload(tag));
+            }
+        }
+        return entitySnapshots;
+    }
+
     private static void skipCompound(DataInputStream input) throws IOException {
         int length = input.readInt();
         input.skipNBytes(length);
+    }
+
+    private static boolean isSupportedVersion(int version) {
+        return version == 3 || version == 4 || version == VERSION;
     }
 
 }

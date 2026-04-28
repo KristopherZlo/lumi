@@ -187,7 +187,7 @@ Current snapshot characteristics:
 - chunk -> section -> palette structure
 - only non-empty sections are stored
 - block entities are kept in a sparse side table keyed by local block index
-- schema v4 includes a per-chunk entity snapshot list; it is currently written empty and schema v3 snapshots still load as block-only snapshots
+- schema v5 writes per-chunk entity snapshots; schema v3/v4 snapshots still load as block-only snapshots
 - `piston_head` and `moving_piston` states are normalized to air during new snapshot capture, and piston bases are stored retracted
 - restore planning can list snapshot chunks by scanning the length-prefixed structure and skipping NBT payload bytes, without materializing `SnapshotData` or deserializing block/entity tags
 - live chunk capture is performed on the Minecraft server thread into immutable compact payloads; snapshot storage only serializes and reads those prepared payloads

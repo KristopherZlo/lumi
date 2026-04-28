@@ -18,12 +18,25 @@ public record ChunkSnapshotPayload(
         int minBuildHeight,
         int maxBuildHeight,
         List<ChunkSectionSnapshotPayload> sections,
-        Map<Integer, CompoundTag> blockEntities
+        Map<Integer, CompoundTag> blockEntities,
+        List<EntityPayload> entitySnapshots
 ) {
+
+    public ChunkSnapshotPayload(
+            int chunkX,
+            int chunkZ,
+            int minBuildHeight,
+            int maxBuildHeight,
+            List<ChunkSectionSnapshotPayload> sections,
+            Map<Integer, CompoundTag> blockEntities
+    ) {
+        this(chunkX, chunkZ, minBuildHeight, maxBuildHeight, sections, blockEntities, List.of());
+    }
 
     public ChunkSnapshotPayload {
         sections = sections == null ? List.of() : List.copyOf(sections);
         blockEntities = copyBlockEntities(blockEntities);
+        entitySnapshots = copyEntitySnapshots(entitySnapshots);
     }
 
     public ChunkPoint chunk() {
@@ -40,6 +53,11 @@ public record ChunkSnapshotPayload(
         return this.blockEntities;
     }
 
+    @Override
+    public List<EntityPayload> entitySnapshots() {
+        return this.entitySnapshots;
+    }
+
     private static Map<Integer, CompoundTag> copyBlockEntities(Map<Integer, CompoundTag> blockEntities) {
         if (blockEntities == null || blockEntities.isEmpty()) {
             return Map.of();
@@ -49,5 +67,14 @@ public record ChunkSnapshotPayload(
             copied.put(entry.getKey(), entry.getValue() == null ? null : entry.getValue().copy());
         }
         return Map.copyOf(copied);
+    }
+
+    private static List<EntityPayload> copyEntitySnapshots(List<EntityPayload> entitySnapshots) {
+        if (entitySnapshots == null || entitySnapshots.isEmpty()) {
+            return List.of();
+        }
+        return entitySnapshots.stream()
+                .map(payload -> payload == null ? new EntityPayload(null) : new EntityPayload(payload.copyTag()))
+                .toList();
     }
 }

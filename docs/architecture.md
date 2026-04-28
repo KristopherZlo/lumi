@@ -67,7 +67,7 @@ Important adapters:
 - `ProjectTrackingIndex`: caches dimension/chunk membership for active projects so block capture does not scan every project for every mutation
 - `UndoRedoHistoryManager`: keeps the in-memory per-project undo and redo action stacks that power live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout or reconciled stabilization deltas into the latest builder action
 - `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
-- `ChunkSnapshotCaptureService`: copies loaded chunk section palettes and real block-entity tags into immutable compact payloads on the server thread
+- `ChunkSnapshotCaptureService`: copies loaded chunk section palettes, real block-entity tags, and entity snapshots into immutable compact payloads on the server thread
 - `SnapshotCaptureService`: marshals checkpoint snapshot capture onto the server thread and leaves serialization/persistence to storage writers
 - `ChunkSectionOwnershipRegistry`: keeps a weak chunk-section owner index for direct section mutation fallback capture, with per-chunk section-array caching so repeated chunk reads during spawn generation do not re-register every section; direct section fallback resolves that server owner before stack inspection, so client chunk loading and unowned generation sections do not pay external-tool stack sampling costs
 - `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, and `PersistentBlockStatePolicy`: filter runtime-only block/entity transitions and normalize piston animation states before they become drafts, undo/redo actions, snapshots, or restore placements; unknown-stack entity fallback detection is scoped to builder-relevant persistent entity types so ordinary mob movement does not sample external-tool stacks
@@ -251,7 +251,7 @@ Current guarantees:
 
 ## Storage format summary
 
-The current durable history format is project schema v4, patch payload schema v6, snapshot payload schema v4, and recovery draft schema v4.
+The current durable history format is project schema v4, patch payload schema v6, snapshot payload schema v5, and recovery draft schema v4.
 
 Main files:
 
