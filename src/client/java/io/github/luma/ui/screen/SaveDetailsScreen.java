@@ -1,10 +1,7 @@
 package io.github.luma.ui.screen;
 
-import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChangeType;
-import io.github.luma.domain.model.PartialRestorePlanSummary;
-import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
@@ -17,17 +14,16 @@ import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.preview.ProjectPreviewTextureCache;
+import io.github.luma.ui.screen.section.SaveDetailsPartialRestoreSection;
+import io.github.luma.ui.state.PartialRestoreFormState;
 import io.github.luma.ui.state.SaveDetailsViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
 import java.util.List;
-import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
@@ -44,6 +40,8 @@ public final class SaveDetailsScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectScreenController controller = new ProjectScreenController();
     private final ScreenRouter router = new ScreenRouter();
+    private final PartialRestoreFormState partialRestoreForm = new PartialRestoreFormState();
+    private final SaveDetailsPartialRestoreSection partialRestoreSections = new SaveDetailsPartialRestoreSection(new PartialRestoreActions());
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private SaveDetailsViewState state = new SaveDetailsViewState(
             null,
@@ -62,13 +60,6 @@ public final class SaveDetailsScreen extends LumaScreen {
     private boolean showPartialRestore = false;
     private boolean showAdvancedInfo = false;
     private int previewZoomStep = 1;
-    private String partialMinX = "";
-    private String partialMinY = "";
-    private String partialMinZ = "";
-    private String partialMaxX = "";
-    private String partialMaxY = "";
-    private String partialMaxZ = "";
-    private PartialRestorePlanSummary partialRestoreSummary;
 
     public SaveDetailsScreen(Screen parent, String projectName, String versionId) {
         super(Component.translatable("luma.screen.save_details.title", projectName));
@@ -326,7 +317,15 @@ public final class SaveDetailsScreen extends LumaScreen {
         expanded.child(restoreSelected);
         if (this.showPartialRestore) {
             FlowLayout partialExpanded = LumaUi.revealGroup();
-            partialExpanded.child(this.partialRestoreSection(version, operationActive));
+            partialExpanded.child(this.partialRestoreSections.section(new SaveDetailsPartialRestoreSection.Model(
+                    this.projectName,
+                    version,
+                    this.client.getUser().getName(),
+                    operationActive,
+                    this.partialRestoreForm,
+                    this.state.project() == null ? null : this.state.project().bounds(),
+                    this.fallbackPartialRestoreBounds()
+            )));
             expanded.child(partialExpanded);
         }
 
@@ -375,169 +374,6 @@ public final class SaveDetailsScreen extends LumaScreen {
                 Component.translatable(ProjectUiSupport.versionKindKey(version.versionKind()))
         )));
         return section;
-    }
-
-    private FlowLayout partialRestoreSection(ProjectVersion version, boolean operationActive) {
-        this.ensurePartialBoundsDefaults();
-        FlowLayout section = LumaUi.insetSection(
-                Component.translatable("luma.partial_restore.title"),
-                Component.translatable("luma.partial_restore.help")
-        );
-        section.child(this.partialBoundsRow(
-                "luma.partial_restore.min",
-                this.partialMinX,
-                this.partialMinY,
-                this.partialMinZ,
-                value -> this.partialMinX = value,
-                value -> this.partialMinY = value,
-                value -> this.partialMinZ = value
-        ));
-        section.child(this.partialBoundsRow(
-                "luma.partial_restore.max",
-                this.partialMaxX,
-                this.partialMaxY,
-                this.partialMaxZ,
-                value -> this.partialMaxX = value,
-                value -> this.partialMaxY = value,
-                value -> this.partialMaxZ = value
-        ));
-
-        if (this.partialRestoreSummary != null) {
-            section.child(LumaUi.caption(Component.translatable(
-                    "luma.partial_restore.summary",
-                    this.partialRestoreSummary.changedBlocks(),
-                    this.partialRestoreSummary.touchedChunks().size()
-            )));
-        }
-
-        FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.button(Component.translatable("luma.action.preview_partial_restore"), button -> {
-            Optional<PartialRestoreRequest> request = this.partialRestoreRequest(version);
-            if (request.isEmpty()) {
-                this.refresh("luma.status.partial_restore_invalid_bounds");
-                return;
-            }
-            this.partialRestoreSummary = this.controller.partialRestorePlanSummary(request.get());
-            this.refresh(this.partialRestoreSummary == null
-                    ? "luma.status.operation_failed"
-                    : "luma.status.partial_restore_plan_ready");
-        }));
-        ButtonComponent applyButton = LumaUi.primaryButton(Component.translatable("luma.action.apply_partial_restore"), button -> {
-            Optional<PartialRestoreRequest> request = this.partialRestoreRequest(version);
-            if (request.isEmpty()) {
-                this.refresh("luma.status.partial_restore_invalid_bounds");
-                return;
-            }
-            String result = this.controller.partialRestore(request.get());
-            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
-        });
-        applyButton.active(!operationActive && this.partialRestoreSummary != null && this.partialRestoreSummary.changedBlocks() > 0);
-        actions.child(applyButton);
-        section.child(actions);
-        return section;
-    }
-
-    private FlowLayout partialBoundsRow(
-            String labelKey,
-            String x,
-            String y,
-            String z,
-            java.util.function.Consumer<String> onX,
-            java.util.function.Consumer<String> onY,
-            java.util.function.Consumer<String> onZ
-    ) {
-        FlowLayout row = LumaUi.actionRow();
-        row.child(LumaUi.caption(Component.translatable(labelKey)));
-
-        var xBox = UIComponents.textBox(Sizing.fixed(60), x);
-        xBox.onChanged().subscribe(value -> {
-            onX.accept(value);
-            this.partialRestoreSummary = null;
-        });
-        row.child(xBox);
-
-        var yBox = UIComponents.textBox(Sizing.fixed(60), y);
-        yBox.onChanged().subscribe(value -> {
-            onY.accept(value);
-            this.partialRestoreSummary = null;
-        });
-        row.child(yBox);
-
-        var zBox = UIComponents.textBox(Sizing.fixed(60), z);
-        zBox.onChanged().subscribe(value -> {
-            onZ.accept(value);
-            this.partialRestoreSummary = null;
-        });
-        row.child(zBox);
-        return row;
-    }
-
-    private Optional<PartialRestoreRequest> partialRestoreRequest(ProjectVersion version) {
-        try {
-            Bounds3i bounds = new Bounds3i(
-                    new BlockPoint(
-                            Integer.parseInt(this.partialMinX),
-                            Integer.parseInt(this.partialMinY),
-                            Integer.parseInt(this.partialMinZ)
-                    ),
-                    new BlockPoint(
-                            Integer.parseInt(this.partialMaxX),
-                            Integer.parseInt(this.partialMaxY),
-                            Integer.parseInt(this.partialMaxZ)
-                    )
-            );
-            Bounds3i normalized = new Bounds3i(
-                    new BlockPoint(
-                            Math.min(bounds.min().x(), bounds.max().x()),
-                            Math.min(bounds.min().y(), bounds.max().y()),
-                            Math.min(bounds.min().z(), bounds.max().z())
-                    ),
-                    new BlockPoint(
-                            Math.max(bounds.min().x(), bounds.max().x()),
-                            Math.max(bounds.min().y(), bounds.max().y()),
-                            Math.max(bounds.min().z(), bounds.max().z())
-                    )
-            );
-            return Optional.of(new PartialRestoreRequest(
-                    this.projectName,
-                    version.id(),
-                    normalized,
-                    PartialRestoreRegionSource.MANUAL_BOUNDS,
-                    this.client.getUser().getName(),
-                    java.util.Map.of()
-            ));
-        } catch (NumberFormatException exception) {
-            return Optional.empty();
-        }
-    }
-
-    private void ensurePartialBoundsDefaults() {
-        if (!this.partialMinX.isBlank()
-                || !this.partialMinY.isBlank()
-                || !this.partialMinZ.isBlank()
-                || !this.partialMaxX.isBlank()
-                || !this.partialMaxY.isBlank()
-                || !this.partialMaxZ.isBlank()) {
-            return;
-        }
-        Bounds3i bounds = this.state.project() == null ? null : this.state.project().bounds();
-        if (bounds != null) {
-            this.partialMinX = Integer.toString(bounds.min().x());
-            this.partialMinY = Integer.toString(bounds.min().y());
-            this.partialMinZ = Integer.toString(bounds.min().z());
-            this.partialMaxX = Integer.toString(bounds.max().x());
-            this.partialMaxY = Integer.toString(bounds.max().y());
-            this.partialMaxZ = Integer.toString(bounds.max().z());
-            return;
-        }
-
-        BlockPos pos = this.client.player == null ? BlockPos.ZERO : this.client.player.blockPosition();
-        this.partialMinX = Integer.toString(pos.getX() - 8);
-        this.partialMinY = Integer.toString(Math.max(this.client.level == null ? -64 : this.client.level.getMinY(), pos.getY() - 8));
-        this.partialMinZ = Integer.toString(pos.getZ() - 8);
-        this.partialMaxX = Integer.toString(pos.getX() + 8);
-        this.partialMaxY = Integer.toString(Math.min(this.client.level == null ? 320 : this.client.level.getMaxY(), pos.getY() + 8));
-        this.partialMaxZ = Integer.toString(pos.getZ() + 8);
     }
 
     private FlowLayout restoreConfirmationSection(ProjectVersion version, ProjectVariant versionVariant, boolean operationActive) {
@@ -618,6 +454,13 @@ public final class SaveDetailsScreen extends LumaScreen {
         return "";
     }
 
+    private Bounds3i fallbackPartialRestoreBounds() {
+        BlockPos pos = this.client.player == null ? BlockPos.ZERO : this.client.player.blockPosition();
+        int minY = this.client.level == null ? -64 : this.client.level.getMinY();
+        int maxY = this.client.level == null ? 320 : this.client.level.getMaxY();
+        return PartialRestoreFormState.fallbackAround(pos, minY, maxY);
+    }
+
     private void refresh(String statusKey) {
         this.status = statusKey == null || statusKey.isBlank() ? "luma.status.project_ready" : statusKey;
         this.rebuild();
@@ -638,6 +481,28 @@ public final class SaveDetailsScreen extends LumaScreen {
     private void restoreScroll(double scrollProgress) {
         if (this.bodyScroll != null) {
             this.bodyScroll.restoreProgress(scrollProgress);
+        }
+    }
+
+    private final class PartialRestoreActions implements SaveDetailsPartialRestoreSection.Actions {
+
+        @Override
+        public void preview(PartialRestoreRequest request) {
+            partialRestoreForm.setSummary(controller.partialRestorePlanSummary(request));
+            refresh(partialRestoreForm.summary() == null
+                    ? "luma.status.operation_failed"
+                    : "luma.status.partial_restore_plan_ready");
+        }
+
+        @Override
+        public void apply(PartialRestoreRequest request) {
+            String result = controller.partialRestore(request);
+            router.openProjectIgnoringRecovery(parent, projectName, result);
+        }
+
+        @Override
+        public void invalidBounds() {
+            refresh("luma.status.partial_restore_invalid_bounds");
         }
     }
 }
