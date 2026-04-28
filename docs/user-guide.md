@@ -15,6 +15,7 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 - Press the Lumi overlay key plus `S` to open Quick save while no screen is open. The default chord is `Left Alt+S`, and both keys are remappable in Minecraft `Controls` under `Lumi`.
 - Use the Lumi overlay key plus `Z` to undo the latest tracked Lumi action while no screen is open. The default overlay key is `Left Alt`.
 - Use the Lumi overlay key plus `Y` to redo the latest undone Lumi action while no screen is open.
+- Undo and redo restore the stored block states without firing immediate redstone/block updates from the replay itself, so restored TNT does not auto-prime just because it is next to powered redstone.
 - Hold the Lumi overlay key to preview undo targets, or overlay key plus `Y` to preview redo targets, when compare highlight is not active. Changing the overlay key changes both the preview hold and these undo/redo chords.
 - Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
 - Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.

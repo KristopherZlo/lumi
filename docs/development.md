@@ -163,6 +163,7 @@ Current UX assumptions:
 - pressing the Lumi overlay key plus `Y` starts redo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; if undo and redo are pressed in the same tick, undo wins and redo must be pressed again
 - nearby short-lived secondary fallout can join the latest tracked undo/redo action instead of disappearing from the live action stack
 - undo/redo drains already-dirty whole-dimension stabilization chunks before selecting an action, so reconciled fluid, contact-created source blocks, and falling-block deltas can join the latest nearby undo/redo action when they settle inside the same time/radius window
+- undo/redo applies the selected stored states with client-visible but side-effect-suppressed block update flags, so restored blocks do not trigger immediate redstone neighbor updates or placement physics during the replay itself
 - runtime-only redstone state flips and piston animation states do not become live undo/redo actions
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
 - pressing `Compare` enables the world highlight immediately for the resolved diff

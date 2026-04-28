@@ -77,7 +77,7 @@ Important adapters:
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick with adaptive block budgets and bounded block-entity/entity passes
 - `WorldChangeBatchPreparer` and `SnapshotBatchPreparer`: convert persisted block/entity changes and snapshot payloads into tick-ready prepared batches before apply begins
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
-- `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
+- `WorldApplyBlockUpdatePolicy` and `BlockChangeApplier`: commit section blocks, block entities, and entity batches in bounded steps with client-visible, side-effect-suppressed block flags so replayed restore/undo/redo states do not emit neighbor updates or placement physics
 - `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
 - `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, and restore workflows, with chat progress and durable pass/fail logs
 - `WorldBootstrapService`: runs startup-only world-origin and root-version metadata checks off the server-start path so storage scans do not delay initial world entry
