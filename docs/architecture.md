@@ -287,7 +287,7 @@ There is also a project-scoped debug layer:
 
 - `ProjectSettings.debugLoggingEnabled` turns on verbose tracing for one workspace
 - `-Dlumi.debug=true` turns it on globally
-- debug logs cover capture, save, restore, recovery, compare, compare overlay cache rebuilds, HUD refresh, and world-operation queue/application steps
+- debug logs cover capture, save, restore, recovery, compare, compare/recent overlay input and render diagnostics, compare overlay cache rebuilds, HUD refresh, and world-operation queue/application steps
 - `-Dlumi.startupProfile=true` is a separate startup diagnostic flag for idle launch profiling. It logs bootstrap/client initializer timings and aggregate chunk-section ownership counters without turning on full capture debug logs.
 
 Logs are part of the support surface. New background or storage work should not be introduced without meaningful logs.
