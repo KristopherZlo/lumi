@@ -143,6 +143,7 @@ The codebase currently follows these top-level areas:
   owo-ui screens, controllers, overlays, and view-state records with router-driven navigation.
 
 For the current architecture, responsibility boundaries, and runtime invariants, see [architecture.md](architecture.md).
+For file-level routing before touching code, see [../modules.md](../modules.md).
 
 ## UI architecture
 

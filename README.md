@@ -274,6 +274,7 @@ Current scope:
 - [Commands](docs/commands.md)
 - [Development](docs/development.md)
 - [Architecture](docs/architecture.md)
+- [Module map](modules.md)
 - [Maintenance guide](docs/maintenance-guide.md)
 - [Storage format](docs/storage-format.md)
 - [Commit policy](docs/commit-policy.md)
