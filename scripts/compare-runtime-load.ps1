@@ -12,7 +12,16 @@ param(
 
     [switch]$FailOnRegression,
 
-    [string]$OutputRoot
+    [string]$OutputRoot,
+
+    [string[]]$BaselineExtraLogs = @(),
+
+    [string[]]$LumiExtraLogs = @(
+        "run\test-client\logs\latest.log",
+        "build\run\clientGameTest\logs\latest.log"
+    ),
+
+    [switch]$RequireLumiActionRun
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,15 +37,88 @@ function New-RunDirectory {
     return $path
 }
 
+function Resolve-RepoPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
+}
+
+function Get-LogOffsets {
+    param(
+        [string[]]$Paths
+    )
+
+    $offsets = @()
+    foreach ($path in $Paths) {
+        if ([string]::IsNullOrWhiteSpace($path)) {
+            continue
+        }
+        $resolved = Resolve-RepoPath -Path $path
+        $length = [int64]0
+        if ([System.IO.File]::Exists($resolved)) {
+            $length = [int64](Get-Item -LiteralPath $resolved).Length
+        }
+        $offsets += [PSCustomObject]@{
+            OriginalPath = $path
+            Path = $resolved
+            Offset = $length
+        }
+    }
+    return $offsets
+}
+
+function Append-ExtraLogs {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath,
+
+        [object[]]$Offsets
+    )
+
+    foreach ($offset in $Offsets) {
+        Add-Content -Path $LogPath -Value ""
+        Add-Content -Path $LogPath -Value ("===== Extra log: {0} =====" -f $offset.OriginalPath)
+        if (-not [System.IO.File]::Exists($offset.Path)) {
+            Add-Content -Path $LogPath -Value "Extra log was not created."
+            continue
+        }
+
+        $currentLength = [int64](Get-Item -LiteralPath $offset.Path).Length
+        if ($currentLength -le $offset.Offset) {
+            Add-Content -Path $LogPath -Value "No new content."
+            continue
+        }
+
+        $stream = [System.IO.File]::Open($offset.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try {
+            [void]$stream.Seek($offset.Offset, [System.IO.SeekOrigin]::Begin)
+            $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::UTF8, $true)
+            $content = $reader.ReadToEnd()
+            Add-Content -Path $LogPath -Value $content
+        } finally {
+            $stream.Dispose()
+        }
+    }
+}
+
 function Invoke-LoggedCommand {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Command,
 
         [Parameter(Mandatory = $true)]
-        [string]$LogPath
+        [string]$LogPath,
+
+        [string[]]$ExtraLogs
     )
 
+    $extraLogOffsets = Get-LogOffsets -Paths $ExtraLogs
     $start = [System.Diagnostics.Stopwatch]::StartNew()
     $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $processInfo.FileName = "cmd.exe"
@@ -61,6 +143,7 @@ function Invoke-LoggedCommand {
         $stderrTask.Result
     ) -join [Environment]::NewLine
     [System.IO.File]::WriteAllText($LogPath, $log)
+    Append-ExtraLogs -LogPath $LogPath -Offsets $extraLogOffsets
 
     return [PSCustomObject]@{
         ExitCode = $process.ExitCode
@@ -94,6 +177,10 @@ function Measure-Log {
         $content,
         "A single server tick took (?<seconds>\d+(?:\.\d+)?) seconds"
     )
+    $actionMatches = [regex]::Matches(
+        $content,
+        "Lumi singleplayer testing (?<result>passed|completed with failures): (?<passed>\d+) passed, (?<failed>\d+) failed"
+    )
 
     $maxKeepUpMs = 0
     $totalKeepUpMs = 0
@@ -109,6 +196,13 @@ function Measure-Log {
         $maxLongTickMs = [Math]::Max($maxLongTickMs, $ms)
     }
 
+    $actionChecksPassed = 0
+    $actionChecksFailed = 0
+    foreach ($match in $actionMatches) {
+        $actionChecksPassed += [int]$match.Groups["passed"].Value
+        $actionChecksFailed += [int]$match.Groups["failed"].Value
+    }
+
     return [PSCustomObject]@{
         LogPath = $LogPath
         ExitCode = $ExitCode
@@ -122,6 +216,9 @@ function Measure-Log {
         ErrorCount = ([regex]::Matches($content, "\bERROR\b")).Count
         LumiWarnCount = ([regex]::Matches($content, "\(Lumi\).*\bWARN\b|\bWARN\b.*\(Lumi\)")).Count
         RenderPipelineFailures = ([regex]::Matches($content, "render pipeline failure|Not building!")).Count
+        ActionRuns = $actionMatches.Count
+        ActionChecksPassed = $actionChecksPassed
+        ActionChecksFailed = $actionChecksFailed
     }
 }
 
@@ -134,14 +231,16 @@ function Invoke-Scenario {
         [string]$Command,
 
         [Parameter(Mandatory = $true)]
-        [string]$RunDirectory
+        [string]$RunDirectory,
+
+        [string[]]$ExtraLogs
     )
 
     $samples = @()
     for ($index = 1; $index -le $Runs; $index++) {
         $logPath = Join-Path $RunDirectory ("{0}-run-{1}.log" -f $Name, $index)
         Write-Host "Running $Name sample $index/$Runs"
-        $run = Invoke-LoggedCommand -Command $Command -LogPath $logPath
+        $run = Invoke-LoggedCommand -Command $Command -LogPath $logPath -ExtraLogs $ExtraLogs
         $samples += Measure-Log -LogPath $logPath -WallClockMs $run.WallClockMs -ExitCode $run.ExitCode
     }
     return $samples
@@ -168,6 +267,9 @@ function New-Summary {
         ErrorCount = [int](($Samples | Measure-Object -Property ErrorCount -Sum).Sum)
         LumiWarnCount = [int](($Samples | Measure-Object -Property LumiWarnCount -Sum).Sum)
         RenderPipelineFailures = [int](($Samples | Measure-Object -Property RenderPipelineFailures -Sum).Sum)
+        ActionRuns = [int](($Samples | Measure-Object -Property ActionRuns -Sum).Sum)
+        ActionChecksPassed = [int](($Samples | Measure-Object -Property ActionChecksPassed -Sum).Sum)
+        ActionChecksFailed = [int](($Samples | Measure-Object -Property ActionChecksFailed -Sum).Sum)
     }
 }
 
@@ -182,9 +284,9 @@ function Write-MarkdownSummary {
     $lines = @(
         "# Lumi Runtime Load Comparison",
         "",
-        "| Scenario | Runs | Failed | Avg wall ms | Max wall ms | Keep-up events | Max behind ms | Long ticks | Max long tick ms | WARN | ERROR | Lumi WARN | Render failures |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-        ("| Baseline | {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} |" -f
+        "| Scenario | Runs | Failed | Avg wall ms | Max wall ms | Keep-up events | Max behind ms | Long ticks | Max long tick ms | WARN | ERROR | Lumi WARN | Render failures | Action runs | Action failed |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ("| Baseline | {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} | {12} | {13} |" -f
             $Result.Baseline.Summary.Runs,
             $Result.Baseline.Summary.FailedRuns,
             $Result.Baseline.Summary.AverageWallClockMs,
@@ -196,8 +298,10 @@ function Write-MarkdownSummary {
             $Result.Baseline.Summary.WarnCount,
             $Result.Baseline.Summary.ErrorCount,
             $Result.Baseline.Summary.LumiWarnCount,
-            $Result.Baseline.Summary.RenderPipelineFailures),
-        ("| Lumi | {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} |" -f
+            $Result.Baseline.Summary.RenderPipelineFailures,
+            $Result.Baseline.Summary.ActionRuns,
+            $Result.Baseline.Summary.ActionChecksFailed),
+        ("| Lumi | {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} | {12} | {13} |" -f
             $Result.Lumi.Summary.Runs,
             $Result.Lumi.Summary.FailedRuns,
             $Result.Lumi.Summary.AverageWallClockMs,
@@ -209,11 +313,15 @@ function Write-MarkdownSummary {
             $Result.Lumi.Summary.WarnCount,
             $Result.Lumi.Summary.ErrorCount,
             $Result.Lumi.Summary.LumiWarnCount,
-            $Result.Lumi.Summary.RenderPipelineFailures),
+            $Result.Lumi.Summary.RenderPipelineFailures,
+            $Result.Lumi.Summary.ActionRuns,
+            $Result.Lumi.Summary.ActionChecksFailed),
         "",
         "Baseline command: ``$($Result.Baseline.Command)``",
         "",
         "Lumi command: ``$($Result.Lumi.Command)``",
+        "",
+        "Lumi action checks: $($Result.Lumi.Summary.ActionChecksPassed) passed, $($Result.Lumi.Summary.ActionChecksFailed) failed",
         "",
         "Raw logs and JSON: ``$($Result.OutputDirectory)``"
     )
@@ -221,8 +329,8 @@ function Write-MarkdownSummary {
 }
 
 $runDirectory = New-RunDirectory
-$baselineSamples = Invoke-Scenario -Name "baseline" -Command $BaselineCommand -RunDirectory $runDirectory
-$lumiSamples = Invoke-Scenario -Name "lumi" -Command $LumiCommand -RunDirectory $runDirectory
+$baselineSamples = Invoke-Scenario -Name "baseline" -Command $BaselineCommand -RunDirectory $runDirectory -ExtraLogs $BaselineExtraLogs
+$lumiSamples = Invoke-Scenario -Name "lumi" -Command $LumiCommand -RunDirectory $runDirectory -ExtraLogs $LumiExtraLogs
 
 $baselineSummary = New-Summary -Samples $baselineSamples
 $lumiSummary = New-Summary -Samples $lumiSamples
@@ -259,7 +367,13 @@ $hasFailedRuns = $baselineSummary.FailedRuns -gt 0 -or $lumiSummary.FailedRuns -
 $hasRegression = $lumiSummary.MaxKeepUpMs -gt ($baselineSummary.MaxKeepUpMs + $KeepUpRegressionMs) `
     -or $lumiSummary.MaxLongTickMs -gt ($baselineSummary.MaxLongTickMs + $KeepUpRegressionMs) `
     -or $lumiSummary.RenderPipelineFailures -gt $baselineSummary.RenderPipelineFailures
+$missingRequiredActionRun = $RequireLumiActionRun `
+    -and ($lumiSummary.ActionRuns -eq 0 -or $lumiSummary.ActionChecksFailed -gt 0)
 
-if ($hasFailedRuns -or ($FailOnRegression -and $hasRegression)) {
+if ($missingRequiredActionRun) {
+    Write-Error "Lumi action run is required but no passing singleplayer action suite result was found."
+}
+
+if ($hasFailedRuns -or ($FailOnRegression -and $hasRegression) -or $missingRequiredActionRun) {
     exit 1
 }

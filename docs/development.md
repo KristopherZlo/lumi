@@ -76,19 +76,22 @@ Run the integrated-world runtime regression suite from a local singleplayer save
 /lumi testing singleplayer
 ```
 
-The command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, integrity, and cleanup services through the server tick loop. It reports phase progress in chat, records pass/fail checks without stopping at the first failed assertion, and writes a detailed log under `<world>/lumi/test-logs/`.
+The command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, player block interaction, integrity, and cleanup services through the server tick loop. It verifies adjacent block fallout such as a flower removed after its support block is broken, reports phase progress in chat, records pass/fail checks without stopping at the first failed assertion, and writes a detailed log under `<world>/lumi/test-logs/`.
+
+`runClientGameTest` starts a consistent singleplayer world and invokes the same runtime suite automatically before taking its smoke screenshot. Use that task in load comparisons when you need repeatable game actions rather than a client startup-only sample.
 
 Compare runtime load between a no-Lumi baseline launch and a Lumi launch:
 
 ```powershell
 .\scripts\compare-runtime-load.ps1 `
   -BaselineCommand "path\to\baseline-launch.bat" `
-  -LumiCommand ".\scripts\run-test-client.ps1 -GradleTasks runClientGameTest" `
+  -LumiCommand "powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-test-client.ps1 -GradleTasks runClientGameTest" `
   -Runs 3 `
+  -RequireLumiActionRun `
   -FailOnRegression
 ```
 
-The harness writes raw logs plus `summary.json` and `summary.md` under `build/runtime-load/<timestamp>/`. It compares wall-clock time, `Can't keep up!` tick-delay reports, long server tick warnings, WARN/ERROR counts, Lumi WARN counts, and render pipeline failures. The baseline command should launch the same world/profile without the Lumi mod so the comparison measures Lumi's overhead rather than unrelated modpack or world-generation cost.
+The harness writes raw logs plus `summary.json` and `summary.md` under `build/runtime-load/<timestamp>/`. It compares wall-clock time, `Can't keep up!` tick-delay reports, long server tick warnings, WARN/ERROR counts, Lumi WARN counts, render pipeline failures, and Lumi singleplayer action-suite results. By default the Lumi run appends new content from `run/test-client/logs/latest.log` and `build/run/clientGameTest/logs/latest.log`; pass `-LumiExtraLogs` or `-BaselineExtraLogs` to attach additional game logs. `-RequireLumiActionRun` fails the comparison when the Lumi command did not actually run the singleplayer runtime suite or when that suite reported failed checks. The baseline command should launch the same world/profile without the Lumi mod so the comparison measures Lumi's overhead rather than unrelated modpack or world-generation cost.
 
 Enable verbose runtime tracing for debugging:
 
@@ -159,7 +162,7 @@ Current runtime history behavior:
 - For whole-dimension workspaces, fluid spread and falling blocks no longer append directly into the draft. They only re-mark chunks inside that causal envelope as dirty, and `SessionStabilizationService` later rebuilds the final chunk diff by comparing compact chunk snapshots instead of walking the world through `level.getBlockState()`.
 - Save, amend, recovery, restore, branch-switch, and undo/redo completion paths that need the live capture draft marshal snapshot/freeze/consume/discard/adjust work onto the Minecraft server thread before touching loaded chunks or mutable capture state.
 - Secondary explosion, fire, growth, block-update, and mob sources are still gated by the active session envelope so one explicit edit does not pull unrelated far-away cave settling into the same draft.
-- Block and entity changes are aggregated into an in-memory recovery draft immediately, then flushed asynchronously through the capture-maintenance executor and journaled while the session is active.
+- Block and entity changes are aggregated into an in-memory recovery draft immediately, then flushed asynchronously through the capture-maintenance executor and journaled while the session is active. Stabilization skips unchanged draft flushes after comparing the live buffer fingerprint, keeping repeated dirty-chunk reconciliation from rewriting the same recovery file every few seconds.
 - `ProjectService` bootstraps a shared `WorldOriginInfo` manifest and a metadata-backed `WORLD_ROOT` version for new dimension workspaces. The manifest is schema v2 and includes a conservative Lumi creation marker plus datapack and generator fingerprints.
 - `ProjectArchiveService` owns UI-driven zip import/export for stable project history. It delegates zip I/O to `ProjectArchiveRepository` and keeps the feature outside the save/restore tick path.
 - `HistoryShareService` backs the `Import / Export` flow on top of the same archive format by exporting one branch lineage to `lumi-projects`, importing it back as a review project, listing available package zips, and deleting imported review projects after validating they belong to the same project lineage.
