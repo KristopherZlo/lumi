@@ -35,7 +35,6 @@ final class MutationSourcePolicy {
                     ENTITY,
                     EXPLOSION,
                     FIRE,
-                    GROWTH,
                     BLOCK_UPDATE,
                     MOB,
                     EXPLOSIVE,
@@ -44,6 +43,7 @@ final class MutationSourcePolicy {
                     FAWE,
                     AXIOM -> true;
             case FLUID,
+                    GROWTH,
                     PISTON,
                     FALLING_BLOCK -> false;
             case RESTORE, SYSTEM -> false;

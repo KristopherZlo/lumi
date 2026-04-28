@@ -12,6 +12,7 @@ import io.github.luma.ui.MaterialEntryView;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
+import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.preview.ProjectPreviewTextureCache;
 import io.github.luma.ui.screen.section.SaveDetailsPartialRestoreSection;
@@ -60,6 +61,7 @@ public final class SaveDetailsScreen extends LumaScreen {
     private boolean showPartialRestore = false;
     private boolean showAdvancedInfo = false;
     private int previewZoomStep = 1;
+    private int refreshCooldown = 0;
 
     public SaveDetailsScreen(Screen parent, String projectName, String versionId) {
         super(Component.translatable("luma.screen.save_details.title", projectName));
@@ -123,6 +125,29 @@ public final class SaveDetailsScreen extends LumaScreen {
     @Override
     public void onClose() {
         this.client.setScreen(this.parent);
+    }
+
+    @Override
+    protected void onLumaTick() {
+        if (++this.refreshCooldown < 10) {
+            return;
+        }
+        this.refreshCooldown = 0;
+
+        SaveDetailsViewState refreshed = this.controller.loadSaveDetailsState(this.projectName, this.versionId, this.status);
+        String normalizedStatusKey = ScreenOperationStateSupport.normalizeStatusKey(
+                this.status,
+                refreshed.operationSnapshot(),
+                "luma.status.project_ready"
+        );
+        if (!normalizedStatusKey.equals(this.status)) {
+            this.status = normalizedStatusKey;
+            refreshed = this.controller.loadSaveDetailsState(this.projectName, this.versionId, this.status);
+        }
+        if (!refreshed.equals(this.state)) {
+            this.state = refreshed;
+            this.rebuild();
+        }
     }
 
     private FlowLayout summarySection(ProjectVersion version, ProjectVariant versionVariant) {

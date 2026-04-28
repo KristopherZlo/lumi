@@ -132,7 +132,7 @@ Responsibilities are split as follows:
 - `QuickSaveScreen` is a standalone shortcut route opened from the Lumi overlay key plus `Quick save key` chord; `QuickSaveScreenController` resolves the current dimension workspace and calls the same save service as the normal Save route
 - `LumaUi` centralizes compact `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface` rules so screens avoid absolute positioning and keep layout predictable
 - `ProjectWindowLayout` and `ProjectSidebarNavigation` keep the primary workspace tabs visible across Build History, Branches, Import / Export, Settings, and More. The sidebar highlights the active route and includes the external support link.
-- `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
+- `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG. Save details polls for the fulfilled metadata and reloads cached textures when the PNG changes, so a finished preview appears without reopening the screen.
 - obsolete tab-builder scaffolds have been removed; larger workflows now use dedicated screens and narrow view-state records instead of a shared project tab container
 - the project home screen is now a Build History view with one primary action, `Save build`, plus one-click `See changes`, recent saves, `Branches`, and `More`
 - dedicated screens isolate `Save`, `Save details`, `Branches`, `Import / Export`, `See Changes`, `Recovered work`, `Settings`, `Cleanup`, `Diagnostics`, and `Advanced` so the main project screen no longer carries rare or technical workflows
@@ -148,12 +148,12 @@ Responsibilities are split as follows:
 ## Capture flow
 
 1. A Minecraft mixin intercepts a block mutation or entity lifecycle/update mutation. External builder edits that bypass the normal `Level#setBlock` context can still be captured by the guarded Axiom block-buffer fallback, the `LevelChunk#setBlockState` known-tool fallback, or the direct `LevelChunkSection#setBlockState` fallback used by FAWE-style chunk placement.
-2. `WorldMutationContext` accepts only explicit player, explosive, explosion, falling-block, selected mob, and other targeted mutation scopes.
+2. `WorldMutationContext` accepts explicit player/tool scopes and targeted secondary scopes. Ambient random ticks are marked as `GROWTH` and do not inherit player action IDs, so natural kelp, vine, grass, or amethyst growth cannot masquerade as a builder action.
 3. `HistoryCaptureManager` finds matching projects for the block position or entity position through a cached dimension/chunk tracking index.
 4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.
 5. Explicit root mutations define a session-local causal envelope. Chunk baselines inside that envelope are captured lazily when those chunks first need stabilization.
 6. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position and entity UUID. For entities, the first old full-NBT payload and latest new full-NBT payload win.
-7. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization.
+7. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization. Natural growth cannot expand tracked chunks.
 8. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, consuming the draft, or choosing a live undo/redo action, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
 9. Idle or dirty sessions are flushed into recovery storage only when the live buffer fingerprint changed since the last queued draft flush.
 10. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
@@ -180,7 +180,7 @@ Important invariants:
 8. `VersionRepository` writes the final version manifest only after payload files exist.
 9. Amend-on-head merges both block and entity changes into the replacement draft before writing the amended version.
 10. Preview generation stores a lightweight request after save durability completes.
-11. The client preview coordinator later builds a local layered preview mesh, renders a textured isometric frame into an off-screen target, and writes the PNG plus preview metadata.
+11. The client preview coordinator later builds a local layered preview mesh, renders a textured isometric frame into an off-screen target, and writes the PNG plus preview metadata. Open project and save-details screens poll this metadata and invalidate preview textures when the underlying file changes.
 
 For automatic dimension workspaces, the history chain starts with a metadata-backed `WORLD_ROOT` version. It records the world origin context instead of a normal patch/snapshot payload.
 
