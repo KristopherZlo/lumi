@@ -20,6 +20,8 @@ import net.minecraft.server.level.ServerLevel;
  */
 public final class WorldChangeBatchPreparer {
 
+    private final ConnectedBlockPlacementExpander connectedBlockPlacementExpander = new ConnectedBlockPlacementExpander();
+
     public List<PreparedChunkBatch> prepareNewValues(ServerLevel level, PatchWorldChanges changes) throws IOException {
         return this.prepare(level, changes.blockChanges(), changes.entityChanges(), true, ProgressListener.NO_OP);
     }
@@ -55,21 +57,26 @@ public final class WorldChangeBatchPreparer {
         int total = changes.size() + entityChanges.size();
         int completed = 0;
 
-        Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = new LinkedHashMap<>();
+        List<ConnectedBlockPlacementExpander.ChangePlacement> blockPlacements = new ArrayList<>();
         Map<ChunkPoint, List<StoredEntityChange>> groupedEntities = new LinkedHashMap<>();
         for (StoredBlockChange change : changes) {
+            StatePayload source = applyNewValues ? change.oldValue() : change.newValue();
             StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
             BlockPos pos = new BlockPos(change.pos().x(), change.pos().y(), change.pos().z());
-            ChunkPoint chunk = ChunkPoint.from(change.pos());
-            grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>())
-                    .add(new PreparedBlockPlacement(
+            blockPlacements.add(new ConnectedBlockPlacementExpander.ChangePlacement(
+                    new PreparedBlockPlacement(
                             pos,
                             BlockStateNbtCodec.deserializeBlockState(level, target == null ? null : target.stateTag()),
                             target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
-                    ));
+                    ),
+                    BlockStateNbtCodec.deserializeBlockState(level, source == null ? null : source.stateTag())
+            ));
             completed += 1;
             progressListener.onDecoded(completed, total);
         }
+        Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = this.connectedBlockPlacementExpander.groupByChunk(
+                this.connectedBlockPlacementExpander.expandChanges(blockPlacements)
+        );
         for (StoredEntityChange change : entityChanges) {
             groupedEntities.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
             completed += 1;

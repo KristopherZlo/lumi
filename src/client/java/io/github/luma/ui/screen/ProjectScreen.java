@@ -139,14 +139,6 @@ public final class ProjectScreen extends LumaScreen {
             return;
         }
 
-        if (!variant.id().equals(this.state.project().activeVariantId())) {
-            String switched = this.actionController.switchVariant(this.projectName, variant.id(), false);
-            if (!"luma.status.variant_switched".equals(switched)) {
-                this.refresh(switched);
-                return;
-            }
-        }
-
         this.refresh(this.actionController.restoreVersion(this.projectName, version.id()));
     }
 

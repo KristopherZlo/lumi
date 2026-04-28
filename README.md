@@ -117,7 +117,8 @@ Use Lumi if you want to:
 4. `WORLD_ROOT` fallback uses tracked baseline chunks when direct replay is not valid.
 5. Snapshot fallback is used for normal versions when direct replay is not valid.
 6. Tick-thread apply uses bounded chunk batches with pre-decoded block states and prepared entity batches.
-7. A full restore moves the active branch head to the restored version; a partial restore applies only selected bounds and writes a new save on the active branch.
+7. Restore replay completes paired block halves such as beds, doors, and tall plants before apply.
+8. A full restore moves the active branch head to the restored version after apply completes; a partial restore applies only selected bounds and writes a new save on the active branch.
 
 ## Runtime Rules
 

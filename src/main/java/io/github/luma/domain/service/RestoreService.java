@@ -21,6 +21,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.world.ConnectedBlockPlacementExpander;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
@@ -59,6 +60,9 @@ import net.minecraft.server.level.ServerLevel;
  * application.
  */
 public final class RestoreService {
+
+    private static final ConnectedBlockPlacementExpander CONNECTED_BLOCK_PLACEMENT_EXPANDER =
+            new ConnectedBlockPlacementExpander();
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -1059,15 +1063,22 @@ public final class RestoreService {
             }
         }
 
+        List<PreparedBlockPlacement> expandedPlacements = CONNECTED_BLOCK_PLACEMENT_EXPANDER.expandTargets(
+                collapsed.values().stream()
+                        .flatMap(placements -> placements.values().stream())
+                        .toList()
+        );
+        Map<ChunkPoint, List<PreparedBlockPlacement>> expanded = CONNECTED_BLOCK_PLACEMENT_EXPANDER.groupByChunk(expandedPlacements);
+
         List<PreparedChunkBatch> result = new ArrayList<>();
         LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
-        chunks.addAll(collapsed.keySet());
+        chunks.addAll(expanded.keySet());
         chunks.addAll(collapsedEntities.keySet());
         for (ChunkPoint chunk : chunks) {
-            LinkedHashMap<Long, PreparedBlockPlacement> placements = collapsed.getOrDefault(chunk, new LinkedHashMap<>());
+            List<PreparedBlockPlacement> placements = expanded.getOrDefault(chunk, List.of());
             EntityBatch entityBatch = collapsedEntities.getOrDefault(chunk, EntityAccumulator.EMPTY).toBatch();
             if (!placements.isEmpty() || !entityBatch.isEmpty()) {
-                result.add(new PreparedChunkBatch(chunk, List.copyOf(placements.values()), entityBatch));
+                result.add(new PreparedChunkBatch(chunk, placements, entityBatch));
             }
         }
         return result;
