@@ -13,9 +13,12 @@ import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.controller.MergePreviewStatus;
 import io.github.luma.ui.controller.ShareScreenController;
+import io.github.luma.ui.navigation.ProjectSidebarNavigation;
+import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.screen.section.ShareMergeReviewSection;
 import io.github.luma.ui.state.ShareViewState;
@@ -27,7 +30,6 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -44,6 +46,7 @@ public final class ShareScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final ShareScreenController controller = new ShareScreenController();
     private final ScreenRouter router = new ScreenRouter();
+    private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ShareMergeReviewSection mergeReviewSections = new ShareMergeReviewSection(new MergeReviewActions());
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private ShareViewState state = new ShareViewState(null, List.of(), List.of(), List.of(), null, List.of(), null, "luma.status.share_ready");
@@ -84,14 +87,9 @@ public final class ShareScreen extends LumaScreen {
         root.padding(Insets.of(10));
         root.gap(0);
 
-        FlowLayout frame = LumaUi.screenFrame();
-        root.child(frame);
-
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        frame.child(header);
-
         if (this.state.project() == null) {
+            FlowLayout frame = LumaUi.screenFrame();
+            root.child(frame);
             frame.child(LumaUi.emptyState(
                     Component.translatable("luma.project.unavailable"),
                     Component.translatable("luma.status.project_failed")
@@ -99,28 +97,25 @@ public final class ShareScreen extends LumaScreen {
             return;
         }
 
-        FlowLayout titleRow = LumaUi.actionRow();
-        titleRow.child(LumaUi.value(Component.translatable("luma.screen.import_export.title")));
-        titleRow.child(LumaUi.chip(Component.translatable(
-                "luma.dashboard.current_dimension",
-                ProjectUiSupport.dimensionLabel(this.state.project().dimensionId())
-        )));
-        titleRow.child(LumaUi.chip(Component.translatable(
-                "luma.project.active_variant",
-                ProjectUiSupport.displayVariantName(this.state.variants(), this.state.project().activeVariantId())
-        )));
-        frame.child(titleRow);
-        frame.child(LumaUi.statusBanner(this.bannerText()));
+        ProjectWindowLayout window = ProjectWindowLayout.forProject(
+                this.width,
+                Component.translatable("luma.screen.import_export.title"),
+                this.state.project(),
+                this.state.variants()
+        );
+        root.child(window.root());
+        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.IMPORT_EXPORT, this::onClose);
+        window.content().child(LumaUi.statusBanner(this.bannerText()));
         if (!this.validationMessage.isBlank()) {
-            frame.child(LumaUi.danger(Component.literal(this.validationMessage)));
+            window.content().child(LumaUi.danger(Component.literal(this.validationMessage)));
         }
         if (this.state.operationSnapshot() != null) {
-            frame.child(this.operationSection());
+            window.content().child(this.operationSection());
         }
 
         FlowLayout body = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(body);
-        frame.child(this.bodyScroll);
+        window.content().child(this.bodyScroll);
 
         body.child(this.exportSection());
         body.child(this.importSection());
@@ -156,23 +151,6 @@ public final class ShareScreen extends LumaScreen {
         if (this.mergePreviewPending) {
             this.pollMergePreview();
         }
-    }
-
-    private FlowLayout navigationRow() {
-        FlowLayout navigation = LumaUi.actionRow();
-        navigation.child(LumaUi.button(Component.translatable("luma.tab.history"), button -> this.router.openProjectIgnoringRecovery(
-                this,
-                this.projectName,
-                "luma.status.project_ready"
-        )));
-        navigation.child(LumaUi.button(Component.translatable("luma.tab.variants"), button -> this.router.openVariants(
-                this,
-                this.projectName
-        )));
-        ButtonComponent shareButton = LumaUi.button(Component.translatable("luma.tab.import_export"), button -> this.refresh("luma.status.share_ready"));
-        shareButton.active(false);
-        navigation.child(shareButton);
-        return navigation;
     }
 
     private FlowLayout importSection() {

@@ -25,7 +25,8 @@ public final class CompareOverlayRenderer {
 
     private static final String CURRENT_WORLD_REFERENCE = "current";
     private static final int MAX_RENDERED_BLOCKS = 2048;
-    private static final float FILL_ALPHA = 112.0F;
+    private static final float NORMAL_FILL_ALPHA = 48.0F;
+    private static final float XRAY_FILL_ALPHA = 96.0F;
     private static final float OUTLINE_WIDTH = 2.75F;
     private static final float FACE_OUTSET = 0.003F;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
@@ -307,7 +308,7 @@ public final class CompareOverlayRenderer {
         var fillBuffer = OverlayImmediateRenderer.begin(fillType);
         VertexConsumer fillConsumer = fillBuffer;
         int filledFaceCount = 0;
-        int fillAlpha = Math.round(FILL_ALPHA);
+        int fillAlpha = Math.round(xrayEnabled ? XRAY_FILL_ALPHA : NORMAL_FILL_ALPHA);
         for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
             DiffBlockEntry entry = surfaceBlock.entry();
             ColorChannels color = ColorChannels.of(entry.changeType());

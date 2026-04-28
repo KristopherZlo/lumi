@@ -27,6 +27,7 @@ public final class LumaUi {
     private static final int SIDEBAR_FILL = 0xFF111214;
     private static final int PANEL_FILL = 0xEF1A1B1E;
     private static final int PANEL_BORDER = 0xFF343238;
+    private static final int ACTIVE_PANEL_BORDER = 0xFFE0B95A;
     private static final int INSET_FILL = 0xEA101113;
     private static final int INSET_BORDER = 0xFF2B2A2F;
     private static final int CHIP_FILL = 0xFF242326;
@@ -132,6 +133,14 @@ public final class LumaUi {
         return layout;
     }
 
+    public static FlowLayout activeInsetPanel(Sizing horizontal, Sizing vertical) {
+        FlowLayout layout = UIContainers.verticalFlow(horizontal, vertical);
+        layout.surface(Surface.flat(INSET_FILL).and(Surface.outline(ACTIVE_PANEL_BORDER)));
+        layout.padding(Insets.of(4));
+        layout.gap(4);
+        return layout;
+    }
+
     public static FlowLayout chip(Component text) {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
@@ -229,16 +238,29 @@ public final class LumaUi {
         return tabs;
     }
 
+    public static FlowLayout sidebarSpacer() {
+        return UIContainers.verticalFlow(Sizing.fill(100), Sizing.expand(100));
+    }
+
+    public static FlowLayout sidebarFooter() {
+        FlowLayout footer = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        footer.surface(Surface.flat(INSET_FILL).and(Surface.outline(INSET_BORDER)));
+        footer.padding(Insets.of(4));
+        footer.gap(4);
+        return footer;
+    }
+
     public static ButtonComponent sidebarTab(Component text, boolean selected, Consumer<ButtonComponent> onPress) {
         ButtonComponent button = styledButton(
                 text,
-                onPress,
+                selected ? pressed -> {
+                } : onPress,
                 selected ? STATUS_FILL : BUTTON_FILL,
                 selected ? STATUS_FILL : BUTTON_HOVER,
                 selected ? STATUS_FILL : BUTTON_DISABLED
         );
         button.sizing(Sizing.fill(100), Sizing.fixed(20));
-        button.active(!selected);
+        button.active(true);
         return button;
     }
 

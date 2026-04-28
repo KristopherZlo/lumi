@@ -26,8 +26,8 @@ public final class RecentChangesOverlayRenderer {
     private static final int MAX_ACTIONS = 10;
     private static final int BASE_ALPHA = 136;
     private static final int ALPHA_STEP = 12;
-    private static final float FILL_ALPHA_SCALE = 0.62F;
-    private static final int MIN_FILL_ALPHA = 36;
+    private static final float FILL_ALPHA_SCALE = 0.38F;
+    private static final int MIN_FILL_ALPHA = 24;
     private static final float OUTLINE_WIDTH = 2.75F;
     private static final float FACE_OUTSET = 0.003F;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();

@@ -12,7 +12,6 @@ import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
-import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.integration.common.IntegrationStatus;
 import io.github.luma.integration.common.IntegrationStatusService;
 import io.github.luma.ui.state.ProjectAdvancedViewState;
@@ -114,7 +113,6 @@ public final class ProjectHomeScreenController {
         private final Minecraft client = Minecraft.getInstance();
         private final ProjectService projectService = new ProjectService();
         private final RecoveryService recoveryService = new RecoveryService();
-        private final VersionLineageService versionLineageService = new VersionLineageService();
         private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
         private final IntegrationStatusService integrationStatusService = new IntegrationStatusService();
         private final OperationSnapshotViewService operationSnapshotViewService = new OperationSnapshotViewService();
@@ -136,10 +134,7 @@ public final class ProjectHomeScreenController {
 
         @Override
         public List<ProjectVersion> loadVersions(String projectName, List<ProjectVariant> variants) throws Exception {
-            return this.versionLineageService.reachableVersions(
-                    this.projectService.loadVersions(this.server(), projectName),
-                    variants
-            );
+            return this.projectService.loadVersions(this.server(), projectName);
         }
 
         @Override

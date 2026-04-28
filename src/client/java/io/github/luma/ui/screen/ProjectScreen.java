@@ -9,6 +9,8 @@ import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
+import io.github.luma.ui.navigation.ProjectSidebarNavigation;
+import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.screen.section.ProjectScreenSections;
 import io.github.luma.ui.state.ProjectHomeViewState;
@@ -29,6 +31,7 @@ public final class ProjectScreen extends LumaScreen {
     private final ProjectHomeScreenController stateController = new ProjectHomeScreenController();
     private final ProjectScreenController actionController = new ProjectScreenController();
     private final ScreenRouter router = new ScreenRouter();
+    private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ProjectScreenSections sections = new ProjectScreenSections(this.actionController, new SectionActions());
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private ProjectHomeViewState state = new ProjectHomeViewState(
@@ -88,22 +91,14 @@ public final class ProjectScreen extends LumaScreen {
             return;
         }
 
-        Component place = Component.translatable(
-                "luma.simple.current_place",
-                ProjectUiSupport.dimensionLabel(this.state.project().dimensionId())
-        );
-        Component idea = Component.translatable(
-                "luma.simple.current_idea",
-                ProjectUiSupport.displayVariantName(this.state.variants(), this.state.project().activeVariantId())
-        );
-        ProjectWindowLayout window = new ProjectWindowLayout(
+        ProjectWindowLayout window = ProjectWindowLayout.forProject(
                 this.width,
                 Component.translatable("luma.simple.workspace_title", this.projectName),
-                place,
-                idea
+                this.state.project(),
+                this.state.variants()
         );
         root.child(window.root());
-        this.buildSidebarTabs(window);
+        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.HISTORY, this::onClose);
         window.content().child(LumaUi.statusBanner(this.bannerText()));
 
         ProjectScreenSections.Model model = this.sectionModel();
@@ -119,30 +114,6 @@ public final class ProjectScreen extends LumaScreen {
         body.child(this.sections.buildSection(model));
         body.child(this.sections.historySection(model));
         body.child(LumaUi.bottomSpacer());
-    }
-
-    private void buildSidebarTabs(ProjectWindowLayout window) {
-        FlowLayout tabs = LumaUi.sidebarTabs();
-        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.tab.history"), true, button -> {
-        }));
-        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.tab.variants"), false, button -> this.router.openVariants(
-                this,
-                this.projectName
-        )));
-        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.tab.import_export"), false, button -> this.router.openShare(
-                this,
-                this.projectName
-        )));
-        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.action.settings"), false, button -> this.router.openSettings(
-                this,
-                this.projectName
-        )));
-        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.action.more"), false, button -> this.router.openMore(
-                this,
-                this.projectName
-        )));
-        tabs.child(LumaUi.sidebarTab(Component.translatable("luma.action.back"), false, button -> this.onClose()));
-        window.sidebar().child(tabs);
     }
 
     @Override

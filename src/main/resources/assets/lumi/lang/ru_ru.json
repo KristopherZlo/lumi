@@ -102,6 +102,7 @@
   "luma.action.confirm_initial_restore": "Восстановить Initial",
   "luma.action.preview_partial_restore": "Предпросмотр выбранной области",
   "luma.action.apply_partial_restore": "Восстановить выбранную область",
+  "luma.action.buy_me_a_coffee": "Buy me a coffee",
 
   "luma.tab.history": "История",
   "luma.tab.variants": "Бренчи",
@@ -632,6 +633,7 @@
   "luma.share.zone_status_use_imported": "Взять импортированные изменения"
   ,
   "luma.window.mode": "Окно истории постройки",
+  "luma.window.support": "Support",
   "luma.window.home_help": "Выбери следующий шаг для этой постройки.",
   "luma.simple.step": "Шаг %s",
   "luma.simple.workspace_title": "%s",

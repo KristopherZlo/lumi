@@ -9,9 +9,9 @@ import net.minecraft.client.renderer.rendertype.RenderType;
 
 final class CompareOverlayRenderTypes {
 
-    private static final RenderType NORMAL_FILL = createFill("lumi_compare_overlay_fill");
+    private static final RenderType NORMAL_FILL = createFill("lumi_compare_overlay_fill", false);
     private static final RenderType NORMAL_OUTLINE = createOutline("lumi_compare_overlay_outline", false);
-    private static final RenderType XRAY_FILL = createFill("lumi_compare_overlay_xray_fill");
+    private static final RenderType XRAY_FILL = createFill("lumi_compare_overlay_xray_fill", true);
     private static final RenderType XRAY_OUTLINE = createOutline("lumi_compare_overlay_xray_outline", true);
 
     private CompareOverlayRenderTypes() {
@@ -25,11 +25,13 @@ final class CompareOverlayRenderTypes {
         return xrayEnabled ? XRAY_OUTLINE : NORMAL_OUTLINE;
     }
 
-    private static RenderType createFill(String name) {
+    private static RenderType createFill(String name, boolean xrayEnabled) {
         RenderPipeline.Builder pipelineBuilder = RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
                 .withLocation("pipeline/" + name)
-                .withCull(false)
-                .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST);
+                .withCull(false);
+        if (xrayEnabled) {
+            pipelineBuilder.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST);
+        }
         RenderPipeline pipeline = pipelineBuilder.build();
         return RenderType.create(
                 name,

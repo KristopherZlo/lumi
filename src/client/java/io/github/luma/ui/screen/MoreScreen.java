@@ -1,7 +1,12 @@
 package io.github.luma.ui.screen;
 
 import io.github.luma.ui.LumaUi;
+import io.github.luma.ui.ProjectWindowLayout;
+import io.github.luma.ui.controller.ProjectHomeScreenController;
+import io.github.luma.ui.navigation.ProjectSidebarNavigation;
+import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
+import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
@@ -16,6 +21,9 @@ public final class MoreScreen extends LumaScreen {
     private final String projectName;
     private final Minecraft client = Minecraft.getInstance();
     private final ScreenRouter router = new ScreenRouter();
+    private final ProjectHomeScreenController controller = new ProjectHomeScreenController();
+    private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
+    private ProjectHomeViewState state;
 
     public MoreScreen(Screen parent, String projectName) {
         super(Component.translatable("luma.screen.more.title"));
@@ -30,22 +38,33 @@ public final class MoreScreen extends LumaScreen {
 
     @Override
     protected void build(FlowLayout root) {
+        this.state = this.controller.loadState(this.projectName, "luma.status.project_ready", false);
+
         root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
         root.gap(0);
 
-        FlowLayout frame = LumaUi.screenFrame();
-        root.child(frame);
+        if (this.state.project() == null) {
+            FlowLayout frame = LumaUi.screenFrame();
+            root.child(frame);
+            frame.child(LumaUi.emptyState(
+                    Component.translatable("luma.project.unavailable"),
+                    Component.translatable("luma.status.project_failed")
+            ));
+            return;
+        }
 
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        frame.child(header);
-
-        frame.child(LumaUi.value(Component.translatable("luma.screen.more.title")));
-        frame.child(LumaUi.caption(Component.translatable("luma.more.help")));
-
+        ProjectWindowLayout window = ProjectWindowLayout.forProject(
+                this.width,
+                Component.translatable("luma.screen.more.title"),
+                this.state.project(),
+                this.state.variants()
+        );
+        root.child(window.root());
+        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.MORE, this::onClose);
+        window.content().child(LumaUi.caption(Component.translatable("luma.more.help")));
         FlowLayout body = LumaUi.screenBody();
-        frame.child(LumaUi.screenScroll(body));
+        window.content().child(LumaUi.screenScroll(body));
 
         body.child(this.navigationCard(
                 "luma.more.projects_title",

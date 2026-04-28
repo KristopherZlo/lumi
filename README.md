@@ -61,7 +61,7 @@ Use Lumi if you want to:
 
 - automatic dimension projects
 - builder-first Build History UI built around `Save build`, `See changes`, recent saves, `Branches`, and `More`
-- lightweight save, branch, import/export, cleanup, diagnostics, and advanced navigation with live background-operation refresh while screens stay open
+- lightweight save, branch, import/export, cleanup, diagnostics, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, restore, see-changes, and branch actions
@@ -129,7 +129,7 @@ Use Lumi if you want to:
 - One map operation is expected at a time per save.
 - Progress is exposed through operation state.
 - Lumi screens do not pause the game.
-- Detached old versions stay on disk for safety.
+- Detached old versions stay on disk for safety and remain visible in Build History after a reset-style restore.
 
 ## Architecture
 

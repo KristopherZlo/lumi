@@ -3,13 +3,17 @@ package io.github.luma.ui.screen;
 import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
+import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.controller.SettingsScreenController;
+import io.github.luma.ui.navigation.ProjectSidebarNavigation;
+import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -20,6 +24,7 @@ public final class SettingsScreen extends LumaScreen {
     private final String projectName;
     private final Minecraft client = Minecraft.getInstance();
     private final SettingsScreenController controller = new SettingsScreenController();
+    private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.settings_ready";
     private boolean loaded = false;
@@ -68,27 +73,29 @@ public final class SettingsScreen extends LumaScreen {
         root.padding(Insets.of(10));
         root.gap(0);
 
-        FlowLayout frame = LumaUi.screenFrame();
-        root.child(frame);
-
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        frame.child(header);
-
-        frame.child(LumaUi.value(Component.translatable("luma.screen.settings.title", this.projectName)));
-        frame.child(LumaUi.statusBanner(Component.translatable(this.status)));
-
-        FlowLayout body = LumaUi.screenBody();
-        this.bodyScroll = LumaUi.screenScroll(body);
-        frame.child(this.bodyScroll);
-
         if (project == null) {
-            body.child(LumaUi.emptyState(
+            FlowLayout frame = LumaUi.screenFrame();
+            root.child(frame);
+            frame.child(LumaUi.emptyState(
                     Component.translatable("luma.project.unavailable"),
                     Component.translatable("luma.status.project_failed")
             ));
             return;
         }
+
+        ProjectWindowLayout window = ProjectWindowLayout.forProject(
+                this.width,
+                Component.translatable("luma.screen.settings.title", this.projectName),
+                project,
+                List.of()
+        );
+        root.child(window.root());
+        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.SETTINGS, this::onClose);
+        window.content().child(LumaUi.statusBanner(Component.translatable(this.status)));
+
+        FlowLayout body = LumaUi.screenBody();
+        this.bodyScroll = LumaUi.screenScroll(body);
+        window.content().child(this.bodyScroll);
 
         body.child(this.safetySection());
         body.child(this.previewSection());

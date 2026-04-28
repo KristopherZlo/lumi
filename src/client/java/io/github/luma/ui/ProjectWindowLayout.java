@@ -1,8 +1,11 @@
 package io.github.luma.ui;
 
+import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ProjectVariant;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
+import java.util.List;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -39,6 +42,23 @@ public final class ProjectWindowLayout {
         this.content.child(this.titleBar);
         this.root.child(this.sidebar);
         this.root.child(this.content);
+    }
+
+    public static ProjectWindowLayout forProject(
+            int screenWidth,
+            Component title,
+            BuildProject project,
+            List<ProjectVariant> variants
+    ) {
+        Component place = Component.translatable(
+                "luma.simple.current_place",
+                ProjectUiSupport.dimensionLabel(project.dimensionId())
+        );
+        Component idea = Component.translatable(
+                "luma.simple.current_idea",
+                ProjectUiSupport.displayVariantName(variants, project.activeVariantId())
+        );
+        return new ProjectWindowLayout(screenWidth, title, place, idea);
     }
 
     public FlowLayout root() {
