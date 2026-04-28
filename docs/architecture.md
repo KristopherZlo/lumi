@@ -77,7 +77,7 @@ Important adapters:
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick with adaptive block budgets and bounded block-entity/entity passes
 - `WorldChangeBatchPreparer` and `SnapshotBatchPreparer`: convert persisted block/entity changes and snapshot payloads into tick-ready prepared batches before apply begins
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
-- `BlockChangeApplier`: commits section blocks, block entities, and entity batches in bounded steps
+- `WorldApplyBlockUpdatePolicy` and `BlockChangeApplier`: commit section blocks, block entities, and entity batches in bounded steps with client-visible, side-effect-suppressed block flags so replayed restore/undo/redo states do not emit neighbor updates or placement physics
 - `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
 - `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, and restore workflows, with chat progress and durable pass/fail logs
 - `WorldBootstrapService`: runs startup-only world-origin and root-version metadata checks off the server-start path so storage scans do not delay initial world entry
@@ -127,7 +127,7 @@ Responsibilities are split as follows:
 - `LumaScreen` extends owo-ui `BaseOwoScreen`, keeps Lumi menus non-pausing, closes the Lumi UI back to the game on Escape, and gives each route a code-driven `OwoUIAdapter`
 - `CompareScreenSections`, `ProjectScreenSections`, focused Save details section builders, and `ShareMergeReviewSection` own repeated route section composition, while their screens keep route lifecycle, transient selection state, and action callbacks
 - `ClientWorkspaceOpenService` opens the current workspace through a lightweight loading screen and schedules project metadata preparation away from the client tick that handled the key press
-- `QuickSaveScreen` is a standalone shortcut route opened from the `Quick save` key binding; `QuickSaveScreenController` resolves the current dimension workspace and calls the same save service as the normal Save route
+- `QuickSaveScreen` is a standalone shortcut route opened from the Lumi overlay key plus `Quick save key` chord; `QuickSaveScreenController` resolves the current dimension workspace and calls the same save service as the normal Save route
 - `LumaUi` centralizes compact `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface` rules so screens avoid absolute positioning and keep layout predictable
 - `ProjectWindowLayout` and `ProjectSidebarNavigation` keep the primary workspace tabs visible across Build History, Branches, Import / Export, Settings, and More. The sidebar highlights the active route and includes the external support link.
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG

@@ -203,8 +203,6 @@ public final class HistoryCaptureManager {
                             trackedProject.project().name()
                     );
                     continue;
-                } else if (session.isWithinStabilizationEnvelope(chunk)) {
-                    session.markEnvelopeChunkDirty(chunk);
                 }
                 int pendingBefore = buffer.size();
                 buffer.addChange(capturedChange, now);

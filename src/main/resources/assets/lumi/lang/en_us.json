@@ -3,7 +3,7 @@
   "key.lumi.undo": "Undo last Lumi action",
   "key.lumi.redo": "Redo last Lumi action",
   "key.lumi.open_dashboard": "Open current workspace",
-  "key.lumi.quick_save": "Quick save",
+  "key.lumi.quick_save": "Quick save key",
   "key.lumi.toggle_compare_overlay": "Show or hide compare highlight",
   "key.lumi.compare_overlay_xray": "Hold Lumi overlay / compare x-ray",
 

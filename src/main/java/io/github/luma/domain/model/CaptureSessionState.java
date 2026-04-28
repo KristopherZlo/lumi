@@ -67,10 +67,6 @@ public final class CaptureSessionState {
         return dirtyChanged || pendingChanged;
     }
 
-    public boolean markEnvelopeChunkDirty(ChunkPoint chunk) {
-        return this.markDirtyChunk(chunk);
-    }
-
     public boolean isWithinStabilizationEnvelope(ChunkPoint chunk) {
         if (chunk == null) {
             return false;

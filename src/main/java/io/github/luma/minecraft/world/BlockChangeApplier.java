@@ -22,6 +22,7 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class BlockChangeApplier {
 
     private static final PersistentBlockStatePolicy BLOCK_STATE_POLICY = new PersistentBlockStatePolicy();
+    private static final WorldApplyBlockUpdatePolicy UPDATE_POLICY = new WorldApplyBlockUpdatePolicy();
 
     private BlockChangeApplier() {
     }
@@ -177,7 +178,7 @@ public final class BlockChangeApplier {
         }
 
         level.removeBlockEntity(pos);
-        level.setBlock(pos, state, 3);
+        level.setBlock(pos, state, UPDATE_POLICY.placementFlags(state));
 
         if (blockEntityTag != null) {
             BlockEntity blockEntity = BlockEntity.loadStatic(pos, state, blockEntityTag.copy(), level.registryAccess());
@@ -196,7 +197,7 @@ public final class BlockChangeApplier {
         }
 
         level.removeBlockEntity(pos);
-        level.setBlock(pos, state, 3);
+        level.setBlock(pos, state, UPDATE_POLICY.placementFlags(state));
     }
 
     public static void applyBlockEntity(ServerLevel level, BlockPos pos, CompoundTag blockEntityTag) {

@@ -158,11 +158,12 @@ owo-lib is the only menu toolkit in this branch. Lumi declares it as a Fabric de
 Current UX assumptions:
 
 - pressing `U` opens the current dimension workspace directly
-- pressing `J` opens the standalone Quick save dialog while no client screen is open; the key is remappable in Minecraft Controls and saves through the current dimension workspace without opening Build History
+- pressing the Lumi overlay key plus `S` opens the standalone Quick save dialog while no client screen is open; the default chord is `Left Alt+S`, both keys are remappable in Minecraft Controls, and it saves through the current dimension workspace without opening Build History
 - pressing the Lumi overlay key plus `Z` starts undo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; the default overlay key is `Left Alt`, and remapping it changes this chord too
 - pressing the Lumi overlay key plus `Y` starts redo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; if undo and redo are pressed in the same tick, undo wins and redo must be pressed again
 - nearby short-lived secondary fallout can join the latest tracked undo/redo action instead of disappearing from the live action stack
 - undo/redo drains already-dirty whole-dimension stabilization chunks before selecting an action, so reconciled fluid, contact-created source blocks, and falling-block deltas can join the latest nearby undo/redo action when they settle inside the same time/radius window
+- undo/redo applies the selected stored states with client-visible but side-effect-suppressed block update flags, so restored blocks do not trigger immediate redstone neighbor updates or placement physics during the replay itself
 - runtime-only redstone state flips and piston animation states do not become live undo/redo actions
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
 - pressing `Compare` enables the world highlight immediately for the resolved diff

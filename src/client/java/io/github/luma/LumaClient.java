@@ -64,7 +64,7 @@ public final class LumaClient implements ClientModInitializer {
         this.quickSaveKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 QUICK_SAVE_KEY,
                 InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_J,
+                GLFW.GLFW_KEY_S,
                 KEY_CATEGORY
         ));
         this.undoKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
@@ -146,10 +146,12 @@ public final class LumaClient implements ClientModInitializer {
             this.undoRedoKeyController.redo(client);
         }
 
+        boolean quickSaveClicked = false;
         while (this.quickSaveKey.consumeClick()) {
-            if (shortcutInputActive) {
-                client.setScreen(new QuickSaveScreen());
-            }
+            quickSaveClicked = true;
+        }
+        if (shortcutInputActive && overlayHold && quickSaveClicked) {
+            client.setScreen(new QuickSaveScreen());
         }
 
         while (this.openDashboardKey.consumeClick()) {
