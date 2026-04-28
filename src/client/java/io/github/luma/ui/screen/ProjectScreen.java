@@ -1,27 +1,21 @@
 package io.github.luma.ui.screen;
 
-import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
-import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
-import io.github.luma.ui.OperationProgressPresenter;
-import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.ProjectUiSupport;
-import io.github.luma.ui.controller.CompareScreenController;
+import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
+import io.github.luma.ui.screen.section.ProjectScreenSections;
 import io.github.luma.ui.state.ProjectHomeViewState;
-import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
-import io.wispforest.owo.ui.core.Sizing;
-import java.util.Comparator;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -29,14 +23,13 @@ import net.minecraft.network.chat.Component;
 
 public final class ProjectScreen extends LumaScreen {
 
-    private static final int RECENT_SAVE_LIMIT = 6;
-
     private final Screen parent;
     private final String projectName;
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectHomeScreenController stateController = new ProjectHomeScreenController();
     private final ProjectScreenController actionController = new ProjectScreenController();
     private final ScreenRouter router = new ScreenRouter();
+    private final ProjectScreenSections sections = new ProjectScreenSections(this.actionController, new SectionActions());
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private ProjectHomeViewState state = new ProjectHomeViewState(
             null,
@@ -113,7 +106,8 @@ public final class ProjectScreen extends LumaScreen {
         this.buildSidebarTabs(window);
         window.content().child(LumaUi.statusBanner(this.bannerText()));
 
-        FlowLayout confirmation = this.initialRestoreConfirmationSection();
+        ProjectScreenSections.Model model = this.sectionModel();
+        FlowLayout confirmation = this.sections.initialRestoreConfirmationSection(model);
         if (confirmation != null) {
             window.content().child(confirmation);
         }
@@ -122,8 +116,8 @@ public final class ProjectScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         window.content().child(this.bodyScroll);
 
-        body.child(this.buildSection());
-        body.child(this.historySection());
+        body.child(this.sections.buildSection(model));
+        body.child(this.sections.historySection(model));
         body.child(LumaUi.bottomSpacer());
     }
 
@@ -156,277 +150,16 @@ public final class ProjectScreen extends LumaScreen {
         this.client.setScreen(this.parent);
     }
 
-    private FlowLayout buildSection() {
-        PendingChangeSummary pending = this.state.pendingChanges();
-        ProjectVersion activeHead = ProjectUiSupport.activeHead(this.state.project(), this.state.variants(), this.state.versions());
-        ProjectVariant activeVariant = ProjectUiSupport.variantFor(this.state.variants(), this.state.project().activeVariantId());
-        boolean operationActive = this.operationActive();
-
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.build.status_title"),
-                Component.translatable(pending.isEmpty() ? "luma.build.status_clean" : "luma.build.status_dirty")
-        );
-
-        FlowLayout meta = LumaUi.actionRow();
-        meta.child(LumaUi.chip(Component.translatable(
-                "luma.build.current_idea",
-                ProjectUiSupport.displayVariantName(activeVariant)
-        )));
-        meta.child(LumaUi.chip(Component.translatable(
-                "luma.build.current_place",
-                ProjectUiSupport.dimensionLabel(this.state.project().dimensionId())
-        )));
-        section.child(meta);
-
-        if (!pending.isEmpty()) {
-            FlowLayout stats = LumaUi.actionRow();
-            stats.child(LumaUi.statChip(Component.translatable("luma.build.blocks_placed"), Component.literal("+" + pending.addedBlocks())));
-            stats.child(LumaUi.statChip(Component.translatable("luma.build.blocks_removed"), Component.literal("-" + pending.removedBlocks())));
-            stats.child(LumaUi.statChip(Component.translatable("luma.build.blocks_changed"), Component.literal(Integer.toString(pending.changedBlocks()))));
-            section.child(stats);
-        }
-
-        ButtonComponent saveButton = LumaUi.primaryButton(Component.translatable("luma.action.save_build"), button -> this.router.openSave(
-                this,
-                this.projectName
-        ));
-        saveButton.active(!pending.isEmpty() && !operationActive);
-        FlowLayout primary = LumaUi.actionRow();
-        primary.child(saveButton);
-        if (pending.isEmpty()) {
-            primary.child(LumaUi.caption(Component.translatable("luma.build.save_disabled_help")));
-        }
-        section.child(primary);
-
-        FlowLayout secondary = LumaUi.actionRow();
-        ButtonComponent changesButton = LumaUi.button(Component.translatable("luma.action.see_changes"), button -> this.router.openCompare(
-                this,
+    private ProjectScreenSections.Model sectionModel() {
+        return new ProjectScreenSections.Model(
                 this.projectName,
-                activeHead == null ? "" : activeHead.id(),
-                CompareScreenController.CURRENT_WORLD_REFERENCE,
-                activeHead == null ? "" : activeHead.id()
-        ));
-        changesButton.active(activeHead != null);
-        secondary.child(changesButton);
-        secondary.child(LumaUi.button(Component.translatable("luma.action.ideas"), button -> this.router.openVariants(
-                this,
-                this.projectName
-        )));
-        secondary.child(LumaUi.button(Component.translatable("luma.action.more"), button -> this.router.openMore(
-                this,
-                this.projectName
-        )));
-        section.child(secondary);
-
-        if (this.state.hasRecoveryDraft()) {
-            FlowLayout recovery = LumaUi.insetSection(
-                    Component.translatable("luma.recovery.found_title"),
-                    Component.translatable("luma.recovery.found_help")
-            );
-            FlowLayout actions = LumaUi.actionRow();
-            actions.child(LumaUi.primaryButton(Component.translatable("luma.action.review_recovered_work"), button -> this.router.openRecovery(
-                    this,
-                    this.projectName
-            )));
-            recovery.child(actions);
-            section.child(recovery);
-        }
-        if (this.state.operationSnapshot() != null) {
-            section.child(this.operationSection());
-        }
-        return section;
-    }
-
-    private FlowLayout operationSection() {
-        var operation = this.state.operationSnapshot();
-        FlowLayout section = LumaUi.insetSection(
-                Component.translatable("luma.project.operation_title"),
-                Component.literal(OperationProgressPresenter.progressSummary(operation))
+                this.state,
+                this.width,
+                this.selectedVariantId,
+                this.showAllSaves,
+                this.pendingRestoreVariantId,
+                this.pendingRestoreVersionId
         );
-        section.child(LumaUi.caption(Component.translatable(
-                "luma.project.operation_stage",
-                operation.stage().name().toLowerCase(java.util.Locale.ROOT)
-        )));
-        section.child(LumaUi.caption(Component.translatable(
-                "luma.project.operation_percent_label",
-                OperationProgressPresenter.displayPercent(operation)
-        )));
-        if (operation.detail() != null && !operation.detail().isBlank()) {
-            section.child(LumaUi.caption(Component.literal(operation.detail())));
-        }
-        return section;
-    }
-
-    private FlowLayout historySection() {
-        ProjectVariant selectedVariant = this.selectedVariant();
-        List<ProjectVersion> versions = selectedVariant == null ? List.of() : this.variantVersions(selectedVariant.id());
-
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.build.recent_saves_title"),
-                Component.translatable(
-                        "luma.build.recent_saves_help",
-                        selectedVariant == null ? Component.translatable("luma.variant.empty") : Component.literal(ProjectUiSupport.displayVariantName(selectedVariant))
-                )
-        );
-        section.child(LumaUi.caption(Component.translatable("luma.build.idea_picker_help")));
-        section.child(this.variantPicker());
-
-        if (versions.isEmpty()) {
-            FlowLayout empty = LumaUi.emptyState(
-                    Component.translatable("luma.build.no_saves_title"),
-                    Component.translatable("luma.build.no_saves_help")
-            );
-            FlowLayout actions = LumaUi.actionRow();
-            ButtonComponent saveButton = LumaUi.primaryButton(Component.translatable("luma.action.save_build"), button -> this.router.openSave(
-                    this,
-                    this.projectName
-            ));
-            saveButton.active(!this.state.pendingChanges().isEmpty() && !this.operationActive());
-            actions.child(saveButton);
-            empty.child(actions);
-            section.child(empty);
-            return section;
-        }
-
-        int limit = this.showAllSaves ? versions.size() : Math.min(RECENT_SAVE_LIMIT, versions.size());
-        for (int index = 0; index < limit; index++) {
-            section.child(this.saveCard(versions.get(index)));
-        }
-
-        if (versions.size() > RECENT_SAVE_LIMIT) {
-            FlowLayout actions = LumaUi.actionRow();
-            actions.child(LumaUi.button(Component.translatable(
-                    this.showAllSaves ? "luma.action.show_recent_saves" : "luma.action.show_older_saves"
-            ), button -> {
-                this.showAllSaves = !this.showAllSaves;
-                this.refresh("luma.status.project_ready");
-            }));
-            section.child(actions);
-        }
-        return section;
-    }
-
-    private FlowLayout variantPicker() {
-        FlowLayout picker = LumaUi.actionRow();
-        for (ProjectVariant variant : this.sortedVariants()) {
-            ButtonComponent button = LumaUi.button(Component.literal(ProjectUiSupport.displayVariantName(variant)), pressed -> {
-                this.selectedVariantId = variant.id();
-                this.showAllSaves = false;
-                this.refresh("luma.status.project_ready", false);
-            });
-            button.active(!variant.id().equals(this.selectedVariantId));
-            picker.child(button);
-        }
-        return picker;
-    }
-
-    private FlowLayout saveCard(ProjectVersion version) {
-        ProjectVariant versionVariant = ProjectUiSupport.variantFor(this.state.variants(), version.variantId());
-        boolean current = ProjectUiSupport.isVariantHead(this.state.variants(), version);
-        boolean operationActive = this.state.operationSnapshot() != null && !this.state.operationSnapshot().terminal();
-
-        FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
-        FlowLayout hero = this.width < 860
-                ? UIContainers.verticalFlow(Sizing.fill(100), Sizing.content())
-                : UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        hero.gap(8);
-        hero.child(ProjectUiSupport.versionPreview(this.actionController, this.projectName, version, 96, 72, 96));
-
-        FlowLayout text = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        text.gap(4);
-        text.child(LumaUi.value(Component.literal(ProjectUiSupport.displayMessage(version))));
-        text.child(LumaUi.caption(Component.translatable(
-                "luma.history.version_meta",
-                ProjectUiSupport.safeText(version.author()),
-                ProjectUiSupport.formatTimestamp(version.createdAt())
-        )));
-        text.child(LumaUi.caption(Component.translatable(
-                "luma.build.save_card_summary",
-                version.stats().changedBlocks()
-        )));
-
-        if (current) {
-            FlowLayout meta = LumaUi.actionRow();
-            meta.child(LumaUi.chip(Component.translatable("luma.history.current_badge")));
-            text.child(meta);
-        }
-        hero.child(text);
-        card.child(hero);
-
-        FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.button(Component.translatable("luma.action.open_save"), button -> this.router.openSaveDetails(
-                this,
-                this.projectName,
-                version.id()
-        )));
-        ButtonComponent restoreButton = LumaUi.button(Component.translatable("luma.action.restore_this_save"), button -> {
-            if (versionVariant != null) {
-                this.restoreVersion(versionVariant, version);
-            }
-        });
-        restoreButton.active(versionVariant != null && !operationActive);
-        actions.child(restoreButton);
-        card.child(actions);
-        return card;
-    }
-
-    private FlowLayout initialRestoreConfirmationSection() {
-        if (this.pendingRestoreVersionId.isBlank()) {
-            return null;
-        }
-
-        ProjectVersion version = ProjectUiSupport.versionFor(this.state.versions(), this.pendingRestoreVersionId);
-        ProjectVariant variant = ProjectUiSupport.variantFor(this.state.variants(), this.pendingRestoreVariantId);
-        if (version == null || variant == null) {
-            this.clearPendingRestore();
-            return null;
-        }
-
-        boolean rootRestore = version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT;
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
-                Component.translatable("luma.restore.confirm_help")
-        );
-        if (this.state.project().settings().safetySnapshotBeforeRestore()) {
-            section.child(LumaUi.caption(Component.translatable("luma.restore.confirm_safety")));
-        }
-        if (rootRestore) {
-            section.child(LumaUi.danger(Component.translatable("luma.restore.initial_confirm_warning")));
-        }
-        section.child(LumaUi.caption(Component.translatable(
-                "luma.restore.confirm_target",
-                ProjectUiSupport.displayVariantName(variant),
-                ProjectUiSupport.displayMessage(version)
-        )));
-
-        FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
-            this.clearPendingRestore();
-            this.refresh("luma.status.project_ready");
-        }));
-        ButtonComponent confirmButton = LumaUi.primaryButton(Component.translatable("luma.action.restore"), button -> {
-            ProjectVersion confirmedVersion = ProjectUiSupport.versionFor(this.state.versions(), this.pendingRestoreVersionId);
-            ProjectVariant confirmedVariant = ProjectUiSupport.variantFor(this.state.variants(), this.pendingRestoreVariantId);
-            this.clearPendingRestore();
-            if (confirmedVersion != null && confirmedVariant != null) {
-                this.executeRestore(confirmedVariant, confirmedVersion);
-            } else {
-                this.refresh("luma.status.operation_failed");
-            }
-        });
-        confirmButton.active(this.state.operationSnapshot() == null || this.state.operationSnapshot().terminal());
-        actions.child(confirmButton);
-        section.child(actions);
-        return section;
-    }
-
-    private void restoreVersion(ProjectVariant variant, ProjectVersion version) {
-        if (variant == null || version == null) {
-            return;
-        }
-        this.pendingRestoreVariantId = variant.id();
-        this.pendingRestoreVersionId = version.id();
-        this.refresh("luma.status.restore_confirmation_required");
     }
 
     private void executeRestore(ProjectVariant variant, ProjectVersion version) {
@@ -461,32 +194,6 @@ public final class ProjectScreen extends LumaScreen {
             return;
         }
         this.selectedVariantId = this.state.project().activeVariantId();
-    }
-
-    private ProjectVariant selectedVariant() {
-        ProjectVariant selected = ProjectUiSupport.variantFor(this.state.variants(), this.selectedVariantId);
-        if (selected != null) {
-            return selected;
-        }
-        if (this.state.project() == null) {
-            return null;
-        }
-        return ProjectUiSupport.variantFor(this.state.variants(), this.state.project().activeVariantId());
-    }
-
-    private List<ProjectVariant> sortedVariants() {
-        return this.state.variants().stream()
-                .sorted(Comparator
-                        .comparing((ProjectVariant variant) -> !variant.id().equals(this.state.project().activeVariantId()))
-                        .thenComparing(ProjectVariant::createdAt))
-                .toList();
-    }
-
-    private List<ProjectVersion> variantVersions(String variantId) {
-        return this.state.versions().stream()
-                .filter(version -> variantId.equals(version.variantId()))
-                .sorted(Comparator.comparing(ProjectVersion::createdAt).reversed())
-                .toList();
     }
 
     private void refresh(String statusKey) {
@@ -524,10 +231,6 @@ public final class ProjectScreen extends LumaScreen {
         }
     }
 
-    private boolean operationActive() {
-        return ScreenOperationStateSupport.blocksMutationActions(this.state.operationSnapshot());
-    }
-
     private Component bannerText() {
         return ScreenOperationStateSupport.bannerText(this.state.status(), this.state.operationSnapshot(), "luma.status.project_ready");
     }
@@ -539,6 +242,79 @@ public final class ProjectScreen extends LumaScreen {
     private void restoreScroll(double scrollProgress) {
         if (this.bodyScroll != null) {
             this.bodyScroll.restoreProgress(scrollProgress);
+        }
+    }
+
+    private final class SectionActions implements ProjectScreenSections.Actions {
+
+        @Override
+        public void openSave() {
+            router.openSave(ProjectScreen.this, projectName);
+        }
+
+        @Override
+        public void openCompare(String leftReference, String rightReference, String contextVersionId) {
+            router.openCompare(ProjectScreen.this, projectName, leftReference, rightReference, contextVersionId);
+        }
+
+        @Override
+        public void openVariants() {
+            router.openVariants(ProjectScreen.this, projectName);
+        }
+
+        @Override
+        public void openMore() {
+            router.openMore(ProjectScreen.this, projectName);
+        }
+
+        @Override
+        public void openRecovery() {
+            router.openRecovery(ProjectScreen.this, projectName);
+        }
+
+        @Override
+        public void openSaveDetails(String versionId) {
+            router.openSaveDetails(ProjectScreen.this, projectName, versionId);
+        }
+
+        @Override
+        public void selectVariant(String variantId) {
+            selectedVariantId = variantId;
+            showAllSaves = false;
+            refresh("luma.status.project_ready", false);
+        }
+
+        @Override
+        public void toggleAllSaves() {
+            showAllSaves = !showAllSaves;
+            refresh("luma.status.project_ready");
+        }
+
+        @Override
+        public void requestRestore(ProjectVariant variant, ProjectVersion version) {
+            if (variant == null || version == null) {
+                return;
+            }
+            pendingRestoreVariantId = variant.id();
+            pendingRestoreVersionId = version.id();
+            refresh("luma.status.restore_confirmation_required");
+        }
+
+        @Override
+        public void cancelRestore() {
+            clearPendingRestore();
+            refresh("luma.status.project_ready");
+        }
+
+        @Override
+        public void confirmRestore(ProjectVariant variant, ProjectVersion version) {
+            clearPendingRestore();
+            executeRestore(variant, version);
+        }
+
+        @Override
+        public void clearPendingRestore() {
+            ProjectScreen.this.clearPendingRestore();
         }
     }
 }
