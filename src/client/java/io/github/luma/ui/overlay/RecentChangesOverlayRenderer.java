@@ -2,6 +2,7 @@ package io.github.luma.ui.overlay;
 
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.luma.LumaMod;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.UndoRedoAction;
 import java.util.ArrayList;
@@ -35,8 +36,45 @@ public final class RecentChangesOverlayRenderer {
     }
 
     public static void show(String projectId, List<UndoRedoAction> actions) {
+        show(projectId, actions, LumaDebugLog.globalEnabled(), RecentChangesOverlayCoordinator.PreviewTarget.UNDO);
+    }
+
+    public static void show(
+            String projectId,
+            List<UndoRedoAction> actions,
+            boolean debugEnabled,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
         List<RecentChangeEntry> entries = flatten(actions);
-        ACTIVE_STATE.set(entries.isEmpty() ? null : new OverlayState(projectId, entries));
+        if (entries.isEmpty()) {
+            ACTIVE_STATE.set(null);
+            OverlayDiagnostics.getInstance().log(
+                    debugEnabled,
+                    "recent-show",
+                    "recent-overlay",
+                    "Loaded recent overlay project={} preview={} actions={} entries={} surfaceEntries={}",
+                    projectId,
+                    previewTarget,
+                    actionCount(actions),
+                    0,
+                    0
+            );
+            return;
+        }
+
+        OverlayState state = new OverlayState(projectId, entries, debugEnabled);
+        ACTIVE_STATE.set(state);
+        OverlayDiagnostics.getInstance().log(
+                debugEnabled,
+                "recent-show",
+                "recent-overlay",
+                "Loaded recent overlay project={} preview={} actions={} entries={} surfaceEntries={}",
+                projectId,
+                previewTarget,
+                actionCount(actions),
+                entries.size(),
+                state.surfaceEntryCount()
+        );
     }
 
     public static void clear() {
@@ -54,22 +92,101 @@ public final class RecentChangesOverlayRenderer {
 
     public static void render(WorldRenderContext context) {
         OverlayState state = ACTIVE_STATE.get();
-        if (state == null || state.entries().isEmpty()) {
+        if (state == null) {
+            OverlayDiagnostics.getInstance().log(
+                    false,
+                    "recent-skip-no-state",
+                    "recent-overlay",
+                    "Render skipped reason={} entries={} surfaceEntries={}",
+                    "no-state",
+                    0,
+                    0
+            );
+            return;
+        }
+        if (state.entries().isEmpty()) {
+            OverlayDiagnostics.getInstance().log(
+                    state.debugEnabled(),
+                    "recent-skip-empty",
+                    "recent-overlay",
+                    "Render skipped reason={} entries={} surfaceEntries={}",
+                    "empty",
+                    0,
+                    state.surfaceEntryCount()
+            );
             return;
         }
         try {
             renderOverlay(context, state);
-        } catch (IllegalStateException exception) {
+        } catch (RuntimeException exception) {
+            OverlayDiagnostics.getInstance().logNow(
+                    state.debugEnabled(),
+                    "recent-overlay",
+                    "Render failed with {}: {}",
+                    exception.getClass().getSimpleName(),
+                    exception.getMessage()
+            );
             ACTIVE_STATE.compareAndSet(state, null);
             LumaMod.LOGGER.warn("Disabled recent changes overlay after a render pipeline failure", exception);
         }
     }
 
     private static void renderOverlay(WorldRenderContext context, OverlayState state) {
+        if (context == null) {
+            OverlayDiagnostics.getInstance().log(
+                    state.debugEnabled(),
+                    "recent-skip-null-context",
+                    "recent-overlay",
+                    "Render skipped reason={} entries={} surfaceEntries={}",
+                    "null-context",
+                    state.entries().size(),
+                    state.surfaceEntryCount()
+            );
+            return;
+        }
+        var matrices = context.matrices();
+        var consumers = context.consumers();
+        if (matrices == null) {
+            OverlayDiagnostics.getInstance().log(
+                    state.debugEnabled(),
+                    "recent-skip-null-matrices",
+                    "recent-overlay",
+                    "Render skipped reason={} entries={} surfaceEntries={}",
+                    "null-matrices",
+                    state.entries().size(),
+                    state.surfaceEntryCount()
+            );
+            return;
+        }
+        if (consumers == null) {
+            OverlayDiagnostics.getInstance().log(
+                    state.debugEnabled(),
+                    "recent-skip-null-consumers",
+                    "recent-overlay",
+                    "Render skipped reason={} entries={} surfaceEntries={}",
+                    "null-consumers",
+                    state.entries().size(),
+                    state.surfaceEntryCount()
+            );
+            return;
+        }
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        VertexConsumer fillConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.fill(false));
-        VertexConsumer lineConsumer = context.consumers().getBuffer(CompareOverlayRenderTypes.outline(false));
-        for (SurfaceEntry surfaceEntry : state.visibleSurfaceEntries(camera.x, camera.y, camera.z)) {
+        VertexConsumer fillConsumer = consumers.getBuffer(CompareOverlayRenderTypes.fill(false));
+        VertexConsumer lineConsumer = consumers.getBuffer(CompareOverlayRenderTypes.outline(false));
+        List<SurfaceEntry> visibleSurfaceEntries = state.visibleSurfaceEntries(camera.x, camera.y, camera.z);
+        OverlayDiagnostics.getInstance().log(
+                state.debugEnabled(),
+                "recent-frame",
+                "recent-overlay",
+                "Render frame entries={} surfaceEntries={} renderedEntries={} camera={}:{}:{}",
+                state.entries().size(),
+                state.surfaceEntryCount(),
+                visibleSurfaceEntries.size(),
+                camera.x,
+                camera.y,
+                camera.z
+        );
+        for (SurfaceEntry surfaceEntry : visibleSurfaceEntries) {
             RecentChangeEntry entry = surfaceEntry.entry();
             float minX = (float) (entry.pos().x() - camera.x) + INSET;
             float minY = (float) (entry.pos().y() - camera.y) + INSET;
@@ -78,7 +195,7 @@ public final class RecentChangesOverlayRenderer {
             float maxY = minY + 1.0F - (INSET * 2.0F);
             float maxZ = minZ + 1.0F - (INSET * 2.0F);
             OverlayFaceRenderer.renderFilledBox(
-                    context.matrices(),
+                    matrices,
                     fillConsumer,
                     minX,
                     minY,
@@ -93,7 +210,7 @@ public final class RecentChangesOverlayRenderer {
                     Math.max(MIN_FILL_ALPHA, Math.round(entry.alpha() * FILL_ALPHA_SCALE))
             );
             ShapeRenderer.renderShape(
-                    context.matrices(),
+                    matrices,
                     lineConsumer,
                     Shapes.block(),
                     entry.pos().x() - camera.x,
@@ -126,6 +243,10 @@ public final class RecentChangesOverlayRenderer {
             }
         }
         return List.copyOf(flattened.values());
+    }
+
+    private static int actionCount(List<UndoRedoAction> actions) {
+        return actions == null ? 0 : actions.size();
     }
 
     private static List<SurfaceEntry> selectNearestSurfaceEntries(
@@ -186,19 +307,29 @@ public final class RecentChangesOverlayRenderer {
         private final String projectId;
         private final List<RecentChangeEntry> entries;
         private final List<SurfaceEntry> surfaceEntries;
+        private final boolean debugEnabled;
         private int cachedCameraBlockX = Integer.MIN_VALUE;
         private int cachedCameraBlockY = Integer.MIN_VALUE;
         private int cachedCameraBlockZ = Integer.MIN_VALUE;
         private List<SurfaceEntry> cachedVisibleEntries = List.of();
 
-        private OverlayState(String projectId, List<RecentChangeEntry> entries) {
+        private OverlayState(String projectId, List<RecentChangeEntry> entries, boolean debugEnabled) {
             this.projectId = projectId;
             this.entries = List.copyOf(entries);
             this.surfaceEntries = this.buildSurfaceEntries(this.entries);
+            this.debugEnabled = debugEnabled;
         }
 
         private List<RecentChangeEntry> entries() {
             return this.entries;
+        }
+
+        private boolean debugEnabled() {
+            return this.debugEnabled;
+        }
+
+        private int surfaceEntryCount() {
+            return this.surfaceEntries.size();
         }
 
         private synchronized List<SurfaceEntry> visibleSurfaceEntries(double cameraX, double cameraY, double cameraZ) {
