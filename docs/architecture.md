@@ -127,6 +127,7 @@ Responsibilities are split as follows:
 - `LumaScreen` extends owo-ui `BaseOwoScreen`, keeps Lumi menus non-pausing, closes the Lumi UI back to the game on Escape, and gives each route a code-driven `OwoUIAdapter`
 - `CompareScreenSections`, `ProjectScreenSections`, focused Save details section builders, and `ShareMergeReviewSection` own repeated route section composition, while their screens keep route lifecycle, transient selection state, and action callbacks
 - `ClientWorkspaceOpenService` opens the current workspace through a lightweight loading screen and schedules project metadata preparation away from the client tick that handled the key press
+- `QuickSaveScreen` is a standalone shortcut route opened from the `Quick save` key binding; `QuickSaveScreenController` resolves the current dimension workspace and calls the same save service as the normal Save route
 - `LumaUi` centralizes compact `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface` rules so screens avoid absolute positioning and keep layout predictable
 - `ProjectWindowLayout` and `ProjectSidebarNavigation` keep the primary workspace tabs visible across Build History, Branches, Import / Export, Settings, and More. The sidebar highlights the active route and includes the external support link.
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG
@@ -167,7 +168,7 @@ Important invariants:
 
 ## Save flow
 
-1. UI controllers call `VersionService.startSaveVersion(...)`.
+1. UI controllers call `VersionService.startSaveVersion(...)`; Quick save reaches the same path after resolving or creating the current dimension workspace.
 2. The live in-memory buffer is consumed on the server thread first; persisted recovery storage is only a fallback.
 3. The draft is moved into isolated operation-draft storage while async save work runs.
 4. `WorldOperationManager` executes background preparation off the tick thread.

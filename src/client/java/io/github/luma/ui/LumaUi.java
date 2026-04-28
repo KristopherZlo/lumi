@@ -53,6 +53,14 @@ public final class LumaUi {
         return layout;
     }
 
+    public static FlowLayout modalFrame(int width) {
+        FlowLayout layout = UIContainers.verticalFlow(Sizing.fixed(width), Sizing.content());
+        layout.surface(windowSurface());
+        layout.padding(Insets.of(6));
+        layout.gap(5);
+        return layout;
+    }
+
     public static Surface screenBackdrop() {
         return Surface.flat(BACKDROP_FILL);
     }
