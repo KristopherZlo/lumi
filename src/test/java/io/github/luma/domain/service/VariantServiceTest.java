@@ -66,13 +66,13 @@ class VariantServiceTest {
         FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
         VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
 
-        ProjectVariant first = service.createVariant(null, "Tower", "Крыша", "");
-        ProjectVariant second = service.createVariant(null, "Tower", "Фундамент", "");
+        ProjectVariant first = service.createVariant(null, "Tower", "!!!", "");
+        ProjectVariant second = service.createVariant(null, "Tower", "$$$", "");
 
         assertEquals("variant", first.id());
         assertEquals("variant-2", second.id());
-        assertEquals("Крыша", first.name());
-        assertEquals("Фундамент", second.name());
+        assertEquals("!!!", first.name());
+        assertEquals("$$$", second.name());
         assertEquals(
                 List.of("main", "variant", "variant-2"),
                 new VariantRepository().loadAll(layout).stream().map(ProjectVariant::id).toList()

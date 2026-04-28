@@ -84,6 +84,28 @@ public final class RestoreService {
      * checkpoint so the player can return to the pre-restore state.
      */
     public OperationHandle restore(ServerLevel level, String projectName, String versionId) throws IOException {
+        return this.restore(level, projectName, versionId, "");
+    }
+
+    /**
+     * Restores the world to a branch head while keeping that branch as the
+     * completion target even when the head version originally belongs to another
+     * branch line.
+     */
+    public OperationHandle restoreVariantHead(ServerLevel level, String projectName, String targetVariantId) throws IOException {
+        ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        ProjectVariant targetVariant = variants.stream()
+                .filter(variant -> variant.id().equals(targetVariantId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Variant not found: " + targetVariantId));
+        if (targetVariant.headVersionId() == null || targetVariant.headVersionId().isBlank()) {
+            throw new IllegalArgumentException("Variant head version is missing: " + targetVariantId);
+        }
+        return this.restore(level, projectName, targetVariant.headVersionId(), targetVariant.id());
+    }
+
+    private OperationHandle restore(ServerLevel level, String projectName, String versionId, String targetVariantId) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
@@ -91,10 +113,7 @@ public final class RestoreService {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion version = this.resolveVersion(project, versions, variants, versionId);
-        ProjectVariant targetVariant = variants.stream()
-                .filter(candidate -> candidate.id().equals(version.variantId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Version branch is missing: " + version.variantId()));
+        ProjectVariant targetVariant = this.restoreTargetVariant(variants, version, targetVariantId);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
                 .freezeSession(level.getServer(), project.id().toString());
@@ -106,7 +125,7 @@ public final class RestoreService {
                 "Starting restore request for project {} to version {} on variant {}",
                 project.name(),
                 version.id(),
-                version.variantId()
+                targetVariant.id()
         );
         LumaDebugLog.log(
                 project,
@@ -114,7 +133,7 @@ public final class RestoreService {
                 "Starting restore for project {} to version {} on variant {} using pendingDraft={} from {}",
                 project.name(),
                 version.id(),
-                version.variantId(),
+                targetVariant.id(),
                 pendingDraft != null && !pendingDraft.isEmpty(),
                 frozenDraft.isPresent() ? "frozen live buffer" : (persistedDraft.isPresent() ? "persisted draft" : "none")
         );
@@ -124,7 +143,7 @@ public final class RestoreService {
                 "restore-started",
                 "Started restore to version " + version.id(),
                 version.id(),
-                version.variantId()
+                targetVariant.id()
         ));
 
         return this.worldOperationManager.startPreparedApplyOperation(
@@ -555,7 +574,12 @@ public final class RestoreService {
             int batchCount
     ) throws IOException {
         Instant now = Instant.now();
-        this.variantRepository.save(layout, this.replaceVariantHead(variants, targetVariant.id(), version.id()));
+        List<ProjectVariant> latestVariants = this.variantRepository.loadAll(layout);
+        this.variantRepository.save(layout, this.replaceVariantHead(
+                latestVariants.isEmpty() ? variants : latestVariants,
+                targetVariant.id(),
+                version.id()
+        ));
         io.github.luma.domain.model.BuildProject updatedProject = targetVariant.id().equals(project.activeVariantId())
                 ? project.withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION).withUpdatedAt(now)
                 : project.withActiveVariantId(targetVariant.id(), now)
@@ -925,6 +949,19 @@ public final class RestoreService {
             batches.addAll(this.decodeStoredChanges(level, changes.blockChanges(), changes.entityChanges(), applyNewValues));
         }
         return batches;
+    }
+
+    ProjectVariant restoreTargetVariant(List<ProjectVariant> variants, ProjectVersion version, String targetVariantId) {
+        if (targetVariantId != null && !targetVariantId.isBlank()) {
+            return variants.stream()
+                    .filter(candidate -> candidate.id().equals(targetVariantId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("Variant not found: " + targetVariantId));
+        }
+        return variants.stream()
+                .filter(candidate -> candidate.id().equals(version.variantId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Version branch is missing: " + version.variantId()));
     }
 
     private List<PreparedChunkBatch> decodeStoredChanges(

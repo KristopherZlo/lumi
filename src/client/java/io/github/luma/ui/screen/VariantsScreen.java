@@ -223,7 +223,11 @@ public final class VariantsScreen extends LumaScreen {
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent switchButton = LumaUi.primaryButton(Component.translatable("luma.action.switch_idea"), button -> {
             String result = this.actionController.switchVariant(this.projectName, variant.id());
-            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, variant.id(), result);
+            if ("luma.status.variant_switched".equals(result)) {
+                this.router.openProjectIgnoringRecovery(this.parent, this.projectName, variant.id(), result);
+            } else {
+                this.refresh(result);
+            }
         });
         switchButton.active(!active && !this.operationActive());
         actions.child(switchButton);

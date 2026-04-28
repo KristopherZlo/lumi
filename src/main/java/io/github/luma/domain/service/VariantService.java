@@ -131,10 +131,12 @@ public final class VariantService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Variant not found: " + variantId));
 
-        this.projectRepository.save(layout, project.withActiveVariantId(targetVariant.id(), Instant.now()).withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION));
         if (restoreHead && targetVariant.headVersionId() != null && !targetVariant.headVersionId().isBlank()) {
-            this.restoreService.restore(level, projectName, targetVariant.headVersionId());
+            this.restoreService.restoreVariantHead(level, projectName, targetVariant.id());
+            return targetVariant;
         }
+
+        this.projectRepository.save(layout, project.withActiveVariantId(targetVariant.id(), Instant.now()).withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION));
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
                 "variant-switched",

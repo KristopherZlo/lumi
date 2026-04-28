@@ -170,7 +170,9 @@ active branch's saved head. It does not consume, discard, or freeze unsaved
 recovery draft edits. Lumi keeps branch names as written and generates a stable
 internal id automatically when several names normalize to the same id.
 
-When you switch branches, Lumi restores that branch head into the map.
+When you switch branches, Lumi restores that branch head into the map and keeps
+the selected branch active even if that head started from a save on another
+branch.
 If a recovery draft is still pending, save or discard it before switching
 branches so Lumi does not overwrite unsaved work.
 
