@@ -199,8 +199,9 @@ Current runtime history behavior:
 - `RestoreService` prefers direct same-lineage patch replay, including shared branch-base ancestors and `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored save on success without deleting detached saves. Persisted block/entity changes are read by repositories, prepared by Minecraft-layer batch preparers, and then applied through the operation model; repositories do not assemble tick-runtime batches.
 - `RestoreService` also supports same-lineage selected-area restore from save details, including a branch restoring a bounded area from the save it was branched from. It filters pending draft and direct patch block/entity changes to manual bounds, reads only intersecting v6 patch chunk frames when possible, applies prepared batches through the operation model, then writes a new `PARTIAL_RESTORE` version on the active branch while preserving pending draft changes outside the selected region.
 - `VariantService` keeps one head pointer per variant.
+- `VersionLineageService` owns reachable-version filtering, common ancestor lookup, ancestor checks, shared imported ancestor validation, and ancestor-to-head path resolution for restore, diff, and merge workflows.
 - `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, carrying non-conflicting entity changes, rejecting unresolved entity conflicts explicitly, and delegating merged version persistence to `VersionService`.
-- `DiffService` reconstructs version-to-version block and entity changes from patch history.
+- `DiffService` reconstructs version-to-version block and entity changes from patch history through the shared lineage path helpers.
 
 The current history pipeline is intentionally split into:
 

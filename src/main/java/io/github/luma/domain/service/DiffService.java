@@ -21,7 +21,6 @@ import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,18 +37,16 @@ public final class DiffService {
     private final VariantRepository variantRepository = new VariantRepository();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
+    private final VersionLineageService lineageService = new VersionLineageService();
 
     public VersionDiff compareVersions(MinecraftServer server, String projectName, String leftVersionId, String rightVersionId) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-        Map<String, ProjectVersion> versionMap = new HashMap<>();
-        for (ProjectVersion version : versions) {
-            versionMap.put(version.id(), version);
-        }
+        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
 
         ProjectVersion left = this.resolveVersion(layout, versions, leftVersionId);
         ProjectVersion right = this.resolveVersion(layout, versions, rightVersionId);
-        ProjectVersion ancestor = this.findCommonAncestor(versionMap, left, right);
+        ProjectVersion ancestor = this.lineageService.commonAncestor(versionMap, left, right);
 
         Map<BlockPoint, StateAccumulator> leftStates = this.collectVersionStates(layout, versionMap, ancestor, left);
         Map<BlockPoint, StateAccumulator> rightStates = this.collectVersionStates(layout, versionMap, ancestor, right);
@@ -167,37 +164,13 @@ public final class DiffService {
         return versions.get(versions.size() - 1);
     }
 
-    private ProjectVersion findCommonAncestor(Map<String, ProjectVersion> versionMap, ProjectVersion left, ProjectVersion right) {
-        Set<String> leftAncestors = new HashSet<>();
-        ProjectVersion cursor = left;
-        while (cursor != null) {
-            leftAncestors.add(cursor.id());
-            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                    ? null
-                    : versionMap.get(cursor.parentVersionId());
-        }
-
-        cursor = right;
-        while (cursor != null) {
-            if (leftAncestors.contains(cursor.id())) {
-                return cursor;
-            }
-
-            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                    ? null
-                    : versionMap.get(cursor.parentVersionId());
-        }
-
-        throw new IllegalArgumentException("Versions do not share a common ancestor");
-    }
-
     private Map<BlockPoint, StateAccumulator> collectVersionStates(
             ProjectLayout layout,
             Map<String, ProjectVersion> versionMap,
             ProjectVersion ancestor,
             ProjectVersion target
     ) throws IOException {
-        List<ProjectVersion> path = this.pathFromAncestor(versionMap, ancestor, target);
+        List<ProjectVersion> path = this.lineageService.pathFromAncestor(versionMap, ancestor, target);
         Map<BlockPoint, StateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
             for (StoredBlockChange change : this.loadPatchWorldChanges(layout, version.patchIds()).blockChanges()) {
@@ -209,30 +182,13 @@ public final class DiffService {
         return states;
     }
 
-    private List<ProjectVersion> pathFromAncestor(Map<String, ProjectVersion> versionMap, ProjectVersion ancestor, ProjectVersion target) {
-        List<ProjectVersion> reversed = new ArrayList<>();
-        ProjectVersion cursor = target;
-        while (cursor != null && !cursor.id().equals(ancestor.id())) {
-            reversed.add(cursor);
-            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                    ? null
-                    : versionMap.get(cursor.parentVersionId());
-        }
-
-        List<ProjectVersion> path = new ArrayList<>();
-        for (int index = reversed.size() - 1; index >= 0; index--) {
-            path.add(reversed.get(index));
-        }
-        return path;
-    }
-
     private Map<String, EntityStateAccumulator> collectEntityVersionStates(
             ProjectLayout layout,
             Map<String, ProjectVersion> versionMap,
             ProjectVersion ancestor,
             ProjectVersion target
     ) throws IOException {
-        List<ProjectVersion> path = this.pathFromAncestor(versionMap, ancestor, target);
+        List<ProjectVersion> path = this.lineageService.pathFromAncestor(versionMap, ancestor, target);
         Map<String, EntityStateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
             for (StoredEntityChange change : this.loadPatchWorldChanges(layout, version.patchIds()).entityChanges()) {

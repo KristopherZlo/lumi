@@ -81,12 +81,90 @@ public final class VersionLineageService {
         return null;
     }
 
-    private Map<String, ProjectVersion> versionMap(List<ProjectVersion> versions) {
+    public Map<String, ProjectVersion> versionMap(List<ProjectVersion> versions) {
         Map<String, ProjectVersion> versionMap = new LinkedHashMap<>();
+        if (versions == null) {
+            return Map.of();
+        }
         for (ProjectVersion version : versions) {
             versionMap.put(version.id(), version);
         }
         return versionMap;
+    }
+
+    public ProjectVersion commonAncestor(Map<String, ProjectVersion> versionMap, ProjectVersion left, ProjectVersion right) {
+        Set<String> leftAncestors = new LinkedHashSet<>();
+        ProjectVersion cursor = left;
+        while (cursor != null) {
+            leftAncestors.add(cursor.id());
+            cursor = this.parent(versionMap, cursor);
+        }
+
+        cursor = right;
+        while (cursor != null) {
+            if (leftAncestors.contains(cursor.id())) {
+                return cursor;
+            }
+            cursor = this.parent(versionMap, cursor);
+        }
+
+        throw new IllegalArgumentException("Versions do not share a common ancestor");
+    }
+
+    public String sharedSavedAncestorId(
+            Map<String, ProjectVersion> targetVersionMap,
+            Map<String, ProjectVersion> sourceVersionMap,
+            String sourceHeadVersionId
+    ) {
+        ProjectVersion cursor = sourceVersionMap.get(sourceHeadVersionId);
+        while (cursor != null) {
+            ProjectVersion targetCandidate = targetVersionMap.get(cursor.id());
+            if (targetCandidate != null && targetCandidate.equals(cursor)) {
+                return targetCandidate.id();
+            }
+            cursor = this.parent(sourceVersionMap, cursor);
+        }
+        throw new IllegalArgumentException("Imported variant does not share a common saved ancestor with the target project");
+    }
+
+    public List<ProjectVersion> pathFromAncestor(
+            Map<String, ProjectVersion> versionMap,
+            ProjectVersion ancestor,
+            ProjectVersion target
+    ) {
+        if (ancestor == null || target == null) {
+            return List.of();
+        }
+        return this.pathFromAncestor(versionMap, ancestor.id(), target.id());
+    }
+
+    public List<ProjectVersion> pathFromAncestor(
+            Map<String, ProjectVersion> versionMap,
+            String ancestorVersionId,
+            String targetHeadVersionId
+    ) {
+        List<ProjectVersion> reversed = new ArrayList<>();
+        ProjectVersion cursor = versionMap.get(targetHeadVersionId);
+        while (cursor != null && !cursor.id().equals(ancestorVersionId)) {
+            reversed.add(cursor);
+            cursor = this.parent(versionMap, cursor);
+        }
+        List<ProjectVersion> path = new ArrayList<>(reversed.size());
+        for (int index = reversed.size() - 1; index >= 0; index--) {
+            path.add(reversed.get(index));
+        }
+        return List.copyOf(path);
+    }
+
+    public boolean isAncestor(Map<String, ProjectVersion> versionMap, String ancestorVersionId, String descendantVersionId) {
+        ProjectVersion cursor = versionMap.get(descendantVersionId);
+        while (cursor != null) {
+            if (cursor.id().equals(ancestorVersionId)) {
+                return true;
+            }
+            cursor = this.parent(versionMap, cursor);
+        }
+        return false;
     }
 
     private Set<String> reachableVersionIds(Map<String, ProjectVersion> versionMap, String headVersionId) {
@@ -103,5 +181,11 @@ public final class VersionLineageService {
             cursor = versionMap.get(cursor.parentVersionId());
         }
         return reachable;
+    }
+
+    private ProjectVersion parent(Map<String, ProjectVersion> versionMap, ProjectVersion version) {
+        return version.parentVersionId() == null || version.parentVersionId().isBlank()
+                ? null
+                : versionMap.get(version.parentVersionId());
     }
 }

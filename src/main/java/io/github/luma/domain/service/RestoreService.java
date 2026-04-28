@@ -41,7 +41,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -76,6 +75,7 @@ public final class RestoreService {
     private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final VersionLineageService lineageService = new VersionLineageService();
 
     /**
      * Starts a restore operation for the given project and target version.
@@ -386,8 +386,8 @@ public final class RestoreService {
             throw new IllegalArgumentException("Partial restore currently requires a target on the active variant lineage");
         }
 
-        Map<String, ProjectVersion> versionMap = this.versionMap(versions);
-        boolean applyNewValues = this.isAncestor(versionMap, activeVariant.headVersionId(), targetVersion.id());
+        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
+        boolean applyNewValues = this.lineageService.isAncestor(versionMap, activeVariant.headVersionId(), targetVersion.id());
         PatchWorldChanges lineageChanges = this.loadVersionWorldChanges(
                 layout,
                 directVersions,
@@ -669,8 +669,8 @@ public final class RestoreService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
         String headVersionId = activeVariant.headVersionId();
-        Map<String, ProjectVersion> versionMap = this.versionMap(versions);
-        boolean applyNewValues = this.isAncestor(versionMap, headVersionId, targetVersion.id());
+        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
+        boolean applyNewValues = this.lineageService.isAncestor(versionMap, headVersionId, targetVersion.id());
 
         int totalSources = directVersions.size() + (pendingDraft != null && !pendingDraft.isEmpty() ? 1 : 0);
         int completedSources = 0;
@@ -731,13 +731,13 @@ public final class RestoreService {
             return null;
         }
 
-        Map<String, ProjectVersion> versionMap = this.versionMap(versions);
+        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
         String headVersionId = activeVariant.headVersionId();
         if (targetVersion.id().equals(headVersionId)) {
             return List.of();
         }
 
-        if (this.isAncestor(versionMap, targetVersion.id(), headVersionId)) {
+        if (this.lineageService.isAncestor(versionMap, targetVersion.id(), headVersionId)) {
             List<ProjectVersion> directVersions = new ArrayList<>();
             ProjectVersion cursor = versionMap.get(headVersionId);
             while (cursor != null && !cursor.id().equals(targetVersion.id())) {
@@ -749,7 +749,7 @@ public final class RestoreService {
             return cursor == null ? null : directVersions;
         }
 
-        if (this.isAncestor(versionMap, headVersionId, targetVersion.id())) {
+        if (this.lineageService.isAncestor(versionMap, headVersionId, targetVersion.id())) {
             List<ProjectVersion> reversed = new ArrayList<>();
             ProjectVersion cursor = targetVersion;
             while (cursor != null && !cursor.id().equals(headVersionId)) {
@@ -830,10 +830,7 @@ public final class RestoreService {
     }
 
     private RestoreChain resolveChain(List<ProjectVersion> versions, ProjectVersion targetVersion) {
-        Map<String, ProjectVersion> versionMap = new HashMap<>();
-        for (ProjectVersion version : versions) {
-            versionMap.put(version.id(), version);
-        }
+        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
 
         List<ProjectVersion> patchVersions = new ArrayList<>();
         ProjectVersion cursor = targetVersion;
@@ -983,27 +980,6 @@ public final class RestoreService {
             return RestorePlanMode.BLOCKED_FINGERPRINT;
         }
         return RestorePlanMode.BASELINE_CHUNKS;
-    }
-
-    private boolean isAncestor(Map<String, ProjectVersion> versionMap, String ancestorVersionId, String descendantVersionId) {
-        ProjectVersion cursor = versionMap.get(descendantVersionId);
-        while (cursor != null) {
-            if (cursor.id().equals(ancestorVersionId)) {
-                return true;
-            }
-            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                    ? null
-                    : versionMap.get(cursor.parentVersionId());
-        }
-        return false;
-    }
-
-    private Map<String, ProjectVersion> versionMap(List<ProjectVersion> versions) {
-        Map<String, ProjectVersion> versionMap = new HashMap<>();
-        for (ProjectVersion version : versions) {
-            versionMap.put(version.id(), version);
-        }
-        return versionMap;
     }
 
     private List<ProjectVariant> replaceVariantHead(List<ProjectVariant> variants, String targetVariantId, String targetVersionId) {
