@@ -116,6 +116,7 @@ Older project files may omit `workspaceHudEnabled`; Lumi treats the missing valu
 ### `variants.json`
 
 Stores the full variant list. Each variant keeps its own head version id and base version id.
+Variant ids are generated from the branch name and receive numeric suffixes when distinct names normalize to the same id.
 
 Restore and amend workflows move variant heads by rewriting this file. Older detached version files are left on disk for safety even when they are no longer reachable from a live variant head.
 The client history view still lists those detached versions after a restore-style reset.

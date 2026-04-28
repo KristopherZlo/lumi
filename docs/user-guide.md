@@ -165,7 +165,14 @@ Use the `Branches` screen to:
 - open saves for one branch
 - compare a branch against the current build from `More`
 
+Creating a branch only adds a new branch head from the selected save or the
+active branch's saved head. It does not consume, discard, or freeze unsaved
+recovery draft edits. Lumi keeps branch names as written and generates a stable
+internal id automatically when several names normalize to the same id.
+
 When you switch branches, Lumi restores that branch head into the map.
+If a recovery draft is still pending, save or discard it before switching
+branches so Lumi does not overwrite unsaved work.
 
 Future saves continue from that head.
 

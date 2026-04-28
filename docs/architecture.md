@@ -44,7 +44,7 @@ Key services:
 - `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy
 - `RestoreService`: build restore plans and orchestrate prepared chunk batches through Minecraft-layer preparers
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
-- `VariantService`: branch creation and branch switching
+- `VariantService`: branch creation and branch switching. Branch creation is metadata-only and does not freeze active recovery drafts; branch switching freezes and validates pending edits before it restores a different head.
 - `VariantMergeService`: compare imported variant lineage against a local target variant, group overlapping conflicts into chunk-connected zones, and write merged saves through the normal patch-first history path
 - `DiffService`: reconstruct version or live-world block and entity differences using structured state payload comparison before formatting UI-facing diff entries
 - `VersionLineageService`: centralizes reachable-version filtering, common ancestor lookup, ancestor checks, and ancestor-to-head path resolution used by restore, diff, and merge workflows

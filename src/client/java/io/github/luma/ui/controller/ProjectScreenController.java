@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import net.minecraft.client.Minecraft;
 
 public final class ProjectScreenController {
@@ -252,7 +253,7 @@ public final class ProjectScreenController {
             return "luma.status.variant_created";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Create variant request failed for project {}", projectName, exception);
-            return "luma.status.operation_failed";
+            return variantFailureStatus(exception);
         }
     }
 
@@ -271,8 +272,44 @@ public final class ProjectScreenController {
             return "luma.status.variant_switched";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Switch variant request failed for project {}", projectName, exception);
+            return variantFailureStatus(exception);
+        }
+    }
+
+    static String variantFailureStatus(Exception exception) {
+        String message = exception.getMessage();
+        if (message == null) {
             return "luma.status.operation_failed";
         }
+
+        if (exception instanceof IllegalStateException) {
+            String normalized = message.toLowerCase(Locale.ROOT);
+            if (normalized.contains("admin") || normalized.contains("cheats")) {
+                return "luma.status.admin_required";
+            }
+            if (normalized.contains("another world operation")) {
+                return "luma.status.world_operation_busy";
+            }
+            return "luma.status.operation_failed";
+        }
+
+        if (!(exception instanceof IllegalArgumentException)) {
+            return "luma.status.operation_failed";
+        }
+
+        if (message.startsWith("Variant name is required")) {
+            return "luma.status.variant_name_required";
+        }
+        if (message.startsWith("Variant already exists")) {
+            return "luma.status.variant_already_exists";
+        }
+        if (message.startsWith("Version not found")) {
+            return "luma.status.variant_base_missing";
+        }
+        if (message.startsWith("Discard or save the current recovery draft")) {
+            return "luma.status.variant_switch_requires_saved_draft";
+        }
+        return "luma.status.operation_failed";
     }
 
     public String refreshPreview(String projectName, String versionId) {

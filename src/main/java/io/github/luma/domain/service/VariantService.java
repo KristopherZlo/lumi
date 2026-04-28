@@ -27,27 +27,54 @@ import net.minecraft.server.level.ServerLevel;
 public final class VariantService {
 
     private final ProjectService projectService = new ProjectService();
+    private final ProjectLayoutResolver layoutResolver;
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final RestoreService restoreService = new RestoreService();
+    private final CaptureSessionLifecycle captureSessionLifecycle;
+
+    public VariantService() {
+        this.layoutResolver = this.projectService::resolveLayout;
+        this.captureSessionLifecycle = new CaptureSessionLifecycle() {
+            @Override
+            public void finalizeProjectSession(MinecraftServer server, String projectId) throws IOException {
+                HistoryCaptureManager.getInstance().finalizeProjectSession(server, projectId);
+            }
+
+            @Override
+            public void invalidateProjectCache(MinecraftServer server) {
+                HistoryCaptureManager.getInstance().invalidateProjectCache(server);
+            }
+        };
+    }
+
+    VariantService(ProjectLayoutResolver layoutResolver, CaptureSessionLifecycle captureSessionLifecycle) {
+        this.layoutResolver = layoutResolver;
+        this.captureSessionLifecycle = captureSessionLifecycle;
+    }
 
     public List<ProjectVariant> listVariants(MinecraftServer server, String projectName) throws IOException {
-        return this.variantRepository.loadAll(this.projectService.resolveLayout(server, projectName));
+        return this.variantRepository.loadAll(this.layoutResolver.resolveLayout(server, projectName));
     }
 
     /**
      * Creates a new variant from the supplied version or the active head.
+     *
+     * <p>Creation only writes branch metadata. It deliberately leaves any live
+     * recovery draft untouched; switching to the new branch is the workflow that
+     * freezes and validates pending world edits.
      */
     public ProjectVariant createVariant(MinecraftServer server, String projectName, String variantName, String fromVersionId) throws IOException {
-        ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
+        if (variantName == null || variantName.isBlank()) {
+            throw new IllegalArgumentException("Variant name is required");
+        }
+
+        String displayName = variantName.trim();
+        ProjectLayout layout = this.layoutResolver.resolveLayout(server, projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
-        HistoryCaptureManager.getInstance().finalizeProjectSession(server, project.id().toString());
-        if (this.recoveryRepository.loadDraft(layout).isPresent()) {
-            throw new IllegalArgumentException("Discard or save the current recovery draft before creating a variant");
-        }
 
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         String baseVersionId = fromVersionId;
@@ -61,12 +88,12 @@ public final class VariantService {
             throw new IllegalArgumentException("Version not found: " + baseVersionId);
         }
 
-        String variantId = this.slug(variantName);
-        if (variants.stream().anyMatch(variant -> variant.id().equals(variantId))) {
-            throw new IllegalArgumentException("Variant already exists: " + variantId);
+        if (this.variantNameExists(variants, displayName)) {
+            throw new IllegalArgumentException("Variant already exists: " + displayName);
         }
 
-        ProjectVariant variant = new ProjectVariant(variantId, variantName, baseVersionId, baseVersionId, false, Instant.now());
+        String variantId = this.uniqueVariantId(displayName, variants);
+        ProjectVariant variant = new ProjectVariant(variantId, displayName, baseVersionId, baseVersionId, false, Instant.now());
         List<ProjectVariant> nextVariants = new ArrayList<>(variants);
         nextVariants.add(variant);
         this.variantRepository.save(layout, nextVariants);
@@ -77,7 +104,7 @@ public final class VariantService {
                 baseVersionId,
                 variantId
         ));
-        HistoryCaptureManager.getInstance().invalidateProjectCache(server);
+        this.captureSessionLifecycle.invalidateProjectCache(server);
         return variant;
     }
 
@@ -90,10 +117,10 @@ public final class VariantService {
      * the world.
      */
     public ProjectVariant switchVariant(ServerLevel level, String projectName, String variantId, boolean restoreHead) throws IOException {
-        ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
+        ProjectLayout layout = this.layoutResolver.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
-        HistoryCaptureManager.getInstance().finalizeProjectSession(level.getServer(), project.id().toString());
+        this.captureSessionLifecycle.finalizeProjectSession(level.getServer(), project.id().toString());
         if (this.recoveryRepository.loadDraft(layout).isPresent()) {
             throw new IllegalArgumentException("Discard or save the current recovery draft before switching variants");
         }
@@ -115,12 +142,46 @@ public final class VariantService {
                 targetVariant.headVersionId(),
                 targetVariant.id()
         ));
-        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
+        this.captureSessionLifecycle.invalidateProjectCache(level.getServer());
         return targetVariant;
     }
 
     private String slug(String value) {
         String slug = value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
         return slug.isBlank() ? "variant" : slug;
+    }
+
+    private String uniqueVariantId(String variantName, List<ProjectVariant> variants) {
+        String baseId = this.slug(variantName);
+        String candidateId = baseId;
+        int suffix = 2;
+        while (this.variantIdExists(variants, candidateId)) {
+            candidateId = baseId + "-" + suffix;
+            suffix += 1;
+        }
+        return candidateId;
+    }
+
+    private boolean variantIdExists(List<ProjectVariant> variants, String variantId) {
+        return variants.stream().anyMatch(variant -> variant.id().equals(variantId));
+    }
+
+    private boolean variantNameExists(List<ProjectVariant> variants, String variantName) {
+        return variants.stream()
+                .map(ProjectVariant::name)
+                .filter(name -> name != null)
+                .anyMatch(name -> name.trim().equalsIgnoreCase(variantName));
+    }
+
+    interface ProjectLayoutResolver {
+
+        ProjectLayout resolveLayout(MinecraftServer server, String projectName) throws IOException;
+    }
+
+    interface CaptureSessionLifecycle {
+
+        void finalizeProjectSession(MinecraftServer server, String projectId) throws IOException;
+
+        void invalidateProjectCache(MinecraftServer server);
     }
 }
