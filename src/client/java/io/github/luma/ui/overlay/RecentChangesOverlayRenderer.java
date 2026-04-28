@@ -8,12 +8,14 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShapeRenderer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.shapes.Shapes;
 
@@ -43,6 +45,11 @@ public final class RecentChangesOverlayRenderer {
 
     public static boolean visible() {
         return ACTIVE_STATE.get() != null;
+    }
+
+    static int visibleSurfaceEntryCountForTest(double cameraX, double cameraY, double cameraZ) {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null ? 0 : state.visibleSurfaceEntries(cameraX, cameraY, cameraZ).size();
     }
 
     public static void render(WorldRenderContext context) {
@@ -121,8 +128,8 @@ public final class RecentChangesOverlayRenderer {
         return List.copyOf(flattened.values());
     }
 
-    private static List<RecentChangeEntry> selectNearestEntries(
-            List<RecentChangeEntry> entries,
+    private static List<SurfaceEntry> selectNearestSurfaceEntries(
+            List<SurfaceEntry> entries,
             double cameraX,
             double cameraY,
             double cameraZ) {
@@ -133,8 +140,8 @@ public final class RecentChangesOverlayRenderer {
         PriorityQueue<RankedEntry> selected = new PriorityQueue<>(
                 MAX_RENDERED_BLOCKS,
                 Comparator.comparingDouble(RankedEntry::distanceSquared).reversed());
-        for (RecentChangeEntry entry : entries) {
-            double distanceSquared = distanceSquared(entry, cameraX, cameraY, cameraZ);
+        for (SurfaceEntry entry : entries) {
+            double distanceSquared = distanceSquared(entry.entry(), cameraX, cameraY, cameraZ);
             if (selected.size() < MAX_RENDERED_BLOCKS) {
                 selected.add(new RankedEntry(entry, distanceSquared));
                 continue;
@@ -149,7 +156,7 @@ public final class RecentChangesOverlayRenderer {
 
         List<RankedEntry> ranked = new ArrayList<>(selected);
         ranked.sort(Comparator.comparingDouble(RankedEntry::distanceSquared));
-        List<RecentChangeEntry> result = new ArrayList<>(ranked.size());
+        List<SurfaceEntry> result = new ArrayList<>(ranked.size());
         for (RankedEntry entry : ranked) {
             result.add(entry.entry());
         }
@@ -163,7 +170,7 @@ public final class RecentChangesOverlayRenderer {
         return (dx * dx) + (dy * dy) + (dz * dz);
     }
 
-    private record RankedEntry(RecentChangeEntry entry, double distanceSquared) {
+    private record RankedEntry(SurfaceEntry entry, double distanceSquared) {
     }
 
     private record RecentChangeEntry(BlockPoint pos, int alpha) {
@@ -178,7 +185,7 @@ public final class RecentChangesOverlayRenderer {
 
         private final String projectId;
         private final List<RecentChangeEntry> entries;
-        private final Set<Long> occupiedPositions;
+        private final List<SurfaceEntry> surfaceEntries;
         private int cachedCameraBlockX = Integer.MIN_VALUE;
         private int cachedCameraBlockY = Integer.MIN_VALUE;
         private int cachedCameraBlockZ = Integer.MIN_VALUE;
@@ -187,10 +194,7 @@ public final class RecentChangesOverlayRenderer {
         private OverlayState(String projectId, List<RecentChangeEntry> entries) {
             this.projectId = projectId;
             this.entries = List.copyOf(entries);
-            this.occupiedPositions = SURFACE_RESOLVER.indexPositions(entries.stream()
-                    .map(entry -> new io.github.luma.domain.model.DiffBlockEntry(entry.pos(), "", "",
-                            io.github.luma.domain.model.ChangeType.CHANGED))
-                    .toList());
+            this.surfaceEntries = this.buildSurfaceEntries(this.entries);
         }
 
         private List<RecentChangeEntry> entries() {
@@ -210,35 +214,39 @@ public final class RecentChangesOverlayRenderer {
             this.cachedCameraBlockX = cameraBlockX;
             this.cachedCameraBlockY = cameraBlockY;
             this.cachedCameraBlockZ = cameraBlockZ;
-            List<RecentChangeEntry> nearestEntries = selectNearestEntries(this.entries, cameraX, cameraY, cameraZ);
-            List<io.github.luma.domain.model.DiffBlockEntry> diffEntries = nearestEntries.stream()
+            this.cachedVisibleEntries = selectNearestSurfaceEntries(this.surfaceEntries, cameraX, cameraY, cameraZ);
+            return this.cachedVisibleEntries;
+        }
+
+        private List<SurfaceEntry> buildSurfaceEntries(List<RecentChangeEntry> entries) {
+            List<io.github.luma.domain.model.DiffBlockEntry> diffEntries = entries.stream()
                     .map(entry -> new io.github.luma.domain.model.DiffBlockEntry(
                             entry.pos(),
                             "",
                             "",
                             io.github.luma.domain.model.ChangeType.CHANGED))
                     .toList();
-            List<CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocks = SURFACE_RESOLVER.resolve(diffEntries,
-                    this.occupiedPositions);
+            Set<Long> occupiedPositions = SURFACE_RESOLVER.indexPositions(diffEntries);
+            Map<Long, RecentChangeEntry> entriesByPosition = new LinkedHashMap<>();
+            for (RecentChangeEntry entry : entries) {
+                entriesByPosition.put(BlockPos.asLong(entry.pos().x(), entry.pos().y(), entry.pos().z()), entry);
+            }
+            List<CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocks = SURFACE_RESOLVER.resolve(
+                    diffEntries,
+                    occupiedPositions
+            );
             List<SurfaceEntry> resolved = new ArrayList<>(surfaceBlocks.size());
             for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : surfaceBlocks) {
-                RecentChangeEntry entry = this.findEntry(surfaceBlock.entry().pos());
-                if (entry == null) {
-                    continue;
-                }
-                resolved.add(new SurfaceEntry(entry, surfaceBlock));
-            }
-            this.cachedVisibleEntries = List.copyOf(resolved);
-            return this.cachedVisibleEntries;
-        }
-
-        private RecentChangeEntry findEntry(BlockPoint pos) {
-            for (RecentChangeEntry entry : this.entries) {
-                if (entry.pos().equals(pos)) {
-                    return entry;
+                RecentChangeEntry entry = entriesByPosition.get(BlockPos.asLong(
+                        surfaceBlock.entry().pos().x(),
+                        surfaceBlock.entry().pos().y(),
+                        surfaceBlock.entry().pos().z()
+                ));
+                if (entry != null) {
+                    resolved.add(new SurfaceEntry(entry, surfaceBlock));
                 }
             }
-            return null;
+            return List.copyOf(resolved);
         }
     }
 }
