@@ -40,17 +40,8 @@ public record ChunkSectionSnapshotPayload(
             return indexes;
         }
 
-        long mask = (1L << this.bitsPerEntry) - 1L;
         for (int index = 0; index < ENTRY_COUNT; index++) {
-            long bitIndex = (long) index * this.bitsPerEntry;
-            int startLong = (int) (bitIndex >>> 6);
-            int startOffset = (int) (bitIndex & 63L);
-            long value = this.packedStorage[startLong] >>> startOffset;
-            int spill = startOffset + this.bitsPerEntry - 64;
-            if (spill > 0 && (startLong + 1) < this.packedStorage.length) {
-                value |= this.packedStorage[startLong + 1] << (64 - startOffset);
-            }
-            indexes[index] = (short) (value & mask);
+            indexes[index] = (short) this.paletteIndexAtStorageIndex(index);
         }
         return indexes;
     }
@@ -59,21 +50,23 @@ public record ChunkSectionSnapshotPayload(
         if (this.palette.isEmpty() || this.bitsPerEntry <= 0 || this.packedStorage.length == 0) {
             return 0;
         }
-        int index = localIndex(localX, localY, localZ);
-        long bitIndex = (long) index * this.bitsPerEntry;
-        int startLong = (int) (bitIndex >>> 6);
-        int startOffset = (int) (bitIndex & 63L);
-        long value = this.packedStorage[startLong] >>> startOffset;
-        int spill = startOffset + this.bitsPerEntry - 64;
-        if (spill > 0 && (startLong + 1) < this.packedStorage.length) {
-            value |= this.packedStorage[startLong + 1] << (64 - startOffset);
-        }
-        long mask = (1L << this.bitsPerEntry) - 1L;
-        return (int) (value & mask);
+        return this.paletteIndexAtStorageIndex(localIndex(localX, localY, localZ));
     }
 
     public static int localIndex(int localX, int localY, int localZ) {
         return (localY << 8) | (localZ << 4) | localX;
+    }
+
+    private int paletteIndexAtStorageIndex(int index) {
+        // Minecraft SimpleBitStorage pads each long instead of spilling values across boundaries.
+        int valuesPerLong = Math.max(1, Long.SIZE / this.bitsPerEntry);
+        int storageIndex = index / valuesPerLong;
+        if (storageIndex < 0 || storageIndex >= this.packedStorage.length) {
+            return 0;
+        }
+        int bitOffset = (index - storageIndex * valuesPerLong) * this.bitsPerEntry;
+        long mask = this.bitsPerEntry >= Long.SIZE ? -1L : (1L << this.bitsPerEntry) - 1L;
+        return (int) ((this.packedStorage[storageIndex] >>> bitOffset) & mask);
     }
 
     private static List<CompoundTag> copyPalette(List<CompoundTag> palette) {

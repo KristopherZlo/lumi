@@ -47,7 +47,7 @@ public record ChunkBatch(
                         new SectionBatch(
                                 entry.getKey(),
                                 changedMasks.getOrDefault(entry.getKey(), new BitSet(4096)),
-                                List.copyOf(entry.getValue())
+                                ConnectedBlockPlacementExpander.ordered(entry.getValue())
                         )
                 ));
 

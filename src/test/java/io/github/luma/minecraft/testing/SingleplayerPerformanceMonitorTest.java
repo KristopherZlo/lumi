@@ -29,13 +29,13 @@ class SingleplayerPerformanceMonitorTest {
     }
 
     @Test
-    void flagsFullChunkRestoreAsLoadRegression() {
+    void flagsLineageFullChunkRestoreAsLoadRegression() {
         SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
         monitor.recordSyncSlice("Project setup", Duration.ofMillis(20).toNanos());
         monitor.recordOperationSnapshot(snapshot("restore-version", 98_304));
 
         SingleplayerPerformanceMonitor.PerformanceCheck restoreCheck = monitor.checks().stream()
-                .filter(check -> check.label().contains("Full restore"))
+                .filter(check -> check.label().contains("Lineage full restore"))
                 .findFirst()
                 .orElseThrow();
 
@@ -43,12 +43,36 @@ class SingleplayerPerformanceMonitorTest {
         assertTrue(restoreCheck.detail().contains("98304"));
     }
 
+    @Test
+    void acceptsExactInitialSnapshotRestore() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordSyncSlice("Project setup", Duration.ofMillis(20).toNanos());
+        monitor.recordOperationSnapshot(snapshot(
+                "restore-version",
+                2,
+                OperationStage.PREPARING,
+                "Decoded initial snapshot snapshot-0001"
+        ));
+        monitor.recordOperationSnapshot(snapshot("restore-version", 98_304));
+
+        SingleplayerPerformanceMonitor.PerformanceCheck restoreCheck = monitor.checks().stream()
+                .filter(check -> check.label().contains("Lineage full restore"))
+                .findFirst()
+                .orElseThrow();
+
+        assertTrue(restoreCheck.passed());
+    }
+
     private static OperationSnapshot snapshot(String label, int totalUnits) {
+        return snapshot(label, totalUnits, OperationStage.COMPLETED, "Completed");
+    }
+
+    private static OperationSnapshot snapshot(String label, int totalUnits, OperationStage stage, String detail) {
         return new OperationSnapshot(
                 new OperationHandle(label + "-id", "project", label, NOW, false),
-                OperationStage.COMPLETED,
+                stage,
                 new OperationProgress(totalUnits, totalUnits, "blocks"),
-                "Completed",
+                detail,
                 NOW.plusMillis(10)
         );
     }

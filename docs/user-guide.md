@@ -118,6 +118,10 @@ If that is not valid, it falls back to checkpoint snapshot plus patch chain.
 
 After restore, the active branch head moves to the selected save.
 
+If the selected save belongs to another branch, Lumi plans the restore from the
+current live branch state and switches the active branch only after the world
+apply finishes.
+
 That means restore behaves like a hard reset for the project.
 
 If you restore an older version and keep building, the next save continues from that point.
@@ -133,6 +137,8 @@ Runtime rules:
 
 - restore runs under the internal `RESTORE` source
 - restore block applies are not written back into normal history
+- restore replay completes paired block halves such as beds, doors, and tall
+  plants so one half is not left clipped after a branch switch or restore
 - if `Safety snapshot before restore` is on and a draft exists, Lumi saves that draft before restore starts
 
 ## Recovery
@@ -173,6 +179,8 @@ internal id automatically when several names normalize to the same id.
 When you switch branches, Lumi restores that branch head into the map and keeps
 the selected branch active even if that head started from a save on another
 branch.
+The branch pointer changes at restore completion, not before the world state is
+applied.
 If a recovery draft is still pending, save or discard it before switching
 branches so Lumi does not overwrite unsaved work.
 

@@ -21,6 +21,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.world.ConnectedBlockPlacementExpander;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
@@ -59,6 +60,9 @@ import net.minecraft.server.level.ServerLevel;
  * application.
  */
 public final class RestoreService {
+
+    private static final ConnectedBlockPlacementExpander CONNECTED_BLOCK_PLACEMENT_EXPANDER =
+            new ConnectedBlockPlacementExpander();
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -230,11 +234,19 @@ public final class RestoreService {
                 .findFirst()
                 .orElse(null);
         String baseVersionId = activeVariant == null ? "" : activeVariant.headVersionId();
+        List<ChunkPoint> pendingChunks = HistoryCaptureManager.getInstance()
+                .snapshotDraft(level.getServer(), project.id().toString())
+                .map(this::touchedChunksForDraft)
+                .orElse(List.of());
 
         if (targetVersion.id().equals(baseVersionId)) {
+            List<ChunkPoint> sameTargetChunks = this.mergeChunks(
+                    pendingChunks,
+                    this.initialSnapshotChunksForPendingRestore(layout, targetVersion, pendingChunks)
+            );
             return new RestorePlanSummary(
-                    RestorePlanMode.NO_OP,
-                    List.of(),
+                    sameTargetChunks.isEmpty() ? RestorePlanMode.NO_OP : RestorePlanMode.PATCH_REPLAY,
+                    sameTargetChunks,
                     targetVersion.variantId(),
                     baseVersionId,
                     targetVersion.id()
@@ -245,7 +257,7 @@ public final class RestoreService {
         if (directVersions != null) {
             return new RestorePlanSummary(
                     RestorePlanMode.PATCH_REPLAY,
-                    this.touchedChunksForVersions(layout, directVersions),
+                    this.mergeChunks(this.touchedChunksForVersions(layout, directVersions), pendingChunks),
                     targetVersion.variantId(),
                     baseVersionId,
                     targetVersion.id()
@@ -256,7 +268,7 @@ public final class RestoreService {
             List<ChunkPoint> trackedChunks = this.baselineChunkRepository.listChunks(layout);
             return new RestorePlanSummary(
                     this.worldRootFallbackMode(level, project),
-                    trackedChunks,
+                    this.mergeChunks(trackedChunks, pendingChunks),
                     targetVersion.variantId(),
                     baseVersionId,
                     targetVersion.id()
@@ -266,7 +278,7 @@ public final class RestoreService {
         RestorePlan plan = this.buildPlan(layout, project, versions, targetVersion);
         return new RestorePlanSummary(
                 RestorePlanMode.BASELINE_CHUNKS,
-                this.touchedChunksForPlan(plan),
+                this.mergeChunks(this.touchedChunksForPlan(plan), pendingChunks),
                 targetVersion.variantId(),
                 baseVersionId,
                 targetVersion.id()
@@ -695,8 +707,11 @@ public final class RestoreService {
         String headVersionId = activeVariant.headVersionId();
         Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
         boolean applyNewValues = this.lineageService.isAncestor(versionMap, headVersionId, targetVersion.id());
+        boolean appendInitialSnapshot = this.shouldAppendInitialSnapshot(targetVersion, pendingDraft);
 
-        int totalSources = directVersions.size() + (pendingDraft != null && !pendingDraft.isEmpty() ? 1 : 0);
+        int totalSources = directVersions.size()
+                + (pendingDraft != null && !pendingDraft.isEmpty() ? 1 : 0)
+                + (appendInitialSnapshot ? 1 : 0);
         int completedSources = 0;
         List<PreparedChunkBatch> batches = new ArrayList<>();
 
@@ -724,6 +739,20 @@ public final class RestoreService {
             );
         }
 
+        if (appendInitialSnapshot) {
+            batches.addAll(this.snapshotBatchPreparer.prepare(
+                    this.snapshotReader.readFile(layout.snapshotFile(targetVersion.snapshotId())),
+                    level
+            ));
+            completedSources += 1;
+            progressSink.update(
+                    OperationStage.PREPARING,
+                    completedSources,
+                    Math.max(1, totalSources),
+                    "Decoded initial snapshot " + targetVersion.snapshotId()
+            );
+        }
+
         List<PreparedChunkBatch> collapsed = collapsePreparedBatches(batches);
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
@@ -739,6 +768,14 @@ public final class RestoreService {
                 collapsedPlacements
         );
         return Optional.of(collapsed);
+    }
+
+    private boolean shouldAppendInitialSnapshot(ProjectVersion targetVersion, RecoveryDraft pendingDraft) {
+        return pendingDraft != null
+                && !pendingDraft.isEmpty()
+                && targetVersion.versionKind() == VersionKind.INITIAL
+                && targetVersion.snapshotId() != null
+                && !targetVersion.snapshotId().isBlank();
     }
 
     List<ProjectVersion> directRestorePatchVersions(
@@ -996,6 +1033,37 @@ public final class RestoreService {
         return List.copyOf(chunks.values());
     }
 
+    private List<ChunkPoint> touchedChunksForDraft(RecoveryDraft draft) {
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        if (draft == null) {
+            return List.of();
+        }
+        for (StoredBlockChange change : draft.changes()) {
+            ChunkPoint chunk = ChunkPoint.from(change.pos());
+            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+        }
+        for (StoredEntityChange change : draft.entityChanges()) {
+            ChunkPoint chunk = change.chunk();
+            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+        }
+        return List.copyOf(chunks.values());
+    }
+
+    private List<ChunkPoint> initialSnapshotChunksForPendingRestore(
+            ProjectLayout layout,
+            ProjectVersion targetVersion,
+            List<ChunkPoint> pendingChunks
+    ) throws IOException {
+        if (pendingChunks == null
+                || pendingChunks.isEmpty()
+                || targetVersion.versionKind() != VersionKind.INITIAL
+                || targetVersion.snapshotId() == null
+                || targetVersion.snapshotId().isBlank()) {
+            return List.of();
+        }
+        return this.snapshotReader.loadChunks(layout.snapshotFile(targetVersion.snapshotId()));
+    }
+
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {
         Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
         for (ChunkPoint chunk : plan.baselineGaps()) {
@@ -1004,6 +1072,22 @@ public final class RestoreService {
         for (PatchMetadata metadata : plan.patchChain()) {
             for (var chunk : metadata.chunks()) {
                 chunks.putIfAbsent(chunk.chunkX() + ":" + chunk.chunkZ(), new ChunkPoint(chunk.chunkX(), chunk.chunkZ()));
+            }
+        }
+        return List.copyOf(chunks.values());
+    }
+
+    @SafeVarargs
+    private final List<ChunkPoint> mergeChunks(List<ChunkPoint>... chunkLists) {
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        for (List<ChunkPoint> chunkList : chunkLists) {
+            if (chunkList == null) {
+                continue;
+            }
+            for (ChunkPoint chunk : chunkList) {
+                if (chunk != null) {
+                    chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+                }
             }
         }
         return List.copyOf(chunks.values());
@@ -1059,15 +1143,22 @@ public final class RestoreService {
             }
         }
 
+        List<PreparedBlockPlacement> expandedPlacements = CONNECTED_BLOCK_PLACEMENT_EXPANDER.expandTargets(
+                collapsed.values().stream()
+                        .flatMap(placements -> placements.values().stream())
+                        .toList()
+        );
+        Map<ChunkPoint, List<PreparedBlockPlacement>> expanded = CONNECTED_BLOCK_PLACEMENT_EXPANDER.groupByChunk(expandedPlacements);
+
         List<PreparedChunkBatch> result = new ArrayList<>();
         LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
-        chunks.addAll(collapsed.keySet());
+        chunks.addAll(expanded.keySet());
         chunks.addAll(collapsedEntities.keySet());
         for (ChunkPoint chunk : chunks) {
-            LinkedHashMap<Long, PreparedBlockPlacement> placements = collapsed.getOrDefault(chunk, new LinkedHashMap<>());
+            List<PreparedBlockPlacement> placements = expanded.getOrDefault(chunk, List.of());
             EntityBatch entityBatch = collapsedEntities.getOrDefault(chunk, EntityAccumulator.EMPTY).toBatch();
             if (!placements.isEmpty() || !entityBatch.isEmpty()) {
-                result.add(new PreparedChunkBatch(chunk, List.copyOf(placements.values()), entityBatch));
+                result.add(new PreparedChunkBatch(chunk, placements, entityBatch));
             }
         }
         return result;

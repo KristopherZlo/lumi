@@ -79,8 +79,9 @@ Important adapters:
 - `WorldChangeBatchPreparer` and `SnapshotBatchPreparer`: convert persisted block/entity changes and snapshot payloads into tick-ready prepared batches before apply begins
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
 - `WorldApplyBlockUpdatePolicy` and `BlockChangeApplier`: commit section blocks, block entities, and entity batches in bounded steps with client-visible, side-effect-suppressed block flags so replayed restore/undo/redo states do not emit neighbor updates or placement physics
+- `ConnectedBlockPlacementExpander`: completes paired block placements for beds, doors, and tall plants before replay so apply batches do not leave one half clipped when only one persisted cell changed
 - `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
-- `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, and restore workflows, with chat progress and durable pass/fail logs
+- `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, gameplay capture, and initial restore workflows, with chat progress and durable pass/fail logs
 - `WorldBootstrapService`: runs startup-only world-origin and root-version metadata checks off the server-start path so storage scans do not delay initial world entry
 
 ### Optional integration layer
@@ -187,19 +188,19 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 
 1. UI calls `RestoreService.restore(...)`.
 2. The client requires explicit user confirmation before restoring an `INITIAL` or `WORLD_ROOT` version.
-3. The confirmation UI shows a lightweight `RestorePlanSummary` with mode, branch, base version, target version, and affected chunk count before any world mutation starts.
+3. The confirmation UI shows a lightweight `RestorePlanSummary` with mode, branch, base version, target version, and affected chunk count before any world mutation starts. Pending recovery-draft chunks keep the summary actionable even when the selected target is already the active branch head.
 4. Active capture is frozen and an optional safety checkpoint is written first.
 5. When the target lies on the current active variant lineage, `RestoreService` prefers a direct patch replay path, including shared branch-base ancestors and restores to `WORLD_ROOT`:
-   reverse patch application for ancestor restores, forward patch application for descendant restores, plus rollback of any pending draft.
+   reverse patch application for ancestor restores, forward patch application for descendant restores, plus rollback of any pending draft. Pending restores to an `INITIAL` snapshot append that snapshot after the direct rollback so the result matches the saved initial state, not just the draft's old values.
 6. If direct replay is not valid and the target is `WORLD_ROOT`, restore falls back to tracked baseline chunks for the current workspace. Generator regeneration remains blocked when the stored origin fingerprint does not match the current world.
 7. If direct replay is not valid for a normal version, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
 8. Baseline gaps are added only for the snapshot-based whole-dimension fallback path.
 9. Persisted patch, baseline, and snapshot payloads are decoded off-thread and converted by Minecraft-layer preparers before any tick-thread apply work starts.
-10. Prepared placements are collapsed by final block position before tick-thread application; entity-only chunk batches are preserved.
+10. Prepared placements are collapsed by final block position and paired block halves are completed before tick-thread application; entity-only chunk batches are preserved.
 11. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
 12. Chunk commit order is fixed to section blocks -> bounded block-entity slices -> bounded entity removals -> bounded entity updates -> bounded entity spawns.
 13. Progress uses total work units: block placements, block-entity tail writes, entity removals, entity updates, and entity spawns. Entity-only operations do not complete early.
-14. Completion resets the target variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly. Branch switching passes an explicit target variant so a branch can restore a head version that was originally saved on another branch without reactivating that source branch.
+14. Completion resets the target variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly. Branch switching and cross-branch save restore pass an explicit target variant or target save branch so active-branch metadata changes only after the world apply has finished.
 15. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
 
 ## Partial Restore Flow
@@ -309,7 +310,7 @@ The current test suite is organized around:
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
 - Fabric GameTest scaffolding for server smoke tests, a Lumi client GameTest that opens a consistent singleplayer world, runs the integrated Lumi runtime suite, and then captures a smoke screenshot, plus a no-Lumi baseline client GameTest that runs the same broad vanilla gameplay surface through `lumi-baseline-gametest`
 - idle startup client GameTests that open a consistent singleplayer world with and without Lumi, wait for chunk rendering and a short idle window, and report a minimal result line for startup-only load comparisons
-- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, gameplay interaction, integrity, and cleanup services while reporting progress and logging pass/fail checks
+- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, gameplay interaction, pending-draft initial restore, integrity, and cleanup services while reporting progress and logging pass/fail checks
 - `scripts/compare-runtime-load.ps1` for repeated no-Lumi versus Lumi launch comparisons based on wall-clock time, server tick-delay warnings, long tick reports, WARN/ERROR counts, Lumi warnings, render pipeline failures, and required gameplay-suite result lines
 
 When extending history or storage behavior, update both tests and documentation in the same change.

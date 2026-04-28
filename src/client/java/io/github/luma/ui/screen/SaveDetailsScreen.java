@@ -424,14 +424,6 @@ public final class SaveDetailsScreen extends LumaScreen {
             return;
         }
 
-        if (this.state.project() != null && !versionVariant.id().equals(this.state.project().activeVariantId())) {
-            String switched = this.controller.switchVariant(this.projectName, versionVariant.id(), false);
-            if (!"luma.status.variant_switched".equals(switched)) {
-                this.refresh(switched);
-                return;
-            }
-        }
-
         String result = this.controller.restoreVersion(this.projectName, version.id());
         this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
     }

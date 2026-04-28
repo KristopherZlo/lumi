@@ -117,7 +117,8 @@ Use Lumi if you want to:
 4. `WORLD_ROOT` fallback uses tracked baseline chunks when direct replay is not valid.
 5. Snapshot fallback is used for normal versions when direct replay is not valid.
 6. Tick-thread apply uses bounded chunk batches with pre-decoded block states and prepared entity batches.
-7. A full restore moves the active branch head to the restored version; a partial restore applies only selected bounds and writes a new save on the active branch.
+7. Restore replay completes paired block halves such as beds, doors, and tall plants before apply.
+8. A full restore moves the active branch head to the restored version after apply completes; a partial restore applies only selected bounds and writes a new save on the active branch.
 
 ## Runtime Rules
 
@@ -238,7 +239,7 @@ Run the local in-world regression suite from a singleplayer save with cheats ena
 /lumi testing singleplayer
 ```
 
-This creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk. The run reports phase progress in chat, keeps a pass/fail report instead of stopping on the first failed check, checks a lightweight performance budget for scoped operations and synchronous tick work, and writes a detailed log under `<save>/lumi/test-logs/`.
+This creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk. The run reports phase progress in chat, keeps a pass/fail report instead of stopping on the first failed check, verifies broad gameplay edits can be restored back to the initial save, checks a lightweight performance budget for scoped operations and synchronous tick work, and writes a detailed log under `<save>/lumi/test-logs/`.
 
 Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` artifacts so the folder only keeps the current `lumi-*` outputs.
 

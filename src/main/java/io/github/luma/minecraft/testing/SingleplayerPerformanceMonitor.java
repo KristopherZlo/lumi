@@ -90,9 +90,9 @@ final class SingleplayerPerformanceMonitor {
                 "maxPartialRestoreUnits=" + this.maxOperationUnits("partial-restore")
         ));
         checks.add(new PerformanceCheck(
-                "Full restore used patch replay instead of full-chunk snapshot apply",
-                this.maxOperationUnits("restore-version") <= MAX_FULL_RESTORE_BLOCKS,
-                "maxRestoreUnits=" + this.maxOperationUnits("restore-version")
+                "Lineage full restore used patch replay unless exact initial snapshot replay was required",
+                this.maxRestoreUnitsWithoutInitialSnapshot() <= MAX_FULL_RESTORE_BLOCKS,
+                "maxLineageRestoreUnits=" + this.maxRestoreUnitsWithoutInitialSnapshot()
         ));
         return List.copyOf(checks);
     }
@@ -104,6 +104,16 @@ final class SingleplayerPerformanceMonitor {
                 if (label.equals(metric.label)) {
                     max = Math.max(max, metric.maxTotalUnits);
                 }
+            }
+        }
+        return max;
+    }
+
+    private int maxRestoreUnitsWithoutInitialSnapshot() {
+        int max = 0;
+        for (OperationMetric metric : this.operations.values()) {
+            if ("restore-version".equals(metric.label) && !metric.decodedInitialSnapshot) {
+                max = Math.max(max, metric.maxTotalUnits);
             }
         }
         return max;
@@ -125,6 +135,7 @@ final class SingleplayerPerformanceMonitor {
         private Instant lastUpdatedAt;
         private boolean terminal;
         private boolean failed;
+        private boolean decodedInitialSnapshot;
 
         private OperationMetric(String label, Instant startedAt) {
             this.label = label == null || label.isBlank() ? "unknown" : label;
@@ -137,6 +148,8 @@ final class SingleplayerPerformanceMonitor {
             this.lastUpdatedAt = snapshot.updatedAt();
             this.terminal = this.terminal || snapshot.terminal();
             this.failed = this.failed || snapshot.failed();
+            this.decodedInitialSnapshot = this.decodedInitialSnapshot
+                    || (snapshot.detail() != null && snapshot.detail().startsWith("Decoded initial snapshot"));
         }
 
         private long durationMillis() {
