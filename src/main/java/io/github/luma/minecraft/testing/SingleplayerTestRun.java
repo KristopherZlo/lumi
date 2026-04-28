@@ -72,6 +72,7 @@ final class SingleplayerTestRun {
     private String lastOperationProgressKey = "";
     private BuildProject project;
     private ProjectVariant branch;
+    private SingleplayerGameplayRegressionSuite.GameplayRegressionReport gameplayReport;
     private int phaseStartPasses;
     private int phaseStartFailures;
     private boolean done;
@@ -137,6 +138,8 @@ final class SingleplayerTestRun {
                 case START_RESTORE_INITIAL -> this.startRestoreInitial();
                 case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
                 case CHECK_PLAYER_INTERACTIONS -> this.checkPlayerInteractions(server);
+                case START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS -> this.startRestoreInitialAfterPlayerInteractions();
+                case CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS -> this.checkRestoreInitialAfterPlayerInteractions(server);
                 case CHECK_PERFORMANCE -> this.checkPerformanceBudget(server);
                 case CLEANUP -> this.finish(server);
             }
@@ -334,30 +337,53 @@ final class SingleplayerTestRun {
     private void checkPlayerInteractions(MinecraftServer server) throws Exception {
         SingleplayerGameplayRegressionSuite.GameplayRegressionReport report =
                 new SingleplayerGameplayRegressionSuite().run(this.level, this.player, this.volume, ACTOR);
-        try {
-            for (SingleplayerGameplayRegressionSuite.GameplayCheck check : report.checks()) {
-                this.check(check.passed(), check.label());
-            }
-
-            RecoveryDraft draft = this.value("Live recovery draft can be loaded after gameplay actions", () ->
-                    HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
-            if (draft != null) {
-                Set<BlockPoint> capturedBlocks = new HashSet<>();
-                for (var change : draft.changes()) {
-                    capturedBlocks.add(change.pos());
-                }
-                for (BlockPoint expectedBlock : report.expectedDraftBlocks()) {
-                    this.check(capturedBlocks.contains(expectedBlock),
-                            "Gameplay draft includes block " + this.format(expectedBlock.toBlockPos()));
-                }
-                this.check(draft.entityChanges().size() >= report.expectedEntityChanges(),
-                        "Gameplay draft includes builder-relevant entity changes");
-            }
-        } finally {
-            HistoryCaptureManager.getInstance().discardSession(server, this.project.id().toString());
-            report.cleanup();
-            this.clearVolume();
+        this.gameplayReport = report;
+        for (SingleplayerGameplayRegressionSuite.GameplayCheck check : report.checks()) {
+            this.check(check.passed(), check.label());
         }
+
+        RecoveryDraft draft = this.value("Live recovery draft can be loaded after gameplay actions", () ->
+                HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
+        if (draft != null) {
+            Set<BlockPoint> capturedBlocks = new HashSet<>();
+            for (var change : draft.changes()) {
+                capturedBlocks.add(change.pos());
+            }
+            for (BlockPoint expectedBlock : report.expectedDraftBlocks()) {
+                this.check(capturedBlocks.contains(expectedBlock),
+                        "Gameplay draft includes block " + this.format(expectedBlock.toBlockPos()));
+            }
+            this.check(draft.entityChanges().size() >= report.expectedEntityChanges(),
+                    "Gameplay draft includes builder-relevant entity changes");
+        }
+        this.completePhase(server, Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
+    }
+
+    private void startRestoreInitialAfterPlayerInteractions() throws Exception {
+        var plan = this.value("Initial restore plan includes pending gameplay actions", () ->
+                this.restoreService.summarizeRestorePlan(this.level, this.project.name(), ProjectService.versionId(1)));
+        if (plan != null) {
+            this.check(plan.mode() != RestorePlanMode.NO_OP, "Initial restore plan remains actionable with pending gameplay changes");
+            int expectedChunks = this.gameplayReport == null ? 0 : this.gameplayReport.expectedDraftBlocks().size();
+            this.check(plan.touchedChunks().size() >= Math.min(1, expectedChunks),
+                    "Initial restore plan includes pending gameplay chunks");
+        }
+        this.pendingOperation = this.restoreService.restore(this.level, this.project.name(), ProjectService.versionId(1));
+        this.log.info("Queued gameplay rollback restore operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
+    }
+
+    private void checkRestoreInitialAfterPlayerInteractions(MinecraftServer server) throws Exception {
+        this.check(this.volume.isAir(this.level), "Full restore returned all gameplay blocks to initial air");
+        if (this.gameplayReport != null) {
+            this.check(this.gameplayReport.spawnedEntities().stream()
+                            .allMatch(entity -> entity == null || entity.isRemoved()),
+                    "Full restore removed gameplay entities");
+            this.gameplayReport.cleanup();
+            this.gameplayReport = null;
+        }
+        this.check("Gameplay restore consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
+        this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
         this.completePhase(server, Phase.CHECK_PERFORMANCE);
     }
 
@@ -487,6 +513,14 @@ final class SingleplayerTestRun {
     }
 
     private void cleanup(MinecraftServer server) {
+        if (this.gameplayReport != null) {
+            try {
+                this.gameplayReport.cleanup();
+            } catch (Exception exception) {
+                this.log.fail(Phase.CLEANUP.title(), "Gameplay entity cleanup failed", exception);
+            }
+            this.gameplayReport = null;
+        }
         try {
             this.clearVolume();
         } catch (Exception exception) {
@@ -616,6 +650,14 @@ final class SingleplayerTestRun {
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
         CHECK_PLAYER_INTERACTIONS("Gameplay interactions", "exercise broad block, stateful block, fluid, and entity actions"),
+        START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS(
+                "Queue gameplay rollback",
+                "plan and start restore to initial after broad gameplay actions"
+        ),
+        CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS(
+                "Verify gameplay rollback",
+                "check broad gameplay actions restore to the initial world state"
+        ),
         CHECK_PERFORMANCE("Performance budget", "verify the test run stayed within low-load limits"),
         CLEANUP("Cleanup and report", "remove test blocks, archive the test project, and write the log");
 
@@ -655,7 +697,9 @@ final class SingleplayerTestRun {
                 case START_BRANCH_SAVE -> START_RESTORE_INITIAL;
                 case CHECK_BRANCH_SAVE -> START_PARTIAL_RESTORE;
                 case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
-                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CHECK_PLAYER_INTERACTIONS, CHECK_PERFORMANCE, CLEANUP -> CLEANUP;
+                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CHECK_PLAYER_INTERACTIONS,
+                     START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS, CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS,
+                     CHECK_PERFORMANCE, CLEANUP -> CLEANUP;
             };
         }
     }

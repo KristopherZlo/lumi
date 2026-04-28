@@ -81,7 +81,7 @@ Important adapters:
 - `WorldApplyBlockUpdatePolicy` and `BlockChangeApplier`: commit section blocks, block entities, and entity batches in bounded steps with client-visible, side-effect-suppressed block flags so replayed restore/undo/redo states do not emit neighbor updates or placement physics
 - `ConnectedBlockPlacementExpander`: completes paired block placements for beds, doors, and tall plants before replay so apply batches do not leave one half clipped when only one persisted cell changed
 - `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
-- `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, and restore workflows, with chat progress and durable pass/fail logs
+- `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, gameplay capture, and initial restore workflows, with chat progress and durable pass/fail logs
 - `WorldBootstrapService`: runs startup-only world-origin and root-version metadata checks off the server-start path so storage scans do not delay initial world entry
 
 ### Optional integration layer
@@ -188,10 +188,10 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 
 1. UI calls `RestoreService.restore(...)`.
 2. The client requires explicit user confirmation before restoring an `INITIAL` or `WORLD_ROOT` version.
-3. The confirmation UI shows a lightweight `RestorePlanSummary` with mode, branch, base version, target version, and affected chunk count before any world mutation starts.
+3. The confirmation UI shows a lightweight `RestorePlanSummary` with mode, branch, base version, target version, and affected chunk count before any world mutation starts. Pending recovery-draft chunks keep the summary actionable even when the selected target is already the active branch head.
 4. Active capture is frozen and an optional safety checkpoint is written first.
 5. When the target lies on the current active variant lineage, `RestoreService` prefers a direct patch replay path, including shared branch-base ancestors and restores to `WORLD_ROOT`:
-   reverse patch application for ancestor restores, forward patch application for descendant restores, plus rollback of any pending draft.
+   reverse patch application for ancestor restores, forward patch application for descendant restores, plus rollback of any pending draft. Pending restores to an `INITIAL` snapshot append that snapshot after the direct rollback so the result matches the saved initial state, not just the draft's old values.
 6. If direct replay is not valid and the target is `WORLD_ROOT`, restore falls back to tracked baseline chunks for the current workspace. Generator regeneration remains blocked when the stored origin fingerprint does not match the current world.
 7. If direct replay is not valid for a normal version, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
 8. Baseline gaps are added only for the snapshot-based whole-dimension fallback path.
@@ -310,7 +310,7 @@ The current test suite is organized around:
 - client-side performance regression tests for compare overlay selection, commit graph layout, and material delta summarization
 - Fabric GameTest scaffolding for server smoke tests, a Lumi client GameTest that opens a consistent singleplayer world, runs the integrated Lumi runtime suite, and then captures a smoke screenshot, plus a no-Lumi baseline client GameTest that runs the same broad vanilla gameplay surface through `lumi-baseline-gametest`
 - idle startup client GameTests that open a consistent singleplayer world with and without Lumi, wait for chunk rendering and a short idle window, and report a minimal result line for startup-only load comparisons
-- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, gameplay interaction, integrity, and cleanup services while reporting progress and logging pass/fail checks
+- `/lumi testing singleplayer` for a local integrated-world runtime suite that exercises the real project, version, recovery, undo/redo, diff, material, branch, archive/share export, partial restore, full restore, gameplay interaction, pending-draft initial restore, integrity, and cleanup services while reporting progress and logging pass/fail checks
 - `scripts/compare-runtime-load.ps1` for repeated no-Lumi versus Lumi launch comparisons based on wall-clock time, server tick-delay warnings, long tick reports, WARN/ERROR counts, Lumi warnings, render pipeline failures, and required gameplay-suite result lines
 
 When extending history or storage behavior, update both tests and documentation in the same change.
