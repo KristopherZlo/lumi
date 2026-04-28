@@ -1,0 +1,252 @@
+package io.github.luma.minecraft.testing;
+
+import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.WorldMutationContext;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.RedstoneLampBlock;
+import net.minecraft.world.level.block.entity.BarrelBlockEntity;
+
+/**
+ * Real integrated-world gameplay actions used by the Lumi runtime suite.
+ */
+final class SingleplayerGameplayRegressionSuite {
+
+    private final List<GameplayScenario> scenarios = List.of(
+            new AdjacentBlockBreakScenario(),
+            new BulkPlacementScenario(),
+            new BlockEntityScenario(),
+            new RedstoneScenario(),
+            new FluidScenario(),
+            new EntitySpawnScenario()
+    );
+
+    GameplayRegressionReport run(
+            ServerLevel level,
+            ServerPlayer player,
+            SingleplayerTestVolume volume,
+            String actor
+    ) {
+        GameplayChecks checks = new GameplayChecks();
+        GameplayScenarioContext context = new GameplayScenarioContext(level, player, volume, actor, checks);
+        for (GameplayScenario scenario : this.scenarios) {
+            scenario.run(context);
+        }
+        return context.report();
+    }
+
+    private interface GameplayScenario {
+        void run(GameplayScenarioContext context);
+    }
+
+    record GameplayRegressionReport(
+            List<GameplayCheck> checks,
+            Set<BlockPoint> expectedDraftBlocks,
+            int expectedEntityChanges,
+            List<Entity> spawnedEntities
+    ) {
+
+        void cleanup() {
+            WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+                for (Entity entity : this.spawnedEntities) {
+                    if (entity != null && !entity.isRemoved()) {
+                        entity.discard();
+                    }
+                }
+            });
+        }
+    }
+
+    record GameplayCheck(String label, boolean passed) {
+    }
+
+    private static final class GameplayChecks {
+
+        private final List<GameplayCheck> results = new ArrayList<>();
+
+        void check(boolean condition, String label) {
+            this.results.add(new GameplayCheck(label, condition));
+        }
+
+        List<GameplayCheck> results() {
+            return List.copyOf(this.results);
+        }
+    }
+
+    private static final class GameplayScenarioContext {
+
+        private final ServerLevel level;
+        private final ServerPlayer player;
+        private final SingleplayerTestVolume volume;
+        private final String actor;
+        private final GameplayChecks checks;
+        private final Set<BlockPoint> expectedDraftBlocks = new LinkedHashSet<>();
+        private final List<Entity> spawnedEntities = new ArrayList<>();
+        private int expectedEntityChanges;
+
+        private GameplayScenarioContext(
+                ServerLevel level,
+                ServerPlayer player,
+                SingleplayerTestVolume volume,
+                String actor,
+                GameplayChecks checks
+        ) {
+            this.level = level;
+            this.player = player;
+            this.volume = volume;
+            this.actor = actor;
+            this.checks = checks;
+        }
+
+        private void trackedPlayerAction(Runnable runnable) {
+            WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, this.actor, true);
+            try {
+                runnable.run();
+            } finally {
+                WorldMutationContext.popSource();
+            }
+        }
+
+        private void expectDraftBlock(BlockPos pos) {
+            this.expectedDraftBlocks.add(BlockPoint.from(pos));
+        }
+
+        private void expectEntityChange(Entity entity) {
+            this.expectedEntityChanges += 1;
+            this.spawnedEntities.add(entity);
+        }
+
+        private GameplayRegressionReport report() {
+            return new GameplayRegressionReport(
+                    this.checks.results(),
+                    Set.copyOf(this.expectedDraftBlocks),
+                    this.expectedEntityChanges,
+                    List.copyOf(this.spawnedEntities)
+            );
+        }
+    }
+
+    private static final class AdjacentBlockBreakScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos support = context.volume.min().offset(0, 0, 0);
+            BlockPos flower = support.above();
+            WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+                context.level.setBlock(support, Blocks.GRASS_BLOCK.defaultBlockState(), 3);
+                context.level.setBlock(flower, Blocks.DANDELION.defaultBlockState(), 3);
+            });
+
+            boolean destroyed = context.player.gameMode.destroyBlock(support);
+            context.checks.check(destroyed, "gameplay block break destroys support");
+            context.checks.check(context.level.getBlockState(support).isAir(), "gameplay support block became air");
+            context.checks.check(context.level.getBlockState(flower).isAir(), "gameplay adjacent flower became air");
+            context.expectDraftBlock(support);
+            context.expectDraftBlock(flower);
+        }
+    }
+
+    private static final class BulkPlacementScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            List<BlockPos> placedBlocks = new ArrayList<>();
+            context.trackedPlayerAction(() -> {
+                for (int x = 0; x < SingleplayerTestVolume.WIDTH; x++) {
+                    for (int z = 0; z < SingleplayerTestVolume.DEPTH; z++) {
+                        BlockPos pos = context.volume.min().offset(x, SingleplayerTestVolume.HEIGHT - 1, z);
+                        context.level.setBlock(pos, Blocks.COPPER_BLOCK.defaultBlockState(), 3);
+                        placedBlocks.add(pos);
+                    }
+                }
+            });
+
+            long verified = placedBlocks.stream()
+                    .filter(pos -> context.level.getBlockState(pos).is(Blocks.COPPER_BLOCK))
+                    .count();
+            context.checks.check(verified == placedBlocks.size(),
+                    "gameplay bulk placement verified " + verified + "/" + placedBlocks.size());
+            placedBlocks.forEach(context::expectDraftBlock);
+        }
+    }
+
+    private static final class BlockEntityScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos barrel = context.volume.min().offset(3, 1, 0);
+            context.trackedPlayerAction(() -> context.level.setBlock(barrel, Blocks.BARREL.defaultBlockState(), 3));
+            context.checks.check(context.level.getBlockEntity(barrel) instanceof BarrelBlockEntity,
+                    "gameplay created barrel block entity");
+            if (context.level.getBlockEntity(barrel) instanceof BarrelBlockEntity blockEntity) {
+                blockEntity.setItem(0, new ItemStack(Items.DIAMOND, 16));
+                context.checks.check(blockEntity.getItem(0).getCount() == 16,
+                        "gameplay block entity inventory updated");
+            }
+            context.expectDraftBlock(barrel);
+        }
+    }
+
+    private static final class RedstoneScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos lamp = context.volume.min().offset(1, 1, 3);
+            BlockPos power = lamp.west();
+            context.trackedPlayerAction(() -> {
+                context.level.setBlock(lamp, Blocks.REDSTONE_LAMP.defaultBlockState(), 3);
+                context.level.setBlock(power, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+            });
+            context.checks.check(context.level.getBlockState(lamp).getValue(RedstoneLampBlock.LIT),
+                    "gameplay redstone lamp lit");
+            context.expectDraftBlock(lamp);
+            context.expectDraftBlock(power);
+        }
+    }
+
+    private static final class FluidScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos water = context.volume.min().offset(3, 1, 3);
+            context.trackedPlayerAction(() -> context.level.setBlock(water, Blocks.WATER.defaultBlockState(), 3));
+            context.checks.check(context.level.getFluidState(water).isSource(), "gameplay placed water source");
+            context.expectDraftBlock(water);
+        }
+    }
+
+    private static final class EntitySpawnScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            Entity entity = EntityType.ARMOR_STAND.create(context.level, EntitySpawnReason.COMMAND);
+            context.checks.check(entity != null, "gameplay created a builder-relevant entity");
+            if (entity == null) {
+                return;
+            }
+
+            BlockPos marker = context.volume.min().offset(2, 1, 2);
+            entity.snapTo(marker.getX() + 0.5D, marker.getY(), marker.getZ() + 0.5D, 0.0F, 0.0F);
+            entity.setCustomName(Component.literal("lumi-runtime-entity"));
+            entity.setGlowingTag(true);
+            context.trackedPlayerAction(() -> context.level.addFreshEntity(entity));
+            context.checks.check(!entity.isRemoved(), "gameplay spawned an entity");
+            context.checks.check(entity.hasCustomName(), "gameplay updated entity custom name");
+            context.checks.check(entity.isCurrentlyGlowing(), "gameplay updated entity glowing state");
+            context.expectEntityChange(entity);
+        }
+    }
+}
