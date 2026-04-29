@@ -13,12 +13,14 @@ import io.github.luma.ui.screen.SaveScreen;
 import io.github.luma.ui.screen.SettingsScreen;
 import io.github.luma.ui.screen.ShareScreen;
 import io.github.luma.ui.screen.VariantsScreen;
+import io.github.luma.ui.controller.ProjectScreenController;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 
 public final class ScreenRouter {
 
     private final Minecraft client = Minecraft.getInstance();
+    private final ProjectScreenController projectController = new ProjectScreenController();
 
     public void openDashboard(Screen parent) {
         this.client.setScreen(new DashboardScreen(parent));
@@ -29,10 +31,18 @@ public final class ScreenRouter {
     }
 
     public void openProject(Screen parent, String projectName) {
+        if (this.projectController.hasRecoveryDraft(projectName)) {
+            this.client.setScreen(new RecoveryScreen(parent, projectName));
+            return;
+        }
         this.client.setScreen(new ProjectScreen(parent, projectName));
     }
 
     public void openProject(Screen parent, String projectName, String variantId) {
+        if (this.projectController.hasRecoveryDraft(projectName)) {
+            this.client.setScreen(new RecoveryScreen(parent, projectName));
+            return;
+        }
         this.client.setScreen(new ProjectScreen(parent, projectName, variantId, "luma.status.project_ready"));
     }
 
