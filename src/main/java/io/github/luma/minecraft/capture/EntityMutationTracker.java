@@ -22,6 +22,9 @@ public final class EntityMutationTracker {
         if (!(entity.level() instanceof ServerLevel level)) {
             return PendingEntityMutation.empty();
         }
+        if (WorldMutationContext.captureSuppressed()) {
+            return PendingEntityMutation.empty();
+        }
 
         String entityType = entityType(entity);
         WorldMutationSource source = WorldMutationContext.currentSource();
@@ -29,6 +32,9 @@ public final class EntityMutationTracker {
         if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
             if (CAPTURE_POLICY.shouldInspectUndoOnlyMutation(source, entityType)) {
                 return new PendingEntityMutation(level, SNAPSHOT_SERVICE.capture(level, entity), null, true);
+            }
+            if (WorldMutationContext.captureSuppressed()) {
+                return PendingEntityMutation.empty();
             }
             if (!CAPTURE_POLICY.shouldInspectExternalToolFallback(entityType)) {
                 return PendingEntityMutation.empty();
@@ -59,6 +65,9 @@ public final class EntityMutationTracker {
         if (level == null || entity == null) {
             return;
         }
+        if (WorldMutationContext.captureSuppressed()) {
+            return;
+        }
         String entityType = entityType(entity);
         WorldMutationSource source = WorldMutationContext.currentSource();
         ObservedExternalToolOperation operation = null;
@@ -66,6 +75,9 @@ public final class EntityMutationTracker {
             if (CAPTURE_POLICY.shouldInspectUndoOnlyMutation(source, entityType)) {
                 EntityPayload newPayload = SNAPSHOT_SERVICE.capture(level, entity);
                 record(level, null, newPayload, null, true);
+                return;
+            }
+            if (WorldMutationContext.captureSuppressed()) {
                 return;
             }
             if (!CAPTURE_POLICY.shouldInspectExternalToolFallback(entityType)) {

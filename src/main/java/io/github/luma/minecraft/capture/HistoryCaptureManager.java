@@ -1326,6 +1326,9 @@ public final class HistoryCaptureManager {
     }
 
     public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
+        if (WorldMutationContext.captureSuppressed()) {
+            return false;
+        }
         return CAPTURE_POLICY.shouldCaptureMutation(source);
     }
 

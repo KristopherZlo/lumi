@@ -39,6 +39,9 @@ abstract class LevelSetBlockMixin {
         ObservedExternalToolOperation operation = null;
         boolean currentSourceCaptures = HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource());
         if (!currentSourceCaptures) {
+            if (WorldMutationContext.captureSuppressed()) {
+                return;
+            }
             var detectedOperation = LUMA_TOOL_DETECTOR.detectOperation();
             if (detectedOperation.isEmpty()) {
                 return;

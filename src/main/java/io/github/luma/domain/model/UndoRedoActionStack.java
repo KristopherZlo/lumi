@@ -47,7 +47,7 @@ public final class UndoRedoActionStack {
             this.trimUndoStack();
         }
 
-        return this.recordIntoAction(action, change, now);
+        return this.recordIntoAction(action, change, now, true);
     }
 
     public long recordRelatedChange(
@@ -62,7 +62,7 @@ public final class UndoRedoActionStack {
             return this.revision;
         }
 
-        return this.recordIntoAction(action, change, now);
+        return this.recordIntoAction(action, change, now, false);
     }
 
     public long recordRelatedEntityChange(
@@ -77,7 +77,7 @@ public final class UndoRedoActionStack {
             return this.revision;
         }
 
-        return this.recordEntityIntoAction(action, change, now);
+        return this.recordEntityIntoAction(action, change, now, false);
     }
 
     public long recordEntityChange(
@@ -99,7 +99,7 @@ public final class UndoRedoActionStack {
             this.trimUndoStack();
         }
 
-        return this.recordEntityIntoAction(action, change, now);
+        return this.recordEntityIntoAction(action, change, now, true);
     }
 
     public Selection selectUndo() {
@@ -113,7 +113,7 @@ public final class UndoRedoActionStack {
     }
 
     public void completeUndo(Selection selection) {
-        if (selection == null || this.revision != selection.revision()) {
+        if (selection == null || !this.selectionCanComplete(this.undoStack, selection)) {
             return;
         }
 
@@ -128,7 +128,7 @@ public final class UndoRedoActionStack {
     }
 
     public void completeRedo(Selection selection) {
-        if (selection == null || this.revision != selection.revision()) {
+        if (selection == null || !this.selectionCanComplete(this.redoStack, selection)) {
             return;
         }
 
@@ -183,30 +183,52 @@ public final class UndoRedoActionStack {
         this.revision += 1;
     }
 
-    private long recordIntoAction(UndoRedoAction action, StoredBlockChange change, Instant now) {
+    private long recordIntoAction(
+            UndoRedoAction action,
+            StoredBlockChange change,
+            Instant now,
+            boolean clearRedoOnMutation
+    ) {
         int before = action.size();
         action.recordChange(change, now);
         if (action.isEmpty()) {
             this.undoStack.remove(action);
         }
         if (before != action.size() || !action.isEmpty()) {
-            this.redoStack.clear();
+            if (clearRedoOnMutation) {
+                this.redoStack.clear();
+            }
             this.revision += 1;
         }
         return this.revision;
     }
 
-    private long recordEntityIntoAction(UndoRedoAction action, StoredEntityChange change, Instant now) {
+    private long recordEntityIntoAction(
+            UndoRedoAction action,
+            StoredEntityChange change,
+            Instant now,
+            boolean clearRedoOnMutation
+    ) {
         int before = action.size();
         action.recordEntityChange(change, now);
         if (action.isEmpty()) {
             this.undoStack.remove(action);
         }
         if (before != action.size() || !action.isEmpty()) {
-            this.redoStack.clear();
+            if (clearRedoOnMutation) {
+                this.redoStack.clear();
+            }
             this.revision += 1;
         }
         return this.revision;
+    }
+
+    private boolean selectionCanComplete(Deque<UndoRedoAction> stack, Selection selection) {
+        if (this.revision == selection.revision()) {
+            return true;
+        }
+        UndoRedoAction current = stack.peekFirst();
+        return current != null && current.id().equals(selection.action().id());
     }
 
     private UndoRedoAction removeById(Deque<UndoRedoAction> stack, String actionId) {

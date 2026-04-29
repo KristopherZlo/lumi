@@ -63,6 +63,46 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void relatedChangesDoNotClearRedoStack() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+        stack.recordChange("action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
+        stack.completeUndo(stack.selectUndo());
+
+        stack.recordRelatedChange(
+                "minecraft:overworld",
+                change(3, "minecraft:air", "minecraft:water"),
+                NOW.plusSeconds(2),
+                java.time.Duration.ofSeconds(10),
+                2
+        );
+
+        assertTrue(stack.canRedo());
+        assertEquals("action-2", stack.recentRedoActions(1).getFirst().id());
+        assertEquals(2, stack.recentUndoActions(1).getFirst().size());
+    }
+
+    @Test
+    void selectedUndoCompletesAfterRelatedChangeJoinsSameAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
+        stack.recordRelatedChange(
+                "minecraft:overworld",
+                change(2, "minecraft:air", "minecraft:water"),
+                NOW.plusSeconds(2),
+                java.time.Duration.ofSeconds(10),
+                2
+        );
+        stack.completeUndo(selection);
+
+        assertFalse(stack.canUndo());
+        assertTrue(stack.canRedo());
+        assertEquals(2, stack.recentRedoActions(1).getFirst().size());
+    }
+
+    @Test
     void relatedChangesJoinLatestActionInsideJoinWindow() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);

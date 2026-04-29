@@ -166,7 +166,7 @@ Responsibilities are split as follows:
 8. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, consuming the draft, or choosing a live undo/redo action, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
 9. Idle or dirty sessions are flushed into recovery storage only when the live buffer fingerprint changed since the last queued draft flush.
 10. Item drops created by explosions, fluid, falling blocks, and nearby block-update fallout are captured into the in-memory undo/redo action only. They are removed on undo and respawned on redo, but they do not enter recovery drafts or saved version payloads.
-11. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
+11. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action without clearing an available redo, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
 12. In integrated singleplayer worlds, explicit builder actions are allowed into capture and undo/redo immediately even if the permission frame is not operator-shaped yet; dedicated servers keep the operator gate.
 
 Important invariants:
