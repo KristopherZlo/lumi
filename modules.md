@@ -35,20 +35,20 @@ Lumi is organized around project history for builders: project, version, branch,
 
 | Work area | Start here | Then inspect | Tests/docs |
 | --- | --- | --- | --- |
-| Project creation, settings, workspace open, `WORLD_ROOT` | `ProjectService`, `ClientWorkspaceOpenService`, `WorldBootstrapService` | `ProjectRepository`, `VariantRepository`, `WorldOriginRepository`, `ProjectLayout` | `ProjectServiceTest`, `WorldOriginRepositoryTest`, `docs/storage-format.md` |
+| Project creation, settings, workspace open, `WORLD_ROOT` | `ProjectService`, `ClientWorkspaceOpenService`, `WorldBootstrapService` | `ProjectRepository`, `VariantRepository`, `WorldOriginRepository`, `RecoveryRepository`, `ProjectLayout` | `ProjectServiceTest`, `WorldOriginRepositoryTest`, `docs/storage-format.md` |
 | Save, amend, quick save | `VersionService`, `QuickSaveScreenController` | `CaptureSessionRegistry`, `CapturePersistenceCoordinator`, `PatchDataRepository`, `PatchMetaRepository`, `SnapshotCaptureService`, `PreviewCaptureRequestService` | `VersionServiceTest`, `PatchDataRepositoryTest`, `SnapshotStorageTest` |
 | Restore, full rollback, operation progress | `RestoreService` | `VersionLineageService`, `WorldOperationManager`, `WorldChangeBatchPreparer`, `SnapshotBatchPreparer`, `BlockChangeApplier` | `RestoreServiceTest`, `WorldChangeBatchPreparerTest`, `docs/architecture.md` |
-| Partial restore | `RestoreService`, `PartialRestorePlanner` | `SaveDetailsScreen`, `SaveDetailsScreenController`, `SaveDetailsPartialRestoreSection`, `PatchDataRepository` | `PartialRestorePlannerTest`, `docs/storage-format.md` |
-| Live capture and recovery draft creation | `HistoryCaptureManager` | `CaptureSessionRegistry`, `TrackedProjectCatalog`, `ProjectTrackingIndex`, `WorldMutationCapturePolicy`, `SessionStabilizationService`, relevant mixin | capture tests under `src/test/java/io/github/luma/minecraft/capture` |
-| Undo/redo and recent actions | `UndoRedoService`, `UndoRedoHistoryManager` | `WorldOperationManager`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer` | `UndoRedoActionStackTest`, `RecentChangesOverlayRendererStateTest` |
-| Branches and branch switching | `VariantService`, `VersionLineageService` | `VariantRepository`, `VariantsScreenController`, `VariantsScreen` | `VariantServiceTest`, `VersionLineageServiceTest`, `VariantsScreenControllerTest` |
-| Import/export/share/merge | `HistoryShareService`, `ProjectArchiveService`, `VariantMergeService` | `ProjectArchiveRepository`, `ShareScreenController`, `MergePreviewCache`, `ShareMergeReviewSection` | `HistoryShareServiceTest`, `ProjectArchiveServiceTest`, `VariantMergeServiceTest` |
+| Partial restore | `RestoreService`, `PartialRestorePlanner` | `SaveDetailsScreen`, `SaveDetailsScreenController`, `SaveDetailsPartialRestoreSection`, `LumiRegionSelectionController`, `LumiRegionSelectionRenderer`, `PatchDataRepository` | `PartialRestorePlannerTest`, `PartialRestoreFormStateTest`, `LumiRegionSelectionStateTest`, `docs/storage-format.md` |
+| Live capture and recovery draft creation | `HistoryCaptureManager` | `CaptureSessionRegistry`, `TrackedProjectCatalog`, `ProjectTrackingIndex`, `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, `SessionStabilizationService`, relevant mixin | capture tests under `src/test/java/io/github/luma/minecraft/capture` |
+| Undo/redo and recent actions | `UndoRedoService`, `UndoRedoHistoryManager` | `WorldOperationManager`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `EntityMutationCapturePolicy` | `UndoRedoActionStackTest`, `RecentChangesOverlayRendererStateTest` |
+| Branches, branch switching, and history editing | `VariantService`, `HistoryEditService`, `VersionLineageService` | `VariantRepository`, `HistoryTombstoneRepository`, `VariantsScreenController`, `VariantsScreen`, `SaveDetailsScreen` | `VariantServiceTest`, `HistoryEditServiceTest`, `VersionLineageServiceTest`, `VariantsScreenControllerTest` |
+| Import/export/share/merge | `HistoryShareService`, `ProjectArchiveService`, `VariantMergeService` | `ProjectArchiveRepository`, `ShareScreenController`, `VariantsScreenController`, `MergePreviewCache`, `ShareMergeReviewSection` | `HistoryShareServiceTest`, `ProjectArchiveServiceTest`, `VariantMergeServiceTest` |
 | Compare and material summaries | `DiffService`, `MaterialDeltaService` | `CompareScreenController`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySurfaceResolver` | `DiffServiceTest`, compare overlay tests |
 | Preview generation | `PreviewCaptureRequestService`, `PreviewService`, `PreviewCaptureCoordinator` | `PreviewBoundsResolver`, `TexturedPreviewCaptureService`, `PreviewRenderMeshBuilder`, `PreviewImageCropper` | `PreviewServiceTest`, `PreviewCaptureRequestRepositoryTest`, preview tests |
 | Recovery UI and recovery actions | `RecoveryService`, `RecoveryScreenController` | `RecoveryRepository`, `CapturePersistenceCoordinator`, `ScreenOperationStateSupport` | `RecoveryRepositoryTest`, recovery model tests |
 | Cleanup and integrity | `ProjectCleanupService`, `ProjectIntegrityService` | `ProjectCleanupRepository`, `CleanupScreenController`, `ProjectRepository` | `ProjectCleanupRepositoryTest`, `ProjectArchiveRepositoryTest` |
 | Storage format or path changes | `ProjectLayout`, exact repository class | `StorageIo`, `GsonProvider`, matching domain model record | `ProjectLayoutTest`, repository tests, `docs/storage-format.md` |
-| Optional builder tool integration | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap` | `WorldEditEditSessionTracker`, Axiom classes, integration mixins | integration tests, `docs/architecture.md` |
+| Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
 | Commands and runtime tests | `LumaCommands`, `SingleplayerTestingService` | `SingleplayerGameplayRegressionSuite`, scripts under `scripts/` | `docs/commands.md`, `docs/test-client.md` |
 | Client navigation and screen behavior | `ScreenRouter`, the route screen, route controller, route view state | `LumaScreen`, `ProjectWindowLayout`, `ProjectSidebarNavigation`, section builders | UI controller tests, `docs/development.md` |
 
@@ -76,6 +76,7 @@ Use `src/main/java/io/github/luma/domain/model` for value objects, persisted rec
 - Branch merge/share/archive: `VariantMergePlan`, `VariantMergeApplyRequest`, `MergeConflictZone`, `MergeConflictResolution`, `MergeConflictZoneResolution`, `ProjectArchiveManifest`, `ProjectArchiveEntry`, `ProjectArchiveScope`, `ProjectArchiveScopeType`, `ProjectArchiveExportResult`, `ProjectArchiveImportResult`, `HistoryPackageFileSummary`, `HistoryPackageImportResult`, `ImportedHistoryProjectSummary`, `ExternalSourceInfo`.
 - Live capture and undo/redo runtime: `TrackedChangeBuffer`, `CaptureSessionState`, `UndoRedoAction`, `UndoRedoActionStack`, `WorldMutationSource`.
 - Preview: `PreviewInfo`, `PreviewCaptureRequest`.
+- History visibility: `HistoryTombstones`.
 - Cleanup/integrity: `ProjectCleanupPolicy`, `ProjectCleanupCandidate`, `ProjectCleanupReport`, `ProjectIntegrityReport`.
 
 ## Domain Services
@@ -86,8 +87,9 @@ Use `src/main/java/io/github/luma/domain/service` for business workflows and pro
 - `VersionService`: save/amend versions, isolate operation drafts, write patch-first history, request snapshots/previews.
 - `RestoreService`: full restore, partial restore, pre-restore safety checkpoints, operation orchestration.
 - `RecoveryService`: recover, discard, persist, and expose interrupted work.
+- `HistoryEditService`: rename saves, soft-delete safe saves, soft-delete inactive branches, and persist history tombstones.
 - `VariantService`: branch creation, branch switching, active head movement.
-- `VariantMergeService`: imported branch merge planning, conflict zones, merge apply through normal version persistence.
+- `VariantMergeService`: imported and local branch merge planning, conflict zones, merge apply through normal version persistence.
 - `VersionLineageService`: reachable version filtering, ancestor/common-ancestor/path lookup shared by restore, diff, merge.
 - `DiffService`: version-to-version and live-world diff reconstruction.
 - `MaterialDeltaService`: material summary aggregation for UI.
@@ -112,6 +114,7 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 - `StorageIo`: atomic writes, NBT helpers, low-level storage utilities.
 - `ProjectRepository`: `project.json` metadata.
 - `VariantRepository`: `variants.json` branch heads and branch list.
+- `HistoryTombstoneRepository`: `history-tombstones.json` soft-delete visibility metadata.
 - `VersionRepository`: `versions/*.json` manifests.
 - `WorldOriginRepository`: shared `world-origin.json` manifest and corruption quarantine behavior.
 - `PatchRepository`: patch metadata/data facade.
@@ -140,6 +143,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `WorldMutationCaptureGuard`: duplicate hook protection.
 - `WorldMutationCapturePolicy`: block mutation filtering and runtime-only state rejection.
 - `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling.
+- `AutoCheckpointService`, `AutoCheckpointCommandClassifier`: pending-draft auto checkpoints before large vanilla commands and external WorldEdit/Axiom edits.
 - `MutationSourcePolicy`: mutation source classification.
 - `ExplosiveEntityContextRegistry`: TNT/explosion causal context.
 - `SessionStabilizationService`: dirty chunk reconciliation before save/freeze/undo/redo.
@@ -210,7 +214,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 - Dashboard/projects: `DashboardScreen`, `DashboardScreenController`, `DashboardViewState`, `DashboardProjectItem`.
 - Create/open workspace: `CreateProjectScreen`, `CreateProjectScreenController`, `ProjectOpeningScreen`, `ClientWorkspaceOpenService`, `ClientProjectAccess`.
 - Project home/history: `ProjectScreen`, `ProjectScreenController`, `ProjectHomeScreenController`, `ProjectHomeViewState`, `ProjectScreenSections`.
-- Save and quick save: `SaveScreen`, `SaveDetailsScreen`, `QuickSaveScreen`, `QuickSaveScreenController`, `SaveViewState`, `SaveDetailsViewState`, `SaveDetailsPartialRestoreSection`.
+- Save and quick save: `SaveScreen`, `SaveDetailsScreen`, `QuickSaveScreen`, `QuickSaveScreenController`, `SaveViewState`, `SaveDetailsViewState`, `SaveDetailsPartialRestoreSection`, `PartialRestoreFormState`.
 - Compare: `CompareScreen`, `CompareScreenController`, `CompareViewState`, `CompareScreenSections`.
 - Branches: `VariantsScreen`, `VariantsScreenController`, `VariantsViewState`.
 - Import/export/share: `ShareScreen`, `ShareScreenController`, `ShareViewState`, `MergePreviewCache`, `MergePreviewKey`, `MergePreviewStatus`, `ShareMergeReviewSection`.
@@ -221,7 +225,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 ### Overlays, Input, Preview, Graphs
 
 - Input chords: `client/input/UndoRedoKeyController`, `UndoRedoKeyChordTracker`, `KeyBindingState`.
-- HUD and compare/recent overlays: `WorkspaceHudCoordinator`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySurfaceResolver`, `CompareOverlayRenderTypes`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `OverlayImmediateRenderer`, `OverlayFaceRenderer`, `OverlayDiagnostics`.
+- HUD, selection, and compare/recent overlays: `WorkspaceHudCoordinator`, `LumiRegionSelectionController`, `LumiRegionSelectionRenderer`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySurfaceResolver`, `CompareOverlayRenderTypes`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `OverlayImmediateRenderer`, `OverlayFaceRenderer`, `OverlayDiagnostics`.
 - Client preview renderer: `client/preview/TexturedPreviewCaptureService`, `PreviewCaptureCoordinator`, `PreviewRenderMeshBuilder`, `PreviewRenderMesh`, `PreviewImageCropper`, `PreviewFramingCalculator`, plus `ui/preview/ProjectPreviewTextureCache`.
 - Commit graph: `ui/graph/CommitGraphLayout`, `CommitGraphNode`, `CommitGraphComponent`.
 

@@ -42,6 +42,7 @@ Current project layout:
 <project>.mbp/
   project.json
   variants.json
+  history-tombstones.json
   versions/
   patches/
   snapshots/
@@ -121,6 +122,19 @@ Variant ids are generated from the branch name and receive numeric suffixes when
 Restore and amend workflows move variant heads by rewriting this file. Older detached version files are left on disk for safety even when they are no longer reachable from a live variant head.
 The client history view still lists those detached versions after a restore-style reset.
 
+### `history-tombstones.json`
+
+Stores soft-deleted history ids for normal UI and lineage filtering.
+
+Important fields:
+
+- schema version
+- tombstoned version ids
+- tombstoned variant ids
+- updated timestamp
+
+Soft delete never removes version manifests, patch payloads, snapshots, previews, baseline chunks, or archive files. `ProjectService` and history screens filter tombstoned versions and branches from normal workflows while leaving the underlying files available for diagnostics or future cleanup tooling.
+
 ### `versions/*.json`
 
 Stores one `ProjectVersion` record per saved version.
@@ -143,6 +157,12 @@ Whole-dimension workspaces now start with a metadata-backed `WORLD_ROOT` version
 - empty `snapshotId`
 - `versionKind = WORLD_ROOT`
 - a user-facing message of `Initial`
+
+Additional semantic version kinds:
+
+- `MERGE`: a local or imported branch merge written as a normal patch-first save on the active branch
+- `AUTO_CHECKPOINT`: a pending draft saved automatically before a large external edit
+- `PARTIAL_RESTORE`: a selected-region restore written as a new save instead of moving the active branch head
 
 ### `patches/<patchId>.meta.json`
 
@@ -272,13 +292,14 @@ Current behavior:
 
 ## Archive format
 
-Version manifests may use `versionKind = PARTIAL_RESTORE` for region-scoped restores. The patch payload uses the normal block/entity-change format; the semantic difference is that the active variant advances to this new version instead of moving its head back to the historical target version.
+Version manifests may use `versionKind = PARTIAL_RESTORE` for region-scoped restores, `MERGE` for branch merges, and `AUTO_CHECKPOINT` for pending drafts saved before large external edits. The patch payload uses the normal block/entity-change format; the semantic difference is how the version was produced and how the UI labels it.
 
 Project import/export uses zip archives stored by default in the game-root `lumi-projects` folder. Each archive contains:
 
 - `manifest.json`
 - `project/project.json`
 - `project/variants.json`
+- `project/history-tombstones.json`
 - `project/versions/*`
 - `project/patches/*`
 - `project/snapshots/*`
@@ -294,6 +315,8 @@ Deleting an imported review package from Import / Export removes that review pro
 
 Recovery draft payloads are intentionally excluded from archives, so export/import remains focused on stable project history rather than live unsaved state.
 
+Runtime Lumi region selections are intentionally excluded from storage. They are client memory only and must be recreated after the client or world closes.
+
 ## Cleanup policy
 
 Current cleanup is conservative and UI-driven:
@@ -301,3 +324,4 @@ Current cleanup is conservative and UI-driven:
 - dry-run first
 - delete only unreferenced snapshot payloads, orphaned preview PNGs, disposable cache files outside `baseline-chunks`, and stale `operation-draft`
 - never delete baseline chunks or files still referenced by version manifests
+- tombstoned history remains soft-deleted only; physical cleanup of tombstoned version, patch, snapshot, and preview files is not part of the current cleanup policy
