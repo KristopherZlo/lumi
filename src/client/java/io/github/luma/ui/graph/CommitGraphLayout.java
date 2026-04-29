@@ -116,9 +116,19 @@ public final class CommitGraphLayout {
                     activeLanes.add(entry.getKey());
                 }
             }
+            String parentVersionId = version.parentVersionId();
+            int parentLane = -1;
+            int parentRowIndex = -1;
+            if (parentVersionId != null && !parentVersionId.isBlank()) {
+                parentLane = versionLane.getOrDefault(parentVersionId, -1);
+                parentRowIndex = rowIndexByVersionId.getOrDefault(parentVersionId, -1);
+            }
             nodes.add(new CommitGraphNode(
                     version,
+                    rowIndex,
                     versionLane.getOrDefault(version.id(), 0),
+                    parentLane,
+                    parentRowIndex,
                     laneCount,
                     List.copyOf(activeLanes),
                     List.copyOf(headVariantsByVersion.getOrDefault(version.id(), List.of())),
