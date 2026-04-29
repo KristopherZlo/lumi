@@ -209,6 +209,32 @@ class VariantMergeServiceTest {
     }
 
     @Test
+    void planMergeSupportsLocalBranchesInOneProject() throws Exception {
+        UUID projectId = UUID.fromString("88888888-8888-8888-8888-888888888888");
+        ProjectLayout layout = this.seedProject(layout(this.tempDir.resolve("tower-local.mbp")), projectId, "Tower", List.of(
+                new ProjectVariant("main", "main", "v0001", "v0002", true, instant(0)),
+                new ProjectVariant("roof-pass", "Roof pass", "v0001", "v0003", false, instant(60))
+        ));
+        this.writeVersion(layout, projectId, "v0001", "main", "", List.of());
+        this.writeVersion(layout, projectId, "v0002", "main", "v0001", List.of(
+                new StoredBlockChange(new BlockPoint(2, 65, 2), state("minecraft:air"), state("minecraft:stone"))
+        ));
+        this.writeVersion(layout, projectId, "v0003", "roof-pass", "v0001", List.of(
+                new StoredBlockChange(new BlockPoint(8, 65, 8), state("minecraft:air"), state("minecraft:oak_planks"))
+        ));
+
+        BuildProject project = this.projectRepository.load(layout).orElseThrow();
+        VariantMergePlan plan = this.variantMergeService.planMerge(layout, project, "main", layout, project, "roof-pass");
+
+        assertFalse(plan.hasConflicts());
+        assertEquals("v0001", plan.commonAncestorVersionId());
+        assertEquals("main", plan.targetVariantId());
+        assertEquals("roof-pass", plan.sourceVariantId());
+        assertEquals(1, plan.mergeBlockCount());
+        assertEquals(new BlockPoint(8, 65, 8), plan.mergeChanges().getFirst().pos());
+    }
+
+    @Test
     void planMergeRejectsUnresolvableEntityConflicts() throws Exception {
         UUID projectId = UUID.fromString("77777777-7777-7777-7777-777777777777");
         ProjectLayout targetLayout = this.seedProject(layout(this.tempDir.resolve("tower-entity-conflict.mbp")), projectId, "Tower", List.of(

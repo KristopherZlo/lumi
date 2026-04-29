@@ -248,6 +248,20 @@ public final class VariantsScreen extends LumaScreen {
         ));
         compareButton.active(headVersion != null);
         actions.child(compareButton);
+
+        ButtonComponent mergeButton = LumaUi.button(Component.translatable("luma.action.merge_into_current"), button -> {
+            String result = this.actionController.mergeVariantIntoCurrent(this.projectName, variant.id());
+            this.refresh(result);
+        });
+        mergeButton.active(!active && headVersion != null && !this.operationActive());
+        actions.child(mergeButton);
+
+        ButtonComponent deleteButton = LumaUi.button(Component.translatable("luma.action.delete_branch"), button -> {
+            String result = this.actionController.deleteVariant(this.projectName, variant.id());
+            this.refresh(result);
+        });
+        deleteButton.active(!active && !variant.main() && !"main".equals(variant.id()) && !this.operationActive());
+        actions.child(deleteButton);
         card.child(actions);
         return card;
     }

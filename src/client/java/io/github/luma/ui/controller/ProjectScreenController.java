@@ -4,7 +4,9 @@ import io.github.luma.LumaMod;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
+import io.github.luma.domain.service.HistoryEditService;
 import io.github.luma.domain.service.VariantService;
+import io.github.luma.domain.service.VariantMergeService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.MaterialDeltaService;
@@ -26,7 +28,9 @@ public final class ProjectScreenController {
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
     private final RestoreService restoreService = new RestoreService();
+    private final HistoryEditService historyEditService = new HistoryEditService();
     private final VariantService variantService = new VariantService();
+    private final VariantMergeService variantMergeService = new VariantMergeService();
     private final RecoveryService recoveryService = new RecoveryService();
     private final DiffService diffService = new DiffService();
     private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
@@ -276,6 +280,42 @@ public final class ProjectScreenController {
         }
     }
 
+    public String deleteVariant(String projectName, String variantId) {
+        try {
+            this.historyEditService.deleteVariant(
+                    ClientProjectAccess.requireSingleplayerServer(this.client),
+                    projectName,
+                    variantId
+            );
+            return "luma.status.variant_deleted";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Delete variant request failed for project {}", projectName, exception);
+            return historyEditFailureStatus(exception);
+        }
+    }
+
+    public String mergeVariantIntoCurrent(String projectName, String sourceVariantId) {
+        try {
+            this.variantMergeService.startLocalMerge(
+                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
+                    projectName,
+                    sourceVariantId,
+                    List.of(),
+                    this.client.getUser().getName()
+            );
+            return "luma.status.merge_started";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Local merge rejected for project {}", projectName, exception);
+            return "luma.status.world_operation_busy";
+        } catch (IllegalArgumentException exception) {
+            LumaMod.LOGGER.warn("Local merge blocked for project {}", projectName, exception);
+            return mergeFailureStatus(exception);
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Local merge failed for project {}", projectName, exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
     static String variantFailureStatus(Exception exception) {
         String message = exception.getMessage();
         if (message == null) {
@@ -308,6 +348,37 @@ public final class ProjectScreenController {
         }
         if (message.startsWith("Discard or save the current recovery draft")) {
             return "luma.status.variant_switch_requires_saved_draft";
+        }
+        return "luma.status.operation_failed";
+    }
+
+    static String historyEditFailureStatus(Exception exception) {
+        String message = exception.getMessage();
+        if (message == null || !(exception instanceof IllegalArgumentException)) {
+            return "luma.status.operation_failed";
+        }
+        if (message.startsWith("Main branch cannot be deleted")
+                || message.startsWith("Active branch cannot be deleted")
+                || message.startsWith("Variant not found")) {
+            return "luma.status.variant_delete_blocked";
+        }
+        return "luma.status.operation_failed";
+    }
+
+    static String mergeFailureStatus(Exception exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            return "luma.status.operation_failed";
+        }
+        if (message.contains("does not add any new changes")
+                || message.contains("Source branch does not add")) {
+            return "luma.status.merge_no_changes";
+        }
+        if (message.contains("conflicts")) {
+            return "luma.status.merge_conflicts_found";
+        }
+        if (message.contains("current recovery draft")) {
+            return "luma.status.merge_requires_saved_draft";
         }
         return "luma.status.operation_failed";
     }

@@ -39,4 +39,36 @@ class ProjectScreenControllerTest {
                 ))
         );
     }
+
+    @Test
+    void historyEditFailuresExposeBranchDeleteStatuses() {
+        assertEquals(
+                "luma.status.variant_delete_blocked",
+                ProjectScreenController.historyEditFailureStatus(new IllegalArgumentException("Main branch cannot be deleted"))
+        );
+        assertEquals(
+                "luma.status.variant_delete_blocked",
+                ProjectScreenController.historyEditFailureStatus(new IllegalArgumentException("Active branch cannot be deleted"))
+        );
+    }
+
+    @Test
+    void mergeFailuresExposeSpecificStatuses() {
+        assertEquals(
+                "luma.status.merge_requires_saved_draft",
+                ProjectScreenController.mergeFailureStatus(new IllegalArgumentException(
+                        "Discard or save the current recovery draft before merging branches"
+                ))
+        );
+        assertEquals(
+                "luma.status.merge_no_changes",
+                ProjectScreenController.mergeFailureStatus(new IllegalArgumentException("Source branch does not add any new changes"))
+        );
+        assertEquals(
+                "luma.status.merge_conflicts_found",
+                ProjectScreenController.mergeFailureStatus(new IllegalArgumentException(
+                        "Merge conflicts must be resolved before applying the merge"
+                ))
+        );
+    }
 }
