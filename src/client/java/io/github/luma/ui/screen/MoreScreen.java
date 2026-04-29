@@ -1,8 +1,12 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
+import io.github.luma.ui.graph.CommitGraphComponent;
+import io.github.luma.ui.graph.CommitGraphLayout;
+import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
@@ -11,6 +15,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -72,12 +77,9 @@ public final class MoreScreen extends LumaScreen {
                 "luma.action.open_cleanup",
                 button -> this.router.openCleanup(this, this.projectName)
         ));
-        body.child(this.navigationCard(
-                "luma.more.advanced_title",
-                "luma.more.advanced_help",
-                "luma.action.open_advanced",
-                button -> this.router.openAdvanced(this, this.projectName)
-        ));
+        body.child(this.actionsSection());
+        body.child(this.graphSection());
+        body.child(this.rawReferencesSection());
         body.child(LumaUi.bottomSpacer());
     }
 
@@ -100,5 +102,52 @@ public final class MoreScreen extends LumaScreen {
         actions.child(LumaUi.button(Component.translatable(buttonKey), action));
         card.child(actions);
         return card;
+    }
+
+    private FlowLayout actionsSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.advanced.actions_title"),
+                Component.translatable("luma.advanced.actions_help")
+        );
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(LumaUi.button(Component.translatable("luma.action.manual_compare"), button -> this.router.openCompare(
+                this,
+                this.projectName,
+                "",
+                ""
+        )));
+        section.child(actions);
+        return section;
+    }
+
+    private FlowLayout graphSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.advanced.history_graph_title"),
+                Component.translatable("luma.advanced.history_graph_help")
+        );
+        List<CommitGraphNode> nodes = CommitGraphLayout.build(
+                this.state.versions(),
+                this.state.variants(),
+                this.state.project().activeVariantId()
+        );
+        if (nodes.isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.history.empty")));
+            return section;
+        }
+        section.child(new CommitGraphComponent(nodes, this.state.variants()));
+        return section;
+    }
+
+    private FlowLayout rawReferencesSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.advanced.raw_refs_title"),
+                Component.translatable("luma.advanced.raw_refs_help")
+        );
+        section.child(LumaUi.caption(Component.translatable("luma.advanced.raw_project_name", this.state.project().name())));
+        section.child(LumaUi.caption(Component.translatable("luma.advanced.raw_active_idea", this.state.project().activeVariantId())));
+        for (ProjectVersion version : this.state.versions().stream().limit(8).toList()) {
+            section.child(LumaUi.caption(Component.translatable("luma.advanced.raw_save_id", version.id())));
+        }
+        return section;
     }
 }

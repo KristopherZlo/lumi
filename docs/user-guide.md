@@ -65,7 +65,7 @@ Each card keeps only the essentials visible:
 - `Open`
 - `Restore this save`
 
-Import/export and settings stay in the workspace sidebar. `More` is limited to storage cleanup and advanced history tools such as manual compare, the colored graph, and raw references.
+Import/export and settings stay in the workspace sidebar. `More` contains storage cleanup, manual compare, the colored graph, and raw references directly.
 
 Lumi stores new versions as patches first.
 
@@ -235,7 +235,7 @@ Current See Changes output includes:
 - material delta
 - sample of changed positions
 
-Manual `From` and `To` references are hidden by default. Use `More details` -> `Advanced manual compare` when you need raw reference fields.
+Manual `From` and `To` references are hidden by default. Use `More details` in See Changes or `More` in the workspace when you need raw reference fields.
 
 Running See Changes turns on the client-side world highlight for the resolved diff immediately.
 Press `H` to hide or show the current overlay without rebuilding the comparison.
@@ -262,7 +262,7 @@ Primary actions stay focused:
 - `Restore this save`
 - `See changes`
 
-Advanced actions like refresh preview, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
+Extra actions like refresh preview, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
 
 `Restore selected area` is also under `More`. Use it when you want to restore only a bounded region from the selected save. Min/Max coordinate fields appear only after you choose that action. Preview the region first, then apply it. Lumi writes the result as a new save on the active branch instead of moving the branch head back to the older save.
 
@@ -280,7 +280,7 @@ The settings screen includes:
 
 Settings apply and persist immediately when a checkbox or valid numeric field changes. There is no separate save/apply block.
 
-Project archive controls are no longer part of normal Settings. Cleanup, diagnostics, import/export, and advanced tools live under `More`. Auto-version and favorite controls are no longer exposed because those workflows are not part of the supported UI surface.
+Project archive controls are no longer part of normal Settings. Import/export lives in the workspace sidebar, while cleanup and history tools live under `More`. Auto-version and favorite controls are no longer exposed because those workflows are not part of the supported UI surface.
 
 ## Cleanup
 
