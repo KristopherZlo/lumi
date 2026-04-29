@@ -112,7 +112,7 @@ If you need the advanced rewrite flow, open `More` on the save screen and use `R
 
 Restore rebuilds the selected state from history data.
 
-Lumi first tries direct replay or rollback on the active branch line.
+Lumi first tries direct patch replay. For another branch, it can roll the current branch back to the shared saved ancestor and then replay the target branch forward.
 
 If that is not valid, it falls back to checkpoint snapshot plus patch chain.
 
