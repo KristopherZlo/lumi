@@ -84,6 +84,9 @@ public final class AutoCheckpointService {
             if (project.isEmpty()) {
                 return;
             }
+            if (!project.get().settings().autoCheckpointEnabled()) {
+                return;
+            }
             Optional<RecoveryDraft> draft = this.recoveryService.loadDraft(level.getServer(), project.get().name());
             if (draft.isEmpty() || draft.get().isEmpty()) {
                 return;

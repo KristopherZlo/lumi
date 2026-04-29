@@ -20,6 +20,7 @@ class ProjectSettingsTest {
         assertTrue(settings.safetySnapshotBeforeRestore());
         assertTrue(settings.previewGenerationEnabled());
         assertFalse(settings.debugLoggingEnabled());
+        assertFalse(settings.autoCheckpointEnabled());
         assertTrue(settings.workspaceHudVisible());
     }
 
@@ -34,6 +35,7 @@ class ProjectSettingsTest {
                 false,
                 false,
                 true,
+                true,
                 null
         ));
 
@@ -45,6 +47,7 @@ class ProjectSettingsTest {
         assertFalse(settings.safetySnapshotBeforeRestore());
         assertFalse(settings.previewGenerationEnabled());
         assertTrue(settings.debugLoggingEnabled());
+        assertTrue(settings.autoCheckpointEnabled());
         assertTrue(settings.workspaceHudVisible());
     }
 
@@ -58,6 +61,7 @@ class ProjectSettingsTest {
                 0.20D,
                 true,
                 true,
+                false,
                 false,
                 false
         ));

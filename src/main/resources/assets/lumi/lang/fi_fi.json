@@ -331,6 +331,8 @@
   "luma.settings.safety_help": "Hallitse, kuinka Lumi suojaa rakennelmata ennen palautustoimenpiteitä.",
   "luma.settings.safety_snapshot": "Tallenna turvallisuus ennen palautusta",
   "luma.settings.safety_snapshot_help": "Tallenna nykyinen rakennelma ennen vanhan tallennuksen palauttamista.",
+  "luma.settings.auto_checkpoint": "Auto checkpoint before large edits",
+  "luma.settings.auto_checkpoint_help": "Save pending work before large fill, clone, WorldEdit, or Axiom edits. Off by default.",
   "luma.settings.preview_generation": "Esikatselu sukupolvi",
   "luma.settings.preview_generation_help": "Luo isometrisiä esikatselukuvia, kun tallennat.",
   "luma.settings.performance_title": "Suorituskyky",

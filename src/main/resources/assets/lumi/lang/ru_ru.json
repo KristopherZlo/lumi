@@ -371,6 +371,8 @@
   "luma.settings.autoversions_help": "Подсказывать, что пора сохранить постройку после тихого периода.",
   "luma.settings.safety_snapshot": "Сохранение безопасности перед восстановлением",
   "luma.settings.safety_snapshot_help": "Сохранить текущую постройку перед восстановлением старого сохранения.",
+  "luma.settings.auto_checkpoint": "Авточекпоинт перед крупными правками",
+  "luma.settings.auto_checkpoint_help": "Сохранять pending work перед крупными fill, clone, WorldEdit или Axiom правками. По умолчанию выключено.",
   "luma.settings.preview_generation": "Генерация превью",
   "luma.settings.preview_generation_help": "Создавать изометрические превью при сохранении.",
   "luma.settings.performance_title": "Производительность",

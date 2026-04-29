@@ -331,6 +331,8 @@
   "luma.settings.safety_help": "Steuern Sie, wie Lumi Ihren Build vor Wiederherstellungsaktionen schützt.",
   "luma.settings.safety_snapshot": "Sicherheitsspeicherung vor der Wiederherstellung",
   "luma.settings.safety_snapshot_help": "Speichern Sie den aktuellen Build, bevor Sie einen älteren Speicher wiederherstellen.",
+  "luma.settings.auto_checkpoint": "Auto checkpoint before large edits",
+  "luma.settings.auto_checkpoint_help": "Save pending work before large fill, clone, WorldEdit, or Axiom edits. Off by default.",
   "luma.settings.preview_generation": "Vorschaugenerierung",
   "luma.settings.preview_generation_help": "Erstellen Sie beim Speichern isometrische Vorschaubilder.",
   "luma.settings.performance_title": "Leistung",

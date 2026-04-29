@@ -241,7 +241,7 @@ Local branch merge reuses `VariantMergeService` conflict planning but targets on
 
 ## Auto checkpoint flow
 
-`AutoCheckpointService` protects pending work before large external edits. It runs before vanilla `/fill` and `/clone` commands when `AutoCheckpointCommandClassifier` estimates at least 512 affected blocks, and before WorldEdit/Axiom actions when those integrations surface an external action id.
+`AutoCheckpointService` protects pending work before large external edits when `ProjectSettings.autoCheckpointEnabled` is enabled. The setting is off by default. When enabled, it runs before vanilla `/fill` and `/clone` commands when `AutoCheckpointCommandClassifier` estimates at least 512 affected blocks, and before WorldEdit/Axiom actions when those integrations surface an external action id.
 
 The service saves an existing pending draft as `VersionKind.AUTO_CHECKPOINT`. If no draft exists, the current branch head already represents the checkpoint and no version is written. Checkpoints are deduplicated per external action id, and skipped attempts are logged when another Lumi world operation is already active.
 

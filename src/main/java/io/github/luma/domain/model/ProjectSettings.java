@@ -9,11 +9,12 @@ public record ProjectSettings(
         boolean safetySnapshotBeforeRestore,
         boolean previewGenerationEnabled,
         boolean debugLoggingEnabled,
+        boolean autoCheckpointEnabled,
         Boolean workspaceHudEnabled
 ) {
 
     public static ProjectSettings defaults() {
-        return new ProjectSettings(false, 10, 5, 10, 0.20D, true, true, false, true);
+        return new ProjectSettings(false, 10, 5, 10, 0.20D, true, true, false, false, true);
     }
 
     public static ProjectSettings sanitize(ProjectSettings settings) {
@@ -30,6 +31,7 @@ public record ProjectSettings(
                 settings.safetySnapshotBeforeRestore(),
                 settings.previewGenerationEnabled(),
                 settings.debugLoggingEnabled(),
+                settings.autoCheckpointEnabled(),
                 settings.workspaceHudEnabled() == null ? true : settings.workspaceHudEnabled()
         );
     }

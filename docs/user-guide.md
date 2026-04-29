@@ -159,7 +159,7 @@ It does not create a hidden branch.
 
 Restore and delete actions require confirmation. More technical recovery details are still available, but they are hidden behind `More`.
 
-Before a large external edit, Lumi also protects pending work automatically. If a draft exists, Lumi saves it as an auto checkpoint before large vanilla `/fill` or `/clone` commands, before WorldEdit edit sessions, and before Axiom block-buffer edits. If there is no draft, the current branch head is already the checkpoint.
+Auto checkpoints before large external edits are available but off by default. Enable `Auto checkpoint before large edits` in Settings if you want Lumi to save pending work before large vanilla `/fill` or `/clone` commands, before WorldEdit edit sessions, and before Axiom block-buffer edits. If there is no draft, the current branch head is already the checkpoint.
 
 ## Branches
 
@@ -291,6 +291,7 @@ Renaming a save changes only the saved message. Deleting a save is a soft delete
 The settings screen includes:
 
 - safety snapshot before restore
+- auto checkpoint before large edits
 - preview generation
 - top-right HUD panel visibility
 - checkpoint frequency

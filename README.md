@@ -79,7 +79,7 @@ Use Lumi if you want to:
 - runtime-only wooden-sword region selection with `corners` and `extend` modes plus an in-world highlighted cuboid overlay
 - history editing: rename saves, soft-delete safe saves, soft-delete inactive branches, and merge another local branch into the current branch as a new `MERGE` save
 - recovery drafts with WAL compaction and a direct recovery screen prompt when a project opens with unsaved draft work
-- automatic `AUTO_CHECKPOINT` saves before large vanilla `/fill` or `/clone` commands, WorldEdit sessions, and Axiom block-buffer edits when a pending draft exists
+- optional `AUTO_CHECKPOINT` saves before large vanilla `/fill` or `/clone` commands, WorldEdit sessions, and Axiom block-buffer edits when a pending draft exists; the setting is off by default
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
 - material delta summaries and integrity checks under focused details and support screens
 - zip import/export from the workspace sidebar, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews

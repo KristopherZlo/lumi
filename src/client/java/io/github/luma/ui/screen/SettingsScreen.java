@@ -32,6 +32,7 @@ public final class SettingsScreen extends LumaScreen {
     private boolean safetySnapshotBeforeRestore;
     private boolean previewGenerationEnabled;
     private boolean debugLoggingEnabled;
+    private boolean autoCheckpointEnabled;
     private boolean workspaceHudEnabled = true;
     private boolean archived;
     private String autoVersionMinutes = "10";
@@ -61,6 +62,7 @@ public final class SettingsScreen extends LumaScreen {
             this.safetySnapshotBeforeRestore = project.settings().safetySnapshotBeforeRestore();
             this.previewGenerationEnabled = project.settings().previewGenerationEnabled();
             this.debugLoggingEnabled = project.settings().debugLoggingEnabled();
+            this.autoCheckpointEnabled = project.settings().autoCheckpointEnabled();
             this.workspaceHudEnabled = project.settings().workspaceHudVisible();
             this.archived = project.archived();
             this.autoVersionMinutes = Integer.toString(project.settings().autoVersionMinutes());
@@ -135,6 +137,12 @@ public final class SettingsScreen extends LumaScreen {
                 Component.translatable("luma.settings.safety_snapshot"),
                 Component.translatable("luma.settings.safety_snapshot_help"),
                 this.toggleControl(this.safetySnapshotBeforeRestore, value -> this.safetySnapshotBeforeRestore = value),
+                ""
+        ));
+        section.child(this.fieldWithError(
+                Component.translatable("luma.settings.auto_checkpoint"),
+                Component.translatable("luma.settings.auto_checkpoint_help"),
+                this.toggleControl(this.autoCheckpointEnabled, value -> this.autoCheckpointEnabled = value),
                 ""
         ));
         return section;
@@ -265,6 +273,7 @@ public final class SettingsScreen extends LumaScreen {
                         this.safetySnapshotBeforeRestore,
                         this.previewGenerationEnabled,
                         this.debugLoggingEnabled,
+                        this.autoCheckpointEnabled,
                         this.workspaceHudEnabled
                 ),
                 this.archived
