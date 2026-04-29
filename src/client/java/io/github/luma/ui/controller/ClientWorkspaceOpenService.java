@@ -1,8 +1,11 @@
 package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
+import io.github.luma.client.onboarding.ClientOnboardingService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
+import io.github.luma.ui.ActionBarMessagePresenter;
+import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.screen.ProjectOpeningScreen;
 import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.RecoveryScreen;
@@ -11,7 +14,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -24,15 +26,21 @@ public final class ClientWorkspaceOpenService {
 
     private final ProjectService projectService;
     private final RecoveryService recoveryService;
+    private final ClientOnboardingService onboardingService;
     private final AtomicReference<CompletableFuture<WorkspaceOpenResult>> pendingOpen = new AtomicReference<>();
 
     public ClientWorkspaceOpenService() {
-        this(new ProjectService(), new RecoveryService());
+        this(new ProjectService(), new RecoveryService(), new ClientOnboardingService());
     }
 
-    ClientWorkspaceOpenService(ProjectService projectService, RecoveryService recoveryService) {
+    ClientWorkspaceOpenService(
+            ProjectService projectService,
+            RecoveryService recoveryService,
+            ClientOnboardingService onboardingService
+    ) {
         this.projectService = Objects.requireNonNull(projectService, "projectService");
         this.recoveryService = Objects.requireNonNull(recoveryService, "recoveryService");
+        this.onboardingService = Objects.requireNonNull(onboardingService, "onboardingService");
     }
 
     public void openCurrentWorkspace(Minecraft client, Screen parent) {
@@ -44,7 +52,7 @@ public final class ClientWorkspaceOpenService {
         try {
             server = ClientProjectAccess.requireSingleplayerServer(client);
         } catch (IllegalStateException exception) {
-            client.gui.setOverlayMessage(Component.translatable("luma.status.admin_required"), false);
+            client.gui.setOverlayMessage(ActionBarMessagePresenter.error("luma.status.admin_required"), false);
             return;
         }
 
@@ -100,13 +108,17 @@ public final class ClientWorkspaceOpenService {
 
         if (throwable != null) {
             LumaMod.LOGGER.warn("Failed to open current Lumi workspace", throwable);
-            client.gui.setOverlayMessage(Component.translatable("luma.status.project_open_failed"), false);
+            client.gui.setOverlayMessage(ActionBarMessagePresenter.error("luma.status.project_open_failed"), false);
             client.setScreen(parent);
             return;
         }
 
         if (result.hasRecoveryDraft()) {
             client.setScreen(new RecoveryScreen(parent, result.projectName()));
+            return;
+        }
+        if (this.onboardingService.shouldShowOnboarding()) {
+            client.setScreen(new OnboardingScreen(parent, result.projectName(), this.onboardingService));
             return;
         }
         client.setScreen(new ProjectScreen(parent, result.projectName()));

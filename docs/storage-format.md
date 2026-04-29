@@ -28,6 +28,12 @@ Project history archives and share packages exported from the UI are stored at:
 <game>/lumi-projects/
 ```
 
+Client-only onboarding state is stored at:
+
+```text
+<game>/config/lumi-client.json
+```
+
 Example:
 
 ```text
@@ -89,6 +95,15 @@ Each log includes:
 - stack traces for unexpected phase or operation errors
 
 These logs are diagnostic artifacts only. They are not referenced by project history, cleanup policies, import/export packages, or restore workflows.
+
+### `config/lumi-client.json`
+
+Stores installation-level client UI state that is not part of any project and is not exported with history packages.
+
+- `schemaVersion`
+- `completedOnboardingVersion`
+
+Missing or malformed files are treated as incomplete onboarding and do not block project loading.
 
 ### `project.json`
 

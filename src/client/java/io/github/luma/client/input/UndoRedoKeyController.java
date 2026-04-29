@@ -10,6 +10,7 @@ import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import java.time.Instant;
 import java.util.List;
@@ -49,7 +50,7 @@ public final class UndoRedoKeyController {
             var project = this.projectService.findWorldProject(level)
                     .orElseThrow(() -> new IllegalArgumentException("No active Lumi workspace in this dimension"));
             if (this.tryNativeExternalUndoRedo(client, level, project, undo)) {
-                client.gui.setOverlayMessage(Component.translatable(
+                client.gui.setOverlayMessage(ActionBarMessagePresenter.info(
                         undo ? "luma.status.native_undo_started" : "luma.status.native_redo_started"
                 ), false);
                 return;
@@ -59,11 +60,11 @@ public final class UndoRedoKeyController {
             } else {
                 this.undoRedoService.redo(level, project.name());
             }
-            client.gui.setOverlayMessage(Component.translatable(
+            client.gui.setOverlayMessage(ActionBarMessagePresenter.info(
                     undo ? "luma.status.undo_started" : "luma.status.redo_started"
             ), false);
         } catch (Exception exception) {
-            client.gui.setOverlayMessage(Component.translatable(this.statusKey(exception, undo)), false);
+            client.gui.setOverlayMessage(this.statusMessage(this.statusKey(exception, undo)), false);
         }
     }
 
@@ -164,5 +165,14 @@ public final class UndoRedoKeyController {
             return undo ? "luma.status.undo_unavailable" : "luma.status.redo_unavailable";
         }
         return "luma.status.operation_failed";
+    }
+
+    private Component statusMessage(String key) {
+        if ("luma.status.operation_failed".equals(key)
+                || "luma.status.world_operation_busy".equals(key)
+                || "luma.status.admin_required".equals(key)) {
+            return ActionBarMessagePresenter.error(key);
+        }
+        return ActionBarMessagePresenter.warning(key);
     }
 }
