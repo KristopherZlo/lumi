@@ -547,7 +547,7 @@
   "luma.advanced.actions_help": "Manual and legacy workflows are intentionally separate from normal building.",
   "luma.advanced.legacy_project_help": "Track only a selected area instead of the whole dimension. Use this only if you know why you need it.",
   "luma.advanced.history_graph_title": "History graph",
-  "luma.advanced.history_graph_help": "Technical graph of saved history.",
+  "luma.advanced.history_graph_help": "Colored graph of saved history and branch heads.",
   "luma.advanced.raw_refs_title": "Raw references",
   "luma.advanced.raw_refs_help": "Internal names and ids for support/debug.",
   "luma.advanced.raw_project_name": "Project: %s",
