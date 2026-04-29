@@ -4,13 +4,10 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
-import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
-import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
 import io.github.luma.debug.StartupProfiler;
 import io.github.luma.ui.controller.ClientWorkspaceOpenService;
@@ -25,7 +22,6 @@ import io.github.luma.ui.overlay.LumiRegionSelectionRenderer;
 import io.github.luma.ui.overlay.OverlayDiagnostics;
 import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
 import io.github.luma.ui.screen.QuickSaveScreen;
-import net.minecraft.world.InteractionResult;
 import org.lwjgl.glfw.GLFW;
 
 public final class LumaClient implements ClientModInitializer {
@@ -100,24 +96,6 @@ public final class LumaClient implements ClientModInitializer {
 
         long eventRegistrationStartedAt = StartupProfiler.start();
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
-        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> {
-            if (world == null || !world.isClientSide()) {
-                return InteractionResult.PASS;
-            }
-            return LumiRegionSelectionController.getInstance().selectPrimary(Minecraft.getInstance(), hand, pos)
-                    ? InteractionResult.SUCCESS
-                    : InteractionResult.PASS;
-        });
-        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
-            if (world == null || !world.isClientSide()) {
-                return InteractionResult.PASS;
-            }
-            return LumiRegionSelectionController.getInstance().selectSecondaryOrToggle(
-                    Minecraft.getInstance(),
-                    hand,
-                    hitResult == null ? null : hitResult.getBlockPos()
-            ) ? InteractionResult.SUCCESS : InteractionResult.PASS;
-        });
         WorldRenderEvents.END_MAIN.register(CompareOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(LumiRegionSelectionRenderer::render);
         WorldRenderEvents.END_MAIN.register(RecentChangesOverlayRenderer::render);

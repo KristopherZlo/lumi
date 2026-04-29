@@ -21,17 +21,41 @@ class LumiRegionSelectionStateTest {
     }
 
     @Test
-    void extendModeExpandsExistingBounds() {
+    void extendPrimaryExpandsExistingBounds() {
         LumiRegionSelectionState state = new LumiRegionSelectionState();
         state.toggleMode();
 
         state.selectPrimary(new BlockPoint(8, 70, 8));
-        state.selectSecondary(new BlockPoint(2, 64, 4));
+        state.selectPrimary(new BlockPoint(2, 64, 4));
 
         assertEquals(LumiRegionSelectionMode.EXTEND, state.mode());
         var bounds = state.bounds().orElseThrow();
         assertEquals(new BlockPoint(2, 64, 4), bounds.min());
         assertEquals(new BlockPoint(8, 70, 8), bounds.max());
+    }
+
+    @Test
+    void extendSecondaryResetsSelectionToOneBlock() {
+        LumiRegionSelectionState state = new LumiRegionSelectionState();
+        state.toggleMode();
+        state.selectPrimary(new BlockPoint(8, 70, 8));
+        state.selectPrimary(new BlockPoint(2, 64, 4));
+
+        state.selectSecondary(new BlockPoint(12, 72, 12));
+
+        var bounds = state.bounds().orElseThrow();
+        assertEquals(new BlockPoint(12, 72, 12), bounds.min());
+        assertEquals(new BlockPoint(12, 72, 12), bounds.max());
+    }
+
+    @Test
+    void clearRemovesSelectionBounds() {
+        LumiRegionSelectionState state = new LumiRegionSelectionState();
+        state.selectPrimary(new BlockPoint(8, 70, 8));
+
+        state.clear();
+
+        assertTrue(state.bounds().isEmpty());
     }
 
     @Test

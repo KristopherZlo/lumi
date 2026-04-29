@@ -692,5 +692,8 @@
   "luma.selection.mode_corners": "Lumi selection mode: corners.",
   "luma.selection.mode_extend": "Lumi selection mode: extend.",
   "luma.selection.corner_a": "Lumi selection corner A set.",
-  "luma.selection.corner_b": "Lumi selection corner B set."
+  "luma.selection.corner_b": "Lumi selection corner B set.",
+  "luma.selection.reset": "Lumi selection reset to the selected block.",
+  "luma.selection.cleared": "Lumi selection cleared.",
+  "luma.selection.no_target": "No loaded block under the crosshair."
 }

@@ -277,10 +277,12 @@ Extra actions like refresh preview, rename save, delete save, replace latest sav
 You can fill those bounds from Lumi's wooden-sword selection:
 
 - Hold `minecraft:wooden_sword`.
-- Left click a block to set corner A.
-- Right click a block to set corner B.
-- Shift+right click toggles `corners` and `extend`.
-- In `extend` mode, either click expands the current cuboid; with no selection, the click starts a one-block selection.
+- Look at a block in loaded chunks; it can be beyond normal interaction reach.
+- Left click sets corner A in `corners` mode.
+- Right click sets corner B in `corners` mode.
+- `Alt+scroll` toggles `corners` and `extend`.
+- In `extend` mode, left click expands the current cuboid and right click resets the selection to the clicked block.
+- `Alt+right click` clears the selection.
 - The selected cuboid is highlighted in-world.
 - Use `Use selected area` in the partial-restore form to copy the selection into the restore bounds.
 

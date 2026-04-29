@@ -26,6 +26,9 @@
     "StemBlockMixin",
     "TntBlockMixin"
   ],
+  "client": [
+    "client.MouseHandlerMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

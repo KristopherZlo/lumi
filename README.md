@@ -76,7 +76,7 @@ Use Lumi if you want to:
 - runtime-only redstone state flips and piston animation blocks are ignored so active mechanisms do not pollute pending history or the recent action overlay
 - hard restore that moves the active branch head
 - region-scoped partial restore from save details, written back as a new `PARTIAL_RESTORE` save, with optional wooden-sword selected bounds
-- runtime-only wooden-sword region selection with `corners` and `extend` modes plus an in-world highlighted cuboid overlay
+- runtime-only wooden-sword region selection with `corners` and `extend` modes, long loaded-chunk targeting, `Alt+scroll` mode switching, `Alt+right click` deselect, and an in-world highlighted cuboid overlay
 - history editing: rename saves, soft-delete safe saves, soft-delete inactive branches, and merge another local branch into the current branch as a new `MERGE` save
 - recovery drafts with WAL compaction and a direct recovery screen prompt when a project opens with unsaved draft work
 - optional `AUTO_CHECKPOINT` saves before large vanilla `/fill` or `/clone` commands, WorldEdit sessions, and Axiom block-buffer edits when a pending draft exists; the setting is off by default
