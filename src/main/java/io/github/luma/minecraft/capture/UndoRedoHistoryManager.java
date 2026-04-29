@@ -54,6 +54,20 @@ public final class UndoRedoHistoryManager {
         this.stack(projectId).recordRelatedChange(dimensionId, change, now, maxIdle, chunkRadius);
     }
 
+    public synchronized void recordRelatedEntityChange(
+            String projectId,
+            String dimensionId,
+            StoredEntityChange change,
+            Instant now,
+            Duration maxIdle,
+            int chunkRadius
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        this.stack(projectId).recordRelatedEntityChange(dimensionId, change, now, maxIdle, chunkRadius);
+    }
+
     public synchronized void recordEntityChange(
             String projectId,
             String dimensionId,

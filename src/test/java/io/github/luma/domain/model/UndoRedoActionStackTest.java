@@ -124,6 +124,26 @@ class UndoRedoActionStackTest {
                 .entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
     }
 
+    @Test
+    void relatedEntityDropsJoinLatestNearbyAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String entityId = "00000000-0000-0000-0000-000000000011";
+        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:air"), NOW);
+
+        stack.recordRelatedEntityChange(
+                "minecraft:overworld",
+                new StoredEntityChange(entityId, "minecraft:item", null, entity("minecraft:item", entityId, 2.0D)),
+                NOW.plusSeconds(2),
+                java.time.Duration.ofSeconds(10),
+                2
+        );
+
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
+        assertNotNull(selection);
+        assertEquals(2, selection.action().size());
+        assertEquals(entityId, selection.action().undoEntityChanges().getFirst().entityId());
+    }
+
     private static StoredBlockChange change(int x, String oldBlock, String newBlock) {
         return new StoredBlockChange(
                 new BlockPoint(x, 64, 1),

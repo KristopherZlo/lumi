@@ -27,6 +27,9 @@ public final class EntityMutationTracker {
         WorldMutationSource source = WorldMutationContext.currentSource();
         ObservedExternalToolOperation operation = null;
         if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
+            if (CAPTURE_POLICY.shouldInspectUndoOnlyMutation(source, entityType)) {
+                return new PendingEntityMutation(level, SNAPSHOT_SERVICE.capture(level, entity), null, true);
+            }
             if (!CAPTURE_POLICY.shouldInspectExternalToolFallback(entityType)) {
                 return PendingEntityMutation.empty();
             }
@@ -41,7 +44,7 @@ public final class EntityMutationTracker {
             return PendingEntityMutation.empty();
         }
 
-        return new PendingEntityMutation(level, SNAPSHOT_SERVICE.capture(level, entity), operation);
+        return new PendingEntityMutation(level, SNAPSHOT_SERVICE.capture(level, entity), operation, false);
     }
 
     public static void captureAfter(Entity entity, PendingEntityMutation pending) {
@@ -49,7 +52,7 @@ public final class EntityMutationTracker {
             return;
         }
         EntityPayload newPayload = entity.isRemoved() ? null : SNAPSHOT_SERVICE.capture(level, entity);
-        record(level, pending.oldPayload(), newPayload, pending.operation());
+        record(level, pending.oldPayload(), newPayload, pending.operation(), pending.undoOnly());
     }
 
     public static void captureSpawn(ServerLevel level, Entity entity) {
@@ -60,6 +63,11 @@ public final class EntityMutationTracker {
         WorldMutationSource source = WorldMutationContext.currentSource();
         ObservedExternalToolOperation operation = null;
         if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
+            if (CAPTURE_POLICY.shouldInspectUndoOnlyMutation(source, entityType)) {
+                EntityPayload newPayload = SNAPSHOT_SERVICE.capture(level, entity);
+                record(level, null, newPayload, null, true);
+                return;
+            }
             if (!CAPTURE_POLICY.shouldInspectExternalToolFallback(entityType)) {
                 return;
             }
@@ -71,7 +79,7 @@ public final class EntityMutationTracker {
             source = operation.source();
         }
         EntityPayload newPayload = SNAPSHOT_SERVICE.capture(level, entity);
-        record(level, null, newPayload, operation);
+        record(level, null, newPayload, operation, false);
     }
 
     public static PendingEntityMutation captureRemoval(Entity entity) {
@@ -89,19 +97,28 @@ public final class EntityMutationTracker {
             ServerLevel level,
             EntityPayload oldPayload,
             EntityPayload newPayload,
-            ObservedExternalToolOperation operation
+            ObservedExternalToolOperation operation,
+            boolean undoOnly
     ) {
         if (oldPayload == null && newPayload == null) {
             return;
         }
         if (operation == null) {
-            HistoryCaptureManager.getInstance().recordEntityChange(level, oldPayload, newPayload);
+            if (undoOnly) {
+                HistoryCaptureManager.getInstance().recordUndoOnlyEntityChange(level, oldPayload, newPayload);
+            } else {
+                HistoryCaptureManager.getInstance().recordEntityChange(level, oldPayload, newPayload);
+            }
             return;
         }
 
         WorldMutationContext.pushExternalSource(operation.source(), operation.actor(), operation.actionId());
         try {
-            HistoryCaptureManager.getInstance().recordEntityChange(level, oldPayload, newPayload);
+            if (undoOnly) {
+                HistoryCaptureManager.getInstance().recordUndoOnlyEntityChange(level, oldPayload, newPayload);
+            } else {
+                HistoryCaptureManager.getInstance().recordEntityChange(level, oldPayload, newPayload);
+            }
         } finally {
             WorldMutationContext.popSource();
         }
@@ -110,11 +127,12 @@ public final class EntityMutationTracker {
     public record PendingEntityMutation(
             ServerLevel level,
             EntityPayload oldPayload,
-            ObservedExternalToolOperation operation
+            ObservedExternalToolOperation operation,
+            boolean undoOnly
     ) {
 
         public static PendingEntityMutation empty() {
-            return new PendingEntityMutation(null, null, null);
+            return new PendingEntityMutation(null, null, null, false);
         }
 
         public boolean isEmpty() {
