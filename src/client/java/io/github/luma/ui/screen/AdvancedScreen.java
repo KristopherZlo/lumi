@@ -2,8 +2,8 @@ package io.github.luma.ui.screen;
 
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.LumaUi;
-import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
+import io.github.luma.ui.graph.CommitGraphComponent;
 import io.github.luma.ui.graph.CommitGraphLayout;
 import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.navigation.ScreenRouter;
@@ -109,19 +109,7 @@ public final class AdvancedScreen extends LumaScreen {
             section.child(LumaUi.caption(Component.translatable("luma.history.empty")));
             return section;
         }
-        for (CommitGraphNode node : nodes) {
-            ProjectVersion version = node.version();
-            FlowLayout row = LumaUi.insetSection(
-                    Component.literal(this.graphPrefix(node) + " " + ProjectUiSupport.displayMessage(version)),
-                    Component.translatable(
-                            "luma.history.version_meta",
-                            ProjectUiSupport.safeText(version.author()),
-                            ProjectUiSupport.formatTimestamp(version.createdAt())
-                    )
-            );
-            row.child(LumaUi.caption(Component.translatable("luma.advanced.raw_save_id", version.id())));
-            section.child(row);
-        }
+        section.child(new CommitGraphComponent(nodes, this.state.variants()));
         return section;
     }
 
@@ -138,20 +126,4 @@ public final class AdvancedScreen extends LumaScreen {
         return section;
     }
 
-    private String graphPrefix(CommitGraphNode node) {
-        StringBuilder builder = new StringBuilder(node.laneCount() * 2);
-        for (int lane = 0; lane < node.laneCount(); lane++) {
-            if (node.lane() == lane) {
-                builder.append(node.activeHead() ? '*' : 'o');
-            } else if (node.activeLanes().contains(lane)) {
-                builder.append('|');
-            } else {
-                builder.append(' ');
-            }
-            if (lane + 1 < node.laneCount()) {
-                builder.append(' ');
-            }
-        }
-        return builder.toString();
-    }
 }

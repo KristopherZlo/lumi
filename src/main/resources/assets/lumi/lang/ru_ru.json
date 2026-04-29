@@ -717,7 +717,7 @@
   "luma.advanced.actions_help": "Ручные и legacy workflow отделены от обычной стройки.",
   "luma.advanced.legacy_project_help": "Отслеживать только выбранную область вместо всего измерения. Используй только если понимаешь зачем.",
   "luma.advanced.history_graph_title": "Граф истории",
-  "luma.advanced.history_graph_help": "Технический граф сохранений.",
+  "luma.advanced.history_graph_help": "Цветной граф сохранений и голов веток.",
   "luma.advanced.raw_refs_title": "Raw references",
   "luma.advanced.raw_refs_help": "Внутренние имена и id для поддержки/debug.",
   "luma.advanced.raw_project_name": "Проект: %s",
