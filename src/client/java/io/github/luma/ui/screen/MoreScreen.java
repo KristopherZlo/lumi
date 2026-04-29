@@ -134,7 +134,11 @@ public final class MoreScreen extends LumaScreen {
             section.child(LumaUi.caption(Component.translatable("luma.history.empty")));
             return section;
         }
-        section.child(new CommitGraphComponent(nodes, this.state.variants()));
+        section.child(new CommitGraphComponent(
+                nodes,
+                this.state.variants(),
+                versionId -> this.router.openSaveDetails(this, this.projectName, versionId)
+        ));
         return section;
     }
 

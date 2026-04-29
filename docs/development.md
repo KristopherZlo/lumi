@@ -179,7 +179,7 @@ Current UX assumptions:
 - the dashboard is a project picker outside the focused workspace menu
 - the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Branches`, and `More`
 - settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress, and settings persist immediately on valid field changes
-- Import / Export and Settings are first-level workspace sidebar routes, while `More` keeps storage cleanup, manual compare, the history graph, and raw references in one place
+- Import / Export and Settings are first-level workspace sidebar routes, while `More` keeps storage cleanup, manual compare, the interactive history graph, and raw references in one place
 - save composition, save details, branch management, import/export combine review, cleanup, diagnostics, and More tools now have dedicated surfaces instead of sharing one overloaded project page
 
 ## History architecture
