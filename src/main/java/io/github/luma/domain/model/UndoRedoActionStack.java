@@ -65,6 +65,21 @@ public final class UndoRedoActionStack {
         return this.recordIntoAction(action, change, now);
     }
 
+    public long recordRelatedEntityChange(
+            String dimensionId,
+            StoredEntityChange change,
+            Instant now,
+            Duration maxIdle,
+            int chunkRadius
+    ) {
+        UndoRedoAction action = this.undoStack.peekFirst();
+        if (action == null || !action.canAbsorbRelatedEntityChange(dimensionId, change, now, maxIdle, chunkRadius)) {
+            return this.revision;
+        }
+
+        return this.recordEntityIntoAction(action, change, now);
+    }
+
     public long recordEntityChange(
             String actionId,
             String actor,

@@ -342,6 +342,41 @@ public final class HistoryCaptureManager {
         }
     }
 
+    public void recordUndoOnlyEntityChange(
+            ServerLevel level,
+            EntityPayload oldPayload,
+            EntityPayload newPayload
+    ) {
+        io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
+        if (!this.canUseMutationSource(level.getServer(), source)) {
+            return;
+        }
+
+        try {
+            Optional<StoredEntityChange> capturedMutation = ENTITY_CAPTURE_POLICY.captureUndoOnly(source, oldPayload, newPayload);
+            if (capturedMutation.isEmpty()) {
+                return;
+            }
+            StoredEntityChange capturedChange = capturedMutation.get();
+            BlockPos pos = this.entityMutationPos(oldPayload, newPayload);
+            Instant now = Instant.now();
+            for (TrackedProject trackedProject : this.matchingProjects(level, pos)) {
+                this.recordUndoRedoEntityAction(trackedProject, level, capturedChange, now);
+                LumaDebugLog.log(
+                        trackedProject.project(),
+                        "capture",
+                        "Tracked undo-only entity {} mutation {} for project {} at {}",
+                        source,
+                        capturedChange.entityId(),
+                        trackedProject.project().name(),
+                        pos
+                );
+            }
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to capture undo-only entity change in {}", level.dimension().identifier(), exception);
+        }
+    }
+
     /**
      * Reconciles the pending version draft after an internal undo/redo world
      * operation has already applied the same state transition to the world.
@@ -798,7 +833,21 @@ public final class HistoryCaptureManager {
                     change,
                     now
             );
+            return;
         }
+
+        if (this.isExplicitRootSource(WorldMutationContext.currentSource())) {
+            return;
+        }
+
+        UndoRedoHistoryManager.getInstance().recordRelatedEntityChange(
+                trackedProject.project().id().toString(),
+                level.dimension().identifier().toString(),
+                change,
+                now,
+                SECONDARY_ACTION_JOIN_WINDOW,
+                SECONDARY_SOURCE_JOIN_RADIUS
+        );
     }
 
     private BlockPos entityMutationPos(EntityPayload oldPayload, EntityPayload newPayload) {

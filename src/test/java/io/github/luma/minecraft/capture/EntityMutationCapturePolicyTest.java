@@ -67,6 +67,16 @@ class EntityMutationCapturePolicyTest {
         assertFalse(this.policy.shouldInspectExternalToolFallback("minecraft:item"));
     }
 
+    @Test
+    void itemDropsAreUndoOnlyForExplosionAndFluidSources() {
+        EntityPayload item = entity("minecraft:item", "00000000-0000-0000-0000-000000000044", 1.0D);
+
+        assertFalse(this.policy.capture(WorldMutationSource.EXPLOSION, null, item).isPresent());
+        assertTrue(this.policy.captureUndoOnly(WorldMutationSource.EXPLOSION, null, item).isPresent());
+        assertTrue(this.policy.captureUndoOnly(WorldMutationSource.FLUID, null, item).isPresent());
+        assertFalse(this.policy.captureUndoOnly(WorldMutationSource.PLAYER, null, item).isPresent());
+    }
+
     private static EntityPayload entity(String type, String uuid, double x) {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", type);
