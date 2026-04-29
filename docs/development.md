@@ -188,7 +188,7 @@ Current UX assumptions:
 - save composition, save details, branch management, import/export combine review, cleanup, diagnostics, and More tools now have dedicated surfaces instead of sharing one overloaded project page
 - save composition no longer renders quick name suggestion buttons; manual naming stays unchanged
 - the wooden-sword Lumi region selector is client runtime state scoped to project and dimension, with loaded-chunk raycast targeting, `corners` and `extend` modes, Lumi action button + scroll mode switching, Lumi action button + right click clear, and a world-render bounds overlay. Save details can copy that selection into partial restore bounds.
-- partial restore is exposed as a primary Save details action. The form accepts either the current Lumi selection or manually edited bounds, supports `Only selected area` and `Everything except selection`, then requires a preview before apply.
+- partial restore is exposed as a primary Save details action. The form accepts either the current Lumi selection or manually edited bounds, supports `Only selected area` and `Everything except selection`, then requires a preview before apply. Successful partial restores are recorded into the runtime undo/redo stack as one action after the `PARTIAL_RESTORE` version is written.
 
 ## History architecture
 

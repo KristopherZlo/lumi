@@ -102,6 +102,43 @@ public final class UndoRedoActionStack {
         return this.recordEntityIntoAction(action, change, now, true);
     }
 
+    public long recordAction(
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            Instant now
+    ) {
+        if (actionId == null || actionId.isBlank()) {
+            return this.revision;
+        }
+
+        UndoRedoAction action = this.undoStack.peekFirst();
+        if (action == null || !action.id().equals(actionId)) {
+            action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
+            this.undoStack.addFirst(action);
+            this.trimUndoStack();
+        }
+
+        int before = action.size();
+        for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
+            action.recordChange(change, now);
+        }
+        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
+            action.recordEntityChange(change, now);
+        }
+        if (action.isEmpty()) {
+            this.undoStack.remove(action);
+        }
+        if (before != action.size() || !action.isEmpty()) {
+            this.redoStack.clear();
+            this.revision += 1;
+        }
+        return this.revision;
+    }
+
     public Selection selectUndo() {
         UndoRedoAction action = this.undoStack.peekFirst();
         return action == null ? null : new Selection(action.copy(), this.revision);

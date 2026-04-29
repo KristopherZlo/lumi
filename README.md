@@ -75,7 +75,7 @@ Use Lumi if you want to:
 - undo/redo replays stored block states without immediate redstone neighbor updates or placement physics, so restored TNT beside powered redstone is visible but not auto-primed by the replay
 - runtime-only redstone state flips and piston animation blocks are ignored so active mechanisms do not pollute pending history or the recent action overlay
 - hard restore that moves the active branch head
-- region-scoped partial restore from save details as a primary save action, written back as a new `PARTIAL_RESTORE` save, with `Only selected area` and `Everything except selection` modes using optional wooden-sword selected bounds or manual XYZ bounds
+- region-scoped partial restore from save details as a primary save action, written back as a new `PARTIAL_RESTORE` save, with `Only selected area` and `Everything except selection` modes using optional wooden-sword selected bounds or manual XYZ bounds. The applied partial restore is also recorded as a live undo/redo action.
 - runtime-only wooden-sword region selection with `corners` and `extend` modes, long loaded-chunk targeting, Lumi action button + scroll mode switching, Lumi action button + right click deselect, and an in-world highlighted cuboid overlay
 - history editing: rename saves, soft-delete safe saves, soft-delete inactive branches, and merge another local branch into the current branch as a new `MERGE` save
 - soft-deleted save files remain accessible from the More screen's deleted saves section
@@ -134,7 +134,7 @@ Use Lumi if you want to:
 6. Tick-thread apply uses bounded chunk batches with pre-decoded block states, direct loaded-section commits when safe, and prepared entity batches.
 7. Restore replay completes paired block halves such as beds, doors, and tall plants before apply.
 8. A full restore moves the active branch head to the restored version after apply completes; when a Lumi selection exists, the confirmation also offers `Only selected area` and `Everything except selection`.
-9. Partial restore writes a new save on the active branch. The form can consume the current Lumi wooden-sword selection and marks that request as `LUMI_REGION`.
+9. Partial restore writes a new save on the active branch and records the applied change in the live undo/redo stack. The form can consume the current Lumi wooden-sword selection and marks that request as `LUMI_REGION`.
 
 ## Runtime Rules
 

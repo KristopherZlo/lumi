@@ -82,6 +82,21 @@ public final class UndoRedoHistoryManager {
         this.stack(projectId).recordEntityChange(actionId, actor, projectId, dimensionId, change, now);
     }
 
+    public synchronized void recordAction(
+            String projectId,
+            String dimensionId,
+            String actionId,
+            String actor,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            Instant now
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        this.stack(projectId).recordAction(actionId, actor, projectId, dimensionId, changes, entityChanges, now);
+    }
+
     public synchronized UndoRedoActionStack.Selection selectUndo(String projectId) {
         return this.stack(projectId).selectUndo();
     }

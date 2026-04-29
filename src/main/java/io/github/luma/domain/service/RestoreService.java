@@ -22,6 +22,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.world.ConnectedBlockPlacementExpander;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
@@ -48,6 +49,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -77,6 +79,7 @@ public final class RestoreService {
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final VersionService versionService = new VersionService();
     private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
+    private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
@@ -495,6 +498,7 @@ public final class RestoreService {
                 true,
                 progressSinkNoOp()
         );
+        this.recordPartialRestoreUndoAction(level, project, request, partialDraft);
         this.rewritePendingDraftAfterPartialRestore(layout, pendingDraft, request.bounds(), request.restoreMode());
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
@@ -510,6 +514,27 @@ public final class RestoreService {
                 request.targetVersionId(),
                 batchCount,
                 partialDraft.totalChangeCount()
+        );
+    }
+
+    private void recordPartialRestoreUndoAction(
+            ServerLevel level,
+            io.github.luma.domain.model.BuildProject project,
+            PartialRestoreRequest request,
+            RecoveryDraft partialDraft
+    ) {
+        if (partialDraft == null || partialDraft.isEmpty()) {
+            return;
+        }
+        Instant now = Instant.now();
+        this.undoRedoHistoryManager.recordAction(
+                project.id().toString(),
+                level.dimension().identifier().toString(),
+                "partial-restore-" + request.targetVersionId() + "-" + UUID.randomUUID(),
+                partialDraft.actor(),
+                partialDraft.changes(),
+                partialDraft.entityChanges(),
+                now
         );
     }
 

@@ -165,6 +165,43 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void batchActionsCanBeUndoneAndRedone() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String entityId = "00000000-0000-0000-0000-000000000012";
+
+        stack.recordAction(
+                "partial-restore-action",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                List.of(
+                        change(1, "minecraft:stone", "minecraft:glass"),
+                        change(2, "minecraft:dirt", "minecraft:gold_block")
+                ),
+                List.of(new StoredEntityChange(
+                        entityId,
+                        "minecraft:block_display",
+                        entity("minecraft:block_display", entityId, 1.0D),
+                        entity("minecraft:block_display", entityId, 2.0D)
+                )),
+                NOW
+        );
+
+        UndoRedoActionStack.Selection undo = stack.selectUndo();
+        assertNotNull(undo);
+        assertEquals(3, undo.action().size());
+        assertEquals("partial-restore-action", undo.action().id());
+
+        stack.completeUndo(undo);
+        assertFalse(stack.canUndo());
+        assertTrue(stack.canRedo());
+
+        stack.completeRedo(stack.selectRedo());
+        assertTrue(stack.canUndo());
+        assertFalse(stack.canRedo());
+    }
+
+    @Test
     void relatedEntityDropsJoinLatestNearbyAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String entityId = "00000000-0000-0000-0000-000000000011";
