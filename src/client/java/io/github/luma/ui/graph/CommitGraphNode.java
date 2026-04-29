@@ -8,7 +8,10 @@ import java.util.List;
  */
 public record CommitGraphNode(
         ProjectVersion version,
+        int rowIndex,
         int lane,
+        int parentLane,
+        int parentRowIndex,
         int laneCount,
         List<Integer> activeLanes,
         List<String> headVariants,

@@ -36,6 +36,29 @@ class CommitGraphLayoutPerformanceTest {
     }
 
     @Test
+    void commitGraphExposesParentLaneForBranchConnectors() {
+        Instant baseTime = Instant.parse("2026-04-21T00:00:00Z");
+        List<ProjectVersion> versions = List.of(
+                this.version("v0001", "main", "", baseTime),
+                this.version("v0002", "main", "v0001", baseTime.plusSeconds(1)),
+                this.version("v0003", "branch-a", "v0001", baseTime.plusSeconds(2))
+        );
+        List<ProjectVariant> variants = List.of(
+                new ProjectVariant("main", "main", "v0001", "v0002", true, baseTime),
+                new ProjectVariant("branch-a", "Branch A", "v0001", "v0003", false, baseTime.plusSeconds(1))
+        );
+
+        CommitGraphNode branchNode = CommitGraphLayout.build(versions, variants, "main").stream()
+                .filter(node -> node.version().id().equals("v0003"))
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(1, branchNode.lane());
+        assertEquals(0, branchNode.parentLane());
+        assertTrue(branchNode.parentRowIndex() > branchNode.rowIndex());
+    }
+
+    @Test
     void commitGraphBuildHandlesLargeBranchHistoryWithinBudget() {
         SyntheticHistory history = this.syntheticHistory();
 
