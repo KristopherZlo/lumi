@@ -114,6 +114,8 @@ public final class ProjectUiSupport {
             case RECOVERY -> "luma.version_kind.recovery";
             case RESTORE -> "luma.version_kind.restore";
             case PARTIAL_RESTORE -> "luma.version_kind.partial_restore";
+            case MERGE -> "luma.version_kind.merge";
+            case AUTO_CHECKPOINT -> "luma.version_kind.auto_checkpoint";
             case LEGACY -> "luma.version_kind.legacy";
             case WORLD_ROOT -> "luma.version_kind.world_root";
         };

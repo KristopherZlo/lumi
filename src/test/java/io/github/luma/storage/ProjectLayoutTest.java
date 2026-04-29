@@ -13,6 +13,7 @@ class ProjectLayoutTest {
 
         assertEquals(Path.of("projects", "My_Project.mbp", "previews", "v0002.png"), layout.previewFile("v0002"));
         assertEquals(Path.of("projects", "My_Project.mbp", "preview-requests", "v0002.json"), layout.previewRequestFile("v0002"));
+        assertEquals(Path.of("projects", "My_Project.mbp", "history-tombstones.json"), layout.historyTombstonesFile());
         assertEquals(Path.of("projects", "My_Project.mbp", "recovery", "draft.bin.lz4"), layout.recoveryDraftFile());
         assertEquals(Path.of("projects", "My_Project.mbp", "recovery", "operation-draft.bin.lz4"), layout.recoveryOperationDraftFile());
     }
