@@ -16,7 +16,6 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -111,7 +110,6 @@ public final class SaveScreen extends LumaScreen {
         body.child(this.summarySection(pending));
         body.child(this.messageSection());
         body.child(this.primaryActions(operationActive));
-        body.child(this.suggestionsSection());
         body.child(this.moreSection(activeHead, operationActive));
         body.child(LumaUi.bottomSpacer());
     }
@@ -177,26 +175,6 @@ public final class SaveScreen extends LumaScreen {
         actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.onClose()));
         section.child(actions);
         return section;
-    }
-
-    private FlowLayout suggestionsSection() {
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.save.suggestions_title"),
-                Component.translatable("luma.save.suggestions_help")
-        );
-        FlowLayout actions = LumaUi.actionRow();
-        actions.child(this.suggestionButton("luma.save.suggestion_roof"));
-        actions.child(this.suggestionButton("luma.save.suggestion_redstone"));
-        actions.child(this.suggestionButton("luma.save.suggestion_layout"));
-        section.child(actions);
-        return section;
-    }
-
-    private ButtonComponent suggestionButton(String translationKey) {
-        return LumaUi.button(Component.translatable(translationKey), button -> {
-            this.saveMessage = Component.translatable(translationKey).getString();
-            this.rebuild();
-        });
     }
 
     private FlowLayout moreSection(ProjectVersion activeHead, boolean operationActive) {

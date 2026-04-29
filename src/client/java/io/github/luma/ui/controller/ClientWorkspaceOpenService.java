@@ -2,8 +2,10 @@ package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.ui.screen.ProjectOpeningScreen;
 import io.github.luma.ui.screen.ProjectScreen;
+import io.github.luma.ui.screen.RecoveryScreen;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -21,14 +23,16 @@ import net.minecraft.world.level.Level;
 public final class ClientWorkspaceOpenService {
 
     private final ProjectService projectService;
-    private final AtomicReference<CompletableFuture<String>> pendingOpen = new AtomicReference<>();
+    private final RecoveryService recoveryService;
+    private final AtomicReference<CompletableFuture<WorkspaceOpenResult>> pendingOpen = new AtomicReference<>();
 
     public ClientWorkspaceOpenService() {
-        this(new ProjectService());
+        this(new ProjectService(), new RecoveryService());
     }
 
-    ClientWorkspaceOpenService(ProjectService projectService) {
+    ClientWorkspaceOpenService(ProjectService projectService, RecoveryService recoveryService) {
         this.projectService = Objects.requireNonNull(projectService, "projectService");
+        this.recoveryService = Objects.requireNonNull(recoveryService, "recoveryService");
     }
 
     public void openCurrentWorkspace(Minecraft client, Screen parent) {
@@ -44,8 +48,8 @@ public final class ClientWorkspaceOpenService {
             return;
         }
 
-        CompletableFuture<String> request = new CompletableFuture<>();
-        CompletableFuture<String> previous = this.pendingOpen.getAndSet(request);
+        CompletableFuture<WorkspaceOpenResult> request = new CompletableFuture<>();
+        CompletableFuture<WorkspaceOpenResult> previous = this.pendingOpen.getAndSet(request);
         if (previous != null) {
             previous.cancel(false);
         }
@@ -62,7 +66,7 @@ public final class ClientWorkspaceOpenService {
             MinecraftServer server,
             ResourceKey<Level> dimension,
             String author,
-            CompletableFuture<String> request
+            CompletableFuture<WorkspaceOpenResult> request
     ) {
         if (request.isCancelled()) {
             return;
@@ -73,7 +77,11 @@ public final class ClientWorkspaceOpenService {
             if (level == null) {
                 level = server.overworld();
             }
-            request.complete(this.projectService.ensureWorldProject(level, author).name());
+            var project = this.projectService.ensureWorldProject(level, author);
+            request.complete(new WorkspaceOpenResult(
+                    project.name(),
+                    this.recoveryService.hasDraft(server, project.name())
+            ));
         } catch (Throwable throwable) {
             request.completeExceptionally(throwable);
         }
@@ -82,8 +90,8 @@ public final class ClientWorkspaceOpenService {
     private void completeOpen(
             Minecraft client,
             Screen parent,
-            CompletableFuture<String> request,
-            String projectName,
+            CompletableFuture<WorkspaceOpenResult> request,
+            WorkspaceOpenResult result,
             Throwable throwable
     ) {
         if (!this.pendingOpen.compareAndSet(request, null) || request.isCancelled()) {
@@ -97,6 +105,13 @@ public final class ClientWorkspaceOpenService {
             return;
         }
 
-        client.setScreen(new ProjectScreen(parent, projectName));
+        if (result.hasRecoveryDraft()) {
+            client.setScreen(new RecoveryScreen(parent, result.projectName()));
+            return;
+        }
+        client.setScreen(new ProjectScreen(parent, result.projectName()));
+    }
+
+    private record WorkspaceOpenResult(String projectName, boolean hasRecoveryDraft) {
     }
 }
