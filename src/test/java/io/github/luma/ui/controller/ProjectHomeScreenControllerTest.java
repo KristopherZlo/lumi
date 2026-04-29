@@ -13,6 +13,10 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.WorldMutationSource;
+import net.minecraft.nbt.CompoundTag;
 import io.github.luma.integration.common.IntegrationStatus;
 import java.time.Instant;
 import java.util.List;
@@ -47,11 +51,38 @@ class ProjectHomeScreenControllerTest {
         assertEquals(1, query.totalIntegrationLoads);
     }
 
+    @Test
+    void currentRunDraftDoesNotShowRecoveryAction() {
+        FakeQuery query = new FakeQuery();
+        query.draft = nonEmptyDraft();
+        query.interruptedDraft = false;
+        ProjectHomeScreenController controller = new ProjectHomeScreenController(query);
+
+        var state = controller.loadState("Tower", "luma.status.project_ready", false);
+
+        assertFalse(state.hasRecoveryDraft());
+        assertEquals(1, state.pendingChanges().addedBlocks());
+    }
+
+    @Test
+    void interruptedDraftShowsRecoveryAction() {
+        FakeQuery query = new FakeQuery();
+        query.draft = nonEmptyDraft();
+        query.interruptedDraft = true;
+        ProjectHomeScreenController controller = new ProjectHomeScreenController(query);
+
+        var state = controller.loadState("Tower", "luma.status.project_ready", false);
+
+        assertTrue(state.hasRecoveryDraft());
+    }
+
     private static final class FakeQuery implements ProjectHomeScreenController.Query {
 
         private int totalIntegrityLoads;
         private int totalJournalLoads;
         private int totalIntegrationLoads;
+        private RecoveryDraft draft;
+        private boolean interruptedDraft;
 
         @Override
         public boolean hasSingleplayerServer() {
@@ -74,8 +105,18 @@ class ProjectHomeScreenControllerTest {
         }
 
         @Override
+        public List<ProjectVersion> loadDeletedVersions(String projectName) {
+            return List.of();
+        }
+
+        @Override
         public RecoveryDraft loadDraft(String projectName) {
-            return null;
+            return this.draft;
+        }
+
+        @Override
+        public boolean hasInterruptedDraft(String projectName) {
+            return this.interruptedDraft;
         }
 
         @Override
@@ -146,6 +187,30 @@ class ProjectHomeScreenControllerTest {
                 instant(offsetSeconds)
         );
     }
+
+    private static RecoveryDraft nonEmptyDraft() {
+        return new RecoveryDraft(
+                "11111111-1111-1111-1111-111111111111",
+                "main",
+                "v0002",
+                "tester",
+                WorldMutationSource.PLAYER,
+                instant(120),
+                instant(121),
+                List.of(new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        StatePayload.air(),
+                        payload("minecraft:stone")
+                ))
+        );
+    }
+
+    private static StatePayload payload(String blockId) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", blockId);
+        return new StatePayload(tag, null);
+    }
+
     private static Instant instant(long seconds) {
         return Instant.parse("2026-04-23T08:00:00Z").plusSeconds(seconds);
     }

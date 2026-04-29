@@ -167,9 +167,9 @@ owo-lib is the only menu toolkit in this branch. Lumi declares it as a Fabric de
 Current UX assumptions:
 
 - pressing `U` opens the current dimension workspace directly
-- pressing the Lumi overlay key plus `S` opens the standalone Quick save dialog while no client screen is open; the default chord is `Left Alt+S`, both keys are remappable in Minecraft Controls, and it saves through the current dimension workspace without opening Build History
-- pressing the Lumi overlay key plus `Z` starts undo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; the default overlay key is `Left Alt`, and remapping it changes this chord too
-- pressing the Lumi overlay key plus `Y` starts redo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; if undo and redo are pressed in the same tick, undo wins and redo must be pressed again
+- pressing the Lumi action button plus `S` opens the standalone Quick save dialog while no client screen is open; the default chord is `Left Alt+S`, both keys are remappable in Minecraft Controls, and it saves through the current dimension workspace without opening Build History
+- pressing the Lumi action button plus `Z` starts undo for the latest tracked action in the current dimension workspace while no client screen is open; the default action button is `Left Alt`, and remapping it changes this chord too
+- pressing the Lumi action button plus `Y` starts redo for the latest tracked action in the current dimension workspace while no client screen is open; if undo and redo are pressed in the same tick, undo wins and redo must be pressed again. WorldEdit and FAWE actors route through native `/undo` and `/redo`, with Lumi capture suppressed during the command and the pending draft adjusted afterward; Axiom actors are ignored so Axiom's own undo flow remains authoritative.
 - nearby short-lived secondary fallout can join the latest tracked undo/redo action instead of disappearing from the live action stack
 - undo/redo drains already-dirty whole-dimension stabilization chunks before selecting an action, so reconciled fluid, contact-created source blocks, and falling-block deltas can join the latest nearby undo/redo action when they settle inside the same time/radius window without discarding redo that came from the last undo
 - undo-only item drops from explosion, fluid, falling-block, and related block-update fallout are removed on undo and respawned on redo, while durable drafts and saved versions keep only the block/entity history they should persist
@@ -178,16 +178,17 @@ Current UX assumptions:
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
 - opening See Changes with a resolved pair or pressing `Compare` enables the world highlight immediately for that diff
 - comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present
-- holding the compare x-ray / Lumi overlay key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
+- holding the Lumi action button shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - compare and recent-action overlays build their render selection from exposed changed blocks, so dense fills still have visible surfaces even when the camera is nearest to internal changed blocks
-- holding the same remappable overlay key while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay that renders translucent exposed sides as well as thicker outlines; holding the overlay key plus redo previews redo actions
+- holding the same remappable action button while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay that renders translucent exposed sides as well as thicker outlines; holding the action button plus redo previews redo actions
 - the dashboard is a project picker outside the focused workspace menu
 - the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, and `Branches`; maintenance tools stay in the sidebar `More` route
 - settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress, and settings persist immediately on valid field changes
 - Import / Export and Settings are first-level workspace sidebar routes, while `More` keeps storage cleanup, manual compare, the interactive history graph, and raw references in one place
 - save composition, save details, branch management, import/export combine review, cleanup, diagnostics, and More tools now have dedicated surfaces instead of sharing one overloaded project page
 - save composition no longer renders quick name suggestion buttons; manual naming stays unchanged
-- the wooden-sword Lumi region selector is client runtime state scoped to project and dimension, with loaded-chunk raycast targeting, `corners` and `extend` modes, `Alt+scroll` mode switching, `Alt+right click` clear, and a world-render bounds overlay. Save details can copy that selection into partial restore bounds.
+- the wooden-sword Lumi region selector is client runtime state scoped to project and dimension, with loaded-chunk raycast targeting, `corners` and `extend` modes, Lumi action button + scroll mode switching, Lumi action button + right click clear, and a world-render bounds overlay. Save details can copy that selection into partial restore bounds.
+- partial restore is exposed as a primary Save details action. The form accepts either the current Lumi selection or manually edited bounds, then requires a preview before apply.
 
 ## History architecture
 
@@ -206,6 +207,8 @@ Current runtime history behavior:
 - First-touch whole-dimension tracking no longer samples the live world block-by-block. The server thread copies loaded chunk section palettes, real block-entity tags, and entity snapshots once, queues async baseline persistence, and returns to normal capture immediately. Entity-triggered first touches apply the known old/new entity payload as a baseline override so a spawn, removal, or update is not duplicated into both the baseline snapshot and the patch diff.
 - For whole-dimension workspaces, fluid spread and falling blocks no longer append directly into the draft. They only re-mark chunks inside that causal envelope as dirty, and `SessionStabilizationService` later rebuilds the final chunk diff by comparing compact chunk snapshots instead of walking the world through `level.getBlockState()`. Live undo/redo asks that same stabilization path to drain currently dirty chunks before it selects the next action.
 - Save, amend, recovery, restore, branch-switch, and undo/redo completion paths that need the live capture draft marshal snapshot/freeze/consume/discard/adjust work onto the Minecraft server thread before touching loaded chunks or mutable capture state. Branch creation only writes metadata for an existing save/head and intentionally does not freeze or consume the active draft. Branch switching restores through an explicit target branch so a branch created from a main-line save stays active after the restore operation completes.
+- Current-run live drafts are marked separately from interrupted persisted drafts. Opening the workspace during the same session shows pending changes normally, while reopening after an interrupted previous session routes to Recovery.
+- Soft-deleted saves stay hidden from normal history but remain inspectable in More -> Deleted saves.
 - Secondary explosion, fire, growth, block-update, and mob sources are still gated by the active session envelope so one explicit edit does not pull unrelated far-away cave settling into the same draft.
 - Block and entity changes are aggregated into an in-memory recovery draft immediately, then flushed asynchronously through the capture-maintenance executor and journaled while the session is active. Stabilization skips unchanged draft flushes after comparing the live buffer fingerprint, keeping repeated dirty-chunk reconciliation from rewriting the same recovery file every few seconds.
 - Shutdown freeze reuses the last matching asynchronously persisted recovery draft when the live buffer fingerprint is already durable, so exiting the world does not rewrite large unchanged drafts after the idle flush has completed.

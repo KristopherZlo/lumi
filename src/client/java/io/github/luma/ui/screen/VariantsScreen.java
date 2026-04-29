@@ -110,6 +110,11 @@ public final class VariantsScreen extends LumaScreen {
     }
 
     @Override
+    public Screen navigationParent() {
+        return this.parent;
+    }
+
+    @Override
     protected void onLumaTick() {
         if (++this.refreshCooldown < 10) {
             return;

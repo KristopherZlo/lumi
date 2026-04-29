@@ -3,6 +3,7 @@ package io.github.luma.ui.navigation;
 import io.github.luma.LumaMod;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectWindowLayout;
+import io.github.luma.ui.screen.LumaScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextureComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -36,21 +37,32 @@ public final class ProjectSidebarNavigation {
             String projectName,
             ProjectWorkspaceTab activeTab
     ) {
+        Screen parent = this.navigationParent(currentScreen);
         FlowLayout tabs = LumaUi.sidebarTabs();
         this.addTab(tabs, Component.translatable("luma.tab.history"), ProjectWorkspaceTab.HISTORY, activeTab, () ->
-                this.router.openProjectIgnoringRecovery(currentScreen, projectName));
+                this.router.openProjectIgnoringRecovery(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.tab.variants"), ProjectWorkspaceTab.VARIANTS, activeTab, () ->
-                this.router.openVariants(currentScreen, projectName));
+                this.router.openVariants(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.tab.import_export"), ProjectWorkspaceTab.IMPORT_EXPORT, activeTab, () ->
-                this.router.openShare(currentScreen, projectName));
+                this.router.openShare(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.action.settings"), ProjectWorkspaceTab.SETTINGS, activeTab, () ->
-                this.router.openSettings(currentScreen, projectName));
+                this.router.openSettings(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.action.more"), ProjectWorkspaceTab.MORE, activeTab, () ->
-                this.router.openMore(currentScreen, projectName));
+                this.router.openMore(parent, projectName));
 
         window.sidebar().child(tabs);
         window.sidebar().child(LumaUi.sidebarSpacer());
         window.sidebar().child(this.supportFooter());
+    }
+
+    private Screen navigationParent(Screen currentScreen) {
+        if (currentScreen instanceof LumaScreen lumaScreen) {
+            Screen parent = lumaScreen.navigationParent();
+            if (parent != null) {
+                return parent;
+            }
+        }
+        return currentScreen;
     }
 
     private void addTab(

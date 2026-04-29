@@ -160,6 +160,13 @@ public final class RecoveryService {
         return this.loadDraft(server, projectName).isPresent();
     }
 
+    public boolean hasInterruptedDraft(MinecraftServer server, String projectName) throws IOException {
+        ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
+        var project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        return HistoryCaptureManager.getInstance().hasInterruptedDraft(server, project.id().toString());
+    }
+
     private List<PreparedChunkBatch> decodeDraft(
             ServerLevel level,
             RecoveryDraft draft,

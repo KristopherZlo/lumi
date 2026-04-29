@@ -80,7 +80,7 @@ public final class ClientWorkspaceOpenService {
             var project = this.projectService.ensureWorldProject(level, author);
             request.complete(new WorkspaceOpenResult(
                     project.name(),
-                    this.recoveryService.hasDraft(server, project.name())
+                    this.recoveryService.hasInterruptedDraft(server, project.name())
             ));
         } catch (Throwable throwable) {
             request.completeExceptionally(throwable);

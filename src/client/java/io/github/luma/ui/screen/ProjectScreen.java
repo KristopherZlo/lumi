@@ -123,6 +123,11 @@ public final class ProjectScreen extends LumaScreen {
         this.client.setScreen(this.parent);
     }
 
+    @Override
+    public Screen navigationParent() {
+        return this.parent;
+    }
+
     private ProjectScreenSections.Model sectionModel() {
         return new ProjectScreenSections.Model(
                 this.projectName,

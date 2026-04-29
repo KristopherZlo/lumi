@@ -149,7 +149,7 @@ public final class ProjectScreenController {
         }
 
         try {
-            return this.recoveryService.hasDraft(ClientProjectAccess.requireSingleplayerServer(this.client), projectName);
+            return this.recoveryService.hasInterruptedDraft(ClientProjectAccess.requireSingleplayerServer(this.client), projectName);
         } catch (Exception exception) {
             return false;
         }

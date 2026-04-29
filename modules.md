@@ -40,7 +40,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Restore, full rollback, operation progress | `RestoreService` | `VersionLineageService`, `WorldOperationManager`, `WorldChangeBatchPreparer`, `SnapshotBatchPreparer`, `BlockChangeApplier` | `RestoreServiceTest`, `WorldChangeBatchPreparerTest`, `docs/architecture.md` |
 | Partial restore | `RestoreService`, `PartialRestorePlanner` | `SaveDetailsScreen`, `SaveDetailsScreenController`, `SaveDetailsPartialRestoreSection`, `LumiRegionSelectionController`, `LumiRegionSelectionRenderer`, `PatchDataRepository` | `PartialRestorePlannerTest`, `PartialRestoreFormStateTest`, `LumiRegionSelectionStateTest`, `docs/storage-format.md` |
 | Live capture and recovery draft creation | `HistoryCaptureManager` | `CaptureSessionRegistry`, `TrackedProjectCatalog`, `ProjectTrackingIndex`, `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, `SessionStabilizationService`, relevant mixin | capture tests under `src/test/java/io/github/luma/minecraft/capture` |
-| Undo/redo and recent actions | `UndoRedoService`, `UndoRedoHistoryManager` | `WorldOperationManager`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `EntityMutationCapturePolicy` | `UndoRedoActionStackTest`, `RecentChangesOverlayRendererStateTest` |
+| Undo/redo and recent actions | `UndoRedoService`, `UndoRedoHistoryManager`, `UndoRedoKeyController` | `ExternalUndoRedoPolicy`, `WorldOperationManager`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `EntityMutationCapturePolicy` | `UndoRedoActionStackTest`, `ExternalUndoRedoPolicyTest`, `RecentChangesOverlayRendererStateTest` |
 | Branches, branch switching, and history editing | `VariantService`, `HistoryEditService`, `VersionLineageService` | `VariantRepository`, `HistoryTombstoneRepository`, `VariantsScreenController`, `VariantsScreen`, `SaveDetailsScreen` | `VariantServiceTest`, `HistoryEditServiceTest`, `VersionLineageServiceTest`, `VariantsScreenControllerTest` |
 | Import/export/share/merge | `HistoryShareService`, `ProjectArchiveService`, `VariantMergeService` | `ProjectArchiveRepository`, `ShareScreenController`, `VariantsScreenController`, `MergePreviewCache`, `ShareMergeReviewSection` | `HistoryShareServiceTest`, `ProjectArchiveServiceTest`, `VariantMergeServiceTest` |
 | Compare and material summaries | `DiffService`, `MaterialDeltaService` | `CompareScreenController`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySurfaceResolver` | `DiffServiceTest`, compare overlay tests |
@@ -139,7 +139,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `CaptureDiagnosticsRegistry`, `CaptureSessionDiagnostics`: accepted mutation traces and capture summaries.
 - `TrackedProjectCatalog`: active project metadata cache for capture matching.
 - `TrackedProject`, `ProjectTrackingIndex`: dimension/chunk membership for tracked workspaces.
-- `WorldMutationContext`: prevents Lumi operations from reentering capture.
+- `WorldMutationContext`: prevents Lumi operations from reentering capture and can suppress fallback capture during native external-tool undo/redo.
 - `WorldMutationCaptureGuard`: duplicate hook protection.
 - `WorldMutationCapturePolicy`: block mutation filtering and runtime-only state rejection.
 - `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling.
@@ -219,12 +219,12 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 - Branches: `VariantsScreen`, `VariantsScreenController`, `VariantsViewState`.
 - Import/export/share: `ShareScreen`, `ShareScreenController`, `ShareViewState`, `MergePreviewCache`, `MergePreviewKey`, `MergePreviewStatus`, `ShareMergeReviewSection`.
 - Recovery: `RecoveryScreen`, `RecoveryScreenController`.
-- Settings/more/tools: `SettingsScreen`, `SettingsScreenController`, `MoreScreen`, `CleanupScreen`, `CleanupScreenController`, `DiagnosticsScreen`, `ProjectAdvancedViewState`, `PartialRestoreFormState`.
+- Settings/more/tools: `SettingsScreen`, `SettingsScreenController`, `MoreScreen`, `CleanupScreen`, `CleanupScreenController`, `DiagnosticsScreen`, `ProjectAdvancedViewState`, `PartialRestoreFormState`. More includes Project tools and Deleted saves tabs.
 - Operation polling helpers: `OperationSnapshotViewService`, `ScreenOperationStateSupport`, `WorkspaceHudController`.
 
 ### Overlays, Input, Preview, Graphs
 
-- Input chords: `client/input/UndoRedoKeyController`, `UndoRedoKeyChordTracker`, `KeyBindingState`.
+- Input chords: `client/input/UndoRedoKeyController`, `UndoRedoKeyChordTracker`, `ExternalUndoRedoPolicy`, `KeyBindingState`.
 - HUD, selection, and compare/recent overlays: `WorkspaceHudCoordinator`, `LumiRegionSelectionController`, `LoadedChunkBlockRaycaster`, `LumiRegionSelectionRenderer`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySurfaceResolver`, `CompareOverlayRenderTypes`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `OverlayImmediateRenderer`, `OverlayFaceRenderer`, `OverlayDiagnostics`.
 - Client preview renderer: `client/preview/TexturedPreviewCaptureService`, `PreviewCaptureCoordinator`, `PreviewRenderMeshBuilder`, `PreviewRenderMesh`, `PreviewImageCropper`, `PreviewFramingCalculator`, plus `ui/preview/ProjectPreviewTextureCache`.
 - Commit graph: `ui/graph/CommitGraphLayout`, `CommitGraphNode`, `CommitGraphComponent`.

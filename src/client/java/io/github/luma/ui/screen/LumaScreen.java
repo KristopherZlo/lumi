@@ -3,6 +3,7 @@ package io.github.luma.ui.screen;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.container.FlowLayout;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -42,6 +43,10 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
 
     protected void closeLumaUi() {
         Minecraft.getInstance().setScreen(null);
+    }
+
+    public Screen navigationParent() {
+        return null;
     }
 
     protected void onLumaTick() {
