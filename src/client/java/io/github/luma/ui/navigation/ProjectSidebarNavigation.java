@@ -23,6 +23,10 @@ public final class ProjectSidebarNavigation {
             LumaMod.MOD_ID,
             "textures/gui/buymeacoffee.png"
     );
+    private static final Identifier PAYPAL_LOGO = Identifier.fromNamespaceAndPath(
+            LumaMod.MOD_ID,
+            "textures/gui/paypal.png"
+    );
 
     private final ScreenRouter router = new ScreenRouter();
 
@@ -68,7 +72,7 @@ public final class ProjectSidebarNavigation {
                 SUPPORT_URI
         ));
         footer.child(this.supportLinkRow(
-                null,
+                PAYPAL_LOGO,
                 Component.translatable("luma.action.paypal_donate"),
                 PAYPAL_DONATE_URI
         ));
