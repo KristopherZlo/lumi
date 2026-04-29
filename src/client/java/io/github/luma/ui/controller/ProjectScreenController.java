@@ -316,6 +316,35 @@ public final class ProjectScreenController {
         }
     }
 
+    public String renameVersion(String projectName, String versionId, String message) {
+        try {
+            this.historyEditService.renameVersion(
+                    ClientProjectAccess.requireSingleplayerServer(this.client),
+                    projectName,
+                    versionId,
+                    message
+            );
+            return "luma.status.version_renamed";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Rename version request failed for project {} version {}", projectName, versionId, exception);
+            return historyEditFailureStatus(exception);
+        }
+    }
+
+    public String deleteVersion(String projectName, String versionId) {
+        try {
+            this.historyEditService.deleteVersion(
+                    ClientProjectAccess.requireSingleplayerServer(this.client),
+                    projectName,
+                    versionId
+            );
+            return "luma.status.version_deleted";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Delete version request failed for project {} version {}", projectName, versionId, exception);
+            return historyEditFailureStatus(exception);
+        }
+    }
+
     static String variantFailureStatus(Exception exception) {
         String message = exception.getMessage();
         if (message == null) {
@@ -361,6 +390,15 @@ public final class ProjectScreenController {
                 || message.startsWith("Active branch cannot be deleted")
                 || message.startsWith("Variant not found")) {
             return "luma.status.variant_delete_blocked";
+        }
+        if (message.startsWith("Save name is required")) {
+            return "luma.status.save_name_required";
+        }
+        if (message.startsWith("Root saves cannot be deleted")
+                || message.startsWith("Only leaf saves can be deleted")
+                || message.startsWith("Save is the head of multiple branches")
+                || message.startsWith("Version not found")) {
+            return "luma.status.version_delete_blocked";
         }
         return "luma.status.operation_failed";
     }

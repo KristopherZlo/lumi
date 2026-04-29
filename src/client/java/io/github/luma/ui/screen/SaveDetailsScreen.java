@@ -20,6 +20,8 @@ import io.github.luma.ui.screen.section.SaveDetailsPartialRestoreSection;
 import io.github.luma.ui.state.PartialRestoreFormState;
 import io.github.luma.ui.state.SaveDetailsViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.TextBoxComponent;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
@@ -59,8 +61,11 @@ public final class SaveDetailsScreen extends LumaScreen {
     private String status = "luma.status.project_ready";
     private boolean showMoreOptions = false;
     private boolean pendingRestoreConfirmation = false;
+    private boolean pendingDeleteConfirmation = false;
     private boolean showPartialRestore = false;
     private boolean showAdvancedInfo = false;
+    private String renameVersionId = "";
+    private String renameMessage = "";
     private int previewZoomStep = 1;
     private int refreshCooldown = 0;
 
@@ -313,6 +318,12 @@ public final class SaveDetailsScreen extends LumaScreen {
         }
 
         FlowLayout expanded = LumaUi.revealGroup();
+        this.ensureRenameMessage(version);
+        expanded.child(this.renameSection(version, operationActive));
+        if (this.pendingDeleteConfirmation) {
+            expanded.child(this.deleteConfirmationSection(version, operationActive));
+        }
+
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent replaceButton = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> this.router.openSave(
                 this,
@@ -327,6 +338,13 @@ public final class SaveDetailsScreen extends LumaScreen {
             ProjectPreviewTextureCache.release(this.projectName, version.id());
             this.refresh(this.controller.refreshPreview(this.projectName, version.id()));
         }));
+
+        ButtonComponent deleteButton = LumaUi.button(Component.translatable("luma.action.delete_save"), button -> {
+            this.pendingDeleteConfirmation = true;
+            this.refresh("luma.status.version_delete_confirm");
+        });
+        deleteButton.active(this.canDeleteVersion(version) && !operationActive);
+        actions.child(deleteButton);
 
         actions.child(LumaUi.button(Component.translatable("luma.save_details.create_idea"), button -> this.router.openVariants(
                 this,
@@ -371,6 +389,69 @@ public final class SaveDetailsScreen extends LumaScreen {
         }
         section.child(expanded);
         return section;
+    }
+
+    private FlowLayout renameSection(ProjectVersion version, boolean operationActive) {
+        FlowLayout section = LumaUi.insetSection(
+                Component.translatable("luma.save_details.rename_title"),
+                Component.translatable("luma.save_details.rename_help")
+        );
+        ButtonComponent renameButton = LumaUi.primaryButton(Component.translatable("luma.action.rename_save"), button -> {
+            String result = this.controller.renameVersion(this.projectName, version.id(), this.renameMessage);
+            if ("luma.status.version_renamed".equals(result)) {
+                this.renameVersionId = "";
+            }
+            this.refresh(result);
+        });
+        TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.renameMessage);
+        input.setHint(Component.translatable("luma.save.name_input"));
+        input.onChanged().subscribe(value -> {
+            this.renameMessage = value == null ? "" : value;
+            renameButton.active(this.canRenameVersion(version, operationActive));
+        });
+        section.child(input);
+
+        FlowLayout actions = LumaUi.actionRow();
+        renameButton.active(this.canRenameVersion(version, operationActive));
+        actions.child(renameButton);
+        section.child(actions);
+        return section;
+    }
+
+    private FlowLayout deleteConfirmationSection(ProjectVersion version, boolean operationActive) {
+        FlowLayout section = LumaUi.insetSection(
+                Component.translatable("luma.save_details.delete_title"),
+                Component.translatable("luma.save_details.delete_help")
+        );
+        section.child(LumaUi.danger(Component.translatable("luma.save_details.delete_warning")));
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
+            this.pendingDeleteConfirmation = false;
+            this.refresh("luma.status.project_ready");
+        }));
+        ButtonComponent confirmButton = LumaUi.primaryButton(Component.translatable("luma.action.delete_save"), button -> {
+            this.pendingDeleteConfirmation = false;
+            String result = this.controller.deleteVersion(this.projectName, version.id());
+            if ("luma.status.version_deleted".equals(result)) {
+                this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
+                return;
+            }
+            this.refresh(result);
+        });
+        confirmButton.active(this.canDeleteVersion(version) && !operationActive);
+        actions.child(confirmButton);
+        section.child(actions);
+        return section;
+    }
+
+    private void ensureRenameMessage(ProjectVersion version) {
+        if (version == null) {
+            return;
+        }
+        if (!version.id().equals(this.renameVersionId)) {
+            this.renameVersionId = version.id();
+            this.renameMessage = ProjectUiSupport.displayMessage(version);
+        }
     }
 
     private FlowLayout advancedInfoSection(ProjectVersion version) {
@@ -462,6 +543,25 @@ public final class SaveDetailsScreen extends LumaScreen {
                 && ProjectUiSupport.isVariantHead(this.state.variants(), version)
                 && this.state.recoveryDraft() != null
                 && !this.state.recoveryDraft().isEmpty();
+    }
+
+    private boolean canDeleteVersion(ProjectVersion version) {
+        if (version == null
+                || version.versionKind() == VersionKind.INITIAL
+                || version.versionKind() == VersionKind.WORLD_ROOT
+                || version.parentVersionId() == null
+                || version.parentVersionId().isBlank()) {
+            return false;
+        }
+        return this.state.versions().stream()
+                .noneMatch(candidate -> version.id().equals(candidate.parentVersionId()));
+    }
+
+    private boolean canRenameVersion(ProjectVersion version, boolean operationActive) {
+        return version != null
+                && !operationActive
+                && !this.renameMessage.trim().isBlank()
+                && !this.renameMessage.trim().equals(ProjectUiSupport.displayMessage(version));
     }
 
     private String parentVersionId(String versionId) {
