@@ -212,7 +212,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 ### Screens, Controllers, And View State
 
 - Dashboard/projects: `DashboardScreen`, `DashboardScreenController`, `DashboardViewState`, `DashboardProjectItem`.
-- Create/open workspace: `CreateProjectScreen`, `CreateProjectScreenController`, `ProjectOpeningScreen`, `ClientWorkspaceOpenService`, `ClientProjectAccess`.
+- Create/open workspace and onboarding: `CreateProjectScreen`, `CreateProjectScreenController`, `ProjectOpeningScreen`, `OnboardingScreen`, `ClientWorkspaceOpenService`, `ClientProjectAccess`, `ClientOnboardingService`, `ClientOnboardingStateRepository`.
 - Project home/history: `ProjectScreen`, `ProjectScreenController`, `ProjectHomeScreenController`, `ProjectHomeViewState`, `ProjectScreenSections`.
 - Save and quick save: `SaveScreen`, `SaveDetailsScreen`, `QuickSaveScreen`, `QuickSaveScreenController`, `SaveViewState`, `SaveDetailsViewState`, `SaveDetailsPartialRestoreSection`, `PartialRestoreFormState`.
 - Compare: `CompareScreen`, `CompareScreenController`, `CompareViewState`, `CompareScreenSections`.

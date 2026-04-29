@@ -1,11 +1,13 @@
 package io.github.luma.ui.navigation;
 
+import io.github.luma.client.onboarding.ClientOnboardingService;
 import io.github.luma.ui.screen.CleanupScreen;
 import io.github.luma.ui.screen.CompareScreen;
 import io.github.luma.ui.screen.CreateProjectScreen;
 import io.github.luma.ui.screen.DashboardScreen;
 import io.github.luma.ui.screen.DiagnosticsScreen;
 import io.github.luma.ui.screen.MoreScreen;
+import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.RecoveryScreen;
 import io.github.luma.ui.screen.SaveDetailsScreen;
@@ -21,6 +23,7 @@ public final class ScreenRouter {
 
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectScreenController projectController = new ProjectScreenController();
+    private final ClientOnboardingService onboardingService = new ClientOnboardingService();
 
     public void openDashboard(Screen parent) {
         this.client.setScreen(new DashboardScreen(parent));
@@ -35,7 +38,7 @@ public final class ScreenRouter {
             this.client.setScreen(new RecoveryScreen(parent, projectName));
             return;
         }
-        this.client.setScreen(new ProjectScreen(parent, projectName));
+        this.openProjectAfterRecoveryCheck(parent, projectName, "", "luma.status.project_ready");
     }
 
     public void openProject(Screen parent, String projectName, String variantId) {
@@ -43,19 +46,31 @@ public final class ScreenRouter {
             this.client.setScreen(new RecoveryScreen(parent, projectName));
             return;
         }
-        this.client.setScreen(new ProjectScreen(parent, projectName, variantId, "luma.status.project_ready"));
+        this.openProjectAfterRecoveryCheck(parent, projectName, variantId, "luma.status.project_ready");
     }
 
     public void openProjectIgnoringRecovery(Screen parent, String projectName) {
-        this.client.setScreen(new ProjectScreen(parent, projectName));
+        this.openProjectAfterRecoveryCheck(parent, projectName, "", "luma.status.project_ready");
     }
 
     public void openProjectIgnoringRecovery(Screen parent, String projectName, String statusKey) {
-        this.client.setScreen(new ProjectScreen(parent, projectName, statusKey));
+        this.openProjectAfterRecoveryCheck(parent, projectName, "", statusKey);
     }
 
     public void openProjectIgnoringRecovery(Screen parent, String projectName, String variantId, String statusKey) {
+        this.openProjectAfterRecoveryCheck(parent, projectName, variantId, statusKey);
+    }
+
+    public void openProjectSkippingOnboarding(Screen parent, String projectName) {
+        this.client.setScreen(new ProjectScreen(parent, projectName));
+    }
+
+    public void openProjectSkippingOnboarding(Screen parent, String projectName, String variantId, String statusKey) {
         this.client.setScreen(new ProjectScreen(parent, projectName, variantId, statusKey));
+    }
+
+    public void openOnboarding(Screen parent, String projectName) {
+        this.client.setScreen(new OnboardingScreen(parent, projectName));
     }
 
     public void openRecovery(Screen parent, String projectName) {
@@ -114,5 +129,19 @@ public final class ScreenRouter {
             String contextVersionId
     ) {
         this.client.setScreen(new CompareScreen(parent, projectName, leftReference, rightReference, contextVersionId));
+    }
+
+    private void openProjectAfterRecoveryCheck(Screen parent, String projectName, String variantId, String statusKey) {
+        if (this.onboardingService.shouldShowOnboarding()) {
+            this.client.setScreen(new OnboardingScreen(
+                    parent,
+                    projectName,
+                    variantId,
+                    statusKey,
+                    this.onboardingService
+            ));
+            return;
+        }
+        this.client.setScreen(new ProjectScreen(parent, projectName, variantId, statusKey));
     }
 }

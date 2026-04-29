@@ -80,6 +80,12 @@ public final class MoreScreen extends LumaScreen {
         body.child(this.tabRow());
         if (this.activeTab == MoreTab.PROJECT_TOOLS) {
             body.child(this.navigationCard(
+                    "luma.more.onboarding_title",
+                    "luma.more.onboarding_help",
+                    "luma.action.show_onboarding",
+                    button -> this.router.openOnboarding(this, this.projectName)
+            ));
+            body.child(this.navigationCard(
                     "luma.more.cleanup_title",
                     "luma.more.cleanup_help",
                     "luma.action.open_cleanup",
