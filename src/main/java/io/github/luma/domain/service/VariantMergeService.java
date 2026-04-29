@@ -23,6 +23,9 @@ import io.github.luma.domain.model.VariantMergeApplyRequest;
 import io.github.luma.domain.model.VariantMergePlan;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
@@ -57,7 +60,95 @@ public final class VariantMergeService {
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final VersionService versionService = new VersionService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final VersionLineageService lineageService = new VersionLineageService();
+
+    public VariantMergePlan previewLocalMerge(
+            MinecraftServer server,
+            String projectName,
+            String sourceVariantId
+    ) throws IOException {
+        ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
+        BuildProject project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        String activeVariantId = this.activeVariantId(layout, project);
+        if (activeVariantId.equals(sourceVariantId)) {
+            throw new IllegalArgumentException("Cannot merge the active branch into itself");
+        }
+        return this.planMerge(layout, project, activeVariantId, layout, project, sourceVariantId);
+    }
+
+    public OperationHandle startLocalMerge(
+            ServerLevel level,
+            String projectName,
+            String sourceVariantId,
+            List<MergeConflictZoneResolution> conflictResolutions,
+            String author
+    ) throws IOException {
+        ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
+        BuildProject project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        String activeVariantId = this.activeVariantId(layout, project);
+        if (activeVariantId.equals(sourceVariantId)) {
+            throw new IllegalArgumentException("Cannot merge the active branch into itself");
+        }
+        if (this.worldOperationManager.hasActiveOperation(level.getServer())) {
+            throw new IllegalStateException("Another world operation is already running");
+        }
+        if (HistoryCaptureManager.getInstance().snapshotDraft(level.getServer(), project.id().toString())
+                .filter(draft -> !draft.isEmpty())
+                .isPresent()) {
+            throw new IllegalArgumentException("Discard or save the current recovery draft before merging branches");
+        }
+
+        VariantMergePlan plan = this.planMerge(layout, project, activeVariantId, layout, project, sourceVariantId);
+        List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, conflictResolutions);
+        List<StoredEntityChange> mergeEntityChanges = plan.mergeEntityChanges();
+        if (mergeChanges.isEmpty() && mergeEntityChanges.isEmpty()) {
+            throw new IllegalArgumentException("Source branch does not add any new changes");
+        }
+
+        String resolvedAuthor = author == null || author.isBlank() ? "Lumi" : author;
+        Instant now = Instant.now();
+        RecoveryDraft draft = new RecoveryDraft(
+                project.id().toString(),
+                activeVariantId,
+                plan.targetHeadVersionId(),
+                resolvedAuthor,
+                WorldMutationSource.SYSTEM,
+                now,
+                now,
+                mergeChanges,
+                mergeEntityChanges
+        );
+
+        return this.worldOperationManager.startPreparedApplyOperation(
+                level,
+                project.id().toString(),
+                "merge-variant",
+                "blocks",
+                LumaDebugLog.enabled(project),
+                progressSink -> {
+                    int totalChanges = mergeChanges.size() + mergeEntityChanges.size();
+                    progressSink.update(OperationStage.PREPARING, 0, Math.max(1, totalChanges), "Preparing branch merge");
+                    List<PreparedChunkBatch> batches = RestoreService.collapsePreparedBatches(this.batchPreparer.prepareNewValues(
+                            level,
+                            mergeChanges,
+                            mergeEntityChanges,
+                            (completed, total) -> progressSink.update(
+                                    OperationStage.PREPARING,
+                                    completed,
+                                    Math.max(1, total),
+                                    "Decoded merge changes"
+                            )
+                    ));
+                    return new WorldOperationManager.PreparedApplyOperation(
+                            batches,
+                            () -> this.completeLocalMerge(level, layout, project, draft, sourceVariantId, batches.size())
+                    );
+                }
+        );
+    }
 
     public VariantMergePlan previewMerge(
             MinecraftServer server,
@@ -152,7 +243,7 @@ public final class VariantMergeService {
                             draft,
                             "Merged " + request.sourceVariantId() + " from " + request.sourceProjectName(),
                             author,
-                            VersionKind.MANUAL,
+                            VersionKind.MERGE,
                             true,
                             "",
                             progressSink
@@ -166,6 +257,61 @@ public final class VariantMergeService {
                     ));
                 }
         );
+    }
+
+    private void completeLocalMerge(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String sourceVariantId,
+            int batchCount
+    ) throws IOException {
+        ProjectVersion mergedVersion = this.versionService.writeVersion(
+                level,
+                layout,
+                project,
+                draft,
+                "Merged " + sourceVariantId + " into " + draft.variantId(),
+                draft.actor(),
+                VersionKind.MERGE,
+                true,
+                progressSinkNoOp()
+        );
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                Instant.now(),
+                "local-variant-merged",
+                "Merged branch " + sourceVariantId + " into active branch " + draft.variantId(),
+                mergedVersion.id(),
+                draft.variantId()
+        ));
+        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
+        LumaDebugLog.log(
+                project,
+                "merge",
+                "Completed local merge from {} into {} as {} using {} chunk batches",
+                sourceVariantId,
+                draft.variantId(),
+                mergedVersion.id(),
+                batchCount
+        );
+    }
+
+    private String activeVariantId(ProjectLayout layout, BuildProject project) throws IOException {
+        ProjectVariant activeVariant = this.resolveVariant(
+                this.variantRepository.loadAll(layout),
+                project.activeVariantId(),
+                "Active"
+        );
+        if (activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
+            throw new IllegalArgumentException("Active branch has no saved head");
+        }
+        return activeVariant.id();
+    }
+
+    private static WorldOperationManager.ProgressSink progressSinkNoOp() {
+        return (stage, completedUnits, totalUnits, detail) -> {
+        };
     }
 
     VariantMergePlan planMerge(
@@ -190,8 +336,11 @@ public final class VariantMergeService {
 
         Map<String, ProjectVersion> targetVersionMap = this.lineageService.versionMap(targetVersions);
         Map<String, ProjectVersion> sourceVersionMap = this.lineageService.versionMap(sourceVersions);
-        String ancestorVersionId = this.lineageService.sharedSavedAncestorId(
+        String ancestorVersionId = this.commonAncestorId(
+                targetLayout,
                 targetVersionMap,
+                targetVariant.headVersionId(),
+                sourceLayout,
                 sourceVersionMap,
                 sourceVariant.headVersionId()
         );
@@ -295,6 +444,30 @@ public final class VariantMergeService {
                 .filter(variant -> variant.id().equals(variantId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(label + " variant not found: " + variantId));
+    }
+
+    private String commonAncestorId(
+            ProjectLayout targetLayout,
+            Map<String, ProjectVersion> targetVersionMap,
+            String targetHeadVersionId,
+            ProjectLayout sourceLayout,
+            Map<String, ProjectVersion> sourceVersionMap,
+            String sourceHeadVersionId
+    ) {
+        if (targetLayout.root().equals(sourceLayout.root())) {
+            ProjectVersion targetHead = targetVersionMap.get(targetHeadVersionId);
+            ProjectVersion sourceHead = targetVersionMap.get(sourceHeadVersionId);
+            if (targetHead == null || sourceHead == null) {
+                throw new IllegalArgumentException("Local merge branch head is missing");
+            }
+            return this.lineageService.commonAncestor(targetVersionMap, targetHead, sourceHead).id();
+        }
+
+        return this.lineageService.sharedSavedAncestorId(
+                targetVersionMap,
+                sourceVersionMap,
+                sourceHeadVersionId
+        );
     }
 
     private List<MergeConflictZone> buildConflictZones(java.util.Collection<StoredBlockChange> conflictingChanges) {
