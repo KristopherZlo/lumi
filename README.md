@@ -66,7 +66,7 @@ Use Lumi if you want to:
 - remappable quick-save chord, default `Left Alt+S`, that opens a standalone save-name dialog without entering Build History
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, restore, see-changes, and branch actions
-- See Changes screen for saved states, branches, and the current build, with manual references hidden under Advanced
+- See Changes screen for saved states, branches, and the current build, with manual raw-reference compare available under `More`
 - live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi overlay key; changing the overlay key changes these chords too
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit; undo/redo drains already-dirty stabilization chunks first so poured fluid, contact-created source blocks, and falling-block deltas from whole-dimension sessions can join before the action is selected
 - undo/redo replays stored block states without immediate redstone neighbor updates or placement physics, so restored TNT beside powered redstone is visible but not auto-primed by the replay
@@ -256,7 +256,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 8. Press the Lumi overlay key plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
 9. Use `Save build` when you want the full save screen with suggestions or replace-latest tools.
 10. Open a save when you want details, restore, see changes, or create a branch from it.
-11. Use `Branches` for alternate build directions, the sidebar for Import / Export and Settings, and `More` for storage cleanup or advanced history tools.
+11. Use `Branches` for alternate build directions, the sidebar for Import / Export and Settings, and `More` for storage cleanup, manual compare, the history graph, or raw references.
 
 ## Scope
 

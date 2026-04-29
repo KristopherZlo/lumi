@@ -1,6 +1,5 @@
 package io.github.luma.ui.navigation;
 
-import io.github.luma.ui.screen.AdvancedScreen;
 import io.github.luma.ui.screen.CleanupScreen;
 import io.github.luma.ui.screen.CompareScreen;
 import io.github.luma.ui.screen.CreateProjectScreen;
@@ -79,10 +78,6 @@ public final class ScreenRouter {
 
     public void openCleanup(Screen parent, String projectName) {
         this.client.setScreen(new CleanupScreen(parent, projectName));
-    }
-
-    public void openAdvanced(Screen parent, String projectName) {
-        this.client.setScreen(new AdvancedScreen(parent, projectName));
     }
 
     public void openVariants(Screen parent, String projectName) {

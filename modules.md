@@ -215,7 +215,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 - Branches: `VariantsScreen`, `VariantsScreenController`, `VariantsViewState`.
 - Import/export/share: `ShareScreen`, `ShareScreenController`, `ShareViewState`, `MergePreviewCache`, `MergePreviewKey`, `MergePreviewStatus`, `ShareMergeReviewSection`.
 - Recovery: `RecoveryScreen`, `RecoveryScreenController`.
-- Settings/more/tools: `SettingsScreen`, `SettingsScreenController`, `MoreScreen`, `CleanupScreen`, `CleanupScreenController`, `DiagnosticsScreen`, `AdvancedScreen`, `ProjectAdvancedViewState`, `PartialRestoreFormState`.
+- Settings/more/tools: `SettingsScreen`, `SettingsScreenController`, `MoreScreen`, `CleanupScreen`, `CleanupScreenController`, `DiagnosticsScreen`, `ProjectAdvancedViewState`, `PartialRestoreFormState`.
 - Operation polling helpers: `OperationSnapshotViewService`, `ScreenOperationStateSupport`, `WorkspaceHudController`.
 
 ### Overlays, Input, Preview, Graphs

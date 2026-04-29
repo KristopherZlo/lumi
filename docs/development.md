@@ -177,8 +177,8 @@ Current UX assumptions:
 - the dashboard is a project picker outside the focused workspace menu
 - the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Branches`, and `More`
 - settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress, and settings persist immediately on valid field changes
-- Import / Export and Settings are first-level workspace sidebar routes, while `More` is limited to storage cleanup and Advanced history tools
-- save composition, save details, branch management, import/export combine review, cleanup, diagnostics, and advanced tools now have dedicated screens instead of sharing one overloaded project page
+- Import / Export and Settings are first-level workspace sidebar routes, while `More` keeps storage cleanup, manual compare, the history graph, and raw references in one place
+- save composition, save details, branch management, import/export combine review, cleanup, diagnostics, and More tools now have dedicated surfaces instead of sharing one overloaded project page
 
 ## History architecture
 
@@ -271,7 +271,7 @@ The current repo also ships that policy in [commit-policy.md](commit-policy.md).
 
 ## Coding conventions
 
-- Keep the product wording builder-friendly. Prefer user-facing `branch` wording over `idea` or raw internal variant terms, and keep technical ids behind Advanced surfaces.
+- Keep the product wording builder-friendly. Prefer user-facing `branch` wording over `idea` or raw internal variant terms, and keep technical ids behind More/details surfaces.
 - Keep the mod usable through menus first. Commands are read-only diagnostics/help only.
 - Preserve the singleplayer-first assumption unless a change explicitly expands runtime scope.
 - When touching storage, prefer forward-only adjustments with simple legacy handling for the current local format.
