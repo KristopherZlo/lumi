@@ -6,6 +6,7 @@ import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchWorldChanges;
+import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVersion;
@@ -392,6 +393,7 @@ public final class RestoreService {
         return new PartialRestorePlanSummary(
                 draft.draft().changes().isEmpty() ? RestorePlanMode.NO_OP : RestorePlanMode.PATCH_REPLAY,
                 request.bounds(),
+                request.restoreMode(),
                 request.regionSource(),
                 ChunkSelectionFactory.fromStoredChanges(draft.draft().changes()),
                 activeVariant.id(),
@@ -412,31 +414,42 @@ public final class RestoreService {
             PartialRestoreRequest request,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
-        List<ProjectVersion> directVersions = this.directRestorePatchVersions(project, versions, variants, targetVersion);
-        if (directVersions == null) {
-            throw new IllegalArgumentException("Partial restore currently requires a target on the active variant lineage");
+        DirectRestorePatchPlan directPlan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
+        if (directPlan == null) {
+            throw new IllegalArgumentException("Partial restore requires a target with shared save history");
         }
 
-        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
-        boolean applyNewValues = this.lineageService.isAncestor(versionMap, activeVariant.headVersionId(), targetVersion.id());
-        PatchWorldChanges lineageChanges = this.loadVersionWorldChanges(
+        List<ChunkPoint> selectedChunks = request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA
+                ? null
+                : this.chunksIntersecting(request.bounds());
+        PatchWorldChanges reverseChanges = this.loadVersionWorldChanges(
                 layout,
-                directVersions,
-                this.chunksIntersecting(request.bounds())
+                directPlan.reverseVersions(),
+                selectedChunks
         );
-        int lineageChangeCount = lineageChanges.blockChanges().size() + lineageChanges.entityChanges().size();
+        PatchWorldChanges forwardChanges = this.loadVersionWorldChanges(
+                layout,
+                directPlan.forwardVersions(),
+                selectedChunks
+        );
+        int lineageChangeCount = reverseChanges.blockChanges().size()
+                + reverseChanges.entityChanges().size()
+                + forwardChanges.blockChanges().size()
+                + forwardChanges.entityChanges().size();
         progressSink.update(OperationStage.PREPARING, 0, Math.max(1, lineageChangeCount), "Filtering partial restore region");
         List<StoredBlockChange> partialChanges = this.partialRestorePlanner.plan(
                 pendingDraft == null ? List.of() : pendingDraft.changes(),
-                lineageChanges.blockChanges(),
-                applyNewValues,
-                request.bounds()
+                reverseChanges.blockChanges(),
+                forwardChanges.blockChanges(),
+                request.bounds(),
+                request.restoreMode()
         );
         List<StoredEntityChange> partialEntityChanges = this.planPartialEntityChanges(
                 pendingDraft == null ? List.of() : pendingDraft.entityChanges(),
-                lineageChanges.entityChanges(),
-                applyNewValues,
-                request.bounds()
+                reverseChanges.entityChanges(),
+                forwardChanges.entityChanges(),
+                request.bounds(),
+                request.restoreMode()
         );
         Instant now = Instant.now();
         RecoveryDraft draft = new RecoveryDraft(
@@ -476,13 +489,13 @@ public final class RestoreService {
                 layout,
                 project,
                 partialDraft,
-                "Partial restore to " + request.targetVersionId(),
+                this.partialRestoreMessage(request),
                 partialDraft.actor(),
                 VersionKind.PARTIAL_RESTORE,
                 true,
                 progressSinkNoOp()
         );
-        this.rewritePendingDraftAfterPartialRestore(layout, pendingDraft, request.bounds());
+        this.rewritePendingDraftAfterPartialRestore(layout, pendingDraft, request.bounds(), request.restoreMode());
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
                 "partial-restore-completed",
@@ -500,20 +513,29 @@ public final class RestoreService {
         );
     }
 
+    private String partialRestoreMessage(PartialRestoreRequest request) {
+        if (request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA) {
+            return "Restore around selection to " + request.targetVersionId();
+        }
+        return "Restore selection from " + request.targetVersionId();
+    }
+
     private void rewritePendingDraftAfterPartialRestore(
             ProjectLayout layout,
             RecoveryDraft pendingDraft,
-            io.github.luma.domain.model.Bounds3i bounds
+            io.github.luma.domain.model.Bounds3i bounds,
+            PartialRestoreMode mode
     ) throws IOException {
         if (pendingDraft == null || pendingDraft.isEmpty()) {
             this.recoveryRepository.deleteDraft(layout);
             return;
         }
+        PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
         List<StoredBlockChange> remaining = pendingDraft.changes().stream()
-                .filter(change -> !bounds.contains(change.pos()))
+                .filter(change -> !effectiveMode.includes(bounds.contains(change.pos())))
                 .toList();
         List<StoredEntityChange> remainingEntities = pendingDraft.entityChanges().stream()
-                .filter(change -> !this.entityChangeInside(change, bounds))
+                .filter(change -> !effectiveMode.includes(this.entityChangeInside(change, bounds)))
                 .toList();
         if (remaining.isEmpty() && remainingEntities.isEmpty()) {
             this.recoveryRepository.deleteDraft(layout);
@@ -1203,26 +1225,40 @@ public final class RestoreService {
 
     private List<StoredEntityChange> planPartialEntityChanges(
             List<StoredEntityChange> pendingChanges,
-            List<StoredEntityChange> lineageChanges,
-            boolean applyNewValues,
-            io.github.luma.domain.model.Bounds3i bounds
+            List<StoredEntityChange> reverseLineageChanges,
+            List<StoredEntityChange> forwardLineageChanges,
+            io.github.luma.domain.model.Bounds3i bounds,
+            PartialRestoreMode mode
     ) {
+        PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
         Map<String, StoredEntityChange> planned = new LinkedHashMap<>();
         for (StoredEntityChange change : pendingChanges) {
-            if (this.entityChangeInside(change, bounds)) {
+            if (effectiveMode.includes(this.entityChangeInside(change, bounds))) {
                 planned.put(change.entityId(), change);
             }
         }
-        for (StoredEntityChange change : lineageChanges) {
-            StoredEntityChange target = applyNewValues ? change : change.inverse();
-            if (this.entityChangeInside(target, bounds)) {
-                StoredEntityChange current = planned.get(target.entityId());
-                planned.put(target.entityId(), current == null ? target : current.withLatestState(target.newValue()));
-            }
+        for (StoredEntityChange change : reverseLineageChanges) {
+            this.accumulatePartialEntityChange(planned, change.inverse(), bounds, effectiveMode);
+        }
+        for (StoredEntityChange change : forwardLineageChanges) {
+            this.accumulatePartialEntityChange(planned, change, bounds, effectiveMode);
         }
         return planned.values().stream()
                 .filter(change -> !change.isNoOp())
                 .toList();
+    }
+
+    private void accumulatePartialEntityChange(
+            Map<String, StoredEntityChange> planned,
+            StoredEntityChange target,
+            io.github.luma.domain.model.Bounds3i bounds,
+            PartialRestoreMode mode
+    ) {
+        if (!mode.includes(this.entityChangeInside(target, bounds))) {
+            return;
+        }
+        StoredEntityChange current = planned.get(target.entityId());
+        planned.put(target.entityId(), current == null ? target : current.withLatestState(target.newValue()));
     }
 
     private boolean entityChangeInside(StoredEntityChange change, io.github.luma.domain.model.Bounds3i bounds) {

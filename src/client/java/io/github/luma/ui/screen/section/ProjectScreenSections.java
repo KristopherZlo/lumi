@@ -1,5 +1,7 @@
 package io.github.luma.ui.screen.section;
 
+import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
@@ -18,6 +20,7 @@ import io.wispforest.owo.ui.core.Sizing;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import net.minecraft.network.chat.Component;
 
 public final class ProjectScreenSections {
@@ -182,6 +185,9 @@ public final class ProjectScreenSections {
         if (rootRestore) {
             section.child(LumaUi.danger(Component.translatable("luma.restore.initial_confirm_warning")));
         }
+        if (model.lumiSelection().isPresent()) {
+            section.child(LumaUi.caption(Component.translatable("luma.restore.selection_choice_help")));
+        }
         section.child(LumaUi.caption(Component.translatable(
                 "luma.restore.confirm_target",
                 ProjectUiSupport.displayVariantName(variant),
@@ -191,12 +197,30 @@ public final class ProjectScreenSections {
         FlowLayout restoreActions = LumaUi.actionRow();
         restoreActions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.actions.cancelRestore()));
         ButtonComponent confirmButton = LumaUi.primaryButton(
-                Component.translatable("luma.action.restore"),
+                Component.translatable(model.lumiSelection().isPresent() ? "luma.action.restore_whole_save" : "luma.action.restore"),
                 button -> this.actions.confirmRestore(variant, version)
         );
         confirmButton.active(model.state().operationSnapshot() == null || model.state().operationSnapshot().terminal());
         restoreActions.child(confirmButton);
         section.child(restoreActions);
+        if (model.lumiSelection().isPresent()) {
+            Bounds3i selectedBounds = model.lumiSelection().get();
+            FlowLayout partialActions = LumaUi.actionRow();
+            ButtonComponent selectedOnly = LumaUi.button(
+                    Component.translatable("luma.action.restore_only_selected_area"),
+                    button -> this.actions.confirmSelectedRestore(version, PartialRestoreMode.SELECTED_AREA, selectedBounds)
+            );
+            selectedOnly.active(model.state().operationSnapshot() == null || model.state().operationSnapshot().terminal());
+            partialActions.child(selectedOnly);
+
+            ButtonComponent outsideOnly = LumaUi.button(
+                    Component.translatable("luma.action.restore_everything_except_selection"),
+                    button -> this.actions.confirmSelectedRestore(version, PartialRestoreMode.OUTSIDE_SELECTED_AREA, selectedBounds)
+            );
+            outsideOnly.active(model.state().operationSnapshot() == null || model.state().operationSnapshot().terminal());
+            partialActions.child(outsideOnly);
+            section.child(partialActions);
+        }
         return section;
     }
 
@@ -327,8 +351,12 @@ public final class ProjectScreenSections {
             String selectedVariantId,
             boolean showAllSaves,
             String pendingRestoreVariantId,
-            String pendingRestoreVersionId
+            String pendingRestoreVersionId,
+            Optional<Bounds3i> lumiSelection
     ) {
+        public Model {
+            lumiSelection = lumiSelection == null ? Optional.empty() : lumiSelection;
+        }
     }
 
     public interface Actions {
@@ -352,6 +380,8 @@ public final class ProjectScreenSections {
         void cancelRestore();
 
         void confirmRestore(ProjectVariant variant, ProjectVersion version);
+
+        void confirmSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds);
 
         void clearPendingRestore();
     }

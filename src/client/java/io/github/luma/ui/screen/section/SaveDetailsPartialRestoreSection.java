@@ -1,6 +1,7 @@
 package io.github.luma.ui.screen.section;
 
 import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVersion;
@@ -29,6 +30,7 @@ public final class SaveDetailsPartialRestoreSection {
                 Component.translatable("luma.partial_restore.title"),
                 Component.translatable("luma.partial_restore.help")
         );
+        section.child(this.modeRow(model));
         section.child(this.boundsRow(
                 "luma.partial_restore.min",
                 model.form().minX(),
@@ -86,6 +88,31 @@ public final class SaveDetailsPartialRestoreSection {
         actionsRow.child(applyButton);
         section.child(actionsRow);
         return section;
+    }
+
+    private FlowLayout modeRow(Model model) {
+        FlowLayout row = LumaUi.actionRow();
+        row.child(LumaUi.caption(Component.translatable("luma.partial_restore.mode")));
+        ButtonComponent selectedArea = LumaUi.button(
+                Component.translatable("luma.partial_restore.mode_selected_area"),
+                button -> {
+                    model.form().setRestoreMode(PartialRestoreMode.SELECTED_AREA);
+                    this.actions.modeChanged();
+                }
+        );
+        selectedArea.active(model.form().restoreMode() != PartialRestoreMode.SELECTED_AREA);
+        row.child(selectedArea);
+
+        ButtonComponent outsideSelection = LumaUi.button(
+                Component.translatable("luma.partial_restore.mode_outside_selection"),
+                button -> {
+                    model.form().setRestoreMode(PartialRestoreMode.OUTSIDE_SELECTED_AREA);
+                    this.actions.modeChanged();
+                }
+        );
+        outsideSelection.active(model.form().restoreMode() != PartialRestoreMode.OUTSIDE_SELECTED_AREA);
+        row.child(outsideSelection);
+        return row;
     }
 
     private FlowLayout boundsRow(
@@ -154,6 +181,8 @@ public final class SaveDetailsPartialRestoreSection {
         void apply(PartialRestoreRequest request);
 
         void selectionApplied();
+
+        void modeChanged();
 
         void invalidBounds();
     }

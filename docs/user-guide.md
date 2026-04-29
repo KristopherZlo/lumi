@@ -133,6 +133,12 @@ If you restore `Initial`, Lumi restores only chunks that the current project has
 It does not roll back unrelated game state like inventory, time, gamerules, or untouched chunks.
 
 Every restore from a save card or save details screen requires confirmation. Before an `Initial` restore starts, Lumi also shows the planned mode, branch, base save, target save, and affected chunk count in a confirmation block above the scrollable workspace panes.
+If you already have a Lumi region selected, the restore confirmation asks how to use that selection:
+
+- `Restore whole save` moves the branch head to that save and applies the full restore.
+- `Only selected area` copies only the selected area from that save into the current build and writes a new save.
+- `Everything except selection` restores the save around the selection while leaving the selected area untouched, then writes a new save.
+
 If the stored generator or datapack fingerprint no longer matches the world, automatic generator regeneration is blocked and Lumi stays on the safer history/baseline path.
 
 Runtime rules:
@@ -274,7 +280,7 @@ Primary actions stay focused:
 
 Extra actions like rename save, delete save, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
 
-`Restore selected area` is a primary action on save details. Use it when you want to restore only a bounded region from the selected save. You can copy a Lumi selection into the form or edit Min/Max coordinates manually. Preview the region first, then apply it. Lumi writes the result as a new save on the active branch instead of moving the branch head back to the older save.
+`Restore selected area` is a primary action on save details. Use it when you want a bounded restore instead of a full branch reset. You can choose `Only selected area` to copy that area from the selected save, or `Everything except selection` to restore the save around the area while keeping the selected area as it is now. Copy a Lumi selection into the form or edit Min/Max coordinates manually. Preview the region first, then apply it. Lumi writes the result as a new save on the active branch instead of moving the branch head back to the older save.
 
 You can fill those bounds from Lumi's wooden-sword selection:
 

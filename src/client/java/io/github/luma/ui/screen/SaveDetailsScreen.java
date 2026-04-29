@@ -2,6 +2,8 @@ package io.github.luma.ui.screen;
 
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChangeType;
+import io.github.luma.domain.model.PartialRestoreMode;
+import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
@@ -492,6 +494,10 @@ public final class SaveDetailsScreen extends LumaScreen {
         if (rootRestore) {
             section.child(LumaUi.danger(Component.translatable("luma.restore.initial_confirm_warning")));
         }
+        java.util.Optional<Bounds3i> lumiSelection = this.selectedLumiBounds();
+        if (lumiSelection.isPresent()) {
+            section.child(LumaUi.caption(Component.translatable("luma.restore.selection_choice_help")));
+        }
         section.child(LumaUi.caption(Component.translatable(
                 "luma.restore.confirm_target",
                 ProjectUiSupport.displayVariantName(versionVariant),
@@ -503,13 +509,32 @@ public final class SaveDetailsScreen extends LumaScreen {
             this.pendingRestoreConfirmation = false;
             this.rebuild();
         }));
-        ButtonComponent confirmButton = LumaUi.primaryButton(Component.translatable("luma.action.restore"), button -> {
+        ButtonComponent confirmButton = LumaUi.primaryButton(Component.translatable(
+                lumiSelection.isPresent() ? "luma.action.restore_whole_save" : "luma.action.restore"
+        ), button -> {
             this.pendingRestoreConfirmation = false;
             this.executeRestore(version, versionVariant);
         });
         confirmButton.active(!operationActive);
         actions.child(confirmButton);
         section.child(actions);
+        if (lumiSelection.isPresent()) {
+            FlowLayout partialActions = LumaUi.actionRow();
+            ButtonComponent selectedOnly = LumaUi.button(
+                    Component.translatable("luma.action.restore_only_selected_area"),
+                    button -> this.executeSelectedRestore(version, PartialRestoreMode.SELECTED_AREA, lumiSelection.get())
+            );
+            selectedOnly.active(!operationActive);
+            partialActions.child(selectedOnly);
+
+            ButtonComponent outsideOnly = LumaUi.button(
+                    Component.translatable("luma.action.restore_everything_except_selection"),
+                    button -> this.executeSelectedRestore(version, PartialRestoreMode.OUTSIDE_SELECTED_AREA, lumiSelection.get())
+            );
+            outsideOnly.active(!operationActive);
+            partialActions.child(outsideOnly);
+            section.child(partialActions);
+        }
         return section;
     }
 
@@ -529,6 +554,25 @@ public final class SaveDetailsScreen extends LumaScreen {
         }
 
         String result = this.controller.restoreVersion(this.projectName, version.id());
+        this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
+    }
+
+    private void executeSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds) {
+        if (version == null || bounds == null) {
+            this.refresh("luma.status.operation_failed");
+            return;
+        }
+        this.pendingRestoreConfirmation = false;
+        PartialRestoreRequest request = new PartialRestoreRequest(
+                this.projectName,
+                version.id(),
+                bounds,
+                mode,
+                PartialRestoreRegionSource.LUMI_REGION,
+                this.client.getUser().getName(),
+                java.util.Map.of()
+        );
+        String result = this.controller.partialRestore(request);
         this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
     }
 
@@ -636,6 +680,11 @@ public final class SaveDetailsScreen extends LumaScreen {
         @Override
         public void selectionApplied() {
             refresh("luma.status.partial_restore_selection_applied");
+        }
+
+        @Override
+        public void modeChanged() {
+            refresh("luma.status.partial_restore_mode_changed");
         }
 
         @Override

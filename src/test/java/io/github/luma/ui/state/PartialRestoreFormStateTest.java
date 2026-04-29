@@ -2,6 +2,7 @@ package io.github.luma.ui.state;
 
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
 import org.junit.jupiter.api.Test;
 
@@ -38,5 +39,18 @@ class PartialRestoreFormStateTest {
         form.setMaxX("3");
 
         assertEquals(PartialRestoreRegionSource.MANUAL_BOUNDS, form.request("Tower", "v0001", "tester").orElseThrow().regionSource());
+    }
+
+    @Test
+    void requestIncludesSelectedPartialRestoreMode() {
+        PartialRestoreFormState form = new PartialRestoreFormState();
+        form.useBounds(
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(1, 65, 1)),
+                PartialRestoreRegionSource.LUMI_REGION
+        );
+
+        form.setRestoreMode(PartialRestoreMode.OUTSIDE_SELECTED_AREA);
+
+        assertEquals(PartialRestoreMode.OUTSIDE_SELECTED_AREA, form.request("Tower", "v0001", "tester").orElseThrow().restoreMode());
     }
 }

@@ -3,6 +3,7 @@ package io.github.luma.ui.state;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.PartialRestorePlanSummary;
+import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import java.util.Map;
@@ -17,6 +18,7 @@ public final class PartialRestoreFormState {
     private String maxX = "";
     private String maxY = "";
     private String maxZ = "";
+    private PartialRestoreMode restoreMode = PartialRestoreMode.SELECTED_AREA;
     private PartialRestoreRegionSource regionSource = PartialRestoreRegionSource.MANUAL_BOUNDS;
     private PartialRestorePlanSummary summary;
 
@@ -92,6 +94,18 @@ public final class PartialRestoreFormState {
         return this.regionSource;
     }
 
+    public PartialRestoreMode restoreMode() {
+        return this.restoreMode;
+    }
+
+    public void setRestoreMode(PartialRestoreMode restoreMode) {
+        PartialRestoreMode effectiveMode = restoreMode == null ? PartialRestoreMode.SELECTED_AREA : restoreMode;
+        if (this.restoreMode != effectiveMode) {
+            this.summary = null;
+        }
+        this.restoreMode = effectiveMode;
+    }
+
     public void useBounds(Bounds3i bounds, PartialRestoreRegionSource source) {
         if (bounds == null) {
             return;
@@ -140,6 +154,7 @@ public final class PartialRestoreFormState {
                     projectName,
                     versionId,
                     normalized,
+                    this.restoreMode,
                     this.regionSource,
                     actor,
                     Map.of()
