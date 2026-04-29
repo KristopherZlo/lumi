@@ -44,6 +44,7 @@ public final class CompareScreen extends LumaScreen {
     private String status = "luma.status.compare_ready";
     private boolean showMoreDetails = false;
     private boolean showManualCompare = false;
+    private boolean initialOverlayAttempted = false;
 
     public CompareScreen(Screen parent, String projectName, String leftReference, String rightReference) {
         this(parent, projectName, leftReference, rightReference, "");
@@ -67,6 +68,7 @@ public final class CompareScreen extends LumaScreen {
     @Override
     protected void build(FlowLayout root) {
         this.state = this.controller.loadState(this.projectName, this.leftReference, this.rightReference, this.status);
+        this.autoShowInitialOverlay();
 
         root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
@@ -114,6 +116,7 @@ public final class CompareScreen extends LumaScreen {
     private CompareScreenSections.Model sectionModel() {
         return new CompareScreenSections.Model(
                 this.state,
+                this.projectName,
                 this.width,
                 this.leftReference,
                 this.rightReference,
@@ -159,6 +162,41 @@ public final class CompareScreen extends LumaScreen {
         }
     }
 
+    private void autoShowInitialOverlay() {
+        if (this.initialOverlayAttempted || this.leftReference.isBlank() || this.rightReference.isBlank()) {
+            return;
+        }
+        this.initialOverlayAttempted = true;
+        if (this.state.diff() == null || this.state.diff().changedBlocks().isEmpty()) {
+            return;
+        }
+
+        if (!CompareOverlayRenderer.visibleFor(
+                this.projectName,
+                this.state.leftResolvedVersionId(),
+                this.state.rightResolvedVersionId()
+        )) {
+            this.status = this.controller.showOverlay(this.projectName, this.state);
+            this.state = this.withStatus(this.state, this.status);
+        }
+    }
+
+    private CompareViewState withStatus(CompareViewState source, String nextStatus) {
+        return new CompareViewState(
+                source.versions(),
+                source.variants(),
+                source.activeVariantId(),
+                source.leftReference(),
+                source.rightReference(),
+                source.leftResolvedVersionId(),
+                source.rightResolvedVersionId(),
+                source.diff(),
+                source.materialDelta(),
+                nextStatus,
+                source.debugEnabled()
+        );
+    }
+
     private final class SectionActions implements CompareScreenSections.Actions {
 
         @Override
@@ -178,9 +216,17 @@ public final class CompareScreen extends LumaScreen {
 
         @Override
         public void toggleOverlay() {
-            status = CompareOverlayRenderer.hasData()
-                    ? controller.toggleOverlayVisibility()
-                    : controller.showOverlay(projectName, state);
+            if (state.diff() == null) {
+                status = "luma.status.compare_failed";
+            } else if (CompareOverlayRenderer.hasDataFor(
+                    projectName,
+                    state.leftResolvedVersionId(),
+                    state.rightResolvedVersionId()
+            )) {
+                status = controller.toggleOverlayVisibility();
+            } else {
+                status = controller.showOverlay(projectName, state);
+            }
             rebuild();
         }
 
@@ -200,6 +246,7 @@ public final class CompareScreen extends LumaScreen {
         public void applyPreset(String leftReference, String rightReference) {
             CompareScreen.this.leftReference = leftReference;
             CompareScreen.this.rightReference = rightReference;
+            initialOverlayAttempted = false;
             status = "luma.status.compare_ready";
             rebuild();
         }
