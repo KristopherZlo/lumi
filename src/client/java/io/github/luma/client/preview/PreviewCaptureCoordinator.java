@@ -24,6 +24,9 @@ public final class PreviewCaptureCoordinator {
 
     private static final PreviewCaptureCoordinator INSTANCE = new PreviewCaptureCoordinator();
     private static final ExecutorService BUILD_EXECUTOR = Executors.newSingleThreadExecutor(new PreviewThreadFactory());
+    private static final int IDLE_SCAN_COOLDOWN_TICKS = 40;
+    private static final int COMPLETED_SCAN_COOLDOWN_TICKS = 20;
+    private static final int FAILED_SCAN_COOLDOWN_TICKS = 40;
 
     private final ProjectService projectService = new ProjectService();
     private final PreviewCaptureRequestRepository requestRepository = new PreviewCaptureRequestRepository();
@@ -58,7 +61,9 @@ public final class PreviewCaptureCoordinator {
             return;
         }
 
-        this.startNextCapture(client);
+        if (!this.startNextCapture(client)) {
+            this.scanCooldownTicks = IDLE_SCAN_COOLDOWN_TICKS;
+        }
     }
 
     private void tickActiveCapture(Minecraft client) {
@@ -154,7 +159,7 @@ public final class PreviewCaptureCoordinator {
         }
     }
 
-    private void startNextCapture(Minecraft client) {
+    private boolean startNextCapture(Minecraft client) {
         String dimensionId = client.level.dimension().identifier().toString();
         try {
             for (BuildProject project : this.projectService.listProjects(client.getSingleplayerServer())) {
@@ -173,13 +178,14 @@ public final class PreviewCaptureCoordinator {
                     this.activeCapture = new ActiveCapture(project, layout, request, buildFuture, null, null);
                     LumaMod.LOGGER.info("Queued client preview render for version {} in project {}", request.versionId(), project.name());
                     LumaDebugLog.log(project, "preview", "Building textured preview mesh for version {} with bounds {}", request.versionId(), request.bounds());
-                    return;
+                    return true;
                 }
             }
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Failed to scan pending preview requests", exception);
-            this.scanCooldownTicks = 40;
+            this.scanCooldownTicks = FAILED_SCAN_COOLDOWN_TICKS;
         }
+        return false;
     }
 
     private void discardActiveCapture() {
@@ -195,7 +201,7 @@ public final class PreviewCaptureCoordinator {
         }
         this.closeMesh(capture);
         this.activeCapture = null;
-        this.scanCooldownTicks = success ? 20 : 40;
+        this.scanCooldownTicks = success ? COMPLETED_SCAN_COOLDOWN_TICKS : FAILED_SCAN_COOLDOWN_TICKS;
     }
 
     private void closeMesh(ActiveCapture capture) {

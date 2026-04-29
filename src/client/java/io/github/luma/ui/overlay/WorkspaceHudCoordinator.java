@@ -21,7 +21,8 @@ import net.minecraft.resources.Identifier;
 public final class WorkspaceHudCoordinator {
 
     private static final Identifier HUD_ELEMENT_ID = Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "workspace_hud");
-    private static final int REFRESH_INTERVAL_TICKS = 10;
+    private static final int ACTIVE_REFRESH_INTERVAL_TICKS = 10;
+    private static final int IDLE_REFRESH_INTERVAL_TICKS = 40;
     private static final int TERMINAL_DISPLAY_TICKS = 40;
     private static final WorkspaceHudCoordinator INSTANCE = new WorkspaceHudCoordinator();
 
@@ -59,7 +60,9 @@ public final class WorkspaceHudCoordinator {
         this.refreshCooldown -= 1;
         if (this.refreshCooldown <= 0 || this.workspaceSnapshot == null) {
             this.workspaceSnapshot = this.controller.loadCurrentWorkspaceSnapshot();
-            this.refreshCooldown = REFRESH_INTERVAL_TICKS;
+            this.refreshCooldown = this.hasActiveOperation(this.workspaceSnapshot)
+                    ? ACTIVE_REFRESH_INTERVAL_TICKS
+                    : IDLE_REFRESH_INTERVAL_TICKS;
             if (this.workspaceSnapshot != null && this.workspaceSnapshot.debugEnabled()) {
                 LumaDebugLog.log(
                         "hud",
@@ -137,6 +140,12 @@ public final class WorkspaceHudCoordinator {
         this.retainedTerminalTicks = 0;
         this.refreshCooldown = 0;
         this.actionbarOwned = false;
+    }
+
+    private boolean hasActiveOperation(WorkspaceHudSnapshot snapshot) {
+        return snapshot != null
+                && snapshot.operationSnapshot() != null
+                && !snapshot.operationSnapshot().terminal();
     }
 
     private void updateActionbar(Minecraft client, OperationSnapshot snapshot) {
