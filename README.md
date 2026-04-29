@@ -127,7 +127,7 @@ Use Lumi if you want to:
 
 1. Active capture is frozen first.
 2. Lumi shows confirmation for initial/root restores with a lightweight restore-plan summary.
-3. Lumi tries direct same-lineage replay first, including rollback to `WORLD_ROOT`.
+3. Lumi tries direct patch replay first, including same-lineage rollback/replay and divergent branch transitions through a shared saved ancestor.
 4. `WORLD_ROOT` fallback uses tracked baseline chunks when direct replay is not valid.
 5. Snapshot fallback is used for normal versions when direct replay is not valid.
 6. Tick-thread apply uses bounded chunk batches with pre-decoded block states, direct loaded-section commits when safe, and prepared entity batches.

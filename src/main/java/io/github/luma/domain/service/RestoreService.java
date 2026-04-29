@@ -253,11 +253,11 @@ public final class RestoreService {
             );
         }
 
-        List<ProjectVersion> directVersions = this.directRestorePatchVersions(project, versions, variants, targetVersion);
-        if (directVersions != null) {
+        DirectRestorePatchPlan directPlan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
+        if (directPlan != null) {
             return new RestorePlanSummary(
                     RestorePlanMode.PATCH_REPLAY,
-                    this.mergeChunks(this.touchedChunksForVersions(layout, directVersions), pendingChunks),
+                    this.mergeChunks(this.touchedChunksForVersions(layout, directPlan.allVersions()), pendingChunks),
                     targetVersion.variantId(),
                     baseVersionId,
                     targetVersion.id()
@@ -694,9 +694,9 @@ public final class RestoreService {
             ServerLevel level,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
-        List<ProjectVersion> directVersions = this.directRestorePatchVersions(project, versions, variants, targetVersion);
-        if (directVersions == null) {
-            LumaDebugLog.log(project, "restore", "Direct restore unavailable for project {} because target is not on the active lineage", project.name());
+        DirectRestorePatchPlan directPlan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
+        if (directPlan == null) {
+            LumaDebugLog.log(project, "restore", "Direct restore unavailable for project {} because no shared patch lineage was found", project.name());
             return Optional.empty();
         }
 
@@ -705,11 +705,9 @@ public final class RestoreService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
         String headVersionId = activeVariant.headVersionId();
-        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
-        boolean applyNewValues = this.lineageService.isAncestor(versionMap, headVersionId, targetVersion.id());
         boolean appendInitialSnapshot = this.shouldAppendInitialSnapshot(targetVersion, pendingDraft);
 
-        int totalSources = directVersions.size()
+        int totalSources = directPlan.stepCount()
                 + (pendingDraft != null && !pendingDraft.isEmpty() ? 1 : 0)
                 + (appendInitialSnapshot ? 1 : 0);
         int completedSources = 0;
@@ -726,16 +724,25 @@ public final class RestoreService {
             );
         }
 
-        for (ProjectVersion version : directVersions) {
-            batches.addAll(this.decodeVersionChanges(layout, level, version, applyNewValues));
+        for (ProjectVersion version : directPlan.reverseVersions()) {
+            batches.addAll(this.decodeVersionChanges(layout, level, version, false));
             completedSources += 1;
             progressSink.update(
                     OperationStage.PREPARING,
                     completedSources,
                     Math.max(1, totalSources),
-                    applyNewValues
-                            ? "Decoded forward patch " + version.id()
-                            : "Decoded reverse patch " + version.id()
+                    "Decoded reverse patch " + version.id()
+            );
+        }
+
+        for (ProjectVersion version : directPlan.forwardVersions()) {
+            batches.addAll(this.decodeVersionChanges(layout, level, version, true));
+            completedSources += 1;
+            progressSink.update(
+                    OperationStage.PREPARING,
+                    completedSources,
+                    Math.max(1, totalSources),
+                    "Decoded forward patch " + version.id()
             );
         }
 
@@ -757,12 +764,13 @@ public final class RestoreService {
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         LumaMod.LOGGER.info(
-                "Using direct {} restore for project {} from head {} to target {} with {} patch steps, draftRollback={}, placements {} -> {}",
-                applyNewValues ? "forward" : "reverse",
+                "Using direct {} restore for project {} from head {} to target {} with reverseSteps={}, forwardSteps={}, draftRollback={}, placements {} -> {}",
+                directPlan.modeLabel(),
                 project.name(),
                 headVersionId,
                 targetVersion.id(),
-                directVersions.size(),
+                directPlan.reverseVersions().size(),
+                directPlan.forwardVersions().size(),
                 pendingDraft != null && !pendingDraft.isEmpty(),
                 rawPlacements,
                 collapsedPlacements
@@ -784,53 +792,82 @@ public final class RestoreService {
             List<ProjectVariant> variants,
             ProjectVersion targetVersion
     ) {
+        DirectRestorePatchPlan plan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
+        if (plan == null || plan.isDivergent()) {
+            return null;
+        }
+        return plan.allVersions();
+    }
+
+    DirectRestorePatchPlan directRestorePatchPlan(
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVersion targetVersion
+    ) {
         ProjectVariant activeVariant = variants.stream()
                 .filter(variant -> variant.id().equals(project.activeVariantId()))
                 .findFirst()
                 .orElse(null);
-        if (activeVariant == null || activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
+        if (activeVariant == null
+                || activeVariant.headVersionId() == null
+                || activeVariant.headVersionId().isBlank()
+                || targetVersion == null) {
             return null;
         }
 
         Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
         String headVersionId = activeVariant.headVersionId();
         if (targetVersion.id().equals(headVersionId)) {
-            return List.of();
+            return DirectRestorePatchPlan.empty();
+        }
+
+        ProjectVersion headVersion = versionMap.get(headVersionId);
+        if (headVersion == null) {
+            return null;
         }
 
         if (this.lineageService.isAncestor(versionMap, targetVersion.id(), headVersionId)) {
-            List<ProjectVersion> directVersions = new ArrayList<>();
-            ProjectVersion cursor = versionMap.get(headVersionId);
-            while (cursor != null && !cursor.id().equals(targetVersion.id())) {
-                directVersions.add(cursor);
-                cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                        ? null
-                        : versionMap.get(cursor.parentVersionId());
-            }
-            return cursor == null ? null : directVersions;
+            List<ProjectVersion> reverseVersions = this.pathFromHeadToAncestor(versionMap, headVersion, targetVersion.id());
+            return reverseVersions == null ? null : new DirectRestorePatchPlan(reverseVersions, List.of());
         }
 
         if (this.lineageService.isAncestor(versionMap, headVersionId, targetVersion.id())) {
-            List<ProjectVersion> reversed = new ArrayList<>();
-            ProjectVersion cursor = targetVersion;
-            while (cursor != null && !cursor.id().equals(headVersionId)) {
-                reversed.add(cursor);
-                cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                        ? null
-                        : versionMap.get(cursor.parentVersionId());
-            }
-            if (cursor == null) {
-                return null;
-            }
-
-            List<ProjectVersion> directVersions = new ArrayList<>();
-            for (int index = reversed.size() - 1; index >= 0; index--) {
-                directVersions.add(reversed.get(index));
-            }
-            return directVersions;
+            return new DirectRestorePatchPlan(
+                    List.of(),
+                    this.lineageService.pathFromAncestor(versionMap, headVersionId, targetVersion.id())
+            );
         }
 
-        return null;
+        try {
+            ProjectVersion ancestor = this.lineageService.commonAncestor(versionMap, headVersion, targetVersion);
+            List<ProjectVersion> reverseVersions = this.pathFromHeadToAncestor(versionMap, headVersion, ancestor.id());
+            if (reverseVersions == null) {
+                return null;
+            }
+            return new DirectRestorePatchPlan(
+                    reverseVersions,
+                    this.lineageService.pathFromAncestor(versionMap, ancestor, targetVersion)
+            );
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    private List<ProjectVersion> pathFromHeadToAncestor(
+            Map<String, ProjectVersion> versionMap,
+            ProjectVersion headVersion,
+            String ancestorVersionId
+    ) {
+        List<ProjectVersion> directVersions = new ArrayList<>();
+        ProjectVersion cursor = headVersion;
+        while (cursor != null && !cursor.id().equals(ancestorVersionId)) {
+            directVersions.add(cursor);
+            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
+                    ? null
+                    : versionMap.get(cursor.parentVersionId());
+        }
+        return cursor == null ? null : directVersions;
     }
 
     private RestorePlan buildPlan(
@@ -1222,6 +1259,46 @@ public final class RestoreService {
             total += batch.placements().size();
         }
         return total;
+    }
+
+    record DirectRestorePatchPlan(List<ProjectVersion> reverseVersions, List<ProjectVersion> forwardVersions) {
+
+        private static DirectRestorePatchPlan empty() {
+            return new DirectRestorePatchPlan(List.of(), List.of());
+        }
+
+        DirectRestorePatchPlan {
+            reverseVersions = reverseVersions == null ? List.of() : List.copyOf(reverseVersions);
+            forwardVersions = forwardVersions == null ? List.of() : List.copyOf(forwardVersions);
+        }
+
+        private int stepCount() {
+            return this.reverseVersions.size() + this.forwardVersions.size();
+        }
+
+        private boolean isDivergent() {
+            return !this.reverseVersions.isEmpty() && !this.forwardVersions.isEmpty();
+        }
+
+        private List<ProjectVersion> allVersions() {
+            List<ProjectVersion> versions = new ArrayList<>(this.stepCount());
+            versions.addAll(this.reverseVersions);
+            versions.addAll(this.forwardVersions);
+            return List.copyOf(versions);
+        }
+
+        private String modeLabel() {
+            if (this.reverseVersions.isEmpty() && this.forwardVersions.isEmpty()) {
+                return "no-op";
+            }
+            if (this.reverseVersions.isEmpty()) {
+                return "forward";
+            }
+            if (this.forwardVersions.isEmpty()) {
+                return "reverse";
+            }
+            return "divergent";
+        }
     }
 
     private record RestoreChain(ProjectVersion anchor, List<ProjectVersion> patchVersions) {

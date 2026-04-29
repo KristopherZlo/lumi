@@ -117,6 +117,33 @@ class RestoreServiceTest {
     }
 
     @Test
+    void directRestorePlanSupportsDivergentBranchHeadThroughCommonAncestor() {
+        RestoreService service = new RestoreService();
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", ""),
+                version("v0002", "main", "v0001"),
+                version("v0003", "feature", "v0001"),
+                version("v0004", "feature", "v0003")
+        );
+        List<ProjectVariant> variants = List.of(
+                new ProjectVariant("main", "main", "v0001", "v0002", true, NOW),
+                new ProjectVariant("feature", "feature", "v0001", "v0004", false, NOW)
+        );
+
+        RestoreService.DirectRestorePatchPlan plan = service.directRestorePatchPlan(
+                project("main"),
+                versions,
+                variants,
+                versions.get(3)
+        );
+
+        assertNotNull(plan);
+        assertEquals(List.of("v0002"), plan.reverseVersions().stream().map(ProjectVersion::id).toList());
+        assertEquals(List.of("v0003", "v0004"), plan.forwardVersions().stream().map(ProjectVersion::id).toList());
+        assertNull(service.directRestorePatchVersions(project("main"), versions, variants, versions.get(3)));
+    }
+
+    @Test
     void restoreTargetCanUseExplicitBranchWhenHeadVersionBelongsToMain() {
         RestoreService service = new RestoreService();
         ProjectVersion baseVersion = version("v0001", "main", "");
