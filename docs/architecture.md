@@ -216,14 +216,15 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 
 ## Partial Restore Flow
 
-Partial restore is a region-scoped restore workflow. The UI builds a `PartialRestoreRequest` with explicit bounds and a region source, then `RestoreService.partialRestore(...)` filters the same-lineage patch replay plan off the server tick. Same-lineage targets may be shared ancestors from another variant, such as the main save a branch was created from.
+Partial restore is a region-scoped restore workflow. The UI builds a `PartialRestoreRequest` with explicit bounds, a mode, and a region source, then `RestoreService.partialRestore(...)` filters the direct patch replay plan off the server tick. Direct targets may be same-lineage saves, shared ancestors from another variant, or divergent branch saves with a common saved ancestor.
 
 Key differences from full restore:
 
 - partial restore does not move the active variant head to the old target version
-- Lumi applies only changes inside the selected bounds; with patch payload v6 it reads only chunk frames intersecting those bounds
+- `SELECTED_AREA` applies only changes inside the selected bounds; with patch payload v6 it reads only chunk frames intersecting those bounds
+- `OUTSIDE_SELECTED_AREA` applies the restore path outside the selected bounds, leaving selected blocks untouched
 - after apply, Lumi writes a new `PARTIAL_RESTORE` version on the active variant
-- pending draft changes inside the selected region are folded into that version; pending draft changes outside the region are preserved as the recovery draft
+- pending draft changes in the restored part are folded into that version; pending draft changes outside the restored part are preserved as the recovery draft
 - entity changes are filtered by their old/new entity position and stored alongside block changes in the partial-restore version
 - non-direct cross-lineage partial restore is rejected until a snapshot/baseline target-state planner is implemented
 

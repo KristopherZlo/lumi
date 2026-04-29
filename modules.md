@@ -72,7 +72,7 @@ Use `src/main/java/io/github/luma/domain/model` for value objects, persisted rec
 - Recovery: `RecoveryDraft`, `RecoveryDraftSummary`, `RecoveryJournalEntry`.
 - Operations/progress/HUD: `OperationHandle`, `OperationProgress`, `OperationSnapshot`, `OperationStage`, `WorkspaceHudSnapshot`.
 - Diff/compare/material summaries: `VersionDiff`, `DiffBlockEntry`, `ChangeStats`, `PendingChangeSummary`, `MaterialDeltaEntry`.
-- Restore and partial restore: `RestorePlanSummary`, `RestorePlanMode`, `PartialRestoreRequest`, `PartialRestorePlanSummary`, `PartialRestoreRegionSource`.
+- Restore and partial restore: `RestorePlanSummary`, `RestorePlanMode`, `PartialRestoreRequest`, `PartialRestorePlanSummary`, `PartialRestoreMode`, `PartialRestoreRegionSource`.
 - Branch merge/share/archive: `VariantMergePlan`, `VariantMergeApplyRequest`, `MergeConflictZone`, `MergeConflictResolution`, `MergeConflictZoneResolution`, `ProjectArchiveManifest`, `ProjectArchiveEntry`, `ProjectArchiveScope`, `ProjectArchiveScopeType`, `ProjectArchiveExportResult`, `ProjectArchiveImportResult`, `HistoryPackageFileSummary`, `HistoryPackageImportResult`, `ImportedHistoryProjectSummary`, `ExternalSourceInfo`.
 - Live capture and undo/redo runtime: `TrackedChangeBuffer`, `CaptureSessionState`, `UndoRedoAction`, `UndoRedoActionStack`, `WorldMutationSource`.
 - Preview: `PreviewInfo`, `PreviewCaptureRequest`.

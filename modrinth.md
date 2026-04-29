@@ -34,7 +34,7 @@ Lumi is made for builders and redstoners who want to:
 - Compare a save against its parent, another save, a branch head, or the live current build.
 - In-world compare highlight with an x-ray hold mode through the Lumi action button.
 - Restore saved versions back into the world with progress reporting.
-- Partial restore from save details using manual XYZ bounds or the current Lumi selection.
+- Partial restore from save details using manual XYZ bounds or the current Lumi selection, with `Only selected area` and `Everything except selection` modes.
 - Runtime-only wooden-sword region selection with highlighted cuboid bounds.
 - Crash recovery drafts with a direct recovery prompt only for interrupted work from a previous session.
 - Optional auto checkpoints before large vanilla `/fill` or `/clone`, WorldEdit, or Axiom edits when pending work exists. This setting is off by default.
@@ -68,7 +68,7 @@ Use a wooden sword as Lumi's selection tool.
 - Lumi action button + right click clears the selection.
 - Selection raycasts through already loaded/rendered client chunks and does not force chunk loading.
 
-Open a save, choose `Restore selected area`, use the current Lumi selection or edit XYZ bounds manually, preview the affected blocks, then apply the partial restore as a new save.
+Open a save, choose `Restore selected area`, choose `Only selected area` to copy the selection from that save or `Everything except selection` to restore around it, use the current Lumi selection or edit XYZ bounds manually, preview the affected blocks, then apply the partial restore as a new save.
 
 ## Builder Tool Capture
 
@@ -121,7 +121,7 @@ All default keybinds can be changed under Minecraft `Controls` -> `Lumi`.
 - `Variant` - a named branch-like line of work.
 - `Compare` - a diff between saved data and another saved state or the current world.
 - `Restore` - applying saved data back into the map.
-- `Partial restore` - applying only selected bounds from an older save.
+- `Partial restore` - applying selected bounds from an older save, or restoring the save around selected bounds.
 - `Recovery` - draft data kept for interrupted unsaved work.
 
 ## Requirements

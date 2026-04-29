@@ -54,7 +54,7 @@ Use Lumi if you want to:
 | `History tombstones` | Soft-deleted save and branch ids hidden from normal history | `history-tombstones.json` |
 | `Compare` | Diff between two saved states, or between a saved state and the live game state | `DiffService` |
 | `Restore` | Apply a chosen version back into the map and move the active head to it | `RestoreService` |
-| `Partial restore` | Apply a bounded region from an older save as a new save on the active branch | `RestoreService` |
+| `Partial restore` | Apply a bounded restore from an older save as a new save on the active branch, either inside a selection or everywhere except it | `RestoreService` |
 | `Import / Export` | Portable branch or project history packages for review and combine workflows | `HistoryShareService`, `ProjectArchiveService` |
 | `Recovery` | Crash-safe draft storage | `recovery/draft.*` |
 
@@ -75,7 +75,7 @@ Use Lumi if you want to:
 - undo/redo replays stored block states without immediate redstone neighbor updates or placement physics, so restored TNT beside powered redstone is visible but not auto-primed by the replay
 - runtime-only redstone state flips and piston animation blocks are ignored so active mechanisms do not pollute pending history or the recent action overlay
 - hard restore that moves the active branch head
-- region-scoped partial restore from save details as a primary save action, written back as a new `PARTIAL_RESTORE` save, with optional wooden-sword selected bounds or manual XYZ bounds
+- region-scoped partial restore from save details as a primary save action, written back as a new `PARTIAL_RESTORE` save, with `Only selected area` and `Everything except selection` modes using optional wooden-sword selected bounds or manual XYZ bounds
 - runtime-only wooden-sword region selection with `corners` and `extend` modes, long loaded-chunk targeting, Lumi action button + scroll mode switching, Lumi action button + right click deselect, and an in-world highlighted cuboid overlay
 - history editing: rename saves, soft-delete safe saves, soft-delete inactive branches, and merge another local branch into the current branch as a new `MERGE` save
 - soft-deleted save files remain accessible from the More screen's deleted saves section
@@ -133,8 +133,8 @@ Use Lumi if you want to:
 5. Snapshot fallback is used for normal versions when direct replay is not valid.
 6. Tick-thread apply uses bounded chunk batches with pre-decoded block states, direct loaded-section commits when safe, and prepared entity batches.
 7. Restore replay completes paired block halves such as beds, doors, and tall plants before apply.
-8. A full restore moves the active branch head to the restored version after apply completes; a partial restore applies only selected bounds and writes a new save on the active branch.
-9. The partial-restore form can consume the current Lumi wooden-sword selection and marks that request as `LUMI_REGION`.
+8. A full restore moves the active branch head to the restored version after apply completes; when a Lumi selection exists, the confirmation also offers `Only selected area` and `Everything except selection`.
+9. Partial restore writes a new save on the active branch. The form can consume the current Lumi wooden-sword selection and marks that request as `LUMI_REGION`.
 
 ## Runtime Rules
 
@@ -143,7 +143,7 @@ Use Lumi if you want to:
 - Snapshot capture copies compact loaded-chunk payloads, including entity snapshots, on the server thread, then writes them asynchronously through storage.
 - Storage repositories read and write payloads; Minecraft-layer preparers build tick-ready apply batches.
 - Large WorldEdit/Axiom edits avoid block-entity NBT serialization for ordinary blocks, and capture project matching uses a cached dimension/chunk index.
-- Partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file.
+- `Only selected area` partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file. `Everything except selection` plans the same restore path but filters out selected blocks after loading the relevant changes.
 - Auto checkpoints save any existing pending draft before large external edits; if no draft exists, the current branch head is already the checkpoint and Lumi does nothing.
 - Restore apply uses adaptive tick budgets, direct section writes with vanilla fallback, batched section packets, capped block-entity/entity tail work per tick, and progress for entity-only batches.
 - One map operation is expected at a time per save.
@@ -282,7 +282,7 @@ Current scope:
 - singleplayer / integrated-server first
 - menu flow first, with commands limited to diagnostics/help and the explicit `/lumi testing singleplayer` runtime test suite
 - combine currently works through imported review projects for the same project lineage, with background review, block-level same-area detection, and validation messages before Lumi writes a combined save
-- partial restore is available from save details with manual bounds or a wooden-sword Lumi selection
+- partial restore is available from save details with manual bounds or a wooden-sword Lumi selection, including inside-selection and everything-except-selection modes
 - compare overlay marks changed positions, not a full 3D preview
 
 ## Docs

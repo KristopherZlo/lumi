@@ -1,5 +1,10 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.selection.LumiRegionSelectionController;
+import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.PartialRestoreMode;
+import io.github.luma.domain.model.PartialRestoreRegionSource;
+import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.LumaScrollContainer;
@@ -19,6 +24,8 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -136,7 +143,8 @@ public final class ProjectScreen extends LumaScreen {
                 this.selectedVariantId,
                 this.showAllSaves,
                 this.pendingRestoreVariantId,
-                this.pendingRestoreVersionId
+                this.pendingRestoreVersionId,
+                this.selectedLumiBounds()
         );
     }
 
@@ -147,6 +155,23 @@ public final class ProjectScreen extends LumaScreen {
         }
 
         this.refresh(this.actionController.restoreVersion(this.projectName, version.id()));
+    }
+
+    private void executeSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds) {
+        if (version == null || bounds == null) {
+            this.refresh("luma.status.operation_failed");
+            return;
+        }
+        PartialRestoreRequest request = new PartialRestoreRequest(
+                this.projectName,
+                version.id(),
+                bounds,
+                mode,
+                PartialRestoreRegionSource.LUMI_REGION,
+                this.client.getUser().getName(),
+                Map.of()
+        );
+        this.refresh(this.actionController.partialRestore(request));
     }
 
     private void clearPendingRestore() {
@@ -210,6 +235,16 @@ public final class ProjectScreen extends LumaScreen {
                 this.state.status(),
                 this.state.operationSnapshot(),
                 "luma.status.project_ready"
+        );
+    }
+
+    private Optional<Bounds3i> selectedLumiBounds() {
+        if (this.state.project() == null) {
+            return Optional.empty();
+        }
+        return LumiRegionSelectionController.getInstance().selectedBounds(
+                this.projectName,
+                this.state.project().dimensionId()
         );
     }
 
@@ -283,6 +318,12 @@ public final class ProjectScreen extends LumaScreen {
         public void confirmRestore(ProjectVariant variant, ProjectVersion version) {
             clearPendingRestore();
             executeRestore(variant, version);
+        }
+
+        @Override
+        public void confirmSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds) {
+            clearPendingRestore();
+            executeSelectedRestore(version, mode, bounds);
         }
 
         @Override
