@@ -116,7 +116,7 @@ Use Lumi if you want to:
 3. Lumi tries direct same-lineage replay first, including rollback to `WORLD_ROOT`.
 4. `WORLD_ROOT` fallback uses tracked baseline chunks when direct replay is not valid.
 5. Snapshot fallback is used for normal versions when direct replay is not valid.
-6. Tick-thread apply uses bounded chunk batches with pre-decoded block states and prepared entity batches.
+6. Tick-thread apply uses bounded chunk batches with pre-decoded block states, direct loaded-section commits when safe, and prepared entity batches.
 7. Restore replay completes paired block halves such as beds, doors, and tall plants before apply.
 8. A full restore moves the active branch head to the restored version after apply completes; a partial restore applies only selected bounds and writes a new save on the active branch.
 
@@ -128,7 +128,7 @@ Use Lumi if you want to:
 - Storage repositories read and write payloads; Minecraft-layer preparers build tick-ready apply batches.
 - Large WorldEdit/Axiom edits avoid block-entity NBT serialization for ordinary blocks, and capture project matching uses a cached dimension/chunk index.
 - Partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file.
-- Restore apply uses adaptive tick budgets, caps block-entity/entity tail work per tick, and reports progress for entity-only batches.
+- Restore apply uses adaptive tick budgets, direct section writes with vanilla fallback, batched section packets, capped block-entity/entity tail work per tick, and progress for entity-only batches.
 - One map operation is expected at a time per save.
 - Progress is exposed through operation state.
 - Lumi screens do not pause the game.

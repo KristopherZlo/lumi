@@ -492,6 +492,7 @@ public final class WorldOperationManager {
         private boolean blockEntitiesApplied = false;
         private boolean entitiesApplied = false;
         private int appliedWorkUnits = 0;
+        private final WorldApplyMetrics applyMetrics = new WorldApplyMetrics();
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -626,9 +627,10 @@ public final class WorldOperationManager {
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op",
-                        "Finalizing prepared operation {} after {} applied work units",
+                        "Finalizing prepared operation {} after {} applied work units with fast-apply metrics: {}",
                         this.handle().label(),
-                        this.appliedWorkUnits
+                        this.appliedWorkUnits,
+                        this.applyMetrics.summary()
                 );
                 return this.advanceCompletion();
             }
@@ -680,7 +682,8 @@ public final class WorldOperationManager {
                         this.level(),
                         section,
                         this.placementIndex,
-                        maxBlocks
+                        maxBlocks,
+                        this.applyMetrics
                 );
                 this.placementIndex += processed;
                 if (this.placementIndex >= section.placementCount()) {
@@ -698,7 +701,8 @@ public final class WorldOperationManager {
                             this.level(),
                             this.currentBlockEntities,
                             this.blockEntityIndex,
-                            Math.min(maxBlocks, MAX_BLOCK_ENTITIES_PER_TICK)
+                            Math.min(maxBlocks, MAX_BLOCK_ENTITIES_PER_TICK),
+                            this.applyMetrics
                     );
                     this.blockEntityIndex += processed;
                     if (this.blockEntityIndex >= this.currentBlockEntities.size()) {

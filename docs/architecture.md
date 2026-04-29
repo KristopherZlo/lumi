@@ -78,7 +78,8 @@ Important adapters:
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick with adaptive block budgets and bounded block-entity/entity passes
 - `WorldChangeBatchPreparer` and `SnapshotBatchPreparer`: convert persisted block/entity changes and snapshot payloads into tick-ready prepared batches before apply begins
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
-- `WorldApplyBlockUpdatePolicy` and `BlockChangeApplier`: commit section blocks, block entities, and entity batches in bounded steps with client-visible, side-effect-suppressed block flags so replayed restore/undo/redo states do not emit neighbor updates or placement physics
+- `BlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, and `VanillaBlockCommitStrategy`: choose the fastest safe loaded-section commit path for prepared section batches and fall back to normal `ServerLevel#setBlock` application when eligibility checks fail
+- `ChunkSectionUpdateBroadcaster`, `WorldApplyBlockUpdatePolicy`, and `BlockChangeApplier`: commit section blocks, block entities, and entity batches in bounded steps with batched section packets, block-entity packets, and side-effect-suppressed fallback flags so replayed restore/undo/redo states do not emit neighbor updates or placement physics
 - `ConnectedBlockPlacementExpander`: completes paired block placements for beds, doors, and tall plants before replay so apply batches do not leave one half clipped when only one persisted cell changed
 - `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
 - `SingleplayerTestingService`: tick-driven integrated-world regression runner for real save, undo/redo, branch, export, gameplay capture, and initial restore workflows, with chat progress and durable pass/fail logs
@@ -198,7 +199,7 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 9. Persisted patch, baseline, and snapshot payloads are decoded off-thread and converted by Minecraft-layer preparers before any tick-thread apply work starts.
 10. Prepared placements are collapsed by final block position and paired block halves are completed before tick-thread application; entity-only chunk batches are preserved.
 11. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
-12. Chunk commit order is fixed to section blocks -> bounded block-entity slices -> bounded entity removals -> bounded entity updates -> bounded entity spawns.
+12. Chunk commit order is fixed to section blocks -> bounded block-entity slices -> bounded entity removals -> bounded entity updates -> bounded entity spawns. Section blocks try direct `LevelChunkSection` writes for loaded chunks, update heightmaps, POI state, light checks, and chunk dirty state, then broadcast section-level changes; invalid or unloaded sections fall back to the vanilla apply path.
 13. Progress uses total work units: block placements, block-entity tail writes, entity removals, entity updates, and entity spawns. Entity-only operations do not complete early.
 14. Completion resets the target variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly. Branch switching and cross-branch save restore pass an explicit target variant or target save branch so active-branch metadata changes only after the world apply has finished.
 15. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
@@ -247,6 +248,7 @@ Current guarantees:
 - only one world operation runs per world at a time
 - the world-operation executor is single-threaded and low priority
 - restore/apply budgets adapt downward when a tick slice exceeds its budget and recover gradually when slices stay cheap
+- prepared apply records debug-only fast-apply metrics for direct sections, fallback sections, changed/skipped blocks, section packets, block-entity packets, light checks, and fallback reasons
 - block entities and entity diffs have explicit per-tick caps instead of running as unbounded chunk tail work
 - entity-only restore, undo/redo, and recovery batches remain visible to the operation model because progress counts entity work as first-class work units
 - preview generation no longer samples or rasterizes on the server; the server only queues request metadata and the client later performs the textured off-screen render with the built-in preview mesh path
@@ -292,7 +294,7 @@ There is also a project-scoped debug layer:
 
 - `ProjectSettings.debugLoggingEnabled` turns on verbose tracing for one workspace
 - `-Dlumi.debug=true` turns it on globally
-- debug logs cover capture, save, restore, recovery, compare, compare/recent overlay input and render diagnostics, compare overlay cache rebuilds, HUD refresh, and world-operation queue/application steps
+- debug logs cover capture, save, restore, recovery, compare, compare/recent overlay input and render diagnostics, compare overlay cache rebuilds, HUD refresh, world-operation queue/application steps, and fast world-apply metrics
 - `-Dlumi.startupProfile=true` is a separate startup diagnostic flag for idle launch profiling. It logs bootstrap/client initializer timings and aggregate chunk-section ownership counters without turning on full capture debug logs.
 
 Logs are part of the support surface. New background or storage work should not be introduced without meaningful logs.

@@ -155,6 +155,9 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `WorldChangeBatchPreparer`: patch/recovery block/entity changes to tick-ready batches.
 - `SnapshotBatchPreparer`: snapshot payloads to tick-ready batches.
 - `BlockChangeApplier`: actual section/block-entity/entity commit operations.
+- `BlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, `VanillaBlockCommitStrategy`: direct loaded-section apply path and safe vanilla fallback selection.
+- `ChunkSectionUpdateBroadcaster`: batched section and block-entity client update packets after fast commits.
+- `WorldApplyMetrics`: debug counters for direct/fallback sections, changed blocks, packets, light checks, and fallback reasons.
 - `WorldApplyBlockUpdatePolicy`: side-effect-suppressed update flags and apply behavior.
 - `PersistentBlockStatePolicy`: restore/snapshot normalization for runtime-only states.
 - `ConnectedBlockPlacementExpander`: paired blocks such as beds, doors, tall plants.

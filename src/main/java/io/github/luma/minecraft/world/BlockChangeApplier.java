@@ -6,7 +6,6 @@ import io.github.luma.domain.model.StoredBlockChange;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -23,6 +22,13 @@ public final class BlockChangeApplier {
 
     private static final PersistentBlockStatePolicy BLOCK_STATE_POLICY = new PersistentBlockStatePolicy();
     private static final WorldApplyBlockUpdatePolicy UPDATE_POLICY = new WorldApplyBlockUpdatePolicy();
+    private static final BlockPlacementUpdateDecider UPDATE_DECIDER = new BlockPlacementUpdateDecider();
+    private static final ChunkSectionUpdateBroadcaster UPDATE_BROADCASTER = new ChunkSectionUpdateBroadcaster();
+    private static final BlockCommitStrategy BLOCK_COMMIT_STRATEGY = new DirectSectionBlockCommitStrategy(
+            BLOCK_STATE_POLICY,
+            UPDATE_DECIDER,
+            UPDATE_BROADCASTER
+    );
 
     private BlockChangeApplier() {
     }
@@ -78,16 +84,25 @@ public final class BlockChangeApplier {
     }
 
     public static int applySectionBatch(ServerLevel level, SectionBatch batch, int startIndex, int maxBlocks) {
+        return applySectionBatch(level, batch, startIndex, maxBlocks, null);
+    }
+
+    public static int applySectionBatch(
+            ServerLevel level,
+            SectionBatch batch,
+            int startIndex,
+            int maxBlocks,
+            WorldApplyMetrics metrics
+    ) {
         if (batch == null || batch.placements().isEmpty() || maxBlocks <= 0 || startIndex >= batch.placements().size()) {
             return 0;
         }
 
-        int endIndex = Math.min(batch.placements().size(), startIndex + maxBlocks);
-        for (int index = startIndex; index < endIndex; index++) {
-            PreparedBlockPlacement placement = batch.placements().get(index);
-            applyBlockStateOnly(level, placement.pos(), placement.state(), placement.blockEntityTag());
+        BlockCommitResult result = BLOCK_COMMIT_STRATEGY.apply(level, batch, startIndex, maxBlocks);
+        if (metrics != null) {
+            metrics.record(result);
         }
-        return endIndex - startIndex;
+        return result.processedBlocks();
     }
 
     private static void applyPersistentBlockState(ServerLevel level, BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
@@ -109,14 +124,28 @@ public final class BlockChangeApplier {
             int startIndex,
             int maxBlockEntities
     ) {
+        return applyBlockEntities(level, blockEntities, startIndex, maxBlockEntities, null);
+    }
+
+    public static int applyBlockEntities(
+            ServerLevel level,
+            List<Map.Entry<BlockPos, CompoundTag>> blockEntities,
+            int startIndex,
+            int maxBlockEntities,
+            WorldApplyMetrics metrics
+    ) {
         if (blockEntities == null || blockEntities.isEmpty() || maxBlockEntities <= 0 || startIndex >= blockEntities.size()) {
             return 0;
         }
 
         int endIndex = Math.min(blockEntities.size(), startIndex + maxBlockEntities);
+        int blockEntityPackets = 0;
         for (int index = startIndex; index < endIndex; index++) {
             Map.Entry<BlockPos, CompoundTag> entry = blockEntities.get(index);
-            applyBlockEntity(level, entry.getKey(), entry.getValue());
+            blockEntityPackets += applyBlockEntityAndReport(level, entry.getKey(), entry.getValue());
+        }
+        if (metrics != null) {
+            metrics.record(BlockCommitResult.blockEntityPackets(blockEntityPackets));
         }
         return endIndex - startIndex;
     }
@@ -189,49 +218,48 @@ public final class BlockChangeApplier {
     }
 
     public static void applyBlockStateOnly(ServerLevel level, BlockPos pos, BlockState state, CompoundTag targetBlockEntityTag) {
+        applyBlockStateOnlyAndReport(level, pos, state, targetBlockEntityTag);
+    }
+
+    static boolean applyBlockStateOnlyAndReport(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState state,
+            CompoundTag targetBlockEntityTag
+    ) {
         PersistentBlockStatePolicy.PersistentBlockState persistentState = BLOCK_STATE_POLICY.normalize(state, targetBlockEntityTag);
         state = persistentState.state();
         targetBlockEntityTag = persistentState.blockEntityTag();
         if (!requiresUpdate(level, pos, state, targetBlockEntityTag)) {
-            return;
+            return false;
         }
 
         level.removeBlockEntity(pos);
         level.setBlock(pos, state, UPDATE_POLICY.placementFlags(state));
+        return true;
     }
 
     public static void applyBlockEntity(ServerLevel level, BlockPos pos, CompoundTag blockEntityTag) {
+        applyBlockEntityAndReport(level, pos, blockEntityTag);
+    }
+
+    private static int applyBlockEntityAndReport(ServerLevel level, BlockPos pos, CompoundTag blockEntityTag) {
         if (blockEntityTag == null) {
-            return;
+            return 0;
         }
 
         BlockState state = level.getBlockState(pos);
         BlockEntity blockEntity = BlockEntity.loadStatic(pos, state, blockEntityTag.copy(), level.registryAccess());
         if (blockEntity != null) {
             level.setBlockEntity(blockEntity);
+            return UPDATE_BROADCASTER.broadcastBlockEntity(level, blockEntity);
         }
+        return 0;
     }
 
     private static boolean requiresUpdate(ServerLevel level, BlockPos pos, BlockState targetState, CompoundTag targetBlockEntityTag) {
         BlockState currentState = level.getBlockState(pos);
-        if (!currentState.equals(targetState)) {
-            return true;
-        }
-
-        if (targetBlockEntityTag == null && !currentState.hasBlockEntity()) {
-            return false;
-        }
-
-        BlockEntity currentBlockEntity = level.getBlockEntity(pos);
-        if (currentBlockEntity == null) {
-            return targetBlockEntityTag != null;
-        }
-        if (targetBlockEntityTag == null) {
-            return true;
-        }
-
-        CompoundTag currentBlockEntityTag = currentBlockEntity.saveWithFullMetadata(level.registryAccess());
-        return !Objects.equals(currentBlockEntityTag, targetBlockEntityTag);
+        return UPDATE_DECIDER.requiresUpdate(level, pos, currentState, targetState, targetBlockEntityTag);
     }
 
     private static void removeEntity(ServerLevel level, String entityId) {
