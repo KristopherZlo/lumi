@@ -56,6 +56,36 @@ class CommitGraphLayoutPerformanceTest {
         assertEquals(1, branchNode.lane());
         assertEquals(0, branchNode.parentLane());
         assertTrue(branchNode.parentRowIndex() > branchNode.rowIndex());
+        assertFalse(CommitGraphLayout.build(versions, variants, "main").stream()
+                .filter(node -> node.version().id().equals("v0001"))
+                .findFirst()
+                .orElseThrow()
+                .activeLanes()
+                .contains(branchNode.lane()));
+    }
+
+    @Test
+    void commitGraphReusesLaneForBranchHeadAlreadyOnActivePath() {
+        Instant baseTime = Instant.parse("2026-04-21T00:00:00Z");
+        List<ProjectVersion> versions = List.of(
+                this.version("v0001", "main", "", baseTime),
+                this.version("v0002", "main", "v0001", baseTime.plusSeconds(1)),
+                this.version("v0003", "main", "v0002", baseTime.plusSeconds(2)),
+                this.version("v0004", "branch-a", "v0003", baseTime.plusSeconds(3))
+        );
+        List<ProjectVariant> variants = List.of(
+                new ProjectVariant("branch-a", "Branch A", "v0003", "v0004", false, baseTime.plusSeconds(2)),
+                new ProjectVariant("main", "main", "v0001", "v0003", true, baseTime)
+        );
+
+        List<CommitGraphNode> nodes = CommitGraphLayout.build(versions, variants, "branch-a");
+
+        assertTrue(nodes.stream().allMatch(node -> node.laneCount() == 1));
+        assertEquals(List.of("main"), nodes.stream()
+                .filter(node -> node.version().id().equals("v0003"))
+                .findFirst()
+                .orElseThrow()
+                .headVariants());
     }
 
     @Test

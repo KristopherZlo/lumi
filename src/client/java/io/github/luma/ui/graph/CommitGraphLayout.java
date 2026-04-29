@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -14,9 +13,9 @@ import java.util.Map;
  * Computes a stable branch-aware lane layout for the workspace commit graph.
  *
  * <p>The graph is a single-parent DAG. Lanes are assigned from variant heads in
- * deterministic order, shared ancestors keep the first lane that reaches them,
- * and each lane remains visually active between the first and last row where it
- * appears.
+ * deterministic order, branch heads already on an existing path reuse that
+ * lane, shared ancestors keep the first lane that reaches them, and each lane
+ * remains visually active only between rows where a version is assigned to it.
  */
 public final class CommitGraphLayout {
 
@@ -56,7 +55,6 @@ public final class CommitGraphLayout {
                         .toList();
 
         Map<String, Integer> versionLane = new LinkedHashMap<>();
-        Map<Integer, LinkedHashSet<String>> lanePaths = new LinkedHashMap<>();
         Map<String, List<String>> headVariantsByVersion = new LinkedHashMap<>();
         int nextLane = 0;
 
@@ -64,20 +62,20 @@ public final class CommitGraphLayout {
             if (variant.headVersionId() == null || variant.headVersionId().isBlank()) {
                 continue;
             }
+            headVariantsByVersion.computeIfAbsent(variant.headVersionId(), ignored -> new ArrayList<>()).add(variant.id());
+            if (versionLane.containsKey(variant.headVersionId())) {
+                continue;
+            }
 
             int lane = nextLane++;
-            LinkedHashSet<String> path = new LinkedHashSet<>();
             ProjectVersion cursor = versionMap.get(variant.headVersionId());
             while (cursor != null) {
-                path.add(cursor.id());
                 versionLane.putIfAbsent(cursor.id(), lane);
                 if (cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()) {
                     break;
                 }
                 cursor = versionMap.get(cursor.parentVersionId());
             }
-            lanePaths.put(lane, path);
-            headVariantsByVersion.computeIfAbsent(variant.headVersionId(), ignored -> new ArrayList<>()).add(variant.id());
         }
 
         for (ProjectVersion version : orderedVersions) {
@@ -86,24 +84,17 @@ public final class CommitGraphLayout {
             }
             int lane = nextLane++;
             versionLane.put(version.id(), lane);
-            lanePaths.put(lane, new LinkedHashSet<>(List.of(version.id())));
         }
 
         Map<Integer, LaneSpan> laneSpans = new LinkedHashMap<>();
-        for (Map.Entry<Integer, LinkedHashSet<String>> entry : lanePaths.entrySet()) {
-            int minRow = Integer.MAX_VALUE;
-            int maxRow = Integer.MIN_VALUE;
-            for (String versionId : entry.getValue()) {
-                Integer rowIndex = rowIndexByVersionId.get(versionId);
-                if (rowIndex == null) {
-                    continue;
-                }
-                minRow = Math.min(minRow, rowIndex);
-                maxRow = Math.max(maxRow, rowIndex);
+        for (ProjectVersion version : orderedVersions) {
+            Integer rowIndex = rowIndexByVersionId.get(version.id());
+            Integer lane = versionLane.get(version.id());
+            if (rowIndex == null || lane == null) {
+                continue;
             }
-            if (minRow != Integer.MAX_VALUE && maxRow != Integer.MIN_VALUE) {
-                laneSpans.put(entry.getKey(), new LaneSpan(minRow, maxRow));
-            }
+            LaneSpan existing = laneSpans.get(lane);
+            laneSpans.put(lane, existing == null ? new LaneSpan(rowIndex, rowIndex) : existing.include(rowIndex));
         }
 
         int laneCount = Math.max(1, nextLane);
@@ -140,6 +131,10 @@ public final class CommitGraphLayout {
     }
 
     private record LaneSpan(int minRow, int maxRow) {
+
+        private LaneSpan include(int rowIndex) {
+            return new LaneSpan(Math.min(this.minRow, rowIndex), Math.max(this.maxRow, rowIndex));
+        }
 
         private boolean contains(int rowIndex) {
             return rowIndex >= this.minRow && rowIndex <= this.maxRow;
