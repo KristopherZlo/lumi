@@ -12,6 +12,7 @@ import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.util.eventbus.Subscribe;
 import com.sk89q.worldedit.world.block.BlockStateHolder;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.Locale;
@@ -45,11 +46,19 @@ public final class WorldEditEditSessionTracker {
         if (level == null) {
             return;
         }
+        String actor = this.actorName(event.getActor());
+        String actionId = UUID.randomUUID().toString();
+        AutoCheckpointService.getInstance().checkpointBeforeExternalOperation(
+                level,
+                WorldMutationSource.WORLDEDIT,
+                actor,
+                actionId
+        );
         event.setExtent(new TrackingExtent(
                 event.getExtent(),
                 level,
-                this.actorName(event.getActor()),
-                UUID.randomUUID().toString()
+                actor,
+                actionId
         ));
     }
 
