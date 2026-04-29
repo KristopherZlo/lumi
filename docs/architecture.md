@@ -224,6 +224,7 @@ Key differences from full restore:
 - `SELECTED_AREA` applies only changes inside the selected bounds; with patch payload v6 it reads only chunk frames intersecting those bounds
 - `OUTSIDE_SELECTED_AREA` applies the restore path outside the selected bounds, leaving selected blocks untouched
 - after apply, Lumi writes a new `PARTIAL_RESTORE` version on the active variant
+- after the version write succeeds, Lumi records the applied block/entity changes as one live undo/redo action so the player can undo or redo the partial restore without changing the saved branch head
 - pending draft changes in the restored part are folded into that version; pending draft changes outside the restored part are preserved as the recovery draft
 - entity changes are filtered by their old/new entity position and stored alongside block changes in the partial-restore version
 - non-direct cross-lineage partial restore is rejected until a snapshot/baseline target-state planner is implemented

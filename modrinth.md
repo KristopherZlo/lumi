@@ -34,7 +34,7 @@ Lumi is made for builders and redstoners who want to:
 - Compare a save against its parent, another save, a branch head, or the live current build.
 - In-world compare highlight with an x-ray hold mode through the Lumi action button.
 - Restore saved versions back into the world with progress reporting.
-- Partial restore from save details using manual XYZ bounds or the current Lumi selection, with `Only selected area` and `Everything except selection` modes.
+- Partial restore from save details using manual XYZ bounds or the current Lumi selection, with `Only selected area` and `Everything except selection` modes, plus live undo/redo for the applied partial restore.
 - Runtime-only wooden-sword region selection with highlighted cuboid bounds.
 - Crash recovery drafts with a direct recovery prompt only for interrupted work from a previous session.
 - Optional auto checkpoints before large vanilla `/fill` or `/clone`, WorldEdit, or Axiom edits when pending work exists. This setting is off by default.
