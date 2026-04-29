@@ -113,6 +113,11 @@ public final class SettingsScreen extends LumaScreen {
         this.client.setScreen(this.parent);
     }
 
+    @Override
+    public Screen navigationParent() {
+        return this.parent;
+    }
+
     private FlowLayout performanceSection() {
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.settings.performance_title"),

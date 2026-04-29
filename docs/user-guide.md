@@ -12,16 +12,17 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 
 - Press `U` to open the project for the current dimension.
 - If that project does not exist yet, Lumi creates it.
-- Press the Lumi overlay key plus `S` to open Quick save while no screen is open. The default chord is `Left Alt+S`, and both keys are remappable in Minecraft `Controls` under `Lumi`.
-- Use the Lumi overlay key plus `Z` to undo the latest tracked Lumi action while no screen is open. The default overlay key is `Left Alt`.
-- Use the Lumi overlay key plus `Y` to redo the latest undone Lumi action while no screen is open.
+- Press the Lumi action button plus `S` to open Quick save while no screen is open. The default chord is `Left Alt+S`, and both keys are remappable in Minecraft `Controls` under `Lumi`.
+- Use the Lumi action button plus `Z` to undo the latest tracked action while no screen is open. The default action button is `Left Alt`.
+- Use the Lumi action button plus `Y` to redo the latest undone tracked action while no screen is open.
+- For WorldEdit and FAWE edits, those chords call the tools' native undo/redo commands and then update Lumi's pending draft. Axiom edits are left to Axiom's own undo command.
 - Undo and redo restore the stored block states without firing immediate redstone/block updates from the replay itself, so restored TNT does not auto-prime just because it is next to powered redstone.
 - Undo also removes item drops caused by the tracked edit, such as TNT drops or water-broken blocks, and redo respawns those drops.
-- Hold the Lumi overlay key to preview undo targets, or overlay key plus `Y` to preview redo targets, when compare highlight is not active. Changing the overlay key changes both the preview hold and these undo/redo chords.
+- Hold the Lumi action button to preview undo targets, or the action button plus `Y` to preview redo targets, when compare highlight is not active. Changing the action button changes both the preview hold and these undo/redo chords.
 - Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
 - Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.
 - Use `More` -> `Projects` when you need to switch dimensions or choose another workspace.
-- Press `Esc` from any Lumi screen to close the Lumi UI and return to the game.
+- Press `Esc` to leave the current Lumi screen. Detail screens go back to their parent screen; top-level workspace screens close the Lumi UI.
 
 ## Legacy Manual Projects
 
@@ -97,7 +98,7 @@ That node is a metadata-backed `WORLD_ROOT`.
 
 ## Save And Amend
 
-Use Quick save when you only need a name, cancel, and save action. It opens as a standalone dialog from the remappable Lumi overlay key plus `Quick save key` chord and saves to the current dimension workspace.
+Use Quick save when you only need a name, cancel, and save action. It opens as a standalone dialog from the remappable Lumi action button plus `Quick save key` chord and saves to the current dimension workspace.
 
 Open the `Save` screen from the main action on the project home screen.
 
@@ -146,7 +147,7 @@ Runtime rules:
 
 Lumi keeps a recovery draft while unsaved tracked changes exist.
 
-If the game stops before you save them as a version, Lumi shows the recovery screen on the next open.
+If the game stops before you save them as a version, Lumi shows the recovery screen on the next open. Normal unsaved work from the current running session stays as pending work in the project screen and does not repeatedly force the recovery screen.
 
 From that screen you can:
 
@@ -251,7 +252,7 @@ Press `H` to hide or show the current overlay without rebuilding the comparison.
 Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
 Dense diff regions render as an exposed translucent shell with thicker outlines, so nearby changes stay readable instead of stacking into a solid color slab.
 If one side of the comparison is the `current` build, that active highlight refreshes automatically while you keep editing.
-If compare highlight is not active, holding the Lumi overlay key shows the latest 10 undo actions instead. Holding the overlay key plus `Y` switches that temporary overlay to redo actions, fading from the newest action to older ones and rendering translucent exposed sides as well as thicker outlines.
+If compare highlight is not active, holding the Lumi action button shows the latest 10 undo actions instead. Holding the action button plus `Y` switches that temporary overlay to redo actions, fading from the newest action to older ones and rendering translucent exposed sides as well as thicker outlines.
 
 The overlay gives priority to changes near the camera.
 
@@ -271,9 +272,9 @@ Primary actions stay focused:
 - `Restore this save`
 - `See changes`
 
-Extra actions like refresh preview, rename save, delete save, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
+Extra actions like rename save, delete save, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
 
-`Restore selected area` is also under `More`. Use it when you want to restore only a bounded region from the selected save. Min/Max coordinate fields appear only after you choose that action. Preview the region first, then apply it. Lumi writes the result as a new save on the active branch instead of moving the branch head back to the older save.
+`Restore selected area` is a primary action on save details. Use it when you want to restore only a bounded region from the selected save. You can copy a Lumi selection into the form or edit Min/Max coordinates manually. Preview the region first, then apply it. Lumi writes the result as a new save on the active branch instead of moving the branch head back to the older save.
 
 You can fill those bounds from Lumi's wooden-sword selection:
 
@@ -281,13 +282,15 @@ You can fill those bounds from Lumi's wooden-sword selection:
 - Look at a block in loaded chunks; it can be beyond normal interaction reach.
 - Left click sets corner A in `corners` mode.
 - Right click sets corner B in `corners` mode.
-- `Alt+scroll` toggles `corners` and `extend`.
+- Lumi action button + scroll toggles `corners` and `extend`.
 - In `extend` mode, left click expands the current cuboid and right click resets the selection to the clicked block.
-- `Alt+right click` clears the selection.
+- Lumi action button + right click clears the selection.
 - The selected cuboid is highlighted in-world.
 - Use `Use selected area` in the partial-restore form to copy the selection into the restore bounds.
 
 Renaming a save changes only the saved message. Deleting a save is a soft delete. Root saves cannot be deleted, non-leaf saves are blocked, and deleting a safe branch-head save moves that branch head back to the parent before hiding the save.
+
+Soft-deleted saves are hidden from normal history, but their files remain on disk. Open `More` and review `Deleted saves` when you need to inspect those hidden save ids.
 
 ## Settings
 

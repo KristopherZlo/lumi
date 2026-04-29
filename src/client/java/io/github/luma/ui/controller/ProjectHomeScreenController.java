@@ -54,6 +54,7 @@ public final class ProjectHomeScreenController {
             var loadedVersions = new ArrayList<>(this.query.loadVersions(projectName, loadedVariants));
             loadedVersions.sort(Comparator.comparing(io.github.luma.domain.model.ProjectVersion::createdAt).reversed());
             RecoveryDraft draft = this.query.loadDraft(projectName);
+            boolean interruptedDraft = this.query.hasInterruptedDraft(projectName);
             ProjectAdvancedViewState advanced = includeAdvanced
                     ? new ProjectAdvancedViewState(
                             this.query.loadIntegrity(projectName),
@@ -68,7 +69,7 @@ public final class ProjectHomeScreenController {
                     loadedVersions,
                     loadedVariants,
                     draft == null ? PendingChangeSummary.empty() : ChangeStatsFactory.summarizePending(draft.changes()),
-                    draft != null && !draft.isEmpty(),
+                    interruptedDraft,
                     this.query.loadOperationSnapshot(project),
                     advanced,
                     status == null || status.isBlank() ? "luma.status.project_ready" : status
@@ -87,6 +88,19 @@ public final class ProjectHomeScreenController {
         }
     }
 
+    public List<ProjectVersion> loadDeletedVersions(String projectName) {
+        if (!this.query.hasSingleplayerServer()) {
+            return List.of();
+        }
+        try {
+            return this.query.loadDeletedVersions(projectName).stream()
+                    .sorted(Comparator.comparing(ProjectVersion::createdAt).reversed())
+                    .toList();
+        } catch (Exception exception) {
+            return List.of();
+        }
+    }
+
     interface Query {
 
         boolean hasSingleplayerServer();
@@ -97,7 +111,11 @@ public final class ProjectHomeScreenController {
 
         List<ProjectVersion> loadVersions(String projectName, List<ProjectVariant> variants) throws Exception;
 
+        List<ProjectVersion> loadDeletedVersions(String projectName) throws Exception;
+
         RecoveryDraft loadDraft(String projectName) throws Exception;
+
+        boolean hasInterruptedDraft(String projectName) throws Exception;
 
         List<RecoveryJournalEntry> loadJournal(String projectName) throws Exception;
 
@@ -138,8 +156,18 @@ public final class ProjectHomeScreenController {
         }
 
         @Override
+        public List<ProjectVersion> loadDeletedVersions(String projectName) throws Exception {
+            return this.projectService.loadDeletedVersions(this.server(), projectName);
+        }
+
+        @Override
         public RecoveryDraft loadDraft(String projectName) throws Exception {
             return this.recoveryService.loadDraft(this.server(), projectName).orElse(null);
+        }
+
+        @Override
+        public boolean hasInterruptedDraft(String projectName) throws Exception {
+            return this.recoveryService.hasInterruptedDraft(this.server(), projectName);
         }
 
         @Override

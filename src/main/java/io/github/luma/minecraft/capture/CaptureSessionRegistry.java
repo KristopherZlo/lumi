@@ -16,6 +16,7 @@ final class CaptureSessionRegistry {
     private final Map<String, Instant> lastDraftFlushes = new HashMap<>();
     private final Map<String, Integer> lastDraftFingerprints = new HashMap<>();
     private final Set<String> dirtySessions = new HashSet<>();
+    private final Set<String> currentRunDrafts = new HashSet<>();
 
     TrackedChangeBuffer buffer(String projectId) {
         return this.activeBuffers.get(projectId);
@@ -48,6 +49,22 @@ final class CaptureSessionRegistry {
         this.dirtySessions.remove(projectId);
         this.lastDraftFlushes.remove(projectId);
         this.lastDraftFingerprints.remove(projectId);
+    }
+
+    void markCurrentRunDraft(String projectId) {
+        if (projectId != null && !projectId.isBlank()) {
+            this.currentRunDrafts.add(projectId);
+        }
+    }
+
+    void clearCurrentRunDraft(String projectId) {
+        if (projectId != null && !projectId.isBlank()) {
+            this.currentRunDrafts.remove(projectId);
+        }
+    }
+
+    boolean hasCurrentRunDraft(String projectId) {
+        return projectId != null && this.currentRunDrafts.contains(projectId);
     }
 
     void markDirty(String projectId) {

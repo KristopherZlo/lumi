@@ -216,6 +216,14 @@ public final class ProjectService {
                 .toList();
     }
 
+    public List<ProjectVersion> loadDeletedVersions(MinecraftServer server, String projectName) throws IOException {
+        ProjectLayout layout = this.resolveLayout(server, projectName);
+        var tombstones = this.historyTombstoneRepository.load(layout);
+        return this.versionRepository.loadAll(layout).stream()
+                .filter(version -> tombstones.versionDeleted(version.id()))
+                .toList();
+    }
+
     public List<ProjectVariant> loadVariants(MinecraftServer server, String projectName) throws IOException {
         ProjectLayout layout = this.resolveLayout(server, projectName);
         var tombstones = this.historyTombstoneRepository.load(layout);

@@ -230,6 +230,7 @@ public final class HistoryCaptureManager {
                 );
                 this.logBufferProgress(trackedProject.project(), buffer, diagnostics);
                 if (buffer.isEmpty()) {
+                    this.sessionRegistry.clearCurrentRunDraft(projectId);
                     this.sessionRegistry.close(projectId);
                     this.clearSessionDiagnostics(projectId);
                     this.persistenceCoordinator.deleteDraft(
@@ -326,6 +327,7 @@ public final class HistoryCaptureManager {
                 );
                 this.logBufferProgress(trackedProject.project(), buffer, this.diagnosticsForSession(projectId));
                 if (buffer.isEmpty()) {
+                    this.sessionRegistry.clearCurrentRunDraft(projectId);
                     this.sessionRegistry.close(projectId);
                     this.clearSessionDiagnostics(projectId);
                     this.persistenceCoordinator.deleteDraft(
@@ -446,6 +448,7 @@ public final class HistoryCaptureManager {
         }
 
         if (buffer.isEmpty()) {
+            this.sessionRegistry.clearCurrentRunDraft(projectId);
             this.sessionRegistry.close(projectId);
             this.clearSessionDiagnostics(projectId);
             this.persistenceCoordinator.deleteDraft(
@@ -474,6 +477,10 @@ public final class HistoryCaptureManager {
         return this.serverThreadExecutor.call(server, () -> this.snapshotDraftOnServerThread(server, projectId));
     }
 
+    public boolean hasInterruptedDraft(MinecraftServer server, String projectId) throws IOException {
+        return this.serverThreadExecutor.call(server, () -> this.hasInterruptedDraftOnServerThread(server, projectId));
+    }
+
     private Optional<RecoveryDraft> snapshotDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
         TrackedChangeBuffer buffer = this.sessionRegistry.buffer(projectId);
         if (buffer != null) {
@@ -484,6 +491,26 @@ public final class HistoryCaptureManager {
             return Optional.empty();
         }
         return this.recoveryRepository.loadDraft(trackedProject.layout());
+    }
+
+    private boolean hasInterruptedDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
+        if (projectId == null || projectId.isBlank()) {
+            return false;
+        }
+        TrackedChangeBuffer buffer = this.sessionRegistry.buffer(projectId);
+        if (buffer != null && !buffer.isEmpty()) {
+            return false;
+        }
+        if (this.sessionRegistry.hasCurrentRunDraft(projectId)) {
+            return false;
+        }
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        if (trackedProject == null) {
+            return false;
+        }
+        return this.recoveryRepository.loadDraft(trackedProject.layout())
+                .filter(draft -> !draft.isEmpty())
+                .isPresent();
     }
 
     /**
@@ -527,6 +554,7 @@ public final class HistoryCaptureManager {
 
         if (trackedProject != null && !session.isEmpty()) {
             if (persistedDraftIsCurrent) {
+                this.sessionRegistry.markCurrentRunDraft(projectId);
                 LumaMod.LOGGER.info(
                         "Skipped shutdown draft rewrite for project {} because the active buffer is already persisted",
                         trackedProject.project().name()
@@ -542,6 +570,7 @@ public final class HistoryCaptureManager {
                     session.size()
             );
             this.recoveryRepository.saveDraft(trackedProject.layout(), session.toDraft());
+            this.sessionRegistry.markCurrentRunDraft(projectId);
             LumaMod.LOGGER.info(
                     "Persisted active buffer for project {} with {} pending changes",
                     trackedProject.project().name(),
@@ -575,6 +604,7 @@ public final class HistoryCaptureManager {
         this.sessionRegistry.close(projectId);
         this.clearSessionDiagnostics(projectId);
         if (session != null) {
+            this.sessionRegistry.clearCurrentRunDraft(projectId);
             LumaMod.LOGGER.info("Consumed in-memory buffer for project {} with {} pending changes", projectId, session.size());
             if (trackedProject != null) {
                 LumaDebugLog.log(
@@ -612,6 +642,7 @@ public final class HistoryCaptureManager {
         this.clearSessionDiagnostics(projectId);
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         if (trackedProject != null) {
+            this.sessionRegistry.clearCurrentRunDraft(projectId);
             this.persistenceCoordinator.deleteDraft(
                     trackedProject.layout(),
                     projectId,
@@ -1185,6 +1216,7 @@ public final class HistoryCaptureManager {
         this.logReconciliation(trackedProject, result);
         this.recordReconciledUndoRedoChanges(trackedProject, level, result.deltaChanges(), Instant.now());
         if (session.buffer().isEmpty()) {
+            this.sessionRegistry.clearCurrentRunDraft(projectId);
             this.sessionRegistry.close(projectId);
             this.clearSessionDiagnostics(projectId);
             this.persistenceCoordinator.deleteDraft(

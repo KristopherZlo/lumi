@@ -67,7 +67,7 @@ Important adapters:
 - `CaptureDiagnosticsRegistry`: owns capture diagnostics state used for accepted-mutation traces and progress summaries
 - `TrackedProjectCatalog`: loads active project metadata, caches tracked-project membership, and exposes the dimension/chunk index used by capture matching
 - `ProjectTrackingIndex`: caches dimension/chunk membership for active projects so block capture does not scan every project for every mutation
-- `UndoRedoHistoryManager`: keeps the in-memory per-project undo and redo action stacks that power live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout or reconciled stabilization deltas into the latest builder action
+- `UndoRedoHistoryManager`: keeps the in-memory per-project undo and redo action stacks that power live undo/redo and the temporary recent-action overlay, and it can absorb nearby short-lived secondary fallout or reconciled stabilization deltas into the latest builder action. Client undo routing sends WorldEdit/FAWE actors through the tools' native commands while leaving Axiom to its own undo flow.
 - `CapturePersistenceCoordinator`: owns the low-priority maintenance executor for async baseline writes and coalesced recovery draft flushes
 - `ChunkSnapshotCaptureService`: copies loaded chunk section palettes, real block-entity tags, and entity snapshots into immutable compact payloads on the server thread
 - `SnapshotCaptureService`: marshals checkpoint snapshot capture onto the server thread and leaves serialization/persistence to storage writers
@@ -76,7 +76,7 @@ Important adapters:
 - `AutoCheckpointCommandClassifier` and `AutoCheckpointService`: identify large vanilla `/fill` and `/clone` commands plus external WorldEdit/Axiom action ids, then save an existing pending draft as an `AUTO_CHECKPOINT` before the external edit starts
 - `ExplosiveEntityContextRegistry`: carries the originating builder action from a primed TNT spawn to its delayed explosion so the block damage is captured with the same action context
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
-- `WorldMutationContext`: prevents restore application from being re-captured as tracked history
+- `WorldMutationContext`: prevents restore application from being re-captured as tracked history and can temporarily suppress capture while Lumi dispatches native external-tool undo/redo commands
 - `LumaAccessControl`: centralizes the operator/cheats gate for diagnostic commands, UI entry points, and dedicated-server tracked world actions
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick with adaptive block budgets and bounded block-entity/entity passes
 - `WorldChangeBatchPreparer` and `SnapshotBatchPreparer`: convert persisted block/entity changes and snapshot payloads into tick-ready prepared batches before apply begins
@@ -134,21 +134,21 @@ Responsibilities are split as follows:
 - `LumaScreen` extends owo-ui `BaseOwoScreen`, keeps Lumi menus non-pausing, closes the Lumi UI back to the game on Escape, and gives each route a code-driven `OwoUIAdapter`
 - `CompareScreenSections`, `ProjectScreenSections`, focused Save details section builders, and `ShareMergeReviewSection` own repeated route section composition, while their screens keep route lifecycle, transient selection state, and action callbacks
 - `ClientWorkspaceOpenService` opens the current workspace through a lightweight loading screen and schedules project metadata preparation away from the client tick that handled the key press
-- `ClientWorkspaceOpenService` and `ScreenRouter` route directly to `RecoveryScreen` when the opened project has a non-empty persisted draft
-- `QuickSaveScreen` is a standalone shortcut route opened from the Lumi overlay key plus `Quick save key` chord; `QuickSaveScreenController` resolves the current dimension workspace and calls the same save service as the normal Save route
+- `ClientWorkspaceOpenService` and `ScreenRouter` route directly to `RecoveryScreen` when the opened project has a non-empty interrupted draft from a previous session; current-run pending work stays on the normal project screen
+- `QuickSaveScreen` is a standalone shortcut route opened from the Lumi action button plus `Quick save key` chord; `QuickSaveScreenController` resolves the current dimension workspace and calls the same save service as the normal Save route
 - `LumaUi` centralizes compact `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface` rules so screens avoid absolute positioning and keep layout predictable
 - `ProjectWindowLayout` and `ProjectSidebarNavigation` keep the primary workspace tabs visible across Build History, Branches, Import / Export, Settings, and More. The sidebar highlights the active route and includes external support links.
 - `PreviewCaptureCoordinator` watches pending preview requests for the current dimension, throttles empty scans so idle gameplay does not repeatedly walk preview request storage, runs the textured off-screen renderer on the client render thread through a local layered preview mesh builder, and trims empty transparent margins before storing the PNG. Save details polls for the fulfilled metadata and reloads cached textures when the PNG changes, so a finished preview appears without reopening the screen.
 - obsolete tab-builder scaffolds have been removed; larger workflows now use dedicated screens and narrow view-state records instead of a shared project tab container
 - the project home screen is now a Build History view with one primary action, `Save build`, plus one-click `See changes`, recent saves, `Branches`, and `More`
-- `MoreScreen` exposes project maintenance, manual compare, the history graph, and raw references directly; Import / Export and Settings stay in the persistent sidebar, and diagnostics remain out of the normal builder path.
+- `MoreScreen` exposes project maintenance, manual compare, the history graph, and raw references under Project tools, plus a separate Deleted saves tab for soft-deleted save metadata; Import / Export and Settings stay in the persistent sidebar, and diagnostics remain out of the normal builder path.
 - `CommitGraphLayout` computes deterministic branch lanes, skips shared-only empty lanes, and exposes parent-lane connectors, while `CommitGraphGeometry` owns graph hit-testing and routed connector geometry. `CommitGraphComponent` renders the More history graph as colored lanes, branch-head badges, commit metadata, and clickable rows instead of ASCII prefixes.
 - dedicated screens isolate `Save`, `Save details`, `Branches`, `Import / Export`, `See Changes`, `Recovered work`, `Settings`, `Cleanup`, and `Diagnostics` so the main project screen no longer carries rare or technical workflows
 - `WorkspaceHudCoordinator` owns the optional top-right HUD overlay and action-bar progress surface. It uses a slower idle refresh cadence and switches back to the short cadence while a world operation is active.
 - project-facing screens poll lightweight operation snapshots every 10 client ticks so conflicting mutation buttons unlock as soon as the operation becomes terminal, while status text can stay visible briefly
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, binds active overlay data to the resolved project/version pair, prioritizes the nearest exposed changed blocks to the current camera position, and draws exposed overlay faces through immediate end-main quads so translucent fill is flushed independently of the shared world buffer. Normal mode remains depth-tested so highlights do not show through blocks; x-ray mode deliberately disables depth testing.
 - `CompareOverlayCoordinator` refreshes `current`-world compare overlays on the client tick so live edits appear in the active highlight without rebuilding the screen manually
-- `RecentChangesOverlayRenderer` renders latest undo actions when the remappable Lumi overlay key is held, or redo actions while overlay key plus redo is held, when the compare overlay is not active. Dense action previews are selected from exposed changed blocks first so large fills do not disappear when the nearest raw blocks are internal, and fill alpha stays low enough for outlines to remain readable.
+- `RecentChangesOverlayRenderer` renders latest undo actions when the remappable Lumi action button is held, or redo actions while the action button plus redo is held, when the compare overlay is not active. Dense action previews are selected from exposed changed blocks first so large fills do not disappear when the nearest raw blocks are internal, and fill alpha stays low enough for outlines to remain readable.
 - `LumiRegionSelectionController` keeps the runtime-only wooden-sword selection for the current project and dimension. `LumiRegionSelectionRenderer` draws the selected cuboid with translucent faces and an outline in the world render callback.
 - the Import / Export route presents the normal flow: export history packages first, list importable zips from the game-root `lumi-projects` folder, import packages as review projects, optionally include preview PNGs in exports, delete imported review packages, resolve same-area zones, show zone overlays, and apply a combined save without cluttering Build History or Branches
 
@@ -177,6 +177,7 @@ Important invariants:
 - entity spawn/remove/update diffs use nullable old/new payloads and are applied through `EntityBatch`
 - restore-originated mutations never re-enter tracked history
 - undo/redo reuses prepared world operations and then adjusts the pending draft separately, so internal replay does not create duplicate capture events
+- native WorldEdit/FAWE undo/redo adjusts Lumi's pending draft after the tool command runs and suppresses fallback capture during the command, so the same changes are not recorded twice
 - undo-only item drops are excluded from durable recovery and version payloads by entity capture policy
 
 ## Save flow
@@ -226,7 +227,7 @@ Key differences from full restore:
 - entity changes are filtered by their old/new entity position and stored alongside block changes in the partial-restore version
 - non-direct cross-lineage partial restore is rejected until a snapshot/baseline target-state planner is implemented
 
-The client can fill the same request from a runtime Lumi region selection. With a `minecraft:wooden_sword`, Lumi uses a client-side raycast through already-loaded chunks so the selected block can be farther than vanilla interaction reach without loading new chunks. `Alt+scroll` toggles between `corners` and `extend`. In `corners` mode, left click sets corner A and right click sets corner B. In `extend` mode, left click expands the current bounds and right click resets the selection to the clicked block. `Alt+right click` clears the selection. Selection state is scoped to project plus dimension in memory and is not persisted.
+The client can fill the same request from a runtime Lumi region selection. With a `minecraft:wooden_sword`, Lumi uses a client-side raycast through already-loaded chunks so the selected block can be farther than vanilla interaction reach without loading new chunks. Lumi action button + scroll toggles between `corners` and `extend`. In `corners` mode, left click sets corner A and right click sets corner B. In `extend` mode, left click expands the current bounds and right click resets the selection to the clicked block. Lumi action button + right click clears the selection. Selection state is scoped to project plus dimension in memory and is not persisted.
 
 Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never happen on the tick-thread apply path.
 
@@ -256,7 +257,7 @@ Current strategy:
 - first-touch whole-dimension baseline writes are queued through the same executor after the server thread copies a compact chunk snapshot payload
 - in-progress save/amend drafts move to `recovery/operation-draft.bin.lz4` so new edits can start a separate live draft
 - restore/save recovery actions reuse the same operation model as save and restore
-- project open routes directly to the recovery screen when a non-empty draft is persisted, so recovery is an active choice instead of only a passive banner
+- project open routes directly to the recovery screen only when a non-empty interrupted draft is persisted from a previous run; same-run unsaved drafts remain visible as pending changes instead of repeatedly forcing recovery
 
 ## Threading model
 

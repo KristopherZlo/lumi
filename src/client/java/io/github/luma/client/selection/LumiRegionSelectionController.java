@@ -5,10 +5,12 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -32,12 +34,19 @@ public final class LumiRegionSelectionController {
             return this.size() > MAX_SCOPES;
         }
     };
+    private KeyMapping actionButton;
+    private KeyBindingState keyBindingState;
 
     private LumiRegionSelectionController() {
     }
 
     public static LumiRegionSelectionController getInstance() {
         return INSTANCE;
+    }
+
+    public void configureActionButton(KeyMapping actionButton, KeyBindingState keyBindingState) {
+        this.actionButton = actionButton;
+        this.keyBindingState = keyBindingState;
     }
 
     public boolean selectPrimary(Minecraft client, InteractionHand hand, BlockPos pos) {
@@ -58,7 +67,7 @@ public final class LumiRegionSelectionController {
             return false;
         }
 
-        if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && this.altDown(client, modifiers)) {
+        if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && this.actionButtonDown(client)) {
             return this.clearSelection(client);
         }
         if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT && button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
@@ -83,7 +92,7 @@ public final class LumiRegionSelectionController {
         if ((horizontalAmount == 0.0D && verticalAmount == 0.0D) || !this.canHandleWorldInput(client)) {
             return false;
         }
-        if (!this.altDown(client, 0) || this.selectionToolHand(client.player).isEmpty()) {
+        if (!this.actionButtonDown(client) || this.selectionToolHand(client.player).isEmpty()) {
             return false;
         }
 
@@ -205,16 +214,11 @@ public final class LumiRegionSelectionController {
                 && client.getOverlay() == null;
     }
 
-    private boolean altDown(Minecraft client, int modifiers) {
-        if ((modifiers & GLFW.GLFW_MOD_ALT) != 0) {
-            return true;
-        }
-        if (client == null || client.getWindow() == null) {
+    private boolean actionButtonDown(Minecraft client) {
+        if (this.actionButton == null || this.keyBindingState == null) {
             return false;
         }
-        long window = client.getWindow().handle();
-        return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_ALT) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_ALT) == GLFW.GLFW_PRESS;
+        return this.keyBindingState.isDown(client, this.actionButton);
     }
 
     private void notify(Player player, String key) {

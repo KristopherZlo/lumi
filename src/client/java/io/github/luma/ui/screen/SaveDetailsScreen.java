@@ -15,7 +15,6 @@ import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
-import io.github.luma.ui.preview.ProjectPreviewTextureCache;
 import io.github.luma.ui.screen.section.SaveDetailsPartialRestoreSection;
 import io.github.luma.ui.state.PartialRestoreFormState;
 import io.github.luma.ui.state.SaveDetailsViewState;
@@ -126,6 +125,9 @@ public final class SaveDetailsScreen extends LumaScreen {
         body.child(this.summarySection(version, versionVariant));
         body.child(this.changesSection(version));
         body.child(this.primaryActions(version, versionVariant, operationActive));
+        if (this.showPartialRestore) {
+            body.child(this.partialRestoreSection(version, operationActive));
+        }
         body.child(this.moreSection(version, operationActive));
         body.child(LumaUi.bottomSpacer());
     }
@@ -296,8 +298,26 @@ public final class SaveDetailsScreen extends LumaScreen {
         comparePrevious.active(!this.parentVersionId(version.id()).isBlank());
         actions.child(comparePrevious);
 
+        actions.child(LumaUi.button(Component.translatable("luma.action.restore_selected_area"), button -> {
+            this.showPartialRestore = !this.showPartialRestore;
+            this.rebuild();
+        }));
+
         section.child(actions);
         return section;
+    }
+
+    private FlowLayout partialRestoreSection(ProjectVersion version, boolean operationActive) {
+        return this.partialRestoreSections.section(new SaveDetailsPartialRestoreSection.Model(
+                this.projectName,
+                version,
+                this.client.getUser().getName(),
+                operationActive,
+                this.partialRestoreForm,
+                this.state.project() == null ? null : this.state.project().bounds(),
+                this.fallbackPartialRestoreBounds(),
+                this.selectedLumiBounds()
+        ));
     }
 
     private FlowLayout moreSection(ProjectVersion version, boolean operationActive) {
@@ -336,11 +356,6 @@ public final class SaveDetailsScreen extends LumaScreen {
         replaceButton.active(this.canReplaceLatest(version) && !operationActive);
         actions.child(replaceButton);
 
-        actions.child(LumaUi.button(Component.translatable("luma.action.refresh_preview"), button -> {
-            ProjectPreviewTextureCache.release(this.projectName, version.id());
-            this.refresh(this.controller.refreshPreview(this.projectName, version.id()));
-        }));
-
         ButtonComponent deleteButton = LumaUi.button(Component.translatable("luma.action.delete_save"), button -> {
             this.pendingDeleteConfirmation = true;
             this.refresh("luma.status.version_delete_confirm");
@@ -354,27 +369,6 @@ public final class SaveDetailsScreen extends LumaScreen {
                 version.id()
         )));
         expanded.child(actions);
-
-        FlowLayout restoreSelected = LumaUi.actionRow();
-        restoreSelected.child(LumaUi.button(Component.translatable("luma.action.restore_selected_area"), button -> {
-            this.showPartialRestore = !this.showPartialRestore;
-            this.rebuild();
-        }));
-        expanded.child(restoreSelected);
-        if (this.showPartialRestore) {
-            FlowLayout partialExpanded = LumaUi.revealGroup();
-            partialExpanded.child(this.partialRestoreSections.section(new SaveDetailsPartialRestoreSection.Model(
-                    this.projectName,
-                    version,
-                    this.client.getUser().getName(),
-                    operationActive,
-                    this.partialRestoreForm,
-                    this.state.project() == null ? null : this.state.project().bounds(),
-                    this.fallbackPartialRestoreBounds(),
-                    this.selectedLumiBounds()
-            )));
-            expanded.child(partialExpanded);
-        }
 
         FlowLayout advanced = LumaUi.actionRow();
         advanced.child(LumaUi.button(Component.translatable(

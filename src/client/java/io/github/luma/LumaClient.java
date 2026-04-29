@@ -9,6 +9,7 @@ import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
+import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.debug.StartupProfiler;
 import io.github.luma.ui.controller.ClientWorkspaceOpenService;
 import net.minecraft.client.KeyMapping;
@@ -42,7 +43,7 @@ public final class LumaClient implements ClientModInitializer {
     private KeyMapping undoKey;
     private KeyMapping redoKey;
     private KeyMapping toggleCompareOverlayKey;
-    private KeyMapping compareOverlayXrayKey;
+    private KeyMapping lumiActionButtonKey;
     private final KeyBindingState keyBindingState = new KeyBindingState();
     private final UndoRedoKeyChordTracker undoRedoKeyChordTracker = new UndoRedoKeyChordTracker();
     private final UndoRedoKeyController undoRedoKeyController = new UndoRedoKeyController();
@@ -86,12 +87,13 @@ public final class LumaClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_H,
                 KEY_CATEGORY
         ));
-        this.compareOverlayXrayKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        this.lumiActionButtonKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 COMPARE_OVERLAY_XRAY_KEY,
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_LEFT_ALT,
                 KEY_CATEGORY
         ));
+        LumiRegionSelectionController.getInstance().configureActionButton(this.lumiActionButtonKey, this.keyBindingState);
         StartupProfiler.logElapsed("client.key-bindings", keyBindingsStartedAt);
 
         long eventRegistrationStartedAt = StartupProfiler.start();
@@ -108,7 +110,7 @@ public final class LumaClient implements ClientModInitializer {
     }
 
     private void onEndTick(Minecraft client) {
-        boolean overlayHold = this.keyBindingState.isDown(client, this.compareOverlayXrayKey);
+        boolean overlayHold = this.keyBindingState.isDown(client, this.lumiActionButtonKey);
         boolean shortcutInputActive = client != null
                 && client.screen == null
                 && client.player != null
@@ -136,7 +138,7 @@ public final class LumaClient implements ClientModInitializer {
                 undoRedoKeys.previewTarget(),
                 undoRedoKeys.undoPressed(),
                 undoRedoKeys.redoPressed(),
-                this.compareOverlayXrayKey
+                this.lumiActionButtonKey
         );
         while (this.toggleCompareOverlayKey.consumeClick()) {
             CompareOverlayRenderer.toggleVisibility();
