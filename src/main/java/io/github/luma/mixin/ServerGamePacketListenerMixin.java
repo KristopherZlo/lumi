@@ -2,6 +2,7 @@ package io.github.luma.mixin;
 
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.access.LumaAccessControl;
+import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket;
@@ -26,6 +27,7 @@ abstract class ServerGamePacketListenerMixin {
     @Inject(method = "handleChatCommand", at = @At("HEAD"))
     private void luma$beginChatCommand(ServerboundChatCommandPacket packet, CallbackInfo ci) {
         this.luma$pushPlayerSource();
+        AutoCheckpointService.getInstance().checkpointBeforeCommand(this.player, packet.command());
     }
 
     @Inject(method = "handleChatCommand", at = @At("RETURN"))
@@ -36,6 +38,7 @@ abstract class ServerGamePacketListenerMixin {
     @Inject(method = "handleSignedChatCommand", at = @At("HEAD"))
     private void luma$beginSignedChatCommand(ServerboundChatCommandSignedPacket packet, CallbackInfo ci) {
         this.luma$pushPlayerSource();
+        AutoCheckpointService.getInstance().checkpointBeforeCommand(this.player, packet.command());
     }
 
     @Inject(method = "handleSignedChatCommand", at = @At("RETURN"))

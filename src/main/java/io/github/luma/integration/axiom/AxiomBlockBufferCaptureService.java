@@ -1,6 +1,7 @@
 package io.github.luma.integration.axiom;
 
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.List;
@@ -42,6 +43,12 @@ public final class AxiomBlockBufferCaptureService {
 
         String actor = this.actorName(player);
         String actionId = "axiom-buffer-" + UUID.randomUUID();
+        AutoCheckpointService.getInstance().checkpointBeforeExternalOperation(
+                level,
+                WorldMutationSource.AXIOM,
+                actor,
+                actionId
+        );
         for (AxiomBlockMutation mutation : mutations) {
             this.recordMutation(level, mutation, actor, actionId);
         }
