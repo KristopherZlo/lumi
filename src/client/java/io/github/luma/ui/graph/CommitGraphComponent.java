@@ -5,6 +5,7 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.ProjectUiSupport;
 import io.wispforest.owo.ui.base.BaseUIComponent;
 import io.wispforest.owo.ui.core.Color;
+import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import java.util.ArrayList;
@@ -12,8 +13,12 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.Font;
+import org.lwjgl.glfw.GLFW;
 
 public final class CommitGraphComponent extends BaseUIComponent {
 
@@ -29,23 +34,27 @@ public final class CommitGraphComponent extends BaseUIComponent {
     };
     private static final int BACKDROP = 0x30071016;
     private static final int BORDER = 0x704D6070;
+    private static final int ROW_HOVER = 0x223F5362;
     private static final int TEXT_PRIMARY = 0xFFF3F7FA;
     private static final int TEXT_MUTED = 0xFF98A6B3;
     private static final int TEXT_BADGE = 0xFF0B1016;
-    private static final int ROW_HEIGHT = 32;
-    private static final int TOP_PADDING = 8;
-    private static final int BOTTOM_PADDING = 8;
-    private static final int SIDE_PADDING = 8;
-    private static final int LEGEND_HEIGHT = 20;
-    private static final int MIN_TEXT_WIDTH = 120;
 
     private final List<CommitGraphNode> nodes;
     private final Map<String, ProjectVariant> variantById;
     private final Map<Integer, List<ProjectVariant>> headVariantsByLane;
     private final int laneCount;
     private final int preferredHeight;
+    private final Consumer<String> openVersionDetails;
 
     public CommitGraphComponent(List<CommitGraphNode> nodes, List<ProjectVariant> variants) {
+        this(nodes, variants, null);
+    }
+
+    public CommitGraphComponent(
+            List<CommitGraphNode> nodes,
+            List<ProjectVariant> variants,
+            Consumer<String> openVersionDetails
+    ) {
         this.nodes = nodes == null ? List.of() : List.copyOf(nodes);
         this.variantById = this.indexVariants(variants);
         this.headVariantsByLane = this.indexHeadVariants(this.nodes, this.variantById);
@@ -53,10 +62,8 @@ public final class CommitGraphComponent extends BaseUIComponent {
                 .mapToInt(CommitGraphNode::laneCount)
                 .max()
                 .orElse(1);
-        this.preferredHeight = TOP_PADDING
-                + (this.headVariantsByLane.isEmpty() ? 0 : LEGEND_HEIGHT)
-                + Math.max(1, this.nodes.size()) * ROW_HEIGHT
-                + BOTTOM_PADDING;
+        this.preferredHeight = CommitGraphGeometry.preferredHeight(this.nodes.size(), !this.headVariantsByLane.isEmpty());
+        this.openVersionDetails = openVersionDetails;
         this.sizing(Sizing.fill(100), Sizing.fixed(this.preferredHeight));
     }
 
@@ -71,6 +78,32 @@ public final class CommitGraphComponent extends BaseUIComponent {
     }
 
     @Override
+    public void update(float delta, int mouseX, int mouseY) {
+        super.update(delta, mouseX, mouseY);
+        this.cursorStyle(this.openVersionDetails != null && this.geometry().nodeAt(mouseX, mouseY).isPresent()
+                ? CursorStyle.HAND
+                : CursorStyle.NONE);
+    }
+
+    @Override
+    public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
+        if (this.openVersionDetails == null) {
+            return super.onMouseDown(click, doubled);
+        }
+        if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            return super.onMouseDown(click, doubled);
+        }
+
+        Optional<CommitGraphNode> target = this.geometry().nodeAtLocal(click.x(), click.y());
+        if (target.isEmpty()) {
+            return super.onMouseDown(click, doubled);
+        }
+
+        this.openVersionDetails.accept(target.get().version().id());
+        return true;
+    }
+
+    @Override
     public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
         graphics.fill(this.x, this.y, this.x + this.width, this.y + this.height, BACKDROP);
         graphics.drawRectOutline(this.x, this.y, this.width, this.height, BORDER);
@@ -79,20 +112,13 @@ public final class CommitGraphComponent extends BaseUIComponent {
         }
 
         Font font = Minecraft.getInstance().font;
-        int graphX = this.x + SIDE_PADDING + 4;
-        int textRight = this.x + this.width - SIDE_PADDING;
-        int laneSpacing = this.laneSpacing();
-        int graphWidth = Math.max(0, (this.laneCount - 1) * laneSpacing);
-        int textX = Math.min(
-                graphX + graphWidth + 18,
-                Math.max(graphX + 42, textRight - MIN_TEXT_WIDTH)
-        );
-        int rowStartY = this.y + TOP_PADDING + (this.headVariantsByLane.isEmpty() ? 0 : LEGEND_HEIGHT);
+        CommitGraphGeometry geometry = this.geometry();
+        CommitGraphNode hoveredNode = geometry.nodeAt(mouseX, mouseY).orElse(null);
 
-        this.drawLegend(graphics, font, graphX, this.y + TOP_PADDING, textRight);
-        this.drawParentConnectors(graphics, graphX, rowStartY, laneSpacing);
-        this.drawLaneRuns(graphics, graphX, rowStartY, laneSpacing);
-        this.drawRows(graphics, font, graphX, rowStartY, laneSpacing, textX, textRight);
+        this.drawLegend(graphics, font, geometry.graphX(), this.y + CommitGraphGeometry.TOP_PADDING, geometry.textRight());
+        this.drawLaneRuns(graphics, geometry);
+        this.drawParentConnectors(graphics, geometry);
+        this.drawRows(graphics, font, geometry, hoveredNode);
     }
 
     private void drawLegend(OwoUIGraphics graphics, Font font, int startX, int y, int rightX) {
@@ -109,49 +135,50 @@ public final class CommitGraphComponent extends BaseUIComponent {
         }
     }
 
-    private void drawParentConnectors(OwoUIGraphics graphics, int graphX, int rowStartY, int laneSpacing) {
+    private void drawParentConnectors(OwoUIGraphics graphics, CommitGraphGeometry geometry) {
         for (CommitGraphNode node : this.nodes) {
-            if (node.parentLane() < 0 || node.parentRowIndex() < 0 || node.parentLane() == node.lane()) {
-                continue;
+            for (CommitGraphGeometry.ConnectorSegment segment : geometry.parentConnectorSegments(node)) {
+                graphics.drawLine(
+                        segment.x1(),
+                        segment.y1(),
+                        segment.x2(),
+                        segment.y2(),
+                        2.0D,
+                        Color.ofArgb(this.fade(this.laneColor(node.lane()), 0xCC))
+                );
             }
-            int nodeX = this.laneX(graphX, laneSpacing, node.lane());
-            int nodeY = this.rowCenterY(rowStartY, node.rowIndex());
-            int parentX = this.laneX(graphX, laneSpacing, node.parentLane());
-            int parentY = this.rowCenterY(rowStartY, node.parentRowIndex());
-            graphics.drawLine(nodeX, nodeY, parentX, parentY, 2.0D, Color.ofArgb(this.fade(this.laneColor(node.lane()), 0xCC)));
         }
     }
 
-    private void drawLaneRuns(OwoUIGraphics graphics, int graphX, int rowStartY, int laneSpacing) {
-        for (int lane = 0; lane < this.laneCount; lane++) {
-            int firstRow = -1;
-            int lastRow = -1;
-            for (CommitGraphNode node : this.nodes) {
-                if (!node.activeLanes().contains(lane)) {
-                    continue;
-                }
-                if (firstRow < 0) {
-                    firstRow = node.rowIndex();
-                }
-                lastRow = node.rowIndex();
-            }
-            if (firstRow < 0 || lastRow < 0) {
-                continue;
-            }
-            int x = this.laneX(graphX, laneSpacing, lane);
-            int y1 = this.rowCenterY(rowStartY, firstRow) - (ROW_HEIGHT / 2) + 4;
-            int y2 = this.rowCenterY(rowStartY, lastRow) + (ROW_HEIGHT / 2) - 4;
-            graphics.drawLine(x, y1, x, y2, 2.0D, Color.ofArgb(this.fade(this.laneColor(lane), 0x88)));
+    private void drawLaneRuns(OwoUIGraphics graphics, CommitGraphGeometry geometry) {
+        for (CommitGraphGeometry.LaneRun run : geometry.laneRuns()) {
+            graphics.drawLine(
+                    run.x(),
+                    run.y1(),
+                    run.x(),
+                    run.y2(),
+                    2.0D,
+                    Color.ofArgb(this.fade(this.laneColor(run.lane()), 0x88))
+            );
         }
     }
 
-    private void drawRows(OwoUIGraphics graphics, Font font, int graphX, int rowStartY, int laneSpacing, int textX, int textRight) {
+    private void drawRows(OwoUIGraphics graphics, Font font, CommitGraphGeometry geometry, CommitGraphNode hoveredNode) {
+        String hoveredVersionId = hoveredNode == null ? "" : hoveredNode.version().id();
+        int textX = geometry.textX();
+        int textRight = geometry.textRight();
         for (CommitGraphNode node : this.nodes) {
-            int rowY = this.rowCenterY(rowStartY, node.rowIndex());
+            boolean hovered = node.version().id().equals(hoveredVersionId);
+            int rowY = geometry.rowCenterY(node);
             int laneColor = this.laneColor(node.lane());
-            int nodeX = this.laneX(graphX, laneSpacing, node.lane());
+            int nodeX = geometry.laneX(node.lane());
 
-            this.drawNode(graphics, nodeX, rowY, laneColor, node.activeHead());
+            if (hovered) {
+                int rowTop = geometry.rowTopY(node) + 2;
+                graphics.fill(this.x + 1, rowTop, this.x + this.width - 1, rowTop + CommitGraphGeometry.ROW_HEIGHT - 4, ROW_HOVER);
+            }
+
+            this.drawNode(graphics, nodeX, rowY, laneColor, node.activeHead(), hovered);
             ProjectVersion version = node.version();
             int maxTextWidth = Math.max(24, textRight - textX);
             String title = this.trim(font, ProjectUiSupport.displayMessage(version), maxTextWidth);
@@ -183,10 +210,18 @@ public final class CommitGraphComponent extends BaseUIComponent {
         }
     }
 
-    private void drawNode(OwoUIGraphics graphics, int x, int y, int laneColor, boolean activeHead) {
-        graphics.drawCircle(x, y, 24, activeHead ? 6.5D : 5.0D, Color.ofArgb(0xFF091018));
-        if (activeHead) {
-            graphics.drawRing(x, y, 24, 5.0D, 7.2D, Color.ofArgb(laneColor), Color.ofArgb(0xFFEAF5FF));
+    private void drawNode(OwoUIGraphics graphics, int x, int y, int laneColor, boolean activeHead, boolean hovered) {
+        graphics.drawCircle(x, y, 24, activeHead || hovered ? 6.8D : 5.0D, Color.ofArgb(0xFF091018));
+        if (activeHead || hovered) {
+            graphics.drawRing(
+                    x,
+                    y,
+                    24,
+                    hovered ? 5.2D : 5.0D,
+                    activeHead ? 7.2D : 6.8D,
+                    Color.ofArgb(laneColor),
+                    Color.ofArgb(hovered ? 0xFFFFFFFF : 0xFFEAF5FF)
+            );
         }
         graphics.drawCircle(x, y, 24, activeHead ? 4.0D : 3.8D, Color.ofArgb(laneColor));
     }
@@ -201,22 +236,6 @@ public final class CommitGraphComponent extends BaseUIComponent {
         graphics.drawRectOutline(x, y, width, 13, this.fade(color, 0xFF));
         graphics.drawString(font, label, x + 4, y + 2, TEXT_BADGE, false);
         return x + width;
-    }
-
-    private int laneSpacing() {
-        if (this.laneCount <= 1) {
-            return 0;
-        }
-        int available = Math.max(28, this.width - SIDE_PADDING - SIDE_PADDING - MIN_TEXT_WIDTH - 24);
-        return Math.max(4, Math.min(16, available / Math.max(1, this.laneCount - 1)));
-    }
-
-    private int laneX(int graphX, int laneSpacing, int lane) {
-        return graphX + (lane * laneSpacing);
-    }
-
-    private int rowCenterY(int rowStartY, int rowIndex) {
-        return rowStartY + (rowIndex * ROW_HEIGHT) + (ROW_HEIGHT / 2);
     }
 
     private int laneColor(int lane) {
@@ -268,5 +287,16 @@ public final class CommitGraphComponent extends BaseUIComponent {
             }
         }
         return indexed;
+    }
+
+    private CommitGraphGeometry geometry() {
+        return new CommitGraphGeometry(
+                this.x,
+                this.y,
+                this.width,
+                this.laneCount,
+                !this.headVariantsByLane.isEmpty(),
+                this.nodes
+        );
     }
 }
