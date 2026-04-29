@@ -61,7 +61,7 @@ Use Lumi if you want to:
 
 - automatic dimension projects
 - builder-first Build History UI built around `Save build`, `See changes`, recent saves, `Branches`, and `More`
-- lightweight save, branch, import/export, cleanup, diagnostics, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
+- lightweight save, branch, import/export, settings, storage cleanup, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
 - remappable quick-save chord, default `Left Alt+S`, that opens a standalone save-name dialog without entering Build History
 - dedicated save screen with optional `Replace latest save`
@@ -75,8 +75,8 @@ Use Lumi if you want to:
 - region-scoped partial restore from save details, written back as a new `PARTIAL_RESTORE` save
 - recovery drafts with WAL compaction
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
-- material delta summaries and integrity checks under focused details/diagnostic screens
-- zip import/export under `More`, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews
+- material delta summaries and integrity checks under focused details and support screens
+- zip import/export from the workspace sidebar, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews
 - imported review projects with deletion, cached combine review, and same-area overlays for shared branches
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
 - conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica/Tweakeroo placement paths, and known tool stacks that reach Minecraft block or entity mutation paths
@@ -256,7 +256,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 8. Press the Lumi overlay key plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
 9. Use `Save build` when you want the full save screen with suggestions or replace-latest tools.
 10. Open a save when you want details, restore, see changes, or create a branch from it.
-11. Use `Branches` for alternate build directions and `More` for import/export, settings, cleanup, diagnostics, and advanced tools.
+11. Use `Branches` for alternate build directions, the sidebar for Import / Export and Settings, and `More` for storage cleanup or advanced history tools.
 
 ## Scope
 

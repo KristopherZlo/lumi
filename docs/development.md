@@ -174,10 +174,10 @@ Current UX assumptions:
 - holding the compare x-ray / Lumi overlay key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - compare and recent-action overlays build their render selection from exposed changed blocks, so dense fills still have visible surfaces even when the camera is nearest to internal changed blocks
 - holding the same remappable overlay key while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay that renders translucent exposed sides as well as thicker outlines; holding the overlay key plus redo previews redo actions
-- the dashboard is now secondary navigation under `More` -> `Projects`
+- the dashboard is a project picker outside the focused workspace menu
 - the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, `Branches`, and `More`
 - settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress, and settings persist immediately on valid field changes
-- low-frequency tools such as import/export, settings, cleanup, diagnostics, the colored branch graph, manual compare, legacy limited projects, and raw info live behind `More` or `Advanced`
+- Import / Export and Settings are first-level workspace sidebar routes, while `More` is limited to storage cleanup and Advanced history tools
 - save composition, save details, branch management, import/export combine review, cleanup, diagnostics, and advanced tools now have dedicated screens instead of sharing one overloaded project page
 
 ## History architecture

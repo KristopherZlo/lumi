@@ -89,9 +89,7 @@ public final class AdvancedScreen extends LumaScreen {
                 "",
                 ""
         )));
-        actions.child(LumaUi.button(Component.translatable("luma.action.legacy_limited_project"), button -> this.router.openCreateProject(this)));
         section.child(actions);
-        section.child(LumaUi.caption(Component.translatable("luma.advanced.legacy_project_help")));
         return section;
     }
 
