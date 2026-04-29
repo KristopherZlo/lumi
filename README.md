@@ -61,7 +61,7 @@ Use Lumi if you want to:
 ## Current Features
 
 - automatic dimension projects
-- builder-first Build History UI built around `Save build`, `See changes`, recent saves, `Branches`, and `More`
+- builder-first Build History UI built around `Save build`, `See changes`, recent saves, and `Branches`, with maintenance tools kept in the sidebar `More` route
 - localized UI resources for English, Russian, French, Spanish, German, and Finnish
 - lightweight save, branch, import/export, settings, storage cleanup, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots

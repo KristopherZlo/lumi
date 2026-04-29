@@ -6,6 +6,7 @@ import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
+import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.state.SaveViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
@@ -78,7 +79,9 @@ public final class SaveScreen extends LumaScreen {
         frame.child(header);
 
         frame.child(LumaUi.value(Component.translatable("luma.screen.save.title")));
-        frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
+        if (this.shouldShowStatusBanner()) {
+            frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
+        }
 
         FlowLayout body = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(body);
@@ -219,6 +222,14 @@ public final class SaveScreen extends LumaScreen {
     private void refresh(String statusKey) {
         this.status = statusKey == null || statusKey.isBlank() ? "luma.status.project_ready" : statusKey;
         this.rebuild();
+    }
+
+    private boolean shouldShowStatusBanner() {
+        return ScreenOperationStateSupport.shouldShowStatusBanner(
+                this.state.status(),
+                this.state.operationSnapshot(),
+                "luma.status.project_ready"
+        );
     }
 
     private void rebuild() {

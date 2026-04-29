@@ -99,7 +99,9 @@ public final class ProjectScreen extends LumaScreen {
         );
         root.child(window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.HISTORY);
-        window.content().child(LumaUi.statusBanner(this.bannerText()));
+        if (this.shouldShowStatusBanner()) {
+            window.content().child(LumaUi.statusBanner(this.bannerText()));
+        }
 
         ProjectScreenSections.Model model = this.sectionModel();
         FlowLayout confirmation = this.sections.initialRestoreConfirmationSection(model);
@@ -198,6 +200,14 @@ public final class ProjectScreen extends LumaScreen {
         return ScreenOperationStateSupport.bannerText(this.state.status(), this.state.operationSnapshot(), "luma.status.project_ready");
     }
 
+    private boolean shouldShowStatusBanner() {
+        return ScreenOperationStateSupport.shouldShowStatusBanner(
+                this.state.status(),
+                this.state.operationSnapshot(),
+                "luma.status.project_ready"
+        );
+    }
+
     private double currentScrollProgress() {
         return this.bodyScroll == null ? 0.0D : this.bodyScroll.progress();
     }
@@ -223,11 +233,6 @@ public final class ProjectScreen extends LumaScreen {
         @Override
         public void openVariants() {
             router.openVariants(ProjectScreen.this, projectName);
-        }
-
-        @Override
-        public void openMore() {
-            router.openMore(ProjectScreen.this, projectName);
         }
 
         @Override

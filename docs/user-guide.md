@@ -53,7 +53,8 @@ Secondary actions stay short:
 
 - `See changes`
 - `Branches`
-- `More`
+
+Project maintenance and the history graph stay in the sidebar `More` route instead of the current-build card.
 
 Below that, `Recent saves` shows recent save cards for the selected branch.
 

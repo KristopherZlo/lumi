@@ -90,7 +90,9 @@ public final class VariantsScreen extends LumaScreen {
         );
         root.child(window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.VARIANTS);
-        window.content().child(LumaUi.statusBanner(this.bannerText()));
+        if (this.shouldShowStatusBanner()) {
+            window.content().child(LumaUi.statusBanner(this.bannerText()));
+        }
 
         FlowLayout body = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(body);
@@ -313,6 +315,14 @@ public final class VariantsScreen extends LumaScreen {
 
     private Component bannerText() {
         return ScreenOperationStateSupport.bannerText(this.state.status(), this.state.operationSnapshot(), "luma.status.project_ready");
+    }
+
+    private boolean shouldShowStatusBanner() {
+        return ScreenOperationStateSupport.shouldShowStatusBanner(
+                this.state.status(),
+                this.state.operationSnapshot(),
+                "luma.status.project_ready"
+        );
     }
 
     private void refresh(String statusKey) {
