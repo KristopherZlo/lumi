@@ -31,6 +31,14 @@ public final class ScreenOperationStateSupport {
         return resolvedStatus;
     }
 
+    public static boolean shouldShowStatusBanner(String statusKey, OperationSnapshot snapshot, String readyStatusKey) {
+        String resolvedStatus = normalizeStatusKey(statusKey, snapshot, readyStatusKey);
+        if (snapshot != null && snapshot.terminal()) {
+            return snapshot.failed();
+        }
+        return !resolvedStatus.equals(readyStatusKey);
+    }
+
     public static Component bannerText(String statusKey, OperationSnapshot snapshot, String readyStatusKey) {
         String resolvedStatus = normalizeStatusKey(statusKey, snapshot, readyStatusKey);
         if (snapshot == null || !snapshot.terminal()) {

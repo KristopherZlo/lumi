@@ -111,7 +111,9 @@ public final class SaveDetailsScreen extends LumaScreen {
                 "luma.screen.save_details.title",
                 ProjectUiSupport.displayMessage(version)
         )));
-        frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
+        if (this.shouldShowStatusBanner()) {
+            frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
+        }
 
         if (this.pendingRestoreConfirmation) {
             frame.child(this.restoreConfirmationSection(version, versionVariant, operationActive));
@@ -587,6 +589,14 @@ public final class SaveDetailsScreen extends LumaScreen {
         return LumiRegionSelectionController.getInstance().selectedBounds(
                 this.projectName,
                 this.state.project().dimensionId()
+        );
+    }
+
+    private boolean shouldShowStatusBanner() {
+        return ScreenOperationStateSupport.shouldShowStatusBanner(
+                this.state.status(),
+                this.state.operationSnapshot(),
+                "luma.status.project_ready"
         );
     }
 

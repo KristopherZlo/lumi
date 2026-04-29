@@ -43,6 +43,35 @@ class ScreenOperationStateSupportTest {
         );
     }
 
+    @Test
+    void readyStatusDoesNotNeedPersistentBanner() {
+        assertFalse(ScreenOperationStateSupport.shouldShowStatusBanner(
+                "luma.status.project_ready",
+                null,
+                "luma.status.project_ready"
+        ));
+        assertTrue(ScreenOperationStateSupport.shouldShowStatusBanner(
+                "luma.status.restore_confirmation_required",
+                null,
+                "luma.status.project_ready"
+        ));
+        assertFalse(ScreenOperationStateSupport.shouldShowStatusBanner(
+                "luma.status.save_started",
+                null,
+                "luma.status.project_ready"
+        ));
+        assertFalse(ScreenOperationStateSupport.shouldShowStatusBanner(
+                "luma.status.project_ready",
+                snapshot(OperationStage.COMPLETED, "Done"),
+                "luma.status.project_ready"
+        ));
+        assertTrue(ScreenOperationStateSupport.shouldShowStatusBanner(
+                "luma.status.project_ready",
+                snapshot(OperationStage.FAILED, "Failed"),
+                "luma.status.project_ready"
+        ));
+    }
+
     private static OperationSnapshot snapshot(OperationStage stage, String detail) {
         return new OperationSnapshot(
                 new OperationHandle("op", "project", "save", Instant.parse("2026-04-23T08:00:00Z"), false),

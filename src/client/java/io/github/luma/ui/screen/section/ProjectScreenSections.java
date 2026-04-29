@@ -90,7 +90,6 @@ public final class ProjectScreenSections {
         changesButton.active(activeHead != null);
         secondary.child(changesButton);
         secondary.child(LumaUi.button(Component.translatable("luma.action.ideas"), button -> this.actions.openVariants()));
-        secondary.child(LumaUi.button(Component.translatable("luma.action.more"), button -> this.actions.openMore()));
         section.child(secondary);
 
         if (model.state().hasRecoveryDraft()) {
@@ -339,8 +338,6 @@ public final class ProjectScreenSections {
         void openCompare(String leftReference, String rightReference, String contextVersionId);
 
         void openVariants();
-
-        void openMore();
 
         void openRecovery();
 

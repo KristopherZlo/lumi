@@ -29,7 +29,7 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
-            this.closeLumaUi();
+            this.onClose();
             return true;
         }
         return super.keyPressed(event);
