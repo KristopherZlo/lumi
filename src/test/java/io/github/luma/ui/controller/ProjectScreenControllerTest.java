@@ -50,6 +50,14 @@ class ProjectScreenControllerTest {
                 "luma.status.variant_delete_blocked",
                 ProjectScreenController.historyEditFailureStatus(new IllegalArgumentException("Active branch cannot be deleted"))
         );
+        assertEquals(
+                "luma.status.save_name_required",
+                ProjectScreenController.historyEditFailureStatus(new IllegalArgumentException("Save name is required"))
+        );
+        assertEquals(
+                "luma.status.version_delete_blocked",
+                ProjectScreenController.historyEditFailureStatus(new IllegalArgumentException("Only leaf saves can be deleted"))
+        );
     }
 
     @Test
