@@ -109,10 +109,12 @@ Stores the project metadata, including:
   - `safetySnapshotBeforeRestore`
   - `previewGenerationEnabled`
   - `debugLoggingEnabled`
+  - `autoCheckpointEnabled`
   - `workspaceHudEnabled`
 - legacy favorite flag and archive flag
 
 Older project files may omit `workspaceHudEnabled`; Lumi treats the missing value as `true` so existing workspaces keep the top-right panel visible until the user disables it in Settings.
+Older project files may omit `autoCheckpointEnabled`; Lumi treats the missing value as `false`, so automatic checkpoints before large external edits remain opt-in.
 
 ### `variants.json`
 

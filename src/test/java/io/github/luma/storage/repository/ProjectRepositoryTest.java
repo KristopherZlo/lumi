@@ -1,13 +1,17 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.storage.GsonProvider;
 import io.github.luma.storage.ProjectLayout;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectRepositoryTest {
@@ -35,5 +39,24 @@ class ProjectRepositoryTest {
     @Test
     void missingProjectsRootHasNoLayoutMatches() throws Exception {
         assertTrue(this.repository.findLayoutByProjectName(this.tempDir.resolve("missing"), "World").isEmpty());
+    }
+
+    @Test
+    void legacyProjectWithoutAutoCheckpointSettingKeepsItDisabled() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Legacy");
+        BuildProject project = BuildProject.createWorldWorkspace(
+                "Legacy",
+                "minecraft:overworld",
+                Instant.parse("2026-04-28T08:00:00Z")
+        );
+        this.repository.initializeLayout(layout);
+        String json = GsonProvider.gson()
+                .toJson(project)
+                .replace(",\"autoCheckpointEnabled\":false", "");
+        Files.writeString(layout.projectFile(), json, StandardCharsets.UTF_8);
+
+        BuildProject loaded = this.repository.load(layout).orElseThrow();
+
+        assertFalse(loaded.settings().autoCheckpointEnabled());
     }
 }

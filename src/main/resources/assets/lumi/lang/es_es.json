@@ -331,6 +331,8 @@
   "luma.settings.safety_help": "Controle cómo Lumi protege su compilación antes de las acciones de restauración.",
   "luma.settings.safety_snapshot": "Guardar seguridad antes de restaurar",
   "luma.settings.safety_snapshot_help": "Guarde la compilación actual antes de restaurar una versión anterior.",
+  "luma.settings.auto_checkpoint": "Auto checkpoint before large edits",
+  "luma.settings.auto_checkpoint_help": "Save pending work before large fill, clone, WorldEdit, or Axiom edits. Off by default.",
   "luma.settings.preview_generation": "Generación de vista previa",
   "luma.settings.preview_generation_help": "Cree imágenes de vista previa isométricas cuando se guarden.",
   "luma.settings.performance_title": "Actuación",
