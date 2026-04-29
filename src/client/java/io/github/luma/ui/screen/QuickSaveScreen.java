@@ -78,8 +78,6 @@ public final class QuickSaveScreen extends LumaScreen {
             this.saveMessage = value == null ? "" : value;
             this.updateSaveButtonActive();
         });
-        this.setInitialFocus(this.saveNameInput);
-        this.saveNameInput.setFocused(true);
         return LumaUi.formField(
                 Component.translatable("luma.save.name_input"),
                 Component.translatable("luma.quick_save.name_help"),

@@ -147,8 +147,6 @@ public final class SaveScreen extends LumaScreen {
         this.saveNameInput = UIComponents.textBox(Sizing.fill(100), this.saveMessage);
         this.saveNameInput.setHint(Component.translatable("luma.save.name_help"));
         this.saveNameInput.onChanged().subscribe(value -> this.saveMessage = value);
-        this.setInitialFocus(this.saveNameInput);
-        this.saveNameInput.setFocused(true);
         return LumaUi.formField(
                 Component.translatable("luma.save.name_input"),
                 Component.translatable("luma.save.name_help"),
