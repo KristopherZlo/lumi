@@ -97,8 +97,8 @@ public final class CompareScreenSections {
         section.child(stats);
 
         FlowLayout actionsRow = LumaUi.actionRow();
-        ButtonComponent overlayButton = LumaUi.button(this.overlayButtonLabel(), button -> this.actions.toggleOverlay());
-        overlayButton.active(!model.state().diff().changedBlocks().isEmpty() || CompareOverlayRenderer.hasData());
+        ButtonComponent overlayButton = LumaUi.button(this.overlayButtonLabel(model), button -> this.actions.toggleOverlay());
+        overlayButton.active(!model.state().diff().changedBlocks().isEmpty() || this.overlayMatches(model));
         actionsRow.child(overlayButton);
 
         actionsRow.child(LumaUi.button(Component.translatable(
@@ -211,13 +211,25 @@ public final class CompareScreenSections {
         return section;
     }
 
-    private Component overlayButtonLabel() {
-        if (!CompareOverlayRenderer.hasData()) {
+    private Component overlayButtonLabel(Model model) {
+        if (!this.overlayMatches(model)) {
             return Component.translatable("luma.action.highlight_compare");
         }
-        return Component.translatable(CompareOverlayRenderer.visible()
+        return Component.translatable(CompareOverlayRenderer.visibleFor(
+                model.projectName(),
+                model.state().leftResolvedVersionId(),
+                model.state().rightResolvedVersionId()
+        )
                 ? "luma.action.hide_highlight"
                 : "luma.action.show_highlight");
+    }
+
+    private boolean overlayMatches(Model model) {
+        return CompareOverlayRenderer.hasDataFor(
+                model.projectName(),
+                model.state().leftResolvedVersionId(),
+                model.state().rightResolvedVersionId()
+        );
     }
 
     private FlowLayout quickPresetRow(Model model) {
@@ -323,6 +335,7 @@ public final class CompareScreenSections {
 
     public record Model(
             CompareViewState state,
+            String projectName,
             int width,
             String leftReference,
             String rightReference,

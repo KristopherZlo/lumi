@@ -84,6 +84,16 @@ public final class CompareOverlayRenderer {
         return ACTIVE_STATE.get() != null;
     }
 
+    public static boolean hasDataFor(String projectName, String leftVersionId, String rightVersionId) {
+        OverlayState state = ACTIVE_STATE.get();
+        return state != null && state.matches(projectName, leftVersionId, rightVersionId);
+    }
+
+    public static boolean visibleFor(String projectName, String leftVersionId, String rightVersionId) {
+        OverlayState state = ACTIVE_STATE.get();
+        return state != null && state.visible() && state.matches(projectName, leftVersionId, rightVersionId);
+    }
+
     public static boolean visible() {
         return active();
     }
@@ -512,6 +522,12 @@ public final class CompareOverlayRenderer {
 
         private boolean visible() {
             return this.visible;
+        }
+
+        private boolean matches(String projectName, String leftVersionId, String rightVersionId) {
+            return this.projectName.equals(projectName == null ? "" : projectName)
+                    && java.util.Objects.equals(this.leftVersionId, leftVersionId)
+                    && java.util.Objects.equals(this.rightVersionId, rightVersionId);
         }
 
         private synchronized OverlayState withVisible(boolean nextVisible) {

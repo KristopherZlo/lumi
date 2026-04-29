@@ -252,7 +252,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 5. Build in the tracked area.
 6. Use the Lumi overlay key plus `Z` / `Y` to undo or redo the latest tracked Lumi action while no screen is open. The default overlay key is `Left Alt`, and changing that key changes these chords too.
 7. Hold the Lumi overlay key to preview the latest 10 undo actions, or hold overlay key plus `Y` to preview redo actions, when the compare overlay is not active. The preview renders translucent exposed sides as well as thicker outlines.
-   Seeing changes against `Current build` enables the world highlight immediately and refreshes it automatically while you keep editing.
+   Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
 8. Press the Lumi overlay key plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
 9. Use `Save build` when you want the full save screen with suggestions or replace-latest tools.
 10. Open a save when you want details, restore, see changes, or create a branch from it.

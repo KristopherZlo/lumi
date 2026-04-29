@@ -60,6 +60,21 @@ class CompareOverlayRendererStateTest {
     }
 
     @Test
+    void overlayDataMatchingIncludesProjectAndResolvedReferences() {
+        CompareOverlayRenderer.show("project-a", "v0001", "v0002", List.of(sampleEntry()), false);
+
+        assertTrue(CompareOverlayRenderer.hasDataFor("project-a", "v0001", "v0002"));
+        assertTrue(CompareOverlayRenderer.visibleFor("project-a", "v0001", "v0002"));
+        assertFalse(CompareOverlayRenderer.hasDataFor("project-a", "v0002", "v0003"));
+        assertFalse(CompareOverlayRenderer.hasDataFor("project-b", "v0001", "v0002"));
+
+        CompareOverlayRenderer.toggleVisibility();
+
+        assertTrue(CompareOverlayRenderer.hasDataFor("project-a", "v0001", "v0002"));
+        assertFalse(CompareOverlayRenderer.visibleFor("project-a", "v0001", "v0002"));
+    }
+
+    @Test
     void denseChangedVolumeStillExposesRenderableSurfaceBlocks() {
         CompareOverlayRenderer.show("v0001", "v0002", denseCubeEntries(), false);
 

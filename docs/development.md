@@ -169,7 +169,7 @@ Current UX assumptions:
 - undo/redo applies the selected stored states with client-visible but side-effect-suppressed block update flags, so restored blocks do not trigger immediate redstone neighbor updates or placement physics during the replay itself
 - runtime-only redstone state flips and piston animation states do not become live undo/redo actions
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
-- pressing `Compare` enables the world highlight immediately for the resolved diff
+- opening See Changes with a resolved pair or pressing `Compare` enables the world highlight immediately for that diff
 - comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present
 - holding the compare x-ray / Lumi overlay key shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
 - compare and recent-action overlays build their render selection from exposed changed blocks, so dense fills still have visible surfaces even when the camera is nearest to internal changed blocks
