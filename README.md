@@ -147,7 +147,7 @@ Use Lumi if you want to:
 - Auto checkpoints save any existing pending draft before large external edits; if no draft exists, the current branch head is already the checkpoint and Lumi does nothing.
 - Restore apply uses adaptive tick budgets, direct section writes with vanilla fallback, batched section packets, capped block-entity/entity tail work per tick, and progress for entity-only batches.
 - One map operation is expected at a time per save.
-- Progress is exposed through operation state.
+- Progress is exposed through operation state. The in-world action bar uses short status text and only shows a compact ASCII progress bar for larger active operations.
 - Lumi screens do not pause the game.
 - Detached old versions stay on disk for safety and remain visible in Build History after a reset-style restore; tombstoned saves and branches stay on disk but are hidden from normal UI and lineage.
 

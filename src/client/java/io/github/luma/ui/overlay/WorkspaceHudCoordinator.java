@@ -3,13 +3,12 @@ package io.github.luma.ui.overlay;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.OperationSnapshot;
-import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.WorkspaceHudSnapshot;
+import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.controller.WorkspaceHudController;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -149,22 +148,8 @@ public final class WorkspaceHudCoordinator {
     }
 
     private void updateActionbar(Minecraft client, OperationSnapshot snapshot) {
-        client.gui.setOverlayMessage(this.buildActionbar(snapshot), false);
+        client.gui.setOverlayMessage(ActionBarMessagePresenter.operation(snapshot), false);
         this.actionbarOwned = true;
-    }
-
-    private Component buildActionbar(OperationSnapshot snapshot) {
-        int percent = OperationProgressPresenter.displayPercent(snapshot);
-        Component stage = Component.literal(this.humanStage(snapshot.stage()))
-                .withStyle(this.stageColor(snapshot.stage()));
-        Component progressBar = Component.literal(this.progressBar(percent))
-                .withStyle(this.stageColor(snapshot.stage()));
-        return Component.empty()
-                .append(Component.literal(this.humanLabel(snapshot.handle().label()) + " ").withStyle(ChatFormatting.WHITE))
-                .append(stage)
-                .append(Component.literal(" "))
-                .append(progressBar)
-                .append(Component.literal(" " + percent + "%").withStyle(ChatFormatting.WHITE));
     }
 
     private void render(GuiGraphics drawContext, net.minecraft.client.DeltaTracker tickCounter) {
@@ -223,68 +208,11 @@ public final class WorkspaceHudCoordinator {
                 + OperationProgressPresenter.displayPercent(snapshot);
     }
 
-    private String humanLabel(String label) {
-        if (label == null || label.isBlank()) {
-            return "Operation";
-        }
-
-        String[] parts = label.split("[-_\\s]+");
-        StringBuilder builder = new StringBuilder();
-        for (String part : parts) {
-            if (part.isBlank()) {
-                continue;
-            }
-            if (!builder.isEmpty()) {
-                builder.append(' ');
-            }
-            builder.append(Character.toUpperCase(part.charAt(0)));
-            if (part.length() > 1) {
-                builder.append(part.substring(1));
-            }
-        }
-        return builder.toString();
-    }
-
-    private String humanStage(OperationStage stage) {
-        return switch (stage) {
-            case QUEUED -> "Queued";
-            case PREPARING -> "Preparing";
-            case WRITING -> "Writing";
-            case APPLYING -> "Applying";
-            case FINALIZING -> "Finalizing";
-            case COMPLETED -> "Completed";
-            case FAILED -> "Failed";
-        };
-    }
-
     private String dimensionLabel(String dimensionId) {
         return switch (dimensionId) {
             case "minecraft:the_nether" -> "Nether";
             case "minecraft:the_end" -> "End";
             default -> "Overworld";
         };
-    }
-
-    private ChatFormatting stageColor(OperationStage stage) {
-        return switch (stage) {
-            case PREPARING, QUEUED -> ChatFormatting.GOLD;
-            case WRITING -> ChatFormatting.BLUE;
-            case APPLYING -> ChatFormatting.GREEN;
-            case FINALIZING -> ChatFormatting.AQUA;
-            case COMPLETED -> ChatFormatting.DARK_GREEN;
-            case FAILED -> ChatFormatting.RED;
-        };
-    }
-
-    private String progressBar(int percent) {
-        int clamped = Math.max(0, Math.min(100, percent));
-        int filled = Math.max(0, Math.min(20, (int) Math.round((clamped / 100.0D) * 20.0D)));
-        StringBuilder builder = new StringBuilder(22);
-        builder.append('[');
-        for (int index = 0; index < 20; index++) {
-            builder.append(index < filled ? '=' : '-');
-        }
-        builder.append(']');
-        return builder.toString();
     }
 }

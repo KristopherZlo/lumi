@@ -6,6 +6,7 @@ import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.client.input.KeyBindingState;
+import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -13,7 +14,6 @@ import java.util.Optional;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -222,7 +222,7 @@ public final class LumiRegionSelectionController {
     }
 
     private void notify(Player player, String key) {
-        player.displayClientMessage(Component.translatable(key), true);
+        player.displayClientMessage(ActionBarMessagePresenter.selection(key), true);
     }
 
     private enum ClickKind {

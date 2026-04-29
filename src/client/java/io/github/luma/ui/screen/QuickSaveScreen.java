@@ -1,5 +1,6 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.QuickSaveScreenController;
 import io.wispforest.owo.ui.component.ButtonComponent;
@@ -97,7 +98,7 @@ public final class QuickSaveScreen extends LumaScreen {
     private void save() {
         String result = this.controller.saveCurrentWorkspace(this.saveMessage);
         if ("luma.status.save_started".equals(result)) {
-            this.client.gui.setOverlayMessage(Component.translatable(result), false);
+            this.client.gui.setOverlayMessage(ActionBarMessagePresenter.info(result), false);
             this.closeLumaUi();
             return;
         }
