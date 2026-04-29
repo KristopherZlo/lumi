@@ -54,6 +54,7 @@ This now includes regression checks for:
 - entity diff merge, entity policy filtering, recovery/patch round-trips, and entity-only restore batches
 - entity-preserving amend, imported-branch merge projection, version diff projection, and entity-only operation progress
 - lightweight home, variants, and share controller loading plus operation-state normalization
+- fast world-apply section packet masks, direct-section eligibility fallback reasons, and apply metric summaries
 
 Run server GameTests:
 
@@ -124,6 +125,7 @@ Enable verbose runtime tracing for debugging:
 - global JVM flag: `-Dlumi.debug=true`
 - accepted capture sessions keep the first 32 per-mutation traces behind debug logging, while info level stays focused on buffer checkpoints, queued/completed maintenance work, and reconcile summaries
 - whole-dimension stabilization now logs dirty-chunk reconcile summaries before draft flush/save/freeze, so startup diagnostics and reconcile summaries should be inspected together when ambient fallout looks suspicious
+- prepared world operations log fast-apply metrics under `world-op` debug tracing, including direct/fallback sections, section packets, block-entity packets, light checks, and fallback reasons
 - client overlay diagnostics log overlay-key state, compare/recent coordinator skip reasons, render callback health, selected surface counts, fill-pass face/vertex/alpha/render-type details, and render failures under `overlay-input`, `overlay-render`, `compare-overlay`, and `recent-overlay`
 - compare and recent-action overlay geometry is drawn as immediate `END_MAIN` world-render quads/lines so fill buffers are flushed in the same callback instead of relying on the shared world `MultiBufferSource`
 
@@ -215,6 +217,7 @@ The current history pipeline is intentionally split into:
 
 - async preparation, compression, and decoding work away from the server tick
 - bounded chunk-batch application on the server tick through `WorldOperationManager`, including adaptive block budgets and explicit block-entity/entity caps
+- direct loaded-section block commits for prepared apply batches, with vanilla fallback and batched section/client block-entity updates
 - operation progress based on block placements, block-entity tail work, and entity operations, so entity-only restore, undo/redo, and recovery batches do not complete early
 - operation snapshots that surface progress to the UI instead of pretending a long task finished immediately
 - optional debug tracing for capture, save, restore, recovery, compare, HUD, and background operations
