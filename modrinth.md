@@ -27,7 +27,7 @@ Lumi is made for builders and redstoners who want to:
 ## Core Features
 
 - Automatic project history for the current dimension or tracked build area.
-- One-time onboarding tour for the safe save, undo, restore, branch, compare, recovery, and import/export flow.
+- One-time onboarding tour for the safe save, undo, restore, branch, compare, recovery, and import/export flow, with manual replay from More or `/lumi-onboarding`.
 - Save versions with a message, stats, preview image, patch payload, and optional checkpoint snapshot.
 - Branch-like variants for alternate ideas.
 - Local branch merge into the current branch with conflict planning and a new merge save.

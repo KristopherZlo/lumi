@@ -102,6 +102,8 @@
   "luma.action.paypal_donate": "PayPal Donate",
   "luma.action.open_lumi": "Open Lumi",
   "luma.action.show_onboarding": "Show onboarding",
+  "luma.command.onboarding_opening": "Opening Lumi onboarding...",
+  "luma.command.onboarding_unavailable": "Open a singleplayer world before starting Lumi onboarding.",
 
   "luma.tab.history": "History",
   "luma.tab.variants": "Branches",

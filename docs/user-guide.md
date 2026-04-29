@@ -12,7 +12,7 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 
 - Press `U` to open the project for the current dimension.
 - If that project does not exist yet, Lumi creates it.
-- The first Lumi workspace open on a Minecraft installation shows a short safety tour. `Skip` and `Open Lumi` both mark it complete. You can replay it later from `More`.
+- The first Lumi workspace open on a Minecraft installation shows a short safety tour. `Skip` and `Open Lumi` both mark it complete. You can replay it later from `More` or with `/lumi-onboarding`.
 - Press the Lumi action button plus `S` to open Quick save while no screen is open. The default chord is `Left Alt+S`, and both keys are remappable in Minecraft `Controls` under `Lumi`.
 - Use the Lumi action button plus `Z` to undo the latest tracked action while no screen is open. The default action button is `Left Alt`.
 - Use the Lumi action button plus `Y` to redo the latest undone tracked action while no screen is open.

@@ -49,7 +49,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Cleanup and integrity | `ProjectCleanupService`, `ProjectIntegrityService` | `ProjectCleanupRepository`, `CleanupScreenController`, `ProjectRepository` | `ProjectCleanupRepositoryTest`, `ProjectArchiveRepositoryTest` |
 | Storage format or path changes | `ProjectLayout`, exact repository class | `StorageIo`, `GsonProvider`, matching domain model record | `ProjectLayoutTest`, repository tests, `docs/storage-format.md` |
 | Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
-| Commands and runtime tests | `LumaCommands`, `SingleplayerTestingService` | `SingleplayerGameplayRegressionSuite`, scripts under `scripts/` | `docs/commands.md`, `docs/test-client.md` |
+| Commands and runtime tests | `LumaCommands`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, scripts under `scripts/` | `docs/commands.md`, `docs/test-client.md` |
 | Client navigation and screen behavior | `ScreenRouter`, the route screen, route controller, route view state | `LumaScreen`, `ProjectWindowLayout`, `ProjectSidebarNavigation`, section builders | UI controller tests, `docs/development.md` |
 
 ## Bootstrap And Global Entry Points
@@ -212,7 +212,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 ### Screens, Controllers, And View State
 
 - Dashboard/projects: `DashboardScreen`, `DashboardScreenController`, `DashboardViewState`, `DashboardProjectItem`.
-- Create/open workspace and onboarding: `CreateProjectScreen`, `CreateProjectScreenController`, `ProjectOpeningScreen`, `OnboardingScreen`, `ClientWorkspaceOpenService`, `ClientProjectAccess`, `ClientOnboardingService`, `ClientOnboardingStateRepository`.
+- Create/open workspace and onboarding: `CreateProjectScreen`, `CreateProjectScreenController`, `ProjectOpeningScreen`, `OnboardingScreen`, `ClientWorkspaceOpenService`, `ClientProjectAccess`, `ClientOnboardingService`, `ClientOnboardingStateRepository`, `LumaClientCommands`.
 - Project home/history: `ProjectScreen`, `ProjectScreenController`, `ProjectHomeScreenController`, `ProjectHomeViewState`, `ProjectScreenSections`.
 - Save and quick save: `SaveScreen`, `SaveDetailsScreen`, `QuickSaveScreen`, `QuickSaveScreenController`, `SaveViewState`, `SaveDetailsViewState`, `SaveDetailsPartialRestoreSection`, `PartialRestoreFormState`.
 - Compare: `CompareScreen`, `CompareScreenController`, `CompareViewState`, `CompareScreenSections`.

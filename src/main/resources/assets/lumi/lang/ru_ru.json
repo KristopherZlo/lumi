@@ -114,6 +114,8 @@
   "luma.action.paypal_donate": "PayPal Donate",
   "luma.action.open_lumi": "Открыть Lumi",
   "luma.action.show_onboarding": "Показать обучение",
+  "luma.command.onboarding_opening": "Открываем обучение Lumi...",
+  "luma.command.onboarding_unavailable": "Сначала открой одиночный мир, чтобы запустить обучение Lumi.",
 
   "luma.tab.history": "История",
   "luma.tab.variants": "Бренчи",
