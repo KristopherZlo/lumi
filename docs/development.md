@@ -55,6 +55,7 @@ This now includes regression checks for:
 - entity-preserving amend, imported-branch merge projection, version diff projection, and entity-only operation progress
 - lightweight home, variants, and share controller loading plus operation-state normalization
 - fast world-apply section packet masks, direct-section eligibility fallback reasons, and apply metric summaries
+- shipped language files containing every English UI key while preserving format and code tokens
 
 Run server GameTests:
 
@@ -155,6 +156,7 @@ Controllers own service access and loading logic. Screens keep transient UI stat
 Escape is handled by `LumaScreen` as a global close-to-game action for Lumi UI routes; route-specific back/navigation controls should not be required to leave the UI.
 `ProjectHomeScreenController`, `SaveDetailsScreen`, `VariantsScreenController`, and `ShareScreenController` are lightweight summary loaders. They avoid diff, material, cleanup, diagnostics, heavy archive validation, and merge-preview work on open and poll fresh operation snapshots every 10 client ticks so conflicting mutation actions unlock without reopening the screen. Save details also polls for async preview metadata so newly rendered PNGs appear in place. Import / Export lists lightweight zip summaries from the game-root `lumi-projects` folder, while combine previews are requested only by explicit review actions and cached by imported package and target branch while the screen is open.
 Save and save-details screens now use dedicated narrow view-state records rather than the old shared project tab state. The old tab view builders are removed instead of being kept as hidden UI scaffolds.
+User-visible strings are shipped through Minecraft language files under `src/main/resources/assets/lumi/lang`. Keep new UI keys in `en_us.json`, update each shipped locale, and run `LanguageFilesTest` or `.\gradlew.bat test` so missing keys and broken `%s`/backtick tokens are caught before packaging.
 
 owo-lib is the only menu toolkit in this branch. Lumi declares it as a Fabric dependency for Minecraft `1.21.11`.
 

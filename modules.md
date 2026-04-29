@@ -234,5 +234,6 @@ Use tests to find the expected behavior before broad code reading.
 - Minecraft capture/apply/runtime: `src/test/java/io/github/luma/minecraft`.
 - Optional integrations: `src/test/java/io/github/luma/integration`.
 - Client UI controllers/overlays/previews/graphs: `src/test/java/io/github/luma/ui` and `src/test/java/io/github/luma/client`.
+- Resource and localization checks: `src/test/java/io/github/luma/resources`.
 - Fabric runtime suites: `src/gametest`, `src/idleGametest`, `src/baselineGametest`, `src/baselineIdleGametest`.
 - Launch and comparison scripts: `scripts/*.ps1`.
