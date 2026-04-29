@@ -34,10 +34,23 @@ public final class LumiRegionSelectionState {
             return;
         }
         if (this.mode == LumiRegionSelectionMode.EXTEND) {
-            this.extendTo(point);
+            this.resetTo(point);
             return;
         }
         this.cornerB = point;
+    }
+
+    public void resetTo(BlockPoint point) {
+        if (point == null) {
+            return;
+        }
+        this.cornerA = point;
+        this.cornerB = point;
+    }
+
+    public void clear() {
+        this.cornerA = null;
+        this.cornerB = null;
     }
 
     public Optional<Bounds3i> bounds() {

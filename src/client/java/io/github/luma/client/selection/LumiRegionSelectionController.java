@@ -17,6 +17,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
+import org.lwjgl.glfw.GLFW;
 
 public final class LumiRegionSelectionController {
 
@@ -24,6 +25,7 @@ public final class LumiRegionSelectionController {
     private static final int MAX_SCOPES = 32;
 
     private final ProjectService projectService = new ProjectService();
+    private final LoadedChunkBlockRaycaster raycaster = new LoadedChunkBlockRaycaster();
     private final Map<SelectionScope, LumiRegionSelectionState> states = new LinkedHashMap<>() {
         @Override
         protected boolean removeEldestEntry(Map.Entry<SelectionScope, LumiRegionSelectionState> eldest) {
@@ -44,6 +46,58 @@ public final class LumiRegionSelectionController {
 
     public boolean selectSecondaryOrToggle(Minecraft client, InteractionHand hand, BlockPos pos) {
         return this.handleClick(client, hand, pos, ClickKind.SECONDARY);
+    }
+
+    public boolean handleMouseButton(Minecraft client, int button, int action, int modifiers) {
+        if (action != GLFW.GLFW_PRESS || !this.canHandleWorldInput(client)) {
+            return false;
+        }
+
+        Optional<InteractionHand> hand = this.selectionToolHand(client.player);
+        if (hand.isEmpty()) {
+            return false;
+        }
+
+        if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && this.altDown(client, modifiers)) {
+            return this.clearSelection(client);
+        }
+        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT && button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+            return false;
+        }
+
+        Optional<BlockPos> target = this.raycaster.findTargetBlock(client);
+        if (target.isEmpty()) {
+            this.notify(client.player, "luma.selection.no_target");
+            return true;
+        }
+
+        return this.handleClick(
+                client,
+                hand.get(),
+                target.get(),
+                button == GLFW.GLFW_MOUSE_BUTTON_LEFT ? ClickKind.PRIMARY : ClickKind.SECONDARY
+        );
+    }
+
+    public boolean handleScroll(Minecraft client, double horizontalAmount, double verticalAmount) {
+        if ((horizontalAmount == 0.0D && verticalAmount == 0.0D) || !this.canHandleWorldInput(client)) {
+            return false;
+        }
+        if (!this.altDown(client, 0) || this.selectionToolHand(client.player).isEmpty()) {
+            return false;
+        }
+
+        Optional<LumiRegionSelectionState> state = this.currentState(client);
+        if (state.isEmpty()) {
+            this.notify(client.player, "luma.selection.no_project");
+            return true;
+        }
+
+        state.get().toggleMode();
+        this.notify(client.player, state.get().mode() == LumiRegionSelectionMode.CORNERS
+                ? "luma.selection.mode_corners"
+                : "luma.selection.mode_extend");
+        return true;
     }
 
     public Optional<Bounds3i> selectedBounds(String projectName, String dimensionId) {
@@ -70,27 +124,42 @@ public final class LumiRegionSelectionController {
             return true;
         }
 
-        LumiRegionSelectionState state;
-        synchronized (this.states) {
-            state = this.states.computeIfAbsent(scope.get(), ignored -> new LumiRegionSelectionState());
-        }
-        if (clickKind == ClickKind.SECONDARY && client.player.isShiftKeyDown()) {
-            state.toggleMode();
-            this.notify(client.player, state.mode() == LumiRegionSelectionMode.CORNERS
-                    ? "luma.selection.mode_corners"
-                    : "luma.selection.mode_extend");
-            return true;
-        }
+        LumiRegionSelectionState state = this.stateFor(scope.get());
 
         BlockPoint point = new BlockPoint(pos.getX(), pos.getY(), pos.getZ());
         if (clickKind == ClickKind.PRIMARY) {
             state.selectPrimary(point);
             this.notify(client.player, "luma.selection.corner_a");
+        } else if (state.mode() == LumiRegionSelectionMode.EXTEND) {
+            state.selectSecondary(point);
+            this.notify(client.player, "luma.selection.reset");
         } else {
             state.selectSecondary(point);
             this.notify(client.player, "luma.selection.corner_b");
         }
         return true;
+    }
+
+    private boolean clearSelection(Minecraft client) {
+        Optional<LumiRegionSelectionState> state = this.currentState(client);
+        if (state.isEmpty()) {
+            this.notify(client.player, "luma.selection.no_project");
+            return true;
+        }
+        state.get().clear();
+        this.notify(client.player, "luma.selection.cleared");
+        return true;
+    }
+
+    private Optional<LumiRegionSelectionState> currentState(Minecraft client) {
+        Optional<SelectionScope> scope = this.currentScope(client);
+        return scope.map(this::stateFor);
+    }
+
+    private LumiRegionSelectionState stateFor(SelectionScope scope) {
+        synchronized (this.states) {
+            return this.states.computeIfAbsent(scope, ignored -> new LumiRegionSelectionState());
+        }
     }
 
     private Optional<SelectionScope> currentScope(Minecraft client) {
@@ -113,6 +182,39 @@ public final class LumiRegionSelectionController {
 
     private boolean usesSelectionTool(Player player, InteractionHand hand) {
         return hand != null && player.getItemInHand(hand).is(Items.WOODEN_SWORD);
+    }
+
+    private Optional<InteractionHand> selectionToolHand(Player player) {
+        if (player == null) {
+            return Optional.empty();
+        }
+        if (this.usesSelectionTool(player, InteractionHand.MAIN_HAND)) {
+            return Optional.of(InteractionHand.MAIN_HAND);
+        }
+        if (this.usesSelectionTool(player, InteractionHand.OFF_HAND)) {
+            return Optional.of(InteractionHand.OFF_HAND);
+        }
+        return Optional.empty();
+    }
+
+    private boolean canHandleWorldInput(Minecraft client) {
+        return client != null
+                && client.player != null
+                && client.level != null
+                && client.screen == null
+                && client.getOverlay() == null;
+    }
+
+    private boolean altDown(Minecraft client, int modifiers) {
+        if ((modifiers & GLFW.GLFW_MOD_ALT) != 0) {
+            return true;
+        }
+        if (client == null || client.getWindow() == null) {
+            return false;
+        }
+        long window = client.getWindow().handle();
+        return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_ALT) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_ALT) == GLFW.GLFW_PRESS;
     }
 
     private void notify(Player player, String key) {

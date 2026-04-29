@@ -746,5 +746,8 @@
   "luma.selection.mode_corners": "Режим выделения Lumi: corners.",
   "luma.selection.mode_extend": "Режим выделения Lumi: extend.",
   "luma.selection.corner_a": "Угол A выделения Lumi задан.",
-  "luma.selection.corner_b": "Угол B выделения Lumi задан."
+  "luma.selection.corner_b": "Угол B выделения Lumi задан.",
+  "luma.selection.reset": "Выделение Lumi сброшено в выбранный блок.",
+  "luma.selection.cleared": "Выделение Lumi очищено.",
+  "luma.selection.no_target": "Под прицелом нет загруженного блока."
 }

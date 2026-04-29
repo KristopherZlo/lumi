@@ -227,7 +227,7 @@ Key differences from full restore:
 - entity changes are filtered by their old/new entity position and stored alongside block changes in the partial-restore version
 - non-direct cross-lineage partial restore is rejected until a snapshot/baseline target-state planner is implemented
 
-The client can fill the same request from a runtime Lumi region selection. With a `minecraft:wooden_sword`, left click sets corner A, right click sets corner B, and Shift+right click toggles between `corners` and `extend`. In `extend` mode either click expands the current bounds, or starts a one-block selection if none exists. Selection state is scoped to project plus dimension in memory and is not persisted.
+The client can fill the same request from a runtime Lumi region selection. With a `minecraft:wooden_sword`, Lumi uses a client-side raycast through already-loaded chunks so the selected block can be farther than vanilla interaction reach without loading new chunks. `Alt+scroll` toggles between `corners` and `extend`. In `corners` mode, left click sets corner A and right click sets corner B. In `extend` mode, left click expands the current bounds and right click resets the selection to the clicked block. `Alt+right click` clears the selection. Selection state is scoped to project plus dimension in memory and is not persisted.
 
 Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never happen on the tick-thread apply path.
 

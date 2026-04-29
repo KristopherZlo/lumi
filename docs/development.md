@@ -187,7 +187,7 @@ Current UX assumptions:
 - Import / Export and Settings are first-level workspace sidebar routes, while `More` keeps storage cleanup, manual compare, the interactive history graph, and raw references in one place
 - save composition, save details, branch management, import/export combine review, cleanup, diagnostics, and More tools now have dedicated surfaces instead of sharing one overloaded project page
 - save composition no longer renders quick name suggestion buttons; manual naming stays unchanged
-- the wooden-sword Lumi region selector is client runtime state scoped to project and dimension, with `corners` and `extend` modes plus a world-render bounds overlay. Save details can copy that selection into partial restore bounds.
+- the wooden-sword Lumi region selector is client runtime state scoped to project and dimension, with loaded-chunk raycast targeting, `corners` and `extend` modes, `Alt+scroll` mode switching, `Alt+right click` clear, and a world-render bounds overlay. Save details can copy that selection into partial restore bounds.
 
 ## History architecture
 
