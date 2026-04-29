@@ -17,6 +17,7 @@ public final class PartialRestoreFormState {
     private String maxX = "";
     private String maxY = "";
     private String maxZ = "";
+    private PartialRestoreRegionSource regionSource = PartialRestoreRegionSource.MANUAL_BOUNDS;
     private PartialRestorePlanSummary summary;
 
     public String minX() {
@@ -25,6 +26,7 @@ public final class PartialRestoreFormState {
 
     public void setMinX(String minX) {
         this.minX = minX;
+        this.regionSource = PartialRestoreRegionSource.MANUAL_BOUNDS;
         this.summary = null;
     }
 
@@ -34,6 +36,7 @@ public final class PartialRestoreFormState {
 
     public void setMinY(String minY) {
         this.minY = minY;
+        this.regionSource = PartialRestoreRegionSource.MANUAL_BOUNDS;
         this.summary = null;
     }
 
@@ -43,6 +46,7 @@ public final class PartialRestoreFormState {
 
     public void setMinZ(String minZ) {
         this.minZ = minZ;
+        this.regionSource = PartialRestoreRegionSource.MANUAL_BOUNDS;
         this.summary = null;
     }
 
@@ -52,6 +56,7 @@ public final class PartialRestoreFormState {
 
     public void setMaxX(String maxX) {
         this.maxX = maxX;
+        this.regionSource = PartialRestoreRegionSource.MANUAL_BOUNDS;
         this.summary = null;
     }
 
@@ -61,6 +66,7 @@ public final class PartialRestoreFormState {
 
     public void setMaxY(String maxY) {
         this.maxY = maxY;
+        this.regionSource = PartialRestoreRegionSource.MANUAL_BOUNDS;
         this.summary = null;
     }
 
@@ -70,6 +76,7 @@ public final class PartialRestoreFormState {
 
     public void setMaxZ(String maxZ) {
         this.maxZ = maxZ;
+        this.regionSource = PartialRestoreRegionSource.MANUAL_BOUNDS;
         this.summary = null;
     }
 
@@ -79,6 +86,25 @@ public final class PartialRestoreFormState {
 
     public void setSummary(PartialRestorePlanSummary summary) {
         this.summary = summary;
+    }
+
+    public PartialRestoreRegionSource regionSource() {
+        return this.regionSource;
+    }
+
+    public void useBounds(Bounds3i bounds, PartialRestoreRegionSource source) {
+        if (bounds == null) {
+            return;
+        }
+        Bounds3i normalized = normalize(bounds);
+        this.minX = Integer.toString(normalized.min().x());
+        this.minY = Integer.toString(normalized.min().y());
+        this.minZ = Integer.toString(normalized.min().z());
+        this.maxX = Integer.toString(normalized.max().x());
+        this.maxY = Integer.toString(normalized.max().y());
+        this.maxZ = Integer.toString(normalized.max().z());
+        this.regionSource = source == null ? PartialRestoreRegionSource.MANUAL_BOUNDS : source;
+        this.summary = null;
     }
 
     public void ensureDefaults(Bounds3i projectBounds, Bounds3i fallbackBounds) {
@@ -114,7 +140,7 @@ public final class PartialRestoreFormState {
                     projectName,
                     versionId,
                     normalized,
-                    PartialRestoreRegionSource.MANUAL_BOUNDS,
+                    this.regionSource,
                     actor,
                     Map.of()
             ));
