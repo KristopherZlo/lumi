@@ -12,6 +12,7 @@ public final class WorldMutationContext {
         stack.push(Frame.system());
         return stack;
     });
+    private static final ThreadLocal<Integer> CAPTURE_SUPPRESSION_DEPTH = ThreadLocal.withInitial(() -> 0);
 
     private WorldMutationContext() {
     }
@@ -30,6 +31,10 @@ public final class WorldMutationContext {
 
     public static boolean currentAccessAllowed() {
         return currentFrame().accessAllowed();
+    }
+
+    public static boolean captureSuppressed() {
+        return CAPTURE_SUPPRESSION_DEPTH.get() > 0;
     }
 
     public static void pushSource(WorldMutationSource source) {
@@ -101,6 +106,20 @@ public final class WorldMutationContext {
             runnable.run();
         } finally {
             popSource();
+        }
+    }
+
+    public static void runWithCaptureSuppressed(Runnable runnable) {
+        CAPTURE_SUPPRESSION_DEPTH.set(CAPTURE_SUPPRESSION_DEPTH.get() + 1);
+        try {
+            runnable.run();
+        } finally {
+            int nextDepth = Math.max(0, CAPTURE_SUPPRESSION_DEPTH.get() - 1);
+            if (nextDepth == 0) {
+                CAPTURE_SUPPRESSION_DEPTH.remove();
+            } else {
+                CAPTURE_SUPPRESSION_DEPTH.set(nextDepth);
+            }
         }
     }
 

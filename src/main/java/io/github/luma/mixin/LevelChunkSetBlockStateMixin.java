@@ -51,6 +51,9 @@ abstract class LevelChunkSetBlockStateMixin {
                 || WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
             return;
         }
+        if (WorldMutationContext.captureSuppressed()) {
+            return;
+        }
 
         var operation = LUMA_TOOL_DETECTOR.detectOperation();
         if (operation.isEmpty()) {

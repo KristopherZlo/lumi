@@ -43,6 +43,9 @@ public final class DirectSectionMutationCaptureService {
                 || HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource())) {
             return PendingDirectSectionMutation.skipped();
         }
+        if (WorldMutationContext.captureSuppressed()) {
+            return PendingDirectSectionMutation.skipped();
+        }
 
         var owner = this.ownershipRegistry.ownerOf(section);
         if (owner.isEmpty()) {

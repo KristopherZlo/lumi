@@ -64,4 +64,17 @@ class WorldMutationContextTest {
             WorldMutationContext.popSource();
         }
     }
+
+    @Test
+    void captureSuppressionIsScoped() {
+        assertFalse(WorldMutationContext.captureSuppressed());
+
+        WorldMutationContext.runWithCaptureSuppressed(() -> {
+            assertTrue(WorldMutationContext.captureSuppressed());
+            WorldMutationContext.runWithCaptureSuppressed(() -> assertTrue(WorldMutationContext.captureSuppressed()));
+            assertTrue(WorldMutationContext.captureSuppressed());
+        });
+
+        assertFalse(WorldMutationContext.captureSuppressed());
+    }
 }
