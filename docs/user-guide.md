@@ -65,7 +65,7 @@ Each card keeps only the essentials visible:
 - `Open`
 - `Restore this save`
 
-Rare tools like import/export, settings, cleanup, diagnostics, manual compare, technical graph, raw references, and legacy limited projects stay under `More` or `More` -> `Advanced`.
+Import/export and settings stay in the workspace sidebar. `More` is limited to storage cleanup and advanced history tools such as manual compare, the colored graph, and raw references.
 
 Lumi stores new versions as patches first.
 

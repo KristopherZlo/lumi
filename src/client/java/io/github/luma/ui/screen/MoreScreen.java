@@ -67,34 +67,10 @@ public final class MoreScreen extends LumaScreen {
         window.content().child(LumaUi.screenScroll(body));
 
         body.child(this.navigationCard(
-                "luma.more.projects_title",
-                "luma.more.projects_help",
-                "luma.action.open_projects",
-                button -> this.router.openDashboard(this)
-        ));
-        body.child(this.navigationCard(
-                "luma.more.import_export_title",
-                "luma.more.import_export_help",
-                "luma.action.open_import_export",
-                button -> this.router.openShare(this, this.projectName)
-        ));
-        body.child(this.navigationCard(
-                "luma.more.settings_title",
-                "luma.more.settings_help",
-                "luma.action.settings",
-                button -> this.router.openSettings(this, this.projectName)
-        ));
-        body.child(this.navigationCard(
                 "luma.more.cleanup_title",
                 "luma.more.cleanup_help",
                 "luma.action.open_cleanup",
                 button -> this.router.openCleanup(this, this.projectName)
-        ));
-        body.child(this.navigationCard(
-                "luma.more.diagnostics_title",
-                "luma.more.diagnostics_help",
-                "luma.action.open_diagnostics",
-                button -> this.router.openDiagnostics(this, this.projectName)
         ));
         body.child(this.navigationCard(
                 "luma.more.advanced_title",
