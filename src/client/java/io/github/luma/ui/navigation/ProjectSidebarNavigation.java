@@ -18,6 +18,7 @@ import net.minecraft.util.Util;
 public final class ProjectSidebarNavigation {
 
     private static final URI SUPPORT_URI = URI.create("https://buymeacoffee.com/zl0yxp");
+    private static final URI PAYPAL_DONATE_URI = URI.create("https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W");
     private static final Identifier SUPPORT_LOGO = Identifier.fromNamespaceAndPath(
             LumaMod.MOD_ID,
             "textures/gui/buymeacoffee.png"
@@ -61,21 +62,35 @@ public final class ProjectSidebarNavigation {
     private FlowLayout supportFooter() {
         FlowLayout footer = LumaUi.sidebarFooter();
         footer.child(LumaUi.caption(Component.translatable("luma.window.support")));
+        footer.child(this.supportLinkRow(
+                SUPPORT_LOGO,
+                Component.translatable("luma.action.buy_me_a_coffee"),
+                SUPPORT_URI
+        ));
+        footer.child(this.supportLinkRow(
+                null,
+                Component.translatable("luma.action.paypal_donate"),
+                PAYPAL_DONATE_URI
+        ));
+        return footer;
+    }
 
+    private FlowLayout supportLinkRow(Identifier logoId, Component label, URI uri) {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(4);
-        TextureComponent logo = UIComponents.texture(SUPPORT_LOGO, 0, 0, 16, 16, 16, 16);
-        logo.blend(true);
-        logo.sizing(Sizing.fixed(16), Sizing.fixed(16));
-        row.child(logo);
+        if (logoId != null) {
+            TextureComponent logo = UIComponents.texture(logoId, 0, 0, 16, 16, 16, 16);
+            logo.blend(true);
+            logo.sizing(Sizing.fixed(16), Sizing.fixed(16));
+            row.child(logo);
+        }
 
         ButtonComponent supportButton = LumaUi.button(
-                Component.translatable("luma.action.buy_me_a_coffee"),
-                button -> Util.getPlatform().openUri(SUPPORT_URI)
+                label,
+                button -> Util.getPlatform().openUri(uri)
         );
         supportButton.sizing(Sizing.expand(100), Sizing.fixed(18));
         row.child(supportButton);
-        footer.child(row);
-        return footer;
+        return row;
     }
 }
