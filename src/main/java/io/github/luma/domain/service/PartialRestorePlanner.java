@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import java.util.ArrayList;
@@ -17,25 +18,44 @@ final class PartialRestorePlanner {
             boolean applyNewValues,
             Bounds3i bounds
     ) {
+        if (applyNewValues) {
+            return this.plan(pendingDraftChanges, List.of(), lineageChanges, bounds, PartialRestoreMode.SELECTED_AREA);
+        }
+        return this.plan(pendingDraftChanges, lineageChanges, List.of(), bounds, PartialRestoreMode.SELECTED_AREA);
+    }
+
+    List<StoredBlockChange> plan(
+            List<StoredBlockChange> pendingDraftChanges,
+            List<StoredBlockChange> reverseLineageChanges,
+            List<StoredBlockChange> forwardLineageChanges,
+            Bounds3i bounds,
+            PartialRestoreMode mode
+    ) {
         if (bounds == null) {
             throw new IllegalArgumentException("Partial restore requires bounds");
         }
 
+        PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
         Map<BlockPoint, ChangeAccumulator> changes = new LinkedHashMap<>();
         for (StoredBlockChange change : safeChanges(pendingDraftChanges)) {
-            if (!bounds.contains(change.pos())) {
+            if (!effectiveMode.includes(bounds.contains(change.pos()))) {
                 continue;
             }
             this.accumulate(changes, change.pos(), change.newValue(), change.oldValue());
         }
 
-        for (StoredBlockChange change : safeChanges(lineageChanges)) {
-            if (!bounds.contains(change.pos())) {
+        for (StoredBlockChange change : safeChanges(reverseLineageChanges)) {
+            if (!effectiveMode.includes(bounds.contains(change.pos()))) {
                 continue;
             }
-            StatePayload current = applyNewValues ? change.oldValue() : change.newValue();
-            StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
-            this.accumulate(changes, change.pos(), current, target);
+            this.accumulate(changes, change.pos(), change.newValue(), change.oldValue());
+        }
+
+        for (StoredBlockChange change : safeChanges(forwardLineageChanges)) {
+            if (!effectiveMode.includes(bounds.contains(change.pos()))) {
+                continue;
+            }
+            this.accumulate(changes, change.pos(), change.oldValue(), change.newValue());
         }
 
         List<StoredBlockChange> result = new ArrayList<>();
