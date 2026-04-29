@@ -29,6 +29,7 @@ Important model groups:
 - operation state: `OperationHandle`, `OperationProgress`, `OperationSnapshot`, `OperationStage`, `WorkspaceHudSnapshot`
 - mutable capture runtime: `TrackedChangeBuffer`, `CaptureSessionState`
 - mutable live action runtime: `UndoRedoAction`, `UndoRedoActionStack`
+- history visibility: `HistoryTombstones`
 
 ### Domain service layer
 
@@ -42,10 +43,11 @@ Key services:
 - `HistoryShareService`: export variant-scoped history packages, import them back as review projects for the same project lineage, and delete imported review packages after lineage validation
 - `ProjectCleanupService`: compute safe cleanup candidates from reachable history metadata and active operation state
 - `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy
+- `HistoryEditService`: rename saves, soft-delete saves, soft-delete branches, move safe branch heads back to parents, and keep tombstoned history hidden without deleting payload files
 - `RestoreService`: build restore plans and orchestrate prepared chunk batches through Minecraft-layer preparers
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching. Branch creation is metadata-only and does not freeze active recovery drafts; branch switching freezes and validates pending edits before asking restore to apply the selected branch head.
-- `VariantMergeService`: compare imported variant lineage against a local target variant, group overlapping conflicts into chunk-connected zones, and write merged saves through the normal patch-first history path
+- `VariantMergeService`: compare imported or local variant lineage against the active local target variant, group overlapping conflicts into chunk-connected zones, and write merged saves through the normal patch-first history path
 - `DiffService`: reconstruct version or live-world block and entity differences using structured state payload comparison before formatting UI-facing diff entries
 - `VersionLineageService`: centralizes reachable-version filtering, common ancestor lookup, ancestor checks, and ancestor-to-head path resolution used by restore, diff, and merge workflows
 - `PreviewCaptureRequestService`: queue preview capture jobs without blocking save durability
@@ -71,6 +73,7 @@ Important adapters:
 - `SnapshotCaptureService`: marshals checkpoint snapshot capture onto the server thread and leaves serialization/persistence to storage writers
 - `ChunkSectionOwnershipRegistry`: keeps a weak chunk-section owner index for direct section mutation fallback capture, with per-chunk section-array caching so repeated chunk reads during spawn generation do not re-register every section; direct section fallback resolves that server owner before stack inspection, so client chunk loading and unowned generation sections do not pay external-tool stack sampling costs
 - `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, and `PersistentBlockStatePolicy`: filter runtime-only block/entity transitions and normalize piston animation states before they become drafts, undo/redo actions, snapshots, or restore placements; unknown-stack entity fallback detection is scoped to builder-relevant persistent entity types so ordinary mob movement does not sample external-tool stacks
+- `AutoCheckpointCommandClassifier` and `AutoCheckpointService`: identify large vanilla `/fill` and `/clone` commands plus external WorldEdit/Axiom action ids, then save an existing pending draft as an `AUTO_CHECKPOINT` before the external edit starts
 - `ExplosiveEntityContextRegistry`: carries the originating builder action from a primed TNT spawn to its delayed explosion so the block damage is captured with the same action context
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history
@@ -112,6 +115,7 @@ Important boundaries:
 - payload repositories read and write compressed binary history data
 - repositories do not depend on `ServerLevel`, block-state codecs, or apply-batch runtime types
 - preview request repositories persist lightweight capture jobs for the client renderer
+- history tombstone repositories persist soft-delete visibility metadata without touching history payloads
 - `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export
 - `ProjectCleanupRepository` owns file scanning and deletion for conservative storage cleanup
 - `StorageIo` owns low-level atomic-write and NBT binary helpers
@@ -130,6 +134,7 @@ Responsibilities are split as follows:
 - `LumaScreen` extends owo-ui `BaseOwoScreen`, keeps Lumi menus non-pausing, closes the Lumi UI back to the game on Escape, and gives each route a code-driven `OwoUIAdapter`
 - `CompareScreenSections`, `ProjectScreenSections`, focused Save details section builders, and `ShareMergeReviewSection` own repeated route section composition, while their screens keep route lifecycle, transient selection state, and action callbacks
 - `ClientWorkspaceOpenService` opens the current workspace through a lightweight loading screen and schedules project metadata preparation away from the client tick that handled the key press
+- `ClientWorkspaceOpenService` and `ScreenRouter` route directly to `RecoveryScreen` when the opened project has a non-empty persisted draft
 - `QuickSaveScreen` is a standalone shortcut route opened from the Lumi overlay key plus `Quick save key` chord; `QuickSaveScreenController` resolves the current dimension workspace and calls the same save service as the normal Save route
 - `LumaUi` centralizes compact `FlowLayout`, `ScrollContainer`, `Sizing`, `Insets`, and `Surface` rules so screens avoid absolute positioning and keep layout predictable
 - `ProjectWindowLayout` and `ProjectSidebarNavigation` keep the primary workspace tabs visible across Build History, Branches, Import / Export, Settings, and More. The sidebar highlights the active route and includes external support links.
@@ -144,6 +149,7 @@ Responsibilities are split as follows:
 - `CompareOverlayRenderer` renders a client-side compare overlay with a remappable hold-to-x-ray mode, keeps diff data separate from visibility, binds active overlay data to the resolved project/version pair, prioritizes the nearest exposed changed blocks to the current camera position, and draws exposed overlay faces through immediate end-main quads so translucent fill is flushed independently of the shared world buffer. Normal mode remains depth-tested so highlights do not show through blocks; x-ray mode deliberately disables depth testing.
 - `CompareOverlayCoordinator` refreshes `current`-world compare overlays on the client tick so live edits appear in the active highlight without rebuilding the screen manually
 - `RecentChangesOverlayRenderer` renders latest undo actions when the remappable Lumi overlay key is held, or redo actions while overlay key plus redo is held, when the compare overlay is not active. Dense action previews are selected from exposed changed blocks first so large fills do not disappear when the nearest raw blocks are internal, and fill alpha stays low enough for outlines to remain readable.
+- `LumiRegionSelectionController` keeps the runtime-only wooden-sword selection for the current project and dimension. `LumiRegionSelectionRenderer` draws the selected cuboid with translucent faces and an outline in the world render callback.
 - the Import / Export route presents the normal flow: export history packages first, list importable zips from the game-root `lumi-projects` folder, import packages as review projects, optionally include preview PNGs in exports, delete imported review packages, resolve same-area zones, show zone overlays, and apply a combined save without cluttering Build History or Branches
 
 ## Core runtime flows
@@ -159,8 +165,9 @@ Responsibilities are split as follows:
 7. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization. Natural growth cannot expand tracked chunks.
 8. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, consuming the draft, or choosing a live undo/redo action, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
 9. Idle or dirty sessions are flushed into recovery storage only when the live buffer fingerprint changed since the last queued draft flush.
-10. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
-11. In integrated singleplayer worlds, explicit builder actions are allowed into capture and undo/redo immediately even if the permission frame is not operator-shaped yet; dedicated servers keep the operator gate.
+10. Item drops created by explosions, fluid, falling blocks, and nearby block-update fallout are captured into the in-memory undo/redo action only. They are removed on undo and respawned on redo, but they do not enter recovery drafts or saved version payloads.
+11. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid/falling-block deltas can join that same action, so Lumi can replay the practical builder step backward or forward without using the tick-thread decode path.
+12. In integrated singleplayer worlds, explicit builder actions are allowed into capture and undo/redo immediately even if the permission frame is not operator-shaped yet; dedicated servers keep the operator gate.
 
 Important invariants:
 
@@ -170,6 +177,7 @@ Important invariants:
 - entity spawn/remove/update diffs use nullable old/new payloads and are applied through `EntityBatch`
 - restore-originated mutations never re-enter tracked history
 - undo/redo reuses prepared world operations and then adjusts the pending draft separately, so internal replay does not create duplicate capture events
+- undo-only item drops are excluded from durable recovery and version payloads by entity capture policy
 
 ## Save flow
 
@@ -219,7 +227,23 @@ Key differences from full restore:
 - entity changes are filtered by their old/new entity position and stored alongside block changes in the partial-restore version
 - non-direct cross-lineage partial restore is rejected until a snapshot/baseline target-state planner is implemented
 
+The client can fill the same request from a runtime Lumi region selection. With a `minecraft:wooden_sword`, left click sets corner A, right click sets corner B, and Shift+right click toggles between `corners` and `extend`. In `extend` mode either click expands the current bounds, or starts a one-block selection if none exists. Selection state is scoped to project plus dimension in memory and is not persisted.
+
 Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never happen on the tick-thread apply path.
+
+## History editing and local merge flow
+
+`HistoryEditService` owns editing rules for saved history metadata. Rename rewrites only the selected `ProjectVersion.message`. Save and branch deletion are soft deletes persisted through `HistoryTombstoneRepository`; payload files, previews, snapshots, and baseline chunks remain on disk.
+
+Save deletion is intentionally narrow: root saves are blocked, non-leaf saves are blocked, and ambiguous multi-head deletes are blocked. If a deleted leaf is a branch head, that branch head is moved to the parent before the version id is tombstoned. Branch deletion is blocked for `main` and for the active branch.
+
+Local branch merge reuses `VariantMergeService` conflict planning but targets only the current active branch for v1. The source branch is unchanged. Resolved changes are prepared and applied through `WorldOperationManager`, then `VersionService` writes a new `MERGE` version on the active branch.
+
+## Auto checkpoint flow
+
+`AutoCheckpointService` protects pending work before large external edits. It runs before vanilla `/fill` and `/clone` commands when `AutoCheckpointCommandClassifier` estimates at least 512 affected blocks, and before WorldEdit/Axiom actions when those integrations surface an external action id.
+
+The service saves an existing pending draft as `VersionKind.AUTO_CHECKPOINT`. If no draft exists, the current branch head already represents the checkpoint and no version is written. Checkpoints are deduplicated per external action id, and skipped attempts are logged when another Lumi world operation is already active.
 
 ## Recovery flow
 
@@ -233,6 +257,7 @@ Current strategy:
 - first-touch whole-dimension baseline writes are queued through the same executor after the server thread copies a compact chunk snapshot payload
 - in-progress save/amend drafts move to `recovery/operation-draft.bin.lz4` so new edits can start a separate live draft
 - restore/save recovery actions reuse the same operation model as save and restore
+- project open routes directly to the recovery screen when a non-empty draft is persisted, so recovery is an active choice instead of only a passive banner
 
 ## Threading model
 

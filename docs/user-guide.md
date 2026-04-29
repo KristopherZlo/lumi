@@ -16,6 +16,7 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 - Use the Lumi overlay key plus `Z` to undo the latest tracked Lumi action while no screen is open. The default overlay key is `Left Alt`.
 - Use the Lumi overlay key plus `Y` to redo the latest undone Lumi action while no screen is open.
 - Undo and redo restore the stored block states without firing immediate redstone/block updates from the replay itself, so restored TNT does not auto-prime just because it is next to powered redstone.
+- Undo also removes item drops caused by the tracked edit, such as TNT drops or water-broken blocks, and redo respawns those drops.
 - Hold the Lumi overlay key to preview undo targets, or overlay key plus `Y` to preview redo targets, when compare highlight is not active. Changing the overlay key changes both the preview hold and these undo/redo chords.
 - Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
 - Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.
@@ -102,7 +103,6 @@ Open the `Save` screen from the main action on the project home screen.
 The save screen is intentionally small:
 
 - `Save name`
-- suggestion buttons for common builder notes
 - `Save`
 - `Cancel`
 
@@ -159,6 +159,8 @@ It does not create a hidden branch.
 
 Restore and delete actions require confirmation. More technical recovery details are still available, but they are hidden behind `More`.
 
+Before a large external edit, Lumi also protects pending work automatically. If a draft exists, Lumi saves it as an auto checkpoint before large vanilla `/fill` or `/clone` commands, before WorldEdit edit sessions, and before Axiom block-buffer edits. If there is no draft, the current branch head is already the checkpoint.
+
 ## Branches
 
 Branches are separate build directions inside one project.
@@ -169,6 +171,8 @@ Use the `Branches` screen to:
 - create a new branch from the current build or a selected save
 - switch the active branch
 - open saves for one branch
+- delete inactive branches
+- merge another local branch into the current branch
 - compare a branch against the current build from `More`
 
 Creating a branch only adds a new branch head from the selected save or the
@@ -185,6 +189,10 @@ If a recovery draft is still pending, save or discard it before switching
 branches so Lumi does not overwrite unsaved work.
 
 Future saves continue from that head.
+
+Deleting a branch is a soft delete. It hides the branch from normal UI without deleting the saved files. `main` and the active branch cannot be deleted.
+
+`Merge into current branch` compares the selected branch against your active branch, applies the resolved result to the world, and writes a new merge save on the active branch. The source branch is unchanged.
 
 ## Import / Export
 
@@ -262,9 +270,21 @@ Primary actions stay focused:
 - `Restore this save`
 - `See changes`
 
-Extra actions like refresh preview, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
+Extra actions like refresh preview, rename save, delete save, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
 
 `Restore selected area` is also under `More`. Use it when you want to restore only a bounded region from the selected save. Min/Max coordinate fields appear only after you choose that action. Preview the region first, then apply it. Lumi writes the result as a new save on the active branch instead of moving the branch head back to the older save.
+
+You can fill those bounds from Lumi's wooden-sword selection:
+
+- Hold `minecraft:wooden_sword`.
+- Left click a block to set corner A.
+- Right click a block to set corner B.
+- Shift+right click toggles `corners` and `extend`.
+- In `extend` mode, either click expands the current cuboid; with no selection, the click starts a one-block selection.
+- The selected cuboid is highlighted in-world.
+- Use `Use selected area` in the partial-restore form to copy the selection into the restore bounds.
+
+Renaming a save changes only the saved message. Deleting a save is a soft delete. Root saves cannot be deleted, non-leaf saves are blocked, and deleting a safe branch-head save moves that branch head back to the parent before hiding the save.
 
 ## Settings
 

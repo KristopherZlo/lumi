@@ -51,6 +51,7 @@ Use Lumi if you want to:
 | `Project` | Tracked area in one dimension | `project.json` |
 | `Version` | Saved history node with message, stats, preview, and payload refs | `versions/*.json` |
 | `Variant` | Named branch-like head pointer | `variants.json` |
+| `History tombstones` | Soft-deleted save and branch ids hidden from normal history | `history-tombstones.json` |
 | `Compare` | Diff between two saved states, or between a saved state and the live game state | `DiffService` |
 | `Restore` | Apply a chosen version back into the map and move the active head to it | `RestoreService` |
 | `Partial restore` | Apply a bounded region from an older save as a new save on the active branch | `RestoreService` |
@@ -66,15 +67,19 @@ Use Lumi if you want to:
 - patch-first history with checkpoint snapshots
 - remappable quick-save chord, default `Left Alt+S`, that opens a standalone save-name dialog without entering Build History
 - dedicated save screen with optional `Replace latest save`
-- save details screen with isometric preview, restore, see-changes, and branch actions
+- save details screen with isometric preview, restore, see-changes, rename, soft-delete, and branch actions
 - See Changes screen for saved states, branches, and the current build, with manual raw-reference compare available under `More`
 - live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi overlay key; changing the overlay key changes these chords too
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit; undo/redo drains already-dirty stabilization chunks first so poured fluid, contact-created source blocks, and falling-block deltas from whole-dimension sessions can join before the action is selected
+- item drops produced by explosions, fluid, falling blocks, or nearby block-update fallout are captured only for the matching undo/redo action; undo removes those dropped item entities and redo respawns them without storing them in recovery drafts or saved versions
 - undo/redo replays stored block states without immediate redstone neighbor updates or placement physics, so restored TNT beside powered redstone is visible but not auto-primed by the replay
 - runtime-only redstone state flips and piston animation blocks are ignored so active mechanisms do not pollute pending history or the recent action overlay
 - hard restore that moves the active branch head
-- region-scoped partial restore from save details, written back as a new `PARTIAL_RESTORE` save
-- recovery drafts with WAL compaction
+- region-scoped partial restore from save details, written back as a new `PARTIAL_RESTORE` save, with optional wooden-sword selected bounds
+- runtime-only wooden-sword region selection with `corners` and `extend` modes plus an in-world highlighted cuboid overlay
+- history editing: rename saves, soft-delete safe saves, soft-delete inactive branches, and merge another local branch into the current branch as a new `MERGE` save
+- recovery drafts with WAL compaction and a direct recovery screen prompt when a project opens with unsaved draft work
+- automatic `AUTO_CHECKPOINT` saves before large vanilla `/fill` or `/clone` commands, WorldEdit sessions, and Axiom block-buffer edits when a pending draft exists
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
 - material delta summaries and integrity checks under focused details and support screens
 - zip import/export from the workspace sidebar, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews
@@ -96,10 +101,11 @@ Use Lumi if you want to:
 5. `EntityMutationCapturePolicy` rejects non-entity-history sources before Lumi asks Minecraft to serialize entity NBT, so transient falling-block or mob internals cannot crash capture.
 6. Whole-dimension sessions keep a causal chunk envelope rooted in explicit builder edits. The root chunk defines a one-chunk halo envelope, and Lumi captures per-chunk baselines lazily when a chunk inside that envelope first needs stabilization.
 7. Ambient fallout such as fluid spread and falling blocks no longer append directly into the live draft for whole-dimension workspaces. They only re-mark chunks inside that causal envelope as dirty.
-8. `TrackedChangeBuffer` merges explicit and targeted realtime block changes by position and entity changes by UUID immediately.
-9. First-touch whole-dimension baseline capture copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
-10. Before draft snapshots, idle flushes, save, amend, undo/redo selection, or freeze persist or consume anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
-11. Recovery draft data flushes on an interval, but the WAL append and compaction run asynchronously on that same capture-maintenance executor.
+8. Related item drops from explosions, water flow, falling blocks, and block-update fallout are attached to the latest nearby undo/redo action only; they are deliberately excluded from recovery drafts and saved versions.
+9. `TrackedChangeBuffer` merges explicit and targeted realtime block changes by position and entity changes by UUID immediately.
+10. First-touch whole-dimension baseline capture copies compact chunk section payloads on the server thread and writes the compressed baseline file later on a dedicated low-priority capture-maintenance executor.
+11. Before draft snapshots, idle flushes, save, amend, undo/redo selection, or freeze persist or consume anything, Lumi reconciles dirty envelope chunks on the server thread against the current world and stores the final stabilized diff on top of the live pending chunk buffer.
+12. Recovery draft data flushes on an interval, but the WAL append and compaction run asynchronously on that same capture-maintenance executor.
 
 ### Save
 
@@ -109,6 +115,13 @@ Use Lumi if you want to:
 4. Amend-on-head preserves block and entity diffs from the replaced head.
 5. Preview generation queues a lightweight request in project storage.
 6. The client later fulfills that request with a textured isometric off-screen render and updates the version metadata.
+
+### History editing and merge
+
+1. `HistoryEditService` owns save rename, save soft-delete, and branch soft-delete rules.
+2. Soft delete writes tombstones only; version manifests, patches, snapshots, previews, and baseline files stay on disk.
+3. Deleting a branch head save moves that branch metadata back to the parent before hiding the save, while root, ambiguous multi-head, and non-leaf deletes are blocked.
+4. Local branch merge compares the source branch against the current active branch, applies the resolved changes through `WorldOperationManager`, and writes a new `MERGE` save on the active branch. The source branch is unchanged.
 
 ### Restore
 
@@ -120,6 +133,7 @@ Use Lumi if you want to:
 6. Tick-thread apply uses bounded chunk batches with pre-decoded block states, direct loaded-section commits when safe, and prepared entity batches.
 7. Restore replay completes paired block halves such as beds, doors, and tall plants before apply.
 8. A full restore moves the active branch head to the restored version after apply completes; a partial restore applies only selected bounds and writes a new save on the active branch.
+9. The partial-restore form can consume the current Lumi wooden-sword selection and marks that request as `LUMI_REGION`.
 
 ## Runtime Rules
 
@@ -129,11 +143,12 @@ Use Lumi if you want to:
 - Storage repositories read and write payloads; Minecraft-layer preparers build tick-ready apply batches.
 - Large WorldEdit/Axiom edits avoid block-entity NBT serialization for ordinary blocks, and capture project matching uses a cached dimension/chunk index.
 - Partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file.
+- Auto checkpoints save any existing pending draft before large external edits; if no draft exists, the current branch head is already the checkpoint and Lumi does nothing.
 - Restore apply uses adaptive tick budgets, direct section writes with vanilla fallback, batched section packets, capped block-entity/entity tail work per tick, and progress for entity-only batches.
 - One map operation is expected at a time per save.
 - Progress is exposed through operation state.
 - Lumi screens do not pause the game.
-- Detached old versions stay on disk for safety and remain visible in Build History after a reset-style restore.
+- Detached old versions stay on disk for safety and remain visible in Build History after a reset-style restore; tombstoned saves and branches stay on disk but are hidden from normal UI and lineage.
 
 ## Architecture
 
@@ -141,7 +156,7 @@ Use Lumi if you want to:
 | --- | --- | --- |
 | Bootstrap | Fabric wiring, diagnostic commands, ticking, flushes | `LumaMod` |
 | Domain model | persisted records and runtime state | `BuildProject`, `ProjectVersion`, `TrackedChangeBuffer` |
-| Domain service | product logic | `VersionService`, `RestoreService`, `HistoryShareService`, `VariantMergeService` |
+| Domain service | product logic | `VersionService`, `RestoreService`, `HistoryEditService`, `HistoryShareService`, `VariantMergeService` |
 | Minecraft adapter | game hooks and map mutation | `HistoryCaptureManager`, `WorldOperationManager`, `BlockChangeApplier`, `WorldMutationCapturePolicy` |
 | Storage | file layout and payload I/O | `ProjectLayout`, repositories in `storage/repository` |
 | Client UI | owo-ui screens, controllers, HUD, overlays, view state | `ScreenRouter`, `ProjectScreen`, `SaveScreen`, `ShareScreen`, `WorkspaceHudCoordinator` |
@@ -255,7 +270,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 7. Hold the Lumi overlay key to preview the latest 10 undo actions, or hold overlay key plus `Y` to preview redo actions, when the compare overlay is not active. The preview renders translucent exposed sides as well as thicker outlines.
    Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
 8. Press the Lumi overlay key plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
-9. Use `Save build` when you want the full save screen with suggestions or replace-latest tools.
+9. Use `Save build` when you want the full save screen with manual naming or replace-latest tools.
 10. Open a save when you want details, restore, see changes, or create a branch from it.
 11. Use `Branches` for alternate build directions, the sidebar for Import / Export and Settings, and `More` for storage cleanup, manual compare, the history graph, or raw references.
 

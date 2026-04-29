@@ -41,6 +41,10 @@ Run the automated test suite:
 
 This now includes regression checks for:
 
+- undo-only item drops attached to live undo/redo without persisting into recovery drafts or saved versions
+- history rename, save soft-delete, branch soft-delete, tombstone filtering, and local branch merge behavior
+- auto-checkpoint command classification for large `/fill` and `/clone` commands
+- runtime Lumi region selection state and selection-backed partial restore form filling
 - compare overlay nearest-entry selection
 - commit graph layout on large histories
 - detached commit visibility after a restore-style reset
@@ -168,6 +172,7 @@ Current UX assumptions:
 - pressing the Lumi overlay key plus `Y` starts redo for the latest tracked Lumi action in the current dimension workspace while no client screen is open; if undo and redo are pressed in the same tick, undo wins and redo must be pressed again
 - nearby short-lived secondary fallout can join the latest tracked undo/redo action instead of disappearing from the live action stack
 - undo/redo drains already-dirty whole-dimension stabilization chunks before selecting an action, so reconciled fluid, contact-created source blocks, and falling-block deltas can join the latest nearby undo/redo action when they settle inside the same time/radius window
+- undo-only item drops from explosion, fluid, falling-block, and related block-update fallout are removed on undo and respawned on redo, while durable drafts and saved versions keep only the block/entity history they should persist
 - undo/redo applies the selected stored states with client-visible but side-effect-suppressed block update flags, so restored blocks do not trigger immediate redstone neighbor updates or placement physics during the replay itself
 - runtime-only redstone state flips and piston animation states do not become live undo/redo actions
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
@@ -181,6 +186,8 @@ Current UX assumptions:
 - settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress, and settings persist immediately on valid field changes
 - Import / Export and Settings are first-level workspace sidebar routes, while `More` keeps storage cleanup, manual compare, the interactive history graph, and raw references in one place
 - save composition, save details, branch management, import/export combine review, cleanup, diagnostics, and More tools now have dedicated surfaces instead of sharing one overloaded project page
+- save composition no longer renders quick name suggestion buttons; manual naming stays unchanged
+- the wooden-sword Lumi region selector is client runtime state scoped to project and dimension, with `corners` and `extend` modes plus a world-render bounds overlay. Save details can copy that selection into partial restore bounds.
 
 ## History architecture
 
@@ -193,6 +200,7 @@ Current runtime history behavior:
 - Automatic dimension project bootstrap is limited to explicit builder-driven sources. Ambient fluid, fire, growth, block-update, and mob mutations cannot create a workspace on world load by themselves.
 - Optional external builder tools use explicit mutation sources where available. WorldEdit sessions are observed through a guarded `EditSessionEvent` extent wrapper when WorldEdit is present; the wrapper records old/new block transitions directly because some WorldEdit bulk paths do not surface through Minecraft `Level#setBlock`, and it serializes block-entity NBT only when the old or new state can hold a block entity. Lumi also recognizes WorldEdit, FAWE, Axiom, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica, and Tweakeroo stack frames at block and entity mutation boundaries, with a guard so lower-level block fallbacks do not duplicate higher-level records. Axiom block-buffer packet applies are still captured before Axiom mutates chunk sections directly with the same lazy block-entity rule.
 - Entity capture is centralized through `HistoryCaptureManager.recordEntityChange`. Generic server-side hooks capture entity spawn, removal, focused transform updates, tags, custom names, visibility, glowing state, and full NBT loads when the operation is player-rooted or comes from a known external builder stack. `EntityMutationCapturePolicy` limits player-originated entity history and unknown-stack external fallback inspection to builder-relevant persistent entities, rejects sources that cannot record entity history before NBT serialization, and rejects `SYSTEM` source changes so chunk-load entity data and ordinary mob movement do not become history or pay builder-tool stack detection costs.
+- Item entities produced by explosion, fluid, falling-block, and nearby block-update fallout are captured as undo-only related entities. They are deliberately excluded from recovery drafts and version payloads, so correcting an edit clears the dropped items without turning transient drops into durable project history.
 - Client controllers and diagnostic commands still require an operator-level permission set on dedicated servers. Integrated singleplayer capture is allowed to keep local build history and live undo responsive from the first edit.
 - New live capture sessions are also limited to explicit builder-driven sources. Whole-dimension sessions now seed a causal chunk envelope from those root edits, then capture per-chunk session baselines lazily as compact chunk snapshot payloads only when a chunk inside that envelope first needs stabilization.
 - First-touch whole-dimension tracking no longer samples the live world block-by-block. The server thread copies loaded chunk section palettes, real block-entity tags, and entity snapshots once, queues async baseline persistence, and returns to normal capture immediately. Entity-triggered first touches apply the known old/new entity payload as a baseline override so a spawn, removal, or update is not duplicated into both the baseline snapshot and the patch diff.
@@ -207,12 +215,14 @@ Current runtime history behavior:
 - `ShareScreenController` keeps history package import/export separate from Build History and Branches, only asks `VariantMergeService` for a combine preview when the user explicitly reviews one imported package, and moves that preview work through a small background cache so the screen does not block on storage scans.
 - `ProjectCleanupService` builds a conservative cleanup policy from current version metadata and active operation state, then delegates file deletion to `ProjectCleanupRepository`.
 - `VersionService` stores new versions as patch-first history, supports amend-on-head without dropping entity diffs, isolates in-progress operation drafts from live capture, and inserts checkpoint snapshots by policy.
+- `AutoCheckpointService` saves an existing pending draft as `AUTO_CHECKPOINT` before large vanilla `/fill` or `/clone` commands and before WorldEdit/Axiom external action ids. It does nothing when no draft exists, deduplicates by external action id, and logs skipped checkpoints while another Lumi world operation is active.
+- `HistoryEditService` owns rename, save soft-delete, branch soft-delete, branch-head movement for safe deleted heads, and tombstone persistence through `HistoryTombstoneRepository`.
 - Preview generation now queues lightweight request files on the server side and fulfills them later through the client-side `PreviewCaptureCoordinator`, which backs off after empty scans to avoid idle storage polling. UI preview textures are invalidated when the backing PNG timestamp or size changes.
 - `RestoreService` prefers direct same-lineage patch replay, including shared branch-base ancestors and `WORLD_ROOT` ancestor restores, exposes a lightweight restore plan summary for `Initial` confirmation, includes pending recovery-draft chunks in that summary even when the selected save is already the active head, appends the initial snapshot after pending-draft rollback for exact `INITIAL` restores, falls back to tracked baseline chunks or checkpoint snapshot plus patch chain when direct replay is not valid, and resets the active branch head to the restored save on success without deleting detached saves. Restores from a save on another branch plan from the current live branch and change active-branch metadata only after apply completion. Persisted block/entity changes and snapshot entity payloads are read by repositories, prepared by Minecraft-layer batch preparers, completed for paired blocks such as beds and doors, and then applied through the operation model; repositories do not assemble tick-runtime batches.
 - `RestoreService` also supports same-lineage selected-area restore from save details, including a branch restoring a bounded area from the save it was branched from. It filters pending draft and direct patch block/entity changes to manual bounds, reads only intersecting v6 patch chunk frames when possible, applies prepared batches through the operation model, then writes a new `PARTIAL_RESTORE` version on the active branch while preserving pending draft changes outside the selected region.
 - `VariantService` keeps one head pointer per variant.
 - `VersionLineageService` owns reachable-version filtering, common ancestor lookup, ancestor checks, shared imported ancestor validation, and ancestor-to-head path resolution for restore, diff, and merge workflows.
-- `VariantMergeService` turns an imported review project back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, carrying non-conflicting entity changes, rejecting unresolved entity conflicts explicitly, and delegating merged version persistence to `VersionService`.
+- `VariantMergeService` turns imported review projects and local branches back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, carrying non-conflicting entity changes, rejecting unresolved entity conflicts explicitly, and delegating merged version persistence to `VersionService` with `VersionKind.MERGE`.
 - `DiffService` reconstructs version-to-version block and entity changes from patch history through the shared lineage path helpers.
 
 The current history pipeline is intentionally split into:
@@ -259,6 +269,8 @@ Shared world origin metadata lives next to the projects root:
 ```
 
 See [storage-format.md](storage-format.md) for the exact folder and file layout.
+
+Soft-deleted history is stored in `history-tombstones.json`. Tombstones hide saves and branches from normal UI and lineage without deleting the payload files.
 
 ## Commit policy
 
