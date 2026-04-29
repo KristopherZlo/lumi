@@ -6,6 +6,7 @@ import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.MaterialEntryView;
@@ -349,7 +350,8 @@ public final class SaveDetailsScreen extends LumaScreen {
                     operationActive,
                     this.partialRestoreForm,
                     this.state.project() == null ? null : this.state.project().bounds(),
-                    this.fallbackPartialRestoreBounds()
+                    this.fallbackPartialRestoreBounds(),
+                    this.selectedLumiBounds()
             )));
             expanded.child(partialExpanded);
         }
@@ -478,6 +480,16 @@ public final class SaveDetailsScreen extends LumaScreen {
         return PartialRestoreFormState.fallbackAround(pos, minY, maxY);
     }
 
+    private java.util.Optional<Bounds3i> selectedLumiBounds() {
+        if (this.state.project() == null) {
+            return java.util.Optional.empty();
+        }
+        return LumiRegionSelectionController.getInstance().selectedBounds(
+                this.projectName,
+                this.state.project().dimensionId()
+        );
+    }
+
     private void refresh(String statusKey) {
         this.status = statusKey == null || statusKey.isBlank() ? "luma.status.project_ready" : statusKey;
         this.rebuild();
@@ -515,6 +527,11 @@ public final class SaveDetailsScreen extends LumaScreen {
         public void apply(PartialRestoreRequest request) {
             String result = controller.partialRestore(request);
             router.openProjectIgnoringRecovery(parent, projectName, result);
+        }
+
+        @Override
+        public void selectionApplied() {
+            refresh("luma.status.partial_restore_selection_applied");
         }
 
         @Override

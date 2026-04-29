@@ -1,6 +1,7 @@
 package io.github.luma.ui.screen.section;
 
 import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.LumaUi;
@@ -54,6 +55,21 @@ public final class SaveDetailsPartialRestoreSection {
                     model.form().summary().touchedChunks().size()
             )));
         }
+
+        FlowLayout selectionRow = LumaUi.actionRow();
+        ButtonComponent selectionButton = LumaUi.button(
+                Component.translatable("luma.action.use_selected_area"),
+                button -> {
+                    model.form().useBounds(model.lumiSelection().orElse(null), PartialRestoreRegionSource.LUMI_REGION);
+                    this.actions.selectionApplied();
+                }
+        );
+        selectionButton.active(model.lumiSelection().isPresent());
+        selectionRow.child(selectionButton);
+        if (model.form().regionSource() == PartialRestoreRegionSource.LUMI_REGION) {
+            selectionRow.child(LumaUi.chip(Component.translatable("luma.partial_restore.lumi_region")));
+        }
+        section.child(selectionRow);
 
         FlowLayout actionsRow = LumaUi.actionRow();
         actionsRow.child(LumaUi.button(
@@ -123,8 +139,12 @@ public final class SaveDetailsPartialRestoreSection {
             boolean operationActive,
             PartialRestoreFormState form,
             Bounds3i projectBounds,
-            Bounds3i fallbackBounds
+            Bounds3i fallbackBounds,
+            Optional<Bounds3i> lumiSelection
     ) {
+        public Model {
+            lumiSelection = lumiSelection == null ? Optional.empty() : lumiSelection;
+        }
     }
 
     public interface Actions {
@@ -132,6 +152,8 @@ public final class SaveDetailsPartialRestoreSection {
         void preview(PartialRestoreRequest request);
 
         void apply(PartialRestoreRequest request);
+
+        void selectionApplied();
 
         void invalidBounds();
     }
