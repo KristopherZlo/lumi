@@ -137,7 +137,7 @@ Responsibilities are split as follows:
 - obsolete tab-builder scaffolds have been removed; larger workflows now use dedicated screens and narrow view-state records instead of a shared project tab container
 - the project home screen is now a Build History view with one primary action, `Save build`, plus one-click `See changes`, recent saves, `Branches`, and `More`
 - `MoreScreen` only exposes project maintenance and advanced history tools; Import / Export and Settings stay in the persistent sidebar, and diagnostics remain out of the normal builder path.
-- `CommitGraphLayout` computes deterministic branch lanes and parent-lane connectors, while `CommitGraphComponent` renders the Advanced history graph as colored lanes, branch-head badges, and commit metadata instead of ASCII prefixes.
+- `CommitGraphLayout` computes deterministic branch lanes, skips shared-only empty lanes, and exposes parent-lane connectors, while `CommitGraphComponent` renders the Advanced history graph as colored lanes, branch-head badges, and commit metadata instead of ASCII prefixes.
 - dedicated screens isolate `Save`, `Save details`, `Branches`, `Import / Export`, `See Changes`, `Recovered work`, `Settings`, `Cleanup`, `Diagnostics`, and `Advanced` so the main project screen no longer carries rare or technical workflows
 - `WorkspaceHudCoordinator` owns the optional top-right HUD overlay and action-bar progress surface. It uses a slower idle refresh cadence and switches back to the short cadence while a world operation is active.
 - project-facing screens poll lightweight operation snapshots every 10 client ticks so conflicting mutation buttons unlock as soon as the operation becomes terminal, while status text can stay visible briefly
