@@ -15,6 +15,7 @@ import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.HistoryTombstoneRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.VariantRepository;
@@ -45,6 +46,7 @@ public final class ProjectService {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
+    private final HistoryTombstoneRepository historyTombstoneRepository = new HistoryTombstoneRepository();
     private final SnapshotCaptureService snapshotCaptureService = new SnapshotCaptureService();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
@@ -207,11 +209,19 @@ public final class ProjectService {
     }
 
     public List<ProjectVersion> loadVersions(MinecraftServer server, String projectName) throws IOException {
-        return this.versionRepository.loadAll(this.resolveLayout(server, projectName));
+        ProjectLayout layout = this.resolveLayout(server, projectName);
+        var tombstones = this.historyTombstoneRepository.load(layout);
+        return this.versionRepository.loadAll(layout).stream()
+                .filter(version -> !tombstones.versionDeleted(version.id()))
+                .toList();
     }
 
     public List<ProjectVariant> loadVariants(MinecraftServer server, String projectName) throws IOException {
-        return this.variantRepository.loadAll(this.resolveLayout(server, projectName));
+        ProjectLayout layout = this.resolveLayout(server, projectName);
+        var tombstones = this.historyTombstoneRepository.load(layout);
+        return this.variantRepository.loadAll(layout).stream()
+                .filter(variant -> !tombstones.variantDeleted(variant.id()))
+                .toList();
     }
 
     public Path projectsRoot(MinecraftServer server) {

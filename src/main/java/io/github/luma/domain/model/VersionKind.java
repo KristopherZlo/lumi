@@ -7,5 +7,7 @@ public enum VersionKind {
     RECOVERY,
     RESTORE,
     PARTIAL_RESTORE,
+    MERGE,
+    AUTO_CHECKPOINT,
     LEGACY
 }

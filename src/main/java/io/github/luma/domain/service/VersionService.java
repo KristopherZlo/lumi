@@ -725,6 +725,8 @@ public final class VersionService {
             case LEGACY -> "Migrated legacy save";
             case RESTORE -> "Restore safety checkpoint";
             case PARTIAL_RESTORE -> "Partial restore";
+            case MERGE -> "Merged branches";
+            case AUTO_CHECKPOINT -> "Auto checkpoint";
             case INITIAL, MANUAL -> "Saved version";
         };
     }
@@ -744,6 +746,26 @@ public final class VersionService {
                     false,
                     Map.of()
             );
+            case MERGE -> ExternalSourceInfo.external(
+                    "SYSTEM",
+                    "merge",
+                    "Branch Merge",
+                    "",
+                    null,
+                    false,
+                    false,
+                    Map.of()
+            );
+            case AUTO_CHECKPOINT -> ExternalSourceInfo.external(
+                    "SYSTEM",
+                    "auto-checkpoint",
+                    "Auto Checkpoint",
+                    "",
+                    null,
+                    false,
+                    false,
+                    Map.of()
+            );
             case INITIAL, MANUAL, LEGACY -> ExternalSourceInfo.manual();
         };
     }
@@ -755,6 +777,8 @@ public final class VersionService {
             case LEGACY -> "Saved a new version while migrating a legacy snapshot project";
             case RESTORE -> "Saved restore checkpoint version";
             case PARTIAL_RESTORE -> "Saved partial restore as a new version";
+            case MERGE -> "Saved branch merge as a new version";
+            case AUTO_CHECKPOINT -> "Saved automatic checkpoint before a large edit";
             case INITIAL, MANUAL -> "Saved version from tracked changes";
         };
     }
