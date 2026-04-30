@@ -92,6 +92,7 @@ final class SectionContainerRewriteCommitStrategy {
 
         section.recalcBlockCounts();
         chunk.markUnsaved();
+        this.heightmapUpdater.updateChangedColumns(chunk, section, batch.sectionY(), plan.localIndexes());
         BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
         int lightChecks = 0;
         for (CellMutation mutation : plan.mutations()) {
@@ -101,7 +102,6 @@ final class SectionContainerRewriteCommitStrategy {
                     (batch.sectionY() << 4) + SectionChangeMask.localY(localIndex),
                     (batch.chunk().z() << 4) + SectionChangeMask.localZ(localIndex)
             );
-            this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, mutation.targetState());
             if (this.lightUpdatePlanner.check(level, mutablePos, mutation.currentState(), mutation.targetState())) {
                 lightChecks += 1;
             }
@@ -175,6 +175,10 @@ final class SectionContainerRewriteCommitStrategy {
     }
 
     private record ApplyPlan(List<CellMutation> mutations, ShortSet changedCells) {
+
+        private List<Integer> localIndexes() {
+            return this.mutations.stream().map(CellMutation::localIndex).toList();
+        }
     }
 
     private record CellMutation(int localIndex, BlockState currentState, BlockState targetState) {
