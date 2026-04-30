@@ -3,6 +3,7 @@ package io.github.luma.storage.repository;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.PatchMetadata;
+import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
@@ -81,6 +82,35 @@ class PatchDataRepositoryTest {
         assertEquals(1, selected.blockChanges().size());
         assertEquals(new BlockPoint(17, 64, 1), selected.blockChanges().getFirst().pos());
         assertFalse(selected.blockChanges().stream().anyMatch(change -> change.pos().equals(new BlockPoint(1, 64, 1))));
+    }
+
+    @Test
+    void exposesSectionFramesForV7Payloads() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        List<StoredBlockChange> changes = List.of(
+                new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:gold_block", null)
+                ),
+                new StoredBlockChange(
+                        new BlockPoint(2, 64, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:diamond_block", null)
+                )
+        );
+
+        PatchMetadata metadata = this.repository.writePayload(layout, "patch-section-v7", "project", "v0004", changes);
+        PatchSectionWorldChanges sectionChanges = this.repository.loadSectionWorldChanges(layout, metadata);
+
+        assertEquals(1, sectionChanges.sectionFrames().size());
+        var frame = sectionChanges.sectionFrames().getFirst();
+        assertEquals(0, frame.chunkX());
+        assertEquals(0, frame.chunkZ());
+        assertEquals(4, frame.sectionY());
+        assertEquals(2, frame.oldStateIds().length);
+        assertEquals(2, frame.newStateIds().length);
+        assertEquals(2, java.util.Arrays.stream(frame.changedMask()).map(Long::bitCount).sum());
     }
 
     @Test

@@ -39,9 +39,13 @@ public final class WorldOperationManager {
     private static final long MIN_NANOS_PER_TICK = 1_000_000L;
     private static final long MAX_NANOS_PER_TICK = 3_000_000L;
     private static final int RESTORE_MIN_BLOCKS_PER_TICK = 1024;
-    private static final int RESTORE_MAX_BLOCKS_PER_TICK = 4096;
+    private static final int RESTORE_MAX_BLOCKS_PER_TICK = 64 * 4096;
     private static final long RESTORE_MIN_NANOS_PER_TICK = 2_000_000L;
     private static final long RESTORE_MAX_NANOS_PER_TICK = 8_000_000L;
+    private static final int MIN_NATIVE_SECTIONS_PER_TICK = 1;
+    private static final int MAX_NATIVE_SECTIONS_PER_TICK = 4;
+    private static final int RESTORE_MIN_NATIVE_SECTIONS_PER_TICK = 16;
+    private static final int RESTORE_MAX_NATIVE_SECTIONS_PER_TICK = 64;
     private static final int MAX_BLOCK_ENTITIES_PER_TICK = 64;
     private static final int MAX_ENTITY_OPERATIONS_PER_TICK = 32;
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
@@ -168,7 +172,7 @@ public final class WorldOperationManager {
         try {
             TickBudget budget = this.currentTickBudget(operation);
             long startedAt = System.nanoTime();
-            if (operation.advance(budget.maxBlocks(), startedAt + budget.maxNanos())) {
+            if (operation.advance(budget, startedAt + budget.maxNanos())) {
                 this.complete(server, operation);
             }
             operation.recordAdvanceCost(System.nanoTime() - startedAt, budget.maxNanos());
@@ -199,10 +203,19 @@ public final class WorldOperationManager {
         int maxBlocks = this.isRestoreOperation(operation) ? RESTORE_MAX_BLOCKS_PER_TICK : MAX_BLOCKS_PER_TICK;
         long minNanos = this.isRestoreOperation(operation) ? RESTORE_MIN_NANOS_PER_TICK : MIN_NANOS_PER_TICK;
         long maxNanos = this.isRestoreOperation(operation) ? RESTORE_MAX_NANOS_PER_TICK : MAX_NANOS_PER_TICK;
+        int minNativeSections = this.isRestoreOperation(operation)
+                ? RESTORE_MIN_NATIVE_SECTIONS_PER_TICK
+                : MIN_NATIVE_SECTIONS_PER_TICK;
+        int maxNativeSections = this.isRestoreOperation(operation)
+                ? RESTORE_MAX_NATIVE_SECTIONS_PER_TICK
+                : MAX_NATIVE_SECTIONS_PER_TICK;
         double adaptiveScale = operation.adaptiveScale();
         int blocks = Math.max(1, (int) Math.round((minBlocks + ((maxBlocks - minBlocks) * fraction)) * adaptiveScale));
+        int nativeSections = Math.max(1, (int) Math.round(
+                (minNativeSections + ((maxNativeSections - minNativeSections) * fraction)) * adaptiveScale
+        ));
         long nanos = Math.max(250_000L, Math.round((minNanos + ((maxNanos - minNanos) * fraction)) * adaptiveScale));
-        return new TickBudget(blocks, nanos);
+        return new TickBudget(blocks, nanos, nativeSections);
     }
 
     private boolean isRestoreOperation(ActiveOperation operation) {
@@ -277,7 +290,7 @@ public final class WorldOperationManager {
         }
     }
 
-    private record TickBudget(int maxBlocks, long maxNanos) {
+    private record TickBudget(int maxBlocks, long maxNanos, int maxNativeSections) {
     }
 
     private abstract static class ActiveOperation {
@@ -406,7 +419,7 @@ public final class WorldOperationManager {
             );
         }
 
-        abstract boolean advance(int maxBlocks, long deadlineNanos) throws Exception;
+        abstract boolean advance(TickBudget budget, long deadlineNanos) throws Exception;
 
         private void logProgressIfNeeded(OperationStage stage, OperationProgress progress, String detail) {
             int percent = progress.totalUnits() <= 0
@@ -459,7 +472,7 @@ public final class WorldOperationManager {
         }
 
         @Override
-        boolean advance(int maxBlocks, long deadlineNanos) throws Exception {
+        boolean advance(TickBudget budget, long deadlineNanos) throws Exception {
             if (!this.future.isDone()) {
                 return false;
             }
@@ -482,9 +495,11 @@ public final class WorldOperationManager {
         private PreparedApplyOperation prepared;
         private GlobalDispatcher dispatcher;
         private ChunkBatch currentBatch;
+        private List<PreparedSectionApplyBatch> currentNativeSections = List.of();
         private List<SectionBatch> currentSections = List.of();
         private List<Map.Entry<BlockPos, CompoundTag>> currentBlockEntities = List.of();
         private CompletableFuture<Void> completionFuture;
+        private int nativeSectionIndex = 0;
         private int sectionIndex = 0;
         private int placementIndex = 0;
         private int blockEntityIndex = 0;
@@ -512,7 +527,7 @@ public final class WorldOperationManager {
         }
 
         @Override
-        boolean advance(int maxBlocks, long deadlineNanos) throws Exception {
+        boolean advance(TickBudget budget, long deadlineNanos) throws Exception {
             if (this.prepared == null) {
                 if (!this.future.isDone()) {
                     return false;
@@ -549,15 +564,18 @@ public final class WorldOperationManager {
             }
 
             int processedWorkThisTick = 0;
-            while (processedWorkThisTick < maxBlocks && System.nanoTime() < deadlineNanos) {
+            int processedNativeSectionsThisTick = 0;
+            while (System.nanoTime() < deadlineNanos) {
                 if (this.currentBatch == null) {
                     this.currentBatch = this.dispatcher.pollNext();
                     if (this.currentBatch == null) {
                         break;
                     }
                     this.currentBatch = this.prepared.batchProcessor().processSet(this.currentBatch);
+                    this.currentNativeSections = this.currentBatch.orderedNativeSections();
                     this.currentSections = this.currentBatch.orderedSections();
                     this.currentBlockEntities = List.copyOf(this.currentBatch.blockEntities().entrySet());
+                    this.nativeSectionIndex = 0;
                     this.sectionIndex = 0;
                     this.placementIndex = 0;
                     this.blockEntityIndex = 0;
@@ -571,26 +589,38 @@ public final class WorldOperationManager {
                             this.currentBatch.chunk().x(),
                             this.currentBatch.chunk().z(),
                             this.currentBatch.totalPlacements(),
-                            this.currentSections.size(),
+                            this.currentSections.size() + this.currentNativeSections.size(),
                             this.currentBlockEntities.size(),
                             BlockChangeApplier.entityOperationCount(this.currentBatch.entityBatch())
                     );
                 }
 
+                if (this.hasPendingNativeSection()) {
+                    if (processedNativeSectionsThisTick >= budget.maxNativeSections()) {
+                        break;
+                    }
+                } else if (processedWorkThisTick >= budget.maxBlocks()) {
+                    break;
+                }
+
                 WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
-                int processed;
+                AppliedWork processed;
                 try {
-                    processed = this.applyCurrentChunk(Math.min(maxBlocks - processedWorkThisTick, 128));
+                    int maxBlocks = this.hasPendingNativeSection()
+                            ? Integer.MAX_VALUE
+                            : Math.min(budget.maxBlocks() - processedWorkThisTick, 128);
+                    processed = this.applyCurrentChunk(maxBlocks);
                 } finally {
                     WorldMutationContext.popSource();
                 }
 
-                if (processed <= 0 && this.currentBatch != null && !this.currentBatchFinished()) {
+                if (processed.workUnits() <= 0 && this.currentBatch != null && !this.currentBatchFinished()) {
                     break;
                 }
 
-                this.appliedWorkUnits += processed;
-                processedWorkThisTick += processed;
+                this.appliedWorkUnits += processed.workUnits();
+                processedWorkThisTick += processed.workUnits();
+                processedNativeSectionsThisTick += processed.nativeSections();
 
                 this.progressSink().update(
                         OperationStage.APPLYING,
@@ -612,6 +642,7 @@ public final class WorldOperationManager {
                     this.prepared.historyStore().record(this.currentBatch);
                     this.prepared.batchProcessor().postProcessSet(this.currentBatch);
                     this.currentBatch = null;
+                    this.currentNativeSections = List.of();
                     this.currentSections = List.of();
                     this.currentBlockEntities = List.of();
                 }
@@ -671,9 +702,20 @@ public final class WorldOperationManager {
             }
         }
 
-        private int applyCurrentChunk(int maxBlocks) {
+        private AppliedWork applyCurrentChunk(int maxBlocks) {
             if (this.currentBatch == null) {
-                return 0;
+                return AppliedWork.none();
+            }
+
+            if (this.hasPendingNativeSection()) {
+                PreparedSectionApplyBatch nativeSection = this.currentNativeSections.get(this.nativeSectionIndex);
+                int processed = BlockChangeApplier.applyNativeSectionBatch(
+                        this.level(),
+                        nativeSection,
+                        this.applyMetrics
+                );
+                this.nativeSectionIndex += 1;
+                return new AppliedWork(processed, 1);
             }
 
             if (this.sectionIndex < this.currentSections.size()) {
@@ -690,7 +732,7 @@ public final class WorldOperationManager {
                     this.sectionIndex += 1;
                     this.placementIndex = 0;
                 }
-                return processed;
+                return new AppliedWork(processed, 0);
             }
 
             if (!this.blockEntitiesApplied) {
@@ -708,7 +750,7 @@ public final class WorldOperationManager {
                     if (this.blockEntityIndex >= this.currentBlockEntities.size()) {
                         this.blockEntitiesApplied = true;
                     }
-                    return processed;
+                    return new AppliedWork(processed, 0);
                 }
             }
 
@@ -716,7 +758,7 @@ public final class WorldOperationManager {
                 int entityOperationCount = BlockChangeApplier.entityOperationCount(this.currentBatch.entityBatch());
                 if (entityOperationCount <= 0) {
                     this.entitiesApplied = true;
-                    return 0;
+                    return AppliedWork.none();
                 }
                 int processed = BlockChangeApplier.applyEntityBatch(
                         this.level(),
@@ -728,17 +770,29 @@ public final class WorldOperationManager {
                 if (this.entityIndex >= entityOperationCount) {
                     this.entitiesApplied = true;
                 }
-                return processed;
+                return new AppliedWork(processed, 0);
             }
 
-            return 0;
+            return AppliedWork.none();
+        }
+
+        private boolean hasPendingNativeSection() {
+            return this.currentBatch != null && this.nativeSectionIndex < this.currentNativeSections.size();
         }
 
         private boolean currentBatchFinished() {
             return this.currentBatch != null
+                    && this.nativeSectionIndex >= this.currentNativeSections.size()
                     && this.sectionIndex >= this.currentSections.size()
                     && this.blockEntitiesApplied
                     && this.entitiesApplied;
+        }
+
+        private record AppliedWork(int workUnits, int nativeSections) {
+
+            private static AppliedWork none() {
+                return new AppliedWork(0, 0);
+            }
         }
     }
 

@@ -1031,7 +1031,12 @@ public final class RestoreService {
         }
 
         for (PatchMetadata patch : plan.patchChain()) {
-            batches.addAll(this.batchPreparer.prepareNewValues(level, this.patchDataRepository.loadWorldChanges(layout, patch)));
+            batches.addAll(this.batchPreparer.prepareNewValues(
+                    level,
+                    this.patchDataRepository.loadSectionWorldChanges(layout, patch),
+                    (completed, total) -> {
+                    }
+            ));
             completedSources += 1;
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded patch " + patch.id());
         }
@@ -1066,8 +1071,13 @@ public final class RestoreService {
         for (String patchId : version.patchIds()) {
             PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
                     .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-            PatchWorldChanges changes = this.patchDataRepository.loadWorldChanges(layout, metadata);
-            batches.addAll(this.decodeStoredChanges(level, changes.blockChanges(), changes.entityChanges(), applyNewValues));
+            batches.addAll(this.batchPreparer.prepare(
+                    level,
+                    this.patchDataRepository.loadSectionWorldChanges(layout, metadata),
+                    applyNewValues,
+                    (completed, total) -> {
+                    }
+            ));
         }
         return batches;
     }

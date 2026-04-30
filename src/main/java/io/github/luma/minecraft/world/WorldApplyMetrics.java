@@ -11,6 +11,9 @@ final class WorldApplyMetrics {
     private int skippedBlocks;
     private int directSections;
     private int fallbackSections;
+    private int nativeSections;
+    private int nativeCells;
+    private int nativeFallbackSections;
     private int sectionPackets;
     private int blockEntityPackets;
     private int lightChecks;
@@ -26,12 +29,19 @@ final class WorldApplyMetrics {
         this.skippedBlocks += result.skippedBlocks();
         this.directSections += result.directSections();
         this.fallbackSections += result.fallbackSections();
+        this.nativeSections += result.nativeSections();
+        this.nativeCells += result.nativeCells();
+        this.nativeFallbackSections += result.nativeFallbackSections();
         this.sectionPackets += result.sectionPackets();
         this.blockEntityPackets += result.blockEntityPackets();
         this.lightChecks += result.lightChecks();
-        if (result.fallbackSections() > 0 && result.fallbackReason() != null
+        if ((result.fallbackSections() > 0 || result.nativeFallbackSections() > 0) && result.fallbackReason() != null
                 && result.fallbackReason() != BlockCommitFallbackReason.NONE) {
-            this.fallbackReasons.merge(result.fallbackReason().label(), result.fallbackSections(), Integer::sum);
+            this.fallbackReasons.merge(
+                    result.fallbackReason().label(),
+                    result.fallbackSections() + result.nativeFallbackSections(),
+                    Integer::sum
+            );
         }
     }
 
@@ -41,6 +51,9 @@ final class WorldApplyMetrics {
                 + ", skippedBlocks=" + this.skippedBlocks
                 + ", directSections=" + this.directSections
                 + ", fallbackSections=" + this.fallbackSections
+                + ", nativeSections=" + this.nativeSections
+                + ", nativeCells=" + this.nativeCells
+                + ", nativeFallbackSections=" + this.nativeFallbackSections
                 + ", sectionPackets=" + this.sectionPackets
                 + ", blockEntityPackets=" + this.blockEntityPackets
                 + ", lightChecks=" + this.lightChecks
