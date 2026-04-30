@@ -94,4 +94,25 @@ class SectionLightUpdatePlannerTest {
         Assertions.assertEquals(1, batch.size());
         Assertions.assertEquals(new BlockPos(2, 64, 2), batch.positions().getFirst());
     }
+
+    @Test
+    void queuesLightChecksWhenOperationContextIsActive() {
+        SectionLightUpdateBatch batch = new SectionLightUpdateBatch();
+        this.planner.plan(
+                batch,
+                new BlockPos(2, 64, 2),
+                Blocks.STONE.defaultBlockState(),
+                Blocks.AIR.defaultBlockState()
+        );
+        WorldLightUpdateQueue queue = new WorldLightUpdateQueue();
+
+        WorldLightUpdateContext.push(queue);
+        try {
+            Assertions.assertEquals(0, this.planner.apply(null, batch));
+        } finally {
+            WorldLightUpdateContext.pop();
+        }
+
+        Assertions.assertEquals(1, queue.pendingCount());
+    }
 }

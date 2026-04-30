@@ -15,7 +15,13 @@ final class SectionLightUpdatePlanner {
     }
 
     int apply(ServerLevel level, SectionLightUpdateBatch batch) {
-        if (level == null || batch == null || batch.isEmpty()) {
+        if (batch == null || batch.isEmpty()) {
+            return 0;
+        }
+        if (WorldLightUpdateContext.enqueue(batch)) {
+            return 0;
+        }
+        if (level == null) {
             return 0;
         }
         for (BlockPos pos : batch.positions()) {
