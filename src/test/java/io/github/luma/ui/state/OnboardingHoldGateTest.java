@@ -6,6 +6,14 @@ import org.junit.jupiter.api.Test;
 class OnboardingHoldGateTest {
 
     @Test
+    void defaultHoldDurationIsEightTenthsOfASecond() {
+        OnboardingHoldGate gate = new OnboardingHoldGate();
+
+        Assertions.assertFalse(gate.update(true, 799L));
+        Assertions.assertTrue(gate.update(true, 1L));
+    }
+
+    @Test
     void fillsAfterRequiredHoldDuration() {
         OnboardingHoldGate gate = new OnboardingHoldGate(1500L);
 

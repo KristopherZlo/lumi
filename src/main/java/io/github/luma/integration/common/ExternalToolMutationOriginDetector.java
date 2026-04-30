@@ -1,5 +1,6 @@
 package io.github.luma.integration.common;
 
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -148,6 +149,12 @@ public final class ExternalToolMutationOriginDetector implements ExternalToolMut
         if (operation == null || !operation.matches(profile) || operation.expired(now, this.operationIdleTimeoutNanos)) {
             operation = new ObservedOperation(profile, profile.actor() + "-" + UUID.randomUUID(), now);
             this.currentOperation.set(operation);
+            LumaDebugLog.log(
+                    "external-tool-detect",
+                    "Detected {} action {}",
+                    profile.actor(),
+                    operation.actionId
+            );
         } else {
             operation.touch(now);
         }

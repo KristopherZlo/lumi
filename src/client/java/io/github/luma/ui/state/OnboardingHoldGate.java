@@ -2,7 +2,7 @@ package io.github.luma.ui.state;
 
 public final class OnboardingHoldGate {
 
-    public static final long DEFAULT_REQUIRED_HOLD_MILLIS = 1500L;
+    public static final long DEFAULT_REQUIRED_HOLD_MILLIS = 800L;
 
     private final long requiredHoldMillis;
     private long heldMillis;

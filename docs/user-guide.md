@@ -12,11 +12,11 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 
 - Press `U` to open the project for the current dimension.
 - If that project does not exist yet, Lumi creates it.
-- The first Lumi workspace open on a Minecraft installation shows a short interactive safety tour. Shortcut steps show your current remapped keys as pixel icons and continue only after you hold the shown shortcut for 1.5 seconds. Use the `X` button in the top-right of the tour if you need to leave it early. You can replay it later from `More` or with `/lumi-onboarding`.
+- The first Lumi workspace open on a Minecraft installation shows a short interactive safety tour. Shortcut steps show your current remapped keys as pixel icons and continue only after you hold the shown shortcut for 0.8 seconds. After the open-workspace shortcut, the tour continues over the Lumi workspace screen. Use the `X` button in the top-right of the tour if you need to leave it early. You can replay it later from `More` or with `/lumi-onboarding`.
 - Press the Lumi action button plus `S` to open Quick save while no screen is open. The default chord is `Left Alt+S`, and both keys are remappable in Minecraft `Controls` under `Lumi`.
 - Use the Lumi action button plus `Z` to undo the latest tracked action while no screen is open. The default action button is `Left Alt`.
 - Use the Lumi action button plus `Y` to redo the latest undone tracked action while no screen is open.
-- For WorldEdit and FAWE edits, those chords call the tools' native undo/redo commands and then update Lumi's pending draft. Axiom edits are left to Axiom's own undo command.
+- For WorldEdit and FAWE edits, those chords call the tools' native undo/redo commands and then update Lumi's pending draft. Captured Axiom edits replay through Lumi's undo/redo operation path.
 - Undo and redo restore the stored block states without firing immediate redstone/block updates from the replay itself, so restored TNT does not auto-prime just because it is next to powered redstone.
 - Undo also removes item drops caused by the tracked edit, such as TNT drops or water-broken blocks, and redo respawns those drops.
 - Hold the Lumi action button to preview undo targets, or the action button plus `Y` to preview redo targets, when compare highlight is not active. Changing the action button changes both the preview hold and these undo/redo chords.

@@ -1,5 +1,6 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientOnboardingService;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.PartialRestoreMode;
@@ -17,17 +18,24 @@ import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
+import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.screen.section.ProjectScreenSections;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
+import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.Surface;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 public final class ProjectScreen extends LumaScreen {
@@ -40,6 +48,8 @@ public final class ProjectScreen extends LumaScreen {
     private final ScreenRouter router = new ScreenRouter();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ProjectScreenSections sections = new ProjectScreenSections(this.actionController, new SectionActions());
+    private final ClientOnboardingService onboardingService;
+    private OnboardingTour onboardingTour;
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private ProjectHomeViewState state = new ProjectHomeViewState(
             null,
@@ -67,11 +77,24 @@ public final class ProjectScreen extends LumaScreen {
     }
 
     public ProjectScreen(Screen parent, String projectName, String selectedVariantId, String statusKey) {
+        this(parent, projectName, selectedVariantId, statusKey, new ClientOnboardingService(), null);
+    }
+
+    public ProjectScreen(
+            Screen parent,
+            String projectName,
+            String selectedVariantId,
+            String statusKey,
+            ClientOnboardingService onboardingService,
+            OnboardingTour onboardingTour
+    ) {
         super(Component.translatable("luma.screen.project.title", projectName));
         this.parent = parent;
         this.projectName = projectName;
         this.selectedVariantId = selectedVariantId == null ? "" : selectedVariantId;
         this.statusKey = statusKey == null || statusKey.isBlank() ? "luma.status.project_ready" : statusKey;
+        this.onboardingService = onboardingService == null ? new ClientOnboardingService() : onboardingService;
+        this.onboardingTour = onboardingTour;
     }
 
     @Override
@@ -98,13 +121,16 @@ public final class ProjectScreen extends LumaScreen {
             return;
         }
 
+        StackLayout stack = UIContainers.stack(Sizing.fill(100), Sizing.fill(100));
+        root.child(stack);
+
         ProjectWindowLayout window = ProjectWindowLayout.forProject(
                 this.width,
                 Component.translatable("luma.simple.workspace_title", this.projectName),
                 this.state.project(),
                 this.state.variants()
         );
-        root.child(window.root());
+        stack.child(window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.HISTORY);
         if (this.shouldShowStatusBanner()) {
             window.content().child(LumaUi.statusBanner(this.bannerText()));
@@ -123,11 +149,23 @@ public final class ProjectScreen extends LumaScreen {
         body.child(this.sections.buildSection(model));
         body.child(this.sections.historySection(model));
         body.child(LumaUi.bottomSpacer());
+
+        if (this.onboardingTour != null) {
+            stack.child(this.onboardingOverlay());
+        }
     }
 
     @Override
     public void onClose() {
         this.client.setScreen(this.parent);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (this.onboardingTour != null && OnboardingScreen.isEscapeKey(event)) {
+            return true;
+        }
+        return super.keyPressed(event);
     }
 
     @Override
@@ -206,6 +244,9 @@ public final class ProjectScreen extends LumaScreen {
 
     @Override
     protected void onLumaTick() {
+        if (this.onboardingTour != null && this.handleOnboardingTransition(this.onboardingTour.tick())) {
+            return;
+        }
         if (++this.refreshCooldown < 10) {
             return;
         }
@@ -224,6 +265,35 @@ public final class ProjectScreen extends LumaScreen {
             this.state = refreshed;
             this.refresh(this.statusKey);
         }
+    }
+
+    private FlowLayout onboardingOverlay() {
+        FlowLayout overlay = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
+        overlay.surface(Surface.flat(0x99000000));
+        overlay.padding(Insets.of(10));
+        overlay.horizontalAlignment(HorizontalAlignment.CENTER);
+        overlay.verticalAlignment(VerticalAlignment.CENTER);
+        overlay.child(this.onboardingTour.panel(this.width, this::handleOnboardingTransition));
+        return overlay;
+    }
+
+    private boolean handleOnboardingTransition(OnboardingTour.Transition transition) {
+        if (transition == null || transition == OnboardingTour.Transition.NONE) {
+            return false;
+        }
+        switch (transition) {
+            case REBUILD, OPEN_WORKSPACE -> this.refresh(this.statusKey);
+            case COMPLETE -> this.completeOnboarding();
+            case NONE -> {
+            }
+        }
+        return true;
+    }
+
+    private void completeOnboarding() {
+        this.onboardingService.markCompleted();
+        this.onboardingTour = null;
+        this.refresh(this.statusKey);
     }
 
     private Component bannerText() {
