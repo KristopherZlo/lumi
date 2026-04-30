@@ -111,11 +111,11 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 
 - `ProjectLayout`: single source of truth for world/project-relative paths.
 - `GsonProvider`: shared JSON configuration.
-- `StorageIo`: atomic writes, NBT helpers, low-level storage utilities.
+- `StorageIo`, `StorageLimits`: atomic writes, bounded NBT/binary reads, low-level storage utilities.
 - `ProjectRepository`: `project.json` metadata.
 - `VariantRepository`: `variants.json` branch heads and branch list.
 - `HistoryTombstoneRepository`: `history-tombstones.json` soft-delete visibility metadata.
-- `VersionRepository`: `versions/*.json` manifests.
+- `VersionRepository`, `VersionIndexRepository`: `versions/*.json` manifests and disposable `versions/index.json` cache.
 - `WorldOriginRepository`: shared `world-origin.json` manifest and corruption quarantine behavior.
 - `PatchRepository`: patch metadata/data facade.
 - `PatchMetaRepository`: `patches/*.meta.json` chunk index and lightweight patch metadata.
@@ -137,7 +137,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `HistoryCaptureManager`: mixin-facing capture facade.
 - `CaptureSessionRegistry`: active buffers, dirty flags, session states, flush fingerprints.
 - `CaptureDiagnosticsRegistry`, `CaptureSessionDiagnostics`: accepted mutation traces and capture summaries.
-- `TrackedProjectCatalog`: active project metadata cache for capture matching.
+- `TrackedProjectCatalog`, `ProjectCatalogCache`: active project metadata cache for capture matching, refreshed only by explicit invalidation.
 - `TrackedProject`, `ProjectTrackingIndex`: dimension/chunk membership for tracked workspaces.
 - `WorldMutationContext`: prevents Lumi operations from reentering capture and suppresses fallback capture while internal prepared apply and native external-tool undo/redo are running.
 - `WorldMutationCaptureGuard`: duplicate hook protection.
@@ -147,7 +147,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `MutationSourcePolicy`: mutation source classification.
 - `ExplosiveEntityContextRegistry`: TNT/explosion causal context.
 - `SessionStabilizationService`: dirty chunk reconciliation before save/freeze/undo/redo.
-- `CapturePersistenceCoordinator`: async maintenance executor for recovery and baseline writes.
+- `CapturePersistenceCoordinator`: separate async draft-flush and baseline-write queues for recovery and baseline persistence.
 - `ChunkSnapshotCaptureService`, `SnapshotCaptureService`: server-thread chunk/snapshot capture into immutable payloads.
 - `ChunkSectionOwnershipRegistry`, `ChunkSectionOwnerLookup`, `DirectSectionMutationCaptureService`: lower-level section owner fallback capture.
 - `UndoRedoHistoryManager`: live undo/redo stacks and recent action source data.
@@ -155,9 +155,9 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 
 ### World Apply
 
-- `WorldOperationManager`: single-operation-per-world async prepare plus tick-time apply orchestration, including high-throughput budgets for restore, recovery, merge, and undo/redo labels.
-- `WorldChangeBatchPreparer`: patch/recovery block/entity changes and v7 section frames to tick-ready sparse or section-native batches.
-- `SnapshotBatchPreparer`: snapshot payloads to tick-ready section-native batches without expanding dense sections into per-block placements.
+- `WorldOperationManager`, `WorldApplyBudgetPlanner`: single-operation-per-world async prepare plus tick-time apply orchestration, including high-throughput block/native-cell/rewrite budgets for restore, recovery, merge, and undo/redo labels.
+- `WorldChangeBatchPreparer`, `BlockStatePaletteDecoder`: patch/recovery block/entity changes and v7 section frames to tick-ready sparse or section-native batches with operation-scoped palette decode caching.
+- `SnapshotBatchPreparer`: snapshot payloads to tick-ready section-native batches without expanding dense sections into per-block placements or decoding palettes inside cell loops.
 - `BlockChangeApplier`: actual section/block-entity/entity commit operations.
 - `SectionContainerRewriteCommitStrategy`, `PalettedContainerDataSwapper`, `SectionNativeBlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, `VanillaBlockCommitStrategy`: dense section container rewrite path, section-native loop path, direct loaded-section sparse apply path, and safe vanilla fallback selection.
 - `ChunkSectionUpdateBroadcaster`: batched section and block-entity client update packets after fast commits.
@@ -165,7 +165,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `WorldApplyBlockUpdatePolicy`: side-effect-suppressed update flags and apply behavior.
 - `PersistentBlockStatePolicy`: restore/snapshot normalization for runtime-only states.
 - `ConnectedBlockPlacementExpander`: paired blocks such as beds, doors, tall plants.
-- `PreparedBlockPlacement`, `PreparedChunkBatch`, `PreparedSectionApplyBatch`, `LumiSectionBuffer`, `SectionChangeMask`: prepared immutable apply data for sparse and section-native work.
+- `PreparedBlockPlacement`, `PreparedChunkBatch`, `PreparedSectionApplyBatch`, `PreparedChunkBatchCollapser`, `LumiSectionBuffer`, `SectionChangeMask`: prepared immutable apply data and collapse logic for sparse and section-native work.
 - `ChunkBatch`, `SectionBatch`, `EntityBatch`: per-chunk apply units.
 - `GlobalDispatcher`, `LocalQueue`, `BatchState`, `BatchProcessor`, `HistoryStore`: queue/runtime state for bounded apply.
 - `BlockStateNbtCodec`: Minecraft block-state and NBT conversion.
