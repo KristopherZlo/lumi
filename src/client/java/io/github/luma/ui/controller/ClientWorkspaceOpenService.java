@@ -44,6 +44,14 @@ public final class ClientWorkspaceOpenService {
     }
 
     public void openCurrentWorkspace(Minecraft client, Screen parent) {
+        this.openCurrentWorkspace(client, parent, WorkspaceOpenTarget.PROJECT);
+    }
+
+    public void openCurrentWorkspaceOnboarding(Minecraft client, Screen parent) {
+        this.openCurrentWorkspace(client, parent, WorkspaceOpenTarget.ONBOARDING);
+    }
+
+    private void openCurrentWorkspace(Minecraft client, Screen parent, WorkspaceOpenTarget target) {
         if (client == null || client.player == null) {
             return;
         }
@@ -67,7 +75,8 @@ public final class ClientWorkspaceOpenService {
         client.setScreen(new ProjectOpeningScreen(parent));
 
         server.execute(() -> this.ensureWorkspace(server, dimension, author, request));
-        request.whenComplete((projectName, throwable) -> client.execute(() -> this.completeOpen(client, parent, request, projectName, throwable)));
+        request.whenComplete((projectName, throwable) ->
+                client.execute(() -> this.completeOpen(client, parent, request, target, projectName, throwable)));
     }
 
     private void ensureWorkspace(
@@ -99,6 +108,7 @@ public final class ClientWorkspaceOpenService {
             Minecraft client,
             Screen parent,
             CompletableFuture<WorkspaceOpenResult> request,
+            WorkspaceOpenTarget target,
             WorkspaceOpenResult result,
             Throwable throwable
     ) {
@@ -117,11 +127,20 @@ public final class ClientWorkspaceOpenService {
             client.setScreen(new RecoveryScreen(parent, result.projectName()));
             return;
         }
+        if (target == WorkspaceOpenTarget.ONBOARDING) {
+            client.setScreen(new OnboardingScreen(parent, result.projectName(), this.onboardingService));
+            return;
+        }
         if (this.onboardingService.shouldShowOnboarding()) {
             client.setScreen(new OnboardingScreen(parent, result.projectName(), this.onboardingService));
             return;
         }
         client.setScreen(new ProjectScreen(parent, result.projectName()));
+    }
+
+    private enum WorkspaceOpenTarget {
+        PROJECT,
+        ONBOARDING
     }
 
     private record WorkspaceOpenResult(String projectName, boolean hasRecoveryDraft) {

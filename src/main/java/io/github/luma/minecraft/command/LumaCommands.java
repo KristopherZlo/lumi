@@ -40,6 +40,7 @@ public final class LumaCommands {
 
     private int help(CommandSourceStack source) {
         source.sendSuccess(() -> Component.literal("Lumi commands are diagnostics and local testing tools."), false);
+        source.sendSuccess(() -> Component.literal("/lumi-onboarding - replay the short Lumi onboarding tour"), false);
         source.sendSuccess(() -> Component.literal("/lumi status - show project and operation status"), false);
         source.sendSuccess(() -> Component.literal("/lumi testing singleplayer - run the integrated-world Lumi regression suite"), false);
         source.sendSuccess(() -> Component.literal("Use the Lumi UI for project creation, save, restore, variants, recovery, share, merge, import/export, and cleanup."), false);

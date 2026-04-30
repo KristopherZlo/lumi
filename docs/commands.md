@@ -1,8 +1,20 @@
 # Commands
 
-Commands are diagnostics and local testing tools. Lumi project creation, save, restore, branches, recovery, share, merge, import/export, cleanup, settings, and compare workflows remain UI-only for normal use.
+Commands are diagnostics and local testing tools. Lumi project creation, save, restore, branches, recovery, share, merge, import/export, cleanup, settings, and compare workflows remain UI-first for normal use.
 
 All `/lumi` commands require an operator-level player permission set. In singleplayer, that means cheats must be enabled for the world.
+
+The onboarding replay command is client-side and is intentionally separate from `/lumi`, so it does not conflict with the server diagnostic command tree.
+
+## Onboarding
+
+```mcfunction
+/lumi-onboarding
+```
+
+Opens the short Lumi onboarding tour for the current singleplayer workspace. If the workspace does not exist yet, Lumi creates it the same way as pressing `U`.
+
+Opening the workspace still follows Lumi's normal local access checks. If interrupted recovered work exists, Lumi opens the recovery screen first so the player does not skip the safety prompt.
 
 ## Help
 

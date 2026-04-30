@@ -1,11 +1,14 @@
 package io.github.luma;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import com.mojang.blaze3d.platform.InputConstants;
+import io.github.luma.client.command.LumaClientCommands;
 import io.github.luma.client.input.KeyBindingState;
+import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
@@ -93,6 +96,14 @@ public final class LumaClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_LEFT_ALT,
                 KEY_CATEGORY
         ));
+        LumiClientKeyBindings.configure(
+                this.openDashboardKey,
+                this.quickSaveKey,
+                this.undoKey,
+                this.redoKey,
+                this.toggleCompareOverlayKey,
+                this.lumiActionButtonKey
+        );
         LumiRegionSelectionController.getInstance().configureActionButton(this.lumiActionButtonKey, this.keyBindingState);
         StartupProfiler.logElapsed("client.key-bindings", keyBindingsStartedAt);
 
@@ -101,6 +112,8 @@ public final class LumaClient implements ClientModInitializer {
         WorldRenderEvents.END_MAIN.register(CompareOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(LumiRegionSelectionRenderer::render);
         WorldRenderEvents.END_MAIN.register(RecentChangesOverlayRenderer::render);
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+                new LumaClientCommands(this.workspaceOpenService).register(dispatcher));
         OverlayDiagnostics.getInstance().clientRenderCallbacksRegistered("END_MAIN");
         StartupProfiler.logElapsed("client.fabric-events", eventRegistrationStartedAt);
         long hudStartedAt = StartupProfiler.start();
@@ -158,7 +171,11 @@ public final class LumaClient implements ClientModInitializer {
             client.setScreen(new QuickSaveScreen());
         }
 
+        boolean openDashboardClicked = false;
         while (this.openDashboardKey.consumeClick()) {
+            openDashboardClicked = true;
+        }
+        if (shortcutInputActive && openDashboardClicked) {
             this.workspaceOpenService.openCurrentWorkspace(client, client.screen);
         }
     }
