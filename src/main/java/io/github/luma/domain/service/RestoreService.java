@@ -23,10 +23,8 @@ import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
-import io.github.luma.minecraft.world.ConnectedBlockPlacementExpander;
-import io.github.luma.minecraft.world.EntityBatch;
-import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.minecraft.world.SnapshotBatchPreparer;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -45,7 +43,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,9 +61,6 @@ import net.minecraft.server.level.ServerLevel;
  */
 public final class RestoreService {
 
-    private static final ConnectedBlockPlacementExpander CONNECTED_BLOCK_PLACEMENT_EXPANDER =
-            new ConnectedBlockPlacementExpander();
-
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VersionRepository versionRepository = new VersionRepository();
@@ -82,6 +76,7 @@ public final class RestoreService {
     private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
+    private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final VersionLineageService lineageService = new VersionLineageService();
 
@@ -344,7 +339,7 @@ public final class RestoreService {
                     if (partialDraft.draft().isEmpty()) {
                         throw new IllegalArgumentException("Partial restore has no changes inside the selected region");
                     }
-                    List<PreparedChunkBatch> batches = collapsePreparedBatches(this.decodeStoredChanges(
+                    List<PreparedChunkBatch> batches = this.batchCollapser.collapse(this.decodeStoredChanges(
                             level,
                             partialDraft.draft().changes(),
                             partialDraft.draft().entityChanges(),
@@ -690,7 +685,7 @@ public final class RestoreService {
             );
         }
 
-        List<PreparedChunkBatch> collapsed = collapsePreparedBatches(batches);
+        List<PreparedChunkBatch> collapsed = this.batchCollapser.collapse(batches);
         LumaMod.LOGGER.info(
                 "Decoded {} tracked baseline chunks for world root restore in project {}",
                 trackedChunks.size(),
@@ -807,7 +802,7 @@ public final class RestoreService {
             );
         }
 
-        List<PreparedChunkBatch> collapsed = collapsePreparedBatches(batches);
+        List<PreparedChunkBatch> collapsed = this.batchCollapser.collapse(batches);
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         LumaMod.LOGGER.info(
@@ -1041,7 +1036,7 @@ public final class RestoreService {
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded patch " + patch.id());
         }
 
-        List<PreparedChunkBatch> collapsed = collapsePreparedBatches(batches);
+        List<PreparedChunkBatch> collapsed = this.batchCollapser.collapse(batches);
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         if (rawPlacements != collapsedPlacements) {
@@ -1217,52 +1212,7 @@ public final class RestoreService {
     }
 
     static List<PreparedChunkBatch> collapsePreparedBatches(List<PreparedChunkBatch> batches) {
-        Map<ChunkPoint, LinkedHashMap<Long, PreparedBlockPlacement>> collapsed = new LinkedHashMap<>();
-        Map<ChunkPoint, EntityAccumulator> collapsedEntities = new LinkedHashMap<>();
-        for (PreparedChunkBatch batch : batches) {
-            if (batch == null) {
-                continue;
-            }
-            LinkedHashMap<Long, PreparedBlockPlacement> chunkPlacements = collapsed.computeIfAbsent(
-                    batch.chunk(),
-                    ignored -> new LinkedHashMap<>()
-            );
-            for (PreparedBlockPlacement placement : batch.placements()) {
-                long packedPos = BlockPos.asLong(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ());
-                chunkPlacements.put(packedPos, placement);
-            }
-            for (var nativeSection : batch.nativeSections()) {
-                for (PreparedBlockPlacement placement : nativeSection.toPlacements()) {
-                    long packedPos = BlockPos.asLong(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ());
-                    chunkPlacements.put(packedPos, placement);
-                }
-            }
-            if (!batch.entityBatch().isEmpty()) {
-                collapsedEntities.computeIfAbsent(batch.chunk(), ignored -> new EntityAccumulator())
-                        .add(batch.entityBatch());
-            }
-        }
-
-        List<PreparedBlockPlacement> expandedPlacements = CONNECTED_BLOCK_PLACEMENT_EXPANDER.expandTargets(
-                collapsed.values().stream()
-                        .flatMap(placements -> placements.values().stream())
-                        .toList()
-        );
-        Map<ChunkPoint, List<PreparedBlockPlacement>> expanded = CONNECTED_BLOCK_PLACEMENT_EXPANDER.groupByChunk(expandedPlacements);
-
-        List<PreparedChunkBatch> result = new ArrayList<>();
-        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
-        chunks.addAll(expanded.keySet());
-        chunks.addAll(collapsedEntities.keySet());
-        WorldChangeBatchPreparer preparer = new WorldChangeBatchPreparer();
-        for (ChunkPoint chunk : chunks) {
-            List<PreparedBlockPlacement> placements = expanded.getOrDefault(chunk, List.of());
-            EntityBatch entityBatch = collapsedEntities.getOrDefault(chunk, EntityAccumulator.EMPTY).toBatch();
-            if (!placements.isEmpty() || !entityBatch.isEmpty()) {
-                result.add(preparer.prepareDecodedChunk(chunk, placements, entityBatch));
-            }
-        }
-        return result;
+        return new PreparedChunkBatchCollapser().collapse(batches);
     }
 
     private List<StoredEntityChange> planPartialEntityChanges(
@@ -1395,22 +1345,4 @@ public final class RestoreService {
     private record ChunkPointAccumulator(int chunkX, int chunkZ) {
     }
 
-    private static final class EntityAccumulator {
-
-        private static final EntityAccumulator EMPTY = new EntityAccumulator();
-
-        private final List<net.minecraft.nbt.CompoundTag> spawns = new ArrayList<>();
-        private final List<String> removals = new ArrayList<>();
-        private final List<net.minecraft.nbt.CompoundTag> updates = new ArrayList<>();
-
-        private void add(EntityBatch batch) {
-            this.spawns.addAll(batch.entitiesToSpawn());
-            this.removals.addAll(batch.entityIdsToRemove());
-            this.updates.addAll(batch.entitiesToUpdate());
-        }
-
-        private EntityBatch toBatch() {
-            return new EntityBatch(this.spawns, this.removals, this.updates);
-        }
-    }
 }
