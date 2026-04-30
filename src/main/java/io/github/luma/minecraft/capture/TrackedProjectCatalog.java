@@ -6,24 +6,18 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.VariantRepository;
 import java.io.IOException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
 final class TrackedProjectCatalog {
 
-    private static final Duration CACHE_TTL = Duration.ofSeconds(5);
-
     private final ProjectService projectService;
     private final ProjectRepository projectRepository;
     private final VariantRepository variantRepository;
-    private final Map<String, CachedProjects> projectCaches = new HashMap<>();
+    private final ProjectCatalogCache<ProjectCatalogSnapshot> cache = new ProjectCatalogCache<>();
 
     TrackedProjectCatalog(
             ProjectService projectService,
@@ -36,7 +30,7 @@ final class TrackedProjectCatalog {
     }
 
     void invalidate(MinecraftServer server) {
-        this.projectCaches.remove(this.cacheKey(server));
+        this.cache.invalidate(this.cacheKey(server));
     }
 
     TrackedProject find(MinecraftServer server, String projectId) throws IOException {
@@ -58,13 +52,11 @@ final class TrackedProjectCatalog {
                 .matching(level.dimension().identifier().toString(), pos);
     }
 
-    private CachedProjects loadCache(MinecraftServer server) throws IOException {
-        String cacheKey = this.cacheKey(server);
-        CachedProjects cachedProjects = this.projectCaches.get(cacheKey);
-        if (cachedProjects != null && Duration.between(cachedProjects.loadedAt(), Instant.now()).compareTo(CACHE_TTL) < 0) {
-            return cachedProjects;
-        }
+    private ProjectCatalogSnapshot loadCache(MinecraftServer server) throws IOException {
+        return this.cache.getOrLoad(this.cacheKey(server), () -> this.loadProjects(server));
+    }
 
+    private ProjectCatalogSnapshot loadProjects(MinecraftServer server) throws IOException {
         List<TrackedProject> trackedProjects = new ArrayList<>();
         java.nio.file.Path projectsRoot = this.projectService.projectsRoot(server);
         if (java.nio.file.Files.exists(projectsRoot)) {
@@ -88,23 +80,13 @@ final class TrackedProjectCatalog {
                     trackedProject
             ));
         }
-        CachedProjects refreshed = new CachedProjects(
-                Instant.now(),
+        return new ProjectCatalogSnapshot(
                 List.copyOf(trackedProjects),
                 ProjectTrackingIndex.build(indexEntries)
         );
-        this.projectCaches.put(cacheKey, refreshed);
-        return refreshed;
     }
 
     private String cacheKey(MinecraftServer server) {
         return server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().toString();
-    }
-
-    private record CachedProjects(
-            Instant loadedAt,
-            List<TrackedProject> projects,
-            ProjectTrackingIndex<TrackedProject> index
-    ) {
     }
 }

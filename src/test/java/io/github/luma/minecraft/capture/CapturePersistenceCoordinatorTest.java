@@ -14,7 +14,11 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -64,6 +68,52 @@ class CapturePersistenceCoordinatorTest {
         }
     }
 
+    @Test
+    void draftFlushCompletesWhileBaselineExecutorIsBlockedAndDrainWaitsForBoth() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryRepository recoveryRepository = new RecoveryRepository();
+        ExecutorService draftExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService baselineExecutor = Executors.newSingleThreadExecutor();
+        CountDownLatch baselineStarted = new CountDownLatch(1);
+        CountDownLatch releaseBaseline = new CountDownLatch(1);
+        baselineExecutor.submit(() -> {
+            baselineStarted.countDown();
+            releaseBaseline.await(5, TimeUnit.SECONDS);
+            return null;
+        });
+        assertTrue(baselineStarted.await(1, TimeUnit.SECONDS));
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                recoveryRepository,
+                new BaselineChunkRepository(),
+                draftExecutor,
+                baselineExecutor
+        )) {
+            coordinator.enqueueBaselineWrite(layout, "project", "Project", chunkSnapshot(), Instant.parse("2026-04-21T09:00:00Z"));
+            coordinator.enqueueDraftFlush(layout, "project", "Project", draft("minecraft:gold_block", Instant.parse("2026-04-21T09:00:01Z")));
+
+            RecoveryDraft flushed = waitForDraft(recoveryRepository, layout);
+            assertEquals("minecraft:gold_block", flushed.changes().getFirst().newValue().blockId());
+
+            CompletableFuture<Void> drained = CompletableFuture.runAsync(() -> {
+                try {
+                    coordinator.drainProject("project", "Project");
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+            });
+            TimeUnit.MILLISECONDS.sleep(100);
+            assertFalse(drained.isDone());
+
+            releaseBaseline.countDown();
+            drained.get(2, TimeUnit.SECONDS);
+        } finally {
+            releaseBaseline.countDown();
+            draftExecutor.shutdownNow();
+            baselineExecutor.shutdownNow();
+        }
+    }
+
     private static ChunkSnapshotPayload chunkSnapshot() {
         short[] indexes = new short[4096];
         indexes[0] = 1;
@@ -97,6 +147,18 @@ class CapturePersistenceCoordinatorTest {
                         payload(blockId)
                 ))
         );
+    }
+
+    private static RecoveryDraft waitForDraft(RecoveryRepository repository, ProjectLayout layout) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (System.nanoTime() < deadline) {
+            var draft = repository.loadDraft(layout);
+            if (draft.isPresent()) {
+                return draft.get();
+            }
+            TimeUnit.MILLISECONDS.sleep(20);
+        }
+        throw new AssertionError("Timed out waiting for draft flush");
     }
 
     private static StatePayload payload(String blockId) {
