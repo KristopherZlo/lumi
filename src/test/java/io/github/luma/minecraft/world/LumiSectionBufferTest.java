@@ -73,4 +73,17 @@ class LumiSectionBufferTest {
         Assertions.assertEquals(SectionApplyPath.SECTION_NATIVE, classifier.classify(dense.build(), false).path());
         Assertions.assertEquals(SectionApplyPath.SECTION_REWRITE, classifier.classify(rewrite.build(), false).path());
     }
+
+    @Test
+    void classifierChoosesRewriteForDenseSingleLayerSections() {
+        SectionApplySafetyClassifier classifier = new SectionApplySafetyClassifier();
+        LumiSectionBuffer.Builder layer = LumiSectionBuffer.builder(0);
+        for (int localZ = 0; localZ < 16; localZ++) {
+            for (int localX = 0; localX < 16; localX++) {
+                layer.set(localX, 0, localZ, Blocks.STONE.defaultBlockState(), null);
+            }
+        }
+
+        Assertions.assertEquals(SectionApplyPath.SECTION_REWRITE, classifier.classify(layer.build(), false).path());
+    }
 }

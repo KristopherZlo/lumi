@@ -544,13 +544,38 @@ public final class WorldOperationManager {
             int processedNativeSectionsThisTick = 0;
             int processedNativeCellsThisTick = 0;
             int processedRewriteSectionsThisTick = 0;
+            int startedChunksThisTick = 0;
+            int finishedChunksThisTick = 0;
+            int tickStartProcessedBlocks = this.applyMetrics.processedBlocks();
+            int tickStartRewriteSections = this.applyMetrics.rewriteSections();
+            int tickStartNativeSections = this.applyMetrics.nativeSections();
+            int tickStartFallbackSections = this.applyMetrics.fallbackSections();
+            int tickStartLightChecks = this.applyMetrics.lightChecks();
+            String stopReason = "deadline";
+            if (this.debugApplyEnabled()) {
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op-apply",
+                        "Apply tick start label={} progress={}/{} adaptiveScale={} budget=[{}] currentBatch={} dispatcherPending={} lightPending={}",
+                        this.handle().label(),
+                        this.appliedWorkUnits,
+                        this.prepared.totalWorkUnits(),
+                        this.adaptiveScale(),
+                        budget.summary(),
+                        this.currentBatch == null ? "none" : this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z(),
+                        this.dispatcher != null && this.dispatcher.hasPending(),
+                        this.lightUpdateQueue.pendingCount()
+                );
+            }
             while (System.nanoTime() < deadlineNanos) {
                 if (this.currentBatch == null) {
                     this.currentBatch = this.dispatcher.pollNext();
                     if (this.currentBatch == null) {
+                        stopReason = "dispatcher-empty";
                         break;
                     }
                     this.currentBatch = this.prepared.batchProcessor().processSet(this.currentBatch);
+                    startedChunksThisTick += 1;
                     this.currentNativeSections = this.currentBatch.orderedNativeSections();
                     this.currentSections = this.currentBatch.orderedSections();
                     this.currentBlockEntities = List.copyOf(this.currentBatch.blockEntities().entrySet());
@@ -562,20 +587,27 @@ public final class WorldOperationManager {
                     this.entityIndex = 0;
                     this.blockEntitiesApplied = false;
                     this.entitiesApplied = false;
-                    LumaDebugLog.log(
-                            this.handle(),
-                            "world-op",
-                            "Applying chunk batch {}:{} with {} placements across {} sections, {} block entities, and {} entity operations",
-                            this.currentBatch.chunk().x(),
-                            this.currentBatch.chunk().z(),
-                            this.currentBatch.totalPlacements(),
-                            this.currentSections.size() + this.currentNativeSections.size(),
-                            this.currentBlockEntities.size(),
-                            BlockChangeApplier.entityOperationCount(this.currentBatch.entityBatch())
-                    );
+                    if (this.debugApplyEnabled()) {
+                        LumaDebugLog.log(
+                                this.handle(),
+                                "world-op-apply",
+                                "Chunk batch start {}:{} placements={} nativeSections={} rewriteSections={} nativeCells={} rewriteCells={} sparseSections={} sparsePlacements={} blockEntities={} entityOps={}",
+                                this.currentBatch.chunk().x(),
+                                this.currentBatch.chunk().z(),
+                                this.currentBatch.totalPlacements(),
+                                this.currentNativeSections.size(),
+                                this.rewriteSectionCount(this.currentBatch),
+                                this.nativeCellCount(this.currentBatch),
+                                this.rewriteCellCount(this.currentBatch),
+                                this.currentSections.size(),
+                                this.sparsePlacementCount(this.currentBatch),
+                                this.currentBlockEntities.size(),
+                                BlockChangeApplier.entityOperationCount(this.currentBatch.entityBatch())
+                        );
+                    }
                 }
 
-                if (!WorldOperationManager.this.tickWorkGate.canStartNextStep(
+                WorldApplyTickGateDecision decision = WorldOperationManager.this.tickWorkGate.decide(
                         this.hasPendingNativeSection(),
                         this.hasPendingNativeSection() ? this.pendingNativeSection().safetyProfile().path() : null,
                         processedWorkThisTick,
@@ -583,7 +615,9 @@ public final class WorldOperationManager {
                         processedNativeCellsThisTick,
                         processedRewriteSectionsThisTick,
                         budget
-                )) {
+                );
+                if (!decision.canStart()) {
+                    stopReason = decision.reason();
                     break;
                 }
 
@@ -601,6 +635,7 @@ public final class WorldOperationManager {
                 }
 
                 if (processed.workUnits() <= 0 && this.currentBatch != null && !this.currentBatchFinished()) {
+                    stopReason = "no-progress";
                     break;
                 }
 
@@ -619,14 +654,18 @@ public final class WorldOperationManager {
                                 : "Applying chunk " + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z())
                 );
                 if (this.currentBatch != null && this.currentBatchFinished()) {
-                    LumaDebugLog.log(
-                            this.handle(),
-                            "world-op",
-                            "Finished chunk batch {}:{} after applying {} total work units so far",
-                            this.currentBatch.chunk().x(),
-                            this.currentBatch.chunk().z(),
-                            this.appliedWorkUnits
-                    );
+                    if (this.debugApplyEnabled()) {
+                        LumaDebugLog.log(
+                                this.handle(),
+                                "world-op-apply",
+                                "Chunk batch finish {}:{} totalApplied={} metrics=[{}]",
+                                this.currentBatch.chunk().x(),
+                                this.currentBatch.chunk().z(),
+                                this.appliedWorkUnits,
+                                this.applyMetrics.summary()
+                        );
+                    }
+                    finishedChunksThisTick += 1;
                     this.prepared.historyStore().record(this.currentBatch);
                     this.prepared.batchProcessor().postProcessSet(this.currentBatch);
                     this.currentBatch = null;
@@ -636,6 +675,23 @@ public final class WorldOperationManager {
                     this.nativeSectionCursor = null;
                 }
             }
+            if (System.nanoTime() >= deadlineNanos && !"dispatcher-empty".equals(stopReason)) {
+                stopReason = "time-budget";
+            }
+            this.logApplyTickSummary(
+                    stopReason,
+                    processedWorkThisTick,
+                    processedNativeSectionsThisTick,
+                    processedNativeCellsThisTick,
+                    processedRewriteSectionsThisTick,
+                    startedChunksThisTick,
+                    finishedChunksThisTick,
+                    tickStartProcessedBlocks,
+                    tickStartRewriteSections,
+                    tickStartNativeSections,
+                    tickStartFallbackSections,
+                    tickStartLightChecks
+            );
 
             if (this.currentBatch == null && (this.dispatcher == null || !this.dispatcher.hasPending())) {
                 if (!this.drainDeferredLightUpdates(budget, deadlineNanos)) {
@@ -667,8 +723,22 @@ public final class WorldOperationManager {
             }
 
             int maxChecks = Math.min(MAX_LIGHT_CHECKS_PER_TICK, Math.max(128, budget.maxBlocks()));
+            int pendingBefore = this.lightUpdateQueue.pendingCount();
+            long startedAt = System.nanoTime();
             int appliedChecks = this.lightUpdateQueue.drain(this.level(), maxChecks, deadlineNanos);
             this.applyMetrics.recordLightChecks(appliedChecks);
+            if (this.debugApplyEnabled()) {
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op-apply",
+                        "Light drain maxChecks={} applied={} pendingBefore={} pendingAfter={} elapsedMicros={}",
+                        maxChecks,
+                        appliedChecks,
+                        pendingBefore,
+                        this.lightUpdateQueue.pendingCount(),
+                        microsSince(startedAt)
+                );
+            }
             this.progressSink().update(
                     OperationStage.FINALIZING,
                     this.appliedWorkUnits,
@@ -690,6 +760,45 @@ public final class WorldOperationManager {
                 return detail;
             }
             return this.preparationMarkerDetail + "; " + detail;
+        }
+
+        private void logApplyTickSummary(
+                String stopReason,
+                int processedWorkThisTick,
+                int processedNativeSectionsThisTick,
+                int processedNativeCellsThisTick,
+                int processedRewriteSectionsThisTick,
+                int startedChunksThisTick,
+                int finishedChunksThisTick,
+                int tickStartProcessedBlocks,
+                int tickStartRewriteSections,
+                int tickStartNativeSections,
+                int tickStartFallbackSections,
+                int tickStartLightChecks
+        ) {
+            if (!this.debugApplyEnabled()) {
+                return;
+            }
+            LumaDebugLog.log(
+                    this.handle(),
+                    "world-op-apply",
+                    "Apply tick stop={} workThisTick={} nativeSectionsThisTick={} nativeCellsThisTick={} rewriteSectionsThisTick={} chunksStarted={} chunksFinished={} totalsDelta=[processedBlocks={}, rewriteSections={}, nativeSections={}, fallbackSections={}, lightChecks={}] currentBatch={} dispatcherPending={} lightPending={}",
+                    stopReason,
+                    processedWorkThisTick,
+                    processedNativeSectionsThisTick,
+                    processedNativeCellsThisTick,
+                    processedRewriteSectionsThisTick,
+                    startedChunksThisTick,
+                    finishedChunksThisTick,
+                    this.applyMetrics.processedBlocks() - tickStartProcessedBlocks,
+                    this.applyMetrics.rewriteSections() - tickStartRewriteSections,
+                    this.applyMetrics.nativeSections() - tickStartNativeSections,
+                    this.applyMetrics.fallbackSections() - tickStartFallbackSections,
+                    this.applyMetrics.lightChecks() - tickStartLightChecks,
+                    this.currentBatch == null ? "none" : this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z(),
+                    this.dispatcher != null && this.dispatcher.hasPending(),
+                    this.lightUpdateQueue.pendingCount()
+            );
         }
 
         private int maxWorkForCurrentStep(
@@ -750,6 +859,7 @@ public final class WorldOperationManager {
                 if (this.nativeSectionCursor == null || !this.nativeSectionCursor.isFor(nativeSection)) {
                     this.nativeSectionCursor = new NativeSectionApplyCursor(nativeSection);
                 }
+                long startedAt = System.nanoTime();
                 NativeSectionApplyResult result = BlockChangeApplier.applyNativeSectionBatch(
                         this.level(),
                         this.nativeSectionCursor,
@@ -768,6 +878,23 @@ public final class WorldOperationManager {
                     this.nativeSectionIndex += 1;
                     this.nativeSectionCursor = null;
                 }
+                if (this.debugApplyEnabled()) {
+                    LumaDebugLog.log(
+                            this.handle(),
+                            "world-op-apply",
+                            "Native section step chunk={}:{} sectionY={} path={} cells={} maxBlocks={} processed={} completed={} elapsedMicros={} commit=[{}]",
+                            this.currentBatch.chunk().x(),
+                            this.currentBatch.chunk().z(),
+                            nativeSection.sectionY(),
+                            nativeSection.safetyProfile().path(),
+                            nativeSection.changedCellCount(),
+                            maxBlocks,
+                            result.processedCells(),
+                            result.completedSection(),
+                            microsSince(startedAt),
+                            this.commitSummary(result.commitResult())
+                    );
+                }
                 return new AppliedWork(
                         result.processedCells(),
                         completedNativeSections,
@@ -778,6 +905,7 @@ public final class WorldOperationManager {
 
             if (this.sectionIndex < this.currentSections.size()) {
                 SectionBatch section = this.currentSections.get(this.sectionIndex);
+                long startedAt = System.nanoTime();
                 int processed = BlockChangeApplier.applySectionBatch(
                         this.level(),
                         section,
@@ -790,6 +918,22 @@ public final class WorldOperationManager {
                     this.sectionIndex += 1;
                     this.placementIndex = 0;
                 }
+                if (this.debugApplyEnabled()) {
+                    LumaDebugLog.log(
+                            this.handle(),
+                            "world-op-apply",
+                            "Sparse section step chunk={}:{} sectionY={} placements={} maxBlocks={} processed={} nextPlacement={} completed={} elapsedMicros={}",
+                            this.currentBatch.chunk().x(),
+                            this.currentBatch.chunk().z(),
+                            section.sectionY(),
+                            section.placementCount(),
+                            maxBlocks,
+                            processed,
+                            this.placementIndex,
+                            this.sectionIndex >= this.currentSections.size() || this.placementIndex == 0,
+                            microsSince(startedAt)
+                    );
+                }
                 return new AppliedWork(processed, 0, 0, 0);
             }
 
@@ -797,6 +941,7 @@ public final class WorldOperationManager {
                 if (this.currentBlockEntities.isEmpty()) {
                     this.blockEntitiesApplied = true;
                 } else {
+                    long startedAt = System.nanoTime();
                     int processed = BlockChangeApplier.applyBlockEntities(
                             this.level(),
                             this.currentBlockEntities,
@@ -808,6 +953,21 @@ public final class WorldOperationManager {
                     if (this.blockEntityIndex >= this.currentBlockEntities.size()) {
                         this.blockEntitiesApplied = true;
                     }
+                    if (this.debugApplyEnabled()) {
+                        LumaDebugLog.log(
+                                this.handle(),
+                                "world-op-apply",
+                                "Block-entity step chunk={}:{} max={} processed={} nextIndex={} total={} completed={} elapsedMicros={}",
+                                this.currentBatch.chunk().x(),
+                                this.currentBatch.chunk().z(),
+                                Math.min(maxBlocks, MAX_BLOCK_ENTITIES_PER_TICK),
+                                processed,
+                                this.blockEntityIndex,
+                                this.currentBlockEntities.size(),
+                                this.blockEntitiesApplied,
+                                microsSince(startedAt)
+                        );
+                    }
                     return new AppliedWork(processed, 0, 0, 0);
                 }
             }
@@ -818,6 +978,7 @@ public final class WorldOperationManager {
                     this.entitiesApplied = true;
                     return AppliedWork.none();
                 }
+                long startedAt = System.nanoTime();
                 int processed = BlockChangeApplier.applyEntityBatch(
                         this.level(),
                         this.currentBatch.entityBatch(),
@@ -827,6 +988,21 @@ public final class WorldOperationManager {
                 this.entityIndex += processed;
                 if (this.entityIndex >= entityOperationCount) {
                     this.entitiesApplied = true;
+                }
+                if (this.debugApplyEnabled()) {
+                    LumaDebugLog.log(
+                            this.handle(),
+                            "world-op-apply",
+                            "Entity step chunk={}:{} max={} processed={} nextIndex={} total={} completed={} elapsedMicros={}",
+                            this.currentBatch.chunk().x(),
+                            this.currentBatch.chunk().z(),
+                            Math.min(maxBlocks, MAX_ENTITY_OPERATIONS_PER_TICK),
+                            processed,
+                            this.entityIndex,
+                            entityOperationCount,
+                            this.entitiesApplied,
+                            microsSince(startedAt)
+                    );
                 }
                 return new AppliedWork(processed, 0, 0, 0);
             }
@@ -848,6 +1024,83 @@ public final class WorldOperationManager {
                     && this.sectionIndex >= this.currentSections.size()
                     && this.blockEntitiesApplied
                     && this.entitiesApplied;
+        }
+
+        private boolean debugApplyEnabled() {
+            return LumaDebugLog.enabled(this.handle());
+        }
+
+        private int rewriteSectionCount(ChunkBatch batch) {
+            if (batch == null) {
+                return 0;
+            }
+            int count = 0;
+            for (PreparedSectionApplyBatch section : batch.nativeSections().values()) {
+                if (section.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE) {
+                    count += 1;
+                }
+            }
+            return count;
+        }
+
+        private int nativeCellCount(ChunkBatch batch) {
+            if (batch == null) {
+                return 0;
+            }
+            int count = 0;
+            for (PreparedSectionApplyBatch section : batch.nativeSections().values()) {
+                if (section.safetyProfile().path() == SectionApplyPath.SECTION_NATIVE) {
+                    count += section.changedCellCount();
+                }
+            }
+            return count;
+        }
+
+        private int rewriteCellCount(ChunkBatch batch) {
+            if (batch == null) {
+                return 0;
+            }
+            int count = 0;
+            for (PreparedSectionApplyBatch section : batch.nativeSections().values()) {
+                if (section.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE) {
+                    count += section.changedCellCount();
+                }
+            }
+            return count;
+        }
+
+        private int sparsePlacementCount(ChunkBatch batch) {
+            if (batch == null) {
+                return 0;
+            }
+            int count = 0;
+            for (SectionBatch section : batch.sections().values()) {
+                count += section.placementCount();
+            }
+            return count;
+        }
+
+        private String commitSummary(BlockCommitResult result) {
+            if (result == null) {
+                return "partial";
+            }
+            return "processed=" + result.processedBlocks()
+                    + ", changed=" + result.changedBlocks()
+                    + ", skipped=" + result.skippedBlocks()
+                    + ", rewriteSections=" + result.rewriteSections()
+                    + ", nativeSections=" + result.nativeSections()
+                    + ", directSections=" + result.directSections()
+                    + ", fallbackSections=" + (result.fallbackSections()
+                            + result.nativeFallbackSections()
+                            + result.rewriteFallbackSections())
+                    + ", packets=" + result.sectionPackets()
+                    + ", blockEntityPackets=" + result.blockEntityPackets()
+                    + ", lightChecks=" + result.lightChecks()
+                    + ", reason=" + result.fallbackReason();
+        }
+
+        private long microsSince(long startedAt) {
+            return Math.max(0L, (System.nanoTime() - startedAt) / 1_000L);
         }
 
         private record AppliedWork(

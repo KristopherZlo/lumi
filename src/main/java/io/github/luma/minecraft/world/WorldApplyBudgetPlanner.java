@@ -15,8 +15,8 @@ final class WorldApplyBudgetPlanner {
     private static final int RESTORE_MIN_NATIVE_SECTIONS_PER_TICK = 16;
     private static final int RESTORE_MAX_NATIVE_SECTIONS_PER_TICK = 64;
     private static final int MAX_REWRITE_SECTIONS_PER_TICK = 1;
-    private static final int RESTORE_MIN_REWRITE_SECTIONS_PER_TICK = 4;
-    private static final int RESTORE_MAX_REWRITE_SECTIONS_PER_TICK = 16;
+    private static final int RESTORE_MIN_REWRITE_SECTIONS_PER_TICK = 16;
+    private static final int RESTORE_MAX_REWRITE_SECTIONS_PER_TICK = 64;
 
     WorldApplyBudget plan(double progressFraction, double adaptiveScale, boolean highThroughput) {
         double fraction = Math.max(0.0D, Math.min(1.0D, progressFraction));

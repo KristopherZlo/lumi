@@ -18,7 +18,7 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(highThroughput.maxNativeSections() > normal.maxNativeSections());
         assertEquals(highThroughput.maxBlocks(), highThroughput.maxNativeCells());
         assertEquals(1, normal.maxRewriteSections());
-        assertEquals(16, highThroughput.maxRewriteSections());
+        assertEquals(64, highThroughput.maxRewriteSections());
     }
 
     @Test

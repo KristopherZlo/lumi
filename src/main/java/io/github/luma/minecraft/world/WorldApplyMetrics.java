@@ -56,6 +56,26 @@ final class WorldApplyMetrics {
         this.lightChecks += Math.max(0, lightChecks);
     }
 
+    int processedBlocks() {
+        return this.processedBlocks;
+    }
+
+    int rewriteSections() {
+        return this.rewriteSections;
+    }
+
+    int nativeSections() {
+        return this.nativeSections;
+    }
+
+    int fallbackSections() {
+        return this.fallbackSections + this.nativeFallbackSections + this.rewriteFallbackSections;
+    }
+
+    int lightChecks() {
+        return this.lightChecks;
+    }
+
     String summary() {
         return "processedBlocks=" + this.processedBlocks
                 + ", changedBlocks=" + this.changedBlocks

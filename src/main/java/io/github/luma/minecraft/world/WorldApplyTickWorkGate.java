@@ -11,11 +11,31 @@ final class WorldApplyTickWorkGate {
             int processedRewriteSectionsThisTick,
             WorldApplyBudget budget
     ) {
+        return this.decide(
+                hasPendingNativeSection,
+                pendingNativePath,
+                processedWorkThisTick,
+                processedNativeSectionsThisTick,
+                processedNativeCellsThisTick,
+                processedRewriteSectionsThisTick,
+                budget
+        ).canStart();
+    }
+
+    WorldApplyTickGateDecision decide(
+            boolean hasPendingNativeSection,
+            SectionApplyPath pendingNativePath,
+            int processedWorkThisTick,
+            int processedNativeSectionsThisTick,
+            int processedNativeCellsThisTick,
+            int processedRewriteSectionsThisTick,
+            WorldApplyBudget budget
+    ) {
         if (budget == null) {
-            return false;
+            return WorldApplyTickGateDecision.stop("no-budget");
         }
         if (hasPendingNativeSection) {
-            return this.canStartNativeStep(
+            return this.decideNativeStep(
                     pendingNativePath,
                     processedWorkThisTick,
                     processedNativeSectionsThisTick,
@@ -24,11 +44,16 @@ final class WorldApplyTickWorkGate {
                     budget
             );
         }
-        return processedRewriteSectionsThisTick <= 0
-                && processedWorkThisTick < budget.maxBlocks();
+        if (processedRewriteSectionsThisTick > 0) {
+            return WorldApplyTickGateDecision.stop("sparse-after-rewrite-work");
+        }
+        if (processedWorkThisTick >= budget.maxBlocks()) {
+            return WorldApplyTickGateDecision.stop("block-budget-consumed");
+        }
+        return WorldApplyTickGateDecision.allow();
     }
 
-    private boolean canStartNativeStep(
+    private WorldApplyTickGateDecision decideNativeStep(
             SectionApplyPath path,
             int processedWorkThisTick,
             int processedNativeSectionsThisTick,
@@ -37,15 +62,25 @@ final class WorldApplyTickWorkGate {
             WorldApplyBudget budget
     ) {
         if (processedNativeSectionsThisTick >= budget.maxNativeSections()) {
-            return false;
+            return WorldApplyTickGateDecision.stop("native-section-budget-consumed");
         }
         if (path == SectionApplyPath.SECTION_REWRITE) {
             boolean nonRewriteWorkAlreadyProcessed = processedWorkThisTick > 0
                     && processedRewriteSectionsThisTick == 0;
-            return processedRewriteSectionsThisTick < budget.maxRewriteSections()
-                    && !nonRewriteWorkAlreadyProcessed;
+            if (nonRewriteWorkAlreadyProcessed) {
+                return WorldApplyTickGateDecision.stop("rewrite-after-non-rewrite-work");
+            }
+            if (processedRewriteSectionsThisTick >= budget.maxRewriteSections()) {
+                return WorldApplyTickGateDecision.stop("rewrite-budget-consumed");
+            }
+            return WorldApplyTickGateDecision.allow();
         }
-        return processedRewriteSectionsThisTick <= 0
-                && processedNativeCellsThisTick < budget.maxNativeCells();
+        if (processedRewriteSectionsThisTick > 0) {
+            return WorldApplyTickGateDecision.stop("native-after-rewrite-work");
+        }
+        if (processedNativeCellsThisTick >= budget.maxNativeCells()) {
+            return WorldApplyTickGateDecision.stop("native-cell-budget-consumed");
+        }
+        return WorldApplyTickGateDecision.allow();
     }
 }
