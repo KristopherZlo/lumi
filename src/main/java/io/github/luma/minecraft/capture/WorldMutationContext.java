@@ -110,16 +110,24 @@ public final class WorldMutationContext {
     }
 
     public static void runWithCaptureSuppressed(Runnable runnable) {
-        CAPTURE_SUPPRESSION_DEPTH.set(CAPTURE_SUPPRESSION_DEPTH.get() + 1);
+        pushCaptureSuppression();
         try {
             runnable.run();
         } finally {
-            int nextDepth = Math.max(0, CAPTURE_SUPPRESSION_DEPTH.get() - 1);
-            if (nextDepth == 0) {
-                CAPTURE_SUPPRESSION_DEPTH.remove();
-            } else {
-                CAPTURE_SUPPRESSION_DEPTH.set(nextDepth);
-            }
+            popCaptureSuppression();
+        }
+    }
+
+    public static void pushCaptureSuppression() {
+        CAPTURE_SUPPRESSION_DEPTH.set(CAPTURE_SUPPRESSION_DEPTH.get() + 1);
+    }
+
+    public static void popCaptureSuppression() {
+        int nextDepth = Math.max(0, CAPTURE_SUPPRESSION_DEPTH.get() - 1);
+        if (nextDepth == 0) {
+            CAPTURE_SUPPRESSION_DEPTH.remove();
+        } else {
+            CAPTURE_SUPPRESSION_DEPTH.set(nextDepth);
         }
     }
 

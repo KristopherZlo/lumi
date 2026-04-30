@@ -1,6 +1,6 @@
 package io.github.luma.mixin;
 
-import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
+import io.github.luma.integration.common.ExternalToolMutationSourceResolver;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
@@ -23,8 +23,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 abstract class LevelSetBlockMixin {
 
     @Unique
-    private static final ExternalToolMutationOriginDetector LUMA_TOOL_DETECTOR =
-            ExternalToolMutationOriginDetector.getInstance();
+    private static final ExternalToolMutationSourceResolver LUMA_TOOL_SOURCE_RESOLVER =
+            ExternalToolMutationSourceResolver.getInstance();
 
     @Unique
     private static final ThreadLocal<Deque<PendingBlockMutation>> LUMA_PENDING_MUTATIONS = ThreadLocal.withInitial(ArrayDeque::new);
@@ -36,17 +36,14 @@ abstract class LevelSetBlockMixin {
             return;
         }
 
-        ObservedExternalToolOperation operation = null;
-        boolean currentSourceCaptures = HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource());
-        if (!currentSourceCaptures) {
-            if (WorldMutationContext.captureSuppressed()) {
-                return;
-            }
-            var detectedOperation = LUMA_TOOL_DETECTOR.detectOperation();
-            if (detectedOperation.isEmpty()) {
-                return;
-            }
-            operation = detectedOperation.get();
+        var currentSource = WorldMutationContext.currentSource();
+        boolean captureSuppressed = WorldMutationContext.captureSuppressed();
+        boolean currentSourceCaptures = HistoryCaptureManager.shouldCaptureMutation(currentSource);
+        ObservedExternalToolOperation operation = currentSourceCaptures
+                ? LUMA_TOOL_SOURCE_RESOLVER.detectPlayerSourceOverride(currentSource, captureSuppressed).orElse(null)
+                : LUMA_TOOL_SOURCE_RESOLVER.detectUnattributedOperation(captureSuppressed).orElse(null);
+        if (!currentSourceCaptures && operation == null) {
+            return;
         }
 
         BlockState oldState = serverLevel.getBlockState(pos);
