@@ -22,20 +22,25 @@ import java.util.concurrent.ThreadFactory;
 /**
  * Coordinates low-priority persistence work for live capture sessions.
  *
- * <p>Baseline chunk writes and recovery draft flushes are serialized through a
- * dedicated maintenance executor so server-tick capture keeps the latest
- * in-memory state while durable writes happen off-thread.
+ * <p>Baseline chunk writes and recovery draft flushes use separate maintenance
+ * executors so draft durability is not delayed behind large baseline batches.
  */
 public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     private final RecoveryRepository recoveryRepository;
     private final BaselineChunkRepository baselineChunkRepository;
-    private final ExecutorService maintenanceExecutor;
+    private final ExecutorService draftFlushExecutor;
+    private final ExecutorService baselineExecutor;
     private final Map<String, CompletableFuture<Void>> pendingBaselineWrites = new HashMap<>();
     private final Map<String, PendingDraftFlush> pendingDraftFlushes = new HashMap<>();
 
     public CapturePersistenceCoordinator() {
-        this(new RecoveryRepository(), new BaselineChunkRepository(), Executors.newSingleThreadExecutor(new MaintenanceThreadFactory()));
+        this(
+                new RecoveryRepository(),
+                new BaselineChunkRepository(),
+                Executors.newSingleThreadExecutor(new MaintenanceThreadFactory("draft")),
+                Executors.newSingleThreadExecutor(new MaintenanceThreadFactory("baseline"))
+        );
     }
 
     CapturePersistenceCoordinator(
@@ -43,9 +48,19 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             BaselineChunkRepository baselineChunkRepository,
             ExecutorService maintenanceExecutor
     ) {
+        this(recoveryRepository, baselineChunkRepository, maintenanceExecutor, maintenanceExecutor);
+    }
+
+    CapturePersistenceCoordinator(
+            RecoveryRepository recoveryRepository,
+            BaselineChunkRepository baselineChunkRepository,
+            ExecutorService draftFlushExecutor,
+            ExecutorService baselineExecutor
+    ) {
         this.recoveryRepository = Objects.requireNonNull(recoveryRepository, "recoveryRepository");
         this.baselineChunkRepository = Objects.requireNonNull(baselineChunkRepository, "baselineChunkRepository");
-        this.maintenanceExecutor = Objects.requireNonNull(maintenanceExecutor, "maintenanceExecutor");
+        this.draftFlushExecutor = Objects.requireNonNull(draftFlushExecutor, "draftFlushExecutor");
+        this.baselineExecutor = Objects.requireNonNull(baselineExecutor, "baselineExecutor");
     }
 
     public boolean enqueueBaselineWrite(
@@ -68,7 +83,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                     chunkSnapshot.chunkX(),
                     chunkSnapshot.chunkZ()
             );
-            this.maintenanceExecutor.execute(() -> this.writeBaseline(layout, projectId, projectName, chunkSnapshot, now, key, future));
+            this.baselineExecutor.execute(() -> this.writeBaseline(layout, projectId, projectName, chunkSnapshot, now, key, future));
             return true;
         }
     }
@@ -131,7 +146,10 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     @Override
     public void close() {
-        this.maintenanceExecutor.shutdown();
+        this.draftFlushExecutor.shutdown();
+        if (this.baselineExecutor != this.draftFlushExecutor) {
+            this.baselineExecutor.shutdown();
+        }
     }
 
     private void writeBaseline(
@@ -165,7 +183,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     private void scheduleDraftFlush(PendingDraftFlush pending) {
         pending.scheduled = true;
-        this.maintenanceExecutor.execute(() -> this.flushDraftLoop(pending));
+        this.draftFlushExecutor.execute(() -> this.flushDraftLoop(pending));
     }
 
     private void flushDraftLoop(PendingDraftFlush pending) {
@@ -247,11 +265,16 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     private static final class MaintenanceThreadFactory implements ThreadFactory {
 
+        private final String queueName;
         private int index;
+
+        private MaintenanceThreadFactory(String queueName) {
+            this.queueName = queueName;
+        }
 
         @Override
         public synchronized Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "lumi-capture-maintenance-" + (++this.index));
+            Thread thread = new Thread(runnable, "lumi-capture-" + this.queueName + "-" + (++this.index));
             thread.setDaemon(true);
             thread.setPriority(Thread.MIN_PRIORITY);
             return thread;
