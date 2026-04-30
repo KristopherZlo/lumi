@@ -156,7 +156,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 ### World Apply
 
 - `WorldOperationManager`, `WorldApplyBudgetPlanner`: single-operation-per-world async prepare plus tick-time apply orchestration, including high-throughput block/native-cell/rewrite budgets for restore, recovery, merge, and undo/redo labels.
-- `WorldChangeBatchPreparer`, `BlockStatePaletteDecoder`: patch/recovery block/entity changes and v7 section frames to tick-ready sparse or section-native batches with operation-scoped palette decode caching.
+- `WorldChangeBatchPreparer`, `BlockStatePaletteDecoder`: patch/recovery block/entity changes, large live undo/redo actions, and v7 section frames to tick-ready sparse or section-native batches with operation-scoped palette decode caching.
 - `SnapshotBatchPreparer`: snapshot payloads to tick-ready section-native batches without expanding dense sections into per-block placements or decoding palettes inside cell loops.
 - `BlockChangeApplier`: actual section/block-entity/entity commit operations.
 - `SectionContainerRewriteCommitStrategy`, `SectionRewriteApplyPlanner`, `PalettedContainerDataSwapper`, `SectionNativeBlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, `VanillaBlockCommitStrategy`: dense section container rewrite path, section-native loop path, direct loaded-section sparse apply path, and safe vanilla fallback selection.

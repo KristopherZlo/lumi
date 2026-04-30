@@ -136,29 +136,18 @@ public final class WorldChangeBatchPreparer {
             return this.prepare(level, changes, entityChanges, applyNewValues, progressListener);
         }
 
-        List<DecodedStoredChange> decodedChanges = new ArrayList<>(changes.size());
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
-        for (StoredBlockChange change : changes) {
-            StatePayload source = applyNewValues ? change.oldValue() : change.newValue();
-            StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
-            BlockState sourceState = blockStateDecoder.decode(level, source == null ? null : source.stateTag());
-            BlockState targetState = blockStateDecoder.decode(level, target == null ? null : target.stateTag());
-            if (this.connectedBlockPlacementExpander.requiresCompanion(sourceState)
-                    || this.connectedBlockPlacementExpander.requiresCompanion(targetState)) {
-                return this.prepare(level, changes, entityChanges, applyNewValues, progressListener);
-            }
-            decodedChanges.add(new DecodedStoredChange(
-                    new BlockPos(change.pos().x(), change.pos().y(), change.pos().z()),
-                    targetState,
-                    target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
-            ));
-        }
-        return this.prepareDecodedSectionFirst(
-                decodedChanges,
+        List<PreparedChunkBatch> batches = this.prepareUndoRedoSectionFirst(
+                level,
+                changes,
                 entityChanges,
                 applyNewValues,
-                progressListener == null ? ProgressListener.NO_OP : progressListener
+                progressListener == null ? ProgressListener.NO_OP : progressListener,
+                blockStateDecoder
         );
+        return batches == null
+                ? this.prepare(level, changes, entityChanges, applyNewValues, progressListener)
+                : batches;
     }
 
     public List<PreparedChunkBatch> prepare(
@@ -331,25 +320,36 @@ public final class WorldChangeBatchPreparer {
         return new SectionSplit(List.copyOf(sparse), List.copyOf(nativeSections));
     }
 
-    private List<PreparedChunkBatch> prepareDecodedSectionFirst(
-            List<DecodedStoredChange> changes,
+    private List<PreparedChunkBatch> prepareUndoRedoSectionFirst(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges,
             boolean applyNewValues,
-            ProgressListener progressListener
-    ) {
+            ProgressListener progressListener,
+            BlockStateDecoder blockStateDecoder
+    ) throws IOException {
         entityChanges = entityChanges == null ? List.of() : entityChanges;
         int total = changes.size() + entityChanges.size();
         int completed = 0;
         Map<SectionKey, LumiSectionBuffer.Builder> sectionBuilders = new LinkedHashMap<>();
-        for (DecodedStoredChange change : changes) {
-            SectionKey key = SectionKey.from(change.pos());
+        for (StoredBlockChange change : changes) {
+            StatePayload source = applyNewValues ? change.oldValue() : change.newValue();
+            StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
+            BlockState sourceState = blockStateDecoder.decode(level, source == null ? null : source.stateTag());
+            BlockState targetState = blockStateDecoder.decode(level, target == null ? null : target.stateTag());
+            if (this.connectedBlockPlacementExpander.requiresCompanion(sourceState)
+                    || this.connectedBlockPlacementExpander.requiresCompanion(targetState)) {
+                return null;
+            }
+
+            SectionKey key = SectionKey.from(change);
             sectionBuilders.computeIfAbsent(key, ignored -> LumiSectionBuffer.builder(key.sectionY()))
                     .set(
-                            change.pos().getX() & 15,
-                            change.pos().getY() & 15,
-                            change.pos().getZ() & 15,
-                            change.targetState(),
-                            change.blockEntityTag()
+                            change.pos().x() & 15,
+                            change.pos().y() & 15,
+                            change.pos().z() & 15,
+                            targetState,
+                            target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
                     );
             completed += 1;
             progressListener.onDecoded(completed, total);
@@ -446,13 +446,14 @@ public final class WorldChangeBatchPreparer {
     ) {
     }
 
-    private record DecodedStoredChange(BlockPos pos, BlockState targetState, CompoundTag blockEntityTag) {
-    }
-
     private record SectionKey(ChunkPoint chunk, int sectionY) {
 
         private static SectionKey from(BlockPos pos) {
             return new SectionKey(ChunkPoint.from(pos), Math.floorDiv(pos.getY(), 16));
+        }
+
+        private static SectionKey from(StoredBlockChange change) {
+            return new SectionKey(ChunkPoint.from(change.pos()), Math.floorDiv(change.pos().y(), 16));
         }
     }
 }
