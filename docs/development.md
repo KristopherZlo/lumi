@@ -179,8 +179,8 @@ Current UX assumptions:
 - opening See Changes with a resolved pair or pressing `Compare` enables the world highlight immediately for that diff
 - comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present
 - holding the Lumi action button shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
-- compare and recent-action overlays build their render selection from exposed changed blocks, so dense fills still have visible surfaces even when the camera is nearest to internal changed blocks
-- holding the same remappable action button while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay that renders translucent exposed sides as well as thicker outlines; holding the action button plus redo previews redo actions
+- compare overlays and small recent-action previews build their render selection from exposed changed blocks, so dense fills still have visible surfaces even when the camera is nearest to internal changed blocks
+- holding the same remappable action button while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay; small actions render translucent exposed sides with thicker outlines, while dense actions collapse into merged low-alpha volume blobs prepared off the client tick. Holding the action button plus redo previews redo actions.
 - the dashboard is a project picker outside the focused workspace menu
 - the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, and `Branches`; maintenance tools stay in the sidebar `More` route
 - settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress, and settings persist immediately on valid field changes

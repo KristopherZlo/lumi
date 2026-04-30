@@ -121,6 +121,14 @@ public final class UndoRedoHistoryManager {
         return this.stack(projectId).recentRedoActions(count);
     }
 
+    public synchronized long revision(String projectId) {
+        if (projectId == null || projectId.isBlank()) {
+            return 0L;
+        }
+        UndoRedoActionStack stack = this.projectStacks.get(projectId);
+        return stack == null ? 0L : stack.revision();
+    }
+
     public synchronized void clearProject(String projectId) {
         if (projectId == null || projectId.isBlank()) {
             return;

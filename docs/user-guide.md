@@ -259,7 +259,7 @@ Press `H` to hide or show the current overlay without rebuilding the comparison.
 Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
 Dense diff regions render as an exposed translucent shell with thicker outlines, so nearby changes stay readable instead of stacking into a solid color slab.
 If one side of the comparison is the `current` build, that active highlight refreshes automatically while you keep editing.
-If compare highlight is not active, holding the Lumi action button shows the latest 10 undo actions instead. Holding the action button plus `Y` switches that temporary overlay to redo actions, fading from the newest action to older ones and rendering translucent exposed sides as well as thicker outlines.
+If compare highlight is not active, holding the Lumi action button shows the latest 10 undo actions instead. Holding the action button plus `Y` switches that temporary overlay to redo actions. Small previews fade from the newest action to older ones and render translucent exposed sides with thicker outlines; dense previews collapse into merged low-alpha volume blobs.
 
 The overlay gives priority to changes near the camera.
 

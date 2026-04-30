@@ -5,7 +5,11 @@ import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.ui.controller.ClientProjectAccess;
+import java.util.Objects;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import net.minecraft.client.Minecraft;
 
 /**
@@ -14,8 +18,17 @@ import net.minecraft.client.Minecraft;
 public final class RecentChangesOverlayCoordinator {
 
     private static final RecentChangesOverlayCoordinator INSTANCE = new RecentChangesOverlayCoordinator();
+    private static final int PREVIEW_ACTION_COUNT = 10;
 
     private final ProjectService projectService = new ProjectService();
+    private final ExecutorService previewExecutor = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "lumi-recent-overlay-preview");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private volatile PreviewKey requestedPreview;
+    private volatile PreviewKey pendingPreview;
+    private volatile PreviewKey preparedPreview;
 
     private RecentChangesOverlayCoordinator() {
     }
@@ -31,27 +44,27 @@ public final class RecentChangesOverlayCoordinator {
     public void tick(Minecraft client, boolean altHeld, PreviewTarget previewTarget) {
         if (client == null) {
             this.logSkip("no-client", previewTarget);
-            RecentChangesOverlayRenderer.clear();
+            this.clearPreview();
             return;
         }
         if (client.player == null) {
             this.logSkip("no-player", previewTarget);
-            RecentChangesOverlayRenderer.clear();
+            this.clearPreview();
             return;
         }
         if (client.level == null) {
             this.logSkip("no-level", previewTarget);
-            RecentChangesOverlayRenderer.clear();
+            this.clearPreview();
             return;
         }
         if (!altHeld) {
             this.logSkip("overlay-key-not-held", previewTarget);
-            RecentChangesOverlayRenderer.clear();
+            this.clearPreview();
             return;
         }
         if (CompareOverlayRenderer.visible()) {
             this.logSkip("compare-overlay-visible", previewTarget);
-            RecentChangesOverlayRenderer.clear();
+            this.clearPreview();
             return;
         }
 
@@ -59,17 +72,28 @@ public final class RecentChangesOverlayCoordinator {
             var project = ClientProjectAccess.findCurrentWorldProject(client, this.projectService);
             if (project.isEmpty()) {
                 this.logSkip("no-project", previewTarget);
-                RecentChangesOverlayRenderer.clear();
+                this.clearPreview();
                 return;
             }
 
+            String projectId = project.get().id().toString();
+            long revision = UndoRedoHistoryManager.getInstance().revision(projectId);
+            PreviewKey previewKey = new PreviewKey(projectId, revision, previewTarget);
+            this.requestedPreview = previewKey;
+            if (RecentChangesOverlayRenderer.visibleFor(projectId, revision, previewTarget)) {
+                this.preparedPreview = previewKey;
+                return;
+            }
+            if (previewKey.equals(this.preparedPreview)) {
+                return;
+            }
+            if (previewKey.equals(this.pendingPreview)) {
+                return;
+            }
+
+            RecentChangesOverlayRenderer.clear();
             boolean debugEnabled = LumaDebugLog.enabled(project.get());
-            RecentChangesOverlayRenderer.show(
-                    project.get().id().toString(),
-                    this.recentActions(project.get().id().toString(), previewTarget),
-                    debugEnabled,
-                    previewTarget
-            );
+            this.preparePreview(previewKey, debugEnabled);
         } catch (Exception exception) {
             OverlayDiagnostics.getInstance().log(
                     false,
@@ -79,8 +103,55 @@ public final class RecentChangesOverlayCoordinator {
                     exception.getClass().getSimpleName(),
                     exception.getMessage()
             );
-            RecentChangesOverlayRenderer.clear();
+            this.clearPreview();
         }
+    }
+
+    private void preparePreview(PreviewKey previewKey, boolean debugEnabled) {
+        this.pendingPreview = previewKey;
+        CompletableFuture
+                .supplyAsync(() -> this.prepareOverlay(previewKey, debugEnabled), this.previewExecutor)
+                .whenComplete((prepared, exception) -> {
+                    if (previewKey.equals(this.pendingPreview)) {
+                        this.pendingPreview = null;
+                    }
+                    if (exception != null) {
+                        OverlayDiagnostics.getInstance().log(
+                                debugEnabled,
+                                "recent-prepare-failed",
+                                "recent-overlay",
+                                "Preview prepare failed project={} revision={} preview={} with {}: {}",
+                                previewKey.projectId(),
+                                previewKey.revision(),
+                                previewKey.previewTarget(),
+                                exception.getClass().getSimpleName(),
+                                exception.getMessage()
+                        );
+                        return;
+                    }
+                    if (previewKey.equals(this.requestedPreview)) {
+                        RecentChangesOverlayRenderer.activate(prepared);
+                        this.preparedPreview = previewKey;
+                    }
+                });
+    }
+
+    private RecentChangesOverlayRenderer.PreparedOverlay prepareOverlay(PreviewKey previewKey, boolean debugEnabled) {
+        List<UndoRedoAction> actions = this.recentActions(previewKey.projectId(), previewKey.previewTarget());
+        return RecentChangesOverlayRenderer.prepare(
+                previewKey.projectId(),
+                actions,
+                debugEnabled,
+                previewKey.previewTarget(),
+                previewKey.revision()
+        );
+    }
+
+    private void clearPreview() {
+        this.requestedPreview = null;
+        this.pendingPreview = null;
+        this.preparedPreview = null;
+        RecentChangesOverlayRenderer.clear();
     }
 
     private void logSkip(String reason, PreviewTarget previewTarget) {
@@ -97,9 +168,16 @@ public final class RecentChangesOverlayCoordinator {
     private List<UndoRedoAction> recentActions(String projectId, PreviewTarget previewTarget) {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
         if (previewTarget == PreviewTarget.REDO) {
-            return historyManager.recentRedoActions(projectId, 10);
+            return historyManager.recentRedoActions(projectId, PREVIEW_ACTION_COUNT);
         }
-        return historyManager.recentUndoActions(projectId, 10);
+        return historyManager.recentUndoActions(projectId, PREVIEW_ACTION_COUNT);
+    }
+
+    private record PreviewKey(String projectId, long revision, PreviewTarget previewTarget) {
+
+        private PreviewKey {
+            previewTarget = Objects.requireNonNullElse(previewTarget, PreviewTarget.UNDO);
+        }
     }
 
     public enum PreviewTarget {

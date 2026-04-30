@@ -90,7 +90,7 @@ Use Lumi if you want to:
 - conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica/Tweakeroo placement paths, and known tool stacks that reach Minecraft block or entity mutation paths
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus builder-relevant entity spawn/remove/update and supported explosion edits, including TNT damage tied back to the action that primed it
-- temporary action-button preview for the latest 10 undo actions, or redo actions while the Lumi action button plus redo is held, with translucent exposed sides and thicker outlines when compare highlight is not active
+- temporary action-button preview for the latest 10 undo actions, or redo actions while the Lumi action button plus redo is held, with translucent exposed sides for small edits and merged volume blobs for dense edits when compare highlight is not active
 
 ## How It Works
 
@@ -269,7 +269,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
 6. Use the Lumi action button plus `Z` / `Y` to undo or redo the latest tracked action while no screen is open. The default action button is `Left Alt`, and changing it changes these chords too. WorldEdit/FAWE actions use native tool undo/redo; captured Axiom capability actions replay through Lumi.
-7. Hold the Lumi action button to preview the latest 10 undo actions, or hold it plus `Y` to preview redo actions, when the compare overlay is not active. The preview renders nearest exposed changed blocks and summarizes dense omitted sections with faint aggregate boxes.
+7. Hold the Lumi action button to preview the latest 10 undo actions, or hold it plus `Y` to preview redo actions, when the compare overlay is not active. Small previews render nearest exposed changed blocks; dense previews collapse into merged low-alpha volume blobs so large edits do not draw thousands of separate block overlays.
    Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
 8. Press the Lumi action button plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
 9. Use `Save build` when you want the full save screen with manual naming or replace-latest tools.
