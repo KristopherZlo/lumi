@@ -10,6 +10,7 @@ import io.github.luma.storage.ProjectLayout;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -17,11 +18,18 @@ import java.util.Optional;
 
 public final class VersionRepository {
 
+    private final VersionIndexRepository indexRepository = new VersionIndexRepository();
+
     public void save(ProjectLayout layout, ProjectVersion version) throws IOException {
         Files.createDirectories(layout.versionsDir());
         StorageIo.writeAtomically(layout.versionFile(version.id()), output -> output.write(
                 GsonProvider.gson().toJson(version).getBytes(StandardCharsets.UTF_8)
         ));
+        try {
+            this.indexRepository.rebuild(layout, this.scanManifests(layout));
+        } catch (IOException | RuntimeException exception) {
+            this.deleteIndexQuietly(layout);
+        }
     }
 
     public Optional<ProjectVersion> load(ProjectLayout layout, String versionId) throws IOException {
@@ -37,15 +45,51 @@ public final class VersionRepository {
             return List.of();
         }
 
+        List<Path> manifestFiles = this.versionManifestFiles(layout);
+        Optional<List<ProjectVersion>> indexed = this.indexRepository.loadIfFresh(layout, manifestFiles);
+        if (indexed.isPresent()) {
+            return indexed.get().stream()
+                    .map(this::normalize)
+                    .toList();
+        }
+
+        List<ProjectVersion> versions = this.scanManifests(layout, manifestFiles);
+        try {
+            this.indexRepository.rebuild(layout, versions);
+        } catch (IOException | RuntimeException exception) {
+            this.deleteIndexQuietly(layout);
+        }
+        return versions;
+    }
+
+    private void deleteIndexQuietly(ProjectLayout layout) {
+        try {
+            this.indexRepository.delete(layout);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private List<ProjectVersion> scanManifests(ProjectLayout layout) throws IOException {
+        return this.scanManifests(layout, this.versionManifestFiles(layout));
+    }
+
+    private List<ProjectVersion> scanManifests(ProjectLayout layout, List<Path> manifestFiles) throws IOException {
         List<ProjectVersion> versions = new ArrayList<>();
-        try (var stream = Files.list(layout.versionsDir())) {
-            for (var file : stream.filter(path -> path.getFileName().toString().endsWith(".json")).toList()) {
-                versions.add(this.normalize(GsonProvider.gson().fromJson(Files.readString(file), ProjectVersion.class)));
-            }
+        for (Path file : manifestFiles) {
+            versions.add(this.normalize(GsonProvider.gson().fromJson(Files.readString(file), ProjectVersion.class)));
         }
 
         versions.sort(Comparator.comparing(ProjectVersion::createdAt));
         return versions;
+    }
+
+    private List<Path> versionManifestFiles(ProjectLayout layout) throws IOException {
+        try (var stream = Files.list(layout.versionsDir())) {
+            return stream
+                    .filter(path -> path.getFileName().toString().endsWith(".json"))
+                    .filter(path -> !path.getFileName().toString().equals("index.json"))
+                    .toList();
+        }
     }
 
     private ProjectVersion normalize(ProjectVersion version) {
