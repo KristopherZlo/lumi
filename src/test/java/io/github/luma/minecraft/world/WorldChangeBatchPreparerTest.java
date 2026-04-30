@@ -101,6 +101,42 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void sectionFramesKeepRewriteBatchesForFullSections() throws Exception {
+        int changedCells = SectionChangeMask.ENTRY_COUNT;
+        int[] oldStateIds = new int[changedCells];
+        int[] newStateIds = new int[changedCells];
+        int[] blockEntityIds = new int[changedCells];
+        Arrays.fill(blockEntityIds, -1);
+
+        PatchSectionFrame frame = new PatchSectionFrame(
+                0,
+                0,
+                4,
+                mask(changedCells),
+                List.of(stateTag("minecraft:air")),
+                List.of(stateTag("minecraft:stone")),
+                oldStateIds,
+                newStateIds,
+                List.of(),
+                List.of(),
+                blockEntityIds,
+                blockEntityIds
+        );
+
+        List<PreparedChunkBatch> batches = this.preparer.prepare(
+                null,
+                new PatchSectionWorldChanges(List.of(frame), List.of()),
+                true,
+                null
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(0, batches.getFirst().placements().size());
+        assertEquals(1, batches.getFirst().nativeSections().size());
+        assertEquals(SectionApplyPath.SECTION_REWRITE, batches.getFirst().nativeSections().getFirst().safetyProfile().path());
+    }
+
+    @Test
     void decodedSparseSectionsStayAsDirectPlacementsBelowNativeCutoff() {
         List<PreparedBlockPlacement> placements = java.util.stream.IntStream
                 .range(0, SectionApplySafetyClassifier.NATIVE_DENSE_THRESHOLD - 1)

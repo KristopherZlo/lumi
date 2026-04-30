@@ -191,10 +191,10 @@ public final class WorldChangeBatchPreparer {
                     profile,
                     fullSection
             );
-            if (profile.path() == SectionApplyPath.SECTION_NATIVE) {
-                nativeSections.computeIfAbsent(chunk, ignored -> new ArrayList<>()).add(nativeBatch);
-            } else {
+            if (profile.path() == SectionApplyPath.DIRECT_SECTION) {
                 sparsePlacements.computeIfAbsent(chunk, ignored -> new ArrayList<>()).addAll(nativeBatch.toPlacements());
+            } else {
+                nativeSections.computeIfAbsent(chunk, ignored -> new ArrayList<>()).add(nativeBatch);
             }
         }
 

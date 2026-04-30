@@ -17,7 +17,8 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(highThroughput.maxBlocks() > normal.maxBlocks());
         assertTrue(highThroughput.maxNativeSections() > normal.maxNativeSections());
         assertEquals(highThroughput.maxBlocks(), highThroughput.maxNativeCells());
-        assertEquals(1, highThroughput.maxRewriteSections());
+        assertEquals(1, normal.maxRewriteSections());
+        assertEquals(16, highThroughput.maxRewriteSections());
     }
 
     @Test
@@ -28,8 +29,9 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(reduced.maxBlocks() < fullScale.maxBlocks());
         assertTrue(reduced.maxNativeCells() < fullScale.maxNativeCells());
         assertTrue(reduced.maxNativeSections() < fullScale.maxNativeSections());
+        assertTrue(reduced.maxRewriteSections() < fullScale.maxRewriteSections());
         assertTrue(reduced.maxNanos() < fullScale.maxNanos());
-        assertEquals(1, reduced.maxRewriteSections());
+        assertTrue(reduced.maxRewriteSections() >= 1);
     }
 
     @Test

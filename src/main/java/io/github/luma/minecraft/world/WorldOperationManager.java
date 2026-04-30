@@ -42,6 +42,7 @@ public final class WorldOperationManager {
 
     private final WorldApplyOperationProfile applyOperationProfile = new WorldApplyOperationProfile();
     private final WorldApplyBudgetPlanner budgetPlanner = new WorldApplyBudgetPlanner();
+    private final WorldApplyTickWorkGate tickWorkGate = new WorldApplyTickWorkGate();
     private ExecutorService backgroundExecutor = createExecutor();
     private final Map<String, ActiveOperation> activeOperations = new HashMap<>();
     private final Map<String, OperationSnapshot> lastSnapshots = new HashMap<>();
@@ -572,20 +573,15 @@ public final class WorldOperationManager {
                     );
                 }
 
-                if (this.hasPendingNativeSection()) {
-                    if (processedNativeSectionsThisTick >= budget.maxNativeSections()) {
-                        break;
-                    }
-                    PreparedSectionApplyBatch pendingNativeSection = this.pendingNativeSection();
-                    if (pendingNativeSection.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE) {
-                        if (processedRewriteSectionsThisTick >= budget.maxRewriteSections()
-                                || processedWorkThisTick > 0) {
-                            break;
-                        }
-                    } else if (processedNativeCellsThisTick >= budget.maxNativeCells()) {
-                        break;
-                    }
-                } else if (processedWorkThisTick >= budget.maxBlocks()) {
+                if (!WorldOperationManager.this.tickWorkGate.canStartNextStep(
+                        this.hasPendingNativeSection(),
+                        this.hasPendingNativeSection() ? this.pendingNativeSection().safetyProfile().path() : null,
+                        processedWorkThisTick,
+                        processedNativeSectionsThisTick,
+                        processedNativeCellsThisTick,
+                        processedRewriteSectionsThisTick,
+                        budget
+                )) {
                     break;
                 }
 
