@@ -11,6 +11,9 @@ final class WorldApplyMetrics {
     private int skippedBlocks;
     private int directSections;
     private int fallbackSections;
+    private int rewriteSections;
+    private int rewriteCells;
+    private int rewriteFallbackSections;
     private int nativeSections;
     private int nativeCells;
     private int nativeFallbackSections;
@@ -29,17 +32,21 @@ final class WorldApplyMetrics {
         this.skippedBlocks += result.skippedBlocks();
         this.directSections += result.directSections();
         this.fallbackSections += result.fallbackSections();
+        this.rewriteSections += result.rewriteSections();
+        this.rewriteCells += result.rewriteCells();
+        this.rewriteFallbackSections += result.rewriteFallbackSections();
         this.nativeSections += result.nativeSections();
         this.nativeCells += result.nativeCells();
         this.nativeFallbackSections += result.nativeFallbackSections();
         this.sectionPackets += result.sectionPackets();
         this.blockEntityPackets += result.blockEntityPackets();
         this.lightChecks += result.lightChecks();
-        if ((result.fallbackSections() > 0 || result.nativeFallbackSections() > 0) && result.fallbackReason() != null
+        if ((result.fallbackSections() > 0 || result.rewriteFallbackSections() > 0 || result.nativeFallbackSections() > 0)
+                && result.fallbackReason() != null
                 && result.fallbackReason() != BlockCommitFallbackReason.NONE) {
             this.fallbackReasons.merge(
                     result.fallbackReason().label(),
-                    result.fallbackSections() + result.nativeFallbackSections(),
+                    result.fallbackSections() + result.rewriteFallbackSections() + result.nativeFallbackSections(),
                     Integer::sum
             );
         }
@@ -51,6 +58,9 @@ final class WorldApplyMetrics {
                 + ", skippedBlocks=" + this.skippedBlocks
                 + ", directSections=" + this.directSections
                 + ", fallbackSections=" + this.fallbackSections
+                + ", rewriteSections=" + this.rewriteSections
+                + ", rewriteCells=" + this.rewriteCells
+                + ", rewriteFallbackSections=" + this.rewriteFallbackSections
                 + ", nativeSections=" + this.nativeSections
                 + ", nativeCells=" + this.nativeCells
                 + ", nativeFallbackSections=" + this.nativeFallbackSections

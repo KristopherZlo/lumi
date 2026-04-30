@@ -53,7 +53,7 @@ class LumiSectionBufferTest {
     }
 
     @Test
-    void classifierChoosesNativeOnlyForDenseOrFullSections() {
+    void classifierChoosesRewriteForFullOrVeryDenseSections() {
         SectionApplySafetyClassifier classifier = new SectionApplySafetyClassifier();
         LumiSectionBuffer.Builder sparse = LumiSectionBuffer.builder(0);
         sparse.set(0, Blocks.STONE.defaultBlockState(), null);
@@ -63,8 +63,14 @@ class LumiSectionBufferTest {
             dense.set(index, Blocks.STONE.defaultBlockState(), null);
         }
 
+        LumiSectionBuffer.Builder rewrite = LumiSectionBuffer.builder(0);
+        for (int index = 0; index < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD; index++) {
+            rewrite.set(index, Blocks.STONE.defaultBlockState(), null);
+        }
+
         Assertions.assertEquals(SectionApplyPath.DIRECT_SECTION, classifier.classify(sparse.build(), false).path());
-        Assertions.assertEquals(SectionApplyPath.SECTION_NATIVE, classifier.classify(sparse.build(), true).path());
+        Assertions.assertEquals(SectionApplyPath.SECTION_REWRITE, classifier.classify(sparse.build(), true).path());
         Assertions.assertEquals(SectionApplyPath.SECTION_NATIVE, classifier.classify(dense.build(), false).path());
+        Assertions.assertEquals(SectionApplyPath.SECTION_REWRITE, classifier.classify(rewrite.build(), false).path());
     }
 }

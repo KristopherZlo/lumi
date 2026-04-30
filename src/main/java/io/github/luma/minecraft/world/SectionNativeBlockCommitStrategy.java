@@ -35,7 +35,8 @@ final class SectionNativeBlockCommitStrategy {
         if (level == null || batch == null || batch.buffer().changedCellCount() <= 0) {
             return BlockCommitResult.nativeFallback(0, 0, 0, BlockCommitFallbackReason.EMPTY_BATCH);
         }
-        if (batch.safetyProfile().path() != SectionApplyPath.SECTION_NATIVE) {
+        if (batch.safetyProfile().path() != SectionApplyPath.SECTION_NATIVE
+                && batch.safetyProfile().path() != SectionApplyPath.SECTION_REWRITE) {
             return new VanillaBlockCommitStrategy(BlockCommitFallbackReason.NATIVE_REJECTED)
                     .apply(level, batch.toSectionBatch(), 0, batch.changedCellCount());
         }

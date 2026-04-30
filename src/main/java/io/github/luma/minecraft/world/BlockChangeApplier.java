@@ -34,6 +34,12 @@ public final class BlockChangeApplier {
             UPDATE_DECIDER,
             UPDATE_BROADCASTER
     );
+    private static final SectionContainerRewriteCommitStrategy SECTION_REWRITE_COMMIT_STRATEGY = new SectionContainerRewriteCommitStrategy(
+            BLOCK_STATE_POLICY,
+            UPDATE_DECIDER,
+            UPDATE_BROADCASTER,
+            SECTION_NATIVE_COMMIT_STRATEGY
+    );
 
     private BlockChangeApplier() {
     }
@@ -119,7 +125,9 @@ public final class BlockChangeApplier {
             return 0;
         }
 
-        BlockCommitResult result = SECTION_NATIVE_COMMIT_STRATEGY.apply(level, batch);
+        BlockCommitResult result = batch.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE
+                ? SECTION_REWRITE_COMMIT_STRATEGY.apply(level, batch)
+                : SECTION_NATIVE_COMMIT_STRATEGY.apply(level, batch);
         if (metrics != null) {
             metrics.record(result);
         }
