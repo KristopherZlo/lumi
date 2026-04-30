@@ -61,15 +61,17 @@ final class SectionNativeBlockCommitStrategy {
 
         ApplyCounters counters = new ApplyCounters();
         ShortSet changedCells = new ShortOpenHashSet();
+        SectionLightUpdateBatch lightBatch = new SectionLightUpdateBatch();
         BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
         batch.buffer().changedCells().forEachSetCell(localIndex ->
-                this.applyCell(level, chunk, section, batch, localIndex, mutablePos, changedCells, counters)
+                this.applyCell(level, chunk, section, batch, localIndex, mutablePos, changedCells, lightBatch, counters)
         );
 
         if (counters.changedBlocks > 0) {
             chunk.markUnsaved();
         }
 
+        int lightChecks = this.lightUpdatePlanner.apply(level, lightBatch);
         int sectionPackets = this.updateBroadcaster.broadcastSection(
                 level,
                 SectionPos.of(chunk.getPos(), batch.sectionY()),
@@ -82,7 +84,7 @@ final class SectionNativeBlockCommitStrategy {
                 counters.skippedBlocks,
                 sectionPackets,
                 counters.blockEntityPackets,
-                counters.lightChecks
+                lightChecks
         );
     }
 
@@ -132,13 +134,14 @@ final class SectionNativeBlockCommitStrategy {
         if (!cursor.changedCells().isEmpty()) {
             chunk.markUnsaved();
         }
+        int lightChecks = this.lightUpdatePlanner.apply(level, cursor.lightBatch());
         int sectionPackets = this.updateBroadcaster.broadcastSection(
                 level,
                 SectionPos.of(chunk.getPos(), batch.sectionY()),
                 cursor.changedCells(),
                 section
         );
-        return NativeSectionApplyResult.completed(processed, cursor.completedNativeResult(sectionPackets));
+        return NativeSectionApplyResult.completed(processed, cursor.completedNativeResult(sectionPackets, lightChecks));
     }
 
     private NativeSectionApplyResult completeWithFallback(
@@ -152,6 +155,7 @@ final class SectionNativeBlockCommitStrategy {
                 cursor.nextCellOrdinal(),
                 cursor.remainingCells()
         );
+        result = withAdditionalLightChecks(result, this.lightUpdatePlanner.apply(level, cursor.lightBatch()));
         cursor.advance(result.processedBlocks());
         return NativeSectionApplyResult.completed(result.processedBlocks(), result);
     }
@@ -164,6 +168,7 @@ final class SectionNativeBlockCommitStrategy {
             int localIndex,
             BlockPos.MutableBlockPos mutablePos,
             ShortSet changedCells,
+            SectionLightUpdateBatch lightBatch,
             ApplyCounters counters
     ) {
         int localX = SectionChangeMask.localX(localIndex);
@@ -188,9 +193,7 @@ final class SectionNativeBlockCommitStrategy {
         section.setBlockState(localX, localY, localZ, targetState, false);
         this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, targetState);
         this.poiUpdatePlanner.update(level, mutablePos, currentState, targetState);
-        if (this.lightUpdatePlanner.check(level, mutablePos, currentState, targetState)) {
-            counters.lightChecks += 1;
-        }
+        this.lightUpdatePlanner.plan(lightBatch, mutablePos, currentState, targetState);
         changedCells.add(SectionPos.sectionRelativePos(mutablePos));
         counters.changedBlocks += 1;
 
@@ -230,12 +233,12 @@ final class SectionNativeBlockCommitStrategy {
         section.setBlockState(localX, localY, localZ, targetState, false);
         this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, targetState);
         this.poiUpdatePlanner.update(level, mutablePos, currentState, targetState);
-        boolean lightCheck = this.lightUpdatePlanner.check(level, mutablePos, currentState, targetState);
+        this.lightUpdatePlanner.plan(cursor.lightBatch(), mutablePos, currentState, targetState);
         int blockEntityPackets = 0;
         if (targetState.hasBlockEntity()) {
             blockEntityPackets = this.createTargetBlockEntity(level, mutablePos.immutable(), targetState, targetBlockEntityTag);
         }
-        cursor.recordChanged(SectionPos.sectionRelativePos(mutablePos), blockEntityPackets, lightCheck);
+        cursor.recordChanged(SectionPos.sectionRelativePos(mutablePos), blockEntityPackets);
     }
 
     private int createTargetBlockEntity(
@@ -266,6 +269,28 @@ final class SectionNativeBlockCommitStrategy {
         private int changedBlocks;
         private int skippedBlocks;
         private int blockEntityPackets;
-        private int lightChecks;
+    }
+
+    private static BlockCommitResult withAdditionalLightChecks(BlockCommitResult result, int lightChecks) {
+        if (result == null || lightChecks <= 0) {
+            return result;
+        }
+        return new BlockCommitResult(
+                result.processedBlocks(),
+                result.changedBlocks(),
+                result.skippedBlocks(),
+                result.directSections(),
+                result.fallbackSections(),
+                result.rewriteSections(),
+                result.rewriteCells(),
+                result.rewriteFallbackSections(),
+                result.nativeSections(),
+                result.nativeCells(),
+                result.nativeFallbackSections(),
+                result.sectionPackets(),
+                result.blockEntityPackets(),
+                result.lightChecks() + lightChecks,
+                result.fallbackReason()
+        );
     }
 }

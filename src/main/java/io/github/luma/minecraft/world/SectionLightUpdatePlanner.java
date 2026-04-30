@@ -6,12 +6,22 @@ import net.minecraft.world.level.block.state.BlockState;
 
 final class SectionLightUpdatePlanner {
 
-    boolean check(ServerLevel level, BlockPos pos, BlockState currentState, BlockState targetState) {
-        if (level == null || pos == null || !this.requiresLightCheck(currentState, targetState)) {
+    boolean plan(SectionLightUpdateBatch batch, BlockPos pos, BlockState currentState, BlockState targetState) {
+        if (batch == null || pos == null || !this.requiresLightCheck(currentState, targetState)) {
             return false;
         }
-        level.getLightEngine().checkBlock(pos);
+        batch.add(pos);
         return true;
+    }
+
+    int apply(ServerLevel level, SectionLightUpdateBatch batch) {
+        if (level == null || batch == null || batch.isEmpty()) {
+            return 0;
+        }
+        for (BlockPos pos : batch.positions()) {
+            level.getLightEngine().checkBlock(pos);
+        }
+        return batch.size();
     }
 
     boolean requiresLightCheck(BlockState currentState, BlockState targetState) {
