@@ -30,8 +30,12 @@ public record PreparedSectionApplyBatch(
         return this.buffer.changedCellCount();
     }
 
+    public List<PreparedBlockPlacement> toPlacements() {
+        return this.buffer.toPlacements(this.chunk);
+    }
+
     SectionBatch toSectionBatch() {
-        List<PreparedBlockPlacement> placements = this.buffer.toPlacements(this.chunk);
+        List<PreparedBlockPlacement> placements = this.toPlacements();
         return new SectionBatch(this.sectionY, this.buffer.changedCells().toBitSet(), placements);
     }
 }

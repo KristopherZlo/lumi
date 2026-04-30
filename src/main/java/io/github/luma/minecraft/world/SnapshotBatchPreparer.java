@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 
@@ -20,6 +19,7 @@ import net.minecraft.server.level.ServerLevel;
 public final class SnapshotBatchPreparer {
 
     private static final CompoundTag AIR_TAG = createAirTag();
+    private final SectionApplySafetyClassifier sectionApplySafetyClassifier = new SectionApplySafetyClassifier();
 
     public List<PreparedChunkBatch> prepare(SnapshotData snapshot, ServerLevel level) throws IOException {
         List<PreparedChunkBatch> batches = new ArrayList<>();
@@ -35,7 +35,8 @@ public final class SnapshotBatchPreparer {
             sections.put(section.sectionY(), section);
         }
 
-        List<PreparedBlockPlacement> placements = new ArrayList<>();
+        List<PreparedSectionApplyBatch> nativeSections = new ArrayList<>();
+        ChunkPoint chunkPoint = new ChunkPoint(chunk.chunkX(), chunk.chunkZ());
         int minSection = Math.floorDiv(snapshot.minBuildHeight(), 16);
         int maxSection = Math.floorDiv(snapshot.maxBuildHeight(), 16);
         for (int sectionY = minSection; sectionY <= maxSection; sectionY++) {
@@ -47,6 +48,7 @@ public final class SnapshotBatchPreparer {
                 continue;
             }
 
+            LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(sectionY);
             for (int y = minY; y <= maxY; y++) {
                 int localY = y - sectionBaseY;
                 for (int localZ = 0; localZ < 16; localZ++) {
@@ -57,19 +59,29 @@ public final class SnapshotBatchPreparer {
                         CompoundTag stateTag = section == null
                                 ? AIR_TAG
                                 : section.palette().get(stateIndex);
-                        BlockPos pos = new BlockPos((chunk.chunkX() << 4) + localX, y, (chunk.chunkZ() << 4) + localZ);
-                        placements.add(new PreparedBlockPlacement(
-                                pos,
+                        builder.set(
+                                localX,
+                                localY,
+                                localZ,
                                 BlockStateNbtCodec.deserializeBlockState(level, stateTag),
                                 this.readBlockEntity(chunk, snapshot.minBuildHeight(), y, localX, localZ)
-                        ));
+                        );
                     }
                 }
             }
+            LumiSectionBuffer buffer = builder.build();
+            nativeSections.add(new PreparedSectionApplyBatch(
+                    chunkPoint,
+                    sectionY,
+                    buffer,
+                    this.sectionApplySafetyClassifier.classify(buffer, true),
+                    true
+            ));
         }
         return new PreparedChunkBatch(
-                new ChunkPoint(chunk.chunkX(), chunk.chunkZ()),
-                placements,
+                chunkPoint,
+                List.of(),
+                nativeSections,
                 this.prepareEntitySnapshots(chunk.entitySnapshots())
         );
     }
