@@ -15,8 +15,12 @@ import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import java.time.Instant;
 import java.util.List;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.block.Blocks;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,19 +31,25 @@ class RestoreServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-04-28T00:00:00Z");
 
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
+
     @Test
     void collapsePreparedBatchesKeepsOnlyLastPlacementPerBlock() {
         PreparedChunkBatch first = new PreparedChunkBatch(
                 new ChunkPoint(0, 0),
                 List.of(
-                        new PreparedBlockPlacement(new BlockPos(1, 64, 1), null, null),
-                        new PreparedBlockPlacement(new BlockPos(2, 64, 2), null, null)
+                        new PreparedBlockPlacement(new BlockPos(1, 64, 1), Blocks.STONE.defaultBlockState(), null),
+                        new PreparedBlockPlacement(new BlockPos(2, 64, 2), Blocks.DIRT.defaultBlockState(), null)
                 )
         );
         PreparedChunkBatch second = new PreparedChunkBatch(
                 new ChunkPoint(0, 0),
                 List.of(
-                        new PreparedBlockPlacement(new BlockPos(1, 64, 1), null, null)
+                        new PreparedBlockPlacement(new BlockPos(1, 64, 1), Blocks.GOLD_BLOCK.defaultBlockState(), null)
                 )
         );
 

@@ -10,7 +10,7 @@ import java.util.Set;
 /**
  * Collapses dense block previews into coarse chunk-section volumes.
  */
-final class RecentChangesOverlayVolumeMerger {
+final class OverlayVolumeMerger {
 
     private static final int SECTION_SIZE = 16;
     private static final int MAX_EXACT_SECTION_KEYS = 4096;

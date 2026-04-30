@@ -75,12 +75,13 @@ class CompareOverlayRendererStateTest {
     }
 
     @Test
-    void denseChangedVolumeStillExposesRenderableSurfaceBlocks() {
+    void denseChangedVolumeCollapsesToMergedBlob() {
         CompareOverlayRenderer.show("v0001", "v0002", denseCubeEntries(), false);
 
         assertTrue(CompareOverlayRenderer.visible());
         assertEquals(8000, CompareOverlayRenderer.changedBlockCount());
-        assertTrue(CompareOverlayRenderer.visibleSurfaceBlockCountForTest(10.5D, 70.5D, 10.5D) > 0);
+        assertEquals(0, CompareOverlayRenderer.visibleSurfaceBlockCountForTest(10.5D, 70.5D, 10.5D));
+        assertEquals(1, CompareOverlayRenderer.visibleVolumeBoxCountForTest(10.5D, 70.5D, 10.5D));
     }
 
     private static DiffBlockEntry sampleEntry() {

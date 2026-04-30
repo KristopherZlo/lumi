@@ -25,6 +25,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
@@ -61,6 +62,7 @@ public final class VariantMergeService {
     private final VersionService versionService = new VersionService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
+    private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
     private final VersionLineageService lineageService = new VersionLineageService();
 
     public VariantMergePlan previewLocalMerge(
@@ -131,7 +133,7 @@ public final class VariantMergeService {
                 progressSink -> {
                     int totalChanges = mergeChanges.size() + mergeEntityChanges.size();
                     progressSink.update(OperationStage.PREPARING, 0, Math.max(1, totalChanges), "Preparing branch merge");
-                    List<PreparedChunkBatch> batches = RestoreService.collapsePreparedBatches(this.batchPreparer.prepareNewValues(
+                    List<PreparedChunkBatch> batches = this.batchCollapser.collapse(this.batchPreparer.prepareNewValues(
                             level,
                             mergeChanges,
                             mergeEntityChanges,
