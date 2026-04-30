@@ -67,6 +67,10 @@ public record ProjectLayout(Path root) {
         return this.versionsDir().resolve(versionId + ".json");
     }
 
+    public Path versionIndexFile() {
+        return this.versionsDir().resolve("index.json");
+    }
+
     public Path patchFile(String patchId) {
         return this.patchDataFile(patchId);
     }

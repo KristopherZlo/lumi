@@ -59,4 +59,19 @@ class ProjectRepositoryTest {
 
         assertFalse(loaded.settings().autoCheckpointEnabled());
     }
+
+    @Test
+    void savesProjectMetadataAtomicallyWithoutLeavingTempFile() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Atomic Project");
+        BuildProject project = BuildProject.createWorldWorkspace(
+                "Atomic Project",
+                "minecraft:overworld",
+                Instant.parse("2026-04-28T08:00:00Z")
+        );
+
+        this.repository.save(layout, project);
+
+        assertEquals(project.id(), this.repository.load(layout).orElseThrow().id());
+        assertFalse(Files.exists(layout.projectFile().resolveSibling("project.json.tmp")));
+    }
 }
