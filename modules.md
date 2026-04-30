@@ -37,7 +37,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | --- | --- | --- | --- |
 | Project creation, settings, workspace open, `WORLD_ROOT` | `ProjectService`, `ClientWorkspaceOpenService`, `WorldBootstrapService` | `ProjectRepository`, `VariantRepository`, `WorldOriginRepository`, `RecoveryRepository`, `ProjectLayout` | `ProjectServiceTest`, `WorldOriginRepositoryTest`, `docs/storage-format.md` |
 | Save, amend, quick save | `VersionService`, `QuickSaveScreenController` | `CaptureSessionRegistry`, `CapturePersistenceCoordinator`, `PatchDataRepository`, `PatchMetaRepository`, `SnapshotCaptureService`, `PreviewCaptureRequestService` | `VersionServiceTest`, `PatchDataRepositoryTest`, `SnapshotStorageTest` |
-| Restore, full rollback, operation progress | `RestoreService` | `VersionLineageService`, `WorldOperationManager`, `WorldChangeBatchPreparer`, `SnapshotBatchPreparer`, `BlockChangeApplier` | `RestoreServiceTest`, `WorldChangeBatchPreparerTest`, `docs/architecture.md` |
+| Restore, full rollback, operation progress | `RestoreService` | `VersionLineageService`, `WorldOperationManager`, `WorldChangeBatchPreparer`, `SnapshotBatchPreparer`, `BlockChangeApplier`, `SectionNativeBlockCommitStrategy` | `RestoreServiceTest`, `WorldChangeBatchPreparerTest`, `docs/architecture.md` |
 | Partial restore | `RestoreService`, `PartialRestorePlanner` | `SaveDetailsScreen`, `SaveDetailsScreenController`, `SaveDetailsPartialRestoreSection`, `LumiRegionSelectionController`, `LumiRegionSelectionRenderer`, `PatchDataRepository` | `PartialRestorePlannerTest`, `PartialRestoreFormStateTest`, `LumiRegionSelectionStateTest`, `docs/storage-format.md` |
 | Live capture and recovery draft creation | `HistoryCaptureManager` | `CaptureSessionRegistry`, `TrackedProjectCatalog`, `ProjectTrackingIndex`, `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, `SessionStabilizationService`, relevant mixin | capture tests under `src/test/java/io/github/luma/minecraft/capture` |
 | Undo/redo and recent actions | `UndoRedoService`, `UndoRedoHistoryManager`, `UndoRedoKeyController` | `ExternalUndoRedoPolicy`, `AxiomUndoRedoBridge`, `WorldOperationManager`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `EntityMutationCapturePolicy` | `UndoRedoActionStackTest`, `ExternalUndoRedoPolicyTest`, `AxiomUndoRedoBridgeTest`, `RecentChangesOverlayRendererStateTest` |
@@ -156,16 +156,16 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 ### World Apply
 
 - `WorldOperationManager`: single-operation-per-world async prepare plus tick-time apply orchestration.
-- `WorldChangeBatchPreparer`: patch/recovery block/entity changes to tick-ready batches.
-- `SnapshotBatchPreparer`: snapshot payloads to tick-ready batches.
+- `WorldChangeBatchPreparer`: patch/recovery block/entity changes and v7 section frames to tick-ready sparse or section-native batches.
+- `SnapshotBatchPreparer`: snapshot payloads to tick-ready section-native batches without expanding dense sections into per-block placements.
 - `BlockChangeApplier`: actual section/block-entity/entity commit operations.
-- `BlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, `VanillaBlockCommitStrategy`: direct loaded-section apply path and safe vanilla fallback selection.
+- `BlockCommitStrategy`, `SectionNativeBlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, `VanillaBlockCommitStrategy`: section-native dense apply path, direct loaded-section sparse apply path, and safe vanilla fallback selection.
 - `ChunkSectionUpdateBroadcaster`: batched section and block-entity client update packets after fast commits.
 - `WorldApplyMetrics`: debug counters for direct/fallback sections, changed blocks, packets, light checks, and fallback reasons.
 - `WorldApplyBlockUpdatePolicy`: side-effect-suppressed update flags and apply behavior.
 - `PersistentBlockStatePolicy`: restore/snapshot normalization for runtime-only states.
 - `ConnectedBlockPlacementExpander`: paired blocks such as beds, doors, tall plants.
-- `PreparedBlockPlacement`, `PreparedChunkBatch`: prepared immutable apply data.
+- `PreparedBlockPlacement`, `PreparedChunkBatch`, `PreparedSectionApplyBatch`, `LumiSectionBuffer`, `SectionChangeMask`: prepared immutable apply data for sparse and section-native work.
 - `ChunkBatch`, `SectionBatch`, `EntityBatch`: per-chunk apply units.
 - `GlobalDispatcher`, `LocalQueue`, `BatchState`, `BatchProcessor`, `HistoryStore`: queue/runtime state for bounded apply.
 - `BlockStateNbtCodec`: Minecraft block-state and NBT conversion.

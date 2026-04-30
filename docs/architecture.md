@@ -79,9 +79,9 @@ Important adapters:
 - `WorldMutationContext`: prevents restore application from being re-captured as tracked history and can temporarily suppress capture while Lumi dispatches native external-tool undo/redo commands
 - `LumaAccessControl`: centralizes the operator/cheats gate for diagnostic commands, UI entry points, and dedicated-server tracked world actions
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick with adaptive block budgets and bounded block-entity/entity passes
-- `WorldChangeBatchPreparer` and `SnapshotBatchPreparer`: convert persisted block/entity changes and snapshot payloads into tick-ready prepared batches before apply begins
+- `WorldChangeBatchPreparer` and `SnapshotBatchPreparer`: convert persisted block/entity changes, v7 section frames, and snapshot payloads into tick-ready sparse or section-native prepared batches before apply begins
 - `GlobalDispatcher`, `LocalQueue`, `ChunkBatch`, `SectionBatch`, and `EntityBatch`: chunk-oriented operation runtime, including entity spawn/remove/update batches
-- `BlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, and `VanillaBlockCommitStrategy`: choose the fastest safe loaded-section commit path for prepared section batches and fall back to normal `ServerLevel#setBlock` application when eligibility checks fail
+- `BlockCommitStrategy`, `SectionNativeBlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, and `VanillaBlockCommitStrategy`: choose the fastest safe loaded-section commit path for prepared section batches and fall back to normal `ServerLevel#setBlock` application when eligibility checks fail
 - `ChunkSectionUpdateBroadcaster`, `WorldApplyBlockUpdatePolicy`, and `BlockChangeApplier`: commit section blocks, block entities, and entity batches in bounded steps with batched section packets, block-entity packets, and side-effect-suppressed fallback flags so replayed restore/undo/redo states do not emit neighbor updates or placement physics
 - `ConnectedBlockPlacementExpander`: completes paired block placements for beds, doors, and tall plants before replay so apply batches do not leave one half clipped when only one persisted cell changed
 - `LumaCommands`: diagnostic command interface plus the singleplayer runtime test entry point
@@ -209,7 +209,7 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 9. Persisted patch, baseline, and snapshot payloads are decoded off-thread and converted by Minecraft-layer preparers before any tick-thread apply work starts.
 10. Prepared placements are collapsed by final block position and paired block halves are completed before tick-thread application; entity-only chunk batches are preserved.
 11. `WorldOperationManager` converts prepared chunk payloads into `ChunkBatch` structures, drains completed local queues first, and only falls back to incomplete queues when the FAWE-style `64 chunks / 25 ms` thresholds are hit.
-12. Chunk commit order is fixed to section blocks -> bounded block-entity slices -> bounded entity removals -> bounded entity updates -> bounded entity spawns. Section blocks try direct `LevelChunkSection` writes for loaded chunks, update heightmaps, POI state, light checks, and chunk dirty state, then broadcast section-level changes; invalid or unloaded sections fall back to the vanilla apply path.
+12. Chunk commit order is fixed to dense native sections -> sparse section blocks -> bounded block-entity slices -> bounded entity removals -> bounded entity updates -> bounded entity spawns. Dense sections use Lumi-owned `LumiSectionBuffer` data and write loaded `LevelChunkSection` cells directly, then update heightmaps, POI state, light checks, block entities, chunk dirty state, and one section packet. Sparse sections keep the existing direct section path, and invalid or unloaded sections fall back to the vanilla apply path.
 13. Progress uses total work units: block placements, block-entity tail writes, entity removals, entity updates, and entity spawns. Entity-only operations do not complete early.
 14. Completion resets the target variant head to the restored version, clears the pre-restore draft, writes a recovery journal entry, and leaves operation state available to the UI briefly. Branch switching and cross-branch save restore pass an explicit target variant or target save branch so active-branch metadata changes only after the world apply has finished.
 15. Resetting the active variant head does not remove later version files. The UI keeps detached versions visible.
@@ -221,7 +221,7 @@ Partial restore is a region-scoped restore workflow. The UI builds a `PartialRes
 Key differences from full restore:
 
 - partial restore does not move the active variant head to the old target version
-- `SELECTED_AREA` applies only changes inside the selected bounds; with patch payload v6 it reads only chunk frames intersecting those bounds
+- `SELECTED_AREA` applies only changes inside the selected bounds; with chunk-addressable patch payloads it reads only chunk frames intersecting those bounds
 - `OUTSIDE_SELECTED_AREA` applies the restore path outside the selected bounds, leaving selected blocks untouched
 - after apply, Lumi writes a new `PARTIAL_RESTORE` version on the active variant
 - after the version write succeeds, Lumi records the applied block/entity changes as one live undo/redo action so the player can undo or redo the partial restore without changing the saved branch head
@@ -277,7 +277,7 @@ Current guarantees:
 - only one world operation runs per world at a time
 - the world-operation executor is single-threaded and low priority
 - restore/apply budgets adapt downward when a tick slice exceeds its budget and recover gradually when slices stay cheap
-- prepared apply records debug-only fast-apply metrics for direct sections, fallback sections, changed/skipped blocks, section packets, block-entity packets, light checks, and fallback reasons
+- prepared apply records debug-only fast-apply metrics for native sections/cells, direct sections, fallback sections, changed/skipped blocks, section packets, block-entity packets, light checks, and fallback reasons
 - block entities and entity diffs have explicit per-tick caps instead of running as unbounded chunk tail work
 - entity-only restore, undo/redo, and recovery batches remain visible to the operation model because progress counts entity work as first-class work units
 - preview generation no longer samples or rasterizes on the server; the server only queues request metadata and the client later performs the textured off-screen render with the built-in preview mesh path
@@ -288,7 +288,7 @@ Current guarantees:
 
 ## Storage format summary
 
-The current durable history format is project schema v4, patch payload schema v6, snapshot payload schema v5, and recovery draft schema v4.
+The current durable history format is project schema v4, patch payload schema v7, snapshot payload schema v5, and recovery draft schema v4.
 
 Main files:
 
