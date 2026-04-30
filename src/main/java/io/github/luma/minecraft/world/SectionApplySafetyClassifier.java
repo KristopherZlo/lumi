@@ -2,7 +2,7 @@ package io.github.luma.minecraft.world;
 
 public final class SectionApplySafetyClassifier {
 
-    static final int NATIVE_DENSE_THRESHOLD = 512;
+    static final int NATIVE_DENSE_THRESHOLD = 64;
 
     public SectionApplySafetyProfile classify(LumiSectionBuffer buffer, boolean fullSection) {
         if (buffer == null || buffer.changedCellCount() <= 0) {

@@ -197,15 +197,16 @@ Metadata reads must not require deserializing the full payload.
 
 ### `patches/<patchId>.bin.lz4`
 
-Patch payloads are the primary history format for tracked saves. New payloads use binary schema v6. The filename suffix remains `.bin.lz4`, but v6 is not one monolithic LZ4 frame. It is a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames. The chunk offsets and lengths in `PatchChunkSlice` are physical file offsets for those frames, so readers can seek directly to selected chunks.
+Patch payloads are the primary history format for tracked saves. New payloads use binary schema v7. The filename suffix remains `.bin.lz4`, but v7 is not one monolithic LZ4 frame. It is a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames. The chunk offsets and lengths in `PatchChunkSlice` are physical file offsets for those frames, so readers can seek directly to selected chunks.
 
 Current payload characteristics:
 
-- chunk-addressable per-chunk LZ4 frames for schema v6
+- chunk-addressable per-chunk LZ4 frames for schema v7
 - chunk-sorted records
-- per-chunk local-position ordering
-- chunk-local palettes for block states
-- chunk-local palettes for block entity payloads
+- chunk -> section frames with a 4096-cell changed mask
+- section-local old/new palettes for block states
+- section-local old/new palettes for block entity payloads
+- mask-order state and block-entity ids so restore can build `LumiSectionBuffer` batches without first materializing a flat per-block list
 - per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload
 - block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
 - schema v3-v5 legacy payloads still load from the older single LZ4 stream format
@@ -214,7 +215,7 @@ Current payload characteristics:
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
-Partial restore uses the metadata chunk index to load only v6 chunk frames that intersect the selected bounds. Legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream.
+Partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Schema v6 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk index is available.
 
 ### `snapshots/<snapshotId>.bin.lz4`
 
