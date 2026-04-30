@@ -20,6 +20,7 @@ import net.jpountz.lz4.LZ4FrameOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SnapshotStorageTest {
 
@@ -178,6 +179,51 @@ class SnapshotStorageTest {
         assertEquals(1, restored.chunks().size());
         assertEquals(List.of(), restored.chunks().getFirst().entitySnapshots());
         assertEquals(List.of(new io.github.luma.domain.model.ChunkPoint(7, 8)), this.reader.loadChunks(file));
+    }
+
+    @Test
+    void rejectsImpossibleSnapshotChunkCount() throws Exception {
+        Path file = this.tempDir.resolve("bad-chunk-count.bin.lz4");
+        try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(
+                new BufferedOutputStream(Files.newOutputStream(file))
+        ))) {
+            data.writeInt(SNAPSHOT_MAGIC);
+            data.writeInt(5);
+            data.writeUTF("project");
+            data.writeLong(Instant.parse("2026-04-20T10:00:00Z").toEpochMilli());
+            data.writeInt(0);
+            data.writeInt(15);
+            data.writeInt(Integer.MAX_VALUE);
+        }
+
+        assertThrows(java.io.IOException.class, () -> this.reader.readFile(file));
+    }
+
+    @Test
+    void rejectsImpossibleSnapshotPaletteIndexes() throws Exception {
+        Path file = this.tempDir.resolve("bad-palette-indexes.bin.lz4");
+        try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(
+                new BufferedOutputStream(Files.newOutputStream(file))
+        ))) {
+            data.writeInt(SNAPSHOT_MAGIC);
+            data.writeInt(5);
+            data.writeUTF("project");
+            data.writeLong(Instant.parse("2026-04-20T10:00:00Z").toEpochMilli());
+            data.writeInt(0);
+            data.writeInt(15);
+            data.writeInt(1);
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(1);
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(1);
+            StorageIo.writeCompound(data, state("minecraft:stone"));
+            data.writeInt(1);
+            data.writeShort(1);
+        }
+
+        assertThrows(java.io.IOException.class, () -> this.reader.readFile(file));
     }
 
     private static net.minecraft.nbt.CompoundTag state(String blockId) {

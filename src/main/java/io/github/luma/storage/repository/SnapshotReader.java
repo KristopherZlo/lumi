@@ -43,27 +43,50 @@ public final class SnapshotReader {
             Instant createdAt = Instant.ofEpochMilli(input.readLong());
             int minY = input.readInt();
             int maxY = input.readInt();
-            int chunkCount = input.readInt();
+            int chunkCount = StorageLimits.requireLength(
+                    "snapshot chunk count",
+                    input.readInt(),
+                    StorageLimits.MAX_SNAPSHOT_CHUNKS
+            );
 
             List<SnapshotChunkData> chunks = new ArrayList<>();
             for (int chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
                 int chunkX = input.readInt();
                 int chunkZ = input.readInt();
-                int sectionCount = input.readInt();
-                int blockEntityCount = input.readInt();
+                int sectionCount = StorageLimits.requireLength(
+                        "snapshot section count",
+                        input.readInt(),
+                        StorageLimits.MAX_SNAPSHOT_SECTIONS_PER_CHUNK
+                );
+                int blockEntityCount = StorageLimits.requireLength(
+                        "snapshot block entity count",
+                        input.readInt(),
+                        StorageLimits.MAX_SNAPSHOT_BLOCK_ENTITIES_PER_CHUNK
+                );
 
                 List<SnapshotSectionData> sections = new ArrayList<>();
                 for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
                     int sectionY = input.readInt();
-                    int paletteSize = input.readInt();
+                    int paletteSize = StorageLimits.requireLength(
+                            "snapshot palette count",
+                            input.readInt(),
+                            StorageLimits.MAX_PALETTE_ENTRIES
+                    );
                     List<net.minecraft.nbt.CompoundTag> palette = new ArrayList<>();
                     for (int paletteIndex = 0; paletteIndex < paletteSize; paletteIndex++) {
                         palette.add(StorageIo.readCompound(input));
                     }
-                    int paletteIndexCount = input.readInt();
+                    int paletteIndexCount = StorageLimits.requireLength(
+                            "snapshot palette index count",
+                            input.readInt(),
+                            StorageLimits.MAX_SNAPSHOT_PALETTE_INDEXES
+                    );
                     short[] indexes = new short[paletteIndexCount];
                     for (int paletteIndex = 0; paletteIndex < paletteIndexCount; paletteIndex++) {
                         indexes[paletteIndex] = input.readShort();
+                        if (indexes[paletteIndex] < 0 || indexes[paletteIndex] >= paletteSize) {
+                            throw new IOException("Snapshot palette index outside palette");
+                        }
                     }
                     sections.add(new SnapshotSectionData(sectionY, palette, indexes));
                 }
@@ -102,15 +125,27 @@ public final class SnapshotReader {
             input.readLong();
             input.readInt();
             input.readInt();
-            int chunkCount = input.readInt();
+            int chunkCount = StorageLimits.requireLength(
+                    "snapshot chunk count",
+                    input.readInt(),
+                    StorageLimits.MAX_SNAPSHOT_CHUNKS
+            );
 
             for (int chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
                 int chunkX = input.readInt();
                 int chunkZ = input.readInt();
                 chunks.add(new ChunkPoint(chunkX, chunkZ));
 
-                int sectionCount = input.readInt();
-                int blockEntityCount = input.readInt();
+                int sectionCount = StorageLimits.requireLength(
+                        "snapshot section count",
+                        input.readInt(),
+                        StorageLimits.MAX_SNAPSHOT_SECTIONS_PER_CHUNK
+                );
+                int blockEntityCount = StorageLimits.requireLength(
+                        "snapshot block entity count",
+                        input.readInt(),
+                        StorageLimits.MAX_SNAPSHOT_BLOCK_ENTITIES_PER_CHUNK
+                );
                 for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
                     this.skipSection(input);
                 }
@@ -119,7 +154,11 @@ public final class SnapshotReader {
                     skipCompound(input);
                 }
                 if (version >= 4) {
-                    int entityCount = input.readInt();
+                    int entityCount = StorageLimits.requireLength(
+                            "snapshot entity count",
+                            input.readInt(),
+                            StorageLimits.MAX_SNAPSHOT_ENTITY_SNAPSHOTS_PER_CHUNK
+                    );
                     for (int entityIndex = 0; entityIndex < entityCount; entityIndex++) {
                         skipCompound(input);
                     }
@@ -132,11 +171,19 @@ public final class SnapshotReader {
 
     private void skipSection(DataInputStream input) throws IOException {
         input.readInt();
-        int paletteSize = input.readInt();
+        int paletteSize = StorageLimits.requireLength(
+                "snapshot palette count",
+                input.readInt(),
+                StorageLimits.MAX_PALETTE_ENTRIES
+        );
         for (int paletteIndex = 0; paletteIndex < paletteSize; paletteIndex++) {
             skipCompound(input);
         }
-        int paletteIndexCount = input.readInt();
+        int paletteIndexCount = StorageLimits.requireLength(
+                "snapshot palette index count",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_PALETTE_INDEXES
+        );
         input.skipNBytes((long) paletteIndexCount * Short.BYTES);
     }
 
@@ -145,7 +192,11 @@ public final class SnapshotReader {
             return List.of();
         }
 
-        int entityCount = input.readInt();
+        int entityCount = StorageLimits.requireLength(
+                "snapshot entity count",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_ENTITY_SNAPSHOTS_PER_CHUNK
+        );
         if (entityCount <= 0) {
             return List.of();
         }
@@ -161,7 +212,7 @@ public final class SnapshotReader {
     }
 
     private static void skipCompound(DataInputStream input) throws IOException {
-        int length = input.readInt();
+        int length = StorageLimits.requireLength("NBT", input.readInt(), StorageLimits.MAX_NBT_BYTES);
         input.skipNBytes(length);
     }
 
