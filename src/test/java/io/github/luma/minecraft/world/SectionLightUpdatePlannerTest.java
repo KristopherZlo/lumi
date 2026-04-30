@@ -26,6 +26,14 @@ class SectionLightUpdatePlannerTest {
     }
 
     @Test
+    void skipsFullOpaqueSwapsWithEquivalentLightProperties() {
+        Assertions.assertFalse(this.planner.requiresLightCheck(
+                Blocks.STONE.defaultBlockState(),
+                Blocks.DEEPSLATE.defaultBlockState()
+        ));
+    }
+
+    @Test
     void checksOpaqueAndAirTransitions() {
         Assertions.assertTrue(this.planner.requiresLightCheck(
                 Blocks.STONE.defaultBlockState(),
@@ -46,6 +54,22 @@ class SectionLightUpdatePlannerTest {
         Assertions.assertTrue(this.planner.requiresLightCheck(
                 Blocks.GLOWSTONE.defaultBlockState(),
                 Blocks.AIR.defaultBlockState()
+        ));
+    }
+
+    @Test
+    void checksFluidTransitions() {
+        Assertions.assertTrue(this.planner.requiresLightCheck(
+                Blocks.WATER.defaultBlockState(),
+                Blocks.AIR.defaultBlockState()
+        ));
+    }
+
+    @Test
+    void checksSkylightTransitions() {
+        Assertions.assertTrue(this.planner.requiresLightCheck(
+                Blocks.GLASS.defaultBlockState(),
+                Blocks.TINTED_GLASS.defaultBlockState()
         ));
     }
 }

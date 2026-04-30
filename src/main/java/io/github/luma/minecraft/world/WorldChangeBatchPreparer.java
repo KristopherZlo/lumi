@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -25,6 +26,19 @@ public final class WorldChangeBatchPreparer {
 
     private final ConnectedBlockPlacementExpander connectedBlockPlacementExpander = new ConnectedBlockPlacementExpander();
     private final SectionApplySafetyClassifier sectionApplySafetyClassifier = new SectionApplySafetyClassifier();
+    private final Supplier<BlockStateDecoder> blockStateDecoderFactory;
+
+    public WorldChangeBatchPreparer() {
+        this(BlockStatePaletteDecoder::new);
+    }
+
+    WorldChangeBatchPreparer(BlockStateDecoder blockStateDecoder) {
+        this(() -> blockStateDecoder);
+    }
+
+    private WorldChangeBatchPreparer(Supplier<BlockStateDecoder> blockStateDecoderFactory) {
+        this.blockStateDecoderFactory = blockStateDecoderFactory;
+    }
 
     public List<PreparedChunkBatch> prepareNewValues(ServerLevel level, PatchWorldChanges changes) throws IOException {
         return this.prepare(level, changes.blockChanges(), changes.entityChanges(), true, ProgressListener.NO_OP);
@@ -68,6 +82,7 @@ public final class WorldChangeBatchPreparer {
         progressListener = progressListener == null ? ProgressListener.NO_OP : progressListener;
         int total = changes.size() + entityChanges.size();
         int completed = 0;
+        BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
 
         List<ConnectedBlockPlacementExpander.ChangePlacement> blockPlacements = new ArrayList<>();
         Map<ChunkPoint, List<StoredEntityChange>> groupedEntities = new LinkedHashMap<>();
@@ -78,10 +93,10 @@ public final class WorldChangeBatchPreparer {
             blockPlacements.add(new ConnectedBlockPlacementExpander.ChangePlacement(
                     new PreparedBlockPlacement(
                             pos,
-                            BlockStateNbtCodec.deserializeBlockState(level, target == null ? null : target.stateTag()),
+                            blockStateDecoder.decode(level, target == null ? null : target.stateTag()),
                             target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
                     ),
-                    BlockStateNbtCodec.deserializeBlockState(level, source == null ? null : source.stateTag())
+                    blockStateDecoder.decode(level, source == null ? null : source.stateTag())
             ));
             completed += 1;
             progressListener.onDecoded(completed, total);
@@ -122,11 +137,12 @@ public final class WorldChangeBatchPreparer {
         }
 
         List<DecodedStoredChange> decodedChanges = new ArrayList<>(changes.size());
+        BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
         for (StoredBlockChange change : changes) {
             StatePayload source = applyNewValues ? change.oldValue() : change.newValue();
             StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
-            BlockState sourceState = BlockStateNbtCodec.deserializeBlockState(level, source == null ? null : source.stateTag());
-            BlockState targetState = BlockStateNbtCodec.deserializeBlockState(level, target == null ? null : target.stateTag());
+            BlockState sourceState = blockStateDecoder.decode(level, source == null ? null : source.stateTag());
+            BlockState targetState = blockStateDecoder.decode(level, target == null ? null : target.stateTag());
             if (this.connectedBlockPlacementExpander.requiresCompanion(sourceState)
                     || this.connectedBlockPlacementExpander.requiresCompanion(targetState)) {
                 return this.prepare(level, changes, entityChanges, applyNewValues, progressListener);
@@ -162,9 +178,10 @@ public final class WorldChangeBatchPreparer {
 
         Map<ChunkPoint, List<PreparedSectionApplyBatch>> nativeSections = new LinkedHashMap<>();
         Map<ChunkPoint, List<PreparedBlockPlacement>> sparsePlacements = new LinkedHashMap<>();
+        BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
         for (PatchSectionFrame frame : changes.sectionFrames()) {
             ChunkPoint chunk = new ChunkPoint(frame.chunkX(), frame.chunkZ());
-            LumiSectionBuffer buffer = this.toSectionBuffer(level, frame, applyNewValues, completed, total, progressListener);
+            LumiSectionBuffer buffer = this.toSectionBuffer(level, frame, applyNewValues, completed, total, progressListener, blockStateDecoder);
             boolean fullSection = buffer.changedCellCount() == SectionChangeMask.ENTRY_COUNT;
             SectionApplySafetyProfile profile = this.sectionApplySafetyClassifier.classify(buffer, fullSection);
             PreparedSectionApplyBatch nativeBatch = new PreparedSectionApplyBatch(
@@ -213,7 +230,8 @@ public final class WorldChangeBatchPreparer {
             boolean applyNewValues,
             int[] completed,
             int total,
-            ProgressListener progressListener
+            ProgressListener progressListener,
+            BlockStateDecoder blockStateDecoder
     ) throws IOException {
         LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(frame.sectionY());
         List<Integer> localIndexes = new ArrayList<>();
@@ -222,17 +240,40 @@ public final class WorldChangeBatchPreparer {
         int[] blockEntityIds = applyNewValues ? frame.newBlockEntityIds() : frame.oldBlockEntityIds();
         List<CompoundTag> statePalette = applyNewValues ? frame.newStatePalette() : frame.oldStatePalette();
         List<CompoundTag> blockEntityPalette = applyNewValues ? frame.newBlockEntityPalette() : frame.oldBlockEntityPalette();
+        BlockState[] decodedPalette = this.decodePalette(level, statePalette, blockStateDecoder);
         for (int index = 0; index < localIndexes.size(); index++) {
             int localIndex = localIndexes.get(index);
             builder.set(
                     localIndex,
-                    BlockStateNbtCodec.deserializeBlockState(level, statePalette.get(stateIds[index])),
+                    decodedPalette[stateIds[index]],
                     this.blockEntityAt(blockEntityPalette, blockEntityIds[index])
             );
             completed[0] += 1;
             progressListener.onDecoded(completed[0], total);
         }
         return builder.build();
+    }
+
+    private BlockState[] decodePalette(
+            ServerLevel level,
+            List<CompoundTag> palette,
+            BlockStateDecoder blockStateDecoder
+    ) throws IOException {
+        BlockState[] decoded = new BlockState[palette == null ? 0 : palette.size()];
+        Map<CompoundTag, BlockState> frameCache = new LinkedHashMap<>();
+        for (int index = 0; index < decoded.length; index++) {
+            CompoundTag tag = palette.get(index);
+            CompoundTag key = tag == null ? new CompoundTag() : tag.copy();
+            BlockState state;
+            if (frameCache.containsKey(key)) {
+                state = frameCache.get(key);
+            } else {
+                state = blockStateDecoder.decode(level, tag);
+                frameCache.put(key, state);
+            }
+            decoded[index] = state;
+        }
+        return decoded;
     }
 
     private CompoundTag blockEntityAt(List<CompoundTag> palette, int id) {

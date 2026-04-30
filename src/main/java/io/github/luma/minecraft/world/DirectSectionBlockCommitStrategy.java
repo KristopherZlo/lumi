@@ -18,6 +18,7 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
     private final BlockPlacementUpdateDecider updateDecider;
     private final ChunkSectionUpdateBroadcaster updateBroadcaster;
     private final DirectSectionCommitEligibility eligibility = new DirectSectionCommitEligibility();
+    private final SectionLightUpdatePlanner lightUpdatePlanner = new SectionLightUpdatePlanner();
 
     DirectSectionBlockCommitStrategy(
             PersistentBlockStatePolicy blockStatePolicy,
@@ -60,6 +61,7 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
         int endIndex = Math.min(batch.placements().size(), startIndex + maxBlocks);
         List<BlockPos> changedPositions = new ArrayList<>();
         int skipped = 0;
+        int lightChecks = 0;
         for (int index = startIndex; index < endIndex; index++) {
             PreparedBlockPlacement placement = batch.placements().get(index);
             PersistentBlockStatePolicy.PersistentBlockState persistentState =
@@ -77,7 +79,9 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
             section.setBlockState(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, targetState, false);
             this.updateHeightmaps(chunk, pos, targetState);
             level.updatePOIOnBlockStateChange(pos, currentState, targetState);
-            level.getLightEngine().checkBlock(pos);
+            if (this.lightUpdatePlanner.check(level, pos, currentState, targetState)) {
+                lightChecks += 1;
+            }
             changedPositions.add(pos.immutable());
         }
 
@@ -97,7 +101,7 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
                 changedPositions.size(),
                 skipped,
                 packets,
-                changedPositions.size()
+                lightChecks
         );
     }
 
