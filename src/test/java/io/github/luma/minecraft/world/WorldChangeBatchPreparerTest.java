@@ -1,8 +1,11 @@
 package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.StoredEntityChange;
+import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import java.util.List;
@@ -76,6 +79,25 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void undoRedoLargeSimpleSectionsPrepareAsRewriteBatches() throws Exception {
+        List<StoredBlockChange> changes = java.util.stream.IntStream
+                .range(0, SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD)
+                .mapToObj(index -> new StoredBlockChange(
+                        new BlockPoint(index & 15, 64 + ((index >>> 8) & 15), (index >>> 4) & 15),
+                        payload(Blocks.AIR.defaultBlockState()),
+                        payload(Blocks.STONE.defaultBlockState())
+                ))
+                .toList();
+
+        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(null, changes, List.of(), true, null);
+
+        assertEquals(1, batches.size());
+        assertEquals(0, batches.getFirst().placements().size());
+        assertEquals(1, batches.getFirst().nativeSections().size());
+        assertEquals(SectionApplyPath.SECTION_REWRITE, batches.getFirst().nativeSections().getFirst().safetyProfile().path());
+    }
+
+    @Test
     void decodedSparseSectionsStayAsDirectPlacementsBelowNativeCutoff() {
         List<PreparedBlockPlacement> placements = java.util.stream.IntStream
                 .range(0, SectionApplySafetyClassifier.NATIVE_DENSE_THRESHOLD - 1)
@@ -102,5 +124,9 @@ class WorldChangeBatchPreparerTest {
         pos.add(DoubleTag.valueOf(1.0D));
         tag.put("Pos", pos);
         return new EntityPayload(tag);
+    }
+
+    private static StatePayload payload(net.minecraft.world.level.block.state.BlockState state) {
+        return new StatePayload(BlockStateNbtCodec.serializeBlockStateTag(state), null);
     }
 }

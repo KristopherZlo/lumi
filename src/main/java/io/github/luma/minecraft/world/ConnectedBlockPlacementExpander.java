@@ -70,6 +70,12 @@ public final class ConnectedBlockPlacementExpander {
         return grouped;
     }
 
+    public boolean requiresCompanion(BlockState state) {
+        return state != null && ((state.getBlock() instanceof BedBlock && state.hasProperty(BedBlock.PART) && state.hasProperty(BedBlock.FACING))
+                || (state.getBlock() instanceof DoorBlock && state.hasProperty(DoorBlock.HALF))
+                || (state.getBlock() instanceof DoublePlantBlock && state.hasProperty(DoublePlantBlock.HALF)));
+    }
+
     public static List<PreparedBlockPlacement> ordered(List<PreparedBlockPlacement> placements) {
         List<PreparedBlockPlacement> ordered = new ArrayList<>(placements == null ? List.of() : placements);
         ordered.sort(APPLY_ORDER);

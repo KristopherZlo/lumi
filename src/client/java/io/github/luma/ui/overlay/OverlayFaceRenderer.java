@@ -53,6 +53,30 @@ final class OverlayFaceRenderer {
         return renderedFaces;
     }
 
+    static int renderSolidBox(
+            PoseStack matrices,
+            VertexConsumer consumer,
+            float minX,
+            float minY,
+            float minZ,
+            float maxX,
+            float maxY,
+            float maxZ,
+            int red,
+            int green,
+            int blue,
+            int alpha
+    ) {
+        PoseStack.Pose pose = matrices.last();
+        addQuad(pose, consumer, red, green, blue, alpha, minX, minY, minZ, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ);
+        addQuad(pose, consumer, red, green, blue, alpha, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, maxX, minY, maxZ);
+        addQuad(pose, consumer, red, green, blue, alpha, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, minX, minY, maxZ);
+        addQuad(pose, consumer, red, green, blue, alpha, maxX, minY, minZ, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ);
+        addQuad(pose, consumer, red, green, blue, alpha, minX, minY, minZ, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ);
+        addQuad(pose, consumer, red, green, blue, alpha, minX, maxY, minZ, maxX, maxY, minZ, maxX, maxY, maxZ, minX, maxY, maxZ);
+        return 6;
+    }
+
     private static void addQuad(
             PoseStack.Pose pose,
             VertexConsumer consumer,
