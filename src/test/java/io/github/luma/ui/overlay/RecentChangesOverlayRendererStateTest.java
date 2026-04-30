@@ -11,6 +11,7 @@ import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -40,6 +41,7 @@ class RecentChangesOverlayRendererStateTest {
         RecentChangesOverlayRenderer.show("project", List.of(action));
 
         assertTrue(RecentChangesOverlayRenderer.visible());
+        assertTrue(RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(10.5D, 64.5D, 10.5D) > 0);
 
         RecentChangesOverlayRenderer.clear();
 
@@ -47,7 +49,7 @@ class RecentChangesOverlayRendererStateTest {
     }
 
     @Test
-    void denseRecentActionStillExposesRenderableSurfaceBlocks() {
+    void denseRecentActionCollapsesToMergedBlob() {
         UndoRedoAction action = new UndoRedoAction(
                 "action",
                 "Alex",
@@ -64,9 +66,8 @@ class RecentChangesOverlayRendererStateTest {
 
         assertTrue(RecentChangesOverlayRenderer.visible());
         int renderedSurfaceEntries = RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(10.5D, 70.5D, 10.5D);
-        assertTrue(renderedSurfaceEntries > 0);
-        assertTrue(renderedSurfaceEntries <= 512);
-        assertTrue(RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(10.5D, 70.5D, 10.5D) > 0);
+        assertEquals(0, renderedSurfaceEntries);
+        assertEquals(1, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(10.5D, 70.5D, 10.5D));
     }
 
     private static CompoundTag state(String blockId) {

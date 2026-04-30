@@ -37,7 +37,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | --- | --- | --- | --- |
 | Project creation, settings, workspace open, `WORLD_ROOT` | `ProjectService`, `ClientWorkspaceOpenService`, `WorldBootstrapService` | `ProjectRepository`, `VariantRepository`, `WorldOriginRepository`, `RecoveryRepository`, `ProjectLayout` | `ProjectServiceTest`, `WorldOriginRepositoryTest`, `docs/storage-format.md` |
 | Save, amend, quick save | `VersionService`, `QuickSaveScreenController` | `CaptureSessionRegistry`, `CapturePersistenceCoordinator`, `PatchDataRepository`, `PatchMetaRepository`, `SnapshotCaptureService`, `PreviewCaptureRequestService` | `VersionServiceTest`, `PatchDataRepositoryTest`, `SnapshotStorageTest` |
-| Restore, full rollback, operation progress | `RestoreService` | `VersionLineageService`, `WorldOperationManager`, `WorldChangeBatchPreparer`, `SnapshotBatchPreparer`, `BlockChangeApplier`, `SectionNativeBlockCommitStrategy` | `RestoreServiceTest`, `WorldChangeBatchPreparerTest`, `docs/architecture.md` |
+| Restore, full rollback, operation progress | `RestoreService` | `VersionLineageService`, `WorldOperationManager`, `WorldChangeBatchPreparer`, `SnapshotBatchPreparer`, `BlockChangeApplier`, `SectionContainerRewriteCommitStrategy`, `SectionNativeBlockCommitStrategy` | `RestoreServiceTest`, `WorldChangeBatchPreparerTest`, `docs/architecture.md` |
 | Partial restore | `RestoreService`, `PartialRestorePlanner` | `SaveDetailsScreen`, `SaveDetailsScreenController`, `SaveDetailsPartialRestoreSection`, `LumiRegionSelectionController`, `LumiRegionSelectionRenderer`, `PatchDataRepository` | `PartialRestorePlannerTest`, `PartialRestoreFormStateTest`, `LumiRegionSelectionStateTest`, `docs/storage-format.md` |
 | Live capture and recovery draft creation | `HistoryCaptureManager` | `CaptureSessionRegistry`, `TrackedProjectCatalog`, `ProjectTrackingIndex`, `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, `SessionStabilizationService`, relevant mixin | capture tests under `src/test/java/io/github/luma/minecraft/capture` |
 | Undo/redo and recent actions | `UndoRedoService`, `UndoRedoHistoryManager`, `UndoRedoKeyController` | `ExternalUndoRedoPolicy`, `AxiomUndoRedoBridge`, `WorldOperationManager`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `EntityMutationCapturePolicy` | `UndoRedoActionStackTest`, `ExternalUndoRedoPolicyTest`, `AxiomUndoRedoBridgeTest`, `RecentChangesOverlayRendererStateTest` |
@@ -159,9 +159,9 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `WorldChangeBatchPreparer`: patch/recovery block/entity changes and v7 section frames to tick-ready sparse or section-native batches.
 - `SnapshotBatchPreparer`: snapshot payloads to tick-ready section-native batches without expanding dense sections into per-block placements.
 - `BlockChangeApplier`: actual section/block-entity/entity commit operations.
-- `BlockCommitStrategy`, `SectionNativeBlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, `VanillaBlockCommitStrategy`: section-native dense apply path, direct loaded-section sparse apply path, and safe vanilla fallback selection.
+- `SectionContainerRewriteCommitStrategy`, `PalettedContainerDataSwapper`, `SectionNativeBlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, `VanillaBlockCommitStrategy`: dense section container rewrite path, section-native loop path, direct loaded-section sparse apply path, and safe vanilla fallback selection.
 - `ChunkSectionUpdateBroadcaster`: batched section and block-entity client update packets after fast commits.
-- `WorldApplyMetrics`: debug counters for direct/fallback sections, changed blocks, packets, light checks, and fallback reasons.
+- `WorldApplyMetrics`: debug counters for rewrite/native/direct/fallback sections, changed blocks, packets, light checks, and fallback reasons.
 - `WorldApplyBlockUpdatePolicy`: side-effect-suppressed update flags and apply behavior.
 - `PersistentBlockStatePolicy`: restore/snapshot normalization for runtime-only states.
 - `ConnectedBlockPlacementExpander`: paired blocks such as beds, doors, tall plants.
@@ -225,7 +225,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 ### Overlays, Input, Preview, Graphs
 
 - Input chords: `client/input/UndoRedoKeyController`, `UndoRedoKeyChordTracker`, `ExternalUndoRedoPolicy`, `KeyBindingState`, `LumiClientKeyBindings`.
-- HUD, selection, and compare/recent overlays: `WorkspaceHudCoordinator`, `LumiRegionSelectionController`, `LoadedChunkBlockRaycaster`, `LumiRegionSelectionRenderer`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySurfaceResolver`, `CompareOverlayRenderTypes`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `OverlayImmediateRenderer`, `OverlayFaceRenderer`, `OverlayDiagnostics`.
+- HUD, selection, and compare/recent overlays: `WorkspaceHudCoordinator`, `LumiRegionSelectionController`, `LoadedChunkBlockRaycaster`, `LumiRegionSelectionRenderer`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySurfaceResolver`, `CompareOverlayRenderTypes`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer` with capped recent block entries and aggregate section boxes, `OverlayImmediateRenderer`, `OverlayFaceRenderer`, `OverlayDiagnostics`.
 - Client preview renderer: `client/preview/TexturedPreviewCaptureService`, `PreviewCaptureCoordinator`, `PreviewRenderMeshBuilder`, `PreviewRenderMesh`, `PreviewImageCropper`, `PreviewFramingCalculator`, plus `ui/preview/ProjectPreviewTextureCache`.
 - Commit graph: `ui/graph/CommitGraphLayout`, `CommitGraphNode`, `CommitGraphComponent`.
 

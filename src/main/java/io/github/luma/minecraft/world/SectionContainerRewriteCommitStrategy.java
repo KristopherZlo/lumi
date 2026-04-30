@@ -73,9 +73,7 @@ final class SectionContainerRewriteCommitStrategy {
             return BlockCommitResult.rewriteSection(batch.changedCellCount(), 0, batch.changedCellCount(), 0, 0);
         }
 
-        PalettedContainer<BlockState> replacement = batch.fullSection()
-                ? section.getStates().recreate()
-                : section.getStates().copy();
+        PalettedContainer<BlockState> replacement = section.getStates().copy();
         for (CellMutation mutation : plan.mutations()) {
             int localIndex = mutation.localIndex();
             replacement.getAndSetUnchecked(

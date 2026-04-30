@@ -24,8 +24,9 @@ import net.minecraft.world.phys.shapes.Shapes;
 public final class RecentChangesOverlayRenderer {
 
     private static final int MAX_RECENT_RENDERED_BLOCKS = 512;
-    private static final int MAX_RECENT_AGGREGATE_BOXES = 96;
+    private static final int MAX_RECENT_VOLUME_BOXES = 96;
     private static final int AGGREGATE_THRESHOLD = 512;
+    private static final int DENSE_BLOB_THRESHOLD = 4096;
     private static final int MAX_ACTIONS = 10;
     private static final int BASE_ALPHA = 136;
     private static final int ALPHA_STEP = 12;
@@ -35,7 +36,9 @@ public final class RecentChangesOverlayRenderer {
     private static final float AGGREGATE_OUTLINE_WIDTH = 1.5F;
     private static final float FACE_OUTSET = 0.003F;
     private static final int AGGREGATE_FILL_ALPHA = 18;
+    private static final int DENSE_BLOB_FILL_ALPHA = 28;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
+    private static final RecentChangesOverlayVolumeMerger VOLUME_MERGER = new RecentChangesOverlayVolumeMerger();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
 
     private RecentChangesOverlayRenderer() {
@@ -51,35 +54,64 @@ public final class RecentChangesOverlayRenderer {
             boolean debugEnabled,
             RecentChangesOverlayCoordinator.PreviewTarget previewTarget
     ) {
+        activate(prepare(projectId, actions, debugEnabled, previewTarget, -1L));
+    }
+
+    static PreparedOverlay prepare(
+            String projectId,
+            List<UndoRedoAction> actions,
+            boolean debugEnabled,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget,
+            long revision
+    ) {
         List<RecentChangeEntry> entries = flatten(actions);
         if (entries.isEmpty()) {
-            ACTIVE_STATE.set(null);
-            OverlayDiagnostics.getInstance().log(
-                    debugEnabled,
-                    "recent-show",
-                    "recent-overlay",
-                    "Loaded recent overlay project={} preview={} actions={} entries={} surfaceEntries={}",
+            return new PreparedOverlay(
                     projectId,
+                    revision,
                     previewTarget,
                     actionCount(actions),
                     0,
-                    0
+                    0,
+                    0,
+                    debugEnabled,
+                    null
             );
-            return;
         }
 
-        OverlayState state = new OverlayState(projectId, entries, debugEnabled);
-        ACTIVE_STATE.set(state);
-        OverlayDiagnostics.getInstance().log(
-                debugEnabled,
-                "recent-show",
-                "recent-overlay",
-                "Loaded recent overlay project={} preview={} actions={} entries={} surfaceEntries={}",
+        OverlayState state = new OverlayState(projectId, revision, previewTarget, entries, debugEnabled);
+        return new PreparedOverlay(
                 projectId,
+                revision,
                 previewTarget,
                 actionCount(actions),
                 entries.size(),
-                state.surfaceEntryCount()
+                state.surfaceEntryCount(),
+                state.volumeBoxCount(),
+                debugEnabled,
+                state
+        );
+    }
+
+    static void activate(PreparedOverlay prepared) {
+        if (prepared == null) {
+            ACTIVE_STATE.set(null);
+            return;
+        }
+        OverlayState state = prepared.state();
+        ACTIVE_STATE.set(state);
+        OverlayDiagnostics.getInstance().log(
+                prepared.debugEnabled(),
+                "recent-show",
+                "recent-overlay",
+                "Loaded recent overlay project={} preview={} revision={} actions={} entries={} surfaceEntries={} volumeBoxes={}",
+                prepared.projectId(),
+                prepared.previewTarget(),
+                prepared.revision(),
+                prepared.actionCount(),
+                prepared.entryCount(),
+                prepared.surfaceEntryCount(),
+                prepared.volumeBoxCount()
         );
     }
 
@@ -91,6 +123,11 @@ public final class RecentChangesOverlayRenderer {
         return ACTIVE_STATE.get() != null;
     }
 
+    static boolean visibleFor(String projectId, long revision, RecentChangesOverlayCoordinator.PreviewTarget previewTarget) {
+        OverlayState state = ACTIVE_STATE.get();
+        return state != null && state.matches(projectId, revision, previewTarget);
+    }
+
     static int visibleSurfaceEntryCountForTest(double cameraX, double cameraY, double cameraZ) {
         OverlayState state = ACTIVE_STATE.get();
         return state == null ? 0 : state.visibleSelection(cameraX, cameraY, cameraZ).surfaceEntries().size();
@@ -98,7 +135,7 @@ public final class RecentChangesOverlayRenderer {
 
     static int visibleAggregateBoxCountForTest(double cameraX, double cameraY, double cameraZ) {
         OverlayState state = ACTIVE_STATE.get();
-        return state == null ? 0 : state.visibleSelection(cameraX, cameraY, cameraZ).aggregateBoxes().size();
+        return state == null ? 0 : state.visibleSelection(cameraX, cameraY, cameraZ).volumeBoxes().size();
     }
 
     public static void render(WorldRenderContext context) {
@@ -171,16 +208,17 @@ public final class RecentChangesOverlayRenderer {
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
         VisibleSelection selection = state.visibleSelection(camera.x, camera.y, camera.z);
         List<SurfaceEntry> visibleSurfaceEntries = selection.surfaceEntries();
-        List<AggregateBox> aggregateBoxes = selection.aggregateBoxes();
+        List<RecentChangesOverlayVolumeMerger.OverlayBox> volumeBoxes = selection.volumeBoxes();
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),
                 "recent-frame",
                 "recent-overlay",
-                "Render frame entries={} surfaceEntries={} renderedEntries={} aggregateBoxes={} camera={}:{}:{}",
+                "Render frame entries={} surfaceEntries={} renderedEntries={} volumeBoxes={} denseBlob={} camera={}:{}:{}",
                 state.entries().size(),
                 state.surfaceEntryCount(),
                 visibleSurfaceEntries.size(),
-                aggregateBoxes.size(),
+                volumeBoxes.size(),
+                state.denseBlob(),
                 camera.x,
                 camera.y,
                 camera.z
@@ -223,7 +261,8 @@ public final class RecentChangesOverlayRenderer {
             minFillAlpha = 0;
             maxFillAlpha = 0;
         }
-        for (AggregateBox box : aggregateBoxes) {
+        int volumeFillAlpha = state.denseBlob() ? DENSE_BLOB_FILL_ALPHA : AGGREGATE_FILL_ALPHA;
+        for (RecentChangesOverlayVolumeMerger.OverlayBox box : volumeBoxes) {
             filledFaceCount += OverlayFaceRenderer.renderSolidBox(
                     matrices,
                     fillConsumer,
@@ -236,7 +275,7 @@ public final class RecentChangesOverlayRenderer {
                     0xFF,
                     0x9C,
                     0x3A,
-                    AGGREGATE_FILL_ALPHA
+                    volumeFillAlpha
             );
         }
         boolean fillDrawn = OverlayImmediateRenderer.draw(fillType, fillBuffer);
@@ -245,9 +284,9 @@ public final class RecentChangesOverlayRenderer {
                 state.debugEnabled(),
                 "recent-fill-pass",
                 "recent-overlay",
-                "Fill pass entries={} aggregateBoxes={} faces={} vertices={} alphaRange={}..{} drawn={} renderType={} consumer={} outset={}",
+                "Fill pass entries={} volumeBoxes={} faces={} vertices={} alphaRange={}..{} drawn={} renderType={} consumer={} outset={}",
                 visibleSurfaceEntries.size(),
-                aggregateBoxes.size(),
+                volumeBoxes.size(),
                 filledFaceCount,
                 filledFaceCount * 4,
                 minFillAlpha,
@@ -273,7 +312,8 @@ public final class RecentChangesOverlayRenderer {
                     0xFFFF9C3A,
                     OUTLINE_WIDTH);
         }
-        for (AggregateBox box : aggregateBoxes) {
+        int volumeOutlineColor = state.denseBlob() ? 0xB3FF9C3A : 0x99FF9C3A;
+        for (RecentChangesOverlayVolumeMerger.OverlayBox box : volumeBoxes) {
             ShapeRenderer.renderShape(
                     matrices,
                     lineConsumer,
@@ -281,7 +321,7 @@ public final class RecentChangesOverlayRenderer {
                     box.minX() - camera.x,
                     box.minY() - camera.y,
                     box.minZ() - camera.z,
-                    0x99FF9C3A,
+                    volumeOutlineColor,
                     AGGREGATE_OUTLINE_WIDTH);
         }
         OverlayImmediateRenderer.draw(outlineType, lineBuffer);
@@ -350,7 +390,7 @@ public final class RecentChangesOverlayRenderer {
         return List.copyOf(result);
     }
 
-    private static List<AggregateBox> selectNearestAggregateBoxes(
+    private static List<RecentChangesOverlayVolumeMerger.OverlayBox> selectNearestAggregateBoxes(
             List<SurfaceEntry> surfaceEntries,
             List<SurfaceEntry> selectedEntries,
             double cameraX,
@@ -366,7 +406,7 @@ public final class RecentChangesOverlayRenderer {
             selectedPositions.add(pack(entry.entry().pos()));
         }
 
-        Map<AggregateKey, AggregateBox> boxes = new LinkedHashMap<>();
+        Map<AggregateKey, RecentChangesOverlayVolumeMerger.OverlayBox> boxes = new LinkedHashMap<>();
         for (SurfaceEntry entry : surfaceEntries) {
             if (selectedPositions.contains(pack(entry.entry().pos()))) {
                 continue;
@@ -376,11 +416,11 @@ public final class RecentChangesOverlayRenderer {
         }
 
         PriorityQueue<RankedAggregateBox> selected = new PriorityQueue<>(
-                MAX_RECENT_AGGREGATE_BOXES,
+                MAX_RECENT_VOLUME_BOXES,
                 Comparator.comparingDouble(RankedAggregateBox::distanceSquared).reversed());
-        for (AggregateBox box : boxes.values()) {
+        for (RecentChangesOverlayVolumeMerger.OverlayBox box : boxes.values()) {
             double distanceSquared = box.distanceSquared(cameraX, cameraY, cameraZ);
-            if (selected.size() < MAX_RECENT_AGGREGATE_BOXES) {
+            if (selected.size() < MAX_RECENT_VOLUME_BOXES) {
                 selected.add(new RankedAggregateBox(box, distanceSquared));
                 continue;
             }
@@ -394,7 +434,46 @@ public final class RecentChangesOverlayRenderer {
 
         List<RankedAggregateBox> ranked = new ArrayList<>(selected);
         ranked.sort(Comparator.comparingDouble(RankedAggregateBox::distanceSquared));
-        List<AggregateBox> result = new ArrayList<>(ranked.size());
+        List<RecentChangesOverlayVolumeMerger.OverlayBox> result = new ArrayList<>(ranked.size());
+        for (RankedAggregateBox entry : ranked) {
+            result.add(entry.box());
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<RecentChangesOverlayVolumeMerger.OverlayBox> selectNearestVolumeBoxes(
+            List<RecentChangesOverlayVolumeMerger.OverlayBox> boxes,
+            double cameraX,
+            double cameraY,
+            double cameraZ
+    ) {
+        if (boxes.isEmpty()) {
+            return List.of();
+        }
+        if (boxes.size() <= MAX_RECENT_VOLUME_BOXES) {
+            return boxes;
+        }
+
+        PriorityQueue<RankedAggregateBox> selected = new PriorityQueue<>(
+                MAX_RECENT_VOLUME_BOXES,
+                Comparator.comparingDouble(RankedAggregateBox::distanceSquared).reversed());
+        for (RecentChangesOverlayVolumeMerger.OverlayBox box : boxes) {
+            double distanceSquared = box.distanceSquared(cameraX, cameraY, cameraZ);
+            if (selected.size() < MAX_RECENT_VOLUME_BOXES) {
+                selected.add(new RankedAggregateBox(box, distanceSquared));
+                continue;
+            }
+
+            RankedAggregateBox farthest = selected.peek();
+            if (farthest != null && distanceSquared < farthest.distanceSquared()) {
+                selected.poll();
+                selected.add(new RankedAggregateBox(box, distanceSquared));
+            }
+        }
+
+        List<RankedAggregateBox> ranked = new ArrayList<>(selected);
+        ranked.sort(Comparator.comparingDouble(RankedAggregateBox::distanceSquared));
+        List<RecentChangesOverlayVolumeMerger.OverlayBox> result = new ArrayList<>(ranked.size());
         for (RankedAggregateBox entry : ranked) {
             result.add(entry.box());
         }
@@ -411,7 +490,7 @@ public final class RecentChangesOverlayRenderer {
     private record RankedEntry(SurfaceEntry entry, double distanceSquared) {
     }
 
-    private record RankedAggregateBox(AggregateBox box, double distanceSquared) {
+    private record RankedAggregateBox(RecentChangesOverlayVolumeMerger.OverlayBox box, double distanceSquared) {
     }
 
     private record RecentChangeEntry(BlockPoint pos, int alpha) {
@@ -422,7 +501,21 @@ public final class RecentChangesOverlayRenderer {
             CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock) {
     }
 
-    private record VisibleSelection(List<SurfaceEntry> surfaceEntries, List<AggregateBox> aggregateBoxes) {
+    private record VisibleSelection(
+            List<SurfaceEntry> surfaceEntries,
+            List<RecentChangesOverlayVolumeMerger.OverlayBox> volumeBoxes) {
+    }
+
+    record PreparedOverlay(
+            String projectId,
+            long revision,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget,
+            int actionCount,
+            int entryCount,
+            int surfaceEntryCount,
+            int volumeBoxCount,
+            boolean debugEnabled,
+            OverlayState state) {
     }
 
     private record AggregateKey(int chunkX, int sectionY, int chunkZ) {
@@ -431,56 +524,57 @@ public final class RecentChangesOverlayRenderer {
             return new AggregateKey(Math.floorDiv(pos.x(), 16), Math.floorDiv(pos.y(), 16), Math.floorDiv(pos.z(), 16));
         }
 
-        private AggregateBox toBox() {
-            return new AggregateBox(this.chunkX << 4, this.sectionY << 4, this.chunkZ << 4);
-        }
-    }
-
-    private record AggregateBox(int minX, int minY, int minZ) {
-
-        private int maxX() {
-            return this.minX + 16;
-        }
-
-        private int maxY() {
-            return this.minY + 16;
-        }
-
-        private int maxZ() {
-            return this.minZ + 16;
-        }
-
-        private double distanceSquared(double cameraX, double cameraY, double cameraZ) {
-            double nearestX = clamp(cameraX, this.minX, this.maxX());
-            double nearestY = clamp(cameraY, this.minY, this.maxY());
-            double nearestZ = clamp(cameraZ, this.minZ, this.maxZ());
-            double dx = nearestX - cameraX;
-            double dy = nearestY - cameraY;
-            double dz = nearestZ - cameraZ;
-            return (dx * dx) + (dy * dy) + (dz * dz);
-        }
-
-        private static double clamp(double value, double min, double max) {
-            return Math.max(min, Math.min(max, value));
+        private RecentChangesOverlayVolumeMerger.OverlayBox toBox() {
+            return new RecentChangesOverlayVolumeMerger.OverlayBox(
+                    this.chunkX << 4,
+                    this.sectionY << 4,
+                    this.chunkZ << 4,
+                    (this.chunkX + 1) << 4,
+                    (this.sectionY + 1) << 4,
+                    (this.chunkZ + 1) << 4
+            );
         }
     }
 
     private static final class OverlayState {
 
         private final String projectId;
+        private final long revision;
+        private final RecentChangesOverlayCoordinator.PreviewTarget previewTarget;
         private final List<RecentChangeEntry> entries;
         private final List<SurfaceEntry> surfaceEntries;
+        private final List<RecentChangesOverlayVolumeMerger.OverlayBox> volumeBoxes;
         private final boolean debugEnabled;
+        private final boolean denseBlob;
         private int cachedCameraBlockX = Integer.MIN_VALUE;
         private int cachedCameraBlockY = Integer.MIN_VALUE;
         private int cachedCameraBlockZ = Integer.MIN_VALUE;
         private VisibleSelection cachedVisibleSelection = new VisibleSelection(List.of(), List.of());
 
-        private OverlayState(String projectId, List<RecentChangeEntry> entries, boolean debugEnabled) {
+        private OverlayState(
+                String projectId,
+                long revision,
+                RecentChangesOverlayCoordinator.PreviewTarget previewTarget,
+                List<RecentChangeEntry> entries,
+                boolean debugEnabled
+        ) {
             this.projectId = projectId;
+            this.revision = revision;
+            this.previewTarget = previewTarget == null
+                    ? RecentChangesOverlayCoordinator.PreviewTarget.UNDO
+                    : previewTarget;
             this.entries = List.copyOf(entries);
-            this.surfaceEntries = this.buildSurfaceEntries(this.entries);
             this.debugEnabled = debugEnabled;
+            this.denseBlob = this.entries.size() > DENSE_BLOB_THRESHOLD;
+            if (this.denseBlob) {
+                this.surfaceEntries = List.of();
+                this.volumeBoxes = VOLUME_MERGER.merge(this.entries.stream()
+                        .map(RecentChangeEntry::pos)
+                        .toList());
+            } else {
+                this.surfaceEntries = this.buildSurfaceEntries(this.entries);
+                this.volumeBoxes = List.of();
+            }
         }
 
         private List<RecentChangeEntry> entries() {
@@ -491,8 +585,28 @@ public final class RecentChangesOverlayRenderer {
             return this.debugEnabled;
         }
 
+        private boolean denseBlob() {
+            return this.denseBlob;
+        }
+
+        private boolean matches(
+                String projectId,
+                long revision,
+                RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+        ) {
+            return java.util.Objects.equals(this.projectId, projectId)
+                    && this.revision == revision
+                    && this.previewTarget == (previewTarget == null
+                    ? RecentChangesOverlayCoordinator.PreviewTarget.UNDO
+                    : previewTarget);
+        }
+
         private int surfaceEntryCount() {
             return this.surfaceEntries.size();
+        }
+
+        private int volumeBoxCount() {
+            return this.volumeBoxes.size();
         }
 
         private synchronized VisibleSelection visibleSelection(double cameraX, double cameraY, double cameraZ) {
@@ -511,7 +625,9 @@ public final class RecentChangesOverlayRenderer {
             List<SurfaceEntry> visibleEntries = selectNearestSurfaceEntries(this.surfaceEntries, cameraX, cameraY, cameraZ);
             this.cachedVisibleSelection = new VisibleSelection(
                     visibleEntries,
-                    selectNearestAggregateBoxes(this.surfaceEntries, visibleEntries, cameraX, cameraY, cameraZ)
+                    this.denseBlob
+                            ? selectNearestVolumeBoxes(this.volumeBoxes, cameraX, cameraY, cameraZ)
+                            : selectNearestAggregateBoxes(this.surfaceEntries, visibleEntries, cameraX, cameraY, cameraZ)
             );
             return this.cachedVisibleSelection;
         }
