@@ -63,7 +63,10 @@ class RecentChangesOverlayRendererStateTest {
         RecentChangesOverlayRenderer.show("project", List.of(action));
 
         assertTrue(RecentChangesOverlayRenderer.visible());
-        assertTrue(RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(10.5D, 70.5D, 10.5D) > 0);
+        int renderedSurfaceEntries = RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(10.5D, 70.5D, 10.5D);
+        assertTrue(renderedSurfaceEntries > 0);
+        assertTrue(renderedSurfaceEntries <= 512);
+        assertTrue(RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(10.5D, 70.5D, 10.5D) > 0);
     }
 
     private static CompoundTag state(String blockId) {

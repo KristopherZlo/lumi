@@ -18,18 +18,23 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.Shapes;
 
 public final class RecentChangesOverlayRenderer {
 
-    private static final int MAX_RENDERED_BLOCKS = 2048;
+    private static final int MAX_RECENT_RENDERED_BLOCKS = 512;
+    private static final int MAX_RECENT_AGGREGATE_BOXES = 96;
+    private static final int AGGREGATE_THRESHOLD = 512;
     private static final int MAX_ACTIONS = 10;
     private static final int BASE_ALPHA = 136;
     private static final int ALPHA_STEP = 12;
     private static final float FILL_ALPHA_SCALE = 0.38F;
     private static final int MIN_FILL_ALPHA = 24;
     private static final float OUTLINE_WIDTH = 2.75F;
+    private static final float AGGREGATE_OUTLINE_WIDTH = 1.5F;
     private static final float FACE_OUTSET = 0.003F;
+    private static final int AGGREGATE_FILL_ALPHA = 18;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
 
@@ -88,7 +93,12 @@ public final class RecentChangesOverlayRenderer {
 
     static int visibleSurfaceEntryCountForTest(double cameraX, double cameraY, double cameraZ) {
         OverlayState state = ACTIVE_STATE.get();
-        return state == null ? 0 : state.visibleSurfaceEntries(cameraX, cameraY, cameraZ).size();
+        return state == null ? 0 : state.visibleSelection(cameraX, cameraY, cameraZ).surfaceEntries().size();
+    }
+
+    static int visibleAggregateBoxCountForTest(double cameraX, double cameraY, double cameraZ) {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null ? 0 : state.visibleSelection(cameraX, cameraY, cameraZ).aggregateBoxes().size();
     }
 
     public static void render(WorldRenderContext context) {
@@ -159,15 +169,18 @@ public final class RecentChangesOverlayRenderer {
             return;
         }
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        List<SurfaceEntry> visibleSurfaceEntries = state.visibleSurfaceEntries(camera.x, camera.y, camera.z);
+        VisibleSelection selection = state.visibleSelection(camera.x, camera.y, camera.z);
+        List<SurfaceEntry> visibleSurfaceEntries = selection.surfaceEntries();
+        List<AggregateBox> aggregateBoxes = selection.aggregateBoxes();
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),
                 "recent-frame",
                 "recent-overlay",
-                "Render frame entries={} surfaceEntries={} renderedEntries={} camera={}:{}:{}",
+                "Render frame entries={} surfaceEntries={} renderedEntries={} aggregateBoxes={} camera={}:{}:{}",
                 state.entries().size(),
                 state.surfaceEntryCount(),
                 visibleSurfaceEntries.size(),
+                aggregateBoxes.size(),
                 camera.x,
                 camera.y,
                 camera.z
@@ -210,14 +223,31 @@ public final class RecentChangesOverlayRenderer {
             minFillAlpha = 0;
             maxFillAlpha = 0;
         }
+        for (AggregateBox box : aggregateBoxes) {
+            filledFaceCount += OverlayFaceRenderer.renderSolidBox(
+                    matrices,
+                    fillConsumer,
+                    (float) (box.minX() - camera.x) - FACE_OUTSET,
+                    (float) (box.minY() - camera.y) - FACE_OUTSET,
+                    (float) (box.minZ() - camera.z) - FACE_OUTSET,
+                    (float) (box.maxX() - camera.x) + FACE_OUTSET,
+                    (float) (box.maxY() - camera.y) + FACE_OUTSET,
+                    (float) (box.maxZ() - camera.z) + FACE_OUTSET,
+                    0xFF,
+                    0x9C,
+                    0x3A,
+                    AGGREGATE_FILL_ALPHA
+            );
+        }
         boolean fillDrawn = OverlayImmediateRenderer.draw(fillType, fillBuffer);
 
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),
                 "recent-fill-pass",
                 "recent-overlay",
-                "Fill pass entries={} faces={} vertices={} alphaRange={}..{} drawn={} renderType={} consumer={} outset={}",
+                "Fill pass entries={} aggregateBoxes={} faces={} vertices={} alphaRange={}..{} drawn={} renderType={} consumer={} outset={}",
                 visibleSurfaceEntries.size(),
+                aggregateBoxes.size(),
                 filledFaceCount,
                 filledFaceCount * 4,
                 minFillAlpha,
@@ -242,6 +272,17 @@ public final class RecentChangesOverlayRenderer {
                     entry.pos().z() - camera.z,
                     0xFFFF9C3A,
                     OUTLINE_WIDTH);
+        }
+        for (AggregateBox box : aggregateBoxes) {
+            ShapeRenderer.renderShape(
+                    matrices,
+                    lineConsumer,
+                    Shapes.create(new AABB(0.0D, 0.0D, 0.0D, box.maxX() - box.minX(), box.maxY() - box.minY(), box.maxZ() - box.minZ())),
+                    box.minX() - camera.x,
+                    box.minY() - camera.y,
+                    box.minZ() - camera.z,
+                    0x99FF9C3A,
+                    AGGREGATE_OUTLINE_WIDTH);
         }
         OverlayImmediateRenderer.draw(outlineType, lineBuffer);
     }
@@ -284,11 +325,11 @@ public final class RecentChangesOverlayRenderer {
         }
 
         PriorityQueue<RankedEntry> selected = new PriorityQueue<>(
-                MAX_RENDERED_BLOCKS,
+                MAX_RECENT_RENDERED_BLOCKS,
                 Comparator.comparingDouble(RankedEntry::distanceSquared).reversed());
         for (SurfaceEntry entry : entries) {
             double distanceSquared = distanceSquared(entry.entry(), cameraX, cameraY, cameraZ);
-            if (selected.size() < MAX_RENDERED_BLOCKS) {
+            if (selected.size() < MAX_RECENT_RENDERED_BLOCKS) {
                 selected.add(new RankedEntry(entry, distanceSquared));
                 continue;
             }
@@ -309,6 +350,57 @@ public final class RecentChangesOverlayRenderer {
         return List.copyOf(result);
     }
 
+    private static List<AggregateBox> selectNearestAggregateBoxes(
+            List<SurfaceEntry> surfaceEntries,
+            List<SurfaceEntry> selectedEntries,
+            double cameraX,
+            double cameraY,
+            double cameraZ
+    ) {
+        if (surfaceEntries.size() <= AGGREGATE_THRESHOLD || selectedEntries.size() >= surfaceEntries.size()) {
+            return List.of();
+        }
+
+        java.util.HashSet<Long> selectedPositions = new java.util.HashSet<>((selectedEntries.size() * 4 / 3) + 1);
+        for (SurfaceEntry entry : selectedEntries) {
+            selectedPositions.add(pack(entry.entry().pos()));
+        }
+
+        Map<AggregateKey, AggregateBox> boxes = new LinkedHashMap<>();
+        for (SurfaceEntry entry : surfaceEntries) {
+            if (selectedPositions.contains(pack(entry.entry().pos()))) {
+                continue;
+            }
+            AggregateKey key = AggregateKey.from(entry.entry().pos());
+            boxes.putIfAbsent(key, key.toBox());
+        }
+
+        PriorityQueue<RankedAggregateBox> selected = new PriorityQueue<>(
+                MAX_RECENT_AGGREGATE_BOXES,
+                Comparator.comparingDouble(RankedAggregateBox::distanceSquared).reversed());
+        for (AggregateBox box : boxes.values()) {
+            double distanceSquared = box.distanceSquared(cameraX, cameraY, cameraZ);
+            if (selected.size() < MAX_RECENT_AGGREGATE_BOXES) {
+                selected.add(new RankedAggregateBox(box, distanceSquared));
+                continue;
+            }
+
+            RankedAggregateBox farthest = selected.peek();
+            if (farthest != null && distanceSquared < farthest.distanceSquared()) {
+                selected.poll();
+                selected.add(new RankedAggregateBox(box, distanceSquared));
+            }
+        }
+
+        List<RankedAggregateBox> ranked = new ArrayList<>(selected);
+        ranked.sort(Comparator.comparingDouble(RankedAggregateBox::distanceSquared));
+        List<AggregateBox> result = new ArrayList<>(ranked.size());
+        for (RankedAggregateBox entry : ranked) {
+            result.add(entry.box());
+        }
+        return List.copyOf(result);
+    }
+
     private static double distanceSquared(RecentChangeEntry entry, double cameraX, double cameraY, double cameraZ) {
         double dx = (entry.pos().x() + 0.5D) - cameraX;
         double dy = (entry.pos().y() + 0.5D) - cameraY;
@@ -319,12 +411,58 @@ public final class RecentChangesOverlayRenderer {
     private record RankedEntry(SurfaceEntry entry, double distanceSquared) {
     }
 
+    private record RankedAggregateBox(AggregateBox box, double distanceSquared) {
+    }
+
     private record RecentChangeEntry(BlockPoint pos, int alpha) {
     }
 
     private record SurfaceEntry(
             RecentChangeEntry entry,
             CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock) {
+    }
+
+    private record VisibleSelection(List<SurfaceEntry> surfaceEntries, List<AggregateBox> aggregateBoxes) {
+    }
+
+    private record AggregateKey(int chunkX, int sectionY, int chunkZ) {
+
+        private static AggregateKey from(BlockPoint pos) {
+            return new AggregateKey(Math.floorDiv(pos.x(), 16), Math.floorDiv(pos.y(), 16), Math.floorDiv(pos.z(), 16));
+        }
+
+        private AggregateBox toBox() {
+            return new AggregateBox(this.chunkX << 4, this.sectionY << 4, this.chunkZ << 4);
+        }
+    }
+
+    private record AggregateBox(int minX, int minY, int minZ) {
+
+        private int maxX() {
+            return this.minX + 16;
+        }
+
+        private int maxY() {
+            return this.minY + 16;
+        }
+
+        private int maxZ() {
+            return this.minZ + 16;
+        }
+
+        private double distanceSquared(double cameraX, double cameraY, double cameraZ) {
+            double nearestX = clamp(cameraX, this.minX, this.maxX());
+            double nearestY = clamp(cameraY, this.minY, this.maxY());
+            double nearestZ = clamp(cameraZ, this.minZ, this.maxZ());
+            double dx = nearestX - cameraX;
+            double dy = nearestY - cameraY;
+            double dz = nearestZ - cameraZ;
+            return (dx * dx) + (dy * dy) + (dz * dz);
+        }
+
+        private static double clamp(double value, double min, double max) {
+            return Math.max(min, Math.min(max, value));
+        }
     }
 
     private static final class OverlayState {
@@ -336,7 +474,7 @@ public final class RecentChangesOverlayRenderer {
         private int cachedCameraBlockX = Integer.MIN_VALUE;
         private int cachedCameraBlockY = Integer.MIN_VALUE;
         private int cachedCameraBlockZ = Integer.MIN_VALUE;
-        private List<SurfaceEntry> cachedVisibleEntries = List.of();
+        private VisibleSelection cachedVisibleSelection = new VisibleSelection(List.of(), List.of());
 
         private OverlayState(String projectId, List<RecentChangeEntry> entries, boolean debugEnabled) {
             this.projectId = projectId;
@@ -357,21 +495,25 @@ public final class RecentChangesOverlayRenderer {
             return this.surfaceEntries.size();
         }
 
-        private synchronized List<SurfaceEntry> visibleSurfaceEntries(double cameraX, double cameraY, double cameraZ) {
+        private synchronized VisibleSelection visibleSelection(double cameraX, double cameraY, double cameraZ) {
             int cameraBlockX = Mth.floor(cameraX);
             int cameraBlockY = Mth.floor(cameraY);
             int cameraBlockZ = Mth.floor(cameraZ);
             if (cameraBlockX == this.cachedCameraBlockX
                     && cameraBlockY == this.cachedCameraBlockY
                     && cameraBlockZ == this.cachedCameraBlockZ) {
-                return this.cachedVisibleEntries;
+                return this.cachedVisibleSelection;
             }
 
             this.cachedCameraBlockX = cameraBlockX;
             this.cachedCameraBlockY = cameraBlockY;
             this.cachedCameraBlockZ = cameraBlockZ;
-            this.cachedVisibleEntries = selectNearestSurfaceEntries(this.surfaceEntries, cameraX, cameraY, cameraZ);
-            return this.cachedVisibleEntries;
+            List<SurfaceEntry> visibleEntries = selectNearestSurfaceEntries(this.surfaceEntries, cameraX, cameraY, cameraZ);
+            this.cachedVisibleSelection = new VisibleSelection(
+                    visibleEntries,
+                    selectNearestAggregateBoxes(this.surfaceEntries, visibleEntries, cameraX, cameraY, cameraZ)
+            );
+            return this.cachedVisibleSelection;
         }
 
         private List<SurfaceEntry> buildSurfaceEntries(List<RecentChangeEntry> entries) {
@@ -404,5 +546,9 @@ public final class RecentChangesOverlayRenderer {
             }
             return List.copyOf(resolved);
         }
+    }
+
+    private static long pack(BlockPoint pos) {
+        return BlockPos.asLong(pos.x(), pos.y(), pos.z());
     }
 }
