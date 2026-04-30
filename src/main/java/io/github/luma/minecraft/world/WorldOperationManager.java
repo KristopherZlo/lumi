@@ -47,6 +47,7 @@ public final class WorldOperationManager {
     private ExecutorService backgroundExecutor = createExecutor();
     private final Map<String, ActiveOperation> activeOperations = new HashMap<>();
     private final Map<String, OperationSnapshot> lastSnapshots = new HashMap<>();
+    private final Map<String, String> lastApplyMetrics = new HashMap<>();
 
     private WorldOperationManager() {
     }
@@ -72,6 +73,13 @@ public final class WorldOperationManager {
         return this.snapshot(server)
                 .filter(snapshot -> snapshot.handle() != null)
                 .filter(snapshot -> projectId == null || projectId.equals(snapshot.handle().projectId()));
+    }
+
+    public synchronized Optional<String> applyMetrics(OperationHandle handle) {
+        if (handle == null || handle.id() == null || handle.id().isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(this.lastApplyMetrics.get(handle.id()));
     }
 
     /**
@@ -186,6 +194,8 @@ public final class WorldOperationManager {
         if (active == operation) {
             this.activeOperations.remove(serverKey);
             this.lastSnapshots.put(serverKey, operation.snapshot());
+            operation.applyMetricsSummary()
+                    .ifPresent(metrics -> this.lastApplyMetrics.put(operation.handle().id(), metrics));
         }
     }
 
@@ -393,6 +403,10 @@ public final class WorldOperationManager {
         }
 
         abstract boolean advance(WorldApplyBudget budget, long deadlineNanos) throws Exception;
+
+        protected Optional<String> applyMetricsSummary() {
+            return Optional.empty();
+        }
 
         private void logProgressIfNeeded(OperationStage stage, OperationProgress progress, String detail) {
             int percent = progress.totalUnits() <= 0
@@ -807,7 +821,9 @@ public final class WorldOperationManager {
                 int processedNativeCellsThisTick
         ) {
             if (!this.hasPendingNativeSection()) {
-                return Math.min(budget.maxBlocks() - processedWorkThisTick, 128);
+                int remainingBlocks = budget.maxBlocks() - processedWorkThisTick;
+                int sparseStepCap = budget.maxBlocks() > 512 ? Math.min(4096, budget.maxBlocks()) : 128;
+                return Math.min(remainingBlocks, sparseStepCap);
             }
             PreparedSectionApplyBatch nativeSection = this.pendingNativeSection();
             if (nativeSection.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE) {
@@ -1097,6 +1113,11 @@ public final class WorldOperationManager {
                     + ", blockEntityPackets=" + result.blockEntityPackets()
                     + ", lightChecks=" + result.lightChecks()
                     + ", reason=" + result.fallbackReason();
+        }
+
+        @Override
+        protected Optional<String> applyMetricsSummary() {
+            return Optional.of(this.applyMetrics.summary());
         }
 
         private long microsSince(long startedAt) {

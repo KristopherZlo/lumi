@@ -14,6 +14,7 @@ final class WorldApplyOperationProfile {
     );
 
     boolean isHighThroughput(String label) {
-        return label != null && HIGH_THROUGHPUT_LABELS.contains(label);
+        return label != null
+                && (HIGH_THROUGHPUT_LABELS.contains(label) || label.startsWith("bulk-diagnostic-"));
     }
 }

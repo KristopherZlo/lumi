@@ -49,7 +49,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Cleanup and integrity | `ProjectCleanupService`, `ProjectIntegrityService` | `ProjectCleanupRepository`, `CleanupScreenController`, `ProjectRepository` | `ProjectCleanupRepositoryTest`, `ProjectArchiveRepositoryTest` |
 | Storage format or path changes | `ProjectLayout`, exact repository class | `StorageIo`, `GsonProvider`, matching domain model record | `ProjectLayoutTest`, repository tests, `docs/storage-format.md` |
 | Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
-| Commands and runtime tests | `LumaCommands`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, scripts under `scripts/` | `docs/commands.md`, `docs/test-client.md` |
+| Commands and runtime tests | `LumaCommands`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, `SingleplayerBulkApplyDiagnostics`, scripts under `scripts/` | `docs/commands.md`, `docs/test-client.md` |
 | Client navigation and screen behavior | `ScreenRouter`, the route screen, route controller, route view state | `LumaScreen`, `ProjectWindowLayout`, `ProjectSidebarNavigation`, section builders | UI controller tests, `docs/development.md` |
 
 ## Bootstrap And Global Entry Points
@@ -155,7 +155,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 
 ### World Apply
 
-- `WorldOperationManager`, `WorldApplyBudgetPlanner`: single-operation-per-world async prepare plus tick-time apply orchestration, including high-throughput block/native-cell/rewrite budgets for restore, recovery, merge, and undo/redo labels.
+- `WorldOperationManager`, `WorldApplyBudgetPlanner`: single-operation-per-world async prepare plus tick-time apply orchestration, including high-throughput sparse-block/native-cell/rewrite budgets for restore, recovery, merge, undo/redo, and bulk diagnostic labels, with final apply metrics available to runtime tests.
 - `WorldChangeBatchPreparer`, `BlockStatePaletteDecoder`: patch/recovery block/entity changes, large live undo/redo actions, and v7 section frames to tick-ready sparse or section-native batches with operation-scoped palette decode caching.
 - `SnapshotBatchPreparer`: snapshot payloads to tick-ready section-native batches without expanding dense sections into per-block placements or decoding palettes inside cell loops.
 - `BlockChangeApplier`: actual section/block-entity/entity commit operations.
