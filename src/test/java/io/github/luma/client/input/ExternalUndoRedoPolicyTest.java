@@ -21,9 +21,9 @@ class ExternalUndoRedoPolicyTest {
     }
 
     @Test
-    void leavesAxiomToItsOwnUndoAndUsesLumiReplayForOtherActors() {
+    void replaysAxiomAndOtherActorsThroughLumi() {
         assertEquals(
-                ExternalUndoRedoPolicy.Decision.AXIOM_OWN_UNDO,
+                ExternalUndoRedoPolicy.Decision.LUMI_REPLAY,
                 this.policy.decisionForActor("axiom:builder")
         );
         assertEquals(

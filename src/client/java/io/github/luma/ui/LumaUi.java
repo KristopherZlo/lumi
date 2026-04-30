@@ -11,6 +11,7 @@ import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.function.Consumer;
 import net.minecraft.network.chat.Component;
 
@@ -161,6 +162,7 @@ public final class LumaUi {
         FlowLayout badge = UIContainers.horizontalFlow(Sizing.fixed(50), Sizing.fixed(22));
         badge.surface(Surface.flat(STATUS_FILL).and(Surface.outline(STATUS_BORDER)));
         badge.horizontalAlignment(HorizontalAlignment.CENTER);
+        badge.verticalAlignment(VerticalAlignment.CENTER);
         badge.padding(Insets.of(3));
         badge.child(compactAccent(text));
         return badge;

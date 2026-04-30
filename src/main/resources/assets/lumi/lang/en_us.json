@@ -417,7 +417,7 @@
   "luma.status.redo_started": "Redoing the last tracked change...",
   "luma.status.native_undo_started": "WorldEdit/FAWE undo sent.",
   "luma.status.native_redo_started": "WorldEdit/FAWE redo sent.",
-  "luma.status.axiom_undo_ignored": "Use Axiom's own undo for Axiom edits.",
+  "luma.status.axiom_undo_ignored": "Axiom actions replay through Lumi undo/redo.",
   "luma.status.undo_unavailable": "Nothing to undo here.",
   "luma.status.redo_unavailable": "Nothing to redo here.",
   "luma.status.initial_restore_confirmation_required": "Confirm restore to Initial before Lumi changes the world.",
@@ -782,7 +782,7 @@
   "luma.onboarding.topic_more": "More tools",
   "luma.onboarding.more_title": "Branches, compare, recovery, and sharing",
   "luma.onboarding.more_help": "Branches are for experiments. Compare shows changes. Recovery protects work after a crash. Import / Export moves history.",
-  "luma.onboarding.shortcut_hold": "Hold this shortcut for 1.5 seconds.",
+  "luma.onboarding.shortcut_hold": "Hold this shortcut for 0.8 seconds.",
   "luma.onboarding.shortcut_required": "This step continues after the green line fills.",
   "luma.onboarding.key_unbound": "Unbound",
 

@@ -93,9 +93,6 @@ public final class UndoRedoKeyController {
         if (decision == ExternalUndoRedoPolicy.Decision.LUMI_REPLAY) {
             return false;
         }
-        if (decision == ExternalUndoRedoPolicy.Decision.AXIOM_OWN_UNDO) {
-            throw new IllegalArgumentException("Axiom edits use Axiom's own undo command");
-        }
 
         this.dispatchNativeToolCommand(client, level.getServer(), undo ? "undo" : "redo");
         if (undo) {
@@ -157,9 +154,6 @@ public final class UndoRedoKeyController {
         }
         if (message.contains("Another world operation is already running")) {
             return "luma.status.world_operation_busy";
-        }
-        if (message.contains("Axiom edits use Axiom's own undo command")) {
-            return "luma.status.axiom_undo_ignored";
         }
         if (message.contains("No Lumi action") || message.contains("No active Lumi workspace")) {
             return undo ? "luma.status.undo_unavailable" : "luma.status.redo_unavailable";

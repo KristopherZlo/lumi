@@ -62,7 +62,7 @@ Use Lumi if you want to:
 
 - automatic dimension projects
 - builder-first Build History UI built around `Save build`, `See changes`, recent saves, and `Branches`, with maintenance tools kept in the sidebar `More` route
-- one-time interactive onboarding wizard that explains safe save, undo/redo, restore, branch, compare, recovery, and import/export workflows, shows remapped shortcuts as pixel key icons, and can be replayed from `More` or `/lumi-onboarding`
+- one-time interactive onboarding wizard that explains safe save, undo/redo, restore, branch, compare, recovery, and import/export workflows, shows remapped shortcuts as pixel key icons, continues over the Lumi workspace after the open shortcut, and can be replayed from `More` or `/lumi-onboarding`
 - localized UI resources for English, Russian, French, Spanish, German, and Finnish
 - lightweight save, branch, import/export, settings, storage cleanup, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
@@ -70,7 +70,7 @@ Use Lumi if you want to:
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, restore, see-changes, rename, soft-delete, and branch actions
 - See Changes screen for saved states, branches, and the current build, with manual raw-reference compare available under `More`
-- live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi action button; changing the action button changes these chords too. WorldEdit and FAWE actions route those chords through the tools' native undo/redo commands, while Axiom keeps using its own undo flow.
+- live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi action button; changing the action button changes these chords too. WorldEdit and FAWE actions route those chords through the tools' native undo/redo commands, while captured Axiom actions replay through Lumi.
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit; undo/redo drains already-dirty stabilization chunks first so poured fluid, contact-created source blocks, and falling-block deltas from whole-dimension sessions can join before the action is selected, and this passive fallout does not discard an available redo
 - item drops produced by explosions, fluid, falling blocks, or nearby block-update fallout are captured only for the matching undo/redo action; undo removes those dropped item entities and redo respawns them without storing them in recovery drafts or saved versions
 - undo/redo replays stored block states without immediate redstone neighbor updates or placement physics, so restored TNT beside powered redstone is visible but not auto-primed by the replay
@@ -268,7 +268,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 3. Press `U`.
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
-6. Use the Lumi action button plus `Z` / `Y` to undo or redo the latest tracked action while no screen is open. The default action button is `Left Alt`, and changing it changes these chords too. WorldEdit/FAWE actions use native tool undo/redo; Axiom keeps its own undo.
+6. Use the Lumi action button plus `Z` / `Y` to undo or redo the latest tracked action while no screen is open. The default action button is `Left Alt`, and changing it changes these chords too. WorldEdit/FAWE actions use native tool undo/redo; captured Axiom actions replay through Lumi.
 7. Hold the Lumi action button to preview the latest 10 undo actions, or hold it plus `Y` to preview redo actions, when the compare overlay is not active. The preview renders translucent exposed sides as well as thicker outlines.
    Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
 8. Press the Lumi action button plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
