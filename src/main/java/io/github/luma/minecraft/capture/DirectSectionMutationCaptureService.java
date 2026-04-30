@@ -2,6 +2,7 @@ package io.github.luma.minecraft.capture;
 
 import io.github.luma.integration.common.ExternalToolMutationDetector;
 import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
+import io.github.luma.integration.common.ExternalToolMutationSourceResolver;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -15,6 +16,7 @@ public final class DirectSectionMutationCaptureService {
     private static final DirectSectionMutationCaptureService INSTANCE = new DirectSectionMutationCaptureService();
 
     private final ExternalToolMutationDetector detector;
+    private final ExternalToolMutationSourceResolver sourceResolver;
     private final ChunkSectionOwnerLookup ownershipRegistry;
 
     public static DirectSectionMutationCaptureService getInstance() {
@@ -22,14 +24,27 @@ public final class DirectSectionMutationCaptureService {
     }
 
     private DirectSectionMutationCaptureService() {
-        this(ExternalToolMutationOriginDetector.getInstance(), ChunkSectionOwnershipRegistry.getInstance());
+        this(
+                ExternalToolMutationOriginDetector.getInstance(),
+                ExternalToolMutationSourceResolver.getInstance(),
+                ChunkSectionOwnershipRegistry.getInstance()
+        );
     }
 
     DirectSectionMutationCaptureService(
             ExternalToolMutationDetector detector,
             ChunkSectionOwnerLookup ownershipRegistry
     ) {
+        this(detector, ExternalToolMutationSourceResolver.getInstance(), ownershipRegistry);
+    }
+
+    DirectSectionMutationCaptureService(
+            ExternalToolMutationDetector detector,
+            ExternalToolMutationSourceResolver sourceResolver,
+            ChunkSectionOwnerLookup ownershipRegistry
+    ) {
         this.detector = detector;
+        this.sourceResolver = sourceResolver;
         this.ownershipRegistry = ownershipRegistry;
     }
 
@@ -39,11 +54,7 @@ public final class DirectSectionMutationCaptureService {
             int localY,
             int localZ
     ) {
-        if (WorldMutationCaptureGuard.suppressesDirectSectionCapture()
-                || HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource())) {
-            return PendingDirectSectionMutation.skipped();
-        }
-        if (WorldMutationContext.captureSuppressed()) {
+        if (WorldMutationCaptureGuard.suppressesDirectSectionCapture()) {
             return PendingDirectSectionMutation.skipped();
         }
 
@@ -52,8 +63,8 @@ public final class DirectSectionMutationCaptureService {
             return PendingDirectSectionMutation.skipped();
         }
 
-        var operation = this.detector.detectOperation();
-        if (operation.isEmpty()) {
+        ObservedExternalToolOperation operation = this.detectOperation();
+        if (operation == null) {
             return PendingDirectSectionMutation.skipped();
         }
 
@@ -64,7 +75,7 @@ public final class DirectSectionMutationCaptureService {
                 pos,
                 oldState,
                 this.blockEntityTag(sectionOwner.level(), pos, oldState),
-                operation.get()
+                operation
         );
     }
 
@@ -111,6 +122,18 @@ public final class DirectSectionMutationCaptureService {
         }
         BlockEntity blockEntity = level.getBlockEntity(pos);
         return blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
+    }
+
+    private ObservedExternalToolOperation detectOperation() {
+        var currentSource = WorldMutationContext.currentSource();
+        boolean captureSuppressed = WorldMutationContext.captureSuppressed();
+        if (HistoryCaptureManager.shouldCaptureMutation(currentSource)) {
+            return this.sourceResolver.detectPlayerSourceOverride(currentSource, captureSuppressed).orElse(null);
+        }
+        if (captureSuppressed) {
+            return null;
+        }
+        return this.detector.detectOperation().orElse(null);
     }
 
     public record PendingDirectSectionMutation(

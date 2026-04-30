@@ -1,6 +1,6 @@
 package io.github.luma.mixin;
 
-import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
+import io.github.luma.integration.common.ExternalToolMutationSourceResolver;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
@@ -26,8 +26,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 abstract class LevelChunkSetBlockStateMixin {
 
     @Unique
-    private static final ExternalToolMutationOriginDetector LUMA_TOOL_DETECTOR =
-            ExternalToolMutationOriginDetector.getInstance();
+    private static final ExternalToolMutationSourceResolver LUMA_TOOL_SOURCE_RESOLVER =
+            ExternalToolMutationSourceResolver.getInstance();
 
     @Unique
     private static final ThreadLocal<Deque<PendingExternalToolBlockMutation>> LUMA_PENDING_TOOL_MUTATIONS =
@@ -47,16 +47,17 @@ abstract class LevelChunkSetBlockStateMixin {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return;
         }
-        if (HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource())
-                || WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
-            return;
-        }
-        if (WorldMutationContext.captureSuppressed()) {
+        if (WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
             return;
         }
 
-        var operation = LUMA_TOOL_DETECTOR.detectOperation();
-        if (operation.isEmpty()) {
+        var currentSource = WorldMutationContext.currentSource();
+        boolean captureSuppressed = WorldMutationContext.captureSuppressed();
+        boolean currentSourceCaptures = HistoryCaptureManager.shouldCaptureMutation(currentSource);
+        ObservedExternalToolOperation operation = currentSourceCaptures
+                ? LUMA_TOOL_SOURCE_RESOLVER.detectPlayerSourceOverride(currentSource, captureSuppressed).orElse(null)
+                : LUMA_TOOL_SOURCE_RESOLVER.detectUnattributedOperation(captureSuppressed).orElse(null);
+        if (operation == null) {
             return;
         }
 
@@ -68,7 +69,7 @@ abstract class LevelChunkSetBlockStateMixin {
                 pos.immutable(),
                 oldState,
                 oldBlockEntity,
-                operation.get()
+                operation
         ));
     }
 
