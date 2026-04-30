@@ -29,6 +29,11 @@ public final class BlockChangeApplier {
             UPDATE_DECIDER,
             UPDATE_BROADCASTER
     );
+    private static final SectionNativeBlockCommitStrategy SECTION_NATIVE_COMMIT_STRATEGY = new SectionNativeBlockCommitStrategy(
+            BLOCK_STATE_POLICY,
+            UPDATE_DECIDER,
+            UPDATE_BROADCASTER
+    );
 
     private BlockChangeApplier() {
     }
@@ -99,6 +104,22 @@ public final class BlockChangeApplier {
         }
 
         BlockCommitResult result = BLOCK_COMMIT_STRATEGY.apply(level, batch, startIndex, maxBlocks);
+        if (metrics != null) {
+            metrics.record(result);
+        }
+        return result.processedBlocks();
+    }
+
+    public static int applyNativeSectionBatch(
+            ServerLevel level,
+            PreparedSectionApplyBatch batch,
+            WorldApplyMetrics metrics
+    ) {
+        if (batch == null || batch.changedCellCount() <= 0) {
+            return 0;
+        }
+
+        BlockCommitResult result = SECTION_NATIVE_COMMIT_STRATEGY.apply(level, batch);
         if (metrics != null) {
             metrics.record(result);
         }

@@ -6,6 +6,7 @@ enum BlockCommitFallbackReason {
     EMPTY_BATCH("empty-batch"),
     MIXED_CHUNK("mixed-chunk"),
     MIXED_SECTION("mixed-section"),
+    NATIVE_REJECTED("native-rejected"),
     CHUNK_NOT_LOADED("chunk-not-loaded"),
     SECTION_OUT_OF_RANGE("section-out-of-range"),
     SECTION_MISSING("section-missing");
