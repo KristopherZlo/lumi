@@ -8,6 +8,7 @@ import java.io.DataInputStream;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -43,9 +44,8 @@ final class StorageIo {
     }
 
     static CompoundTag readCompound(DataInput input) throws IOException {
-        int length = input.readInt();
-        byte[] bytes = new byte[length];
-        input.readFully(bytes);
+        int length = StorageLimits.requireLength("NBT", input.readInt(), StorageLimits.MAX_NBT_BYTES);
+        byte[] bytes = readFullyBounded(input, length, StorageLimits.MAX_NBT_BYTES, "NBT");
         return deserializeCompound(bytes);
     }
 
@@ -58,6 +58,26 @@ final class StorageIo {
 
     static CompoundTag readNullableCompound(DataInput input) throws IOException {
         return input.readBoolean() ? readCompound(input) : null;
+    }
+
+    static byte[] readFullyBounded(DataInput input, int length, int maxBytes, String label) throws IOException {
+        StorageLimits.requireLength(label, length, maxBytes);
+        byte[] bytes = new byte[length];
+        input.readFully(bytes);
+        return bytes;
+    }
+
+    static byte[] readAllBytesBounded(InputStream input, int maxBytes, String label) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = input.read(buffer)) >= 0) {
+            if (output.size() > maxBytes - read) {
+                throw new IOException(label + " exceeds " + maxBytes + " bytes");
+            }
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
     }
 
     static void quarantineCorruptedFile(Path file, Exception exception) throws IOException {

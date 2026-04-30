@@ -53,24 +53,31 @@ public final class RecoveryRepository {
     }
 
     public Optional<RecoveryDraft> loadDraft(ProjectLayout layout) throws IOException {
-        RecoveryDraft latest = null;
+        RecoveryDraft base = this.readBaseDraft(layout.recoveryBaseFile()).orElse(null);
+        if (!Files.exists(layout.recoveryWalFile())) {
+            return Optional.ofNullable(base);
+        }
+
+        WalReadResult wal = this.readWal(layout.recoveryWalFile());
+        if (wal.corruptEntry() || wal.truncatedTail()) {
+            StorageIo.quarantineCorruptedFile(layout.recoveryWalFile(), wal.exception(), "malformed recovery WAL");
+            if (wal.latestDraft() != null) {
+                this.writeBase(layout.recoveryBaseFile(), wal.latestDraft());
+                return Optional.of(wal.latestDraft());
+            }
+            return Optional.ofNullable(base);
+        }
+        return Optional.ofNullable(wal.latestDraft() == null ? base : wal.latestDraft());
+    }
+
+    private Optional<RecoveryDraft> readBaseDraft(Path baseFile) throws IOException {
+        if (!Files.exists(baseFile)) {
+            return Optional.empty();
+        }
         try {
-            if (Files.exists(layout.recoveryBaseFile())) {
-                latest = this.readSingleEntry(layout.recoveryBaseFile());
-            }
-            if (Files.exists(layout.recoveryWalFile())) {
-                RecoveryDraft walLatest = this.readLastWalEntry(layout.recoveryWalFile());
-                if (walLatest != null) {
-                    latest = walLatest;
-                }
-            }
-            return Optional.ofNullable(latest);
+            return Optional.of(this.readSingleEntry(baseFile));
         } catch (IOException exception) {
-            if (Files.exists(layout.recoveryWalFile())) {
-                StorageIo.quarantineCorruptedFile(layout.recoveryWalFile(), exception);
-            } else if (Files.exists(layout.recoveryBaseFile())) {
-                StorageIo.quarantineCorruptedFile(layout.recoveryBaseFile(), exception);
-            }
+            StorageIo.quarantineCorruptedFile(baseFile, exception, "malformed recovery base");
             return Optional.empty();
         }
     }
@@ -163,24 +170,55 @@ public final class RecoveryRepository {
         try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
                 new BufferedInputStream(Files.newInputStream(baseFile))
         ))) {
-            int length = input.readInt();
-            byte[] bytes = new byte[length];
-            input.readFully(bytes);
+            int length = StorageLimits.requireLength(
+                    "recovery base entry",
+                    input.readInt(),
+                    StorageLimits.MAX_RECOVERY_ENTRY_BYTES
+            );
+            byte[] bytes = StorageIo.readFullyBounded(
+                    input,
+                    length,
+                    StorageLimits.MAX_RECOVERY_ENTRY_BYTES,
+                    "recovery base entry"
+            );
             return this.deserializeDraft(bytes);
         }
     }
 
-    private RecoveryDraft readLastWalEntry(Path walFile) throws IOException {
+    private WalReadResult readWal(Path walFile) throws IOException {
         RecoveryDraft latest = null;
+        long fileSize = Files.size(walFile);
+        long offset = 0L;
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(walFile)))) {
-            while (input.available() > 0) {
+            while (offset < fileSize) {
+                if (fileSize - offset < Integer.BYTES) {
+                    return WalReadResult.truncated(latest, new IOException("Truncated recovery WAL entry header"));
+                }
                 int length = input.readInt();
-                byte[] bytes = new byte[length];
-                input.readFully(bytes);
-                latest = this.deserializeDraft(this.decompressEntry(bytes));
+                offset += Integer.BYTES;
+                try {
+                    StorageLimits.requireLength(
+                            "recovery WAL entry",
+                            length,
+                            StorageLimits.MAX_RECOVERY_ENTRY_BYTES
+                    );
+                    if (fileSize - offset < length) {
+                        return WalReadResult.truncated(latest, new IOException("Truncated recovery WAL entry body"));
+                    }
+                    byte[] bytes = StorageIo.readFullyBounded(
+                            input,
+                            length,
+                            StorageLimits.MAX_RECOVERY_ENTRY_BYTES,
+                            "recovery WAL entry"
+                    );
+                    offset += length;
+                    latest = this.deserializeDraft(this.decompressEntry(bytes));
+                } catch (IOException | RuntimeException exception) {
+                    return WalReadResult.corrupt(latest, exception);
+                }
             }
         }
-        return latest;
+        return WalReadResult.clean(latest);
     }
 
     private byte[] compressEntry(byte[] entryBytes) throws IOException {
@@ -195,7 +233,11 @@ public final class RecoveryRepository {
         try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
                 new BufferedInputStream(new ByteArrayInputStream(compressedBytes))
         ))) {
-            return input.readAllBytes();
+            return StorageIo.readAllBytesBounded(
+                    input,
+                    StorageLimits.MAX_RECOVERY_ENTRY_BYTES,
+                    "decompressed recovery WAL entry"
+            );
         }
     }
 
@@ -297,5 +339,25 @@ public final class RecoveryRepository {
 
     private StatePayload normalizePayload(StatePayload payload) {
         return payload == null ? StatePayload.air() : payload;
+    }
+
+    private record WalReadResult(
+            RecoveryDraft latestDraft,
+            boolean truncatedTail,
+            boolean corruptEntry,
+            Exception exception
+    ) {
+
+        private static WalReadResult clean(RecoveryDraft latestDraft) {
+            return new WalReadResult(latestDraft, false, false, null);
+        }
+
+        private static WalReadResult truncated(RecoveryDraft latestDraft, IOException exception) {
+            return new WalReadResult(latestDraft, true, false, exception);
+        }
+
+        private static WalReadResult corrupt(RecoveryDraft latestDraft, Exception exception) {
+            return new WalReadResult(latestDraft, false, true, exception);
+        }
     }
 }
