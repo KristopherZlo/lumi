@@ -1,14 +1,22 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.PatchChunkSlice;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchSectionWorldChanges;
+import io.github.luma.domain.model.PatchStats;
 import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.storage.ProjectLayout;
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
@@ -19,6 +27,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PatchDataRepositoryTest {
@@ -141,6 +150,79 @@ class PatchDataRepositoryTest {
                 .entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
     }
 
+    @Test
+    void rejectsNegativeNbtLengthWithoutAllocation() {
+        byte[] bytes = new byte[] {-1, -1, -1, -1};
+
+        assertThrows(IOException.class, () -> StorageIo.readCompound(new DataInputStream(new ByteArrayInputStream(bytes))));
+    }
+
+    @Test
+    void rejectsCorruptPatchFrameLength() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        Path dataFile = layout.patchDataFile("corrupt-frame");
+        Files.createDirectories(dataFile.getParent());
+        try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(dataFile))) {
+            output.writeInt(0x4C504154);
+            output.writeInt(7);
+            output.writeInt(1);
+            output.writeInt(0);
+            output.writeInt(0);
+            output.writeInt(-1);
+            output.writeInt(0);
+        }
+
+        assertThrows(IOException.class, () -> this.repository.loadWorldChanges(layout, metadata("corrupt-frame", List.of())));
+    }
+
+    @Test
+    void selectedChunkReadRejectsSliceOutsideFileBounds() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        PatchMetadata metadata = this.repository.writePayload(
+                layout,
+                "bad-slice",
+                "project",
+                "v0005",
+                List.of(new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:gold_block", null)
+                ))
+        );
+        PatchMetadata badMetadata = metadata(
+                metadata.id(),
+                List.of(new PatchChunkSlice(0, 0, 1, 999_999L, 64))
+        );
+
+        assertThrows(IOException.class, () -> this.repository.loadWorldChanges(layout, badMetadata, List.of(new ChunkPoint(0, 0))));
+    }
+
+    @Test
+    void selectedChunkReadRejectsMismatchedEntityFrameChunk() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        String entityId = "00000000-0000-0000-0000-000000000031";
+        PatchMetadata metadata = this.repository.writePayload(
+                layout,
+                "entity-mismatch",
+                "project",
+                "v0006",
+                List.of(),
+                List.of(new StoredEntityChange(
+                        entityId,
+                        "minecraft:block_display",
+                        null,
+                        entity("minecraft:block_display", entityId, 32.0D)
+                ))
+        );
+        PatchChunkSlice actual = metadata.chunks().getFirst();
+        PatchMetadata badMetadata = metadata(
+                metadata.id(),
+                List.of(new PatchChunkSlice(0, 0, actual.changeCount(), actual.dataOffsetBytes(), actual.dataLengthBytes()))
+        );
+
+        assertThrows(IOException.class, () -> this.repository.loadWorldChanges(layout, badMetadata, List.of(new ChunkPoint(0, 0))));
+    }
+
     private static StatePayload payload(String blockId, net.minecraft.nbt.CompoundTag blockEntity) {
         CompoundTag state = new CompoundTag();
         state.putString("Name", blockId);
@@ -164,5 +246,9 @@ class PatchDataRepositoryTest {
         pos.add(DoubleTag.valueOf(1.0D));
         tag.put("Pos", pos);
         return new EntityPayload(tag);
+    }
+
+    private static PatchMetadata metadata(String patchId, List<PatchChunkSlice> chunks) {
+        return new PatchMetadata(patchId, "project", "version", patchId + ".bin.lz4", chunks, new PatchStats(0, chunks.size()));
     }
 }

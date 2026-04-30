@@ -170,7 +170,11 @@ public final class PatchDataRepository {
             if (version != VERSION) {
                 return this.toSectionWorldChanges(this.loadChunkAddressableWorldChanges(dataFile));
             }
-            int chunkCount = input.readInt();
+            int chunkCount = StorageLimits.requireLength(
+                    "patch chunk count",
+                    input.readInt(),
+                    StorageLimits.MAX_PATCH_CHUNKS
+            );
             List<PatchSectionFrame> frames = new ArrayList<>();
             List<StoredEntityChange> entityChanges = new ArrayList<>();
             for (int index = 0; index < chunkCount; index++) {
@@ -208,7 +212,11 @@ public final class PatchDataRepository {
     private PatchWorldChanges loadChunkAddressableWorldChanges(Path dataFile) throws IOException {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(dataFile)))) {
             int version = this.readChunkAddressableHeader(input, dataFile);
-            int chunkCount = input.readInt();
+            int chunkCount = StorageLimits.requireLength(
+                    "patch chunk count",
+                    input.readInt(),
+                    StorageLimits.MAX_PATCH_CHUNKS
+            );
             List<StoredBlockChange> changes = new ArrayList<>();
             List<StoredEntityChange> entityChanges = new ArrayList<>();
             for (int index = 0; index < chunkCount; index++) {
@@ -236,12 +244,16 @@ public final class PatchDataRepository {
 
         List<StoredBlockChange> changes = new ArrayList<>();
         List<StoredEntityChange> entityChanges = new ArrayList<>();
+        long fileSize = Files.size(dataFile);
+        for (PatchChunkSlice slice : selectedSlices) {
+            this.validateSlice(dataFile, slice, fileSize);
+        }
         try (RandomAccessFile input = new RandomAccessFile(dataFile.toFile(), "r")) {
             input.seek(4L);
             int version = input.readInt();
             for (PatchChunkSlice slice : selectedSlices) {
                 input.seek(slice.dataOffsetBytes());
-                PatchWorldChanges chunk = this.readChunkFrame(input, version);
+                PatchWorldChanges chunk = this.readChunkFrame(input, version, slice.chunk());
                 changes.addAll(chunk.blockChanges());
                 entityChanges.addAll(chunk.entityChanges());
             }
@@ -378,20 +390,35 @@ public final class PatchDataRepository {
     private PatchWorldChanges readChunkFrame(DataInputStream input, int version) throws IOException {
         int chunkX = input.readInt();
         int chunkZ = input.readInt();
-        int uncompressedLength = input.readInt();
-        int compressedLength = input.readInt();
-        byte[] compressedBytes = new byte[compressedLength];
-        input.readFully(compressedBytes);
+        int uncompressedLength = this.readPatchFrameLength(input, "patch chunk frame uncompressed", StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES);
+        int compressedLength = this.readPatchFrameLength(input, "patch chunk frame compressed", StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES);
+        byte[] compressedBytes = StorageIo.readFullyBounded(
+                input,
+                compressedLength,
+                StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES,
+                "patch chunk frame"
+        );
         return this.readDecompressedChunkFrame(chunkX, chunkZ, uncompressedLength, compressedBytes, version);
     }
 
     private PatchWorldChanges readChunkFrame(RandomAccessFile input, int version) throws IOException {
+        return this.readChunkFrame(input, version, null);
+    }
+
+    private PatchWorldChanges readChunkFrame(RandomAccessFile input, int version, ChunkPoint expectedChunk) throws IOException {
         int chunkX = input.readInt();
         int chunkZ = input.readInt();
-        int uncompressedLength = input.readInt();
-        int compressedLength = input.readInt();
-        byte[] compressedBytes = new byte[compressedLength];
-        input.readFully(compressedBytes);
+        if (expectedChunk != null && (chunkX != expectedChunk.x() || chunkZ != expectedChunk.z())) {
+            throw new IOException("Patch selected chunk slice coordinate mismatch");
+        }
+        int uncompressedLength = this.readPatchFrameLength(input, "patch chunk frame uncompressed", StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES);
+        int compressedLength = this.readPatchFrameLength(input, "patch chunk frame compressed", StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES);
+        byte[] compressedBytes = StorageIo.readFullyBounded(
+                input,
+                compressedLength,
+                StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES,
+                "patch chunk frame"
+        );
         return this.readDecompressedChunkFrame(chunkX, chunkZ, uncompressedLength, compressedBytes, version);
     }
 
@@ -410,6 +437,12 @@ public final class PatchDataRepository {
                     throw new IOException("Patch chunk frame coordinate mismatch");
                 }
             }
+            for (StoredEntityChange change : changes.entityChanges()) {
+                ChunkPoint entityChunk = change.chunk();
+                if (entityChunk.x() != expectedChunkX || entityChunk.z() != expectedChunkZ) {
+                    throw new IOException("Patch entity chunk frame coordinate mismatch");
+                }
+            }
             return changes;
         }
     }
@@ -417,7 +450,11 @@ public final class PatchDataRepository {
     private PatchWorldChanges readChunk(DataInputStream input, int version) throws IOException {
         int chunkX = input.readInt();
         int chunkZ = input.readInt();
-        int changeCount = input.readInt();
+        int changeCount = StorageLimits.requireLength(
+                "patch change count",
+                input.readInt(),
+                StorageLimits.MAX_PATCH_CHANGES_PER_CHUNK
+        );
         if (version == VERSION) {
             return this.readSectionChunk(chunkX, chunkZ, input);
         }
@@ -432,13 +469,21 @@ public final class PatchDataRepository {
             int version
     ) throws IOException {
         List<net.minecraft.nbt.CompoundTag> statePalette = new ArrayList<>();
-        int statePaletteCount = input.readInt();
+        int statePaletteCount = StorageLimits.requireLength(
+                "patch state palette count",
+                input.readInt(),
+                StorageLimits.MAX_PALETTE_ENTRIES
+        );
         for (int index = 0; index < statePaletteCount; index++) {
             statePalette.add(StorageIo.readCompound(input));
         }
 
         List<net.minecraft.nbt.CompoundTag> blockEntityPalette = new ArrayList<>();
-        int blockEntityPaletteCount = input.readInt();
+        int blockEntityPaletteCount = StorageLimits.requireLength(
+                "patch block entity palette count",
+                input.readInt(),
+                StorageLimits.MAX_PALETTE_ENTRIES
+        );
         for (int index = 0; index < blockEntityPaletteCount; index++) {
             blockEntityPalette.add(StorageIo.readCompound(input));
         }
@@ -468,7 +513,11 @@ public final class PatchDataRepository {
     }
 
     private PatchWorldChanges readSectionChunk(int chunkX, int chunkZ, DataInputStream input) throws IOException {
-        int sectionCount = input.readInt();
+        int sectionCount = StorageLimits.requireLength(
+                "patch section count",
+                input.readInt(),
+                StorageLimits.MAX_PATCH_SECTIONS_PER_CHUNK
+        );
         List<StoredBlockChange> changes = new ArrayList<>();
         for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
             PatchSectionFrame frame = this.readSectionFrame(chunkX, chunkZ, input);
@@ -480,10 +529,14 @@ public final class PatchDataRepository {
     private PatchSectionWorldChanges readSectionChunkFrame(DataInputStream input) throws IOException {
         int chunkX = input.readInt();
         int chunkZ = input.readInt();
-        int uncompressedLength = input.readInt();
-        int compressedLength = input.readInt();
-        byte[] compressedBytes = new byte[compressedLength];
-        input.readFully(compressedBytes);
+        int uncompressedLength = this.readPatchFrameLength(input, "patch section frame uncompressed", StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES);
+        int compressedLength = this.readPatchFrameLength(input, "patch section frame compressed", StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES);
+        byte[] compressedBytes = StorageIo.readFullyBounded(
+                input,
+                compressedLength,
+                StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES,
+                "patch section frame"
+        );
         byte[] chunkBytes = this.decompressFrame(compressedBytes, uncompressedLength);
         try (DataInputStream chunkInput = new DataInputStream(new ByteArrayInputStream(chunkBytes))) {
             int frameChunkX = chunkInput.readInt();
@@ -492,7 +545,11 @@ public final class PatchDataRepository {
                 throw new IOException("Patch section chunk frame coordinate mismatch");
             }
             chunkInput.readInt();
-            int sectionCount = chunkInput.readInt();
+            int sectionCount = StorageLimits.requireLength(
+                    "patch section count",
+                    chunkInput.readInt(),
+                    StorageLimits.MAX_PATCH_SECTIONS_PER_CHUNK
+            );
             List<PatchSectionFrame> frames = new ArrayList<>();
             for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
                 frames.add(this.readSectionFrame(chunkX, chunkZ, chunkInput));
@@ -539,7 +596,11 @@ public final class PatchDataRepository {
     }
 
     private List<net.minecraft.nbt.CompoundTag> readPalette(DataInputStream input) throws IOException {
-        int count = input.readInt();
+        int count = StorageLimits.requireLength(
+                "patch palette count",
+                input.readInt(),
+                StorageLimits.MAX_PALETTE_ENTRIES
+        );
         List<net.minecraft.nbt.CompoundTag> palette = new ArrayList<>();
         for (int index = 0; index < count; index++) {
             palette.add(StorageIo.readCompound(input));
@@ -593,7 +654,11 @@ public final class PatchDataRepository {
     }
 
     private List<StoredEntityChange> readEntityChanges(DataInputStream input) throws IOException {
-        int entityChangeCount = input.readInt();
+        int entityChangeCount = StorageLimits.requireLength(
+                "patch entity change count",
+                input.readInt(),
+                StorageLimits.MAX_ENTITY_CHANGES_PER_CHUNK
+        );
         List<StoredEntityChange> changes = new ArrayList<>();
         for (int index = 0; index < entityChangeCount; index++) {
             String entityId = input.readUTF();
@@ -619,15 +684,40 @@ public final class PatchDataRepository {
     }
 
     private byte[] decompressFrame(byte[] bytes, int expectedLength) throws IOException {
-        ByteArrayOutputStream output = new ByteArrayOutputStream(Math.max(0, expectedLength));
+        StorageLimits.requireLength(
+                "patch chunk frame uncompressed",
+                expectedLength,
+                StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES
+        );
         try (LZ4FrameInputStream input = new LZ4FrameInputStream(new ByteArrayInputStream(bytes))) {
-            input.transferTo(output);
-        }
-        byte[] decompressed = output.toByteArray();
-        if (expectedLength >= 0 && decompressed.length != expectedLength) {
+            byte[] decompressed = StorageIo.readAllBytesBounded(
+                    input,
+                    StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES,
+                    "decompressed patch frame"
+            );
+            if (decompressed.length != expectedLength) {
+                throw new IOException("Patch chunk frame length mismatch");
+            }
+            return decompressed;
+        } catch (IOException exception) {
             throw new IOException("Patch chunk frame length mismatch");
         }
-        return decompressed;
+    }
+
+    private int readPatchFrameLength(DataInputStream input, String label, int maxBytes) throws IOException {
+        return StorageLimits.requireLength(label, input.readInt(), maxBytes);
+    }
+
+    private int readPatchFrameLength(RandomAccessFile input, String label, int maxBytes) throws IOException {
+        return StorageLimits.requireLength(label, input.readInt(), maxBytes);
+    }
+
+    private void validateSlice(Path dataFile, PatchChunkSlice slice, long fileSize) throws IOException {
+        long offset = slice.dataOffsetBytes();
+        int length = slice.dataLengthBytes();
+        if (offset < 12L || length <= 0 || offset > fileSize || fileSize - offset < length) {
+            throw new IOException("Patch chunk slice outside file bounds for " + dataFile.getFileName());
+        }
     }
 
     private int paletteId(LinkedHashMap<net.minecraft.nbt.CompoundTag, Integer> palette, net.minecraft.nbt.CompoundTag tag) {

@@ -11,8 +11,10 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import io.github.luma.storage.ProjectLayout;
+import java.io.DataOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -129,6 +131,53 @@ class RecoveryRepositoryTest {
         assertEquals("minecraft:block_display", restored.entityChanges().getFirst().newValue().entityType());
     }
 
+    @Test
+    void corruptWalDoesNotDestroyValidBaseDraft() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryDraft base = draft("minecraft:stone", Instant.parse("2026-04-20T10:00:00Z"));
+        this.repository.saveDraft(layout, base);
+        try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(layout.recoveryWalFile()))) {
+            output.writeInt(-1);
+        }
+
+        RecoveryDraft restored = this.repository.loadDraft(layout).orElseThrow();
+
+        assertEquals("minecraft:stone", restored.changes().getFirst().newValue().blockId());
+        assertTrue(Files.exists(layout.recoveryBaseFile()));
+        assertFalse(Files.exists(layout.recoveryWalFile()));
+        assertTrue(hasQuarantinedWal(layout));
+    }
+
+    @Test
+    void truncatedWalTailReturnsLatestValidEntryAndCompactsIt() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryDraft base = draft("minecraft:stone", Instant.parse("2026-04-20T10:00:00Z"));
+        RecoveryDraft latest = draft("minecraft:gold_block", Instant.parse("2026-04-20T10:05:00Z"));
+        this.repository.saveDraft(layout, base);
+        this.repository.saveDraft(layout, latest);
+        Files.write(layout.recoveryWalFile(), new byte[] {0, 1}, StandardOpenOption.APPEND);
+
+        RecoveryDraft restored = this.repository.loadDraft(layout).orElseThrow();
+
+        assertEquals("minecraft:gold_block", restored.changes().getFirst().newValue().blockId());
+        assertFalse(Files.exists(layout.recoveryWalFile()));
+        assertTrue(hasQuarantinedWal(layout));
+        assertEquals("minecraft:gold_block", this.repository.loadDraft(layout).orElseThrow().changes().getFirst().newValue().blockId());
+    }
+
+    @Test
+    void corruptWalWithoutBaseReturnsEmptyAndQuarantinesWal() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        Files.createDirectories(layout.recoveryWalFile().getParent());
+        try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(layout.recoveryWalFile()))) {
+            output.writeInt(Integer.MAX_VALUE);
+        }
+
+        assertTrue(this.repository.loadDraft(layout).isEmpty());
+        assertFalse(Files.exists(layout.recoveryWalFile()));
+        assertTrue(hasQuarantinedWal(layout));
+    }
+
     private static RecoveryDraft draft(String blockId, Instant updatedAt) {
         return new RecoveryDraft(
                 "project",
@@ -162,5 +211,11 @@ class RecoveryRepositoryTest {
         pos.add(DoubleTag.valueOf(1.0D));
         tag.put("Pos", pos);
         return new EntityPayload(tag);
+    }
+
+    private static boolean hasQuarantinedWal(ProjectLayout layout) throws Exception {
+        try (var stream = Files.list(layout.recoveryDir())) {
+            return stream.anyMatch(path -> path.getFileName().toString().startsWith("draft.wal.lz4.corrupt-"));
+        }
     }
 }
