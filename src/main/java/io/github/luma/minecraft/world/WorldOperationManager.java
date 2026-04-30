@@ -36,6 +36,7 @@ public final class WorldOperationManager {
 
     private static final int MAX_BLOCK_ENTITIES_PER_TICK = 64;
     private static final int MAX_ENTITY_OPERATIONS_PER_TICK = 32;
+    private static final int MAX_LIGHT_CHECKS_PER_TICK = 4096;
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
     private static final double MAX_ADAPTIVE_SCALE = 1.25D;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
@@ -482,6 +483,7 @@ public final class WorldOperationManager {
         private int appliedWorkUnits = 0;
         private String preparationMarkerDetail = "";
         private final WorldApplyMetrics applyMetrics = new WorldApplyMetrics();
+        private final WorldLightUpdateQueue lightUpdateQueue = new WorldLightUpdateQueue();
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -587,11 +589,13 @@ public final class WorldOperationManager {
 
                 WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
                 WorldMutationContext.pushCaptureSuppression();
+                WorldLightUpdateContext.push(this.lightUpdateQueue);
                 AppliedWork processed;
                 try {
                     int maxBlocks = this.maxWorkForCurrentStep(budget, processedWorkThisTick, processedNativeCellsThisTick);
                     processed = this.applyCurrentChunk(maxBlocks);
                 } finally {
+                    WorldLightUpdateContext.pop();
                     WorldMutationContext.popCaptureSuppression();
                     WorldMutationContext.popSource();
                 }
@@ -634,6 +638,9 @@ public final class WorldOperationManager {
             }
 
             if (this.currentBatch == null && (this.dispatcher == null || !this.dispatcher.hasPending())) {
+                if (!this.drainDeferredLightUpdates(budget, deadlineNanos)) {
+                    return false;
+                }
                 this.progressSink().update(
                         OperationStage.FINALIZING,
                         this.appliedWorkUnits,
@@ -652,6 +659,23 @@ public final class WorldOperationManager {
             }
 
             return false;
+        }
+
+        private boolean drainDeferredLightUpdates(WorldApplyBudget budget, long deadlineNanos) {
+            if (!this.lightUpdateQueue.hasPending()) {
+                return true;
+            }
+
+            int maxChecks = Math.min(MAX_LIGHT_CHECKS_PER_TICK, Math.max(128, budget.maxBlocks()));
+            int appliedChecks = this.lightUpdateQueue.drain(this.level(), maxChecks, deadlineNanos);
+            this.applyMetrics.recordLightChecks(appliedChecks);
+            this.progressSink().update(
+                    OperationStage.FINALIZING,
+                    this.appliedWorkUnits,
+                    this.prepared.totalWorkUnits(),
+                    this.applyDetail("Updating light, " + this.lightUpdateQueue.pendingCount() + " checks queued")
+            );
+            return !this.lightUpdateQueue.hasPending();
         }
 
         private String preservedPreparationMarker(String detail) {

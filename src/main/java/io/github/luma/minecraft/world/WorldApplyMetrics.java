@@ -52,6 +52,10 @@ final class WorldApplyMetrics {
         }
     }
 
+    void recordLightChecks(int lightChecks) {
+        this.lightChecks += Math.max(0, lightChecks);
+    }
+
     String summary() {
         return "processedBlocks=" + this.processedBlocks
                 + ", changedBlocks=" + this.changedBlocks
