@@ -28,7 +28,9 @@ public final class ProjectRepository {
 
     public void save(ProjectLayout layout, BuildProject project) throws IOException {
         this.initializeLayout(layout);
-        Files.writeString(layout.projectFile(), GsonProvider.gson().toJson(project), StandardCharsets.UTF_8);
+        StorageIo.writeAtomically(layout.projectFile(), output -> output.write(
+                GsonProvider.gson().toJson(project).getBytes(StandardCharsets.UTF_8)
+        ));
     }
 
     public Optional<BuildProject> load(ProjectLayout layout) throws IOException {

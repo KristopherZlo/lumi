@@ -14,7 +14,10 @@ public final class VariantRepository {
     private static final java.lang.reflect.Type VARIANT_LIST_TYPE = new TypeToken<List<ProjectVariant>>() { }.getType();
 
     public void save(ProjectLayout layout, List<ProjectVariant> variants) throws IOException {
-        Files.writeString(layout.variantsFile(), GsonProvider.gson().toJson(variants), StandardCharsets.UTF_8);
+        Files.createDirectories(layout.root());
+        StorageIo.writeAtomically(layout.variantsFile(), output -> output.write(
+                GsonProvider.gson().toJson(variants).getBytes(StandardCharsets.UTF_8)
+        ));
     }
 
     public List<ProjectVariant> loadAll(ProjectLayout layout) throws IOException {
