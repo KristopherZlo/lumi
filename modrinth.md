@@ -52,8 +52,8 @@ Lumi tracks recent builder actions separately from saved versions.
 - Default redo chord: `Left Alt+Y`.
 - `Left Alt` is the default Lumi action button and can be rebound in Minecraft controls.
 - Changing the Lumi action button changes the undo, redo, quick-save, preview, selection, and deselect chords that use it.
-- WorldEdit, FAWE, and captured Axiom actions use the tools' native undo/redo path through Lumi's hotkeys first.
-- Lumi falls back to replaying captured Axiom actions when the native Axiom hook is unavailable.
+- WorldEdit and FAWE actions use the tools' native undo/redo commands through Lumi's hotkeys.
+- Axiom capability actions replay through Lumi undo/redo, including tool-assisted breaks and placements.
 - TNT, explosion, water, falling-block, and nearby block-update fallout can be folded into the matching tracked action.
 - Dropped item entities from those effects are undo-only action data: undo removes them, redo respawns them, and saved versions/recovery drafts do not persist them.
 

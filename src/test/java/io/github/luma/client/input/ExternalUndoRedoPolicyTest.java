@@ -21,25 +21,25 @@ class ExternalUndoRedoPolicyTest {
     }
 
     @Test
-    void routesAxiomToNativeHook() {
+    void replaysAxiomThroughLumi() {
         assertEquals(
-                ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK,
+                ExternalUndoRedoPolicy.Decision.LUMI_REPLAY,
                 this.policy.decisionForActor("axiom:builder")
         );
         assertEquals(
-                ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK,
+                ExternalUndoRedoPolicy.Decision.LUMI_REPLAY,
                 this.policy.decisionForActor("Axiom")
         );
     }
 
     @Test
-    void routesAxiomActionIdsToNativeHookEvenWhenActorLooksPlayerDriven() {
+    void replaysAxiomActionIdsThroughLumiEvenWhenActorLooksPlayerDriven() {
         assertEquals(
-                ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK,
+                ExternalUndoRedoPolicy.Decision.LUMI_REPLAY,
                 this.policy.decisionForAction("player", "axiom-bulldozer-action")
         );
         assertEquals(
-                ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK,
+                ExternalUndoRedoPolicy.Decision.LUMI_REPLAY,
                 this.policy.decisionForAction("player", "axiom-buffer-fast-place")
         );
     }
