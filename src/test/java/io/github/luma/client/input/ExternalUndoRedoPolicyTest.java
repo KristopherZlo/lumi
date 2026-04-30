@@ -21,11 +21,19 @@ class ExternalUndoRedoPolicyTest {
     }
 
     @Test
-    void replaysAxiomAndOtherActorsThroughLumi() {
+    void routesAxiomToNativeHook() {
         assertEquals(
-                ExternalUndoRedoPolicy.Decision.LUMI_REPLAY,
+                ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK,
                 this.policy.decisionForActor("axiom:builder")
         );
+        assertEquals(
+                ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK,
+                this.policy.decisionForActor("Axiom")
+        );
+    }
+
+    @Test
+    void replaysOtherActorsThroughLumi() {
         assertEquals(
                 ExternalUndoRedoPolicy.Decision.LUMI_REPLAY,
                 this.policy.decisionForActor("player")
