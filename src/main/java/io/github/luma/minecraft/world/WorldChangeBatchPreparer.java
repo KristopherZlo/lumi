@@ -16,6 +16,7 @@ import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Converts persisted domain changes into Minecraft-ready chunk apply batches.
@@ -106,6 +107,42 @@ public final class WorldChangeBatchPreparer {
             ));
         }
         return batches;
+    }
+
+    public List<PreparedChunkBatch> prepareUndoRedo(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            ProgressListener progressListener
+    ) throws IOException {
+        changes = changes == null ? List.of() : changes;
+        if (changes.size() < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD) {
+            return this.prepare(level, changes, entityChanges, applyNewValues, progressListener);
+        }
+
+        List<DecodedStoredChange> decodedChanges = new ArrayList<>(changes.size());
+        for (StoredBlockChange change : changes) {
+            StatePayload source = applyNewValues ? change.oldValue() : change.newValue();
+            StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
+            BlockState sourceState = BlockStateNbtCodec.deserializeBlockState(level, source == null ? null : source.stateTag());
+            BlockState targetState = BlockStateNbtCodec.deserializeBlockState(level, target == null ? null : target.stateTag());
+            if (this.connectedBlockPlacementExpander.requiresCompanion(sourceState)
+                    || this.connectedBlockPlacementExpander.requiresCompanion(targetState)) {
+                return this.prepare(level, changes, entityChanges, applyNewValues, progressListener);
+            }
+            decodedChanges.add(new DecodedStoredChange(
+                    new BlockPos(change.pos().x(), change.pos().y(), change.pos().z()),
+                    targetState,
+                    target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
+            ));
+        }
+        return this.prepareDecodedSectionFirst(
+                decodedChanges,
+                entityChanges,
+                applyNewValues,
+                progressListener == null ? ProgressListener.NO_OP : progressListener
+        );
     }
 
     public List<PreparedChunkBatch> prepare(
@@ -253,6 +290,74 @@ public final class WorldChangeBatchPreparer {
         return new SectionSplit(List.copyOf(sparse), List.copyOf(nativeSections));
     }
 
+    private List<PreparedChunkBatch> prepareDecodedSectionFirst(
+            List<DecodedStoredChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            ProgressListener progressListener
+    ) {
+        entityChanges = entityChanges == null ? List.of() : entityChanges;
+        int total = changes.size() + entityChanges.size();
+        int completed = 0;
+        Map<SectionKey, LumiSectionBuffer.Builder> sectionBuilders = new LinkedHashMap<>();
+        for (DecodedStoredChange change : changes) {
+            SectionKey key = SectionKey.from(change.pos());
+            sectionBuilders.computeIfAbsent(key, ignored -> LumiSectionBuffer.builder(key.sectionY()))
+                    .set(
+                            change.pos().getX() & 15,
+                            change.pos().getY() & 15,
+                            change.pos().getZ() & 15,
+                            change.targetState(),
+                            change.blockEntityTag()
+                    );
+            completed += 1;
+            progressListener.onDecoded(completed, total);
+        }
+
+        Map<ChunkPoint, List<PreparedSectionApplyBatch>> nativeSections = new LinkedHashMap<>();
+        Map<ChunkPoint, List<PreparedBlockPlacement>> sparsePlacements = new LinkedHashMap<>();
+        for (Map.Entry<SectionKey, LumiSectionBuffer.Builder> entry : sectionBuilders.entrySet()) {
+            SectionKey key = entry.getKey();
+            LumiSectionBuffer buffer = entry.getValue().build();
+            boolean fullSection = buffer.changedCellCount() == SectionChangeMask.ENTRY_COUNT;
+            SectionApplySafetyProfile profile = this.sectionApplySafetyClassifier.classify(buffer, fullSection);
+            PreparedSectionApplyBatch nativeBatch = new PreparedSectionApplyBatch(
+                    key.chunk(),
+                    key.sectionY(),
+                    buffer,
+                    profile,
+                    fullSection
+            );
+            if (profile.path() == SectionApplyPath.DIRECT_SECTION) {
+                sparsePlacements.computeIfAbsent(key.chunk(), ignored -> new ArrayList<>()).addAll(nativeBatch.toPlacements());
+            } else {
+                nativeSections.computeIfAbsent(key.chunk(), ignored -> new ArrayList<>()).add(nativeBatch);
+            }
+        }
+
+        Map<ChunkPoint, List<StoredEntityChange>> groupedEntities = new LinkedHashMap<>();
+        for (StoredEntityChange change : entityChanges) {
+            groupedEntities.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
+            completed += 1;
+            progressListener.onDecoded(completed, total);
+        }
+
+        List<PreparedChunkBatch> batches = new ArrayList<>();
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
+        chunks.addAll(nativeSections.keySet());
+        chunks.addAll(sparsePlacements.keySet());
+        chunks.addAll(groupedEntities.keySet());
+        for (ChunkPoint chunk : chunks) {
+            batches.add(new PreparedChunkBatch(
+                    chunk,
+                    sparsePlacements.getOrDefault(chunk, List.of()),
+                    nativeSections.getOrDefault(chunk, List.of()),
+                    this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues)
+            ));
+        }
+        return batches;
+    }
+
     private LumiSectionBuffer toSectionBuffer(int sectionY, List<PreparedBlockPlacement> placements) {
         LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(sectionY);
         for (PreparedBlockPlacement placement : placements) {
@@ -298,5 +403,15 @@ public final class WorldChangeBatchPreparer {
             List<PreparedBlockPlacement> sparsePlacements,
             List<PreparedSectionApplyBatch> nativeSections
     ) {
+    }
+
+    private record DecodedStoredChange(BlockPos pos, BlockState targetState, CompoundTag blockEntityTag) {
+    }
+
+    private record SectionKey(ChunkPoint chunk, int sectionY) {
+
+        private static SectionKey from(BlockPos pos) {
+            return new SectionKey(ChunkPoint.from(pos), Math.floorDiv(pos.getY(), 16));
+        }
     }
 }

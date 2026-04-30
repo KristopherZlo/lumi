@@ -80,7 +80,7 @@ public final class UndoRedoService {
                 LumaDebugLog.enabled(project),
                 progressSink -> {
                     progressSink.update(OperationStage.PREPARING, 0, totalChanges, "Decoding " + direction.label());
-                    List<PreparedChunkBatch> batches = this.batchPreparer.prepare(
+                    List<PreparedChunkBatch> batches = this.batchPreparer.prepareUndoRedo(
                             level,
                             targetChanges,
                             targetEntityChanges,

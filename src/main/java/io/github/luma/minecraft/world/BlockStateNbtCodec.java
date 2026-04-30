@@ -4,6 +4,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import java.io.IOException;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.level.ServerLevel;
@@ -24,7 +25,7 @@ public final class BlockStateNbtCodec {
     }
 
     public static BlockState deserializeBlockState(ServerLevel level, CompoundTag tag) throws IOException {
-        HolderGetter<Block> blocks = level.registryAccess().lookupOrThrow(Registries.BLOCK);
+        HolderGetter<Block> blocks = level == null ? BuiltInRegistries.BLOCK : level.registryAccess().lookupOrThrow(Registries.BLOCK);
         return NbtUtils.readBlockState(blocks, tag == null ? airTag() : tag);
     }
 
