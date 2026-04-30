@@ -286,6 +286,16 @@ Current scope:
 - partial restore is available from save details with manual bounds or a wooden-sword Lumi selection, including inside-selection and everything-except-selection modes
 - compare overlay marks changed positions, not a full 3D preview; very large comparisons collapse into merged volume blobs so the client does not draw hundreds of thousands of separate block overlays
 
+## TODO
+
+- [ ] In-use player onboarding for tools, tabs, and workflow explanations
+- [ ] Multiplayer support
+- [ ] Additional test coverage
+- [ ] Exploit discovery and hardening
+- [ ] Wiki website
+- [ ] Mod landing page
+- [ ] Tutorial video
+
 ## Docs
 
 - [User guide](docs/user-guide.md)
