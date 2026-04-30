@@ -77,4 +77,25 @@ class WorldMutationContextTest {
 
         assertFalse(WorldMutationContext.captureSuppressed());
     }
+
+    @Test
+    void captureSuppressionCanSpanMixinBoundary() {
+        assertFalse(WorldMutationContext.captureSuppressed());
+
+        WorldMutationContext.pushCaptureSuppression();
+        try {
+            assertTrue(WorldMutationContext.captureSuppressed());
+            WorldMutationContext.pushCaptureSuppression();
+            try {
+                assertTrue(WorldMutationContext.captureSuppressed());
+            } finally {
+                WorldMutationContext.popCaptureSuppression();
+            }
+            assertTrue(WorldMutationContext.captureSuppressed());
+        } finally {
+            WorldMutationContext.popCaptureSuppression();
+        }
+
+        assertFalse(WorldMutationContext.captureSuppressed());
+    }
 }
