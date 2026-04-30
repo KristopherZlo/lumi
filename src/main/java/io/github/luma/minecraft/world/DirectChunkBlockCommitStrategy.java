@@ -12,7 +12,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 final class DirectChunkBlockCommitStrategy {
 
@@ -64,6 +63,7 @@ final class DirectChunkBlockCommitStrategy {
         int directSections = 0;
         Map<Integer, SectionUpdate> sectionUpdates = new LinkedHashMap<>();
         SectionLightUpdateBatch lightBatch = new SectionLightUpdateBatch();
+        ChunkHeightmapUpdatePlan heightmapPlan = new ChunkHeightmapUpdatePlan();
         BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
 
         while (sectionIndex < sections.size()
@@ -90,7 +90,8 @@ final class DirectChunkBlockCommitStrategy {
                         directSections,
                         chunk,
                         sectionUpdates,
-                        lightBatch
+                        lightBatch,
+                        heightmapPlan
                 );
             }
             LevelChunkSection section = chunk.getSection(sectionArrayIndex);
@@ -107,7 +108,8 @@ final class DirectChunkBlockCommitStrategy {
                         directSections,
                         chunk,
                         sectionUpdates,
-                        lightBatch
+                        lightBatch,
+                        heightmapPlan
                 );
             }
 
@@ -118,7 +120,16 @@ final class DirectChunkBlockCommitStrategy {
             );
             int sectionProcessed = 0;
             for (int index = placementIndex; index < endIndex; index++) {
-                CellResult cellResult = this.applyCell(level, chunk, section, sectionBatch.placements().get(index), mutablePos, update, lightBatch);
+                CellResult cellResult = this.applyCell(
+                        level,
+                        section,
+                        sectionBatch.sectionY(),
+                        sectionBatch.placements().get(index),
+                        mutablePos,
+                        update,
+                        lightBatch,
+                        heightmapPlan
+                );
                 changedBlocks += cellResult.changed() ? 1 : 0;
                 skippedBlocks += cellResult.skipped() ? 1 : 0;
                 processedBlocks += 1;
@@ -136,7 +147,17 @@ final class DirectChunkBlockCommitStrategy {
             }
         }
 
-        BlockCommitResult directResult = this.finishDirect(level, chunk, processedBlocks, changedBlocks, skippedBlocks, directSections, sectionUpdates, lightBatch);
+        BlockCommitResult directResult = this.finishDirect(
+                level,
+                chunk,
+                processedBlocks,
+                changedBlocks,
+                skippedBlocks,
+                directSections,
+                sectionUpdates,
+                lightBatch,
+                heightmapPlan
+        );
         return new DirectChunkApplyResult(processedBlocks, sectionIndex, placementIndex, directResult);
     }
 
@@ -152,9 +173,20 @@ final class DirectChunkBlockCommitStrategy {
             int directSections,
             LevelChunk chunk,
             Map<Integer, SectionUpdate> sectionUpdates,
-            SectionLightUpdateBatch lightBatch
+            SectionLightUpdateBatch lightBatch,
+            ChunkHeightmapUpdatePlan heightmapPlan
     ) {
-        BlockCommitResult directResult = this.finishDirect(level, chunk, processedBlocks, changedBlocks, skippedBlocks, directSections, sectionUpdates, lightBatch);
+        BlockCommitResult directResult = this.finishDirect(
+                level,
+                chunk,
+                processedBlocks,
+                changedBlocks,
+                skippedBlocks,
+                directSections,
+                sectionUpdates,
+                lightBatch,
+                heightmapPlan
+        );
         DirectChunkApplyResult fallback = this.applyFallbackSection(level, sections, sectionIndex, placementIndex, maxBlocks);
         return new DirectChunkApplyResult(
                 processedBlocks + fallback.processedBlocks(),
@@ -188,12 +220,13 @@ final class DirectChunkBlockCommitStrategy {
 
     private CellResult applyCell(
             ServerLevel level,
-            LevelChunk chunk,
             LevelChunkSection section,
+            int sectionY,
             PreparedBlockPlacement placement,
             BlockPos.MutableBlockPos mutablePos,
             SectionUpdate update,
-            SectionLightUpdateBatch lightBatch
+            SectionLightUpdateBatch lightBatch,
+            ChunkHeightmapUpdatePlan heightmapPlan
     ) {
         PersistentBlockStatePolicy.PersistentBlockState persistentState =
                 this.blockStatePolicy.normalize(placement.state(), placement.blockEntityTag());
@@ -211,7 +244,7 @@ final class DirectChunkBlockCommitStrategy {
 
         level.removeBlockEntity(mutablePos);
         section.setBlockState(localX, localY, localZ, targetState, false);
-        this.updateHeightmaps(chunk, mutablePos, targetState);
+        heightmapPlan.record(sectionY, SectionChangeMask.localIndex(localX, localY, localZ));
         level.updatePOIOnBlockStateChange(mutablePos, currentState, targetState);
         this.lightUpdatePlanner.plan(lightBatch, mutablePos, currentState, targetState);
         update.changedCells().add(SectionPos.sectionRelativePos(mutablePos));
@@ -226,9 +259,11 @@ final class DirectChunkBlockCommitStrategy {
             int skippedBlocks,
             int directSections,
             Map<Integer, SectionUpdate> sectionUpdates,
-            SectionLightUpdateBatch lightBatch
+            SectionLightUpdateBatch lightBatch,
+            ChunkHeightmapUpdatePlan heightmapPlan
     ) {
         if (chunk != null && changedBlocks > 0) {
+            heightmapPlan.apply(chunk);
             chunk.markUnsaved();
         }
         int lightChecks = this.lightUpdatePlanner.apply(level, lightBatch);
@@ -251,13 +286,6 @@ final class DirectChunkBlockCommitStrategy {
                 lightChecks,
                 directSections
         );
-    }
-
-    private void updateHeightmaps(LevelChunk chunk, BlockPos pos, BlockState state) {
-        for (var entry : chunk.getHeightmaps()) {
-            Heightmap heightmap = entry.getValue();
-            heightmap.update(pos.getX() & 15, pos.getY(), pos.getZ() & 15, state);
-        }
     }
 
     private record SectionUpdate(SectionPos sectionPos, LevelChunkSection section, ShortSet changedCells) {

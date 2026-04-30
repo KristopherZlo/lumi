@@ -15,6 +15,7 @@ class WorldApplyBudgetPlannerTest {
         WorldApplyBudget highThroughput = this.planner.plan(1.0D, 1.0D, WorldApplyProfile.HISTORY_FAST);
 
         assertTrue(highThroughput.maxBlocks() > normal.maxBlocks());
+        assertTrue(highThroughput.maxNanos() > normal.maxNanos());
         assertTrue(highThroughput.maxNativeSections() > normal.maxNativeSections());
         assertTrue(highThroughput.maxDirectSections() > normal.maxDirectSections());
         assertTrue(highThroughput.maxLightChecks() > normal.maxLightChecks());
@@ -44,6 +45,7 @@ class WorldApplyBudgetPlannerTest {
         WorldApplyBudget turbo = this.planner.plan(1.0D, 1.0D, WorldApplyProfile.DIAGNOSTIC_TURBO);
 
         assertTrue(turbo.maxBlocks() > historyFast.maxBlocks());
+        assertTrue(turbo.maxNanos() > historyFast.maxNanos());
         assertTrue(turbo.maxDirectSections() > historyFast.maxDirectSections());
         assertTrue(turbo.maxLightChecks() > historyFast.maxLightChecks());
         assertTrue(turbo.sparseStepCap() > historyFast.sparseStepCap());

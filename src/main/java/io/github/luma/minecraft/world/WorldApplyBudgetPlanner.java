@@ -8,8 +8,8 @@ final class WorldApplyBudgetPlanner {
     private static final long MAX_NANOS_PER_TICK = 3_000_000L;
     private static final int RESTORE_MIN_BLOCKS_PER_TICK = 1024;
     private static final int RESTORE_MAX_BLOCKS_PER_TICK = 64 * SectionChangeMask.ENTRY_COUNT;
-    private static final long RESTORE_MIN_NANOS_PER_TICK = 2_000_000L;
-    private static final long RESTORE_MAX_NANOS_PER_TICK = 8_000_000L;
+    private static final long RESTORE_MIN_NANOS_PER_TICK = 4_000_000L;
+    private static final long RESTORE_MAX_NANOS_PER_TICK = 10_000_000L;
     private static final int MIN_NATIVE_SECTIONS_PER_TICK = 1;
     private static final int MAX_NATIVE_SECTIONS_PER_TICK = 4;
     private static final int RESTORE_MIN_NATIVE_SECTIONS_PER_TICK = 16;
@@ -28,8 +28,8 @@ final class WorldApplyBudgetPlanner {
     private static final int TURBO_SPARSE_STEP_CAP = 32_768;
     private static final int TURBO_MIN_BLOCKS_PER_TICK = 4096;
     private static final int TURBO_MAX_BLOCKS_PER_TICK = 128 * SectionChangeMask.ENTRY_COUNT;
-    private static final long TURBO_MIN_NANOS_PER_TICK = 4_000_000L;
-    private static final long TURBO_MAX_NANOS_PER_TICK = 12_000_000L;
+    private static final long TURBO_MIN_NANOS_PER_TICK = 12_000_000L;
+    private static final long TURBO_MAX_NANOS_PER_TICK = 24_000_000L;
 
     WorldApplyBudget plan(double progressFraction, double adaptiveScale, WorldApplyProfile profile) {
         WorldApplyProfile resolvedProfile = profile == null ? WorldApplyProfile.NORMAL : profile;
