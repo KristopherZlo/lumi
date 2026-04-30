@@ -706,6 +706,7 @@ public final class WorldOperationManager {
                     tickStartFallbackSections,
                     tickStartLightChecks
             );
+            this.applyMetrics.recordApplyTick(processedWorkThisTick);
 
             if (this.currentBatch == null && (this.dispatcher == null || !this.dispatcher.hasPending())) {
                 if (!this.drainDeferredLightUpdates(budget, deadlineNanos)) {
@@ -740,7 +741,9 @@ public final class WorldOperationManager {
             int pendingBefore = this.lightUpdateQueue.pendingCount();
             long startedAt = System.nanoTime();
             int appliedChecks = this.lightUpdateQueue.drain(this.level(), maxChecks, deadlineNanos);
+            long elapsedNanos = System.nanoTime() - startedAt;
             this.applyMetrics.recordLightChecks(appliedChecks);
+            this.applyMetrics.recordLightDrainTick(elapsedNanos);
             if (this.debugApplyEnabled()) {
                 LumaDebugLog.log(
                         this.handle(),
@@ -750,7 +753,7 @@ public final class WorldOperationManager {
                         appliedChecks,
                         pendingBefore,
                         this.lightUpdateQueue.pendingCount(),
-                        microsSince(startedAt)
+                        elapsedNanos / 1_000L
                 );
             }
             this.progressSink().update(
