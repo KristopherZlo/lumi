@@ -94,7 +94,7 @@ Each log includes:
 - phase progress messages
 - per-check PASS/FAIL entries
 - stack traces for unexpected phase or operation errors
-- completed prepared-apply metrics, including changed/skipped blocks, rewrite/native/direct/fallback section counts, packets, light checks, and fallback reasons
+- completed prepared-apply metrics, including changed/skipped blocks, rewrite/native/direct/fallback section counts, packets, light checks, apply/work ticks, light-drain ticks/duration, and fallback reasons
 - bulk apply diagnostic summaries for dense rewrite-friendly, block-entity fallback, and sparse direct-section batches when the singleplayer suite can reserve safe high-altitude target cells
 
 These logs are diagnostic artifacts only. They are not referenced by project history, cleanup policies, import/export packages, or restore workflows.
