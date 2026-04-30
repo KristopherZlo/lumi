@@ -72,7 +72,7 @@ record BlockCommitResult(
             BlockCommitFallbackReason reason
     ) {
         return result(processedBlocks, changedBlocks, skippedBlocks)
-                .rewriteFallbackSections(processedBlocks > 0 ? 1 : 0)
+                .rewriteFallbackSections(reason == null || reason == BlockCommitFallbackReason.NONE ? 0 : 1)
                 .fallbackReason(reason)
                 .build();
     }
