@@ -42,6 +42,7 @@ public final class WorldOperationManager {
 
     private final WorldApplyOperationProfile applyOperationProfile = new WorldApplyOperationProfile();
     private final WorldApplyBudgetPlanner budgetPlanner = new WorldApplyBudgetPlanner();
+    private final WorldApplyTickWorkGate tickWorkGate = new WorldApplyTickWorkGate();
     private ExecutorService backgroundExecutor = createExecutor();
     private final Map<String, ActiveOperation> activeOperations = new HashMap<>();
     private final Map<String, OperationSnapshot> lastSnapshots = new HashMap<>();
@@ -479,6 +480,7 @@ public final class WorldOperationManager {
         private boolean blockEntitiesApplied = false;
         private boolean entitiesApplied = false;
         private int appliedWorkUnits = 0;
+        private String preparationMarkerDetail = "";
         private final WorldApplyMetrics applyMetrics = new WorldApplyMetrics();
 
         private PreparedApplyActiveOperation(
@@ -514,6 +516,7 @@ public final class WorldOperationManager {
                     throw cause;
                 }
 
+                this.preparationMarkerDetail = this.preservedPreparationMarker(this.snapshot().detail());
                 this.dispatcher = new GlobalDispatcher();
                 this.dispatcher.enqueue(this.prepared.localQueue());
                 LumaDebugLog.log(
@@ -528,7 +531,7 @@ public final class WorldOperationManager {
                         OperationStage.APPLYING,
                         0,
                         this.prepared.totalWorkUnits(),
-                        "Applying prepared batches"
+                        this.applyDetail("Applying prepared batches")
                 );
                 if (this.prepared.totalWorkUnits() == 0) {
                     return this.advanceCompletion();
@@ -570,20 +573,15 @@ public final class WorldOperationManager {
                     );
                 }
 
-                if (this.hasPendingNativeSection()) {
-                    if (processedNativeSectionsThisTick >= budget.maxNativeSections()) {
-                        break;
-                    }
-                    PreparedSectionApplyBatch pendingNativeSection = this.pendingNativeSection();
-                    if (pendingNativeSection.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE) {
-                        if (processedRewriteSectionsThisTick >= budget.maxRewriteSections()
-                                || processedWorkThisTick > 0) {
-                            break;
-                        }
-                    } else if (processedNativeCellsThisTick >= budget.maxNativeCells()) {
-                        break;
-                    }
-                } else if (processedWorkThisTick >= budget.maxBlocks()) {
+                if (!WorldOperationManager.this.tickWorkGate.canStartNextStep(
+                        this.hasPendingNativeSection(),
+                        this.hasPendingNativeSection() ? this.pendingNativeSection().safetyProfile().path() : null,
+                        processedWorkThisTick,
+                        processedNativeSectionsThisTick,
+                        processedNativeCellsThisTick,
+                        processedRewriteSectionsThisTick,
+                        budget
+                )) {
                     break;
                 }
 
@@ -612,9 +610,9 @@ public final class WorldOperationManager {
                         OperationStage.APPLYING,
                         this.appliedWorkUnits,
                         this.prepared.totalWorkUnits(),
-                        this.currentBatch == null
+                        this.applyDetail(this.currentBatch == null
                                 ? "Applying queued chunks"
-                                : "Applying chunk " + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
+                                : "Applying chunk " + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z())
                 );
                 if (this.currentBatch != null && this.currentBatchFinished()) {
                     LumaDebugLog.log(
@@ -640,7 +638,7 @@ public final class WorldOperationManager {
                         OperationStage.FINALIZING,
                         this.appliedWorkUnits,
                         this.prepared.totalWorkUnits(),
-                        "Finalizing"
+                        this.applyDetail("Finalizing")
                 );
                 LumaDebugLog.log(
                         this.handle(),
@@ -654,6 +652,20 @@ public final class WorldOperationManager {
             }
 
             return false;
+        }
+
+        private String preservedPreparationMarker(String detail) {
+            if (detail == null || !detail.startsWith("Decoded initial snapshot")) {
+                return "";
+            }
+            return detail;
+        }
+
+        private String applyDetail(String detail) {
+            if (this.preparationMarkerDetail.isBlank()) {
+                return detail;
+            }
+            return this.preparationMarkerDetail + "; " + detail;
         }
 
         private int maxWorkForCurrentStep(

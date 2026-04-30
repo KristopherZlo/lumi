@@ -63,6 +63,25 @@ class SingleplayerPerformanceMonitorTest {
         assertTrue(restoreCheck.passed());
     }
 
+    @Test
+    void acceptsExactInitialSnapshotMarkerCarriedIntoApplyProgress() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordSyncSlice("Project setup", Duration.ofMillis(20).toNanos());
+        monitor.recordOperationSnapshot(snapshot(
+                "restore-version",
+                98_304,
+                OperationStage.APPLYING,
+                "Decoded initial snapshot snapshot-0001; Applying chunk 0:0"
+        ));
+
+        SingleplayerPerformanceMonitor.PerformanceCheck restoreCheck = monitor.checks().stream()
+                .filter(check -> check.label().contains("Lineage full restore"))
+                .findFirst()
+                .orElseThrow();
+
+        assertTrue(restoreCheck.passed());
+    }
+
     private static OperationSnapshot snapshot(String label, int totalUnits) {
         return snapshot(label, totalUnits, OperationStage.COMPLETED, "Completed");
     }
