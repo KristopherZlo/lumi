@@ -139,7 +139,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `CaptureDiagnosticsRegistry`, `CaptureSessionDiagnostics`: accepted mutation traces and capture summaries.
 - `TrackedProjectCatalog`: active project metadata cache for capture matching.
 - `TrackedProject`, `ProjectTrackingIndex`: dimension/chunk membership for tracked workspaces.
-- `WorldMutationContext`: prevents Lumi operations from reentering capture and can suppress fallback capture during native external-tool undo/redo.
+- `WorldMutationContext`: prevents Lumi operations from reentering capture and suppresses fallback capture while internal prepared apply and native external-tool undo/redo are running.
 - `WorldMutationCaptureGuard`: duplicate hook protection.
 - `WorldMutationCapturePolicy`: block mutation filtering and runtime-only state rejection.
 - `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling.
@@ -155,7 +155,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 
 ### World Apply
 
-- `WorldOperationManager`: single-operation-per-world async prepare plus tick-time apply orchestration.
+- `WorldOperationManager`: single-operation-per-world async prepare plus tick-time apply orchestration, including high-throughput budgets for restore, recovery, merge, and undo/redo labels.
 - `WorldChangeBatchPreparer`: patch/recovery block/entity changes and v7 section frames to tick-ready sparse or section-native batches.
 - `SnapshotBatchPreparer`: snapshot payloads to tick-ready section-native batches without expanding dense sections into per-block placements.
 - `BlockChangeApplier`: actual section/block-entity/entity commit operations.

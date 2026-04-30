@@ -75,6 +75,23 @@ class WorldChangeBatchPreparerTest {
         assertEquals(SectionApplyPath.SECTION_NATIVE, batch.nativeSections().getFirst().safetyProfile().path());
     }
 
+    @Test
+    void decodedSparseSectionsStayAsDirectPlacementsBelowNativeCutoff() {
+        List<PreparedBlockPlacement> placements = java.util.stream.IntStream
+                .range(0, SectionApplySafetyClassifier.NATIVE_DENSE_THRESHOLD - 1)
+                .mapToObj(index -> new PreparedBlockPlacement(
+                        new BlockPos(index & 15, 64 + ((index >>> 8) & 15), (index >>> 4) & 15),
+                        Blocks.STONE.defaultBlockState(),
+                        null
+                ))
+                .toList();
+
+        PreparedChunkBatch batch = this.preparer.prepareDecodedChunk(new ChunkPoint(0, 0), placements, EntityBatch.empty());
+
+        assertEquals(placements.size(), batch.placements().size());
+        assertEquals(0, batch.nativeSections().size());
+    }
+
     private static EntityPayload entity(String entityId, double x) {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", "minecraft:block_display");

@@ -76,7 +76,7 @@ Important adapters:
 - `AutoCheckpointCommandClassifier` and `AutoCheckpointService`: identify large vanilla `/fill` and `/clone` commands plus external WorldEdit/Axiom action ids, then save an existing pending draft as an `AUTO_CHECKPOINT` before the external edit starts
 - `ExplosiveEntityContextRegistry`: carries the originating builder action from a primed TNT spawn to its delayed explosion so the block damage is captured with the same action context
 - `SessionStabilizationService`: compares session-start chunk baselines to the current world and composes a stabilized diff on top of the current pending chunk state for dirty envelope chunks
-- `WorldMutationContext`: prevents restore application from being re-captured as tracked history and can temporarily suppress capture while Lumi dispatches native external-tool undo/redo commands
+- `WorldMutationContext`: prevents internal restore, recovery, merge, and undo/redo application from being re-captured as tracked history and can temporarily suppress capture while Lumi dispatches native external-tool undo/redo commands
 - `LumaAccessControl`: centralizes the operator/cheats gate for diagnostic commands, UI entry points, and dedicated-server tracked world actions
 - `WorldOperationManager`: runs async preparation plus completed-first chunk-queue dispatch on the server tick with adaptive block budgets and bounded block-entity/entity passes
 - `WorldChangeBatchPreparer` and `SnapshotBatchPreparer`: convert persisted block/entity changes, v7 section frames, and snapshot payloads into tick-ready sparse or section-native prepared batches before apply begins
@@ -176,7 +176,7 @@ Important invariants:
 - no-op edits are removed from the buffer
 - entity spawn/remove/update diffs use nullable old/new payloads and are applied through `EntityBatch`
 - restore-originated mutations never re-enter tracked history
-- undo/redo reuses prepared world operations and then adjusts the pending draft separately, so internal replay does not create duplicate capture events
+- undo/redo reuses high-throughput prepared world operations and then adjusts the pending draft separately, so internal replay does not create duplicate capture events
 - native WorldEdit/FAWE undo/redo adjusts Lumi's pending draft after the tool command runs and suppresses fallback capture during the command, so the same changes are not recorded twice
 - undo-only item drops are excluded from durable recovery and version payloads by entity capture policy
 
@@ -276,6 +276,7 @@ Current guarantees:
 
 - only one world operation runs per world at a time
 - the world-operation executor is single-threaded and low priority
+- restore, recovery, merge, and undo/redo apply operations use the high-throughput section-native budget; ordinary prepared work keeps the conservative tick budget
 - restore/apply budgets adapt downward when a tick slice exceeds its budget and recover gradually when slices stay cheap
 - prepared apply records debug-only fast-apply metrics for native sections/cells, direct sections, fallback sections, changed/skipped blocks, section packets, block-entity packets, light checks, and fallback reasons
 - block entities and entity diffs have explicit per-tick caps instead of running as unbounded chunk tail work

@@ -52,6 +52,7 @@ public final class WorldOperationManager {
     private static final double MAX_ADAPTIVE_SCALE = 1.25D;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
 
+    private final WorldApplyOperationProfile applyOperationProfile = new WorldApplyOperationProfile();
     private ExecutorService backgroundExecutor = createExecutor();
     private final Map<String, ActiveOperation> activeOperations = new HashMap<>();
     private final Map<String, OperationSnapshot> lastSnapshots = new HashMap<>();
@@ -199,14 +200,15 @@ public final class WorldOperationManager {
 
     private TickBudget currentTickBudget(ActiveOperation operation) {
         double fraction = operation.snapshot().progress().fraction();
-        int minBlocks = this.isRestoreOperation(operation) ? RESTORE_MIN_BLOCKS_PER_TICK : MIN_BLOCKS_PER_TICK;
-        int maxBlocks = this.isRestoreOperation(operation) ? RESTORE_MAX_BLOCKS_PER_TICK : MAX_BLOCKS_PER_TICK;
-        long minNanos = this.isRestoreOperation(operation) ? RESTORE_MIN_NANOS_PER_TICK : MIN_NANOS_PER_TICK;
-        long maxNanos = this.isRestoreOperation(operation) ? RESTORE_MAX_NANOS_PER_TICK : MAX_NANOS_PER_TICK;
-        int minNativeSections = this.isRestoreOperation(operation)
+        boolean highThroughput = this.isHighThroughputApplyOperation(operation);
+        int minBlocks = highThroughput ? RESTORE_MIN_BLOCKS_PER_TICK : MIN_BLOCKS_PER_TICK;
+        int maxBlocks = highThroughput ? RESTORE_MAX_BLOCKS_PER_TICK : MAX_BLOCKS_PER_TICK;
+        long minNanos = highThroughput ? RESTORE_MIN_NANOS_PER_TICK : MIN_NANOS_PER_TICK;
+        long maxNanos = highThroughput ? RESTORE_MAX_NANOS_PER_TICK : MAX_NANOS_PER_TICK;
+        int minNativeSections = highThroughput
                 ? RESTORE_MIN_NATIVE_SECTIONS_PER_TICK
                 : MIN_NATIVE_SECTIONS_PER_TICK;
-        int maxNativeSections = this.isRestoreOperation(operation)
+        int maxNativeSections = highThroughput
                 ? RESTORE_MAX_NATIVE_SECTIONS_PER_TICK
                 : MAX_NATIVE_SECTIONS_PER_TICK;
         double adaptiveScale = operation.adaptiveScale();
@@ -218,11 +220,10 @@ public final class WorldOperationManager {
         return new TickBudget(blocks, nanos, nativeSections);
     }
 
-    private boolean isRestoreOperation(ActiveOperation operation) {
+    private boolean isHighThroughputApplyOperation(ActiveOperation operation) {
         return operation != null
                 && operation.handle() != null
-                && ("restore-version".equals(operation.handle().label())
-                || "partial-restore".equals(operation.handle().label()));
+                && this.applyOperationProfile.isHighThroughput(operation.handle().label());
     }
 
     private void ensureIdle(String serverKey) {
@@ -604,6 +605,7 @@ public final class WorldOperationManager {
                 }
 
                 WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
+                WorldMutationContext.pushCaptureSuppression();
                 AppliedWork processed;
                 try {
                     int maxBlocks = this.hasPendingNativeSection()
@@ -611,6 +613,7 @@ public final class WorldOperationManager {
                             : Math.min(budget.maxBlocks() - processedWorkThisTick, 128);
                     processed = this.applyCurrentChunk(maxBlocks);
                 } finally {
+                    WorldMutationContext.popCaptureSuppression();
                     WorldMutationContext.popSource();
                 }
 
