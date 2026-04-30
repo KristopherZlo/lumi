@@ -1,14 +1,17 @@
 package io.github.luma.minecraft.world;
 
-import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.PatchSectionFrame;
+import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import java.util.Arrays;
+import java.util.List;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
-import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
@@ -114,6 +117,54 @@ class WorldChangeBatchPreparerTest {
         assertEquals(0, batch.nativeSections().size());
     }
 
+    @Test
+    void sectionFramesDecodeRepeatedPaletteTagsOnceAndKeepBlockEntities() throws Exception {
+        CountingBlockStateDecoder decoder = new CountingBlockStateDecoder();
+        WorldChangeBatchPreparer preparer = new WorldChangeBatchPreparer(decoder);
+        int changedCells = SectionApplySafetyClassifier.NATIVE_DENSE_THRESHOLD;
+        int[] stateIds = new int[changedCells];
+        int[] oldBlockEntityIds = new int[changedCells];
+        int[] blockEntityIds = new int[changedCells];
+        Arrays.fill(oldBlockEntityIds, -1);
+        Arrays.fill(blockEntityIds, -1);
+        for (int index = 0; index < changedCells; index++) {
+            stateIds[index] = index & 1;
+        }
+        blockEntityIds[0] = 0;
+
+        PatchSectionFrame frame = new PatchSectionFrame(
+                0,
+                0,
+                4,
+                mask(changedCells),
+                List.of(stateTag("minecraft:air")),
+                List.of(stateTag("minecraft:stone"), stateTag("minecraft:stone")),
+                new int[changedCells],
+                stateIds,
+                List.of(),
+                List.of(blockEntityTag("minecraft:chest")),
+                oldBlockEntityIds,
+                blockEntityIds
+        );
+
+        List<PreparedChunkBatch> batches = preparer.prepare(
+                null,
+                new PatchSectionWorldChanges(List.of(frame), List.of()),
+                true,
+                null
+        );
+
+        assertEquals(1, decoder.callsFor("minecraft:stone"));
+        assertEquals(0, batches.getFirst().placements().size());
+        assertEquals(1, batches.getFirst().nativeSections().size());
+        PreparedSectionApplyBatch sectionBatch = batches.getFirst().nativeSections().getFirst();
+        assertEquals(SectionApplyPath.SECTION_NATIVE, sectionBatch.safetyProfile().path());
+        assertEquals(
+                "minecraft:chest",
+                sectionBatch.buffer().blockEntityPlan().tagAt(0).getString("id").orElse("")
+        );
+    }
+
     private static EntityPayload entity(String entityId, double x) {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", "minecraft:block_display");
@@ -128,5 +179,25 @@ class WorldChangeBatchPreparerTest {
 
     private static StatePayload payload(net.minecraft.world.level.block.state.BlockState state) {
         return new StatePayload(BlockStateNbtCodec.serializeBlockStateTag(state), null);
+    }
+
+    private static long[] mask(int changedCells) {
+        SectionChangeMask.Builder builder = SectionChangeMask.builder();
+        for (int index = 0; index < changedCells; index++) {
+            builder.set(index);
+        }
+        return builder.build().words();
+    }
+
+    private static CompoundTag stateTag(String name) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", name);
+        return tag;
+    }
+
+    private static CompoundTag blockEntityTag(String id) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", id);
+        return tag;
     }
 }

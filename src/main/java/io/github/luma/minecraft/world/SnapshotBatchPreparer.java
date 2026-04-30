@@ -8,10 +8,13 @@ import io.github.luma.domain.model.SnapshotSectionData;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Converts persisted snapshot payloads into Minecraft-ready chunk apply batches.
@@ -20,16 +23,37 @@ public final class SnapshotBatchPreparer {
 
     private static final CompoundTag AIR_TAG = createAirTag();
     private final SectionApplySafetyClassifier sectionApplySafetyClassifier = new SectionApplySafetyClassifier();
+    private final Supplier<BlockStateDecoder> blockStateDecoderFactory;
+
+    public SnapshotBatchPreparer() {
+        this(BlockStatePaletteDecoder::new);
+    }
+
+    SnapshotBatchPreparer(BlockStateDecoder blockStateDecoder) {
+        this(() -> blockStateDecoder);
+    }
+
+    private SnapshotBatchPreparer(Supplier<BlockStateDecoder> blockStateDecoderFactory) {
+        this.blockStateDecoderFactory = blockStateDecoderFactory;
+    }
 
     public List<PreparedChunkBatch> prepare(SnapshotData snapshot, ServerLevel level) throws IOException {
         List<PreparedChunkBatch> batches = new ArrayList<>();
+        BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
+        BlockState airState = blockStateDecoder.decode(level, AIR_TAG);
         for (SnapshotChunkData chunk : snapshot.chunks()) {
-            batches.add(this.prepareChunk(snapshot, chunk, level));
+            batches.add(this.prepareChunk(snapshot, chunk, level, blockStateDecoder, airState));
         }
         return batches;
     }
 
-    private PreparedChunkBatch prepareChunk(SnapshotData snapshot, SnapshotChunkData chunk, ServerLevel level) throws IOException {
+    private PreparedChunkBatch prepareChunk(
+            SnapshotData snapshot,
+            SnapshotChunkData chunk,
+            ServerLevel level,
+            BlockStateDecoder blockStateDecoder,
+            BlockState airState
+    ) throws IOException {
         Map<Integer, SnapshotSectionData> sections = new HashMap<>();
         for (SnapshotSectionData section : chunk.sections()) {
             sections.put(section.sectionY(), section);
@@ -49,6 +73,9 @@ public final class SnapshotBatchPreparer {
             }
 
             LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(sectionY);
+            BlockState[] decodedPalette = section == null
+                    ? null
+                    : this.decodePalette(level, section.palette(), blockStateDecoder);
             for (int y = minY; y <= maxY; y++) {
                 int localY = y - sectionBaseY;
                 for (int localZ = 0; localZ < 16; localZ++) {
@@ -56,14 +83,11 @@ public final class SnapshotBatchPreparer {
                         int stateIndex = section == null
                                 ? 0
                                 : section.paletteIndexes()[(localY << 8) | (localZ << 4) | localX];
-                        CompoundTag stateTag = section == null
-                                ? AIR_TAG
-                                : section.palette().get(stateIndex);
                         builder.set(
                                 localX,
                                 localY,
                                 localZ,
-                                BlockStateNbtCodec.deserializeBlockState(level, stateTag),
+                                section == null ? airState : decodedPalette[stateIndex],
                                 this.readBlockEntity(chunk, snapshot.minBuildHeight(), y, localX, localZ)
                         );
                     }
@@ -84,6 +108,28 @@ public final class SnapshotBatchPreparer {
                 nativeSections,
                 this.prepareEntitySnapshots(chunk.entitySnapshots())
         );
+    }
+
+    private BlockState[] decodePalette(
+            ServerLevel level,
+            List<CompoundTag> palette,
+            BlockStateDecoder blockStateDecoder
+    ) throws IOException {
+        BlockState[] decoded = new BlockState[palette == null ? 0 : palette.size()];
+        Map<CompoundTag, BlockState> sectionCache = new LinkedHashMap<>();
+        for (int index = 0; index < decoded.length; index++) {
+            CompoundTag tag = palette.get(index);
+            CompoundTag key = tag == null ? new CompoundTag() : tag.copy();
+            BlockState state;
+            if (sectionCache.containsKey(key)) {
+                state = sectionCache.get(key);
+            } else {
+                state = blockStateDecoder.decode(level, tag);
+                sectionCache.put(key, state);
+            }
+            decoded[index] = state;
+        }
+        return decoded;
     }
 
     private CompoundTag readBlockEntity(SnapshotChunkData chunk, int minBuildHeight, int y, int localX, int localZ) {
