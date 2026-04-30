@@ -62,6 +62,16 @@ public final class VersionRepository {
         return versions;
     }
 
+    public boolean isVersionIndexFresh(ProjectLayout layout) throws IOException {
+        if (!Files.exists(layout.versionIndexFile())) {
+            return true;
+        }
+        if (!Files.exists(layout.versionsDir())) {
+            return false;
+        }
+        return this.indexRepository.loadIfFresh(layout, this.versionManifestFiles(layout)).isPresent();
+    }
+
     private void deleteIndexQuietly(ProjectLayout layout) {
         try {
             this.indexRepository.delete(layout);
