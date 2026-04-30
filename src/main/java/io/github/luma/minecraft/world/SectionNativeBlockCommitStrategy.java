@@ -86,6 +86,76 @@ final class SectionNativeBlockCommitStrategy {
         );
     }
 
+    NativeSectionApplyResult applySlice(ServerLevel level, NativeSectionApplyCursor cursor, int maxCells) {
+        if (cursor == null || cursor.isComplete() || maxCells <= 0) {
+            return NativeSectionApplyResult.partial(0);
+        }
+        PreparedSectionApplyBatch batch = cursor.batch();
+        if (level == null || batch.buffer().changedCellCount() <= 0) {
+            cursor.advance(cursor.remainingCells());
+            return NativeSectionApplyResult.completed(
+                    0,
+                    BlockCommitResult.nativeFallback(0, 0, 0, BlockCommitFallbackReason.EMPTY_BATCH)
+            );
+        }
+        if (batch.safetyProfile().path() != SectionApplyPath.SECTION_NATIVE) {
+            return this.completeWithFallback(level, cursor, BlockCommitFallbackReason.NATIVE_REJECTED);
+        }
+
+        LevelChunk chunk = level.getChunkSource().getChunkNow(batch.chunk().x(), batch.chunk().z());
+        if (chunk == null) {
+            return this.completeWithFallback(level, cursor, BlockCommitFallbackReason.CHUNK_NOT_LOADED);
+        }
+
+        int sectionIndex = chunk.getSectionIndexFromSectionY(batch.sectionY());
+        if (sectionIndex < 0 || sectionIndex >= chunk.getSections().length) {
+            return this.completeWithFallback(level, cursor, BlockCommitFallbackReason.SECTION_OUT_OF_RANGE);
+        }
+
+        LevelChunkSection section = chunk.getSection(sectionIndex);
+        if (section == null) {
+            return this.completeWithFallback(level, cursor, BlockCommitFallbackReason.SECTION_MISSING);
+        }
+
+        int processed = 0;
+        BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
+        while (processed < maxCells && !cursor.isComplete()) {
+            this.applyCell(level, chunk, section, cursor, mutablePos);
+            cursor.advance();
+            processed += 1;
+        }
+
+        if (!cursor.isComplete()) {
+            return NativeSectionApplyResult.partial(processed);
+        }
+
+        if (!cursor.changedCells().isEmpty()) {
+            chunk.markUnsaved();
+        }
+        int sectionPackets = this.updateBroadcaster.broadcastSection(
+                level,
+                SectionPos.of(chunk.getPos(), batch.sectionY()),
+                cursor.changedCells(),
+                section
+        );
+        return NativeSectionApplyResult.completed(processed, cursor.completedNativeResult(sectionPackets));
+    }
+
+    private NativeSectionApplyResult completeWithFallback(
+            ServerLevel level,
+            NativeSectionApplyCursor cursor,
+            BlockCommitFallbackReason reason
+    ) {
+        BlockCommitResult result = new VanillaBlockCommitStrategy(reason).apply(
+                level,
+                cursor.batch().toSectionBatch(),
+                cursor.nextCellOrdinal(),
+                cursor.remainingCells()
+        );
+        cursor.advance(result.processedBlocks());
+        return NativeSectionApplyResult.completed(result.processedBlocks(), result);
+    }
+
     private void applyCell(
             ServerLevel level,
             LevelChunk chunk,
@@ -127,6 +197,45 @@ final class SectionNativeBlockCommitStrategy {
         if (targetState.hasBlockEntity()) {
             counters.blockEntityPackets += this.createTargetBlockEntity(level, mutablePos.immutable(), targetState, targetBlockEntityTag);
         }
+    }
+
+    private void applyCell(
+            ServerLevel level,
+            LevelChunk chunk,
+            LevelChunkSection section,
+            NativeSectionApplyCursor cursor,
+            BlockPos.MutableBlockPos mutablePos
+    ) {
+        PreparedSectionApplyBatch batch = cursor.batch();
+        int localIndex = cursor.nextLocalIndex();
+        int localX = SectionChangeMask.localX(localIndex);
+        int localY = SectionChangeMask.localY(localIndex);
+        int localZ = SectionChangeMask.localZ(localIndex);
+        BlockState rawTargetState = batch.buffer().targetStateAt(localIndex);
+        CompoundTag rawBlockEntityTag = batch.buffer().blockEntityPlan().tagAt(localIndex);
+        PersistentBlockStatePolicy.PersistentBlockState persistentState =
+                this.blockStatePolicy.normalize(rawTargetState, rawBlockEntityTag);
+        BlockState targetState = persistentState.state();
+        CompoundTag targetBlockEntityTag = persistentState.blockEntityTag();
+        BlockState currentState = section.getBlockState(localX, localY, localZ);
+        mutablePos.set((batch.chunk().x() << 4) + localX, (batch.sectionY() << 4) + localY, (batch.chunk().z() << 4) + localZ);
+        if (!this.updateDecider.requiresUpdate(level, mutablePos, currentState, targetState, targetBlockEntityTag)) {
+            cursor.recordSkipped();
+            return;
+        }
+
+        if (currentState.hasBlockEntity()) {
+            level.removeBlockEntity(mutablePos);
+        }
+        section.setBlockState(localX, localY, localZ, targetState, false);
+        this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, targetState);
+        this.poiUpdatePlanner.update(level, mutablePos, currentState, targetState);
+        boolean lightCheck = this.lightUpdatePlanner.check(level, mutablePos, currentState, targetState);
+        int blockEntityPackets = 0;
+        if (targetState.hasBlockEntity()) {
+            blockEntityPackets = this.createTargetBlockEntity(level, mutablePos.immutable(), targetState, targetBlockEntityTag);
+        }
+        cursor.recordChanged(SectionPos.sectionRelativePos(mutablePos), blockEntityPackets, lightCheck);
     }
 
     private int createTargetBlockEntity(
