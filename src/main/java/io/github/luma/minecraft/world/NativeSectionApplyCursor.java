@@ -8,11 +8,11 @@ final class NativeSectionApplyCursor {
     private final PreparedSectionApplyBatch batch;
     private final int[] localIndexes;
     private final ShortSet changedCells = new ShortOpenHashSet();
+    private final SectionLightUpdateBatch lightBatch = new SectionLightUpdateBatch();
     private int nextOrdinal;
     private int changedBlocks;
     private int skippedBlocks;
     private int blockEntityPackets;
-    private int lightChecks;
 
     NativeSectionApplyCursor(PreparedSectionApplyBatch batch) {
         if (batch == null) {
@@ -50,13 +50,14 @@ final class NativeSectionApplyCursor {
         return this.localIndexes[this.nextOrdinal];
     }
 
-    void recordChanged(short relativeCell, int blockEntityPackets, boolean lightCheck) {
+    SectionLightUpdateBatch lightBatch() {
+        return this.lightBatch;
+    }
+
+    void recordChanged(short relativeCell, int blockEntityPackets) {
         this.changedCells.add(relativeCell);
         this.changedBlocks += 1;
         this.blockEntityPackets += Math.max(0, blockEntityPackets);
-        if (lightCheck) {
-            this.lightChecks += 1;
-        }
     }
 
     void recordSkipped() {
@@ -75,14 +76,14 @@ final class NativeSectionApplyCursor {
         return this.changedCells;
     }
 
-    BlockCommitResult completedNativeResult(int sectionPackets) {
+    BlockCommitResult completedNativeResult(int sectionPackets, int lightChecks) {
         return BlockCommitResult.nativeSection(
                 this.localIndexes.length,
                 this.changedBlocks,
                 this.skippedBlocks,
                 sectionPackets,
                 this.blockEntityPackets,
-                this.lightChecks
+                lightChecks
         );
     }
 

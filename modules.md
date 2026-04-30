@@ -159,7 +159,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `WorldChangeBatchPreparer`, `BlockStatePaletteDecoder`: patch/recovery block/entity changes and v7 section frames to tick-ready sparse or section-native batches with operation-scoped palette decode caching.
 - `SnapshotBatchPreparer`: snapshot payloads to tick-ready section-native batches without expanding dense sections into per-block placements or decoding palettes inside cell loops.
 - `BlockChangeApplier`: actual section/block-entity/entity commit operations.
-- `SectionContainerRewriteCommitStrategy`, `PalettedContainerDataSwapper`, `SectionNativeBlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, `VanillaBlockCommitStrategy`: dense section container rewrite path, section-native loop path, direct loaded-section sparse apply path, and safe vanilla fallback selection.
+- `SectionContainerRewriteCommitStrategy`, `SectionRewriteApplyPlanner`, `PalettedContainerDataSwapper`, `SectionNativeBlockCommitStrategy`, `DirectSectionBlockCommitStrategy`, `VanillaBlockCommitStrategy`: dense section container rewrite path, section-native loop path, direct loaded-section sparse apply path, and safe vanilla fallback selection.
 - `ChunkSectionUpdateBroadcaster`: batched section and block-entity client update packets after fast commits.
 - `WorldApplyMetrics`: debug counters for rewrite/native/direct/fallback sections, changed blocks, packets, light checks, and fallback reasons.
 - `WorldApplyBlockUpdatePolicy`: side-effect-suppressed update flags and apply behavior.

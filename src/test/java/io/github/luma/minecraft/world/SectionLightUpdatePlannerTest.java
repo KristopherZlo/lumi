@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.world;
 
 import net.minecraft.SharedConstants;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.Assertions;
@@ -71,5 +72,26 @@ class SectionLightUpdatePlannerTest {
                 Blocks.GLASS.defaultBlockState(),
                 Blocks.TINTED_GLASS.defaultBlockState()
         ));
+    }
+
+    @Test
+    void plansOnlyLightRelevantPositionsForDeferredBatchApply() {
+        SectionLightUpdateBatch batch = new SectionLightUpdateBatch();
+
+        Assertions.assertFalse(this.planner.plan(
+                batch,
+                new BlockPos(1, 64, 1),
+                Blocks.STONE.defaultBlockState(),
+                Blocks.DEEPSLATE.defaultBlockState()
+        ));
+        Assertions.assertTrue(this.planner.plan(
+                batch,
+                new BlockPos(2, 64, 2),
+                Blocks.STONE.defaultBlockState(),
+                Blocks.AIR.defaultBlockState()
+        ));
+
+        Assertions.assertEquals(1, batch.size());
+        Assertions.assertEquals(new BlockPos(2, 64, 2), batch.positions().getFirst());
     }
 }

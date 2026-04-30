@@ -43,12 +43,12 @@ class NativeSectionApplyCursorTest {
     void cursorBuildsCompletedNativeCommitResultFromAccumulatedCounters() {
         NativeSectionApplyCursor cursor = new NativeSectionApplyCursor(sectionBatch(2));
 
-        cursor.recordChanged((short) 1, 2, true);
+        cursor.recordChanged((short) 1, 2);
         cursor.advance();
         cursor.recordSkipped();
         cursor.advance();
 
-        BlockCommitResult result = cursor.completedNativeResult(1);
+        BlockCommitResult result = cursor.completedNativeResult(1, 1);
 
         assertEquals(2, result.processedBlocks());
         assertEquals(1, result.changedBlocks());

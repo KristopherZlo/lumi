@@ -1,6 +1,5 @@
 package io.github.luma.minecraft.world;
 
-import java.util.List;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -22,8 +21,8 @@ final class SectionHeightmapUpdater {
         }
     }
 
-    int updateChangedColumns(LevelChunk chunk, LevelChunkSection section, int sectionY, List<Integer> localIndexes) {
-        if (chunk == null || section == null || localIndexes == null || localIndexes.isEmpty()) {
+    int updateChangedColumns(LevelChunk chunk, LevelChunkSection section, int sectionY, int[] localIndexes) {
+        if (chunk == null || section == null || localIndexes == null || localIndexes.length == 0) {
             return 0;
         }
 
