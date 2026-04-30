@@ -6,6 +6,13 @@ final class StorageLimits {
 
     static final int MAX_NBT_BYTES = 16 * 1024 * 1024;
     static final int MAX_RECOVERY_ENTRY_BYTES = 64 * 1024 * 1024;
+    static final int MAX_PATCH_FRAME_COMPRESSED_BYTES = 64 * 1024 * 1024;
+    static final int MAX_PATCH_FRAME_UNCOMPRESSED_BYTES = 64 * 1024 * 1024;
+    static final int MAX_PATCH_CHUNKS = 1_000_000;
+    static final int MAX_PATCH_CHANGES_PER_CHUNK = 128 * 4096;
+    static final int MAX_PATCH_SECTIONS_PER_CHUNK = 128;
+    static final int MAX_PALETTE_ENTRIES = 4096;
+    static final int MAX_ENTITY_CHANGES_PER_CHUNK = 262_144;
 
     private StorageLimits() {
     }
