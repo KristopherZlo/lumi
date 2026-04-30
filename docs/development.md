@@ -232,10 +232,11 @@ The current history pipeline is intentionally split into:
 
 - async preparation, compression, and decoding work away from the server tick
 - bounded chunk-batch application on the server tick through `WorldOperationManager`, including adaptive block budgets and explicit block-entity/entity caps
-- Lumi-owned section-native commits for dense prepared sections, direct loaded-section commits for sparse batches, with vanilla fallback and batched section/client block-entity updates. Sections with at least 64 prepared cells are considered dense enough for the native path unless safety classification rejects them.
+- Lumi-owned section-native commits for dense prepared sections, direct loaded-section commits for sparse batches, with vanilla fallback and batched section/client block-entity updates. Sections with at least 64 prepared cells are considered dense enough for the native loop path, and full sections or sections with at least 1024 prepared cells may use the container rewrite path when preflight proves there are no block entities or POI states.
 - operation progress based on block placements, block-entity tail work, and entity operations, so entity-only restore, undo/redo, and recovery batches do not complete early
 - operation snapshots that surface progress to the UI instead of pretending a long task finished immediately
 - optional debug tracing for capture, save, restore, recovery, compare, HUD, and background operations
+- debug apply metrics include rewrite sections/cells, native sections/cells, light checks, section packets, and rewrite/native fallback reasons so slow dense actions can be traced to safety rejection, light maintenance, block entities, unloaded chunks, or sparse distribution.
 
 Current world-apply runtime types:
 

@@ -132,7 +132,7 @@ Use Lumi if you want to:
 3. Lumi tries direct patch replay first, including same-lineage rollback/replay and divergent branch transitions through a shared saved ancestor.
 4. `WORLD_ROOT` fallback uses tracked baseline chunks when direct replay is not valid.
 5. Snapshot fallback is used for normal versions when direct replay is not valid.
-6. Tick-thread apply uses bounded chunk batches with pre-decoded block states, direct loaded-section commits when safe, and prepared entity batches.
+6. Tick-thread apply uses bounded chunk batches with pre-decoded block states, dense safe section rewrites or native section loops when available, direct loaded-section commits for sparse changes, and prepared entity batches.
 7. Restore replay completes paired block halves such as beds, doors, and tall plants before apply.
 8. A full restore moves the active branch head to the restored version after apply completes; when a Lumi selection exists, the confirmation also offers `Only selected area` and `Everything except selection`.
 9. Partial restore writes a new save on the active branch and records the applied change in the live undo/redo stack. The form can consume the current Lumi wooden-sword selection and marks that request as `LUMI_REGION`.
@@ -146,7 +146,7 @@ Use Lumi if you want to:
 - Large WorldEdit/Axiom edits avoid block-entity NBT serialization for ordinary blocks, and capture project matching uses a cached dimension/chunk index.
 - `Only selected area` partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file. `Everything except selection` plans the same restore path but filters out selected blocks after loading the relevant changes.
 - Auto checkpoints save any existing pending draft before large external edits; if no draft exists, the current branch head is already the checkpoint and Lumi does nothing.
-- Restore apply uses adaptive tick budgets, direct section writes with vanilla fallback, batched section packets, capped block-entity/entity tail work per tick, and progress for entity-only batches.
+- Restore apply uses adaptive tick budgets, safe dense section rewrites, native or direct section writes with vanilla fallback, batched section packets, capped block-entity/entity tail work per tick, and progress for entity-only batches.
 - One map operation is expected at a time per save.
 - Progress is exposed through operation state. The in-world action bar uses short status text and only shows a compact ASCII progress bar for larger active operations.
 - Lumi screens do not pause the game.
@@ -269,7 +269,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
 6. Use the Lumi action button plus `Z` / `Y` to undo or redo the latest tracked action while no screen is open. The default action button is `Left Alt`, and changing it changes these chords too. WorldEdit/FAWE actions use native tool undo/redo; captured Axiom capability actions replay through Lumi.
-7. Hold the Lumi action button to preview the latest 10 undo actions, or hold it plus `Y` to preview redo actions, when the compare overlay is not active. The preview renders translucent exposed sides as well as thicker outlines.
+7. Hold the Lumi action button to preview the latest 10 undo actions, or hold it plus `Y` to preview redo actions, when the compare overlay is not active. The preview renders nearest exposed changed blocks and summarizes dense omitted sections with faint aggregate boxes.
    Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
 8. Press the Lumi action button plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
 9. Use `Save build` when you want the full save screen with manual naming or replace-latest tools.
