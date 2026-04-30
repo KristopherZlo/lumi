@@ -7,4 +7,12 @@ record WorldApplyBudget(
         int maxNativeCells,
         int maxRewriteSections
 ) {
+
+    String summary() {
+        return "maxBlocks=" + this.maxBlocks
+                + ", maxNanos=" + this.maxNanos
+                + ", maxNativeSections=" + this.maxNativeSections
+                + ", maxNativeCells=" + this.maxNativeCells
+                + ", maxRewriteSections=" + this.maxRewriteSections;
+    }
 }

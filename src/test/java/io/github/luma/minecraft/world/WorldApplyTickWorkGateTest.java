@@ -2,6 +2,7 @@ package io.github.luma.minecraft.world;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,6 +35,18 @@ class WorldApplyTickWorkGateTest {
                 4,
                 this.budget
         ));
+        assertEquals(
+                "rewrite-budget-consumed",
+                this.gate.decide(
+                        true,
+                        SectionApplyPath.SECTION_REWRITE,
+                        SectionChangeMask.ENTRY_COUNT * 4,
+                        4,
+                        0,
+                        4,
+                        this.budget
+                ).reason()
+        );
     }
 
     @Test
@@ -47,6 +60,18 @@ class WorldApplyTickWorkGateTest {
                 0,
                 this.budget
         ));
+        assertEquals(
+                "rewrite-after-non-rewrite-work",
+                this.gate.decide(
+                        true,
+                        SectionApplyPath.SECTION_REWRITE,
+                        64,
+                        0,
+                        64,
+                        0,
+                        this.budget
+                ).reason()
+        );
         assertFalse(this.gate.canStartNextStep(
                 true,
                 SectionApplyPath.SECTION_NATIVE,
