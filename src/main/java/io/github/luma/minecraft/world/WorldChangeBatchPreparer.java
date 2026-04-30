@@ -21,6 +21,7 @@ import net.minecraft.server.level.ServerLevel;
 public final class WorldChangeBatchPreparer {
 
     private final ConnectedBlockPlacementExpander connectedBlockPlacementExpander = new ConnectedBlockPlacementExpander();
+    private final SectionApplySafetyClassifier sectionApplySafetyClassifier = new SectionApplySafetyClassifier();
 
     public List<PreparedChunkBatch> prepareNewValues(ServerLevel level, PatchWorldChanges changes) throws IOException {
         return this.prepare(level, changes.blockChanges(), changes.entityChanges(), true, ProgressListener.NO_OP);
@@ -88,13 +89,79 @@ public final class WorldChangeBatchPreparer {
         chunks.addAll(grouped.keySet());
         chunks.addAll(groupedEntities.keySet());
         for (ChunkPoint chunk : chunks) {
-            batches.add(new PreparedChunkBatch(
+            batches.add(this.prepareDecodedChunk(
                     chunk,
-                    List.copyOf(grouped.getOrDefault(chunk, List.of())),
+                    grouped.getOrDefault(chunk, List.of()),
                     this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues)
             ));
         }
         return batches;
+    }
+
+    public PreparedChunkBatch prepareDecodedChunk(
+            ChunkPoint chunk,
+            List<PreparedBlockPlacement> placements,
+            EntityBatch entityBatch
+    ) {
+        SectionSplit split = this.splitSections(chunk, placements);
+        return new PreparedChunkBatch(
+                chunk,
+                split.sparsePlacements(),
+                split.nativeSections(),
+                entityBatch
+        );
+    }
+
+    private SectionSplit splitSections(ChunkPoint chunk, List<PreparedBlockPlacement> placements) {
+        if (placements == null || placements.isEmpty()) {
+            return new SectionSplit(List.of(), List.of());
+        }
+
+        Map<Integer, List<PreparedBlockPlacement>> bySection = new LinkedHashMap<>();
+        for (PreparedBlockPlacement placement : placements) {
+            bySection.computeIfAbsent(Math.floorDiv(placement.pos().getY(), 16), ignored -> new ArrayList<>())
+                    .add(placement);
+        }
+
+        List<PreparedBlockPlacement> sparse = new ArrayList<>();
+        List<PreparedSectionApplyBatch> nativeSections = new ArrayList<>();
+        bySection.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    if (entry.getValue().stream().anyMatch(placement -> placement.state() == null)) {
+                        sparse.addAll(entry.getValue());
+                        return;
+                    }
+                    LumiSectionBuffer buffer = this.toSectionBuffer(entry.getKey(), entry.getValue());
+                    SectionApplySafetyProfile profile = this.sectionApplySafetyClassifier.classify(buffer, false);
+                    if (profile.path() == SectionApplyPath.SECTION_NATIVE) {
+                        nativeSections.add(new PreparedSectionApplyBatch(
+                                chunk,
+                                entry.getKey(),
+                                buffer,
+                                profile,
+                                false
+                        ));
+                    } else {
+                        sparse.addAll(entry.getValue());
+                    }
+                });
+        return new SectionSplit(List.copyOf(sparse), List.copyOf(nativeSections));
+    }
+
+    private LumiSectionBuffer toSectionBuffer(int sectionY, List<PreparedBlockPlacement> placements) {
+        LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(sectionY);
+        for (PreparedBlockPlacement placement : placements) {
+            BlockPos pos = placement.pos();
+            builder.set(
+                    pos.getX() & 15,
+                    pos.getY() & 15,
+                    pos.getZ() & 15,
+                    placement.state(),
+                    placement.blockEntityTag()
+            );
+        }
+        return builder.build();
     }
 
     EntityBatch toEntityBatch(List<StoredEntityChange> changes, boolean applyNewValues) {
@@ -121,5 +188,11 @@ public final class WorldChangeBatchPreparer {
         };
 
         void onDecoded(int completed, int total);
+    }
+
+    private record SectionSplit(
+            List<PreparedBlockPlacement> sparsePlacements,
+            List<PreparedSectionApplyBatch> nativeSections
+    ) {
     }
 }

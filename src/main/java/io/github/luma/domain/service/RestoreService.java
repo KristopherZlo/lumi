@@ -1221,6 +1221,12 @@ public final class RestoreService {
                 long packedPos = BlockPos.asLong(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ());
                 chunkPlacements.put(packedPos, placement);
             }
+            for (var nativeSection : batch.nativeSections()) {
+                for (PreparedBlockPlacement placement : nativeSection.toPlacements()) {
+                    long packedPos = BlockPos.asLong(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ());
+                    chunkPlacements.put(packedPos, placement);
+                }
+            }
             if (!batch.entityBatch().isEmpty()) {
                 collapsedEntities.computeIfAbsent(batch.chunk(), ignored -> new EntityAccumulator())
                         .add(batch.entityBatch());
@@ -1238,11 +1244,12 @@ public final class RestoreService {
         LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
         chunks.addAll(expanded.keySet());
         chunks.addAll(collapsedEntities.keySet());
+        WorldChangeBatchPreparer preparer = new WorldChangeBatchPreparer();
         for (ChunkPoint chunk : chunks) {
             List<PreparedBlockPlacement> placements = expanded.getOrDefault(chunk, List.of());
             EntityBatch entityBatch = collapsedEntities.getOrDefault(chunk, EntityAccumulator.EMPTY).toBatch();
             if (!placements.isEmpty() || !entityBatch.isEmpty()) {
-                result.add(new PreparedChunkBatch(chunk, placements, entityBatch));
+                result.add(preparer.prepareDecodedChunk(chunk, placements, entityBatch));
             }
         }
         return result;

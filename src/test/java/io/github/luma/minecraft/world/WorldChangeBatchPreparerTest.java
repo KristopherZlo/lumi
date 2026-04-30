@@ -1,11 +1,17 @@
 package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.StoredEntityChange;
+import net.minecraft.SharedConstants;
+import net.minecraft.core.BlockPos;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.block.Blocks;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -13,6 +19,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class WorldChangeBatchPreparerTest {
 
     private final WorldChangeBatchPreparer preparer = new WorldChangeBatchPreparer();
+
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
 
     @Test
     void preparesEntityOnlyNewValueBatches() throws Exception {
@@ -43,6 +55,24 @@ class WorldChangeBatchPreparerTest {
 
         assertEquals(1, batches.size());
         assertEquals(List.of(entityId), batches.getFirst().entityBatch().entityIdsToRemove());
+    }
+
+    @Test
+    void decodedDenseSectionsUseNativeSectionBatches() {
+        List<PreparedBlockPlacement> placements = java.util.stream.IntStream
+                .range(0, SectionApplySafetyClassifier.NATIVE_DENSE_THRESHOLD)
+                .mapToObj(index -> new PreparedBlockPlacement(
+                        new BlockPos(index & 15, 64 + ((index >>> 8) & 15), (index >>> 4) & 15),
+                        Blocks.STONE.defaultBlockState(),
+                        null
+                ))
+                .toList();
+
+        PreparedChunkBatch batch = this.preparer.prepareDecodedChunk(new ChunkPoint(0, 0), placements, EntityBatch.empty());
+
+        assertEquals(0, batch.placements().size());
+        assertEquals(1, batch.nativeSections().size());
+        assertEquals(SectionApplyPath.SECTION_NATIVE, batch.nativeSections().getFirst().safetyProfile().path());
     }
 
     private static EntityPayload entity(String entityId, double x) {

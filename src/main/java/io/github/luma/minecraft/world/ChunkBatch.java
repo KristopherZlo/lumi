@@ -18,17 +18,32 @@ import net.minecraft.nbt.CompoundTag;
  */
 public record ChunkBatch(
         ChunkPoint chunk,
+        Map<Integer, PreparedSectionApplyBatch> nativeSections,
         Map<Integer, SectionBatch> sections,
         Map<BlockPos, CompoundTag> blockEntities,
         EntityBatch entityBatch,
         BatchState state
 ) {
 
+    public ChunkBatch(
+            ChunkPoint chunk,
+            Map<Integer, SectionBatch> sections,
+            Map<BlockPos, CompoundTag> blockEntities,
+            EntityBatch entityBatch,
+            BatchState state
+    ) {
+        this(chunk, Map.of(), sections, blockEntities, entityBatch, state);
+    }
+
     public static ChunkBatch fromPrepared(PreparedChunkBatch batch) {
+        Map<Integer, PreparedSectionApplyBatch> nativeSections = new LinkedHashMap<>();
         Map<Integer, List<PreparedBlockPlacement>> placementsBySection = new LinkedHashMap<>();
         Map<Integer, BitSet> changedMasks = new LinkedHashMap<>();
         Map<BlockPos, CompoundTag> blockEntities = new LinkedHashMap<>();
 
+        for (PreparedSectionApplyBatch nativeSection : batch.nativeSections()) {
+            nativeSections.put(nativeSection.sectionY(), nativeSection);
+        }
         for (PreparedBlockPlacement placement : batch.placements()) {
             int sectionY = Math.floorDiv(placement.pos().getY(), 16);
             placementsBySection.computeIfAbsent(sectionY, ignored -> new ArrayList<>()).add(placement);
@@ -53,6 +68,7 @@ public record ChunkBatch(
 
         return new ChunkBatch(
                 batch.chunk(),
+                Map.copyOf(nativeSections),
                 Map.copyOf(sections),
                 Map.copyOf(blockEntities),
                 batch.entityBatch(),
@@ -64,8 +80,15 @@ public record ChunkBatch(
         return new ArrayList<>(this.sections.values());
     }
 
+    public List<PreparedSectionApplyBatch> orderedNativeSections() {
+        return new ArrayList<>(this.nativeSections.values());
+    }
+
     public int totalPlacements() {
         int total = 0;
+        for (PreparedSectionApplyBatch section : this.nativeSections.values()) {
+            total += section.changedCellCount();
+        }
         for (SectionBatch section : this.sections.values()) {
             total += section.placementCount();
         }
