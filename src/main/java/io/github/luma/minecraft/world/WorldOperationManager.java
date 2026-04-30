@@ -471,6 +471,7 @@ public final class WorldOperationManager {
         private List<Map.Entry<BlockPos, CompoundTag>> currentBlockEntities = List.of();
         private CompletableFuture<Void> completionFuture;
         private int nativeSectionIndex = 0;
+        private NativeSectionApplyCursor nativeSectionCursor;
         private int sectionIndex = 0;
         private int placementIndex = 0;
         private int blockEntityIndex = 0;
@@ -536,6 +537,8 @@ public final class WorldOperationManager {
 
             int processedWorkThisTick = 0;
             int processedNativeSectionsThisTick = 0;
+            int processedNativeCellsThisTick = 0;
+            int processedRewriteSectionsThisTick = 0;
             while (System.nanoTime() < deadlineNanos) {
                 if (this.currentBatch == null) {
                     this.currentBatch = this.dispatcher.pollNext();
@@ -547,6 +550,7 @@ public final class WorldOperationManager {
                     this.currentSections = this.currentBatch.orderedSections();
                     this.currentBlockEntities = List.copyOf(this.currentBatch.blockEntities().entrySet());
                     this.nativeSectionIndex = 0;
+                    this.nativeSectionCursor = null;
                     this.sectionIndex = 0;
                     this.placementIndex = 0;
                     this.blockEntityIndex = 0;
@@ -570,6 +574,15 @@ public final class WorldOperationManager {
                     if (processedNativeSectionsThisTick >= budget.maxNativeSections()) {
                         break;
                     }
+                    PreparedSectionApplyBatch pendingNativeSection = this.pendingNativeSection();
+                    if (pendingNativeSection.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE) {
+                        if (processedRewriteSectionsThisTick >= budget.maxRewriteSections()
+                                || processedWorkThisTick > 0) {
+                            break;
+                        }
+                    } else if (processedNativeCellsThisTick >= budget.maxNativeCells()) {
+                        break;
+                    }
                 } else if (processedWorkThisTick >= budget.maxBlocks()) {
                     break;
                 }
@@ -578,9 +591,7 @@ public final class WorldOperationManager {
                 WorldMutationContext.pushCaptureSuppression();
                 AppliedWork processed;
                 try {
-                    int maxBlocks = this.hasPendingNativeSection()
-                            ? Integer.MAX_VALUE
-                            : Math.min(budget.maxBlocks() - processedWorkThisTick, 128);
+                    int maxBlocks = this.maxWorkForCurrentStep(budget, processedWorkThisTick, processedNativeCellsThisTick);
                     processed = this.applyCurrentChunk(maxBlocks);
                 } finally {
                     WorldMutationContext.popCaptureSuppression();
@@ -594,6 +605,8 @@ public final class WorldOperationManager {
                 this.appliedWorkUnits += processed.workUnits();
                 processedWorkThisTick += processed.workUnits();
                 processedNativeSectionsThisTick += processed.nativeSections();
+                processedNativeCellsThisTick += processed.nativeCells();
+                processedRewriteSectionsThisTick += processed.rewriteSections();
 
                 this.progressSink().update(
                         OperationStage.APPLYING,
@@ -618,6 +631,7 @@ public final class WorldOperationManager {
                     this.currentNativeSections = List.of();
                     this.currentSections = List.of();
                     this.currentBlockEntities = List.of();
+                    this.nativeSectionCursor = null;
                 }
             }
 
@@ -640,6 +654,21 @@ public final class WorldOperationManager {
             }
 
             return false;
+        }
+
+        private int maxWorkForCurrentStep(
+                WorldApplyBudget budget,
+                int processedWorkThisTick,
+                int processedNativeCellsThisTick
+        ) {
+            if (!this.hasPendingNativeSection()) {
+                return Math.min(budget.maxBlocks() - processedWorkThisTick, 128);
+            }
+            PreparedSectionApplyBatch nativeSection = this.pendingNativeSection();
+            if (nativeSection.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE) {
+                return Integer.MAX_VALUE;
+            }
+            return Math.max(0, budget.maxNativeCells() - processedNativeCellsThisTick);
         }
 
         private boolean advanceCompletion() throws Exception {
@@ -682,13 +711,33 @@ public final class WorldOperationManager {
 
             if (this.hasPendingNativeSection()) {
                 PreparedSectionApplyBatch nativeSection = this.currentNativeSections.get(this.nativeSectionIndex);
-                int processed = BlockChangeApplier.applyNativeSectionBatch(
+                if (this.nativeSectionCursor == null || !this.nativeSectionCursor.isFor(nativeSection)) {
+                    this.nativeSectionCursor = new NativeSectionApplyCursor(nativeSection);
+                }
+                NativeSectionApplyResult result = BlockChangeApplier.applyNativeSectionBatch(
                         this.level(),
-                        nativeSection,
+                        this.nativeSectionCursor,
+                        maxBlocks,
                         this.applyMetrics
                 );
-                this.nativeSectionIndex += 1;
-                return new AppliedWork(processed, 1);
+                int nativeCells = nativeSection.safetyProfile().path() == SectionApplyPath.SECTION_NATIVE
+                        ? result.processedCells()
+                        : 0;
+                int completedNativeSections = result.completedSection() ? 1 : 0;
+                int completedRewriteSections = nativeSection.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE
+                        && result.completedSection()
+                        ? 1
+                        : 0;
+                if (result.completedSection()) {
+                    this.nativeSectionIndex += 1;
+                    this.nativeSectionCursor = null;
+                }
+                return new AppliedWork(
+                        result.processedCells(),
+                        completedNativeSections,
+                        nativeCells,
+                        completedRewriteSections
+                );
             }
 
             if (this.sectionIndex < this.currentSections.size()) {
@@ -705,7 +754,7 @@ public final class WorldOperationManager {
                     this.sectionIndex += 1;
                     this.placementIndex = 0;
                 }
-                return new AppliedWork(processed, 0);
+                return new AppliedWork(processed, 0, 0, 0);
             }
 
             if (!this.blockEntitiesApplied) {
@@ -723,7 +772,7 @@ public final class WorldOperationManager {
                     if (this.blockEntityIndex >= this.currentBlockEntities.size()) {
                         this.blockEntitiesApplied = true;
                     }
-                    return new AppliedWork(processed, 0);
+                    return new AppliedWork(processed, 0, 0, 0);
                 }
             }
 
@@ -743,7 +792,7 @@ public final class WorldOperationManager {
                 if (this.entityIndex >= entityOperationCount) {
                     this.entitiesApplied = true;
                 }
-                return new AppliedWork(processed, 0);
+                return new AppliedWork(processed, 0, 0, 0);
             }
 
             return AppliedWork.none();
@@ -751,6 +800,10 @@ public final class WorldOperationManager {
 
         private boolean hasPendingNativeSection() {
             return this.currentBatch != null && this.nativeSectionIndex < this.currentNativeSections.size();
+        }
+
+        private PreparedSectionApplyBatch pendingNativeSection() {
+            return this.currentNativeSections.get(this.nativeSectionIndex);
         }
 
         private boolean currentBatchFinished() {
@@ -761,10 +814,15 @@ public final class WorldOperationManager {
                     && this.entitiesApplied;
         }
 
-        private record AppliedWork(int workUnits, int nativeSections) {
+        private record AppliedWork(
+                int workUnits,
+                int nativeSections,
+                int nativeCells,
+                int rewriteSections
+        ) {
 
             private static AppliedWork none() {
-                return new AppliedWork(0, 0);
+                return new AppliedWork(0, 0, 0, 0);
             }
         }
     }

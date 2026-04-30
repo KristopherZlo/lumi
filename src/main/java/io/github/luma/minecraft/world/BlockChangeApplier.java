@@ -124,14 +124,44 @@ public final class BlockChangeApplier {
         if (batch == null || batch.changedCellCount() <= 0) {
             return 0;
         }
+        NativeSectionApplyResult result = applyNativeSectionBatch(
+                level,
+                new NativeSectionApplyCursor(batch),
+                Integer.MAX_VALUE,
+                metrics
+        );
+        return result.processedCells();
+    }
 
+    static NativeSectionApplyResult applyNativeSectionBatch(
+            ServerLevel level,
+            NativeSectionApplyCursor cursor,
+            int maxCells,
+            WorldApplyMetrics metrics
+    ) {
+        if (cursor == null || cursor.batch().changedCellCount() <= 0 || maxCells <= 0) {
+            return NativeSectionApplyResult.partial(0);
+        }
+
+        PreparedSectionApplyBatch batch = cursor.batch();
+        NativeSectionApplyResult result;
+        if (batch.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE) {
+            result = applyAtomicNativeSection(level, batch);
+            cursor.advance(cursor.remainingCells());
+        } else {
+            result = SECTION_NATIVE_COMMIT_STRATEGY.applySlice(level, cursor, maxCells);
+        }
+        if (metrics != null && result.commitResult() != null) {
+            metrics.record(result.commitResult());
+        }
+        return result;
+    }
+
+    private static NativeSectionApplyResult applyAtomicNativeSection(ServerLevel level, PreparedSectionApplyBatch batch) {
         BlockCommitResult result = batch.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE
                 ? SECTION_REWRITE_COMMIT_STRATEGY.apply(level, batch)
                 : SECTION_NATIVE_COMMIT_STRATEGY.apply(level, batch);
-        if (metrics != null) {
-            metrics.record(result);
-        }
-        return result.processedBlocks();
+        return NativeSectionApplyResult.completed(result.processedBlocks(), result);
     }
 
     private static void applyPersistentBlockState(ServerLevel level, BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
