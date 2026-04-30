@@ -31,6 +31,7 @@ public final class UndoRedoKeyController {
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final ExternalUndoRedoPolicy externalUndoRedoPolicy = new ExternalUndoRedoPolicy();
+    private final AxiomUndoRedoBridge axiomUndoRedoBridge = new AxiomUndoRedoBridge();
 
     public void undo(Minecraft client) {
         this.start(client, true);
@@ -94,7 +95,20 @@ public final class UndoRedoKeyController {
             return false;
         }
 
-        this.dispatchNativeToolCommand(client, level.getServer(), undo ? "undo" : "redo");
+        if (decision == ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK) {
+            AxiomUndoRedoBridge.DispatchResult dispatchResult = this.axiomUndoRedoBridge.dispatch(undo);
+            if (!dispatchResult.dispatched()) {
+                return false;
+            }
+            try {
+                this.awaitQueuedServerWork(level.getServer());
+            } finally {
+                dispatchResult.clearUnconsumedReplayExpectation();
+            }
+        } else {
+            this.dispatchNativeToolCommand(client, level.getServer(), undo ? "undo" : "redo");
+        }
+
         if (undo) {
             this.historyManager.completeUndo(project.id().toString(), selection);
             this.applyPendingAdjustments(level, project, action.inverseChanges(), action.inverseEntityChanges(), action.actor());
@@ -121,6 +135,21 @@ public final class UndoRedoKeyController {
                 );
                 return null;
             }).join();
+        } catch (CompletionException exception) {
+            Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw exception;
+        }
+    }
+
+    private void awaitQueuedServerWork(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        try {
+            server.submit(() -> null).join();
         } catch (CompletionException exception) {
             Throwable cause = exception.getCause() == null ? exception : exception.getCause();
             if (cause instanceof RuntimeException runtimeException) {
