@@ -316,7 +316,9 @@ public final class WorldChangeBatchPreparer {
                     }
                     LumiSectionBuffer buffer = this.toSectionBuffer(entry.getKey(), entry.getValue());
                     SectionApplySafetyProfile profile = this.sectionApplySafetyClassifier.classify(buffer, false);
-                    if (profile.path() == SectionApplyPath.SECTION_NATIVE) {
+                    if (profile.path() == SectionApplyPath.DIRECT_SECTION) {
+                        sparse.addAll(entry.getValue());
+                    } else {
                         nativeSections.add(new PreparedSectionApplyBatch(
                                 chunk,
                                 entry.getKey(),
@@ -324,8 +326,6 @@ public final class WorldChangeBatchPreparer {
                                 profile,
                                 false
                         ));
-                    } else {
-                        sparse.addAll(entry.getValue());
                     }
                 });
         return new SectionSplit(List.copyOf(sparse), List.copyOf(nativeSections));

@@ -82,6 +82,24 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void decodedRewriteSectionsStayNativeInsteadOfFlatteningToPlacements() {
+        List<PreparedBlockPlacement> placements = java.util.stream.IntStream
+                .range(0, SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD)
+                .mapToObj(index -> new PreparedBlockPlacement(
+                        new BlockPos(index & 15, 64 + ((index >>> 8) & 15), (index >>> 4) & 15),
+                        Blocks.STONE.defaultBlockState(),
+                        null
+                ))
+                .toList();
+
+        PreparedChunkBatch batch = this.preparer.prepareDecodedChunk(new ChunkPoint(0, 0), placements, EntityBatch.empty());
+
+        assertEquals(0, batch.placements().size());
+        assertEquals(1, batch.nativeSections().size());
+        assertEquals(SectionApplyPath.SECTION_REWRITE, batch.nativeSections().getFirst().safetyProfile().path());
+    }
+
+    @Test
     void undoRedoLargeSimpleSectionsPrepareAsRewriteBatches() throws Exception {
         List<StoredBlockChange> changes = java.util.stream.IntStream
                 .range(0, SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD)
