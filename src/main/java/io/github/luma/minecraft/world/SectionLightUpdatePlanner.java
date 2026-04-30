@@ -10,7 +10,11 @@ final class SectionLightUpdatePlanner {
         if (batch == null || pos == null || !this.requiresLightCheck(currentState, targetState)) {
             return false;
         }
-        batch.add(pos);
+        if (currentState.getLightEmission() != targetState.getLightEmission()) {
+            batch.addExact(pos);
+        } else {
+            batch.addSurfaceCandidate(pos);
+        }
         return true;
     }
 

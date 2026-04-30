@@ -1,5 +1,6 @@
 package io.github.luma.client.input;
 
+import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
@@ -99,8 +100,20 @@ public final class UndoRedoKeyController {
         }
 
         if (decision == ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK) {
+            LumaMod.LOGGER.info(
+                    "Delegating {} for Axiom action {} by {} to native Axiom history",
+                    undo ? "undo" : "redo",
+                    action.id(),
+                    action.actor()
+            );
             AxiomUndoRedoBridge.DispatchResult dispatchResult = this.axiomUndoRedoBridge.dispatch(undo);
             if (!dispatchResult.dispatched()) {
+                LumaMod.LOGGER.info(
+                        "Native Axiom {} unavailable for action {}: {}; falling back to Lumi replay",
+                        undo ? "undo" : "redo",
+                        action.id(),
+                        dispatchResult.fallbackReason()
+                );
                 return false;
             }
             try {
@@ -108,6 +121,11 @@ public final class UndoRedoKeyController {
             } finally {
                 dispatchResult.clearUnconsumedReplayExpectation();
             }
+            LumaMod.LOGGER.info(
+                    "Native Axiom {} completed for action {}; applying Lumi history adjustment",
+                    undo ? "undo" : "redo",
+                    action.id()
+            );
         } else {
             this.dispatchNativeToolCommand(client, level.getServer(), undo ? "undo" : "redo");
         }

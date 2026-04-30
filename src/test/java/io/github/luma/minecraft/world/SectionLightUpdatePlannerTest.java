@@ -93,6 +93,23 @@ class SectionLightUpdatePlannerTest {
 
         Assertions.assertEquals(1, batch.size());
         Assertions.assertEquals(new BlockPos(2, 64, 2), batch.positions().getFirst());
+        Assertions.assertEquals(0, batch.exactPositions().size());
+        Assertions.assertEquals(1, batch.surfaceCandidatePositions().size());
+    }
+
+    @Test
+    void keepsEmissiveTransitionsExactForDeferredBatchApply() {
+        SectionLightUpdateBatch batch = new SectionLightUpdateBatch();
+
+        Assertions.assertTrue(this.planner.plan(
+                batch,
+                new BlockPos(2, 64, 2),
+                Blocks.GLOWSTONE.defaultBlockState(),
+                Blocks.AIR.defaultBlockState()
+        ));
+
+        Assertions.assertEquals(1, batch.exactPositions().size());
+        Assertions.assertEquals(0, batch.surfaceCandidatePositions().size());
     }
 
     @Test
