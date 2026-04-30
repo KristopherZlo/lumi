@@ -177,9 +177,9 @@ Current UX assumptions:
 - runtime-only redstone state flips and piston animation states do not become live undo/redo actions
 - pressing `H` hides or shows the current compare overlay without clearing the diff data
 - opening See Changes with a resolved pair or pressing `Compare` enables the world highlight immediately for that diff
-- comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present
+- comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present, except very large active overlays which keep their initial snapshot to avoid client stalls
 - holding the Lumi action button shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
-- compare overlays and small recent-action previews build their render selection from exposed changed blocks, so dense fills still have visible surfaces even when the camera is nearest to internal changed blocks
+- compare overlays and small recent-action previews build their render selection from exposed changed blocks, so dense fills still have visible surfaces even when the camera is nearest to internal changed blocks; very large compare diffs collapse to merged low-alpha volume blobs by change type
 - holding the same remappable action button while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay; small actions render translucent exposed sides with thicker outlines, while dense actions collapse into merged low-alpha volume blobs prepared off the client tick. Holding the action button plus redo previews redo actions.
 - the dashboard is a project picker outside the focused workspace menu
 - the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, and `Branches`; maintenance tools stay in the sidebar `More` route

@@ -284,7 +284,7 @@ Current scope:
 - menu flow first, with commands limited to diagnostics/help and the explicit `/lumi testing singleplayer` runtime test suite
 - combine currently works through imported review projects for the same project lineage, with background review, block-level same-area detection, and validation messages before Lumi writes a combined save
 - partial restore is available from save details with manual bounds or a wooden-sword Lumi selection, including inside-selection and everything-except-selection modes
-- compare overlay marks changed positions, not a full 3D preview
+- compare overlay marks changed positions, not a full 3D preview; very large comparisons collapse into merged volume blobs so the client does not draw hundreds of thousands of separate block overlays
 
 ## Docs
 

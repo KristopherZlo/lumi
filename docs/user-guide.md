@@ -257,8 +257,8 @@ Manual `From` and `To` references are hidden by default. Use `More details` in S
 Running See Changes turns on the client-side world highlight for the resolved diff immediately.
 Press `H` to hide or show the current overlay without rebuilding the comparison.
 Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
-Dense diff regions render as an exposed translucent shell with thicker outlines, so nearby changes stay readable instead of stacking into a solid color slab.
-If one side of the comparison is the `current` build, that active highlight refreshes automatically while you keep editing.
+Small and moderate diff regions render as an exposed translucent shell with thicker outlines, so nearby changes stay readable instead of stacking into a solid color slab. Very large diff regions collapse into merged low-alpha volume blobs.
+If one side of the comparison is the `current` build, that active highlight refreshes automatically while you keep editing. Very large current-build highlights keep their initial snapshot to avoid client stalls.
 If compare highlight is not active, holding the Lumi action button shows the latest 10 undo actions instead. Holding the action button plus `Y` switches that temporary overlay to redo actions. Small previews fade from the newest action to older ones and render translucent exposed sides with thicker outlines; dense previews collapse into merged low-alpha volume blobs.
 
 The overlay gives priority to changes near the camera.

@@ -12,6 +12,7 @@ import net.minecraft.client.Minecraft;
 public final class CompareOverlayCoordinator {
 
     private static final int REFRESH_INTERVAL_TICKS = 10;
+    private static final int LARGE_DIFF_AUTO_REFRESH_LIMIT = 50_000;
     private static final CompareOverlayCoordinator INSTANCE = new CompareOverlayCoordinator();
 
     private final CompareScreenController controller = new CompareScreenController();
@@ -46,6 +47,10 @@ public final class CompareOverlayCoordinator {
             return;
         }
         this.refreshCooldown = REFRESH_INTERVAL_TICKS;
+        if (request.changedBlockCount() > LARGE_DIFF_AUTO_REFRESH_LIMIT) {
+            this.logSkip(request.debugEnabled(), "large-diff-auto-refresh-disabled", request.leftVersionId(), request.rightVersionId());
+            return;
+        }
 
         try {
             VersionDiff diff = this.controller.buildDiff(
