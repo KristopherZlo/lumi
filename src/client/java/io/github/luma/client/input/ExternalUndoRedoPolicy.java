@@ -6,8 +6,16 @@ package io.github.luma.client.input;
  */
 public final class ExternalUndoRedoPolicy {
 
+    public Decision decisionForAction(String actor, String actionId) {
+        String normalizedActionId = normalize(actionId);
+        if (normalizedActionId.startsWith("axiom-") || normalizedActionId.startsWith("axiom:")) {
+            return Decision.AXIOM_NATIVE_HOOK;
+        }
+        return this.decisionForActor(actor);
+    }
+
     public Decision decisionForActor(String actor) {
-        String normalized = actor == null ? "" : actor.toLowerCase(java.util.Locale.ROOT);
+        String normalized = normalize(actor);
         if (normalized.startsWith("worldedit") || normalized.startsWith("fawe")) {
             return Decision.NATIVE_TOOL_COMMAND;
         }
@@ -15,6 +23,10 @@ public final class ExternalUndoRedoPolicy {
             return Decision.AXIOM_NATIVE_HOOK;
         }
         return Decision.LUMI_REPLAY;
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.toLowerCase(java.util.Locale.ROOT);
     }
 
     public enum Decision {

@@ -90,7 +90,10 @@ public final class UndoRedoKeyController {
         }
 
         UndoRedoAction action = selection.action();
-        ExternalUndoRedoPolicy.Decision decision = this.externalUndoRedoPolicy.decisionForActor(action.actor());
+        ExternalUndoRedoPolicy.Decision decision = this.externalUndoRedoPolicy.decisionForAction(
+                action.actor(),
+                action.id()
+        );
         if (decision == ExternalUndoRedoPolicy.Decision.LUMI_REPLAY) {
             return false;
         }

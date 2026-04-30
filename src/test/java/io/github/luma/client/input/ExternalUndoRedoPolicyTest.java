@@ -33,6 +33,18 @@ class ExternalUndoRedoPolicyTest {
     }
 
     @Test
+    void routesAxiomActionIdsToNativeHookEvenWhenActorLooksPlayerDriven() {
+        assertEquals(
+                ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK,
+                this.policy.decisionForAction("player", "axiom-bulldozer-action")
+        );
+        assertEquals(
+                ExternalUndoRedoPolicy.Decision.AXIOM_NATIVE_HOOK,
+                this.policy.decisionForAction("player", "axiom-buffer-fast-place")
+        );
+    }
+
+    @Test
     void replaysOtherActorsThroughLumi() {
         assertEquals(
                 ExternalUndoRedoPolicy.Decision.LUMI_REPLAY,
