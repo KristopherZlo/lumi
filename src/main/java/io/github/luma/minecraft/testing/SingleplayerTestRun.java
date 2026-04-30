@@ -77,6 +77,7 @@ final class SingleplayerTestRun {
     private ProjectVariant branch;
     private SingleplayerGameplayRegressionSuite.GameplayRegressionReport gameplayReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
+    private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
     private String gameplaySaveVersionId = "";
     private int previewWaitTicks;
     private int explosionWaitTicks;
@@ -161,6 +162,8 @@ final class SingleplayerTestRun {
                 case START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS -> this.startRestoreInitialAfterPlayerInteractions();
                 case CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS -> this.checkRestoreInitialAfterPlayerInteractions(server);
                 case CHECK_PERFORMANCE -> this.checkPerformanceBudget(server);
+                case START_BULK_APPLY_DIAGNOSTICS -> this.startBulkApplyDiagnostics(server);
+                case RUN_BULK_APPLY_DIAGNOSTICS -> this.runBulkApplyDiagnostics(server);
                 case CLEANUP -> this.finish(server);
             }
         } catch (Exception exception) {
@@ -540,6 +543,42 @@ final class SingleplayerTestRun {
         for (SingleplayerPerformanceMonitor.PerformanceCheck check : this.performanceMonitor.checks()) {
             this.check(check.passed(), check.label() + " (" + check.detail() + ")");
         }
+        this.completePhase(server, Phase.START_BULK_APPLY_DIAGNOSTICS);
+    }
+
+    private void startBulkApplyDiagnostics(MinecraftServer server) {
+        this.bulkApplyDiagnostics = new SingleplayerBulkApplyDiagnostics(
+                this.level,
+                this.player.blockPosition(),
+                this.project.id().toString()
+        );
+        this.completePhase(server, Phase.RUN_BULK_APPLY_DIAGNOSTICS);
+    }
+
+    private void runBulkApplyDiagnostics(MinecraftServer server) {
+        if (this.bulkApplyDiagnostics == null) {
+            this.recordFailure("Bulk apply diagnostics were not initialized");
+            this.completePhase(server, Phase.CLEANUP);
+            return;
+        }
+
+        SingleplayerBulkApplyDiagnostics.StepResult result = this.bulkApplyDiagnostics.advance(server);
+        for (String message : result.messages()) {
+            this.message(server, message);
+        }
+        if (result.operationHandle() != null) {
+            this.pendingOperation = result.operationHandle();
+            this.log.info("Queued bulk diagnostics operation "
+                    + this.pendingOperation.label() + " " + this.pendingOperation.id());
+            return;
+        }
+        if (!result.finished()) {
+            return;
+        }
+
+        for (SingleplayerBulkApplyDiagnostics.DiagnosticCheck check : this.bulkApplyDiagnostics.checks()) {
+            this.check(check.passed(), check.label() + " (" + check.detail() + ")");
+        }
         this.completePhase(server, Phase.CLEANUP);
     }
 
@@ -590,6 +629,14 @@ final class SingleplayerTestRun {
             this.recordFailure("World operation failed: " + this.pendingOperation.label() + " - " + operation.detail());
         } else {
             this.log.info("Operation completed: " + this.pendingOperation.label() + " " + this.pendingOperation.id());
+            this.worldOperationManager.applyMetrics(this.pendingOperation).ifPresent(metrics -> {
+                this.log.info("Operation apply metrics: label=" + this.pendingOperation.label()
+                        + ", id=" + this.pendingOperation.id()
+                        + ", " + metrics);
+                if (this.bulkApplyDiagnostics != null) {
+                    this.bulkApplyDiagnostics.recordMetrics(this.pendingOperation, operation, metrics);
+                }
+            });
         }
         this.pendingOperation = null;
         this.lastOperationProgressKey = "";
@@ -668,6 +715,13 @@ final class SingleplayerTestRun {
             this.gameplayReport = null;
         }
         this.explosionReport = null;
+        if (this.bulkApplyDiagnostics != null) {
+            try {
+                this.bulkApplyDiagnostics.cleanup();
+            } catch (Exception exception) {
+                this.log.fail(Phase.CLEANUP.title(), "Bulk diagnostics cleanup failed", exception);
+            }
+        }
         try {
             this.clearVolume();
         } catch (Exception exception) {
@@ -840,6 +894,8 @@ final class SingleplayerTestRun {
                 "check broad gameplay actions restore to the initial world state"
         ),
         CHECK_PERFORMANCE("Performance budget", "verify the test run stayed within low-load limits"),
+        START_BULK_APPLY_DIAGNOSTICS("Bulk apply diagnostics", "prepare large dense, fallback, and sparse apply scenarios"),
+        RUN_BULK_APPLY_DIAGNOSTICS("Run bulk apply diagnostics", "apply and delete large prepared block batches with metrics"),
         CLEANUP("Cleanup and report", "remove test blocks, archive the test project, and write the log");
 
         private final String title;
@@ -884,7 +940,8 @@ final class SingleplayerTestRun {
                      CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
                      START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,
                      START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS, CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS,
-                     CHECK_PERFORMANCE, CLEANUP -> CLEANUP;
+                     CHECK_PERFORMANCE, START_BULK_APPLY_DIAGNOSTICS, RUN_BULK_APPLY_DIAGNOSTICS,
+                     CLEANUP -> CLEANUP;
             };
         }
     }
