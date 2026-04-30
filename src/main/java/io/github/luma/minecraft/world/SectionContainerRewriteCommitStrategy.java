@@ -1,12 +1,7 @@
 package io.github.luma.minecraft.world;
 
-import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
-import it.unimi.dsi.fastutil.shorts.ShortSet;
-import java.util.ArrayList;
-import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -15,8 +10,7 @@ import net.minecraft.world.level.chunk.PalettedContainer;
 
 final class SectionContainerRewriteCommitStrategy {
 
-    private final PersistentBlockStatePolicy blockStatePolicy;
-    private final BlockPlacementUpdateDecider updateDecider;
+    private final SectionRewriteApplyPlanner applyPlanner;
     private final ChunkSectionUpdateBroadcaster updateBroadcaster;
     private final SectionNativeBlockCommitStrategy nativeFallback;
     private final PalettedContainerDataSwapper dataSwapper = new PalettedContainerDataSwapper();
@@ -30,8 +24,7 @@ final class SectionContainerRewriteCommitStrategy {
             ChunkSectionUpdateBroadcaster updateBroadcaster,
             SectionNativeBlockCommitStrategy nativeFallback
     ) {
-        this.blockStatePolicy = blockStatePolicy;
-        this.updateDecider = updateDecider;
+        this.applyPlanner = new SectionRewriteApplyPlanner(blockStatePolicy, updateDecider);
         this.updateBroadcaster = updateBroadcaster;
         this.nativeFallback = nativeFallback;
         this.preflight = new SectionRewritePreflight(blockStatePolicy);
@@ -68,21 +61,15 @@ final class SectionContainerRewriteCommitStrategy {
             return this.fallback(level, batch, rejectionReason);
         }
 
-        ApplyPlan plan = this.prepareApplyPlan(level, section, batch);
-        if (plan.changedCells().isEmpty()) {
+        SectionRewriteApplyPlan plan = this.applyPlanner.plan(level, section, batch);
+        if (plan.isNoOp()) {
             return BlockCommitResult.rewriteSection(batch.changedCellCount(), 0, batch.changedCellCount(), 0, 0);
         }
 
-        PalettedContainer<BlockState> replacement = section.getStates().copy();
-        for (CellMutation mutation : plan.mutations()) {
-            int localIndex = mutation.localIndex();
-            replacement.getAndSetUnchecked(
-                    SectionChangeMask.localX(localIndex),
-                    SectionChangeMask.localY(localIndex),
-                    SectionChangeMask.localZ(localIndex),
-                    mutation.targetState()
-            );
-        }
+        PalettedContainer<BlockState> replacement = plan.rebuildsEntireSection()
+                ? section.getStates().recreate()
+                : section.getStates().copy();
+        plan.writeTo(replacement);
 
         if (!this.dataSwapper.swapData(section.getStates(), replacement)) {
             return this.fallback(level, batch, BlockCommitFallbackReason.REWRITE_UNAVAILABLE);
@@ -90,17 +77,22 @@ final class SectionContainerRewriteCommitStrategy {
 
         section.recalcBlockCounts();
         chunk.markUnsaved();
-        this.heightmapUpdater.updateChangedColumns(chunk, section, batch.sectionY(), plan.localIndexes());
+        this.heightmapUpdater.updateChangedColumns(chunk, section, batch.sectionY(), plan.changedLocalIndexes());
         SectionLightUpdateBatch lightBatch = new SectionLightUpdateBatch();
         BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
-        for (CellMutation mutation : plan.mutations()) {
-            int localIndex = mutation.localIndex();
+        for (int index = 0; index < plan.changedBlockCount(); index++) {
+            int localIndex = plan.changedLocalIndexAt(index);
             mutablePos.set(
                     (batch.chunk().x() << 4) + SectionChangeMask.localX(localIndex),
                     (batch.sectionY() << 4) + SectionChangeMask.localY(localIndex),
                     (batch.chunk().z() << 4) + SectionChangeMask.localZ(localIndex)
             );
-            this.lightUpdatePlanner.plan(lightBatch, mutablePos, mutation.currentState(), mutation.targetState());
+            this.lightUpdatePlanner.plan(
+                    lightBatch,
+                    mutablePos,
+                    plan.currentStateAt(index),
+                    plan.changedTargetStateAt(index)
+            );
         }
 
         int lightChecks = this.lightUpdatePlanner.apply(level, lightBatch);
@@ -112,34 +104,11 @@ final class SectionContainerRewriteCommitStrategy {
         );
         return BlockCommitResult.rewriteSection(
                 batch.changedCellCount(),
-                plan.mutations().size(),
-                batch.changedCellCount() - plan.mutations().size(),
+                plan.changedBlockCount(),
+                plan.skippedBlockCount(batch.changedCellCount()),
                 sectionPackets,
                 lightChecks
         );
-    }
-
-    private ApplyPlan prepareApplyPlan(ServerLevel level, LevelChunkSection section, PreparedSectionApplyBatch batch) {
-        List<CellMutation> mutations = new ArrayList<>(batch.changedCellCount());
-        ShortSet changedCells = new ShortOpenHashSet();
-        BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
-        batch.buffer().changedCells().forEachSetCell(localIndex -> {
-            int localX = SectionChangeMask.localX(localIndex);
-            int localY = SectionChangeMask.localY(localIndex);
-            int localZ = SectionChangeMask.localZ(localIndex);
-            BlockState currentState = section.getBlockState(localX, localY, localZ);
-            CompoundTag rawBlockEntityTag = batch.buffer().blockEntityPlan().tagAt(localIndex);
-            PersistentBlockStatePolicy.PersistentBlockState persistentState =
-                    this.blockStatePolicy.normalize(batch.buffer().targetStateAt(localIndex), rawBlockEntityTag);
-            BlockState targetState = persistentState.state();
-            mutablePos.set((batch.chunk().x() << 4) + localX, (batch.sectionY() << 4) + localY, (batch.chunk().z() << 4) + localZ);
-            if (!this.updateDecider.requiresUpdate(level, mutablePos, currentState, targetState, null)) {
-                return;
-            }
-            mutations.add(new CellMutation(localIndex, currentState, targetState));
-            changedCells.add(SectionPos.sectionRelativePos(mutablePos));
-        });
-        return new ApplyPlan(List.copyOf(mutations), changedCells);
     }
 
     private BlockCommitResult fallback(
@@ -171,13 +140,4 @@ final class SectionContainerRewriteCommitStrategy {
         );
     }
 
-    private record ApplyPlan(List<CellMutation> mutations, ShortSet changedCells) {
-
-        private List<Integer> localIndexes() {
-            return this.mutations.stream().map(CellMutation::localIndex).toList();
-        }
-    }
-
-    private record CellMutation(int localIndex, BlockState currentState, BlockState targetState) {
-    }
 }
