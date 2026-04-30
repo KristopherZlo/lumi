@@ -131,7 +131,7 @@ Responsibilities are split as follows:
 - view-state records provide immutable inputs to the rendering layer
 - lightweight summary controllers keep the project home, Branches, and Import / Export routes fast by avoiding diff, material, cleanup, diagnostics, archive scan, and merge-preview work on open
 - `MergePreviewCache` runs Import / Export combine previews in the background and caches them by imported package and target branch while the screen is open
-- `LumaScreen` extends owo-ui `BaseOwoScreen`, keeps Lumi menus non-pausing, closes the Lumi UI back to the game on Escape, and gives each route a code-driven `OwoUIAdapter`
+- `LumaScreen` extends owo-ui `BaseOwoScreen`, keeps Lumi menus non-pausing, closes the Lumi UI back to the game on Escape unless a route deliberately overrides that behavior, and gives each route a code-driven `OwoUIAdapter`
 - `CompareScreenSections`, `ProjectScreenSections`, focused Save details section builders, and `ShareMergeReviewSection` own repeated route section composition, while their screens keep route lifecycle, transient selection state, and action callbacks
 - `ClientWorkspaceOpenService` opens the current workspace through a lightweight loading screen and schedules project metadata preparation away from the client tick that handled the key press
 - `ClientWorkspaceOpenService` and `ScreenRouter` route directly to `RecoveryScreen` when the opened project has a non-empty interrupted draft from a previous session; current-run pending work stays on the normal project screen

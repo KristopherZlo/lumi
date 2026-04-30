@@ -25,8 +25,10 @@ import java.util.Set;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
+import org.lwjgl.glfw.GLFW;
 
 public final class OnboardingScreen extends LumaScreen {
 
@@ -111,6 +113,14 @@ public final class OnboardingScreen extends LumaScreen {
     @Override
     public void onClose() {
         this.completeAndOpenWorkspace();
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (isEscapeKey(event)) {
+            return true;
+        }
+        return super.keyPressed(event);
     }
 
     @Override
@@ -283,6 +293,10 @@ public final class OnboardingScreen extends LumaScreen {
 
     private int dialogWidth() {
         return Math.max(MIN_DIALOG_WIDTH, Math.min(MAX_DIALOG_WIDTH, this.width - 20));
+    }
+
+    static boolean isEscapeKey(KeyEvent event) {
+        return event != null && event.key() == GLFW.GLFW_KEY_ESCAPE;
     }
 
     private record Page(String id, String titleKey, String helpKey, Shortcut shortcut) {
