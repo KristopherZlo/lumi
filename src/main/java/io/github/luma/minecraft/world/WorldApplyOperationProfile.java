@@ -13,8 +13,13 @@ final class WorldApplyOperationProfile {
             "merge-variant"
     );
 
-    boolean isHighThroughput(String label) {
-        return label != null
-                && (HIGH_THROUGHPUT_LABELS.contains(label) || label.startsWith("bulk-diagnostic-"));
+    WorldApplyProfile profileFor(String label) {
+        if (label != null && label.startsWith("bulk-diagnostic-")) {
+            return WorldApplyProfile.DIAGNOSTIC_TURBO;
+        }
+        if (label != null && HIGH_THROUGHPUT_LABELS.contains(label)) {
+            return WorldApplyProfile.HISTORY_FAST;
+        }
+        return WorldApplyProfile.NORMAL;
     }
 }

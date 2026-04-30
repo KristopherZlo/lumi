@@ -20,6 +20,11 @@ final class WorldApplyMetrics {
     private int sectionPackets;
     private int blockEntityPackets;
     private int lightChecks;
+    private int applyTicks;
+    private int workTicks;
+    private int maxWorkPerTick;
+    private int lightDrainTicks;
+    private long lightDrainNanos;
     private final Map<String, Integer> fallbackReasons = new LinkedHashMap<>();
 
     void record(BlockCommitResult result) {
@@ -54,6 +59,20 @@ final class WorldApplyMetrics {
 
     void recordLightChecks(int lightChecks) {
         this.lightChecks += Math.max(0, lightChecks);
+    }
+
+    void recordApplyTick(int workUnits) {
+        this.applyTicks += 1;
+        if (workUnits <= 0) {
+            return;
+        }
+        this.workTicks += 1;
+        this.maxWorkPerTick = Math.max(this.maxWorkPerTick, workUnits);
+    }
+
+    void recordLightDrainTick(long elapsedNanos) {
+        this.lightDrainTicks += 1;
+        this.lightDrainNanos += Math.max(0L, elapsedNanos);
     }
 
     int processedBlocks() {
@@ -91,7 +110,21 @@ final class WorldApplyMetrics {
                 + ", sectionPackets=" + this.sectionPackets
                 + ", blockEntityPackets=" + this.blockEntityPackets
                 + ", lightChecks=" + this.lightChecks
+                + ", applyTicks=" + this.applyTicks
+                + ", workTicks=" + this.workTicks
+                + ", avgWorkPerTick=" + this.avgWorkPerTick()
+                + ", maxWorkPerTick=" + this.maxWorkPerTick
+                + ", lightDrainTicks=" + this.lightDrainTicks
+                + ", lightDrainDurationMs=" + this.lightDrainDurationMillis()
                 + ", fallbackReasons=" + this.fallbackReasonsSummary();
+    }
+
+    private int avgWorkPerTick() {
+        return this.workTicks <= 0 ? 0 : this.processedBlocks / this.workTicks;
+    }
+
+    private long lightDrainDurationMillis() {
+        return this.lightDrainNanos / 1_000_000L;
     }
 
     private String fallbackReasonsSummary() {

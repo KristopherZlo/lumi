@@ -364,6 +364,10 @@ final class SingleplayerTestRun {
         for (SingleplayerGameplayRegressionSuite.GameplayCheck check : report.checks()) {
             this.check(check.passed(), check.label());
         }
+        for (SingleplayerGameplayRegressionSuite.GameplayTiming timing : report.timings()) {
+            this.log.info("Gameplay timing: scenario=" + timing.scenario()
+                    + ", durationMs=" + timing.durationMillis());
+        }
 
         RecoveryDraft draft = this.value("Live recovery draft can be loaded after gameplay actions", () ->
                 HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));

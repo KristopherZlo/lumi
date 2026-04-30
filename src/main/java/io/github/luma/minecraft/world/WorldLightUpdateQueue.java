@@ -1,9 +1,11 @@
 package io.github.luma.minecraft.world;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongComparator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 
 final class WorldLightUpdateQueue {
@@ -83,8 +85,22 @@ final class WorldLightUpdateQueue {
         }
         this.positions.clear();
         this.positions.addAll(selected);
+        this.positions.sort(LOCALITY_ORDER);
         this.nextIndex = 0;
         this.drainPrepared = true;
+    }
+
+    private static final LongComparator LOCALITY_ORDER = (first, second) -> {
+        int sectionComparison = Long.compare(sectionKey(first), sectionKey(second));
+        return sectionComparison != 0 ? sectionComparison : Long.compare(first, second);
+    };
+
+    private static long sectionKey(long packedPos) {
+        return SectionPos.asLong(
+                Math.floorDiv(BlockPos.getX(packedPos), 16),
+                Math.floorDiv(BlockPos.getY(packedPos), 16),
+                Math.floorDiv(BlockPos.getZ(packedPos), 16)
+        );
     }
 
     private boolean isSurfaceCandidate(long packedPos) {

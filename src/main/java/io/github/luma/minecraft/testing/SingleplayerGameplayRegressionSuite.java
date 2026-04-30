@@ -56,9 +56,16 @@ final class SingleplayerGameplayRegressionSuite {
         GameplayChecks checks = new GameplayChecks();
         GameplayScenarioContext context = new GameplayScenarioContext(level, player, volume, actor, checks);
         for (GameplayScenario scenario : this.scenarios) {
+            long startedAt = System.nanoTime();
             scenario.run(context);
+            context.recordTiming(this.scenarioName(scenario), System.nanoTime() - startedAt);
         }
         return context.report();
+    }
+
+    private String scenarioName(GameplayScenario scenario) {
+        String name = scenario.getClass().getSimpleName();
+        return name.endsWith("Scenario") ? name.substring(0, name.length() - "Scenario".length()) : name;
     }
 
     private interface GameplayScenario {
@@ -70,7 +77,8 @@ final class SingleplayerGameplayRegressionSuite {
             Set<BlockPoint> expectedDraftBlocks,
             Set<BlockPoint> latestUndoRedoBlocks,
             int expectedEntityChanges,
-            List<Entity> spawnedEntities
+            List<Entity> spawnedEntities,
+            List<GameplayTiming> timings
     ) {
 
         void cleanup() {
@@ -85,6 +93,13 @@ final class SingleplayerGameplayRegressionSuite {
     }
 
     record GameplayCheck(String label, boolean passed) {
+    }
+
+    record GameplayTiming(String scenario, long durationNanos) {
+
+        long durationMillis() {
+            return Math.max(0L, this.durationNanos) / 1_000_000L;
+        }
     }
 
     private static final class GameplayChecks {
@@ -111,6 +126,7 @@ final class SingleplayerGameplayRegressionSuite {
         private final Set<BlockPoint> expectedDraftBlocks = new LinkedHashSet<>();
         private final Set<BlockPoint> latestUndoRedoBlocks = new LinkedHashSet<>();
         private final List<Entity> spawnedEntities = new ArrayList<>();
+        private final List<GameplayTiming> timings = new ArrayList<>();
         private int expectedEntityChanges;
 
         private GameplayScenarioContext(
@@ -155,13 +171,18 @@ final class SingleplayerGameplayRegressionSuite {
             this.spawnedEntities.add(entity);
         }
 
+        private void recordTiming(String scenario, long durationNanos) {
+            this.timings.add(new GameplayTiming(scenario, durationNanos));
+        }
+
         private GameplayRegressionReport report() {
             return new GameplayRegressionReport(
                     this.checks.results(),
                     Set.copyOf(this.expectedDraftBlocks),
                     Set.copyOf(this.latestUndoRedoBlocks),
                     this.expectedEntityChanges,
-                    List.copyOf(this.spawnedEntities)
+                    List.copyOf(this.spawnedEntities),
+                    List.copyOf(this.timings)
             );
         }
     }
