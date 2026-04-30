@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.luma.client.command.LumaClientCommands;
 import io.github.luma.client.input.KeyBindingState;
+import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
@@ -95,6 +96,14 @@ public final class LumaClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_LEFT_ALT,
                 KEY_CATEGORY
         ));
+        LumiClientKeyBindings.configure(
+                this.openDashboardKey,
+                this.quickSaveKey,
+                this.undoKey,
+                this.redoKey,
+                this.toggleCompareOverlayKey,
+                this.lumiActionButtonKey
+        );
         LumiRegionSelectionController.getInstance().configureActionButton(this.lumiActionButtonKey, this.keyBindingState);
         StartupProfiler.logElapsed("client.key-bindings", keyBindingsStartedAt);
 
@@ -162,7 +171,11 @@ public final class LumaClient implements ClientModInitializer {
             client.setScreen(new QuickSaveScreen());
         }
 
+        boolean openDashboardClicked = false;
         while (this.openDashboardKey.consumeClick()) {
+            openDashboardClicked = true;
+        }
+        if (shortcutInputActive && openDashboardClicked) {
             this.workspaceOpenService.openCurrentWorkspace(client, client.screen);
         }
     }
