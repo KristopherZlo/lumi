@@ -24,10 +24,17 @@ public final class BlockChangeApplier {
     private static final WorldApplyBlockUpdatePolicy UPDATE_POLICY = new WorldApplyBlockUpdatePolicy();
     private static final BlockPlacementUpdateDecider UPDATE_DECIDER = new BlockPlacementUpdateDecider();
     private static final ChunkSectionUpdateBroadcaster UPDATE_BROADCASTER = new ChunkSectionUpdateBroadcaster();
-    private static final BlockCommitStrategy BLOCK_COMMIT_STRATEGY = new DirectSectionBlockCommitStrategy(
+    private static final DirectSectionBlockCommitStrategy DIRECT_SECTION_COMMIT_STRATEGY = new DirectSectionBlockCommitStrategy(
             BLOCK_STATE_POLICY,
             UPDATE_DECIDER,
             UPDATE_BROADCASTER
+    );
+    private static final BlockCommitStrategy BLOCK_COMMIT_STRATEGY = DIRECT_SECTION_COMMIT_STRATEGY;
+    private static final DirectChunkBlockCommitStrategy DIRECT_CHUNK_COMMIT_STRATEGY = new DirectChunkBlockCommitStrategy(
+            BLOCK_STATE_POLICY,
+            UPDATE_DECIDER,
+            UPDATE_BROADCASTER,
+            DIRECT_SECTION_COMMIT_STRATEGY
     );
     private static final SectionNativeBlockCommitStrategy SECTION_NATIVE_COMMIT_STRATEGY = new SectionNativeBlockCommitStrategy(
             BLOCK_STATE_POLICY,
@@ -114,6 +121,29 @@ public final class BlockChangeApplier {
             metrics.record(result);
         }
         return result.processedBlocks();
+    }
+
+    static DirectChunkApplyResult applyDirectChunkSections(
+            ServerLevel level,
+            ChunkBatch batch,
+            int startSectionIndex,
+            int startPlacementIndex,
+            int maxBlocks,
+            int maxSections,
+            WorldApplyMetrics metrics
+    ) {
+        DirectChunkApplyResult result = DIRECT_CHUNK_COMMIT_STRATEGY.apply(
+                level,
+                batch,
+                startSectionIndex,
+                startPlacementIndex,
+                maxBlocks,
+                maxSections
+        );
+        if (metrics != null && result.commitResult() != null) {
+            metrics.record(result.commitResult());
+        }
+        return result;
     }
 
     public static int applyNativeSectionBatch(

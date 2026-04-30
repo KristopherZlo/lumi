@@ -5,7 +5,10 @@ record WorldApplyBudget(
         long maxNanos,
         int maxNativeSections,
         int maxNativeCells,
-        int maxRewriteSections
+        int maxRewriteSections,
+        int maxDirectSections,
+        int maxLightChecks,
+        int sparseStepCap
 ) {
 
     String summary() {
@@ -13,6 +16,9 @@ record WorldApplyBudget(
                 + ", maxNanos=" + this.maxNanos
                 + ", maxNativeSections=" + this.maxNativeSections
                 + ", maxNativeCells=" + this.maxNativeCells
-                + ", maxRewriteSections=" + this.maxRewriteSections;
+                + ", maxRewriteSections=" + this.maxRewriteSections
+                + ", maxDirectSections=" + this.maxDirectSections
+                + ", maxLightChecks=" + this.maxLightChecks
+                + ", sparseStepCap=" + this.sparseStepCap;
     }
 }

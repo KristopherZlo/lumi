@@ -9,6 +9,7 @@ final class WorldApplyTickWorkGate {
             int processedNativeSectionsThisTick,
             int processedNativeCellsThisTick,
             int processedRewriteSectionsThisTick,
+            int processedDirectSectionsThisTick,
             WorldApplyBudget budget
     ) {
         return this.decide(
@@ -18,6 +19,7 @@ final class WorldApplyTickWorkGate {
                 processedNativeSectionsThisTick,
                 processedNativeCellsThisTick,
                 processedRewriteSectionsThisTick,
+                processedDirectSectionsThisTick,
                 budget
         ).canStart();
     }
@@ -29,6 +31,7 @@ final class WorldApplyTickWorkGate {
             int processedNativeSectionsThisTick,
             int processedNativeCellsThisTick,
             int processedRewriteSectionsThisTick,
+            int processedDirectSectionsThisTick,
             WorldApplyBudget budget
     ) {
         if (budget == null) {
@@ -49,6 +52,9 @@ final class WorldApplyTickWorkGate {
         }
         if (processedWorkThisTick >= budget.maxBlocks()) {
             return WorldApplyTickGateDecision.stop("block-budget-consumed");
+        }
+        if (processedDirectSectionsThisTick >= budget.maxDirectSections()) {
+            return WorldApplyTickGateDecision.stop("direct-section-budget-consumed");
         }
         return WorldApplyTickGateDecision.allow();
     }

@@ -25,8 +25,19 @@ record BlockCommitResult(
             int sectionPackets,
             int lightChecks
     ) {
+        return direct(processedBlocks, changedBlocks, skippedBlocks, sectionPackets, lightChecks, processedBlocks > 0 ? 1 : 0);
+    }
+
+    static BlockCommitResult direct(
+            int processedBlocks,
+            int changedBlocks,
+            int skippedBlocks,
+            int sectionPackets,
+            int lightChecks,
+            int directSections
+    ) {
         return result(processedBlocks, changedBlocks, skippedBlocks)
-                .directSections(processedBlocks > 0 ? 1 : 0)
+                .directSections(Math.max(0, directSections))
                 .sectionPackets(sectionPackets)
                 .lightChecks(lightChecks)
                 .build();
@@ -104,6 +115,32 @@ record BlockCommitResult(
                 .nativeFallbackSections(processedBlocks > 0 ? 1 : 0)
                 .fallbackReason(reason)
                 .build();
+    }
+
+    static BlockCommitResult combine(BlockCommitResult first, BlockCommitResult second) {
+        if (first == null) {
+            return second;
+        }
+        if (second == null) {
+            return first;
+        }
+        return new BlockCommitResult(
+                first.processedBlocks() + second.processedBlocks(),
+                first.changedBlocks() + second.changedBlocks(),
+                first.skippedBlocks() + second.skippedBlocks(),
+                first.directSections() + second.directSections(),
+                first.fallbackSections() + second.fallbackSections(),
+                first.rewriteSections() + second.rewriteSections(),
+                first.rewriteCells() + second.rewriteCells(),
+                first.rewriteFallbackSections() + second.rewriteFallbackSections(),
+                first.nativeSections() + second.nativeSections(),
+                first.nativeCells() + second.nativeCells(),
+                first.nativeFallbackSections() + second.nativeFallbackSections(),
+                first.sectionPackets() + second.sectionPackets(),
+                first.blockEntityPackets() + second.blockEntityPackets(),
+                first.lightChecks() + second.lightChecks(),
+                first.fallbackReason() == BlockCommitFallbackReason.NONE ? second.fallbackReason() : first.fallbackReason()
+        );
     }
 
     private static Builder result(int processedBlocks, int changedBlocks, int skippedBlocks) {

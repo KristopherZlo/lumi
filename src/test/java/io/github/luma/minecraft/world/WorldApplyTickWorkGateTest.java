@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WorldApplyTickWorkGateTest {
 
     private final WorldApplyTickWorkGate gate = new WorldApplyTickWorkGate();
-    private final WorldApplyBudget budget = new WorldApplyBudget(512, 1_000_000L, 16, 512, 4);
+    private final WorldApplyBudget budget = new WorldApplyBudget(512, 1_000_000L, 16, 512, 4, 2, 512, 128);
 
     @Test
     void allowsRewriteBurstAfterRewriteWorkAlreadyStartedThisTick() {
@@ -20,6 +20,7 @@ class WorldApplyTickWorkGateTest {
                 1,
                 0,
                 1,
+                0,
                 this.budget
         ));
     }
@@ -33,6 +34,7 @@ class WorldApplyTickWorkGateTest {
                 4,
                 0,
                 4,
+                0,
                 this.budget
         ));
         assertEquals(
@@ -44,6 +46,7 @@ class WorldApplyTickWorkGateTest {
                         4,
                         0,
                         4,
+                        0,
                         this.budget
                 ).reason()
         );
@@ -58,6 +61,7 @@ class WorldApplyTickWorkGateTest {
                 0,
                 64,
                 0,
+                0,
                 this.budget
         ));
         assertEquals(
@@ -69,6 +73,7 @@ class WorldApplyTickWorkGateTest {
                         0,
                         64,
                         0,
+                        0,
                         this.budget
                 ).reason()
         );
@@ -79,6 +84,7 @@ class WorldApplyTickWorkGateTest {
                 1,
                 0,
                 1,
+                0,
                 this.budget
         ));
         assertFalse(this.gate.canStartNextStep(
@@ -88,7 +94,35 @@ class WorldApplyTickWorkGateTest {
                 1,
                 0,
                 1,
+                0,
                 this.budget
         ));
+    }
+
+    @Test
+    void stopsSparseDirectWorkWhenDirectSectionBudgetIsConsumed() {
+        assertFalse(this.gate.canStartNextStep(
+                false,
+                null,
+                128,
+                0,
+                0,
+                0,
+                2,
+                this.budget
+        ));
+        assertEquals(
+                "direct-section-budget-consumed",
+                this.gate.decide(
+                        false,
+                        null,
+                        128,
+                        0,
+                        0,
+                        0,
+                        2,
+                        this.budget
+                ).reason()
+        );
     }
 }
