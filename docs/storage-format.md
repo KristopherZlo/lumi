@@ -50,6 +50,7 @@ Current project layout:
   variants.json
   history-tombstones.json
   versions/
+    index.json
   patches/
   snapshots/
   previews/
@@ -168,6 +169,8 @@ Important fields:
 
 Version manifests stay lightweight. They are written only after referenced patch and snapshot payloads have been written successfully.
 
+`versions/index.json` is an optional disposable cache for `VersionRepository.loadAll(...)`. It stores version records plus each manifest file's size and modification time. Lumi uses it only when every version manifest matches and no extra version JSON file exists; stale or corrupt indexes are ignored and rebuilt. Deleting `index.json` never changes restore correctness and the file is not a version manifest.
+
 Whole-dimension workspaces now start with a metadata-backed `WORLD_ROOT` version. That root version has:
 
 - empty `patchIds`
@@ -216,6 +219,7 @@ Current payload characteristics:
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
 Partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Schema v6 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk index is available.
+Patch readers bound NBT lengths, compressed/uncompressed frame lengths, palette counts, entity counts, and selected chunk slices before allocating buffers. A selected chunk slice whose stored frame coordinates or entity coordinates do not match the requested chunk is treated as corrupt storage.
 
 ### `snapshots/<snapshotId>.bin.lz4`
 
@@ -232,6 +236,7 @@ Current snapshot characteristics:
 - restore planning can list snapshot chunks by scanning the length-prefixed structure and skipping NBT payload bytes, without materializing `SnapshotData` or deserializing block/entity tags
 - live chunk capture is performed on the Minecraft server thread into immutable compact payloads; snapshot storage only serializes and reads those prepared payloads
 - snapshot readers return persisted payloads, while Minecraft-layer preparers convert them into apply batches off the tick-thread path
+- snapshot readers bound chunk, section, palette, palette-index, block-entity, entity, and NBT lengths before allocating arrays; impossible palette indexes are rejected as corrupt storage
 
 They are currently created:
 
@@ -274,6 +279,8 @@ Stores the current compacted recovery base snapshot in schema v4 binary format. 
 Stores append-only recovery draft updates as an LZ4-compressed write-ahead log.
 
 The active in-memory `TrackedChangeBuffer` is periodically snapshotted into an immutable `RecoveryDraft` and queued to the low-priority capture-maintenance executor instead of rewriting one large JSON file for every change on the server tick. Recovery drafts now carry block changes and entity spawn/remove/update diffs. Once the WAL reaches the compaction threshold, the latest entry is rewritten into `draft.bin.lz4` and the WAL is removed.
+
+Recovery load reads the compacted base and WAL independently. If the WAL has a corrupt entry or truncated tail, Lumi quarantines the WAL and returns the base or the last valid WAL entry. When a last valid WAL entry exists, it is compacted back into `draft.bin.lz4` so the next load no longer depends on the damaged WAL.
 
 ### `recovery/operation-draft.bin.lz4`
 
