@@ -9,7 +9,7 @@ public final class ExternalUndoRedoPolicy {
     public Decision decisionForAction(String actor, String actionId) {
         String normalizedActionId = normalize(actionId);
         if (normalizedActionId.startsWith("axiom-") || normalizedActionId.startsWith("axiom:")) {
-            return Decision.LUMI_REPLAY;
+            return Decision.AXIOM_NATIVE_HOOK;
         }
         return this.decisionForActor(actor);
     }
@@ -18,6 +18,9 @@ public final class ExternalUndoRedoPolicy {
         String normalized = normalize(actor);
         if (normalized.startsWith("worldedit") || normalized.startsWith("fawe")) {
             return Decision.NATIVE_TOOL_COMMAND;
+        }
+        if (normalized.startsWith("axiom")) {
+            return Decision.AXIOM_NATIVE_HOOK;
         }
         return Decision.LUMI_REPLAY;
     }
