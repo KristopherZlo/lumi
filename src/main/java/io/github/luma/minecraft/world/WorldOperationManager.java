@@ -34,18 +34,6 @@ import net.minecraft.world.level.storage.LevelResource;
  */
 public final class WorldOperationManager {
 
-    private static final int MIN_BLOCKS_PER_TICK = 128;
-    private static final int MAX_BLOCKS_PER_TICK = 512;
-    private static final long MIN_NANOS_PER_TICK = 1_000_000L;
-    private static final long MAX_NANOS_PER_TICK = 3_000_000L;
-    private static final int RESTORE_MIN_BLOCKS_PER_TICK = 1024;
-    private static final int RESTORE_MAX_BLOCKS_PER_TICK = 64 * 4096;
-    private static final long RESTORE_MIN_NANOS_PER_TICK = 2_000_000L;
-    private static final long RESTORE_MAX_NANOS_PER_TICK = 8_000_000L;
-    private static final int MIN_NATIVE_SECTIONS_PER_TICK = 1;
-    private static final int MAX_NATIVE_SECTIONS_PER_TICK = 4;
-    private static final int RESTORE_MIN_NATIVE_SECTIONS_PER_TICK = 16;
-    private static final int RESTORE_MAX_NATIVE_SECTIONS_PER_TICK = 64;
     private static final int MAX_BLOCK_ENTITIES_PER_TICK = 64;
     private static final int MAX_ENTITY_OPERATIONS_PER_TICK = 32;
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
@@ -53,6 +41,7 @@ public final class WorldOperationManager {
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
 
     private final WorldApplyOperationProfile applyOperationProfile = new WorldApplyOperationProfile();
+    private final WorldApplyBudgetPlanner budgetPlanner = new WorldApplyBudgetPlanner();
     private ExecutorService backgroundExecutor = createExecutor();
     private final Map<String, ActiveOperation> activeOperations = new HashMap<>();
     private final Map<String, OperationSnapshot> lastSnapshots = new HashMap<>();
@@ -171,7 +160,7 @@ public final class WorldOperationManager {
         }
 
         try {
-            TickBudget budget = this.currentTickBudget(operation);
+            WorldApplyBudget budget = this.currentTickBudget(operation);
             long startedAt = System.nanoTime();
             if (operation.advance(budget, startedAt + budget.maxNanos())) {
                 this.complete(server, operation);
@@ -198,26 +187,10 @@ public final class WorldOperationManager {
         }
     }
 
-    private TickBudget currentTickBudget(ActiveOperation operation) {
+    private WorldApplyBudget currentTickBudget(ActiveOperation operation) {
         double fraction = operation.snapshot().progress().fraction();
         boolean highThroughput = this.isHighThroughputApplyOperation(operation);
-        int minBlocks = highThroughput ? RESTORE_MIN_BLOCKS_PER_TICK : MIN_BLOCKS_PER_TICK;
-        int maxBlocks = highThroughput ? RESTORE_MAX_BLOCKS_PER_TICK : MAX_BLOCKS_PER_TICK;
-        long minNanos = highThroughput ? RESTORE_MIN_NANOS_PER_TICK : MIN_NANOS_PER_TICK;
-        long maxNanos = highThroughput ? RESTORE_MAX_NANOS_PER_TICK : MAX_NANOS_PER_TICK;
-        int minNativeSections = highThroughput
-                ? RESTORE_MIN_NATIVE_SECTIONS_PER_TICK
-                : MIN_NATIVE_SECTIONS_PER_TICK;
-        int maxNativeSections = highThroughput
-                ? RESTORE_MAX_NATIVE_SECTIONS_PER_TICK
-                : MAX_NATIVE_SECTIONS_PER_TICK;
-        double adaptiveScale = operation.adaptiveScale();
-        int blocks = Math.max(1, (int) Math.round((minBlocks + ((maxBlocks - minBlocks) * fraction)) * adaptiveScale));
-        int nativeSections = Math.max(1, (int) Math.round(
-                (minNativeSections + ((maxNativeSections - minNativeSections) * fraction)) * adaptiveScale
-        ));
-        long nanos = Math.max(250_000L, Math.round((minNanos + ((maxNanos - minNanos) * fraction)) * adaptiveScale));
-        return new TickBudget(blocks, nanos, nativeSections);
+        return this.budgetPlanner.plan(fraction, operation.adaptiveScale(), highThroughput);
     }
 
     private boolean isHighThroughputApplyOperation(ActiveOperation operation) {
@@ -289,9 +262,6 @@ public final class WorldOperationManager {
         public int totalWorkUnits() {
             return this.localQueue == null ? 0 : this.localQueue.totalWorkUnits();
         }
-    }
-
-    private record TickBudget(int maxBlocks, long maxNanos, int maxNativeSections) {
     }
 
     private abstract static class ActiveOperation {
@@ -420,7 +390,7 @@ public final class WorldOperationManager {
             );
         }
 
-        abstract boolean advance(TickBudget budget, long deadlineNanos) throws Exception;
+        abstract boolean advance(WorldApplyBudget budget, long deadlineNanos) throws Exception;
 
         private void logProgressIfNeeded(OperationStage stage, OperationProgress progress, String detail) {
             int percent = progress.totalUnits() <= 0
@@ -473,7 +443,7 @@ public final class WorldOperationManager {
         }
 
         @Override
-        boolean advance(TickBudget budget, long deadlineNanos) throws Exception {
+        boolean advance(WorldApplyBudget budget, long deadlineNanos) throws Exception {
             if (!this.future.isDone()) {
                 return false;
             }
@@ -528,7 +498,7 @@ public final class WorldOperationManager {
         }
 
         @Override
-        boolean advance(TickBudget budget, long deadlineNanos) throws Exception {
+        boolean advance(WorldApplyBudget budget, long deadlineNanos) throws Exception {
             if (this.prepared == null) {
                 if (!this.future.isDone()) {
                     return false;
