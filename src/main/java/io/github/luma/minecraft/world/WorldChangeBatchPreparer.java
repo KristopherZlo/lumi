@@ -1,6 +1,8 @@
 package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.PatchSectionFrame;
+import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
@@ -25,6 +27,14 @@ public final class WorldChangeBatchPreparer {
 
     public List<PreparedChunkBatch> prepareNewValues(ServerLevel level, PatchWorldChanges changes) throws IOException {
         return this.prepare(level, changes.blockChanges(), changes.entityChanges(), true, ProgressListener.NO_OP);
+    }
+
+    public List<PreparedChunkBatch> prepareNewValues(
+            ServerLevel level,
+            PatchSectionWorldChanges changes,
+            ProgressListener progressListener
+    ) throws IOException {
+        return this.prepare(level, changes, true, progressListener);
     }
 
     public List<PreparedChunkBatch> prepareNewValues(
@@ -96,6 +106,100 @@ public final class WorldChangeBatchPreparer {
             ));
         }
         return batches;
+    }
+
+    public List<PreparedChunkBatch> prepare(
+            ServerLevel level,
+            PatchSectionWorldChanges changes,
+            boolean applyNewValues,
+            ProgressListener progressListener
+    ) throws IOException {
+        if (changes == null || changes.sectionFrames().isEmpty()) {
+            return this.prepare(level, List.of(), changes == null ? List.of() : changes.entityChanges(), applyNewValues, progressListener);
+        }
+        progressListener = progressListener == null ? ProgressListener.NO_OP : progressListener;
+        int total = changes.sectionFrames().stream()
+                .mapToInt(frame -> new SectionChangeMask(frame.changedMask()).cardinality())
+                .sum() + changes.entityChanges().size();
+        int[] completed = new int[] {0};
+
+        Map<ChunkPoint, List<PreparedSectionApplyBatch>> nativeSections = new LinkedHashMap<>();
+        Map<ChunkPoint, List<PreparedBlockPlacement>> sparsePlacements = new LinkedHashMap<>();
+        for (PatchSectionFrame frame : changes.sectionFrames()) {
+            ChunkPoint chunk = new ChunkPoint(frame.chunkX(), frame.chunkZ());
+            LumiSectionBuffer buffer = this.toSectionBuffer(level, frame, applyNewValues, completed, total, progressListener);
+            boolean fullSection = buffer.changedCellCount() == SectionChangeMask.ENTRY_COUNT;
+            SectionApplySafetyProfile profile = this.sectionApplySafetyClassifier.classify(buffer, fullSection);
+            PreparedSectionApplyBatch nativeBatch = new PreparedSectionApplyBatch(
+                    chunk,
+                    frame.sectionY(),
+                    buffer,
+                    profile,
+                    fullSection
+            );
+            if (profile.path() == SectionApplyPath.SECTION_NATIVE) {
+                nativeSections.computeIfAbsent(chunk, ignored -> new ArrayList<>()).add(nativeBatch);
+            } else {
+                sparsePlacements.computeIfAbsent(chunk, ignored -> new ArrayList<>()).addAll(nativeBatch.toPlacements());
+            }
+        }
+
+        Map<ChunkPoint, List<StoredEntityChange>> groupedEntities = new LinkedHashMap<>();
+        for (StoredEntityChange change : changes.entityChanges()) {
+            groupedEntities.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
+            completed[0] += 1;
+            progressListener.onDecoded(completed[0], total);
+        }
+
+        List<PreparedChunkBatch> batches = new ArrayList<>();
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
+        chunks.addAll(nativeSections.keySet());
+        chunks.addAll(sparsePlacements.keySet());
+        chunks.addAll(groupedEntities.keySet());
+        for (ChunkPoint chunk : chunks) {
+            SectionSplit split = this.splitSections(chunk, sparsePlacements.getOrDefault(chunk, List.of()));
+            List<PreparedSectionApplyBatch> combinedNativeSections = new ArrayList<>(nativeSections.getOrDefault(chunk, List.of()));
+            combinedNativeSections.addAll(split.nativeSections());
+            batches.add(new PreparedChunkBatch(
+                    chunk,
+                    split.sparsePlacements(),
+                    combinedNativeSections,
+                    this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues)
+            ));
+        }
+        return batches;
+    }
+
+    private LumiSectionBuffer toSectionBuffer(
+            ServerLevel level,
+            PatchSectionFrame frame,
+            boolean applyNewValues,
+            int[] completed,
+            int total,
+            ProgressListener progressListener
+    ) throws IOException {
+        LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(frame.sectionY());
+        List<Integer> localIndexes = new ArrayList<>();
+        new SectionChangeMask(frame.changedMask()).forEachSetCell(localIndexes::add);
+        int[] stateIds = applyNewValues ? frame.newStateIds() : frame.oldStateIds();
+        int[] blockEntityIds = applyNewValues ? frame.newBlockEntityIds() : frame.oldBlockEntityIds();
+        List<CompoundTag> statePalette = applyNewValues ? frame.newStatePalette() : frame.oldStatePalette();
+        List<CompoundTag> blockEntityPalette = applyNewValues ? frame.newBlockEntityPalette() : frame.oldBlockEntityPalette();
+        for (int index = 0; index < localIndexes.size(); index++) {
+            int localIndex = localIndexes.get(index);
+            builder.set(
+                    localIndex,
+                    BlockStateNbtCodec.deserializeBlockState(level, statePalette.get(stateIds[index])),
+                    this.blockEntityAt(blockEntityPalette, blockEntityIds[index])
+            );
+            completed[0] += 1;
+            progressListener.onDecoded(completed[0], total);
+        }
+        return builder.build();
+    }
+
+    private CompoundTag blockEntityAt(List<CompoundTag> palette, int id) {
+        return id < 0 ? null : palette.get(id).copy();
     }
 
     public PreparedChunkBatch prepareDecodedChunk(
