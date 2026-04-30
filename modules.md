@@ -139,7 +139,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `CaptureDiagnosticsRegistry`, `CaptureSessionDiagnostics`: accepted mutation traces and capture summaries.
 - `TrackedProjectCatalog`, `ProjectCatalogCache`: active project metadata cache for capture matching, refreshed only by explicit invalidation.
 - `TrackedProject`, `ProjectTrackingIndex`: dimension/chunk membership for tracked workspaces.
-- `WorldMutationContext`: prevents Lumi operations from reentering capture and suppresses fallback capture while internal prepared apply and native external-tool undo/redo are running.
+- `WorldMutationContext`: prevents Lumi operations from reentering capture and suppresses fallback capture while internal prepared apply, native WorldEdit/FAWE undo/redo, or experimental native Axiom replay diagnostics are running.
 - `WorldMutationCaptureGuard`: duplicate hook protection.
 - `WorldMutationCapturePolicy`: block mutation filtering and runtime-only state rejection.
 - `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling.
@@ -196,7 +196,7 @@ Use `src/main/java/io/github/luma/integration` for external builder tool detecti
 - `OptionalIntegrationBootstrap`: reflectively enables optional integrations.
 - `integration/common/*`: capability reporting, external mutation detection, clipboard/schematic/selection contracts.
 - `integration/worldedit/WorldEditEditSessionTracker.java`: guarded WorldEdit edit-session extent capture.
-- `integration/axiom/*`: Axiom block-buffer extraction/capture helpers and native undo/redo replay guards.
+- `integration/axiom/*`: Axiom block-buffer extraction/capture helpers and experimental native undo/redo replay guards.
 
 ## Client Layer
 

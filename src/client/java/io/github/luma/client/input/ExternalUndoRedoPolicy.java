@@ -6,10 +6,22 @@ package io.github.luma.client.input;
  */
 public final class ExternalUndoRedoPolicy {
 
+    private static final String EXPERIMENTAL_AXIOM_NATIVE_UNDO_REDO = "lumi.experimentalAxiomNativeUndoRedo";
+
+    private final boolean axiomNativeUndoRedoEnabled;
+
+    public ExternalUndoRedoPolicy() {
+        this(Boolean.getBoolean(EXPERIMENTAL_AXIOM_NATIVE_UNDO_REDO));
+    }
+
+    ExternalUndoRedoPolicy(boolean axiomNativeUndoRedoEnabled) {
+        this.axiomNativeUndoRedoEnabled = axiomNativeUndoRedoEnabled;
+    }
+
     public Decision decisionForAction(String actor, String actionId) {
         String normalizedActionId = normalize(actionId);
         if (normalizedActionId.startsWith("axiom-") || normalizedActionId.startsWith("axiom:")) {
-            return Decision.AXIOM_NATIVE_HOOK;
+            return this.decisionForAxiom();
         }
         return this.decisionForActor(actor);
     }
@@ -20,9 +32,13 @@ public final class ExternalUndoRedoPolicy {
             return Decision.NATIVE_TOOL_COMMAND;
         }
         if (normalized.startsWith("axiom")) {
-            return Decision.AXIOM_NATIVE_HOOK;
+            return this.decisionForAxiom();
         }
         return Decision.LUMI_REPLAY;
+    }
+
+    private Decision decisionForAxiom() {
+        return this.axiomNativeUndoRedoEnabled ? Decision.AXIOM_NATIVE_HOOK : Decision.LUMI_REPLAY;
     }
 
     private static String normalize(String value) {
