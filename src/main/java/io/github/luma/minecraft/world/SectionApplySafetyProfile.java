@@ -14,6 +14,10 @@ public record SectionApplySafetyProfile(
         return new SectionApplySafetyProfile(SectionApplyPath.SECTION_NATIVE, reason);
     }
 
+    static SectionApplySafetyProfile sectionRewrite(String reason) {
+        return new SectionApplySafetyProfile(SectionApplyPath.SECTION_REWRITE, reason);
+    }
+
     static SectionApplySafetyProfile directSection(String reason) {
         return new SectionApplySafetyProfile(SectionApplyPath.DIRECT_SECTION, reason);
     }
