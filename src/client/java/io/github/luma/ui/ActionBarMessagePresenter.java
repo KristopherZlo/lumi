@@ -136,6 +136,7 @@ public final class ActionBarMessagePresenter {
         return switch (stage) {
             case QUEUED -> "luma.actionbar.stage.queued";
             case PREPARING -> "luma.actionbar.stage.preparing";
+            case PRELOADING -> "luma.actionbar.stage.preloading";
             case WRITING -> "luma.actionbar.stage.writing";
             case APPLYING -> "luma.actionbar.stage.applying";
             case FINALIZING -> "luma.actionbar.stage.finalizing";

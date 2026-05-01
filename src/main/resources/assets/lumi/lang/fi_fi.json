@@ -753,6 +753,7 @@
   "luma.actionbar.operation.merge": "Merge branches",
   "luma.actionbar.stage.queued": "waiting",
   "luma.actionbar.stage.preparing": "preparing",
+  "luma.actionbar.stage.preloading": "loading chunks",
   "luma.actionbar.stage.writing": "saving",
   "luma.actionbar.stage.applying": "applying",
   "luma.actionbar.stage.finalizing": "finishing",
