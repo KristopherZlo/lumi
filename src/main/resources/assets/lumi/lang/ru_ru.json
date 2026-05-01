@@ -808,6 +808,7 @@
   "luma.actionbar.operation.merge": "Слияние веток",
   "luma.actionbar.stage.queued": "ожидание",
   "luma.actionbar.stage.preparing": "подготовка",
+  "luma.actionbar.stage.preloading": "загрузка чанков",
   "luma.actionbar.stage.writing": "запись",
   "luma.actionbar.stage.applying": "применение",
   "luma.actionbar.stage.finalizing": "завершение",

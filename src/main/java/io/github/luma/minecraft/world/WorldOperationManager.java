@@ -482,7 +482,9 @@ public final class WorldOperationManager {
 
         private final CompletableFuture<PreparedApplyOperation> future;
         private final long preparationStartedAtNanos;
+        private final WorldApplyProfile profile;
         private PreparedApplyOperation prepared;
+        private WorldApplyChunkPreloader chunkPreloader;
         private GlobalDispatcher dispatcher;
         private ChunkBatch currentBatch;
         private List<PreparedSectionApplyBatch> currentNativeSections = List.of();
@@ -509,6 +511,7 @@ public final class WorldOperationManager {
                 PreparedApplyWork work
         ) {
             super(level, handle, unitLabel);
+            this.profile = WorldOperationManager.this.applyOperationProfile.profileFor(handle.label());
             this.preparationStartedAtNanos = System.nanoTime();
             this.future = CompletableFuture.supplyAsync(() -> {
                 try {
@@ -538,25 +541,27 @@ public final class WorldOperationManager {
 
                 this.applyMetrics.recordPreparationDuration(System.nanoTime() - this.preparationStartedAtNanos);
                 this.preparationMarkerDetail = this.preservedPreparationMarker(this.snapshot().detail());
-                this.dispatcher = new GlobalDispatcher();
-                this.dispatcher.enqueue(this.prepared.localQueue());
+                this.chunkPreloader = WorldApplyChunkPreloader.create(this.prepared.localQueue(), this.profile);
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op",
-                        "Prepared operation {} loaded {} work units across {} ready chunk batches",
+                        "Prepared operation {} loaded {} work units across {} ready chunk batches and {} preload chunks",
                         this.handle().label(),
                         this.prepared.totalWorkUnits(),
-                        this.prepared.localQueue().completedCount()
-                );
-                this.progressSink().update(
-                        OperationStage.APPLYING,
-                        0,
-                        this.prepared.totalWorkUnits(),
-                        this.applyDetail("Applying prepared batches")
+                        this.prepared.localQueue().completedCount(),
+                        this.chunkPreloader.totalChunks()
                 );
                 if (this.prepared.totalWorkUnits() == 0) {
                     return this.advanceCompletion();
                 }
+            }
+
+            if (this.chunkPreloader != null && this.chunkPreloader.required() && !this.chunkPreloader.complete()) {
+                return this.advancePreload(budget, deadlineNanos);
+            }
+
+            if (this.dispatcher == null) {
+                this.startApply();
             }
 
             int processedWorkThisTick = 0;
@@ -743,6 +748,52 @@ public final class WorldOperationManager {
             return false;
         }
 
+        private boolean advancePreload(WorldApplyBudget budget, long deadlineNanos) {
+            long startedAt = System.nanoTime();
+            WorldApplyChunkPreloader.PreloadTickResult result = this.chunkPreloader.advance(
+                    new ServerLevelChunkPreloadAccess(this.level()),
+                    budget,
+                    deadlineNanos
+            );
+            long elapsedNanos = System.nanoTime() - startedAt;
+            this.applyMetrics.recordPreloadTick(
+                    result.newlyLoadedChunks(),
+                    result.alreadyLoadedChunks(),
+                    elapsedNanos
+            );
+            this.progressSink().update(
+                    OperationStage.PRELOADING,
+                    result.completedChunks(),
+                    result.totalChunks(),
+                    this.applyDetail("Preloading chunks " + result.completedChunks() + "/" + result.totalChunks())
+            );
+            if (this.debugApplyEnabled()) {
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op-apply",
+                        "Preload tick chunks={}/{} newlyLoaded={} alreadyLoaded={} elapsedMicros={} complete={}",
+                        result.completedChunks(),
+                        result.totalChunks(),
+                        result.newlyLoadedChunks(),
+                        result.alreadyLoadedChunks(),
+                        elapsedNanos / 1_000L,
+                        result.complete()
+                );
+            }
+            return false;
+        }
+
+        private void startApply() {
+            this.dispatcher = new GlobalDispatcher();
+            this.dispatcher.enqueue(this.prepared.localQueue());
+            this.progressSink().update(
+                    OperationStage.APPLYING,
+                    0,
+                    this.prepared.totalWorkUnits(),
+                    this.applyDetail("Applying prepared batches")
+            );
+        }
+
         private boolean drainDeferredLightUpdates(WorldApplyBudget budget, long deadlineNanos) {
             if (!this.lightUpdateQueue.hasPending()) {
                 return true;
@@ -849,6 +900,7 @@ public final class WorldOperationManager {
 
         private boolean advanceCompletion() throws Exception {
             if (this.completionFuture == null) {
+                this.releasePreloadTickets();
                 this.progressSink().update(
                         OperationStage.FINALIZING,
                         this.appliedWorkUnits,
@@ -1143,6 +1195,25 @@ public final class WorldOperationManager {
         protected Optional<String> applyMetricsSummary() {
             this.applyMetrics.recordTotalDuration(Duration.between(this.handle().startedAt(), Instant.now()).toNanos());
             return Optional.of(this.applyMetrics.summary());
+        }
+
+        @Override
+        protected void complete(String detail) {
+            this.releasePreloadTickets();
+            super.complete(detail);
+        }
+
+        @Override
+        protected void fail(Exception exception) {
+            this.releasePreloadTickets();
+            super.fail(exception);
+        }
+
+        private void releasePreloadTickets() {
+            if (this.chunkPreloader == null) {
+                return;
+            }
+            this.chunkPreloader.release(new ServerLevelChunkPreloadAccess(this.level()));
         }
 
         private long microsSince(long startedAt) {

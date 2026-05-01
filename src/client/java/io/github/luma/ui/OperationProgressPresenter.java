@@ -25,6 +25,7 @@ public final class OperationProgressPresenter {
         return switch (snapshot.stage()) {
             case QUEUED -> 0;
             case PREPARING -> stagePercent(rawPercent, 5, 45, 18);
+            case PRELOADING -> stagePercent(rawPercent, 46, 59, 52);
             case WRITING -> stagePercent(rawPercent, 46, 80, 64);
             case APPLYING -> stagePercent(rawPercent, 60, 94, 72);
             case FINALIZING -> stagePercent(rawPercent, 95, 99, 97);
