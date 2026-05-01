@@ -26,6 +26,11 @@ final class WorldApplyBudgetPlanner {
     private static final int NORMAL_SPARSE_STEP_CAP = 128;
     private static final int RESTORE_SPARSE_STEP_CAP = 4096;
     private static final int TURBO_SPARSE_STEP_CAP = 32_768;
+    private static final int NORMAL_MAX_PRELOAD_CHUNKS_PER_TICK = 0;
+    private static final int RESTORE_MIN_PRELOAD_CHUNKS_PER_TICK = 2;
+    private static final int RESTORE_MAX_PRELOAD_CHUNKS_PER_TICK = 8;
+    private static final int TURBO_MIN_PRELOAD_CHUNKS_PER_TICK = 8;
+    private static final int TURBO_MAX_PRELOAD_CHUNKS_PER_TICK = 32;
     private static final int TURBO_MIN_BLOCKS_PER_TICK = 4096;
     private static final int TURBO_MAX_BLOCKS_PER_TICK = 128 * SectionChangeMask.ENTRY_COUNT;
     private static final long TURBO_MIN_NANOS_PER_TICK = 12_000_000L;
@@ -86,6 +91,21 @@ final class WorldApplyBudgetPlanner {
             case HISTORY_FAST -> RESTORE_SPARSE_STEP_CAP;
             case DIAGNOSTIC_TURBO -> TURBO_SPARSE_STEP_CAP;
         };
+        int preloadChunks = switch (resolvedProfile) {
+            case NORMAL -> NORMAL_MAX_PRELOAD_CHUNKS_PER_TICK;
+            case HISTORY_FAST -> Math.max(1, scaledInt(
+                    RESTORE_MIN_PRELOAD_CHUNKS_PER_TICK,
+                    RESTORE_MAX_PRELOAD_CHUNKS_PER_TICK,
+                    fraction,
+                    scale
+            ));
+            case DIAGNOSTIC_TURBO -> Math.max(1, scaledInt(
+                    TURBO_MIN_PRELOAD_CHUNKS_PER_TICK,
+                    TURBO_MAX_PRELOAD_CHUNKS_PER_TICK,
+                    fraction,
+                    scale
+            ));
+        };
         sparseStepCap = Math.max(1, Math.min(sparseStepCap, blocks));
         lightChecks = Math.max(1, lightChecks);
         long nanos = Math.max(250_000L, Math.round((minNanos + ((maxNanos - minNanos) * fraction)) * scale));
@@ -97,7 +117,8 @@ final class WorldApplyBudgetPlanner {
                 rewriteSections,
                 directSections,
                 lightChecks,
-                sparseStepCap
+                sparseStepCap,
+                preloadChunks
         );
     }
 

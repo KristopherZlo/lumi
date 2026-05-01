@@ -1,8 +1,11 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.ChunkPoint;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Per-operation local queue of prepared chunk batches.
@@ -65,6 +68,17 @@ public final class LocalQueue {
 
     public int totalWorkUnits() {
         return this.totalWorkUnits;
+    }
+
+    public List<ChunkPoint> uniqueChunks() {
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
+        for (ChunkBatch batch : this.completed) {
+            chunks.add(batch.chunk());
+        }
+        for (QueuedChunkBatch queued : this.incomplete) {
+            chunks.add(queued.batch().chunk());
+        }
+        return List.copyOf(chunks);
     }
 
     public int incompleteWaitingCount() {

@@ -8,7 +8,8 @@ record WorldApplyBudget(
         int maxRewriteSections,
         int maxDirectSections,
         int maxLightChecks,
-        int sparseStepCap
+        int sparseStepCap,
+        int maxPreloadChunks
 ) {
 
     String summary() {
@@ -19,6 +20,7 @@ record WorldApplyBudget(
                 + ", maxRewriteSections=" + this.maxRewriteSections
                 + ", maxDirectSections=" + this.maxDirectSections
                 + ", maxLightChecks=" + this.maxLightChecks
-                + ", sparseStepCap=" + this.sparseStepCap;
+                + ", sparseStepCap=" + this.sparseStepCap
+                + ", maxPreloadChunks=" + this.maxPreloadChunks;
     }
 }

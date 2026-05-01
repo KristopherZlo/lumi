@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WorldApplyTickWorkGateTest {
 
     private final WorldApplyTickWorkGate gate = new WorldApplyTickWorkGate();
-    private final WorldApplyBudget budget = new WorldApplyBudget(512, 1_000_000L, 16, 512, 4, 2, 512, 128);
+    private final WorldApplyBudget budget = new WorldApplyBudget(512, 1_000_000L, 16, 512, 4, 2, 512, 128, 0);
 
     @Test
     void allowsRewriteBurstAfterRewriteWorkAlreadyStartedThisTick() {

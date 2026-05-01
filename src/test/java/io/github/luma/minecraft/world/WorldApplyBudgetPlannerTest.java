@@ -19,6 +19,7 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(highThroughput.maxNativeSections() > normal.maxNativeSections());
         assertTrue(highThroughput.maxDirectSections() > normal.maxDirectSections());
         assertTrue(highThroughput.maxLightChecks() > normal.maxLightChecks());
+        assertTrue(highThroughput.maxPreloadChunks() > normal.maxPreloadChunks());
         assertEquals(highThroughput.maxBlocks(), highThroughput.maxNativeCells());
         assertEquals(1, normal.maxRewriteSections());
         assertEquals(64, highThroughput.maxRewriteSections());
@@ -35,6 +36,7 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(reduced.maxRewriteSections() < fullScale.maxRewriteSections());
         assertTrue(reduced.maxDirectSections() < fullScale.maxDirectSections());
         assertTrue(reduced.maxLightChecks() < fullScale.maxLightChecks());
+        assertTrue(reduced.maxPreloadChunks() < fullScale.maxPreloadChunks());
         assertTrue(reduced.maxNanos() < fullScale.maxNanos());
         assertTrue(reduced.maxRewriteSections() >= 1);
     }
@@ -49,6 +51,7 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(turbo.maxDirectSections() > historyFast.maxDirectSections());
         assertTrue(turbo.maxLightChecks() > historyFast.maxLightChecks());
         assertTrue(turbo.sparseStepCap() > historyFast.sparseStepCap());
+        assertTrue(turbo.maxPreloadChunks() > historyFast.maxPreloadChunks());
     }
 
     @Test
