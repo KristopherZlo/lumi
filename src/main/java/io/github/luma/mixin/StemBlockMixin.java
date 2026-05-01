@@ -1,5 +1,7 @@
 package io.github.luma.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.core.BlockPos;
@@ -8,50 +10,33 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.StemBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(StemBlock.class)
 abstract class StemBlockMixin {
 
-    @Unique
-    private int luma$growthDepth = 0;
-
-    @Inject(method = "randomTick", at = @At("HEAD"))
-    private void luma$beginRandomGrowth(BlockState state, ServerLevel level, BlockPos pos, RandomSource random, CallbackInfo ci) {
-        this.luma$pushGrowthSource();
-    }
-
-    @Inject(method = "randomTick", at = @At("RETURN"))
-    private void luma$endRandomGrowth(BlockState state, ServerLevel level, BlockPos pos, RandomSource random, CallbackInfo ci) {
-        this.luma$popGrowthSource();
-    }
-
-    @Inject(method = "performBonemeal", at = @At("HEAD"))
-    private void luma$beginBonemealGrowth(ServerLevel level, RandomSource random, BlockPos pos, BlockState state, CallbackInfo ci) {
-        this.luma$pushGrowthSource();
-    }
-
-    @Inject(method = "performBonemeal", at = @At("RETURN"))
-    private void luma$endBonemealGrowth(ServerLevel level, RandomSource random, BlockPos pos, BlockState state, CallbackInfo ci) {
-        this.luma$popGrowthSource();
-    }
-
-    @Unique
-    private void luma$pushGrowthSource() {
-        this.luma$growthDepth += 1;
-        WorldMutationContext.pushSource(WorldMutationSource.GROWTH);
-    }
-
-    @Unique
-    private void luma$popGrowthSource() {
-        if (this.luma$growthDepth <= 0) {
-            return;
+    @WrapMethod(method = "randomTick")
+    private void luma$wrapRandomGrowth(
+            BlockState state,
+            ServerLevel level,
+            BlockPos pos,
+            RandomSource random,
+            Operation<Void> original
+    ) {
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.GROWTH)) {
+            original.call(state, level, pos, random);
         }
+    }
 
-        this.luma$growthDepth -= 1;
-        WorldMutationContext.popSource();
+    @WrapMethod(method = "performBonemeal")
+    private void luma$wrapBonemealGrowth(
+            ServerLevel level,
+            RandomSource random,
+            BlockPos pos,
+            BlockState state,
+            Operation<Void> original
+    ) {
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.GROWTH)) {
+            original.call(level, random, pos, state);
+        }
     }
 }
