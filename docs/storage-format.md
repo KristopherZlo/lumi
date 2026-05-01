@@ -342,6 +342,10 @@ Deleting an imported review package from Import / Export removes that review pro
 
 Recovery draft payloads are intentionally excluded from archives, so export/import remains focused on stable project history rather than live unsaved state.
 
+Archive import is a trust boundary. Lumi validates archive manifests before copying payloads: project folder names must be safe `.mbp` folder names, entry paths must stay under the supported `project/` subtrees, the manifest is size-bounded, and each copied entry is checked against per-file and total unpacked-size limits. Imported version, patch, snapshot, and preview identifiers must be storage-safe file ids, and patch metadata ids must match the patch id referenced by the version manifest. Malformed archives are rejected before they become normal project history.
+
+Archive export does not follow symbolic links. Files are only copied when their resolved source remains inside the project root and the archive path is one of the supported project-relative locations.
+
 Runtime Lumi region selections are intentionally excluded from storage. They are client memory only and must be recreated after the client or world closes.
 
 ## Cleanup policy

@@ -15,8 +15,7 @@ public record ProjectLayout(Path root) {
     }
 
     private static String safeFolderName(String projectName) {
-        String normalized = projectName.trim().replaceAll("[\\\\/:*?\"<>|]", "_");
-        return normalized.isBlank() ? "project" : normalized;
+        return StoragePathPolicy.safeFolderName(projectName);
     }
 
     public Path projectFile() {
@@ -64,7 +63,7 @@ public record ProjectLayout(Path root) {
     }
 
     public Path versionFile(String versionId) {
-        return this.versionsDir().resolve(versionId + ".json");
+        return StoragePathPolicy.resolveStorageFile(this.versionsDir(), versionId, ".json", "version id");
     }
 
     public Path versionIndexFile() {
@@ -76,11 +75,11 @@ public record ProjectLayout(Path root) {
     }
 
     public Path patchMetaFile(String patchId) {
-        return this.patchesDir().resolve(patchId + ".meta.json");
+        return StoragePathPolicy.resolveStorageFile(this.patchesDir(), patchId, ".meta.json", "patch id");
     }
 
     public Path patchDataFile(String patchId) {
-        return this.patchesDir().resolve(patchId + ".bin.lz4");
+        return StoragePathPolicy.resolveStorageFile(this.patchesDir(), patchId, ".bin.lz4", "patch id");
     }
 
     public Path recoveryDraftFile() {
@@ -92,15 +91,15 @@ public record ProjectLayout(Path root) {
     }
 
     public Path previewFile(String versionId) {
-        return this.previewsDir().resolve(versionId + ".png");
+        return StoragePathPolicy.resolveStorageFile(this.previewsDir(), versionId, ".png", "preview version id");
     }
 
     public Path previewRequestFile(String versionId) {
-        return this.previewRequestsDir().resolve(versionId + ".json");
+        return StoragePathPolicy.resolveStorageFile(this.previewRequestsDir(), versionId, ".json", "preview request version id");
     }
 
     public Path snapshotFile(String snapshotId) {
-        return this.snapshotsDir().resolve(snapshotId + ".bin.lz4");
+        return StoragePathPolicy.resolveStorageFile(this.snapshotsDir(), snapshotId, ".bin.lz4", "snapshot id");
     }
 
     public Path recoveryBaseFile() {

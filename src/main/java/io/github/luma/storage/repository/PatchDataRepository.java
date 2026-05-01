@@ -498,8 +498,14 @@ public final class PatchDataRepository {
             BlockPoint pos = unpackPosition(chunkX, chunkZ, packed);
             changes.add(new StoredBlockChange(
                     pos,
-                    new StatePayload(statePalette.get(oldStateId).copy(), blockEntityAt(blockEntityPalette, oldBlockEntityId)),
-                    new StatePayload(statePalette.get(newStateId).copy(), blockEntityAt(blockEntityPalette, newBlockEntityId))
+                    new StatePayload(
+                            stateAt("old state palette", statePalette, oldStateId).copy(),
+                            blockEntityAt("old block entity palette", blockEntityPalette, oldBlockEntityId)
+                    ),
+                    new StatePayload(
+                            stateAt("new state palette", statePalette, newStateId).copy(),
+                            blockEntityAt("new block entity palette", blockEntityPalette, newBlockEntityId)
+                    )
             ));
         }
         if (version >= 4) {
@@ -608,13 +614,17 @@ public final class PatchDataRepository {
         return palette;
     }
 
-    private List<StoredBlockChange> toStoredChanges(PatchSectionFrame frame) {
+    private List<StoredBlockChange> toStoredChanges(PatchSectionFrame frame) throws IOException {
         List<Integer> localIndexes = new ArrayList<>();
         new SectionChangeMask(frame.changedMask()).forEachSetCell(localIndexes::add);
         int[] oldStateIds = frame.oldStateIds();
         int[] newStateIds = frame.newStateIds();
         int[] oldBlockEntityIds = frame.oldBlockEntityIds();
         int[] newBlockEntityIds = frame.newBlockEntityIds();
+        this.requireArrayLength("old state ids", oldStateIds, localIndexes.size());
+        this.requireArrayLength("new state ids", newStateIds, localIndexes.size());
+        this.requireArrayLength("old block entity ids", oldBlockEntityIds, localIndexes.size());
+        this.requireArrayLength("new block entity ids", newBlockEntityIds, localIndexes.size());
         List<StoredBlockChange> changes = new ArrayList<>(localIndexes.size());
         for (int index = 0; index < localIndexes.size(); index++) {
             int localIndex = localIndexes.get(index);
@@ -626,12 +636,12 @@ public final class PatchDataRepository {
             changes.add(new StoredBlockChange(
                     pos,
                     new StatePayload(
-                            frame.oldStatePalette().get(oldStateIds[index]).copy(),
-                            blockEntityAt(frame.oldBlockEntityPalette(), oldBlockEntityIds[index])
+                            stateAt("old state palette", frame.oldStatePalette(), oldStateIds[index]).copy(),
+                            blockEntityAt("old block entity palette", frame.oldBlockEntityPalette(), oldBlockEntityIds[index])
                     ),
                     new StatePayload(
-                            frame.newStatePalette().get(newStateIds[index]).copy(),
-                            blockEntityAt(frame.newBlockEntityPalette(), newBlockEntityIds[index])
+                            stateAt("new state palette", frame.newStatePalette(), newStateIds[index]).copy(),
+                            blockEntityAt("new block entity palette", frame.newBlockEntityPalette(), newBlockEntityIds[index])
                     )
             ));
         }
@@ -731,8 +741,35 @@ public final class PatchDataRepository {
         return tag == null ? -1 : palette.get(tag);
     }
 
-    private net.minecraft.nbt.CompoundTag blockEntityAt(List<net.minecraft.nbt.CompoundTag> palette, int id) {
-        return id < 0 ? null : palette.get(id).copy();
+    private net.minecraft.nbt.CompoundTag stateAt(
+            String label,
+            List<net.minecraft.nbt.CompoundTag> palette,
+            int id
+    ) throws IOException {
+        if (id < 0 || id >= palette.size()) {
+            throw new IOException("Invalid " + label + " id " + id);
+        }
+        return palette.get(id);
+    }
+
+    private net.minecraft.nbt.CompoundTag blockEntityAt(
+            String label,
+            List<net.minecraft.nbt.CompoundTag> palette,
+            int id
+    ) throws IOException {
+        if (id < 0) {
+            return null;
+        }
+        if (id >= palette.size()) {
+            throw new IOException("Invalid " + label + " id " + id);
+        }
+        return palette.get(id).copy();
+    }
+
+    private void requireArrayLength(String label, int[] values, int expectedLength) throws IOException {
+        if (values.length != expectedLength) {
+            throw new IOException("Patch section " + label + " length mismatch");
+        }
     }
 
     private PatchSectionWorldChanges toSectionWorldChanges(PatchWorldChanges worldChanges) {

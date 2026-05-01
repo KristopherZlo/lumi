@@ -116,7 +116,7 @@ Important boundaries:
 - repositories do not depend on `ServerLevel`, block-state codecs, or apply-batch runtime types
 - preview request repositories persist lightweight capture jobs for the client renderer
 - history tombstone repositories persist soft-delete visibility metadata without touching history payloads
-- `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export
+- `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export, including manifest size limits, safe storage-id validation, bounded entry copying, and symlink rejection
 - `ProjectCleanupRepository` owns file scanning and deletion for conservative storage cleanup
 - `StorageIo` owns low-level atomic-write and NBT binary helpers
 
@@ -337,7 +337,7 @@ The current test suite is organized around:
 
 - model behavior such as `TrackedChangeBuffer`
 - repository round-trips for patch, snapshot, and recovery storage
-- repository round-trips for archive export/import boundaries
+- repository round-trips for archive export/import boundaries, including malformed archive rejection and storage path containment
 - service-level diff and history policy behavior
 - project layout and storage path invariants
 - recovery draft isolation between live capture and save/amend operations

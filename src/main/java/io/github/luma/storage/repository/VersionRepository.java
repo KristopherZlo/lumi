@@ -7,6 +7,7 @@ import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.storage.GsonProvider;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.StoragePathPolicy;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -103,13 +104,21 @@ public final class VersionRepository {
     }
 
     private ProjectVersion normalize(ProjectVersion version) {
+        String versionId = StoragePathPolicy.requireStorageId(version.id(), "version id");
         return new ProjectVersion(
-                version.id(),
+                versionId,
                 version.projectId(),
-                version.variantId() == null || version.variantId().isBlank() ? "main" : version.variantId(),
-                version.parentVersionId() == null ? "" : version.parentVersionId(),
-                version.snapshotId() == null ? "" : version.snapshotId(),
-                version.patchIds() == null ? List.of() : List.copyOf(version.patchIds()),
+                StoragePathPolicy.requireOptionalStorageId(
+                        version.variantId() == null || version.variantId().isBlank() ? "main" : version.variantId(),
+                        "variant id"
+                ),
+                StoragePathPolicy.requireOptionalStorageId(version.parentVersionId(), "parent version id"),
+                StoragePathPolicy.requireOptionalStorageId(version.snapshotId(), "snapshot id"),
+                version.patchIds() == null
+                        ? List.of()
+                        : version.patchIds().stream()
+                                .map(patchId -> StoragePathPolicy.requireStorageId(patchId, "patch id"))
+                                .toList(),
                 version.versionKind() == null ? VersionKind.LEGACY : version.versionKind(),
                 version.author() == null ? "" : version.author(),
                 version.message() == null ? "" : version.message(),

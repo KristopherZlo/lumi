@@ -6,22 +6,34 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
+import io.github.luma.domain.model.ProjectArchiveEntry;
+import io.github.luma.domain.model.ProjectArchiveManifest;
+import io.github.luma.domain.model.ProjectArchiveScope;
 import io.github.luma.domain.model.ProjectArchiveScopeType;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.storage.GsonProvider;
 import io.github.luma.storage.ProjectLayout;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.IntStream;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectArchiveRepositoryTest {
@@ -125,6 +137,97 @@ class ProjectArchiveRepositoryTest {
         assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/versions/v0003.json")));
     }
 
+    @Test
+    void importArchiveRejectsUnsafeProjectFolderName() throws Exception {
+        Path archiveFile = this.tempDir.resolve("bad-folder.zip");
+        this.writeArchive(
+                archiveFile,
+                manifest("../escape.mbp", List.of()),
+                Map.of()
+        );
+
+        assertThrows(IOException.class, () -> this.projectArchiveRepository.importArchive(this.tempDir.resolve("target"), archiveFile));
+    }
+
+    @Test
+    void importArchiveRejectsTooManyManifestEntries() throws Exception {
+        Path archiveFile = this.tempDir.resolve("too-many.zip");
+        List<ProjectArchiveEntry> entries = IntStream.range(0, 20_001)
+                .mapToObj(index -> new ProjectArchiveEntry("project/previews/v" + index + ".png", 0L, true))
+                .toList();
+        this.writeArchive(archiveFile, manifest("too-many.mbp", entries), Map.of());
+
+        assertThrows(IOException.class, () -> this.projectArchiveRepository.loadManifest(archiveFile));
+    }
+
+    @Test
+    void importArchiveRejectsEntrySizeMismatch() throws Exception {
+        Path archiveFile = this.tempDir.resolve("size-mismatch.zip");
+        ProjectArchiveEntry projectEntry = new ProjectArchiveEntry("project/project.json", 128L, false);
+        this.writeArchive(
+                archiveFile,
+                manifest("tower.mbp", List.of(projectEntry)),
+                Map.of(projectEntry.path(), "{}".getBytes(StandardCharsets.UTF_8))
+        );
+
+        assertThrows(IOException.class, () -> this.projectArchiveRepository.importArchive(this.tempDir.resolve("target"), archiveFile));
+    }
+
+    @Test
+    void importArchiveRejectsMaliciousVersionIds() throws Exception {
+        ProjectLayout sourceLayout = this.seedProject(this.tempDir.resolve("source-bad-version").resolve("tower.mbp"));
+        ProjectVersion badVersion = new ProjectVersion(
+                "../escape",
+                "project",
+                "main",
+                "",
+                "snapshot-0001",
+                List.of("patch-0001"),
+                VersionKind.INITIAL,
+                "tester",
+                "Bad",
+                ChangeStats.empty(),
+                PreviewInfo.none(),
+                ExternalSourceInfo.manual(),
+                Instant.parse("2026-04-21T08:00:00Z")
+        );
+        Files.writeString(sourceLayout.versionFile("v0001"), GsonProvider.gson().toJson(badVersion), StandardCharsets.UTF_8);
+        Path archiveFile = this.tempDir.resolve("bad-version.zip");
+        this.projectArchiveRepository.exportArchive(sourceLayout, this.projectRepository.load(sourceLayout).orElseThrow(), archiveFile, false);
+
+        assertThrows(IOException.class, () -> this.projectArchiveRepository.importArchive(this.tempDir.resolve("target-bad-version"), archiveFile));
+    }
+
+    @Test
+    void importArchiveRejectsMismatchedPatchMetadataId() throws Exception {
+        ProjectLayout sourceLayout = this.seedProject(this.tempDir.resolve("source-bad-patch").resolve("tower.mbp"));
+        Files.writeString(sourceLayout.patchMetaFile("patch-0001"), "{\"id\":\"other-patch\"}", StandardCharsets.UTF_8);
+        Path archiveFile = this.tempDir.resolve("bad-patch.zip");
+        this.projectArchiveRepository.exportArchive(sourceLayout, this.projectRepository.load(sourceLayout).orElseThrow(), archiveFile, false);
+
+        assertThrows(IOException.class, () -> this.projectArchiveRepository.importArchive(this.tempDir.resolve("target-bad-patch"), archiveFile));
+    }
+
+    @Test
+    void exportArchiveRejectsSymlinkedFiles() throws Exception {
+        ProjectLayout layout = this.seedProject(this.tempDir.resolve("source-symlink").resolve("tower.mbp"));
+        Path outside = this.tempDir.resolve("outside.txt");
+        Files.writeString(outside, "secret", StandardCharsets.UTF_8);
+        Path symlink = layout.cacheDir().resolve("render-cache-link.bin");
+        try {
+            Files.createSymbolicLink(symlink, outside);
+        } catch (UnsupportedOperationException | IOException exception) {
+            Assumptions.abort("Symlink creation is not available in this environment");
+        }
+
+        assertThrows(IOException.class, () -> this.projectArchiveRepository.exportArchive(
+                layout,
+                this.projectRepository.load(layout).orElseThrow(),
+                this.tempDir.resolve("symlink.zip"),
+                false
+        ));
+    }
+
     private ProjectLayout seedProject(Path root) throws Exception {
         ProjectLayout layout = new ProjectLayout(root);
         this.projectRepository.initializeLayout(layout);
@@ -163,6 +266,38 @@ class ProjectArchiveRepositoryTest {
         Files.write(layout.recoveryDraftFile(), new byte[]{11});
         Files.write(layout.recoveryOperationDraftFile(), new byte[]{12});
         return layout;
+    }
+
+    private ProjectArchiveManifest manifest(String projectFolderName, List<ProjectArchiveEntry> entries) {
+        return new ProjectArchiveManifest(
+                ProjectArchiveManifest.CURRENT_SCHEMA_VERSION,
+                ProjectArchiveScope.project(),
+                "Tower",
+                projectFolderName,
+                "project",
+                Instant.parse("2026-04-21T08:00:00Z"),
+                false,
+                entries
+        );
+    }
+
+    private void writeArchive(
+            Path archiveFile,
+            ProjectArchiveManifest manifest,
+            Map<String, byte[]> payloads
+    ) throws Exception {
+        Files.createDirectories(archiveFile.getParent());
+        Map<String, byte[]> orderedPayloads = new LinkedHashMap<>(payloads);
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(archiveFile), StandardCharsets.UTF_8)) {
+            zip.putNextEntry(new ZipEntry("manifest.json"));
+            zip.write(GsonProvider.compactGson().toJson(manifest).getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+            for (Map.Entry<String, byte[]> entry : orderedPayloads.entrySet()) {
+                zip.putNextEntry(new ZipEntry(entry.getKey()));
+                zip.write(entry.getValue());
+                zip.closeEntry();
+            }
+        }
     }
 
     private ProjectLayout seedProjectWithVariant(Path root) throws Exception {

@@ -50,7 +50,7 @@ This now includes regression checks for:
 - detached commit visibility after a restore-style reset
 - recovery draft isolation while save/amend operations run
 - WorldEdit optional edit-session context wiring
-- zip archive import/export for project history, with previews optional and recovery drafts excluded
+- zip archive import/export for project history, with previews optional, recovery drafts excluded, bounded import, storage-id validation, and symlink rejection
 - variant-scoped history package export/import, imported review package deletion, cached imported-variant merge planning, conflict zones, and per-zone resolutions
 - conservative cleanup flow for orphaned snapshots/previews/cache and stale operation drafts
 - material delta summarization on large diffs

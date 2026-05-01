@@ -13,12 +13,14 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.storage.ProjectLayout;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import net.jpountz.lz4.LZ4FrameOutputStream;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
@@ -176,6 +178,27 @@ class PatchDataRepositoryTest {
     }
 
     @Test
+    void rejectsInvalidPaletteIdsWithIOException() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        Path dataFile = layout.patchDataFile("bad-palette");
+        byte[] frame = this.corruptPaletteFrame();
+        byte[] compressedFrame = this.compressFrame(frame);
+        Files.createDirectories(dataFile.getParent());
+        try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(dataFile))) {
+            output.writeInt(0x4C504154);
+            output.writeInt(7);
+            output.writeInt(1);
+            output.writeInt(0);
+            output.writeInt(0);
+            output.writeInt(frame.length);
+            output.writeInt(compressedFrame.length);
+            output.write(compressedFrame);
+        }
+
+        assertThrows(IOException.class, () -> this.repository.loadWorldChanges(layout, metadata("bad-palette", List.of())));
+    }
+
+    @Test
     void selectedChunkReadRejectsSliceOutsideFileBounds() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         PatchMetadata metadata = this.repository.writePayload(
@@ -224,9 +247,13 @@ class PatchDataRepositoryTest {
     }
 
     private static StatePayload payload(String blockId, net.minecraft.nbt.CompoundTag blockEntity) {
+        return new StatePayload(state(blockId), blockEntity);
+    }
+
+    private static CompoundTag state(String blockId) {
         CompoundTag state = new CompoundTag();
         state.putString("Name", blockId);
-        return new StatePayload(state, blockEntity);
+        return state;
     }
 
     private static CompoundTag blockEntity(String id, int items) {
@@ -250,5 +277,40 @@ class PatchDataRepositoryTest {
 
     private static PatchMetadata metadata(String patchId, List<PatchChunkSlice> chunks) {
         return new PatchMetadata(patchId, "project", "version", patchId + ".bin.lz4", chunks, new PatchStats(0, chunks.size()));
+    }
+
+    private byte[] corruptPaletteFrame() throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream output = new DataOutputStream(bytes)) {
+            output.writeInt(0);
+            output.writeInt(0);
+            output.writeInt(1);
+            output.writeInt(1);
+            output.writeInt(4);
+            output.writeLong(1L);
+            output.writeLong(0L);
+            output.writeLong(0L);
+            output.writeLong(0L);
+            output.writeInt(1);
+            StorageIo.writeCompound(output, state("minecraft:stone"));
+            output.writeInt(1);
+            StorageIo.writeCompound(output, state("minecraft:dirt"));
+            output.writeInt(0);
+            output.writeInt(0);
+            output.writeInt(5);
+            output.writeInt(0);
+            output.writeInt(-1);
+            output.writeInt(-1);
+            output.writeInt(0);
+        }
+        return bytes.toByteArray();
+    }
+
+    private byte[] compressFrame(byte[] frame) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (LZ4FrameOutputStream output = new LZ4FrameOutputStream(bytes)) {
+            output.write(frame);
+        }
+        return bytes.toByteArray();
     }
 }
