@@ -292,12 +292,14 @@ Current scope:
 - [ ] Multiplayer support
 - [ ] Additional test coverage
 - [ ] Exploit discovery and hardening
-- [ ] Wiki website
-- [ ] Mod landing page
+- [x] Wiki website mockup
+- [x] Mod landing page mockup
 - [ ] Tutorial video
 
 ## Docs
 
+- [Landing page mockup](site/landing/index.html)
+- [Wiki mockup](site/wiki/index.html)
 - [User guide](docs/user-guide.md)
 - [Commands](docs/commands.md)
 - [Development](docs/development.md)
