@@ -586,7 +586,7 @@
   "luma.save_details.create_variant": "Créer une branche à partir de cette sauvegarde",
   "luma.save_details.create_idea": "Créer une branche à partir de cette sauvegarde",
   "luma.save_details.advanced_info_title": "Informations avancées",
-  "luma.save_details.advanced_info_help": "Détails du matériel et identifiants bruts pour le support/débogage.",
+  "luma.save_details.advanced_info_help": "Identifiants bruts de la sauvegarde pour le support/débogage.",
   "luma.save_details.raw_info_title": "Informations brutes",
   "luma.save_details.raw_info_id": "Identifiant de sauvegarde : %s",
   "luma.save_details.raw_info_author": "Auteur : %s",

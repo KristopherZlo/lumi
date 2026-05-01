@@ -215,7 +215,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 - Dashboard/projects: `DashboardScreen`, `DashboardScreenController`, `DashboardViewState`, `DashboardProjectItem`.
 - Create/open workspace and onboarding: `CreateProjectScreen`, `CreateProjectScreenController`, `ProjectOpeningScreen`, `OnboardingScreen`, `ClientWorkspaceOpenService`, `ClientProjectAccess`, `ClientOnboardingService`, `ClientContextualHelpService`, `ClientOnboardingStateRepository`, `LumaClientCommands`, `KeyGlyphResolver`, `OnboardingHoldGate`.
 - Project home/history: `ProjectScreen`, `ProjectScreenController`, `ProjectHomeScreenController`, `ProjectHomeViewState`, `ProjectScreenSections`.
-- Save and quick save: `SaveScreen`, `SaveDetailsScreen`, `QuickSaveScreen`, `QuickSaveScreenController`, `SaveViewState`, `SaveDetailsViewState`, `SaveDetailsPartialRestoreSection`, `PartialRestoreFormState`.
+- Save and quick save: `SaveScreen`, `SaveDetailsScreen`, `SaveDetailsStateFactory`, `QuickSaveScreen`, `QuickSaveScreenController`, `SaveViewState`, `SaveDetailsViewState`, `SaveDetailsPartialRestoreSection`, `PartialRestoreFormState`.
 - Compare: `CompareScreen`, `CompareScreenController`, `CompareViewState`, `CompareScreenSections`.
 - Branches: `VariantsScreen`, `VariantsScreenController`, `VariantsViewState`.
 - Import/export/share: `ShareScreen`, `ShareScreenController`, `ShareViewState`, `MergePreviewCache`, `MergePreviewKey`, `MergePreviewStatus`, `ShareMergeReviewSection`.

@@ -586,7 +586,7 @@
   "luma.save_details.create_variant": "Erstellen Sie einen Zweig aus dieser Speicherung",
   "luma.save_details.create_idea": "Erstellen Sie einen Zweig aus dieser Speicherung",
   "luma.save_details.advanced_info_title": "Erweiterte Informationen",
-  "luma.save_details.advanced_info_help": "Materialdetails und Roh-IDs für Support/Debug.",
+  "luma.save_details.advanced_info_help": "Rohe Speicher-IDs für Support/Debug.",
   "luma.save_details.raw_info_title": "Rohdaten",
   "luma.save_details.raw_info_id": "Speicher-ID: %s",
   "luma.save_details.raw_info_author": "Autor: %s",

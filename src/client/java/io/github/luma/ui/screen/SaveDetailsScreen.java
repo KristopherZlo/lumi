@@ -4,7 +4,7 @@ import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.domain.model.Bounds3i;
-import io.github.luma.domain.model.ChangeType;
+import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
@@ -14,7 +14,6 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
-import io.github.luma.ui.MaterialEntryView;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
@@ -39,7 +38,6 @@ import net.minecraft.network.chat.Component;
 
 public final class SaveDetailsScreen extends LumaScreen {
 
-    private static final int MATERIAL_LIMIT = 6;
     private static final int[] PREVIEW_WIDTH_STEPS = {168, 212, 284, 356};
 
     private final Screen parent;
@@ -57,8 +55,6 @@ public final class SaveDetailsScreen extends LumaScreen {
             List.of(),
             List.of(),
             null,
-            null,
-            List.of(),
             null,
             null,
             "luma.status.project_ready"
@@ -254,25 +250,19 @@ public final class SaveDetailsScreen extends LumaScreen {
         );
 
         FlowLayout stats = LumaUi.actionRow();
-        if (this.state.selectedVersionDiff() != null) {
-            stats.child(LumaUi.statChip(
-                    Component.translatable("luma.change_type.added"),
-                    Component.literal(Integer.toString(ProjectUiSupport.changeCount(this.state.selectedVersionDiff(), ChangeType.ADDED)))
-            ));
-            stats.child(LumaUi.statChip(
-                    Component.translatable("luma.change_type.removed"),
-                    Component.literal(Integer.toString(ProjectUiSupport.changeCount(this.state.selectedVersionDiff(), ChangeType.REMOVED)))
-            ));
-            stats.child(LumaUi.statChip(
-                    Component.translatable("luma.change_type.changed"),
-                    Component.literal(Integer.toString(ProjectUiSupport.changeCount(this.state.selectedVersionDiff(), ChangeType.CHANGED)))
-            ));
-        } else {
-            stats.child(LumaUi.statChip(
-                    Component.translatable("luma.history.commit_blocks"),
-                    Component.literal(Integer.toString(version.stats().changedBlocks()))
-            ));
-        }
+        ChangeStats changeStats = version.stats() == null ? ChangeStats.empty() : version.stats();
+        stats.child(LumaUi.statChip(
+                Component.translatable("luma.history.commit_blocks"),
+                Component.literal(Integer.toString(changeStats.changedBlocks()))
+        ));
+        stats.child(LumaUi.statChip(
+                Component.translatable("luma.history.commit_chunks"),
+                Component.literal(Integer.toString(changeStats.changedChunks()))
+        ));
+        stats.child(LumaUi.statChip(
+                Component.translatable("luma.history.commit_types"),
+                Component.literal(Integer.toString(changeStats.distinctBlockTypes()))
+        ));
         section.child(stats);
 
         return section;
@@ -464,22 +454,6 @@ public final class SaveDetailsScreen extends LumaScreen {
                 Component.translatable("luma.save_details.advanced_info_title"),
                 Component.translatable("luma.save_details.advanced_info_help")
         );
-        if (this.state.materialDelta().isEmpty()) {
-            section.child(LumaUi.caption(Component.translatable("luma.materials.empty")));
-        } else {
-            int limit = Math.min(MATERIAL_LIMIT, this.state.materialDelta().size());
-            for (int index = 0; index < limit; index++) {
-                var entry = this.state.materialDelta().get(index);
-                section.child(MaterialEntryView.row(
-                        entry.blockId(),
-                        Component.translatable(
-                                "luma.compare.material_entry",
-                                entry.blockId(),
-                                entry.delta()
-                        )
-                ));
-            }
-        }
         section.child(LumaUi.caption(Component.translatable("luma.save_details.raw_info_id", version.id())));
         section.child(LumaUi.caption(Component.translatable("luma.save_details.raw_info_author", ProjectUiSupport.safeText(version.author()))));
         section.child(LumaUi.caption(Component.translatable(

@@ -529,7 +529,7 @@
   "luma.save_details.create_variant": "Создать бренч из этого сохранения",
   "luma.save_details.create_idea": "Создать бренч из этого сохранения",
   "luma.save_details.advanced_info_title": "Техническая информация",
-  "luma.save_details.advanced_info_help": "Материалы и raw id для поддержки/debug.",
+  "luma.save_details.advanced_info_help": "Raw ID сохранения для поддержки/debug.",
   "luma.save_details.raw_info_title": "Raw-информация",
   "luma.save_details.raw_info_id": "ID сохранения: %s",
   "luma.save_details.raw_info_author": "Автор: %s",

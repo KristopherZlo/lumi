@@ -586,7 +586,7 @@
   "luma.save_details.create_variant": "Crear rama desde este guardado",
   "luma.save_details.create_idea": "Crear rama desde este guardado",
   "luma.save_details.advanced_info_title": "Información avanzada",
-  "luma.save_details.advanced_info_help": "Detalles del material e identificaciones sin procesar para soporte/depuración.",
+  "luma.save_details.advanced_info_help": "Identificadores raw del guardado para soporte/debug.",
   "luma.save_details.raw_info_title": "información sin procesar",
   "luma.save_details.raw_info_id": "ID de guardado: %s",
   "luma.save_details.raw_info_author": "Autor: %s",

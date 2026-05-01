@@ -8,10 +8,7 @@ import io.github.luma.domain.service.HistoryEditService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VariantMergeService;
 import io.github.luma.domain.service.VersionService;
-import io.github.luma.domain.service.DiffService;
-import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ChangeStatsFactory;
-import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.ui.state.SaveDetailsViewState;
 import io.github.luma.ui.state.SaveViewState;
@@ -32,9 +29,7 @@ public final class ProjectScreenController {
     private final VariantService variantService = new VariantService();
     private final VariantMergeService variantMergeService = new VariantMergeService();
     private final RecoveryService recoveryService = new RecoveryService();
-    private final DiffService diffService = new DiffService();
-    private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
-    private final VersionLineageService versionLineageService = new VersionLineageService();
+    private final SaveDetailsStateFactory saveDetailsStateFactory = new SaveDetailsStateFactory();
 
     public SaveViewState loadSaveState(String projectName, String status) {
         if (!this.client.hasSingleplayerServer()) {
@@ -85,8 +80,6 @@ public final class ProjectScreenController {
                     List.of(),
                     null,
                     null,
-                    List.of(),
-                    null,
                     null,
                     "luma.status.singleplayer_only"
             );
@@ -98,23 +91,17 @@ public final class ProjectScreenController {
             var loadedVariants = new ArrayList<>(this.projectService.loadVariants(server, projectName));
             var loadedVersions = new ArrayList<>(this.projectService.loadVersions(server, projectName));
             loadedVersions.sort(java.util.Comparator.comparing(io.github.luma.domain.model.ProjectVersion::createdAt).reversed());
-            var selectedVersion = this.resolveSelectedVersion(loadedVersions, loadedVariants, project.activeVariantId(), selectedVersionId);
-            var diff = selectedVersion != null
-                    ? this.diffService.compareVersionToParent(server, projectName, selectedVersion.id())
-                    : null;
             var operationSnapshot = this.visibleOperationSnapshot(WorldOperationManager.getInstance()
                     .snapshot(server, project.id().toString())
                     .orElse(null));
-            return new SaveDetailsViewState(
+            return this.saveDetailsStateFactory.create(
                     project,
                     loadedVersions,
                     loadedVariants,
-                    selectedVersion,
-                    diff,
-                    diff == null ? List.of() : this.materialDeltaService.summarize(diff),
+                    selectedVersionId,
                     this.recoveryService.loadDraft(server, projectName).orElse(null),
                     operationSnapshot,
-                    status == null || status.isBlank() ? "luma.status.project_ready" : status
+                    status
             );
         } catch (Exception exception) {
             return new SaveDetailsViewState(
@@ -122,8 +109,6 @@ public final class ProjectScreenController {
                     List.of(),
                     List.of(),
                     null,
-                    null,
-                    List.of(),
                     null,
                     null,
                     "luma.status.project_failed"
@@ -451,25 +436,4 @@ public final class ProjectScreenController {
         return ChangeStatsFactory.summarizePending(draft.changes());
     }
 
-    private io.github.luma.domain.model.ProjectVersion resolveSelectedVersion(
-            List<io.github.luma.domain.model.ProjectVersion> versions,
-            List<io.github.luma.domain.model.ProjectVariant> variants,
-            String activeVariantId,
-            String selectedVersionId
-    ) {
-        if (versions.isEmpty()) {
-            return null;
-        }
-
-        if (selectedVersionId != null && !selectedVersionId.isBlank()) {
-            for (var version : versions) {
-                if (version.id().equals(selectedVersionId)) {
-                    return version;
-                }
-            }
-        }
-
-        io.github.luma.domain.model.ProjectVersion activeHead = this.versionLineageService.resolveVariantHead(versions, variants, activeVariantId);
-        return activeHead != null ? activeHead : versions.getFirst();
-    }
 }

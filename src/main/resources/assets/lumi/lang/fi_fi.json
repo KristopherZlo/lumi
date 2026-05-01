@@ -586,7 +586,7 @@
   "luma.save_details.create_variant": "Luo haara tästä tallennuksesta",
   "luma.save_details.create_idea": "Luo haara tästä tallennuksesta",
   "luma.save_details.advanced_info_title": "Lisätiedot",
-  "luma.save_details.advanced_info_help": "Materiaalitiedot ja raaka-tunnukset tukeen/virheenkorjaukseen.",
+  "luma.save_details.advanced_info_help": "Tallennuksen raakatunnisteet tukea/debuggausta varten.",
   "luma.save_details.raw_info_title": "Raaka tieto",
   "luma.save_details.raw_info_id": "Tallenna tunnus: %s",
   "luma.save_details.raw_info_author": "Kirjoittaja: %s",

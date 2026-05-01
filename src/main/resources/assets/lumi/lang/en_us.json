@@ -628,7 +628,7 @@
   "luma.save_details.create_variant": "Create branch from this save",
   "luma.save_details.create_idea": "Create branch from this save",
   "luma.save_details.advanced_info_title": "Advanced info",
-  "luma.save_details.advanced_info_help": "Material details and raw ids for support/debug.",
+  "luma.save_details.advanced_info_help": "Raw save identifiers for support/debug.",
   "luma.save_details.raw_info_title": "Raw info",
   "luma.save_details.raw_info_id": "Save id: %s",
   "luma.save_details.raw_info_author": "Author: %s",

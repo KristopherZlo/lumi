@@ -277,7 +277,7 @@ The save details screen shows:
 - the save name
 - isometric preview with automatic empty-margin trimming, zoom controls, and automatic loading when the async preview render finishes
 - time
-- change summary
+- lightweight change summary from stored save metadata
 
 Primary actions stay focused:
 
@@ -285,6 +285,7 @@ Primary actions stay focused:
 - `See changes`
 
 Extra actions like rename save, delete save, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
+Use `See changes` for the full added/removed/changed breakdown, material delta, and changed-position sample.
 
 `Restore selected area` is a primary action on save details. Use it when you want a bounded restore instead of a full branch reset. You can choose `Only selected area` to copy that area from the selected save, or `Everything except selection` to restore the save around the area while keeping the selected area as it is now. Copy a Lumi selection into the form or edit Min/Max coordinates manually. Preview the region first, then apply it. Lumi writes the result as a new save on the active branch instead of moving the branch head back to the older save. The applied partial restore is also undoable with the Lumi action button + `Z`, and redoable with the Lumi action button + `Y`.
 

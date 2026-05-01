@@ -83,7 +83,7 @@ Use Lumi if you want to:
 - recovery drafts with WAL compaction and a direct recovery screen prompt only when a project opens with interrupted persisted draft work from a previous session
 - optional `AUTO_CHECKPOINT` saves before large vanilla `/fill` or `/clone` commands, WorldEdit sessions, and Axiom block-buffer edits when a pending draft exists; the setting is off by default
 - client-rendered textured isometric preview images auto-framed from changed blocks with safe context padding
-- material delta summaries and integrity checks under focused details and support screens
+- material delta summaries in See Changes and integrity checks under focused support screens
 - zip import/export from the workspace sidebar, including branch-scoped packages in the game-root `lumi-projects` folder with optional previews
 - imported review projects with deletion, cached combine review, and same-area overlays for shared branches
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
