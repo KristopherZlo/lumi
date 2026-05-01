@@ -138,6 +138,11 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.FAWE));
         assertTrue(HistoryCaptureManager.canUseMutationSource(true, true, WorldMutationSource.PLAYER));
         assertFalse(HistoryCaptureManager.canUseMutationSource(true, false, WorldMutationSource.PLAYER));
+        assertTrue(HistoryCaptureManager.canUseMutationSource(true, true, WorldMutationSource.WORLDEDIT));
+        assertFalse(HistoryCaptureManager.canUseMutationSource(true, false, WorldMutationSource.EXTERNAL_TOOL));
+        assertFalse(HistoryCaptureManager.canUseMutationSource(true, false, WorldMutationSource.WORLDEDIT));
+        assertFalse(HistoryCaptureManager.canUseMutationSource(true, false, WorldMutationSource.FAWE));
+        assertFalse(HistoryCaptureManager.canUseMutationSource(true, false, WorldMutationSource.AXIOM));
         assertTrue(HistoryCaptureManager.canUseMutationSource(true, false, WorldMutationSource.FLUID));
     }
 

@@ -4,6 +4,8 @@ import io.github.luma.integration.axiom.AxiomBlockBufferCaptureService;
 import io.github.luma.integration.axiom.AxiomNativeUndoRedoGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,7 +21,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 abstract class AxiomSetBufferPacketMixin {
 
     @Unique
-    private static final ThreadLocal<Integer> LUMA_NATIVE_REPLAY_SUPPRESSION_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<Deque<WorldMutationCaptureGuard.CaptureBoundary>> LUMA_DIRECT_SECTION_SUPPRESSIONS =
+            ThreadLocal.withInitial(ArrayDeque::new);
+
+    @Unique
+    private static final ThreadLocal<Deque<WorldMutationContext.SuppressionFrame>> LUMA_NATIVE_REPLAY_SUPPRESSIONS =
+            ThreadLocal.withInitial(ArrayDeque::new);
 
     @Inject(
             method = "applyBlockBufferServer",
@@ -34,11 +41,10 @@ abstract class AxiomSetBufferPacketMixin {
             @Coerce Object player,
             CallbackInfo ci
     ) {
-        WorldMutationCaptureGuard.pushDirectSectionCaptureSuppression();
+        LUMA_DIRECT_SECTION_SUPPRESSIONS.get().push(WorldMutationCaptureGuard.pushDirectSectionCaptureSuppression());
         boolean nativeUndoRedoReplay = AxiomNativeUndoRedoGuard.consumeExpectedNativeReplay();
         if (nativeUndoRedoReplay) {
-            WorldMutationContext.pushCaptureSuppression();
-            LUMA_NATIVE_REPLAY_SUPPRESSION_DEPTH.set(LUMA_NATIVE_REPLAY_SUPPRESSION_DEPTH.get() + 1);
+            LUMA_NATIVE_REPLAY_SUPPRESSIONS.get().push(WorldMutationContext.pushCaptureSuppression());
         }
         if (!(level instanceof ServerLevel serverLevel)) {
             return;
@@ -64,15 +70,20 @@ abstract class AxiomSetBufferPacketMixin {
             @Coerce Object player,
             CallbackInfo ci
     ) {
-        int suppressionDepth = LUMA_NATIVE_REPLAY_SUPPRESSION_DEPTH.get();
-        if (suppressionDepth > 0) {
-            WorldMutationContext.popCaptureSuppression();
-            if (suppressionDepth == 1) {
-                LUMA_NATIVE_REPLAY_SUPPRESSION_DEPTH.remove();
-            } else {
-                LUMA_NATIVE_REPLAY_SUPPRESSION_DEPTH.set(suppressionDepth - 1);
-            }
+        Deque<WorldMutationContext.SuppressionFrame> suppressions = LUMA_NATIVE_REPLAY_SUPPRESSIONS.get();
+        if (!suppressions.isEmpty()) {
+            suppressions.pop().close();
         }
-        WorldMutationCaptureGuard.popDirectSectionCaptureSuppression();
+        if (suppressions.isEmpty()) {
+            LUMA_NATIVE_REPLAY_SUPPRESSIONS.remove();
+        }
+
+        Deque<WorldMutationCaptureGuard.CaptureBoundary> boundaries = LUMA_DIRECT_SECTION_SUPPRESSIONS.get();
+        if (!boundaries.isEmpty()) {
+            boundaries.pop().close();
+        }
+        if (boundaries.isEmpty()) {
+            LUMA_DIRECT_SECTION_SUPPRESSIONS.remove();
+        }
     }
 }

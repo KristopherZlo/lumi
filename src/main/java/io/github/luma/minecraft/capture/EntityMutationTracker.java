@@ -124,15 +124,18 @@ public final class EntityMutationTracker {
             return;
         }
 
-        WorldMutationContext.pushExternalSource(operation.source(), operation.actor(), operation.actionId());
-        try {
+        boolean accessAllowed = operation.accessAllowed() || !level.getServer().isDedicatedServer();
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                operation.source(),
+                operation.actor(),
+                operation.actionId(),
+                accessAllowed
+        )) {
             if (undoOnly) {
                 HistoryCaptureManager.getInstance().recordUndoOnlyEntityChange(level, oldPayload, newPayload);
             } else {
                 HistoryCaptureManager.getInstance().recordEntityChange(level, oldPayload, newPayload);
             }
-        } finally {
-            WorldMutationContext.popSource();
         }
     }
 

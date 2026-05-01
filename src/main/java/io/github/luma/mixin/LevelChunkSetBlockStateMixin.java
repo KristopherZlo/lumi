@@ -57,6 +57,9 @@ abstract class LevelChunkSetBlockStateMixin {
         ObservedExternalToolOperation operation = currentSourceCaptures
                 ? LUMA_TOOL_SOURCE_RESOLVER.detectPlayerSourceOverride(currentSource, captureSuppressed).orElse(null)
                 : LUMA_TOOL_SOURCE_RESOLVER.detectUnattributedOperation(captureSuppressed).orElse(null);
+        if (operation != null && currentSourceCaptures) {
+            operation = operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed());
+        }
         if (operation == null) {
             return;
         }
@@ -64,12 +67,13 @@ abstract class LevelChunkSetBlockStateMixin {
         LevelChunk chunk = (LevelChunk) (Object) this;
         BlockState oldState = chunk.getBlockState(pos);
         CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, pos, oldState);
-        WorldMutationCaptureGuard.pushChunkSetBlockBoundary();
+        WorldMutationCaptureGuard.CaptureBoundary boundary = WorldMutationCaptureGuard.pushChunkSetBlockBoundary();
         LUMA_PENDING_TOOL_MUTATIONS.get().push(new PendingExternalToolBlockMutation(
                 pos.immutable(),
                 oldState,
                 oldBlockEntity,
-                operation
+                operation,
+                boundary
         ));
     }
 
@@ -90,7 +94,6 @@ abstract class LevelChunkSetBlockStateMixin {
         }
 
         PendingExternalToolBlockMutation mutation = mutations.pop();
-        boolean sourcePushed = false;
         try {
             if (cir.getReturnValue() == null) {
                 return;
@@ -99,25 +102,24 @@ abstract class LevelChunkSetBlockStateMixin {
             LevelChunk chunk = (LevelChunk) (Object) this;
             BlockState appliedState = chunk.getBlockState(mutation.pos());
             CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, mutation.pos(), appliedState);
-            WorldMutationContext.pushExternalSource(
+            boolean accessAllowed = mutation.operation().accessAllowed() || !serverLevel.getServer().isDedicatedServer();
+            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
                     mutation.operation().source(),
                     mutation.operation().actor(),
-                    mutation.operation().actionId()
-            );
-            sourcePushed = true;
-            HistoryCaptureManager.getInstance().recordBlockChange(
-                    serverLevel,
-                    mutation.pos(),
-                    mutation.oldState(),
-                    appliedState,
-                    mutation.oldBlockEntity(),
-                    newBlockEntity
-            );
-        } finally {
-            if (sourcePushed) {
-                WorldMutationContext.popSource();
+                    mutation.operation().actionId(),
+                    accessAllowed
+            )) {
+                HistoryCaptureManager.getInstance().recordBlockChange(
+                        serverLevel,
+                        mutation.pos(),
+                        mutation.oldState(),
+                        appliedState,
+                        mutation.oldBlockEntity(),
+                        newBlockEntity
+                );
             }
-            WorldMutationCaptureGuard.popChunkSetBlockBoundary();
+        } finally {
+            mutation.boundary().close();
         }
     }
 
@@ -135,7 +137,8 @@ abstract class LevelChunkSetBlockStateMixin {
             BlockPos pos,
             BlockState oldState,
             CompoundTag oldBlockEntity,
-            ObservedExternalToolOperation operation
+            ObservedExternalToolOperation operation,
+            WorldMutationCaptureGuard.CaptureBoundary boundary
     ) {
     }
 }

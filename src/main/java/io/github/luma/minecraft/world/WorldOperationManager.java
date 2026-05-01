@@ -648,25 +648,28 @@ public final class WorldOperationManager {
                     break;
                 }
 
-                WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
-                WorldMutationContext.pushCaptureSuppression();
-                WorldLightUpdateContext.push(this.lightUpdateQueue);
-                boolean allowSynchronousChunkLoad = this.allowsSynchronousChunkLoad();
-                if (allowSynchronousChunkLoad) {
-                    WorldApplyChunkLoadContext.pushAllowSynchronousLoad();
-                }
                 AppliedWork processed;
-                try {
+                try (
+                        WorldMutationContext.SourceFrame ignoredSource =
+                                WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
+                        WorldMutationContext.SuppressionFrame ignoredSuppression =
+                                WorldMutationContext.pushCaptureSuppression()
+                ) {
+                    WorldLightUpdateContext.push(this.lightUpdateQueue);
+                    boolean allowSynchronousChunkLoad = this.allowsSynchronousChunkLoad();
+                    if (allowSynchronousChunkLoad) {
+                        WorldApplyChunkLoadContext.pushAllowSynchronousLoad();
+                    }
                     int maxBlocks = this.maxWorkForCurrentStep(budget, processedWorkThisTick, processedNativeCellsThisTick);
                     int maxDirectSections = Math.max(0, budget.maxDirectSections() - processedDirectSectionsThisTick);
-                    processed = this.applyCurrentChunk(maxBlocks, maxDirectSections);
-                } finally {
-                    if (allowSynchronousChunkLoad) {
-                        WorldApplyChunkLoadContext.pop();
+                    try {
+                        processed = this.applyCurrentChunk(maxBlocks, maxDirectSections);
+                    } finally {
+                        if (allowSynchronousChunkLoad) {
+                            WorldApplyChunkLoadContext.pop();
+                        }
+                        WorldLightUpdateContext.pop();
                     }
-                    WorldLightUpdateContext.pop();
-                    WorldMutationContext.popCaptureSuppression();
-                    WorldMutationContext.popSource();
                 }
 
                 if (processed.workUnits() <= 0 && this.currentBatch != null && !this.currentBatchFinished()) {

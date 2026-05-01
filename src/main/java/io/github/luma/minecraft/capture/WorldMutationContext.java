@@ -37,7 +37,7 @@ public final class WorldMutationContext {
         return CAPTURE_SUPPRESSION_DEPTH.get() > 0;
     }
 
-    public static void pushSource(WorldMutationSource source) {
+    public static SourceFrame pushSource(WorldMutationSource source) {
         WorldMutationSource resolvedSource = source == null ? WorldMutationSource.SYSTEM : source;
         Frame parent = currentFrame();
         if (inheritsParentAction(resolvedSource)) {
@@ -47,7 +47,7 @@ public final class WorldMutationContext {
                     parent.actionId(),
                     parent.accessAllowed()
             ));
-            return;
+            return new SourceFrame();
         }
 
         SOURCE_STACK.get().push(new Frame(
@@ -56,9 +56,10 @@ public final class WorldMutationContext {
                 "",
                 false
         ));
+        return new SourceFrame();
     }
 
-    public static void pushSource(
+    public static SourceFrame pushSource(
             WorldMutationSource source,
             String actor,
             String actionId,
@@ -70,24 +71,36 @@ public final class WorldMutationContext {
                 actionId == null || actionId.isBlank() ? "" : actionId,
                 accessAllowed
         ));
+        return new SourceFrame();
     }
 
-    public static void pushPlayerSource(WorldMutationSource source, String actor, boolean accessAllowed) {
+    public static SourceFrame pushPlayerSource(WorldMutationSource source, String actor, boolean accessAllowed) {
         SOURCE_STACK.get().push(new Frame(
                 source == null ? WorldMutationSource.PLAYER : source,
                 actor == null || actor.isBlank() ? "player" : actor,
                 UUID.randomUUID().toString(),
                 accessAllowed
         ));
+        return new SourceFrame();
     }
 
-    public static void pushExternalSource(WorldMutationSource source, String actor, String actionId) {
+    static SourceFrame pushExternalSource(WorldMutationSource source, String actor, String actionId) {
+        return pushExternalSource(source, actor, actionId, false);
+    }
+
+    public static SourceFrame pushExternalSource(
+            WorldMutationSource source,
+            String actor,
+            String actionId,
+            boolean accessAllowed
+    ) {
         SOURCE_STACK.get().push(new Frame(
                 source == null ? WorldMutationSource.EXTERNAL_TOOL : source,
                 actor == null || actor.isBlank() ? "external-tool" : actor,
                 actionId == null || actionId.isBlank() ? UUID.randomUUID().toString() : actionId,
-                true
+                accessAllowed
         ));
+        return new SourceFrame();
     }
 
     public static void popSource() {
@@ -101,25 +114,20 @@ public final class WorldMutationContext {
     }
 
     public static void runWithSource(WorldMutationSource source, Runnable runnable) {
-        pushSource(source);
-        try {
+        try (SourceFrame ignored = pushSource(source)) {
             runnable.run();
-        } finally {
-            popSource();
         }
     }
 
     public static void runWithCaptureSuppressed(Runnable runnable) {
-        pushCaptureSuppression();
-        try {
+        try (SuppressionFrame ignored = pushCaptureSuppression()) {
             runnable.run();
-        } finally {
-            popCaptureSuppression();
         }
     }
 
-    public static void pushCaptureSuppression() {
+    public static SuppressionFrame pushCaptureSuppression() {
         CAPTURE_SUPPRESSION_DEPTH.set(CAPTURE_SUPPRESSION_DEPTH.get() + 1);
+        return new SuppressionFrame();
     }
 
     public static void popCaptureSuppression() {
@@ -173,6 +181,40 @@ public final class WorldMutationContext {
 
         private static Frame system() {
             return new Frame(WorldMutationSource.SYSTEM, "world", "", false);
+        }
+    }
+
+    public static final class SourceFrame implements AutoCloseable {
+
+        private boolean closed;
+
+        private SourceFrame() {
+        }
+
+        @Override
+        public void close() {
+            if (this.closed) {
+                return;
+            }
+            this.closed = true;
+            popSource();
+        }
+    }
+
+    public static final class SuppressionFrame implements AutoCloseable {
+
+        private boolean closed;
+
+        private SuppressionFrame() {
+        }
+
+        @Override
+        public void close() {
+            if (this.closed) {
+                return;
+            }
+            this.closed = true;
+            popCaptureSuppression();
         }
     }
 }

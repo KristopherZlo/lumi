@@ -97,12 +97,13 @@ public final class DirectSectionMutationCaptureService {
 
         ServerLevel level = owner.get().level();
         BlockState appliedState = section.getBlockState(localX, localY, localZ);
-        WorldMutationContext.pushExternalSource(
+        boolean accessAllowed = this.accessAllowed(level, mutation.operation());
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
                 mutation.operation().source(),
                 mutation.operation().actor(),
-                mutation.operation().actionId()
-        );
-        try {
+                mutation.operation().actionId(),
+                accessAllowed
+        )) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     level,
                     mutation.pos(),
@@ -111,8 +112,6 @@ public final class DirectSectionMutationCaptureService {
                     mutation.oldBlockEntity(),
                     this.blockEntityTag(level, mutation.pos(), appliedState)
             );
-        } finally {
-            WorldMutationContext.popSource();
         }
     }
 
@@ -128,12 +127,19 @@ public final class DirectSectionMutationCaptureService {
         var currentSource = WorldMutationContext.currentSource();
         boolean captureSuppressed = WorldMutationContext.captureSuppressed();
         if (HistoryCaptureManager.shouldCaptureMutation(currentSource)) {
-            return this.sourceResolver.detectPlayerSourceOverride(currentSource, captureSuppressed).orElse(null);
+            return this.sourceResolver.detectPlayerSourceOverride(currentSource, captureSuppressed)
+                    .map(operation -> operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed()))
+                    .orElse(null);
         }
         if (captureSuppressed) {
             return null;
         }
         return this.detector.detectOperation().orElse(null);
+    }
+
+    private boolean accessAllowed(ServerLevel level, ObservedExternalToolOperation operation) {
+        return operation != null
+                && (operation.accessAllowed() || level == null || !level.getServer().isDedicatedServer());
     }
 
     public record PendingDirectSectionMutation(

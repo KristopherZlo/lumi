@@ -1,6 +1,7 @@
 package io.github.luma.integration.axiom;
 
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
@@ -43,18 +44,26 @@ public final class AxiomBlockBufferCaptureService {
 
         String actor = this.actorName(player);
         String actionId = "axiom-buffer-" + UUID.randomUUID();
+        boolean accessAllowed = this.accessAllowed(level, player);
         AutoCheckpointService.getInstance().checkpointBeforeExternalOperation(
                 level,
                 WorldMutationSource.AXIOM,
                 actor,
-                actionId
+                actionId,
+                accessAllowed
         );
         for (AxiomBlockMutation mutation : mutations) {
-            this.recordMutation(level, mutation, actor, actionId);
+            this.recordMutation(level, mutation, actor, actionId, accessAllowed);
         }
     }
 
-    private void recordMutation(ServerLevel level, AxiomBlockMutation mutation, String actor, String actionId) {
+    private void recordMutation(
+            ServerLevel level,
+            AxiomBlockMutation mutation,
+            String actor,
+            String actionId,
+            boolean accessAllowed
+    ) {
         if (mutation == null || mutation.pos() == null || mutation.newState() == null) {
             return;
         }
@@ -62,8 +71,12 @@ public final class AxiomBlockBufferCaptureService {
         BlockPos pos = mutation.pos();
         BlockState oldState = level.getBlockState(pos);
         CompoundTag oldBlockEntity = this.blockEntityTag(level, pos, oldState);
-        WorldMutationContext.pushExternalSource(WorldMutationSource.AXIOM, actor, actionId);
-        try {
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                WorldMutationSource.AXIOM,
+                actor,
+                actionId,
+                accessAllowed
+        )) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     level,
                     pos,
@@ -72,8 +85,6 @@ public final class AxiomBlockBufferCaptureService {
                     oldBlockEntity,
                     mutation.newBlockEntity()
             );
-        } finally {
-            WorldMutationContext.popSource();
         }
     }
 
@@ -90,5 +101,12 @@ public final class AxiomBlockBufferCaptureService {
             return "axiom";
         }
         return "axiom:" + player.getName().getString();
+    }
+
+    private boolean accessAllowed(ServerLevel level, ServerPlayer player) {
+        if (level == null || !level.getServer().isDedicatedServer()) {
+            return true;
+        }
+        return LumaAccessControl.getInstance().canUse(player);
     }
 }

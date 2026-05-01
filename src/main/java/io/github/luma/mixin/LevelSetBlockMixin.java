@@ -42,18 +42,22 @@ abstract class LevelSetBlockMixin {
         ObservedExternalToolOperation operation = currentSourceCaptures
                 ? LUMA_TOOL_SOURCE_RESOLVER.detectPlayerSourceOverride(currentSource, captureSuppressed).orElse(null)
                 : LUMA_TOOL_SOURCE_RESOLVER.detectUnattributedOperation(captureSuppressed).orElse(null);
+        if (operation != null && currentSourceCaptures) {
+            operation = operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed());
+        }
         if (!currentSourceCaptures && operation == null) {
             return;
         }
 
         BlockState oldState = serverLevel.getBlockState(pos);
         CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, pos, oldState);
-        WorldMutationCaptureGuard.pushLevelSetBlockBoundary();
+        WorldMutationCaptureGuard.CaptureBoundary boundary = WorldMutationCaptureGuard.pushLevelSetBlockBoundary();
         LUMA_PENDING_MUTATIONS.get().push(new PendingBlockMutation(
                 pos.immutable(),
                 oldState,
                 oldBlockEntity,
-                operation
+                operation,
+                boundary
         ));
     }
 
@@ -79,7 +83,7 @@ abstract class LevelSetBlockMixin {
             CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, mutation.pos(), appliedState);
             this.luma$recordMutation(serverLevel, mutation, appliedState, newBlockEntity);
         } finally {
-            WorldMutationCaptureGuard.popLevelSetBlockBoundary();
+            mutation.boundary().close();
         }
     }
 
@@ -103,8 +107,13 @@ abstract class LevelSetBlockMixin {
             return;
         }
 
-        WorldMutationContext.pushExternalSource(operation.source(), operation.actor(), operation.actionId());
-        try {
+        boolean accessAllowed = operation.accessAllowed() || !serverLevel.getServer().isDedicatedServer();
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                operation.source(),
+                operation.actor(),
+                operation.actionId(),
+                accessAllowed
+        )) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     serverLevel,
                     mutation.pos(),
@@ -113,8 +122,6 @@ abstract class LevelSetBlockMixin {
                     mutation.oldBlockEntity(),
                     newBlockEntity
             );
-        } finally {
-            WorldMutationContext.popSource();
         }
     }
 
@@ -132,7 +139,8 @@ abstract class LevelSetBlockMixin {
             BlockPos pos,
             BlockState oldState,
             CompoundTag oldBlockEntity,
-            ObservedExternalToolOperation operation
+            ObservedExternalToolOperation operation,
+            WorldMutationCaptureGuard.CaptureBoundary boundary
     ) {
     }
 }

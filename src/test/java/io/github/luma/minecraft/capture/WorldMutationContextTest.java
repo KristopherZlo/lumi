@@ -5,18 +5,30 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorldMutationContextTest {
 
     @Test
     void externalSourcePreservesToolActorAndActionId() {
-        WorldMutationContext.pushExternalSource(WorldMutationSource.WORLDEDIT, "worldedit:builder", "action-1");
+        WorldMutationContext.pushExternalSource(WorldMutationSource.WORLDEDIT, "worldedit:builder", "action-1", true);
         try {
             assertEquals(WorldMutationSource.WORLDEDIT, WorldMutationContext.currentSource());
             assertEquals("worldedit:builder", WorldMutationContext.currentActor());
             assertEquals("action-1", WorldMutationContext.currentActionId());
             assertTrue(WorldMutationContext.currentAccessAllowed());
+        } finally {
+            WorldMutationContext.popSource();
+        }
+    }
+
+    @Test
+    void externalSourceDefaultsToDeniedWithoutExplicitAccess() {
+        WorldMutationContext.pushExternalSource(WorldMutationSource.WORLDEDIT, "worldedit:builder", "action-1");
+        try {
+            assertEquals(WorldMutationSource.WORLDEDIT, WorldMutationContext.currentSource());
+            assertFalse(WorldMutationContext.currentAccessAllowed());
         } finally {
             WorldMutationContext.popSource();
         }
@@ -66,6 +78,20 @@ class WorldMutationContextTest {
     }
 
     @Test
+    void sourceFrameClosesAfterException() {
+        assertEquals(WorldMutationSource.SYSTEM, WorldMutationContext.currentSource());
+
+        assertThrows(IllegalStateException.class, () -> {
+            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.RESTORE)) {
+                assertEquals(WorldMutationSource.RESTORE, WorldMutationContext.currentSource());
+                throw new IllegalStateException("boom");
+            }
+        });
+
+        assertEquals(WorldMutationSource.SYSTEM, WorldMutationContext.currentSource());
+    }
+
+    @Test
     void captureSuppressionIsScoped() {
         assertFalse(WorldMutationContext.captureSuppressed());
 
@@ -73,6 +99,20 @@ class WorldMutationContextTest {
             assertTrue(WorldMutationContext.captureSuppressed());
             WorldMutationContext.runWithCaptureSuppressed(() -> assertTrue(WorldMutationContext.captureSuppressed()));
             assertTrue(WorldMutationContext.captureSuppressed());
+        });
+
+        assertFalse(WorldMutationContext.captureSuppressed());
+    }
+
+    @Test
+    void suppressionFrameClosesAfterException() {
+        assertFalse(WorldMutationContext.captureSuppressed());
+
+        assertThrows(IllegalStateException.class, () -> {
+            try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression()) {
+                assertTrue(WorldMutationContext.captureSuppressed());
+                throw new IllegalStateException("boom");
+            }
         });
 
         assertFalse(WorldMutationContext.captureSuppressed());

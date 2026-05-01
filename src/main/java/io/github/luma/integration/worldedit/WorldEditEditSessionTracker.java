@@ -12,6 +12,7 @@ import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.util.eventbus.Subscribe;
 import com.sk89q.worldedit.world.block.BlockStateHolder;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
@@ -21,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -48,17 +50,20 @@ public final class WorldEditEditSessionTracker {
         }
         String actor = this.actorName(event.getActor());
         String actionId = UUID.randomUUID().toString();
+        boolean accessAllowed = this.accessAllowed(level, event.getActor());
         AutoCheckpointService.getInstance().checkpointBeforeExternalOperation(
                 level,
                 WorldMutationSource.WORLDEDIT,
                 actor,
-                actionId
+                actionId,
+                accessAllowed
         );
         event.setExtent(new TrackingExtent(
                 event.getExtent(),
                 level,
                 actor,
-                actionId
+                actionId,
+                accessAllowed
         ));
     }
 
@@ -78,17 +83,30 @@ public final class WorldEditEditSessionTracker {
         }
     }
 
+    private boolean accessAllowed(ServerLevel level, Actor actor) {
+        if (level == null || !level.getServer().isDedicatedServer()) {
+            return true;
+        }
+        if (actor == null || !actor.isPlayer() || actor.getUniqueId() == null) {
+            return false;
+        }
+        ServerPlayer player = level.getServer().getPlayerList().getPlayer(actor.getUniqueId());
+        return LumaAccessControl.getInstance().canUse(player);
+    }
+
     private static final class TrackingExtent extends AbstractDelegateExtent {
 
         private final ServerLevel level;
         private final String actor;
         private final String actionId;
+        private final boolean accessAllowed;
 
-        private TrackingExtent(Extent extent, ServerLevel level, String actor, String actionId) {
+        private TrackingExtent(Extent extent, ServerLevel level, String actor, String actionId, boolean accessAllowed) {
             super(extent);
             this.level = level;
             this.actor = actor;
             this.actionId = actionId;
+            this.accessAllowed = accessAllowed;
         }
 
         @Override
@@ -96,16 +114,18 @@ public final class WorldEditEditSessionTracker {
             BlockPos pos = FabricAdapter.toBlockPos(location);
             BlockState oldState = this.level.getBlockState(pos);
             CompoundTag oldBlockEntity = this.blockEntityTag(pos, oldState);
-            WorldMutationContext.pushExternalSource(WorldMutationSource.WORLDEDIT, this.actor, this.actionId);
-            try {
+            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                    WorldMutationSource.WORLDEDIT,
+                    this.actor,
+                    this.actionId,
+                    this.accessAllowed
+            )) {
                 boolean changed = super.setBlock(location, block);
                 if (changed) {
                     BlockState newState = this.level.getBlockState(pos);
                     this.recordChange(pos, oldState, newState, oldBlockEntity);
                 }
                 return changed;
-            } finally {
-                WorldMutationContext.popSource();
             }
         }
 
