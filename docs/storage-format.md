@@ -220,7 +220,7 @@ Current payload characteristics:
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
-Partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Schema v6 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk index is available.
+Direct partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Schema v6 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk index is available. Non-direct partial restore reconstructs finite current and target states from `snapshots/`, `cache/baseline-chunks/`, and patch payloads before writing a normal `PARTIAL_RESTORE` patch; missing required payload files are treated as an invalid restore plan.
 Patch readers bound NBT lengths, compressed/uncompressed frame lengths, palette counts, entity counts, and selected chunk slices before allocating buffers. A selected chunk slice whose stored frame coordinates or entity coordinates do not match the requested chunk is treated as corrupt storage.
 
 ### `snapshots/<snapshotId>.bin.lz4`

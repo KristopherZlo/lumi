@@ -73,6 +73,7 @@ public final class RestoreService {
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final VersionService versionService = new VersionService();
     private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
+    private final PartialRestoreTargetStatePlanner partialRestoreTargetStatePlanner = new PartialRestoreTargetStatePlanner();
     private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
@@ -351,6 +352,8 @@ public final class RestoreService {
                             targetVersion,
                             pendingDraft,
                             request,
+                            level.getMinY(),
+                            level.getMaxY(),
                             progressSink
                     );
                     if (partialDraft.draft().isEmpty()) {
@@ -401,12 +404,14 @@ public final class RestoreService {
                 targetVersion,
                 pendingDraft.orElse(null),
                 request,
+                level.getMinY(),
+                level.getMaxY(),
                 (stage, completed, total, detail) -> {
                 }
         );
 
         return new PartialRestorePlanSummary(
-                draft.draft().changes().isEmpty() ? RestorePlanMode.NO_OP : RestorePlanMode.PATCH_REPLAY,
+                draft.draft().isEmpty() ? RestorePlanMode.NO_OP : draft.mode(),
                 request.bounds(),
                 request.restoreMode(),
                 request.regionSource(),
@@ -414,7 +419,8 @@ public final class RestoreService {
                 activeVariant.id(),
                 activeVariant.headVersionId(),
                 targetVersion.id(),
-                draft.draft().changes().size()
+                draft.draft().changes().size(),
+                draft.draft().entityChanges().size()
         );
     }
 
@@ -427,11 +433,24 @@ public final class RestoreService {
             ProjectVersion targetVersion,
             RecoveryDraft pendingDraft,
             PartialRestoreRequest request,
+            int worldMinY,
+            int worldMaxY,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         DirectRestorePatchPlan directPlan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
         if (directPlan == null) {
-            throw new IllegalArgumentException("Partial restore requires a target with shared save history");
+            return this.buildTargetStatePartialRestoreDraft(
+                    layout,
+                    project,
+                    versions,
+                    activeVariant,
+                    targetVersion,
+                    pendingDraft,
+                    request,
+                    worldMinY,
+                    worldMaxY,
+                    progressSink
+            );
         }
 
         List<ChunkPoint> selectedChunks = request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA
@@ -487,7 +506,59 @@ public final class RestoreService {
                 lineageChangeCount,
                 partialChanges.size() + partialEntityChanges.size()
         );
-        return new PartialRestoreDraft(draft);
+        return new PartialRestoreDraft(RestorePlanMode.PATCH_REPLAY, draft);
+    }
+
+    private PartialRestoreDraft buildTargetStatePartialRestoreDraft(
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVersion> versions,
+            ProjectVariant activeVariant,
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft,
+            PartialRestoreRequest request,
+            int worldMinY,
+            int worldMaxY,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
+        ProjectVersion currentHead = versions.stream()
+                .filter(version -> version.id().equals(activeVariant.headVersionId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Active variant head is missing: " + activeVariant.headVersionId()));
+        PartialRestoreTargetStatePlanner.Plan plan = this.partialRestoreTargetStatePlanner.plan(
+                layout,
+                project,
+                versions,
+                currentHead,
+                targetVersion,
+                pendingDraft,
+                request.bounds(),
+                request.restoreMode(),
+                worldMinY,
+                worldMaxY,
+                progressSink
+        );
+        Instant now = Instant.now();
+        RecoveryDraft draft = new RecoveryDraft(
+                project.id().toString(),
+                activeVariant.id(),
+                activeVariant.headVersionId(),
+                request.actor() == null || request.actor().isBlank() ? "Lumi" : request.actor(),
+                io.github.luma.domain.model.WorldMutationSource.RESTORE,
+                now,
+                now,
+                plan.blockChanges(),
+                plan.entityChanges()
+        );
+        LumaDebugLog.log(
+                project,
+                "restore",
+                "Partial restore for project {} target {} used target-state planning with {} changes",
+                project.name(),
+                targetVersion.id(),
+                plan.blockChanges().size() + plan.entityChanges().size()
+        );
+        return new PartialRestoreDraft(RestorePlanMode.TARGET_STATE, draft);
     }
 
     private void completePartialRestore(
@@ -1383,7 +1454,7 @@ public final class RestoreService {
     ) {
     }
 
-    private record PartialRestoreDraft(RecoveryDraft draft) {
+    private record PartialRestoreDraft(RestorePlanMode mode, RecoveryDraft draft) {
     }
 
     private record ChunkPointAccumulator(int chunkX, int chunkZ) {

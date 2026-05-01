@@ -135,7 +135,7 @@ Use Lumi if you want to:
 6. Tick-thread apply uses bounded chunk batches with pre-decoded block states, dense safe section rewrites or native section loops when available, direct loaded-section commits for sparse changes, and prepared entity batches.
 7. Restore replay completes paired block halves such as beds, doors, and tall plants before apply.
 8. A full restore moves the active branch head to the restored version after apply completes; when a Lumi selection exists, the confirmation also offers `Only selected area` and `Everything except selection`.
-9. Partial restore writes a new save on the active branch and records the applied change in the live undo/redo stack. The form can consume the current Lumi wooden-sword selection and marks that request as `LUMI_REGION`.
+9. Partial restore writes a new save on the active branch and records the applied change in the live undo/redo stack. Direct history uses patch replay; cross-lineage targets fall back to a finite snapshot/baseline target-state plan before apply. The form can consume the current Lumi wooden-sword selection and marks that request as `LUMI_REGION`.
 
 ## Runtime Rules
 
@@ -144,7 +144,7 @@ Use Lumi if you want to:
 - Snapshot capture copies compact loaded-chunk payloads, including entity snapshots, on the server thread, then writes them asynchronously through storage.
 - Storage repositories read and write payloads; Minecraft-layer preparers build tick-ready apply batches.
 - Large WorldEdit/Axiom edits avoid block-entity NBT serialization for ordinary blocks, and capture project matching uses a cached dimension/chunk index.
-- `Only selected area` partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file. `Everything except selection` plans the same restore path but filters out selected blocks after loading the relevant changes.
+- `Only selected area` partial restore can seek directly to selected chunks in new patch payloads instead of decoding the whole patch file. `Everything except selection` plans the same restore path but filters out selected blocks after loading the relevant changes. If no direct patch path exists, Lumi reconstructs current and target states from snapshots, baseline chunks, and patches off-thread, then rejects the restore if required payloads are missing.
 - Auto checkpoints save any existing pending draft before large external edits; if no draft exists, the current branch head is already the checkpoint and Lumi does nothing.
 - Restore apply uses adaptive tick budgets, safe dense section rewrites, native or direct section writes with vanilla fallback, batched section packets, capped block-entity/entity tail work per tick, and progress for entity-only batches.
 - One map operation is expected at a time per save.

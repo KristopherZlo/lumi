@@ -138,6 +138,9 @@ If you already have a Lumi region selected, the restore confirmation asks how to
 
 - `Restore whole save` moves the branch head to that save and applies the full restore.
 - `Only selected area` copies only the selected area from that save into the current build and writes a new save.
+- `Everything except selection` restores the surrounding finite project/tracked area and keeps the selection unchanged.
+
+Partial restore can also target saves that do not have a direct patch replay path from the current branch. In that case Lumi reconstructs current and target state from stored snapshots, baseline chunks, and patches before applying the selected region. If required history payloads are missing or corrupt, the restore is rejected before the world changes.
 - `Everything except selection` restores the save around the selection while leaving the selected area untouched, then writes a new save.
 
 If the stored generator or datapack fingerprint no longer matches the world, automatic generator regeneration is blocked and Lumi stays on the safer history/baseline path.

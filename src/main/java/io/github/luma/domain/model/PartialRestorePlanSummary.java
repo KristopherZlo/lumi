@@ -11,7 +11,8 @@ public record PartialRestorePlanSummary(
         String branchId,
         String baseVersionId,
         String targetVersionId,
-        int changedBlocks
+        int changedBlocks,
+        int changedEntities
 ) {
 
     public PartialRestorePlanSummary {
@@ -21,6 +22,7 @@ public record PartialRestorePlanSummary(
         baseVersionId = baseVersionId == null ? "" : baseVersionId;
         targetVersionId = targetVersionId == null ? "" : targetVersionId;
         changedBlocks = Math.max(0, changedBlocks);
+        changedEntities = Math.max(0, changedEntities);
     }
 
     public PartialRestorePlanSummary(
@@ -42,7 +44,33 @@ public record PartialRestorePlanSummary(
                 branchId,
                 baseVersionId,
                 targetVersionId,
-                changedBlocks
+                changedBlocks,
+                0
+        );
+    }
+
+    public PartialRestorePlanSummary(
+            RestorePlanMode mode,
+            Bounds3i bounds,
+            PartialRestoreMode partialRestoreMode,
+            PartialRestoreRegionSource regionSource,
+            List<ChunkPoint> touchedChunks,
+            String branchId,
+            String baseVersionId,
+            String targetVersionId,
+            int changedBlocks
+    ) {
+        this(
+                mode,
+                bounds,
+                partialRestoreMode,
+                regionSource,
+                touchedChunks,
+                branchId,
+                baseVersionId,
+                targetVersionId,
+                changedBlocks,
+                0
         );
     }
 }

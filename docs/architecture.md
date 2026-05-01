@@ -216,7 +216,7 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 
 ## Partial Restore Flow
 
-Partial restore is a region-scoped restore workflow. The UI builds a `PartialRestoreRequest` with explicit bounds, a mode, and a region source, then `RestoreService.partialRestore(...)` filters the direct patch replay plan off the server tick. Direct targets may be same-lineage saves, shared ancestors from another variant, or divergent branch saves with a common saved ancestor.
+Partial restore is a region-scoped restore workflow. The UI builds a `PartialRestoreRequest` with explicit bounds, a mode, and a region source, then `RestoreService.partialRestore(...)` plans the requested target state off the server tick. Direct targets may be same-lineage saves, shared ancestors from another variant, or divergent branch saves with a common saved ancestor. When direct patch replay is not available, `PartialRestoreTargetStatePlanner` reconstructs the current head and target save from checkpoint snapshots, whole-dimension baseline chunks, and patch chains, then emits a normal partial-restore draft from current state to target state.
 
 Key differences from full restore:
 
@@ -227,7 +227,8 @@ Key differences from full restore:
 - after the version write succeeds, Lumi records the applied block/entity changes as one live undo/redo action so the player can undo or redo the partial restore without changing the saved branch head
 - pending draft changes in the restored part are folded into that version; pending draft changes outside the restored part are preserved as the recovery draft
 - entity changes are filtered by their old/new entity position and stored alongside block changes in the partial-restore version
-- non-direct cross-lineage partial restore is rejected until a snapshot/baseline target-state planner is implemented
+- non-direct target-state planning is finite: selected-area restore uses selected chunks, while `OUTSIDE_SELECTED_AREA` uses project bounds for bounded projects or tracked whole-dimension chunks for world workspaces
+- missing snapshot, patch, or baseline payloads reject the partial restore before tick-time apply starts
 
 The client can fill the same request from a runtime Lumi region selection. With a `minecraft:wooden_sword`, Lumi uses a client-side raycast through already-loaded chunks so the selected block can be farther than vanilla interaction reach without loading new chunks. Lumi action button + scroll toggles between `corners` and `extend`. In `corners` mode, left click sets corner A and right click sets corner B. In `extend` mode, left click expands the current bounds and right click resets the selection to the clicked block. Lumi action button + right click clears the selection. Selection state is scoped to project plus dimension in memory and is not persisted.
 
