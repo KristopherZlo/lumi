@@ -651,12 +651,19 @@ public final class WorldOperationManager {
                 WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
                 WorldMutationContext.pushCaptureSuppression();
                 WorldLightUpdateContext.push(this.lightUpdateQueue);
+                boolean allowSynchronousChunkLoad = this.allowsSynchronousChunkLoad();
+                if (allowSynchronousChunkLoad) {
+                    WorldApplyChunkLoadContext.pushAllowSynchronousLoad();
+                }
                 AppliedWork processed;
                 try {
                     int maxBlocks = this.maxWorkForCurrentStep(budget, processedWorkThisTick, processedNativeCellsThisTick);
                     int maxDirectSections = Math.max(0, budget.maxDirectSections() - processedDirectSectionsThisTick);
                     processed = this.applyCurrentChunk(maxBlocks, maxDirectSections);
                 } finally {
+                    if (allowSynchronousChunkLoad) {
+                        WorldApplyChunkLoadContext.pop();
+                    }
                     WorldLightUpdateContext.pop();
                     WorldMutationContext.popCaptureSuppression();
                     WorldMutationContext.popSource();
@@ -896,6 +903,12 @@ public final class WorldOperationManager {
                 return Integer.MAX_VALUE;
             }
             return Math.max(0, budget.maxNativeCells() - processedNativeCellsThisTick);
+        }
+
+        private boolean allowsSynchronousChunkLoad() {
+            return this.profile != WorldApplyProfile.NORMAL
+                    && this.chunkPreloader != null
+                    && this.chunkPreloader.complete();
         }
 
         private boolean advanceCompletion() throws Exception {
