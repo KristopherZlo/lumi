@@ -9,6 +9,7 @@ import io.github.luma.domain.model.ProjectArchiveManifest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.StoragePathPolicy;
 import io.github.luma.storage.repository.ProjectArchiveRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.VariantRepository;
@@ -135,7 +136,7 @@ public final class HistoryShareService {
                     manifest
             );
         } finally {
-            this.deleteTree(tempProjectsRoot);
+            this.deleteTree(tempProjectsRoot, projectsRoot);
         }
     }
 
@@ -206,7 +207,7 @@ public final class HistoryShareService {
             throw new IOException("Imported package storage is outside the projects root");
         }
 
-        this.deleteTree(importedLayout.root());
+        this.deleteTree(importedLayout.root(), projectsRoot);
     }
 
     private String archiveFileName(String projectName, String variantName, Instant now) {
@@ -235,11 +236,17 @@ public final class HistoryShareService {
         return preferred + " " + suffix;
     }
 
-    private void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) {
+    private void deleteTree(Path root, Path containmentRoot) throws IOException {
+        Path containedRoot;
+        try {
+            containedRoot = StoragePathPolicy.requireContainedPath(containmentRoot, root, "history share delete root");
+        } catch (IllegalArgumentException exception) {
+            throw new IOException(exception.getMessage(), exception);
+        }
+        if (!Files.exists(containedRoot)) {
             return;
         }
-        try (var stream = Files.walk(root)) {
+        try (var stream = Files.walk(containedRoot)) {
             for (Path path : stream.sorted(Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(path);
             }

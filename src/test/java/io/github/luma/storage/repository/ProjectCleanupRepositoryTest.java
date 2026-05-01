@@ -3,8 +3,10 @@ package io.github.luma.storage.repository;
 import io.github.luma.domain.model.ProjectCleanupPolicy;
 import io.github.luma.storage.ProjectLayout;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Set;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -73,6 +75,30 @@ class ProjectCleanupRepositoryTest {
 
         assertEquals(3, candidates.size());
         assertFalse(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("recovery/operation-draft.bin.lz4")));
+    }
+
+    @Test
+    void applyDoesNotFollowSymlinkDirectories() throws Exception {
+        ProjectLayout layout = this.seedLayout();
+        Path outside = this.tempDir.resolve("outside-cache-target");
+        Files.createDirectories(outside);
+        Path outsideFile = outside.resolve("keep.txt");
+        Files.writeString(outsideFile, "keep");
+        Path symlink = layout.cacheDir().resolve("linked-cache");
+        try {
+            Files.createSymbolicLink(symlink, outside);
+        } catch (UnsupportedOperationException | java.io.IOException | SecurityException exception) {
+            Assumptions.assumeTrue(false, "Symlinks are unavailable: " + exception.getMessage());
+        }
+
+        this.repository.apply(layout, new ProjectCleanupPolicy(
+                Set.of("snapshot-0001.bin.lz4"),
+                Set.of("v0001.png"),
+                true
+        ));
+
+        assertTrue(Files.exists(symlink, LinkOption.NOFOLLOW_LINKS));
+        assertTrue(Files.exists(outsideFile));
     }
 
     private ProjectLayout seedLayout() throws Exception {
