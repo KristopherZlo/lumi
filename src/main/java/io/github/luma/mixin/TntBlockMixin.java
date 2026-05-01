@@ -1,5 +1,7 @@
 package io.github.luma.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.core.BlockPos;
@@ -16,55 +18,47 @@ import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.phys.BlockHitResult;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(TntBlock.class)
 abstract class TntBlockMixin {
 
-    @Unique
-    private int luma$explosiveDepth = 0;
-
-    @Inject(method = "onPlace", at = @At("HEAD"))
-    private void luma$beginOnPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean moved, CallbackInfo ci) {
-        this.luma$pushExplosiveSource(level);
+    @WrapMethod(method = "onPlace")
+    private void luma$wrapOnPlace(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            BlockState oldState,
+            boolean moved,
+            Operation<Void> original
+    ) {
+        WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
+        try {
+            original.call(state, level, pos, oldState, moved);
+        } finally {
+            this.luma$closeSource(frame);
+        }
     }
 
-    @Inject(method = "onPlace", at = @At("RETURN"))
-    private void luma$endOnPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean moved, CallbackInfo ci) {
-        this.luma$popExplosiveSource();
-    }
-
-    @Inject(method = "neighborChanged", at = @At("HEAD"))
-    private void luma$beginNeighborChanged(
+    @WrapMethod(method = "neighborChanged")
+    private void luma$wrapNeighborChanged(
             BlockState state,
             Level level,
             BlockPos pos,
             Block sourceBlock,
             Orientation orientation,
             boolean movedByPiston,
-            CallbackInfo ci
+            Operation<Void> original
     ) {
-        this.luma$pushExplosiveSource(level);
+        WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
+        try {
+            original.call(state, level, pos, sourceBlock, orientation, movedByPiston);
+        } finally {
+            this.luma$closeSource(frame);
+        }
     }
 
-    @Inject(method = "neighborChanged", at = @At("RETURN"))
-    private void luma$endNeighborChanged(
-            BlockState state,
-            Level level,
-            BlockPos pos,
-            Block sourceBlock,
-            Orientation orientation,
-            boolean movedByPiston,
-            CallbackInfo ci
-    ) {
-        this.luma$popExplosiveSource();
-    }
-
-    @Inject(method = "useItemOn", at = @At("HEAD"))
-    private void luma$beginUseItemOn(
+    @WrapMethod(method = "useItemOn")
+    private InteractionResult luma$wrapUseItemOn(
             ItemStack stack,
             BlockState state,
             Level level,
@@ -72,52 +66,45 @@ abstract class TntBlockMixin {
             Player player,
             InteractionHand hand,
             BlockHitResult hitResult,
-            CallbackInfoReturnable<InteractionResult> cir
+            Operation<InteractionResult> original
     ) {
-        this.luma$pushExplosiveSource(level);
+        WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
+        try {
+            return original.call(stack, state, level, pos, player, hand, hitResult);
+        } finally {
+            this.luma$closeSource(frame);
+        }
     }
 
-    @Inject(method = "useItemOn", at = @At("RETURN"))
-    private void luma$endUseItemOn(
-            ItemStack stack,
-            BlockState state,
+    @WrapMethod(method = "onProjectileHit")
+    private void luma$wrapProjectileHit(
             Level level,
-            BlockPos pos,
-            Player player,
-            InteractionHand hand,
+            BlockState state,
             BlockHitResult hitResult,
-            CallbackInfoReturnable<InteractionResult> cir
+            Projectile projectile,
+            Operation<Void> original
     ) {
-        this.luma$popExplosiveSource();
-    }
-
-    @Inject(method = "onProjectileHit", at = @At("HEAD"))
-    private void luma$beginProjectileHit(Level level, BlockState state, BlockHitResult hitResult, Projectile projectile, CallbackInfo ci) {
-        this.luma$pushExplosiveSource(level);
-    }
-
-    @Inject(method = "onProjectileHit", at = @At("RETURN"))
-    private void luma$endProjectileHit(Level level, BlockState state, BlockHitResult hitResult, Projectile projectile, CallbackInfo ci) {
-        this.luma$popExplosiveSource();
+        WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
+        try {
+            original.call(level, state, hitResult, projectile);
+        } finally {
+            this.luma$closeSource(frame);
+        }
     }
 
     @Unique
-    private void luma$pushExplosiveSource(Level level) {
+    private WorldMutationContext.SourceFrame luma$pushExplosiveSource(Level level) {
         if (level.isClientSide()) {
-            return;
+            return null;
         }
 
-        this.luma$explosiveDepth += 1;
-        WorldMutationContext.pushSource(WorldMutationSource.EXPLOSIVE);
+        return WorldMutationContext.pushSource(WorldMutationSource.EXPLOSIVE);
     }
 
     @Unique
-    private void luma$popExplosiveSource() {
-        if (this.luma$explosiveDepth <= 0) {
-            return;
+    private void luma$closeSource(WorldMutationContext.SourceFrame frame) {
+        if (frame != null) {
+            frame.close();
         }
-
-        this.luma$explosiveDepth -= 1;
-        WorldMutationContext.popSource();
     }
 }
