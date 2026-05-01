@@ -51,7 +51,7 @@ final class DirectChunkBlockCommitStrategy {
             return DirectChunkApplyResult.none(startSectionIndex, startPlacementIndex);
         }
 
-        LevelChunk chunk = level.getChunkSource().getChunkNow(batch.chunk().x(), batch.chunk().z());
+        LevelChunk chunk = this.loadedChunk(level, batch);
         if (chunk == null) {
             return this.applyFallbackSection(level, sections, startSectionIndex, startPlacementIndex, maxBlocks);
         }
@@ -160,6 +160,17 @@ final class DirectChunkBlockCommitStrategy {
                 heightmapPlan
         );
         return new DirectChunkApplyResult(processedBlocks, sectionIndex, placementIndex, directResult);
+    }
+
+    private LevelChunk loadedChunk(ServerLevel level, ChunkBatch batch) {
+        if (level == null || batch == null || batch.chunk() == null) {
+            return null;
+        }
+        LevelChunk chunk = level.getChunkSource().getChunkNow(batch.chunk().x(), batch.chunk().z());
+        if (chunk != null || !WorldApplyChunkLoadContext.allowsSynchronousLoad()) {
+            return chunk;
+        }
+        return level.getChunk(batch.chunk().x(), batch.chunk().z());
     }
 
     private DirectChunkApplyResult combineWithFallback(
