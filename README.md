@@ -299,6 +299,8 @@ Current scope:
 ## Docs
 
 - [Landing page mockup](site/landing/index.html)
+- [Download archive mockup](site/download/index.html)
+- [Changelog mockup](site/changelog/index.html)
 - [Wiki mockup](site/wiki/index.html)
 - [User guide](docs/user-guide.md)
 - [Commands](docs/commands.md)
