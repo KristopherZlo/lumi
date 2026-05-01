@@ -18,6 +18,10 @@ public record IntegrationStatus(
         return IntegrationCapability.labels(this.capabilities);
     }
 
+    public List<String> capabilityDisplayLabels() {
+        return IntegrationCapability.displayLabels(this.capabilities);
+    }
+
     public String modeLabel() {
         return this.mode.label();
     }

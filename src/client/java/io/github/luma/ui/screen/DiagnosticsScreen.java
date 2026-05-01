@@ -104,7 +104,7 @@ public final class DiagnosticsScreen extends LumaScreen {
                     integration.toolId(),
                     integration.available() ? Component.translatable("luma.common.available") : Component.translatable("luma.common.unavailable"),
                     integration.modeLabel(),
-                    String.join(", ", integration.capabilityLabels())
+                    String.join(", ", integration.capabilityDisplayLabels())
             )));
         }
         return section;

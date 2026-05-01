@@ -18,6 +18,7 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 - Use the Lumi action button plus `Z` to undo the latest tracked action while no screen is open. The default action button is `Left Alt`.
 - Use the Lumi action button plus `Y` to redo the latest undone tracked action while no screen is open.
 - For WorldEdit and FAWE edits, those chords call the tools' native undo/redo commands and then update Lumi's pending draft. Captured Axiom capability edits replay through Lumi undo/redo, including tool-assisted breaks and placements.
+- Diagnostics lists stable public-API capabilities separately from fallback capture. WorldEdit and compatible FAWE installs may show stable selection, clipboard, and schematic-format support; Axiom does not claim those capabilities unless a stable API exists.
 - Undo and redo restore the stored block states without firing immediate redstone/block updates from the replay itself, so restored TNT does not auto-prime just because it is next to powered redstone.
 - Undo also removes item drops caused by the tracked edit, such as TNT drops or water-broken blocks, and redo respawns those drops.
 - Hold the Lumi action button to preview undo targets, or the action button plus `Y` to preview redo targets, when compare highlight is not active. Changing the action button changes both the preview hold and these undo/redo chords.

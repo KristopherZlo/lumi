@@ -35,7 +35,7 @@ class ExternalToolIntegrationRegistryTest {
     }
 
     @Test
-    void reportsFaweAsDetectedFallbackCapture() {
+    void reportsFaweAsDetectedFallbackCaptureWithoutStableWorldEditApis() {
         Set<String> classes = Set.of("com.fastasyncworldedit.core.Fawe");
         ExternalToolIntegrationRegistry registry = new ExternalToolIntegrationRegistry(
                 modId -> false,
@@ -53,12 +53,42 @@ class ExternalToolIntegrationRegistryTest {
     }
 
     @Test
+    void reportsFaweStableCapabilitiesThroughWorldEditCompatibleApis() {
+        Set<String> classes = Set.of(
+                "com.fastasyncworldedit.core.Fawe",
+                "com.sk89q.worldedit.WorldEdit",
+                "com.sk89q.worldedit.LocalSession",
+                "com.sk89q.worldedit.fabric.FabricAdapter",
+                "com.sk89q.worldedit.regions.Region",
+                "com.sk89q.worldedit.session.ClipboardHolder",
+                "com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat",
+                "com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats"
+        );
+        ExternalToolIntegrationRegistry registry = new ExternalToolIntegrationRegistry(
+                modId -> false,
+                classes::contains
+        );
+
+        IntegrationStatus status = registry.faweStatus();
+
+        assertTrue(status.available());
+        assertEquals(IntegrationMode.DETECTED, status.mode());
+        assertTrue(status.capabilities().contains(IntegrationCapability.FALLBACK_CAPTURE));
+        assertTrue(status.capabilities().contains(IntegrationCapability.SELECTION));
+        assertTrue(status.capabilities().contains(IntegrationCapability.CLIPBOARD));
+        assertTrue(status.capabilities().contains(IntegrationCapability.SCHEMATIC));
+    }
+
+    @Test
     void reportsWorldEditCapabilitiesOnlyWhenApiClassesArePresent() {
         Set<String> classes = Set.of(
                 "com.sk89q.worldedit.WorldEdit",
                 "com.sk89q.worldedit.event.extent.EditSessionEvent",
                 "com.sk89q.worldedit.LocalSession",
-                "com.sk89q.worldedit.extent.clipboard.Clipboard",
+                "com.sk89q.worldedit.fabric.FabricAdapter",
+                "com.sk89q.worldedit.regions.Region",
+                "com.sk89q.worldedit.session.ClipboardHolder",
+                "com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat",
                 "com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats"
         );
         ExternalToolIntegrationRegistry registry = new ExternalToolIntegrationRegistry(
@@ -75,6 +105,7 @@ class ExternalToolIntegrationRegistryTest {
         assertTrue(status.capabilities().contains(IntegrationCapability.SELECTION));
         assertTrue(status.capabilities().contains(IntegrationCapability.CLIPBOARD));
         assertTrue(status.capabilities().contains(IntegrationCapability.SCHEMATIC));
+        assertTrue(status.capabilityDisplayLabels().contains("Stable selection"));
     }
 
     @Test

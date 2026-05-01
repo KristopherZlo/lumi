@@ -48,7 +48,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Recovery UI and recovery actions | `RecoveryService`, `RecoveryScreenController` | `RecoveryRepository`, `CapturePersistenceCoordinator`, `ScreenOperationStateSupport` | `RecoveryRepositoryTest`, recovery model tests |
 | Cleanup and integrity | `ProjectCleanupService`, `ProjectIntegrityService` | `ProjectCleanupRepository`, `CleanupScreenController`, `ProjectRepository` | `ProjectCleanupRepositoryTest`, `ProjectArchiveRepositoryTest` |
 | Storage format or path changes | `ProjectLayout`, exact repository class | `StorageIo`, `GsonProvider`, matching domain model record | `ProjectLayoutTest`, repository tests, `docs/storage-format.md` |
-| Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
+| Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditSessionBridge`, `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
 | Commands and runtime tests | `LumaCommands`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, `SingleplayerBulkApplyDiagnostics`, scripts under `scripts/` | `docs/commands.md`, `docs/test-client.md` |
 | Client navigation and screen behavior | `ScreenRouter`, the route screen, route controller, route view state | `LumaScreen`, `ProjectWindowLayout`, `ProjectSidebarNavigation`, section builders | UI controller tests, `docs/development.md` |
 
@@ -195,6 +195,7 @@ Use `src/main/java/io/github/luma/integration` for external builder tool detecti
 
 - `OptionalIntegrationBootstrap`: reflectively enables optional integrations.
 - `integration/common/*`: capability reporting, external mutation detection, clipboard/schematic/selection contracts.
+- `integration/worldedit/WorldEditSessionBridge.java`: stable WorldEdit session selection, clipboard, and schematic-format bridge.
 - `integration/worldedit/WorldEditEditSessionTracker.java`: guarded WorldEdit edit-session extent capture.
 - `integration/axiom/*`: Axiom block-buffer extraction/capture helpers and experimental native undo/redo replay guards.
 
