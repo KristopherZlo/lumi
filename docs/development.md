@@ -52,7 +52,7 @@ This now includes regression checks for:
 - recovery draft isolation while save/amend operations run
 - WorldEdit optional edit-session context wiring
 - zip archive import/export for project history, with previews optional, recovery drafts excluded, bounded import, storage-id validation, and symlink rejection
-- variant-scoped history package export/import, imported review package deletion, cached imported-variant merge planning, conflict zones, and per-zone resolutions
+- variant-scoped history package export/import, imported review package deletion, cached imported-variant merge planning, conflict zones, per-zone resolutions, and imported payload safety warnings
 - conservative cleanup flow for orphaned snapshots/previews/cache and stale operation drafts, including root containment and symlink-directory pruning safety
 - material delta summarization on large diffs
 - project tracking index membership checks, chunk-addressable patch selective reads, and snapshot chunk-list scans

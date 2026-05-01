@@ -344,6 +344,8 @@ Recovery draft payloads are intentionally excluded from archives, so export/impo
 
 Archive import is a trust boundary. Lumi validates archive manifests before copying payloads: project folder names must be safe `.mbp` folder names, entry paths must stay under the supported `project/` subtrees, the manifest is size-bounded, and each copied entry is checked against per-file and total unpacked-size limits. Imported version, patch, snapshot, and preview identifiers must be storage-safe file ids, and patch metadata ids must match the patch id referenced by the version manifest. Malformed archives are rejected before they become normal project history.
 
+Imported history payloads are executable world-state data, not just visual diffs. During imported combine previews and imported-project restore checks, Lumi scans block-entity and entity payloads for command blocks, structure blocks, jigsaw blocks, spawners, command block minecarts, and unknown entity or block-entity ids. Unsafe payloads are not stripped; applying an imported combine requires an explicit trusted-package confirmation, and restoring an unsafe imported review project is blocked unless a trusted restore API path is used.
+
 Archive export does not follow symbolic links. Files are only copied when their resolved source remains inside the project root and the archive path is one of the supported project-relative locations.
 
 Runtime Lumi region selections are intentionally excluded from storage. They are client memory only and must be recreated after the client or world closes.
@@ -355,4 +357,5 @@ Current cleanup is conservative and UI-driven:
 - dry-run first
 - delete only unreferenced snapshot payloads, orphaned preview PNGs, disposable cache files outside `baseline-chunks`, and stale `operation-draft`
 - never delete baseline chunks or files still referenced by version manifests
+- resolve deletion candidates back through the project root and skip symlink directories while pruning empty folders
 - tombstoned history remains soft-deleted only; physical cleanup of tombstoned version, patch, snapshot, and preview files is not part of the current cleanup policy

@@ -16,7 +16,8 @@ public record VariantMergePlan(
         int targetChangedBlocks,
         List<StoredBlockChange> mergeChanges,
         List<StoredEntityChange> mergeEntityChanges,
-        List<MergeConflictZone> conflictZones
+        List<MergeConflictZone> conflictZones,
+        HistoryPackageSafetyReport safetyReport
 ) {
 
     public VariantMergePlan(
@@ -44,7 +45,8 @@ public record VariantMergePlan(
                 targetChangedBlocks,
                 mergeChanges,
                 List.of(),
-                conflictZones
+                conflictZones,
+                HistoryPackageSafetyReport.clean()
         );
     }
 
@@ -52,6 +54,7 @@ public record VariantMergePlan(
         mergeChanges = mergeChanges == null ? List.of() : List.copyOf(mergeChanges);
         mergeEntityChanges = mergeEntityChanges == null ? List.of() : List.copyOf(mergeEntityChanges);
         conflictZones = conflictZones == null ? List.of() : List.copyOf(conflictZones);
+        safetyReport = safetyReport == null ? HistoryPackageSafetyReport.clean() : safetyReport;
     }
 
     public boolean hasConflicts() {

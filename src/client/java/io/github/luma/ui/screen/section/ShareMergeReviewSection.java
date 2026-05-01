@@ -11,6 +11,7 @@ import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.ShareViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.core.Sizing;
 import java.util.Comparator;
@@ -71,6 +72,28 @@ public final class ShareMergeReviewSection {
         stats.child(LumaUi.statChip(Component.translatable("luma.share.conflicts"), Component.literal(Integer.toString(model.mergePlan().conflictPositions().size()))));
         section.child(stats);
 
+        if (model.mergePlan().safetyReport().requiresTrustedConfirmation()) {
+            section.child(LumaUi.danger(Component.translatable("luma.share.package_safety_warning")));
+            if (!model.mergePlan().safetyReport().dangerousBlockEntityTypes().isEmpty()) {
+                section.child(LumaUi.caption(Component.translatable(
+                        "luma.share.package_safety_block_entities",
+                        String.join(", ", model.mergePlan().safetyReport().dangerousBlockEntityTypes())
+                )));
+            }
+            if (!model.mergePlan().safetyReport().dangerousEntityTypes().isEmpty()) {
+                section.child(LumaUi.caption(Component.translatable(
+                        "luma.share.package_safety_entities",
+                        String.join(", ", model.mergePlan().safetyReport().dangerousEntityTypes())
+                )));
+            }
+            FlowLayout trustRow = LumaUi.actionRow();
+            var trustedCheckbox = UIComponents.checkbox(Component.translatable("luma.share.trusted_package_confirm"));
+            trustedCheckbox.checked(model.trustedPackageConfirmed());
+            trustedCheckbox.onChanged(this.actions::setTrustedPackageConfirmed);
+            trustRow.child(trustedCheckbox);
+            section.child(trustRow);
+        }
+
         if (model.mergePlan().hasConflicts()) {
             section.child(LumaUi.danger(Component.translatable(
                     "luma.share.merge_conflicts",
@@ -105,7 +128,9 @@ public final class ShareMergeReviewSection {
                 Component.translatable("luma.action.apply_combine"),
                 button -> this.actions.applyMerge(resolutions)
         );
-        mergeButton.active(model.mergePlan().canApply(resolutions) && !model.operationActive());
+        mergeButton.active(model.mergePlan().canApply(resolutions)
+                && !model.operationActive()
+                && (!model.mergePlan().safetyReport().requiresTrustedConfirmation() || model.trustedPackageConfirmed()));
         actionsRow.child(mergeButton);
         section.child(actionsRow);
 
@@ -238,7 +263,8 @@ public final class ShareMergeReviewSection {
             String selectedImportedVariantId,
             String selectedImportedVariantName,
             Map<String, MergeConflictResolution> conflictResolutions,
-            boolean operationActive
+            boolean operationActive,
+            boolean trustedPackageConfirmed
     ) {
     }
 
@@ -253,6 +279,8 @@ public final class ShareMergeReviewSection {
         void setZoneResolution(String zoneId, MergeConflictResolution resolution);
 
         void clearZoneResolution(String zoneId);
+
+        void setTrustedPackageConfirmed(boolean trusted);
 
         void showZoneHighlight(MergeConflictZone zone);
 

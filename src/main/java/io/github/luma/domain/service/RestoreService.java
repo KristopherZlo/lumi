@@ -79,6 +79,7 @@ public final class RestoreService {
     private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final VersionLineageService lineageService = new VersionLineageService();
+    private final HistoryPackageSafetyScanner safetyScanner = new HistoryPackageSafetyScanner();
 
     /**
      * Starts a restore operation for the given project and target version.
@@ -87,7 +88,16 @@ public final class RestoreService {
      * checkpoint so the player can return to the pre-restore state.
      */
     public OperationHandle restore(ServerLevel level, String projectName, String versionId) throws IOException {
-        return this.restore(level, projectName, versionId, "");
+        return this.restore(level, projectName, versionId, "", false);
+    }
+
+    public OperationHandle restore(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            boolean trustedImportedPackage
+    ) throws IOException {
+        return this.restore(level, projectName, versionId, "", trustedImportedPackage);
     }
 
     /**
@@ -105,10 +115,16 @@ public final class RestoreService {
         if (targetVariant.headVersionId() == null || targetVariant.headVersionId().isBlank()) {
             throw new IllegalArgumentException("Variant head version is missing: " + targetVariantId);
         }
-        return this.restore(level, projectName, targetVariant.headVersionId(), targetVariant.id());
+        return this.restore(level, projectName, targetVariant.headVersionId(), targetVariant.id(), false);
     }
 
-    private OperationHandle restore(ServerLevel level, String projectName, String versionId, String targetVariantId) throws IOException {
+    private OperationHandle restore(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            String targetVariantId,
+            boolean trustedImportedPackage
+    ) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
@@ -117,6 +133,7 @@ public final class RestoreService {
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion version = this.resolveVersion(project, versions, variants, versionId);
         ProjectVariant targetVariant = this.restoreTargetVariant(variants, version, targetVariantId);
+        this.requireTrustedImportedRestore(level, layout, project, versions, trustedImportedPackage);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
                 .freezeSession(level.getServer(), project.id().toString());
@@ -1088,6 +1105,33 @@ public final class RestoreService {
                 .filter(candidate -> candidate.id().equals(version.variantId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Version branch is missing: " + version.variantId()));
+    }
+
+    private void requireTrustedImportedRestore(
+            ServerLevel level,
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVersion> versions,
+            boolean trustedImportedPackage
+    ) throws IOException {
+        if (!this.isImportedReviewProject(level, project)) {
+            return;
+        }
+        var report = this.safetyScanner.scanProjectHistory(layout, versions);
+        if (report.requiresTrustedConfirmation() && !trustedImportedPackage) {
+            throw new IllegalArgumentException("Imported package contains executable world-state data. Confirm that you trust this package before restoring it.");
+        }
+    }
+
+    private boolean isImportedReviewProject(
+            ServerLevel level,
+            io.github.luma.domain.model.BuildProject project
+    ) throws IOException {
+        if (project == null || project.name() == null || !project.name().contains(" - Shared ")) {
+            return false;
+        }
+        return this.projectService.listProjects(level.getServer()).stream()
+                .anyMatch(candidate -> project.id().equals(candidate.id()) && !project.name().equals(candidate.name()));
     }
 
     private List<PreparedChunkBatch> decodeStoredChanges(

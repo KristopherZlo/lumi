@@ -150,7 +150,7 @@ Responsibilities are split as follows:
 - `CompareOverlayCoordinator` refreshes `current`-world compare overlays on the client tick so live edits appear in the active highlight without rebuilding the screen manually. To protect the client, very large active overlays keep their initial snapshot instead of auto-refreshing every few ticks.
 - `RecentChangesOverlayCoordinator` prepares recent-action overlay data off the client tick and reuses it while the undo/redo stack revision is unchanged. `RecentChangesOverlayRenderer` renders latest undo actions when the remappable Lumi action button is held, or redo actions while the action button plus redo is held, when the compare overlay is not active. Small action previews are selected from exposed changed blocks first and capped to the nearest 512 per-block entries. Dense action previews skip per-block surface resolving and collapse changed chunk sections into low-alpha merged volume blobs so large edits remain readable without drawing thousands of overlapping overlays.
 - `LumiRegionSelectionController` keeps the runtime-only wooden-sword selection for the current project and dimension. `LumiRegionSelectionRenderer` draws the selected cuboid with translucent faces and an outline in the world render callback.
-- the Import / Export route presents the normal flow: export history packages first, list importable zips from the game-root `lumi-projects` folder, import packages as review projects, optionally include preview PNGs in exports, delete imported review packages, resolve same-area zones, show zone overlays, and apply a combined save without cluttering Build History or Branches
+- the Import / Export route presents the normal flow: export history packages first, list importable zips from the game-root `lumi-projects` folder, import packages as review projects, optionally include preview PNGs in exports, delete imported review packages, resolve same-area zones, show zone overlays, review imported payload safety warnings, and apply a combined save without cluttering Build History or Branches
 
 ## Core runtime flows
 
@@ -240,6 +240,8 @@ Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never 
 Save deletion is intentionally narrow: root saves are blocked, non-leaf saves are blocked, and ambiguous multi-head deletes are blocked. If a deleted leaf is a branch head, that branch head is moved to the parent before the version id is tombstoned. Branch deletion is blocked for `main` and for the active branch.
 
 Local branch merge reuses `VariantMergeService` conflict planning but targets only the current active branch for v1. The source branch is unchanged. Resolved changes are prepared and applied through `WorldOperationManager`, then `VersionService` writes a new `MERGE` version on the active branch.
+
+Imported branch merge plans also carry a `HistoryPackageSafetyReport` from `HistoryPackageSafetyScanner`. The scanner inspects imported block-entity and entity payloads for command-capable blocks, structure/jigsaw/spawner data, command block minecarts, and unknown ids. Unsafe imported payloads require an explicit trusted-package confirmation before `VariantMergeService.startMerge(...)` will apply them; local branch merges remain trusted local history.
 
 ## Auto checkpoint flow
 

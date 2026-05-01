@@ -67,8 +67,37 @@ class VariantMergeServiceTest {
 
         assertEquals("v0001", plan.commonAncestorVersionId());
         assertFalse(plan.hasConflicts());
+        assertTrue(plan.safetyReport().safe());
         assertEquals(1, plan.mergeBlockCount());
         assertEquals(new BlockPoint(8, 65, 8), plan.mergeChanges().getFirst().pos());
+    }
+
+    @Test
+    void planMergeFlagsUnsafeImportedPayloads() throws Exception {
+        UUID projectId = UUID.fromString("99999999-9999-9999-9999-999999999999");
+        ProjectLayout targetLayout = this.seedTargetProject(this.tempDir.resolve("tower-unsafe.mbp"), projectId, false);
+        ProjectLayout sourceLayout = this.seedProject(layout(this.tempDir.resolve("tower-unsafe-shared.mbp")), projectId, "Tower Shared", List.of(
+                new ProjectVariant("roof-pass", "Roof pass", "v0001", "v0003", true, instant(60))
+        ));
+        this.writeVersion(sourceLayout, projectId, "v0001", "main", "", List.of());
+        this.writeVersion(sourceLayout, projectId, "v0003", "roof-pass", "v0001", List.of(new StoredBlockChange(
+                new BlockPoint(8, 65, 8),
+                state("minecraft:air"),
+                commandBlockState()
+        )));
+
+        VariantMergePlan plan = this.variantMergeService.planMerge(
+                targetLayout,
+                this.projectRepository.load(targetLayout).orElseThrow(),
+                "main",
+                sourceLayout,
+                this.projectRepository.load(sourceLayout).orElseThrow(),
+                "roof-pass"
+        );
+
+        assertFalse(plan.safetyReport().safe());
+        assertTrue(plan.safetyReport().requiresTrustedConfirmation());
+        assertTrue(plan.safetyReport().dangerousBlockEntityTypes().contains("minecraft:command_block"));
     }
 
     @Test
@@ -375,6 +404,12 @@ class VariantMergeServiceTest {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", blockId);
         return new StatePayload(tag, null);
+    }
+
+    private static StatePayload commandBlockState() {
+        CompoundTag blockEntityTag = new CompoundTag();
+        blockEntityTag.putString("id", "minecraft:command_block");
+        return new StatePayload(state("minecraft:command_block").stateTag(), blockEntityTag);
     }
 
     private static EntityPayload entity(String entityId, double x) {

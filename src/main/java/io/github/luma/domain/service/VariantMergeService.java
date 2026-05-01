@@ -6,6 +6,7 @@ import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.HistoryPackageSafetyReport;
 import io.github.luma.domain.model.MergeConflictResolution;
 import io.github.luma.domain.model.MergeConflictZone;
 import io.github.luma.domain.model.MergeConflictZoneResolution;
@@ -64,6 +65,7 @@ public final class VariantMergeService {
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
     private final VersionLineageService lineageService = new VersionLineageService();
+    private final HistoryPackageSafetyScanner safetyScanner = new HistoryPackageSafetyScanner();
 
     public VariantMergePlan previewLocalMerge(
             MinecraftServer server,
@@ -183,7 +185,8 @@ public final class VariantMergeService {
                         sourceProjectName,
                         sourceVariantId,
                         targetVariantId,
-                        List.of()
+                        List.of(),
+                        false
                 ),
                 author
         );
@@ -212,6 +215,7 @@ public final class VariantMergeService {
                 sourceProject,
                 request.sourceVariantId()
         );
+        this.requireTrustedImportedPackage(plan, targetLayout, sourceLayout, request.trustedPackageConfirmed());
         List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, request.conflictResolutions());
         List<StoredEntityChange> mergeEntityChanges = plan.mergeEntityChanges();
         if (mergeChanges.isEmpty() && mergeEntityChanges.isEmpty()) {
@@ -385,7 +389,7 @@ public final class VariantMergeService {
         }
         List<StoredEntityChange> mergeEntityChanges = this.collectMergeEntityChanges(targetEntityStates, sourceEntityStates);
 
-        return new VariantMergePlan(
+        VariantMergePlan plan = new VariantMergePlan(
                 sourceProject.name(),
                 sourceVariant.id(),
                 sourceVariant.headVersionId(),
@@ -397,7 +401,44 @@ public final class VariantMergeService {
                 targetStates.size(),
                 List.copyOf(mergeChanges),
                 mergeEntityChanges,
-                this.buildConflictZones(conflictChanges.values())
+                this.buildConflictZones(conflictChanges.values()),
+                HistoryPackageSafetyReport.clean()
+        );
+        if (targetLayout.root().toAbsolutePath().normalize().equals(sourceLayout.root().toAbsolutePath().normalize())) {
+            return plan;
+        }
+        return this.withSafetyReport(plan, this.safetyScanner.scanMergePlan(plan));
+    }
+
+    private void requireTrustedImportedPackage(
+            VariantMergePlan plan,
+            ProjectLayout targetLayout,
+            ProjectLayout sourceLayout,
+            boolean trustedPackageConfirmed
+    ) {
+        if (targetLayout.root().toAbsolutePath().normalize().equals(sourceLayout.root().toAbsolutePath().normalize())) {
+            return;
+        }
+        if (plan.safetyReport().requiresTrustedConfirmation() && !trustedPackageConfirmed) {
+            throw new IllegalArgumentException("Imported package contains executable world-state data. Confirm that you trust this package before applying it.");
+        }
+    }
+
+    private VariantMergePlan withSafetyReport(VariantMergePlan plan, HistoryPackageSafetyReport safetyReport) {
+        return new VariantMergePlan(
+                plan.sourceProjectName(),
+                plan.sourceVariantId(),
+                plan.sourceHeadVersionId(),
+                plan.targetProjectName(),
+                plan.targetVariantId(),
+                plan.targetHeadVersionId(),
+                plan.commonAncestorVersionId(),
+                plan.sourceChangedBlocks(),
+                plan.targetChangedBlocks(),
+                plan.mergeChanges(),
+                plan.mergeEntityChanges(),
+                plan.conflictZones(),
+                safetyReport
         );
     }
 

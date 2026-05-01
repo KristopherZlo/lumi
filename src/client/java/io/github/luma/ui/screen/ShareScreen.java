@@ -65,6 +65,7 @@ public final class ShareScreen extends LumaScreen {
     private TextBoxComponent importArchiveInput;
     private boolean includePreviews = false;
     private boolean mergePreviewPending = false;
+    private boolean trustedPackageConfirmed = false;
     private int refreshCooldown = 0;
 
     public ShareScreen(Screen parent, String projectName) {
@@ -271,6 +272,7 @@ public final class ShareScreen extends LumaScreen {
             this.selectedImportedVariantId = importedProject.variantId();
             this.selectedImportedVariantName = importedProject.variantName();
             this.conflictResolutions.clear();
+            this.trustedPackageConfirmed = false;
             this.refreshMergePreview();
         });
         reviewButton.active(true);
@@ -299,7 +301,8 @@ public final class ShareScreen extends LumaScreen {
                 this.selectedImportedVariantId,
                 this.selectedImportedVariantName,
                 this.conflictResolutions,
-                this.operationActive()
+                this.operationActive(),
+                this.trustedPackageConfirmed
         );
     }
 
@@ -407,6 +410,7 @@ public final class ShareScreen extends LumaScreen {
         this.selectedImportedVariantId = result.importedVariantId();
         this.selectedImportedVariantName = result.importedVariantName();
         this.conflictResolutions.clear();
+        this.trustedPackageConfirmed = false;
         if (this.selectedTargetVariantId.isBlank() && this.state.project() != null) {
             this.selectedTargetVariantId = this.state.project().activeVariantId();
         }
@@ -433,6 +437,7 @@ public final class ShareScreen extends LumaScreen {
             this.mergePlan = null;
             this.mergePreviewPending = false;
             this.conflictResolutions.clear();
+            this.trustedPackageConfirmed = false;
             this.controller.clearConflictZoneOverlay();
         }
         this.refresh(statusKey);
@@ -516,6 +521,7 @@ public final class ShareScreen extends LumaScreen {
             this.selectedImportedVariantName = "";
             this.mergePlan = null;
             this.conflictResolutions.clear();
+            this.trustedPackageConfirmed = false;
         }
     }
 
@@ -555,6 +561,7 @@ public final class ShareScreen extends LumaScreen {
         public void selectTargetVariant(String variantId) {
             selectedTargetVariantId = variantId;
             conflictResolutions.clear();
+            trustedPackageConfirmed = false;
             refreshMergePreview();
         }
 
@@ -590,6 +597,12 @@ public final class ShareScreen extends LumaScreen {
         }
 
         @Override
+        public void setTrustedPackageConfirmed(boolean trusted) {
+            trustedPackageConfirmed = trusted;
+            refresh("luma.status.merge_preview_ready");
+        }
+
+        @Override
         public void showZoneHighlight(MergeConflictZone zone) {
             String statusKey = controller.showConflictZoneOverlay(
                     selectedImportedProjectName,
@@ -608,7 +621,8 @@ public final class ShareScreen extends LumaScreen {
                     selectedImportedProjectName,
                     selectedImportedVariantId,
                     selectedTargetVariantId,
-                    resolutions
+                    resolutions,
+                    trustedPackageConfirmed
             ));
             validationMessage = controller.lastValidationMessage();
             refresh(statusKey);
