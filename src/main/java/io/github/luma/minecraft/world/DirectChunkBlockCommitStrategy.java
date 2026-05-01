@@ -20,6 +20,7 @@ final class DirectChunkBlockCommitStrategy {
     private final ChunkSectionUpdateBroadcaster updateBroadcaster;
     private final DirectSectionBlockCommitStrategy sectionFallback;
     private final SectionLightUpdatePlanner lightUpdatePlanner = new SectionLightUpdatePlanner();
+    private final SparseDeleteFastPathClassifier deleteFastPathClassifier = new SparseDeleteFastPathClassifier();
 
     DirectChunkBlockCommitStrategy(
             PersistentBlockStatePolicy blockStatePolicy,
@@ -242,10 +243,12 @@ final class DirectChunkBlockCommitStrategy {
             return CellResult.skippedResult();
         }
 
-        level.removeBlockEntity(mutablePos);
+        if (!this.deleteFastPathClassifier.canDelete(currentState, targetState, targetBlockEntityTag)) {
+            level.removeBlockEntity(mutablePos);
+            level.updatePOIOnBlockStateChange(mutablePos, currentState, targetState);
+        }
         section.setBlockState(localX, localY, localZ, targetState, false);
         heightmapPlan.record(sectionY, SectionChangeMask.localIndex(localX, localY, localZ));
-        level.updatePOIOnBlockStateChange(mutablePos, currentState, targetState);
         this.lightUpdatePlanner.plan(lightBatch, mutablePos, currentState, targetState);
         update.changedCells().add(SectionPos.sectionRelativePos(mutablePos));
         return CellResult.changedResult();
