@@ -277,7 +277,7 @@ Current guarantees:
 - only one world operation runs per world at a time
 - the world-operation executor is single-threaded and low priority
 - restore, recovery, merge, and undo/redo apply operations use the `HISTORY_FAST` profile; ordinary prepared work keeps the `NORMAL` profile, and bulk diagnostics use `DIAGNOSTIC_TURBO`
-- restore/apply budgets adapt downward when a tick slice exceeds its budget and recover gradually when slices stay cheap; native cells, rewrite-section bursts, direct sparse sections, sparse step size, and deferred light checks have explicit caps in addition to block count and time budgets
+- restore/apply budgets adapt downward when a tick slice exceeds its budget and recover gradually when slices stay cheap; native cells, rewrite-section bursts, direct sparse sections, sparse step size, and deferred light checks have explicit caps in addition to block count and time budgets. `HISTORY_FAST` and `DIAGNOSTIC_TURBO` keep profile-specific minimum direct-section and tick-time floors after adaptive downscale so one expensive chunk-load tick does not collapse sparse throughput for the rest of the operation.
 - prepared apply records debug-only fast-apply metrics for native sections/cells, direct sections, fallback sections, changed/skipped blocks, section packets, block-entity packets, deferred light checks, apply/work ticks, light-drain ticks/duration, and fallback reasons
 - block entities and entity diffs have explicit per-tick caps instead of running as unbounded chunk tail work
 - entity-only restore, undo/redo, and recovery batches remain visible to the operation model because progress counts entity work as first-class work units

@@ -55,6 +55,20 @@ class WorldApplyBudgetPlannerTest {
     }
 
     @Test
+    void fastProfilesKeepSafeMinimumDirectAndTimeBudgetsAfterDownscale() {
+        WorldApplyBudget normal = this.planner.plan(0.0D, 0.25D, WorldApplyProfile.NORMAL);
+        WorldApplyBudget historyFast = this.planner.plan(0.0D, 0.25D, WorldApplyProfile.HISTORY_FAST);
+        WorldApplyBudget turbo = this.planner.plan(0.0D, 0.25D, WorldApplyProfile.DIAGNOSTIC_TURBO);
+
+        assertEquals(1, normal.maxDirectSections());
+        assertEquals(250_000L, normal.maxNanos());
+        assertEquals(16, historyFast.maxDirectSections());
+        assertEquals(4_000_000L, historyFast.maxNanos());
+        assertEquals(64, turbo.maxDirectSections());
+        assertEquals(12_000_000L, turbo.maxNanos());
+    }
+
+    @Test
     void clampsProgressFractionForStableBudgetBounds() {
         WorldApplyBudget belowStart = this.planner.plan(-1.0D, 1.0D, WorldApplyProfile.NORMAL);
         WorldApplyBudget atStart = this.planner.plan(0.0D, 1.0D, WorldApplyProfile.NORMAL);

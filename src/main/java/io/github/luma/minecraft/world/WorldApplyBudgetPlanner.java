@@ -18,7 +18,9 @@ final class WorldApplyBudgetPlanner {
     private static final int RESTORE_MIN_REWRITE_SECTIONS_PER_TICK = 16;
     private static final int RESTORE_MAX_REWRITE_SECTIONS_PER_TICK = 64;
     private static final int NORMAL_MAX_DIRECT_SECTIONS_PER_TICK = 1;
+    private static final int RESTORE_MIN_DIRECT_SECTIONS_PER_TICK = 16;
     private static final int RESTORE_MAX_DIRECT_SECTIONS_PER_TICK = 96;
+    private static final int TURBO_MIN_DIRECT_SECTIONS_PER_TICK = 64;
     private static final int TURBO_MAX_DIRECT_SECTIONS_PER_TICK = 256;
     private static final int NORMAL_MAX_LIGHT_CHECKS_PER_TICK = 512;
     private static final int RESTORE_MAX_LIGHT_CHECKS_PER_TICK = 16_384;
@@ -78,8 +80,14 @@ final class WorldApplyBudgetPlanner {
                 ));
         int directSections = switch (resolvedProfile) {
             case NORMAL -> NORMAL_MAX_DIRECT_SECTIONS_PER_TICK;
-            case HISTORY_FAST -> Math.max(1, scaledInt(16, RESTORE_MAX_DIRECT_SECTIONS_PER_TICK, fraction, scale));
-            case DIAGNOSTIC_TURBO -> Math.max(1, scaledInt(64, TURBO_MAX_DIRECT_SECTIONS_PER_TICK, fraction, scale));
+            case HISTORY_FAST -> Math.max(
+                    RESTORE_MIN_DIRECT_SECTIONS_PER_TICK,
+                    scaledInt(RESTORE_MIN_DIRECT_SECTIONS_PER_TICK, RESTORE_MAX_DIRECT_SECTIONS_PER_TICK, fraction, scale)
+            );
+            case DIAGNOSTIC_TURBO -> Math.max(
+                    TURBO_MIN_DIRECT_SECTIONS_PER_TICK,
+                    scaledInt(TURBO_MIN_DIRECT_SECTIONS_PER_TICK, TURBO_MAX_DIRECT_SECTIONS_PER_TICK, fraction, scale)
+            );
         };
         int lightChecks = switch (resolvedProfile) {
             case NORMAL -> Math.max(128, Math.min(NORMAL_MAX_LIGHT_CHECKS_PER_TICK, blocks));
@@ -108,7 +116,15 @@ final class WorldApplyBudgetPlanner {
         };
         sparseStepCap = Math.max(1, Math.min(sparseStepCap, blocks));
         lightChecks = Math.max(1, lightChecks);
-        long nanos = Math.max(250_000L, Math.round((minNanos + ((maxNanos - minNanos) * fraction)) * scale));
+        long minimumProfileNanos = switch (resolvedProfile) {
+            case NORMAL -> 250_000L;
+            case HISTORY_FAST -> RESTORE_MIN_NANOS_PER_TICK;
+            case DIAGNOSTIC_TURBO -> TURBO_MIN_NANOS_PER_TICK;
+        };
+        long nanos = Math.max(
+                minimumProfileNanos,
+                Math.round((minNanos + ((maxNanos - minNanos) * fraction)) * scale)
+        );
         return new WorldApplyBudget(
                 blocks,
                 nanos,
