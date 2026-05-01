@@ -2,6 +2,8 @@
 
 This repository ships a dedicated Fabric development profile for a local singleplayer test client.
 
+The automated `runClientGameTest` profile invokes `/lumi testing singleplayer`, including the real storage-backed large save, branch, and restore diagnostics described in `docs/commands.md`.
+
 ## Launch
 
 Use the default nickname:

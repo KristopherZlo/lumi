@@ -78,6 +78,7 @@ final class SingleplayerTestRun {
     private SingleplayerGameplayRegressionSuite.GameplayRegressionReport gameplayReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
     private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
+    private SingleplayerLargeHistoryScenario largeHistoryScenario;
     private String gameplaySaveVersionId = "";
     private int previewWaitTicks;
     private int explosionWaitTicks;
@@ -162,6 +163,8 @@ final class SingleplayerTestRun {
                 case START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS -> this.startRestoreInitialAfterPlayerInteractions();
                 case CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS -> this.checkRestoreInitialAfterPlayerInteractions(server);
                 case CHECK_PERFORMANCE -> this.checkPerformanceBudget(server);
+                case START_LARGE_HISTORY_DIAGNOSTICS -> this.startLargeHistoryDiagnostics(server);
+                case RUN_LARGE_HISTORY_DIAGNOSTICS -> this.runLargeHistoryDiagnostics(server);
                 case START_BULK_APPLY_DIAGNOSTICS -> this.startBulkApplyDiagnostics(server);
                 case RUN_BULK_APPLY_DIAGNOSTICS -> this.runBulkApplyDiagnostics(server);
                 case CLEANUP -> this.finish(server);
@@ -547,6 +550,38 @@ final class SingleplayerTestRun {
         for (SingleplayerPerformanceMonitor.PerformanceCheck check : this.performanceMonitor.checks()) {
             this.check(check.passed(), check.label() + " (" + check.detail() + ")");
         }
+        this.completePhase(server, Phase.START_LARGE_HISTORY_DIAGNOSTICS);
+    }
+
+    private void startLargeHistoryDiagnostics(MinecraftServer server) {
+        this.largeHistoryScenario = new SingleplayerLargeHistoryScenario(this.level, this.player.blockPosition(), ACTOR);
+        this.completePhase(server, Phase.RUN_LARGE_HISTORY_DIAGNOSTICS);
+    }
+
+    private void runLargeHistoryDiagnostics(MinecraftServer server) {
+        if (this.largeHistoryScenario == null) {
+            this.recordFailure("Large persisted history diagnostics were not initialized");
+            this.completePhase(server, Phase.START_BULK_APPLY_DIAGNOSTICS);
+            return;
+        }
+
+        SingleplayerLargeHistoryScenario.StepResult result = this.largeHistoryScenario.advance(server);
+        for (String message : result.messages()) {
+            this.message(server, message);
+        }
+        if (result.operationHandle() != null) {
+            this.pendingOperation = result.operationHandle();
+            this.log.info("Queued large persisted history operation "
+                    + this.pendingOperation.label() + " " + this.pendingOperation.id());
+            return;
+        }
+        if (!result.finished()) {
+            return;
+        }
+
+        for (SingleplayerLargeHistoryScenario.DiagnosticCheck check : this.largeHistoryScenario.checks()) {
+            this.check(check.passed(), check.label() + " (" + check.detail() + ")");
+        }
         this.completePhase(server, Phase.START_BULK_APPLY_DIAGNOSTICS);
     }
 
@@ -633,12 +668,18 @@ final class SingleplayerTestRun {
             this.recordFailure("World operation failed: " + this.pendingOperation.label() + " - " + operation.detail());
         } else {
             this.log.info("Operation completed: " + this.pendingOperation.label() + " " + this.pendingOperation.id());
+            if (this.largeHistoryScenario != null) {
+                this.largeHistoryScenario.recordCompletion(this.pendingOperation, operation);
+            }
             this.worldOperationManager.applyMetrics(this.pendingOperation).ifPresent(metrics -> {
                 this.log.info("Operation apply metrics: label=" + this.pendingOperation.label()
                         + ", id=" + this.pendingOperation.id()
                         + ", " + metrics);
                 if (this.bulkApplyDiagnostics != null) {
                     this.bulkApplyDiagnostics.recordMetrics(this.pendingOperation, operation, metrics);
+                }
+                if (this.largeHistoryScenario != null) {
+                    this.largeHistoryScenario.recordMetrics(this.pendingOperation, operation, metrics);
                 }
             });
         }
@@ -724,6 +765,13 @@ final class SingleplayerTestRun {
                 this.bulkApplyDiagnostics.cleanup();
             } catch (Exception exception) {
                 this.log.fail(Phase.CLEANUP.title(), "Bulk diagnostics cleanup failed", exception);
+            }
+        }
+        if (this.largeHistoryScenario != null) {
+            try {
+                this.largeHistoryScenario.cleanup();
+            } catch (Exception exception) {
+                this.log.fail(Phase.CLEANUP.title(), "Large history diagnostics cleanup failed", exception);
             }
         }
         try {
@@ -898,6 +946,14 @@ final class SingleplayerTestRun {
                 "check broad gameplay actions restore to the initial world state"
         ),
         CHECK_PERFORMANCE("Performance budget", "verify the test run stayed within low-load limits"),
+        START_LARGE_HISTORY_DIAGNOSTICS(
+                "Large history diagnostics",
+                "prepare a large persisted save, branch, and restore scenario"
+        ),
+        RUN_LARGE_HISTORY_DIAGNOSTICS(
+                "Run large history diagnostics",
+                "save and restore large stored project history through real services"
+        ),
         START_BULK_APPLY_DIAGNOSTICS("Bulk apply diagnostics", "prepare large dense, fallback, and sparse apply scenarios"),
         RUN_BULK_APPLY_DIAGNOSTICS("Run bulk apply diagnostics", "apply and delete large prepared block batches with metrics"),
         CLEANUP("Cleanup and report", "remove test blocks, archive the test project, and write the log");
@@ -944,7 +1000,8 @@ final class SingleplayerTestRun {
                      CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
                      START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,
                      START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS, CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS,
-                     CHECK_PERFORMANCE, START_BULK_APPLY_DIAGNOSTICS, RUN_BULK_APPLY_DIAGNOSTICS,
+                     CHECK_PERFORMANCE, START_LARGE_HISTORY_DIAGNOSTICS, RUN_LARGE_HISTORY_DIAGNOSTICS,
+                     START_BULK_APPLY_DIAGNOSTICS, RUN_BULK_APPLY_DIAGNOSTICS,
                      CLEANUP -> CLEANUP;
             };
         }
