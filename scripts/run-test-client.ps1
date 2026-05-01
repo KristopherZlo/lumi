@@ -14,7 +14,9 @@ function Get-JavaMajorVersion {
         [string]$JavaExe
     )
 
-    $versionLine = (& cmd.exe /d /c ('"{0}" -version 2>&1' -f $JavaExe) | Select-Object -First 1)
+    $versionLine = (& cmd.exe /d /c ('"{0}" -version 2>&1' -f $JavaExe) |
+        Where-Object { $_ -match '"\d+(?:\.\d+)*' } |
+        Select-Object -First 1)
     if (-not $versionLine) {
         return $null
     }

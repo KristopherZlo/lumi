@@ -26,10 +26,17 @@ If you want to force a specific JDK:
 .\scripts\run-test-client.ps1 -JavaHome "C:\Program Files\Java\jdk-21"
 ```
 
+Existing `JAVA_TOOL_OPTIONS` are preserved, so debug JVM flags can be set before launching:
+
+```powershell
+$env:JAVA_TOOL_OPTIONS = "-Dlumi.debug=true"
+.\scripts\run-test-client.ps1
+```
+
 If you only want to verify the Gradle profile without starting Minecraft:
 
 ```powershell
-.\scripts\run-test-client.ps1 -GradleTasks tasks --all
+.\scripts\run-test-client.ps1 -GradleTasks @("tasks", "--all")
 ```
 
 If you want to launch the broader performance-mod profile:
