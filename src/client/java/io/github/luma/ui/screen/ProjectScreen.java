@@ -1,6 +1,8 @@
 package io.github.luma.ui.screen;
 
 import io.github.luma.client.onboarding.ClientOnboardingService;
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.PartialRestoreMode;
@@ -10,6 +12,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
@@ -49,6 +52,7 @@ public final class ProjectScreen extends LumaScreen {
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ProjectScreenSections sections = new ProjectScreenSections(this.actionController, new SectionActions());
     private final ClientOnboardingService onboardingService;
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private OnboardingTour onboardingTour;
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private ProjectHomeViewState state = new ProjectHomeViewState(
@@ -146,6 +150,8 @@ public final class ProjectScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         window.content().child(this.bodyScroll);
 
+        new ContextualHelpPresenter(this.contextualHelpService, () -> this.refresh(this.statusKey))
+                .addHint(body, ClientContextualHelpHint.HISTORY);
         body.child(this.sections.buildSection(model));
         body.child(this.sections.historySection(model));
         body.child(LumaUi.bottomSpacer());

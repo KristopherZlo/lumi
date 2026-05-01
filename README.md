@@ -62,7 +62,7 @@ Use Lumi if you want to:
 
 - automatic dimension projects
 - builder-first Build History UI built around `Save build`, `See changes`, recent saves, and `Branches`, with maintenance tools kept in the sidebar `More` route
-- one-time interactive onboarding wizard that explains safe save, undo/redo, restore, branch, compare, recovery, and import/export workflows, shows remapped shortcuts as pixel key icons, continues over the Lumi workspace after the open shortcut, and can be replayed from `More` or `/lumi-onboarding`
+- one-time interactive onboarding wizard that explains safe save, undo/redo, restore, branch, compare, recovery, and import/export workflows, plus dismissible contextual hints on the main tabs and workflows; the tour shows remapped shortcuts as pixel key icons, continues over the Lumi workspace after the open shortcut, and can be replayed from `More` or `/lumi-onboarding`
 - localized UI resources for English, Russian, French, Spanish, German, and Finnish
 - lightweight save, branch, import/export, settings, storage cleanup, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
@@ -288,7 +288,6 @@ Current scope:
 
 ## TODO
 
-- [ ] In-use player onboarding for tools, tabs, and workflow explanations
 - [ ] Multiplayer support
 - [ ] Additional test coverage
 - [ ] Exploit discovery and hardening

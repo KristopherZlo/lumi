@@ -207,12 +207,12 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 - `ui/navigation/ScreenRouter.java`: route construction and screen transitions.
 - `ui/navigation/ProjectWorkspaceTab.java`, `ProjectSidebarNavigation.java`: workspace tab/sidebar model.
 - `ui/screen/LumaScreen.java`: common non-pausing owo-ui base screen and Escape behavior.
-- `ui/ProjectWindowLayout.java`, `ProjectUiSupport.java`, `LumaUi.java`, `LumaScrollContainer.java`, `SimpleActionCard.java`, `OperationProgressPresenter.java`, `MaterialEntryView.java`: shared layout, surfaces, progress, and compact UI helpers.
+- `ui/ProjectWindowLayout.java`, `ProjectUiSupport.java`, `LumaUi.java`, `ContextualHelpPresenter.java`, `LumaScrollContainer.java`, `SimpleActionCard.java`, `OperationProgressPresenter.java`, `MaterialEntryView.java`: shared layout, contextual help, surfaces, progress, and compact UI helpers.
 
 ### Screens, Controllers, And View State
 
 - Dashboard/projects: `DashboardScreen`, `DashboardScreenController`, `DashboardViewState`, `DashboardProjectItem`.
-- Create/open workspace and onboarding: `CreateProjectScreen`, `CreateProjectScreenController`, `ProjectOpeningScreen`, `OnboardingScreen`, `ClientWorkspaceOpenService`, `ClientProjectAccess`, `ClientOnboardingService`, `ClientOnboardingStateRepository`, `LumaClientCommands`, `KeyGlyphResolver`, `OnboardingHoldGate`.
+- Create/open workspace and onboarding: `CreateProjectScreen`, `CreateProjectScreenController`, `ProjectOpeningScreen`, `OnboardingScreen`, `ClientWorkspaceOpenService`, `ClientProjectAccess`, `ClientOnboardingService`, `ClientContextualHelpService`, `ClientOnboardingStateRepository`, `LumaClientCommands`, `KeyGlyphResolver`, `OnboardingHoldGate`.
 - Project home/history: `ProjectScreen`, `ProjectScreenController`, `ProjectHomeScreenController`, `ProjectHomeViewState`, `ProjectScreenSections`.
 - Save and quick save: `SaveScreen`, `SaveDetailsScreen`, `QuickSaveScreen`, `QuickSaveScreenController`, `SaveViewState`, `SaveDetailsViewState`, `SaveDetailsPartialRestoreSection`, `PartialRestoreFormState`.
 - Compare: `CompareScreen`, `CompareScreenController`, `CompareViewState`, `CompareScreenSections`.

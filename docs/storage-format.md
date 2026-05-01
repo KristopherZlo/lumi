@@ -105,8 +105,9 @@ Stores installation-level client UI state that is not part of any project and is
 
 - `schemaVersion`
 - `completedOnboardingVersion`
+- `dismissedContextualHintIds`
 
-Missing or malformed files are treated as incomplete onboarding and do not block project loading.
+Schema v2 adds the dismissed contextual hint id set. v1 files are normalized to v2 with the completed onboarding version preserved and no dismissed hints. Missing or malformed files are treated as incomplete onboarding and do not block project loading.
 
 ### `project.json`
 

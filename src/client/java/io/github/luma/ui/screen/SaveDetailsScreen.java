@@ -1,5 +1,8 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
+import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.PartialRestoreMode;
@@ -8,7 +11,7 @@ import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionKind;
-import io.github.luma.client.selection.LumiRegionSelectionController;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.MaterialEntryView;
@@ -47,6 +50,7 @@ public final class SaveDetailsScreen extends LumaScreen {
     private final ScreenRouter router = new ScreenRouter();
     private final PartialRestoreFormState partialRestoreForm = new PartialRestoreFormState();
     private final SaveDetailsPartialRestoreSection partialRestoreSections = new SaveDetailsPartialRestoreSection(new PartialRestoreActions());
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private SaveDetailsViewState state = new SaveDetailsViewState(
             null,
@@ -124,10 +128,13 @@ public final class SaveDetailsScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         frame.child(this.bodyScroll);
 
+        ContextualHelpPresenter contextualHelp = new ContextualHelpPresenter(this.contextualHelpService, this::rebuild);
+        contextualHelp.addHint(body, ClientContextualHelpHint.RESTORE);
         body.child(this.summarySection(version, versionVariant));
         body.child(this.changesSection(version));
         body.child(this.primaryActions(version, versionVariant, operationActive));
         if (this.showPartialRestore) {
+            contextualHelp.addHint(body, ClientContextualHelpHint.PARTIAL_RESTORE);
             body.child(this.partialRestoreSection(version, operationActive));
         }
         body.child(this.moreSection(version, operationActive));

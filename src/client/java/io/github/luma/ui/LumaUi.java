@@ -1,5 +1,6 @@
 package io.github.luma.ui;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -175,6 +176,27 @@ public final class LumaUi {
         banner.gap(3);
         banner.child(accent(text));
         return banner;
+    }
+
+    public static FlowLayout contextualHint(
+            ClientContextualHelpHint hint,
+            Consumer<ButtonComponent> onDismiss
+    ) {
+        FlowLayout panel = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        panel.surface(Surface.flat(0xEF171B1E).and(Surface.outline(STATUS_BORDER)));
+        panel.padding(Insets.of(5));
+        panel.gap(4);
+
+        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        header.gap(5);
+        header.verticalAlignment(VerticalAlignment.CENTER);
+        header.child(accent(Component.translatable(hint.titleKey())));
+        header.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
+        ButtonComponent dismiss = button(Component.translatable("luma.action.dismiss_hint"), onDismiss);
+        header.child(dismiss);
+        panel.child(header);
+        panel.child(caption(Component.translatable(hint.bodyKey())));
+        return panel;
     }
 
     public static FlowLayout emptyState(Component title, Component description) {

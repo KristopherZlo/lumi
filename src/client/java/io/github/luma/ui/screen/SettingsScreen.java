@@ -1,6 +1,9 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.model.ProjectSettings;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectWindowLayout;
@@ -25,6 +28,7 @@ public final class SettingsScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final SettingsScreenController controller = new SettingsScreenController();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.settings_ready";
     private boolean loaded = false;
@@ -99,6 +103,8 @@ public final class SettingsScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         window.content().child(this.bodyScroll);
 
+        new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
+                .addHint(body, ClientContextualHelpHint.SETTINGS);
         body.child(this.safetySection());
         body.child(this.previewSection());
         body.child(this.hudSection());

@@ -1,7 +1,10 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
@@ -29,6 +32,7 @@ public final class SaveScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectScreenController controller = new ProjectScreenController();
     private final ScreenRouter router = new ScreenRouter();
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private SaveViewState state = new SaveViewState(
             null,
@@ -110,6 +114,8 @@ public final class SaveScreen extends LumaScreen {
             return;
         }
 
+        new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
+                .addHint(body, ClientContextualHelpHint.SAVE);
         body.child(this.summarySection(pending));
         body.child(this.messageSection());
         body.child(this.primaryActions(operationActive));

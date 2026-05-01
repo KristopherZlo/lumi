@@ -13,6 +13,7 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 - Press `U` to open the project for the current dimension.
 - If that project does not exist yet, Lumi creates it.
 - The first Lumi workspace open on a Minecraft installation shows a short interactive safety tour. Shortcut steps show your current remapped keys as pixel icons and continue only after you hold the shown shortcut for 0.8 seconds. After the open-workspace shortcut, the tour continues over the Lumi workspace screen. Use the `X` button in the top-right of the tour if you need to leave it early. You can replay it later from `More` or with `/lumi-onboarding`.
+- The main tabs and focused workflows show small dismissible tips the first time they are useful. Use `More` -> `Show tips again` to reset those contextual hints without replaying the full tour.
 - Press the Lumi action button plus `S` to open Quick save while no screen is open. The default chord is `Left Alt+S`, and both keys are remappable in Minecraft `Controls` under `Lumi`.
 - Use the Lumi action button plus `Z` to undo the latest tracked action while no screen is open. The default action button is `Left Alt`.
 - Use the Lumi action button plus `Y` to redo the latest undone tracked action while no screen is open.

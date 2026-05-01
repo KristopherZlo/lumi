@@ -1,5 +1,8 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.RecoveryScreenController;
@@ -24,6 +27,7 @@ public final class RecoveryScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final RecoveryScreenController controller = new RecoveryScreenController();
     private final ScreenRouter router = new ScreenRouter();
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.recovery_ready";
     private boolean showDetails = false;
@@ -85,6 +89,8 @@ public final class RecoveryScreen extends LumaScreen {
         }
 
         var summaryState = draftSummary.get();
+        new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
+                .addHint(body, ClientContextualHelpHint.RECOVERY);
         body.child(this.summarySection(summaryState));
         body.child(this.saveSection(summaryState));
         if (this.confirmRestore) {

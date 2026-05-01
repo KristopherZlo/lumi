@@ -42,6 +42,18 @@ class ClientOnboardingServiceTest {
         Assertions.assertTrue(service.shouldShowOnboarding());
     }
 
+    @Test
+    void completingOnboardingPreservesDismissedContextualHints() throws Exception {
+        Path file = this.tempDir.resolve("lumi-client.json");
+        ClientOnboardingStateRepository repository = new ClientOnboardingStateRepository(file);
+        repository.save(ClientOnboardingState.empty().withDismissedContextualHint(ClientContextualHelpHint.SAVE.id()));
+        ClientOnboardingService service = new ClientOnboardingService(repository);
+
+        service.markCompleted();
+
+        Assertions.assertTrue(repository.load().dismissedContextualHintIds().contains(ClientContextualHelpHint.SAVE.id()));
+    }
+
     private static ClientOnboardingService service(Path file) {
         return new ClientOnboardingService(new ClientOnboardingStateRepository(file));
     }

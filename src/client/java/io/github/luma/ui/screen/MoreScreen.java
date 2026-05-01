@@ -1,6 +1,9 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
@@ -31,6 +34,7 @@ public final class MoreScreen extends LumaScreen {
     private final ScreenRouter router = new ScreenRouter();
     private final ProjectHomeScreenController controller = new ProjectHomeScreenController();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private ProjectHomeViewState state;
     private List<ProjectVersion> deletedVersions = List.of();
     private MoreTab activeTab = MoreTab.PROJECT_TOOLS;
@@ -77,14 +81,11 @@ public final class MoreScreen extends LumaScreen {
         FlowLayout body = LumaUi.screenBody();
         window.content().child(LumaUi.screenScroll(body));
 
+        new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
+                .addHint(body, ClientContextualHelpHint.MORE);
         body.child(this.tabRow());
         if (this.activeTab == MoreTab.PROJECT_TOOLS) {
-            body.child(this.navigationCard(
-                    "luma.more.onboarding_title",
-                    "luma.more.onboarding_help",
-                    "luma.action.show_onboarding",
-                    button -> this.router.openOnboarding(this, this.projectName)
-            ));
+            body.child(this.onboardingSection());
             body.child(this.navigationCard(
                     "luma.more.cleanup_title",
                     "luma.more.cleanup_help",
@@ -103,6 +104,24 @@ public final class MoreScreen extends LumaScreen {
     @Override
     public void onClose() {
         this.client.setScreen(this.parent);
+    }
+
+    private FlowLayout onboardingSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.more.onboarding_title"),
+                Component.translatable("luma.more.onboarding_help")
+        );
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(LumaUi.button(Component.translatable("luma.action.show_onboarding"), button -> this.router.openOnboarding(
+                this,
+                this.projectName
+        )));
+        actions.child(LumaUi.button(Component.translatable("luma.action.reset_contextual_hints"), button -> {
+            this.contextualHelpService.resetHints();
+            this.rebuild();
+        }));
+        section.child(actions);
+        return section;
     }
 
     @Override

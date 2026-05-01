@@ -1,5 +1,7 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.model.HistoryPackageImportResult;
 import io.github.luma.domain.model.HistoryPackageFileSummary;
 import io.github.luma.domain.model.ImportedHistoryProjectSummary;
@@ -9,6 +11,7 @@ import io.github.luma.domain.model.MergeConflictZoneResolution;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.VariantMergeApplyRequest;
 import io.github.luma.domain.model.VariantMergePlan;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.OperationProgressPresenter;
@@ -48,6 +51,7 @@ public final class ShareScreen extends LumaScreen {
     private final ScreenRouter router = new ScreenRouter();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ShareMergeReviewSection mergeReviewSections = new ShareMergeReviewSection(new MergeReviewActions());
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private ShareViewState state = new ShareViewState(null, List.of(), List.of(), List.of(), null, List.of(), null, "luma.status.share_ready");
     private String status = "luma.status.share_ready";
@@ -118,6 +122,8 @@ public final class ShareScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         window.content().child(this.bodyScroll);
 
+        new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
+                .addHint(body, ClientContextualHelpHint.IMPORT_EXPORT);
         body.child(this.exportSection());
         body.child(this.importSection());
         body.child(this.importedPackagesSection());

@@ -1,5 +1,8 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.CompareScreenController;
@@ -25,6 +28,7 @@ public final class CompareScreen extends LumaScreen {
     private final CompareScreenController controller = new CompareScreenController();
     private final ScreenRouter router = new ScreenRouter();
     private final CompareScreenSections sections = new CompareScreenSections(new SectionActions());
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private CompareViewState state = new CompareViewState(
             List.of(),
@@ -92,6 +96,8 @@ public final class CompareScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         frame.child(this.bodyScroll);
 
+        new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
+                .addHint(body, ClientContextualHelpHint.COMPARE);
         CompareScreenSections.Model model = this.sectionModel();
         if (this.state.diff() == null) {
             body.child(LumaUi.emptyState(
