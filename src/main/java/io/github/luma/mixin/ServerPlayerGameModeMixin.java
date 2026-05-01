@@ -1,5 +1,7 @@
 package io.github.luma.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.WorldMutationContext;
@@ -14,9 +16,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ServerPlayerGameMode.class)
 abstract class ServerPlayerGameModeMixin {
@@ -27,60 +26,47 @@ abstract class ServerPlayerGameModeMixin {
     @Unique
     private int luma$playerMutationDepth = 0;
 
-    @Inject(method = "destroyBlock", at = @At("HEAD"))
-    private void luma$beginDestroyBlock(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
+    @WrapMethod(method = "destroyBlock")
+    private boolean luma$wrapDestroyBlock(BlockPos pos, Operation<Boolean> original) {
         this.luma$pushPlayerSource();
+        try {
+            return original.call(pos);
+        } finally {
+            this.luma$popPlayerSource();
+        }
     }
 
-    @Inject(method = "destroyBlock", at = @At("RETURN"))
-    private void luma$endDestroyBlock(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
-        this.luma$popPlayerSource();
-    }
-
-    @Inject(method = "useItem", at = @At("HEAD"))
-    private void luma$beginUseItem(
+    @WrapMethod(method = "useItem")
+    private InteractionResult luma$wrapUseItem(
             ServerPlayer player,
             Level level,
             ItemStack stack,
             InteractionHand hand,
-            CallbackInfoReturnable<InteractionResult> cir
+            Operation<InteractionResult> original
     ) {
         this.luma$pushPlayerSource();
+        try {
+            return original.call(player, level, stack, hand);
+        } finally {
+            this.luma$popPlayerSource();
+        }
     }
 
-    @Inject(method = "useItem", at = @At("RETURN"))
-    private void luma$endUseItem(
-            ServerPlayer player,
-            Level level,
-            ItemStack stack,
-            InteractionHand hand,
-            CallbackInfoReturnable<InteractionResult> cir
-    ) {
-        this.luma$popPlayerSource();
-    }
-
-    @Inject(method = "useItemOn", at = @At("HEAD"))
-    private void luma$beginUseItemOn(
+    @WrapMethod(method = "useItemOn")
+    private InteractionResult luma$wrapUseItemOn(
             ServerPlayer player,
             Level level,
             ItemStack stack,
             InteractionHand hand,
             BlockHitResult hitResult,
-            CallbackInfoReturnable<InteractionResult> cir
+            Operation<InteractionResult> original
     ) {
         this.luma$pushPlayerSource();
-    }
-
-    @Inject(method = "useItemOn", at = @At("RETURN"))
-    private void luma$endUseItemOn(
-            ServerPlayer player,
-            Level level,
-            ItemStack stack,
-            InteractionHand hand,
-            BlockHitResult hitResult,
-            CallbackInfoReturnable<InteractionResult> cir
-    ) {
-        this.luma$popPlayerSource();
+        try {
+            return original.call(player, level, stack, hand, hitResult);
+        } finally {
+            this.luma$popPlayerSource();
+        }
     }
 
     @Unique

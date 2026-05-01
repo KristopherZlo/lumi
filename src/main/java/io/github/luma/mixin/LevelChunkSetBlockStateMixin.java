@@ -1,12 +1,12 @@
 package io.github.luma.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.integration.common.ExternalToolMutationSourceResolver;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -18,9 +18,6 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LevelChunk.class)
 abstract class LevelChunkSetBlockStateMixin {
@@ -29,26 +26,59 @@ abstract class LevelChunkSetBlockStateMixin {
     private static final ExternalToolMutationSourceResolver LUMA_TOOL_SOURCE_RESOLVER =
             ExternalToolMutationSourceResolver.getInstance();
 
-    @Unique
-    private static final ThreadLocal<Deque<PendingExternalToolBlockMutation>> LUMA_PENDING_TOOL_MUTATIONS =
-            ThreadLocal.withInitial(ArrayDeque::new);
-
     @Shadow
     @Final
     Level level;
 
-    @Inject(method = "setBlockState(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Lnet/minecraft/world/level/block/state/BlockState;", at = @At("HEAD"))
-    private void luma$captureBeforeAxiomChunkSetBlock(
+    @WrapMethod(method = "setBlockState(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Lnet/minecraft/world/level/block/state/BlockState;")
+    private BlockState luma$wrapChunkSetBlockState(
             BlockPos pos,
             BlockState newState,
             int flags,
-            CallbackInfoReturnable<BlockState> cir
+            Operation<BlockState> original
     ) {
         if (!(this.level instanceof ServerLevel serverLevel)) {
-            return;
+            return original.call(pos, newState, flags);
         }
+
+        PendingExternalToolBlockMutation mutation = this.luma$captureBeforeChunkSetBlock(serverLevel, pos);
+        if (mutation == null) {
+            return original.call(pos, newState, flags);
+        }
+
+        try {
+            BlockState previous = original.call(pos, newState, flags);
+            if (previous != null) {
+                LevelChunk chunk = (LevelChunk) (Object) this;
+                BlockState appliedState = chunk.getBlockState(mutation.pos());
+                CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, mutation.pos(), appliedState);
+                boolean accessAllowed = mutation.operation().accessAllowed() || !serverLevel.getServer().isDedicatedServer();
+                try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                        mutation.operation().source(),
+                        mutation.operation().actor(),
+                        mutation.operation().actionId(),
+                        accessAllowed
+                )) {
+                    HistoryCaptureManager.getInstance().recordBlockChange(
+                            serverLevel,
+                            mutation.pos(),
+                            mutation.oldState(),
+                            appliedState,
+                            mutation.oldBlockEntity(),
+                            newBlockEntity
+                    );
+                }
+            }
+            return previous;
+        } finally {
+            mutation.boundary().close();
+        }
+    }
+
+    @Unique
+    private PendingExternalToolBlockMutation luma$captureBeforeChunkSetBlock(ServerLevel serverLevel, BlockPos pos) {
         if (WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
-            return;
+            return null;
         }
 
         var currentSource = WorldMutationContext.currentSource();
@@ -61,66 +91,20 @@ abstract class LevelChunkSetBlockStateMixin {
             operation = operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed());
         }
         if (operation == null) {
-            return;
+            return null;
         }
 
         LevelChunk chunk = (LevelChunk) (Object) this;
         BlockState oldState = chunk.getBlockState(pos);
         CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, pos, oldState);
         WorldMutationCaptureGuard.CaptureBoundary boundary = WorldMutationCaptureGuard.pushChunkSetBlockBoundary();
-        LUMA_PENDING_TOOL_MUTATIONS.get().push(new PendingExternalToolBlockMutation(
+        return new PendingExternalToolBlockMutation(
                 pos.immutable(),
                 oldState,
                 oldBlockEntity,
                 operation,
                 boundary
-        ));
-    }
-
-    @Inject(method = "setBlockState(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Lnet/minecraft/world/level/block/state/BlockState;", at = @At("RETURN"))
-    private void luma$captureAfterAxiomChunkSetBlock(
-            BlockPos pos,
-            BlockState newState,
-            int flags,
-            CallbackInfoReturnable<BlockState> cir
-    ) {
-        if (!(this.level instanceof ServerLevel serverLevel)) {
-            return;
-        }
-
-        Deque<PendingExternalToolBlockMutation> mutations = LUMA_PENDING_TOOL_MUTATIONS.get();
-        if (mutations.isEmpty()) {
-            return;
-        }
-
-        PendingExternalToolBlockMutation mutation = mutations.pop();
-        try {
-            if (cir.getReturnValue() == null) {
-                return;
-            }
-
-            LevelChunk chunk = (LevelChunk) (Object) this;
-            BlockState appliedState = chunk.getBlockState(mutation.pos());
-            CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, mutation.pos(), appliedState);
-            boolean accessAllowed = mutation.operation().accessAllowed() || !serverLevel.getServer().isDedicatedServer();
-            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
-                    mutation.operation().source(),
-                    mutation.operation().actor(),
-                    mutation.operation().actionId(),
-                    accessAllowed
-            )) {
-                HistoryCaptureManager.getInstance().recordBlockChange(
-                        serverLevel,
-                        mutation.pos(),
-                        mutation.oldState(),
-                        appliedState,
-                        mutation.oldBlockEntity(),
-                        newBlockEntity
-                );
-            }
-        } finally {
-            mutation.boundary().close();
-        }
+        );
     }
 
     @Unique
