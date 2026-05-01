@@ -24,7 +24,17 @@ final class WorldApplyMetrics {
     private int workTicks;
     private int maxWorkPerTick;
     private int lightDrainTicks;
+    private long preparationNanos;
+    private long preloadNanos;
+    private long applyNanos;
     private long lightDrainNanos;
+    private long totalNanos;
+    private long maxApplyTickNanos;
+    private long maxPreloadTickNanos;
+    private int preloadTicks;
+    private int preloadedChunks;
+    private int loadedBeforeApply;
+    private int missedAtApply;
     private final Map<String, Integer> fallbackReasons = new LinkedHashMap<>();
 
     void record(BlockCommitResult result) {
@@ -49,11 +59,15 @@ final class WorldApplyMetrics {
         if ((result.fallbackSections() > 0 || result.rewriteFallbackSections() > 0 || result.nativeFallbackSections() > 0)
                 && result.fallbackReason() != null
                 && result.fallbackReason() != BlockCommitFallbackReason.NONE) {
+            int fallbackCount = result.fallbackSections() + result.rewriteFallbackSections() + result.nativeFallbackSections();
             this.fallbackReasons.merge(
                     result.fallbackReason().label(),
-                    result.fallbackSections() + result.rewriteFallbackSections() + result.nativeFallbackSections(),
+                    fallbackCount,
                     Integer::sum
             );
+            if (result.fallbackReason() == BlockCommitFallbackReason.CHUNK_NOT_LOADED) {
+                this.missedAtApply += fallbackCount;
+            }
         }
     }
 
@@ -62,7 +76,14 @@ final class WorldApplyMetrics {
     }
 
     void recordApplyTick(int workUnits) {
+        this.recordApplyTick(workUnits, 0L);
+    }
+
+    void recordApplyTick(int workUnits, long elapsedNanos) {
         this.applyTicks += 1;
+        long sanitizedElapsedNanos = Math.max(0L, elapsedNanos);
+        this.applyNanos += sanitizedElapsedNanos;
+        this.maxApplyTickNanos = Math.max(this.maxApplyTickNanos, sanitizedElapsedNanos);
         if (workUnits <= 0) {
             return;
         }
@@ -73,6 +94,23 @@ final class WorldApplyMetrics {
     void recordLightDrainTick(long elapsedNanos) {
         this.lightDrainTicks += 1;
         this.lightDrainNanos += Math.max(0L, elapsedNanos);
+    }
+
+    void recordPreparationDuration(long elapsedNanos) {
+        this.preparationNanos = Math.max(this.preparationNanos, Math.max(0L, elapsedNanos));
+    }
+
+    void recordPreloadTick(int newlyLoadedChunks, int alreadyLoadedChunks, long elapsedNanos) {
+        this.preloadTicks += 1;
+        long sanitizedElapsedNanos = Math.max(0L, elapsedNanos);
+        this.preloadNanos += sanitizedElapsedNanos;
+        this.maxPreloadTickNanos = Math.max(this.maxPreloadTickNanos, sanitizedElapsedNanos);
+        this.preloadedChunks += Math.max(0, newlyLoadedChunks);
+        this.loadedBeforeApply += Math.max(0, alreadyLoadedChunks);
+    }
+
+    void recordTotalDuration(long elapsedNanos) {
+        this.totalNanos = Math.max(this.totalNanos, Math.max(0L, elapsedNanos));
     }
 
     int processedBlocks() {
@@ -97,6 +135,17 @@ final class WorldApplyMetrics {
 
     String summary() {
         return "processedBlocks=" + this.processedBlocks
+                + ", prepareDurationMs=" + this.millis(this.preparationNanos)
+                + ", preloadDurationMs=" + this.millis(this.preloadNanos)
+                + ", preloadTicks=" + this.preloadTicks
+                + ", preloadedChunks=" + this.preloadedChunks
+                + ", loadedBeforeApply=" + this.loadedBeforeApply
+                + ", missedAtApply=" + this.missedAtApply
+                + ", applyDurationMs=" + this.millis(this.applyNanos)
+                + ", lightFinalizeDurationMs=" + this.lightDrainDurationMillis()
+                + ", totalOperationDurationMs=" + this.millis(this.totalNanos)
+                + ", maxApplyTickMs=" + this.millis(this.maxApplyTickNanos)
+                + ", maxPreloadTickMs=" + this.millis(this.maxPreloadTickNanos)
                 + ", changedBlocks=" + this.changedBlocks
                 + ", skippedBlocks=" + this.skippedBlocks
                 + ", directSections=" + this.directSections
@@ -124,7 +173,11 @@ final class WorldApplyMetrics {
     }
 
     private long lightDrainDurationMillis() {
-        return this.lightDrainNanos / 1_000_000L;
+        return this.millis(this.lightDrainNanos);
+    }
+
+    private long millis(long nanos) {
+        return nanos / 1_000_000L;
     }
 
     private String fallbackReasonsSummary() {

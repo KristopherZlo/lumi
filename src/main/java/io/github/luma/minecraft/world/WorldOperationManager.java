@@ -9,6 +9,7 @@ import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
@@ -480,6 +481,7 @@ public final class WorldOperationManager {
     private final class PreparedApplyActiveOperation extends ActiveOperation {
 
         private final CompletableFuture<PreparedApplyOperation> future;
+        private final long preparationStartedAtNanos;
         private PreparedApplyOperation prepared;
         private GlobalDispatcher dispatcher;
         private ChunkBatch currentBatch;
@@ -507,6 +509,7 @@ public final class WorldOperationManager {
                 PreparedApplyWork work
         ) {
             super(level, handle, unitLabel);
+            this.preparationStartedAtNanos = System.nanoTime();
             this.future = CompletableFuture.supplyAsync(() -> {
                 try {
                     this.progressSink().update(OperationStage.PREPARING, 0, 0, "Preparing");
@@ -533,6 +536,7 @@ public final class WorldOperationManager {
                     throw cause;
                 }
 
+                this.applyMetrics.recordPreparationDuration(System.nanoTime() - this.preparationStartedAtNanos);
                 this.preparationMarkerDetail = this.preservedPreparationMarker(this.snapshot().detail());
                 this.dispatcher = new GlobalDispatcher();
                 this.dispatcher.enqueue(this.prepared.localQueue());
@@ -567,6 +571,7 @@ public final class WorldOperationManager {
             int tickStartNativeSections = this.applyMetrics.nativeSections();
             int tickStartFallbackSections = this.applyMetrics.fallbackSections();
             int tickStartLightChecks = this.applyMetrics.lightChecks();
+            long applyTickStartedAt = System.nanoTime();
             String stopReason = "deadline";
             if (this.debugApplyEnabled()) {
                 LumaDebugLog.log(
@@ -712,7 +717,7 @@ public final class WorldOperationManager {
                     tickStartFallbackSections,
                     tickStartLightChecks
             );
-            this.applyMetrics.recordApplyTick(processedWorkThisTick);
+            this.applyMetrics.recordApplyTick(processedWorkThisTick, System.nanoTime() - applyTickStartedAt);
 
             if (this.currentBatch == null && (this.dispatcher == null || !this.dispatcher.hasPending())) {
                 if (!this.drainDeferredLightUpdates(budget, deadlineNanos)) {
@@ -1136,6 +1141,7 @@ public final class WorldOperationManager {
 
         @Override
         protected Optional<String> applyMetricsSummary() {
+            this.applyMetrics.recordTotalDuration(Duration.between(this.handle().startedAt(), Instant.now()).toNanos());
             return Optional.of(this.applyMetrics.summary());
         }
 

@@ -15,13 +15,27 @@ class WorldApplyMetricsTest {
         metrics.record(BlockCommitResult.rewriteFallback(4, 0, 4, BlockCommitFallbackReason.REWRITE_UNAVAILABLE));
         metrics.record(BlockCommitResult.fallback(2, 1, 1, BlockCommitFallbackReason.CHUNK_NOT_LOADED));
         metrics.record(BlockCommitResult.blockEntityPackets(2));
-        metrics.recordApplyTick(18);
+        metrics.recordPreparationDuration(3_000_000L);
+        metrics.recordPreloadTick(2, 1, 4_000_000L);
+        metrics.recordApplyTick(18, 5_000_000L);
         metrics.recordApplyTick(0);
         metrics.recordLightDrainTick(2_500_000L);
+        metrics.recordTotalDuration(12_000_000L);
 
         String summary = metrics.summary();
 
         Assertions.assertTrue(summary.contains("processedBlocks=34"));
+        Assertions.assertTrue(summary.contains("prepareDurationMs=3"));
+        Assertions.assertTrue(summary.contains("preloadDurationMs=4"));
+        Assertions.assertTrue(summary.contains("preloadTicks=1"));
+        Assertions.assertTrue(summary.contains("preloadedChunks=2"));
+        Assertions.assertTrue(summary.contains("loadedBeforeApply=1"));
+        Assertions.assertTrue(summary.contains("missedAtApply=1"));
+        Assertions.assertTrue(summary.contains("applyDurationMs=5"));
+        Assertions.assertTrue(summary.contains("lightFinalizeDurationMs=2"));
+        Assertions.assertTrue(summary.contains("totalOperationDurationMs=12"));
+        Assertions.assertTrue(summary.contains("maxApplyTickMs=5"));
+        Assertions.assertTrue(summary.contains("maxPreloadTickMs=4"));
         Assertions.assertTrue(summary.contains("changedBlocks=26"));
         Assertions.assertTrue(summary.contains("skippedBlocks=8"));
         Assertions.assertTrue(summary.contains("directSections=1"));
