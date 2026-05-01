@@ -243,6 +243,8 @@ The current history pipeline is intentionally split into:
 
 Current safe bulk-apply baseline from the 2026-04-30 singleplayer diagnostics run is dense rewrite `fill=1402 ms` and `delete=943 ms`, block-entity fallback `fill=944 ms` and `delete=950 ms`, and sparse direct `fill=8773 ms` and `delete=11650 ms`, with `failedChecks=0` and `nonAirAfterDelete=0`. Future speed work should report prepare, preload, apply, light finalize, verification, and total scenario timings so chunk loading or verification cost cannot be hidden outside the apply metric.
 
+The 2026-05-01 safe-acceleration verification run after fast-profile preload, chunk reacquire, sparse delete pruning, and fast-profile budget floors reported dense rewrite `fill=1293 ms` and `delete=1046 ms`, block-entity fallback `fill=1150 ms` and `delete=998 ms`, and sparse direct `fill=6309 ms` and `delete=7252 ms`, with `failedChecks=0`, `nonAirAfterDelete=0`, `missedAtApply=0`, and empty sparse fallback reasons. Sparse direct apply CPU time in that run was `548 ms` for fill and `997 ms` for delete; the remaining wall time is bounded tick scheduling, preload, final light drain, and runtime verification.
+
 Current world-apply runtime types:
 
 - `ChunkBatch`
