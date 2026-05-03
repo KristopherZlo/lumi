@@ -4,6 +4,7 @@ run/
 out/
 logs/
 bin/
+site/
 
 *.log
 *.tmp
