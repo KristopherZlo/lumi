@@ -63,6 +63,18 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void clearDropsUndoAndRedoStacks() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+        stack.completeUndo(stack.selectUndo());
+
+        stack.clear();
+
+        assertFalse(stack.canUndo());
+        assertFalse(stack.canRedo());
+    }
+
+    @Test
     void relatedChangesDoNotClearRedoStack() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);

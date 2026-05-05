@@ -770,6 +770,7 @@ public final class RestoreService {
                         .withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION);
         this.projectRepository.save(layout, updatedProject);
         this.recoveryRepository.deleteDraft(layout);
+        this.undoRedoHistoryManager.clearProject(project.id().toString());
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,
                 "restore-completed",

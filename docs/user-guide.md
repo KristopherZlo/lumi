@@ -89,6 +89,7 @@ Tracked history includes:
 - supported explosion edits
 
 Lumi does not record its own restore apply pass as normal history.
+After a full restore or quick rollback completes, Lumi drops the old live undo/redo stack because those actions belonged to the pre-restore world state. Pressing the normal undo chord immediately after quick rollback returns to the state before that restore; if you make new edits first, undo handles those newer edits before falling back to the restore return point.
 When TNT is primed by a tracked builder action, Lumi keeps that action context through the fuse delay and records the resulting block damage with the same history step.
 Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
 Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi keeps a one-chunk halo around the root chunk, captures per-chunk baselines lazily as fallout reaches those chunks, then reconciles later fallout such as falling gravel and fluid spread against the current world before the draft is flushed, saved, frozen, or used to choose a live undo/redo action.
