@@ -118,6 +118,11 @@ public final class LumiOverlayClientSmoke {
             this.waitForRecentMesh(context, "small recent", 1, 1);
             this.waitForRenderedRecentFrames(context, "small recent");
             context.takeScreenshot("lumi-recent-overlay-small");
+            context.runOnClient(client -> {
+                this.actionKey().setDown(false);
+                RecentChangesOverlayRenderer.clear();
+            });
+            context.waitTick();
 
             UndoRedoHistoryManager.getInstance().clearProject(fixture.projectId());
             UndoRedoHistoryManager.getInstance().recordAction(
@@ -129,14 +134,54 @@ public final class LumiOverlayClientSmoke {
                     List.of(),
                     Instant.now()
             );
-            context.runOnClient(client -> RecentChangesOverlayRenderer.clear());
+            context.runOnClient(client -> this.actionKey().setDown(true));
             this.waitForRecentMesh(context, "large recent", 1, 1);
             context.runOnClient(client -> this.assertRecentMeshNearCamera(client, "large recent"));
+            this.assertPinnedRecentOverlaySurvivesLiveEdits(context, fixture);
         } finally {
             context.runOnClient(client -> {
                 this.actionKey().setDown(false);
                 RecentChangesOverlayRenderer.clear();
             });
+        }
+    }
+
+    private void assertPinnedRecentOverlaySurvivesLiveEdits(
+            ClientGameTestContext context,
+            RecentFixture fixture
+    ) throws Exception {
+        int largePrimitiveCount = context.computeOnClient(client ->
+                RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
+        if (largePrimitiveCount < 1) {
+            throw new AssertionError("large recent overlay did not expose mesh primitives before live edit pinning check");
+        }
+
+        UndoRedoHistoryManager.getInstance().recordAction(
+                fixture.projectId(),
+                fixture.dimensionId(),
+                "lumi-overlay-smoke-live-edit",
+                ACTOR,
+                this.storedChanges(fixture.origin().offset(96, 0, 0), 5, 2, 2),
+                List.of(),
+                Instant.now()
+        );
+
+        for (int tick = 0; tick < 10; tick++) {
+            context.waitTick();
+            int currentPrimitiveCount = context.computeOnClient(client -> {
+                if (!RecentChangesOverlayRenderer.visible()) {
+                    throw new AssertionError("large recent overlay disappeared after a live edit while Alt was held");
+                }
+                return RecentChangesOverlayRenderer.meshPrimitiveCountForTest();
+            });
+            if (currentPrimitiveCount != largePrimitiveCount) {
+                throw new AssertionError(
+                        "large recent overlay was replaced after live edits while Alt was held: expected "
+                                + largePrimitiveCount
+                                + " primitives but saw "
+                                + currentPrimitiveCount
+                );
+            }
         }
     }
 
