@@ -70,7 +70,7 @@ Use Lumi if you want to:
 - remappable quick rollback key, default `R`, that restores the active branch head without opening a screen; hold the Lumi action button with `R` to return to the state before the last full restore
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, restore, see-changes, rename, soft-delete, and branch actions
-- See Changes screen for saved states, branches, and the current build, with manual raw-reference compare available under `More`
+- See Changes screen for saved states, branches, and the current build, with background-loaded diffs and manual raw-reference compare available under `More`
 - live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi action button; changing the action button changes these chords too. WorldEdit and FAWE actions route those chords through the tools' native undo/redo commands, while captured Axiom capability actions replay through Lumi so tool-assisted breaks and placements use the state Lumi recorded.
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit; undo/redo drains already-dirty stabilization chunks first so poured fluid, contact-created source blocks, and falling-block deltas from whole-dimension sessions can join before the action is selected, and this passive fallout does not discard an available redo
 - item drops produced by explosions, fluid, falling blocks, or nearby block-update fallout are captured only for the matching undo/redo action; undo removes those dropped item entities and redo respawns them without storing them in recovery drafts or saved versions
@@ -272,7 +272,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
 6. Use the Lumi action button plus `Z` / `Y` to undo or redo the latest tracked action while no screen is open. The default action button is `Left Alt`, and changing it changes these chords too. WorldEdit/FAWE actions use native tool undo/redo; captured Axiom capability actions replay through Lumi.
-7. Hold the Lumi action button to show all pending unsaved changes since the active head, or hold it plus `Z`/`Y` to preview undo/redo actions when the compare overlay is not active. Pending overlays above the detailed cap collapse into merged orange volume blobs so the client does not build unbounded overlay geometry.
+7. Hold the Lumi action button to show all pending unsaved changes since the active head, or hold it plus `Z`/`Y` to preview undo/redo actions when the compare overlay is not active. Pending overlays above the detailed cap collapse into bounded tiled orange volume blobs so the client does not build unbounded overlay geometry.
    Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
 8. Press the Lumi action button plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
 9. Use `Save build` when you want the full save screen with manual naming or replace-latest tools.
@@ -287,7 +287,7 @@ Current scope:
 - menu flow first, with commands limited to diagnostics/help and the explicit `/lumi testing singleplayer` runtime test suite
 - combine currently works through imported review projects for the same project lineage, with background review, block-level same-area detection, and validation messages before Lumi writes a combined save
 - partial restore is available from save details with manual bounds or a wooden-sword Lumi selection, including inside-selection and everything-except-selection modes
-- compare overlay marks changed positions, not a full 3D preview; large compare diffs load asynchronously, cache exposed changed-block meshes by section, and reuse uploaded GPU buffers between frames, while extremely large comparisons collapse into merged volume blobs so the client does not build unbounded overlay geometry
+- compare overlay marks changed positions, not a full 3D preview; large compare diffs and large world-highlight preparation run asynchronously, cache exposed changed-block meshes by section, and reuse uploaded GPU buffers between frames, while extremely large comparisons collapse into bounded tiled volume blobs so the client does not build unbounded overlay geometry
 
 ## TODO
 

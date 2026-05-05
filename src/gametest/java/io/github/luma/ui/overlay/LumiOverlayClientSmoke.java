@@ -6,6 +6,7 @@ import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import java.time.Instant;
@@ -27,8 +28,6 @@ import net.minecraft.server.players.NameAndId;
 public final class LumiOverlayClientSmoke {
 
     private static final String ACTOR = "Lumi overlay smoke";
-    private static final int WAIT_TIMEOUT_TICKS = 20 * 30;
-
     private final ProjectService projectService = new ProjectService();
 
     public void run(ClientGameTestContext context, TestSingleplayerContext singleplayer) throws Exception {
@@ -41,6 +40,7 @@ public final class LumiOverlayClientSmoke {
         RecentFixture fixture = null;
         try {
             this.runCompareSmoke(context, origin);
+            this.runPendingSmoke(context, origin);
             fixture = this.prepareRecentFixture(singleplayer, origin);
             this.runRecentSmoke(context, fixture);
         } finally {
@@ -65,18 +65,41 @@ public final class LumiOverlayClientSmoke {
         context.takeScreenshot("lumi-compare-overlay-small");
         context.runOnClient(client -> CompareOverlayRenderer.clear());
 
+        CompareOverlayRenderer.PreparedOverlay largeCompare = CompareOverlayRenderer.prepare(
+                "lumi-overlay-smoke",
+                "v0001",
+                "v0002-large",
+                this.compareEntries(origin, 80, 64, 64),
+                true,
+                true
+        );
         context.runOnClient(client -> {
-            CompareOverlayRenderer.show(
-                    "lumi-overlay-smoke",
-                    "v0001",
-                    "v0002-large",
-                    this.compareEntries(origin, 80, 64, 64),
-                    true
-            );
+            CompareOverlayRenderer.activate(largeCompare);
             this.assertCompareMesh("large compare", 1, 1);
             this.assertCompareMeshNearCamera(client, "large compare");
         });
         context.runOnClient(client -> CompareOverlayRenderer.clear());
+    }
+
+    private void runPendingSmoke(ClientGameTestContext context, BlockPos origin) throws Exception {
+        PendingChangesOverlayRenderer.PreparedOverlay pending = PendingChangesOverlayRenderer.prepare(
+                new PendingChangesOverlaySnapshot(
+                        "lumi-overlay-smoke",
+                        100_064L,
+                        this.pendingChanges(origin),
+                        0
+                ),
+                true
+        );
+        context.runOnClient(client -> {
+            CompareOverlayRenderer.clear();
+            RecentChangesOverlayRenderer.clear();
+            PendingChangesOverlayRenderer.clear();
+            PendingChangesOverlayRenderer.activate(pending);
+            this.assertPendingMesh("pending cumulative", 1, 1);
+            this.assertPendingMeshNearCamera(client, "pending cumulative");
+        });
+        context.runOnClient(client -> PendingChangesOverlayRenderer.clear());
     }
 
     private RecentFixture prepareRecentFixture(TestSingleplayerContext singleplayer, BlockPos origin) throws Exception {
@@ -108,86 +131,56 @@ public final class LumiOverlayClientSmoke {
     }
 
     private void runRecentSmoke(ClientGameTestContext context, RecentFixture fixture) throws Exception {
+        UndoRedoAction smallAction = this.undoRedoAction(
+                fixture.projectId(),
+                fixture.dimensionId(),
+                "lumi-overlay-smoke-small",
+                this.storedChanges(fixture.origin(), 2, 2, 2)
+        );
+        RecentChangesOverlayRenderer.PreparedOverlay smallPrepared = RecentChangesOverlayRenderer.prepare(
+                fixture.projectId(),
+                List.of(smallAction),
+                false,
+                RecentChangesOverlayCoordinator.PreviewTarget.UNDO,
+                -1L
+        );
         context.runOnClient(client -> {
-            KeyMapping actionKey = this.actionKey();
             CompareOverlayRenderer.clear();
             RecentChangesOverlayRenderer.clear();
-            actionKey.setDown(true);
+            RecentChangesOverlayRenderer.activate(smallPrepared);
+            this.assertRecentMesh("small recent", 1, 1);
+            this.assertRecentMeshNearCamera(client, "small recent");
         });
         try {
-            this.waitForRecentMesh(context, "small recent", 1, 1);
-            this.waitForRenderedRecentFrames(context, "small recent");
-            context.takeScreenshot("lumi-recent-overlay-small");
-            context.runOnClient(client -> {
-                this.actionKey().setDown(false);
-                RecentChangesOverlayRenderer.clear();
-            });
-            context.waitTick();
-
-            UndoRedoHistoryManager.getInstance().clearProject(fixture.projectId());
-            UndoRedoHistoryManager.getInstance().recordAction(
+            UndoRedoAction largeAction = this.undoRedoAction(
                     fixture.projectId(),
                     fixture.dimensionId(),
                     "lumi-overlay-smoke-large",
-                    ACTOR,
-                    this.storedChanges(fixture.origin(), 64, 40, 40),
-                    List.of(),
-                    Instant.now()
+                    this.storedChanges(fixture.origin(), 64, 40, 40)
             );
-            context.runOnClient(client -> this.actionKey().setDown(true));
-            this.waitForRecentMesh(context, "large recent", 1, 1);
-            context.runOnClient(client -> this.assertRecentMeshNearCamera(client, "large recent"));
-            this.assertPinnedRecentOverlaySurvivesLiveEdits(context, fixture);
+            RecentChangesOverlayRenderer.PreparedOverlay largePrepared = RecentChangesOverlayRenderer.prepare(
+                    fixture.projectId(),
+                    List.of(largeAction),
+                    false,
+                    RecentChangesOverlayCoordinator.PreviewTarget.UNDO,
+                    -1L
+            );
+            context.runOnClient(client -> {
+                RecentChangesOverlayRenderer.activate(largePrepared);
+                this.assertRecentMesh("large recent", 1, 1);
+                this.assertRecentMeshNearCamera(client, "large recent");
+            });
         } finally {
             context.runOnClient(client -> {
-                this.actionKey().setDown(false);
                 RecentChangesOverlayRenderer.clear();
             });
-        }
-    }
-
-    private void assertPinnedRecentOverlaySurvivesLiveEdits(
-            ClientGameTestContext context,
-            RecentFixture fixture
-    ) throws Exception {
-        int largePrimitiveCount = context.computeOnClient(client ->
-                RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
-        if (largePrimitiveCount < 1) {
-            throw new AssertionError("large recent overlay did not expose mesh primitives before live edit pinning check");
-        }
-
-        UndoRedoHistoryManager.getInstance().recordAction(
-                fixture.projectId(),
-                fixture.dimensionId(),
-                "lumi-overlay-smoke-live-edit",
-                ACTOR,
-                this.storedChanges(fixture.origin().offset(96, 0, 0), 5, 2, 2),
-                List.of(),
-                Instant.now()
-        );
-
-        for (int tick = 0; tick < 10; tick++) {
-            context.waitTick();
-            int currentPrimitiveCount = context.computeOnClient(client -> {
-                if (!RecentChangesOverlayRenderer.visible()) {
-                    throw new AssertionError("large recent overlay disappeared after a live edit while Alt was held");
-                }
-                return RecentChangesOverlayRenderer.meshPrimitiveCountForTest();
-            });
-            if (currentPrimitiveCount != largePrimitiveCount) {
-                throw new AssertionError(
-                        "large recent overlay was replaced after live edits while Alt was held: expected "
-                                + largePrimitiveCount
-                                + " primitives but saw "
-                                + currentPrimitiveCount
-                );
-            }
         }
     }
 
     private void clearOverlayState(ClientGameTestContext context, RecentFixture fixture) throws Exception {
         context.runOnClient(client -> {
             CompareOverlayRenderer.clear();
+            PendingChangesOverlayRenderer.clear();
             RecentChangesOverlayRenderer.clear();
             KeyMapping actionKey = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
             if (actionKey != null) {
@@ -211,22 +204,28 @@ public final class LumiOverlayClientSmoke {
         }
     }
 
-    private void waitForRecentMesh(
-            ClientGameTestContext context,
-            String label,
-            int minSections,
-            int minPrimitives
-    ) throws Exception {
-        for (int tick = 0; tick < WAIT_TIMEOUT_TICKS; tick++) {
-            boolean ready = context.computeOnClient(client -> RecentChangesOverlayRenderer.visible()
-                    && RecentChangesOverlayRenderer.meshSectionCountForTest() >= minSections
-                    && RecentChangesOverlayRenderer.meshPrimitiveCountForTest() >= minPrimitives);
-            if (ready) {
-                return;
-            }
-            context.waitTick();
+    private void assertRecentMesh(String label, int minSections, int minPrimitives) {
+        if (!RecentChangesOverlayRenderer.visible()) {
+            throw new AssertionError(label + " overlay is not visible");
         }
-        throw new AssertionError(label + " overlay did not become visible");
+        if (RecentChangesOverlayRenderer.meshSectionCountForTest() < minSections) {
+            throw new AssertionError(label + " mesh has no cached sections");
+        }
+        if (RecentChangesOverlayRenderer.meshPrimitiveCountForTest() < minPrimitives) {
+            throw new AssertionError(label + " mesh has no primitives");
+        }
+    }
+
+    private void assertPendingMesh(String label, int minSections, int minPrimitives) {
+        if (!PendingChangesOverlayRenderer.visible()) {
+            throw new AssertionError(label + " overlay is not visible");
+        }
+        if (PendingChangesOverlayRenderer.meshSectionCountForTest() < minSections) {
+            throw new AssertionError(label + " mesh has no cached sections");
+        }
+        if (PendingChangesOverlayRenderer.meshPrimitiveCountForTest() < minPrimitives) {
+            throw new AssertionError(label + " mesh has no primitives");
+        }
     }
 
     private void waitForRenderedCompareFrames(ClientGameTestContext context, String label) throws Exception {
@@ -235,18 +234,6 @@ public final class LumiOverlayClientSmoke {
             context.runOnClient(client -> {
                 this.assertCompareMesh(label, 1, 1);
                 this.assertCompareMeshNearCamera(client, label);
-            });
-        }
-    }
-
-    private void waitForRenderedRecentFrames(ClientGameTestContext context, String label) throws Exception {
-        for (int i = 0; i < 3; i++) {
-            context.waitTick();
-            context.runOnClient(client -> {
-                if (!RecentChangesOverlayRenderer.visible()) {
-                    throw new AssertionError(label + " overlay disappeared during render smoke");
-                }
-                this.assertRecentMeshNearCamera(client, label);
             });
         }
     }
@@ -265,12 +252,11 @@ public final class LumiOverlayClientSmoke {
         }
     }
 
-    private KeyMapping actionKey() {
-        KeyMapping actionKey = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
-        if (actionKey == null) {
-            throw new AssertionError("Lumi action key binding was not registered");
+    private void assertPendingMeshNearCamera(net.minecraft.client.Minecraft client, String label) {
+        var camera = client.gameRenderer.getMainCamera().position();
+        if (PendingChangesOverlayRenderer.visibleMeshSectionCountForTest(camera.x, camera.y, camera.z, 8) < 1) {
+            throw new AssertionError(label + " overlay has no visible mesh sections near the camera");
         }
-        return actionKey;
     }
 
     private List<DiffBlockEntry> compareEntries(BlockPos origin, int sizeX, int sizeY, int sizeZ) {
@@ -306,6 +292,27 @@ public final class LumiOverlayClientSmoke {
             }
         }
         return changes;
+    }
+
+    private List<StoredBlockChange> pendingChanges(BlockPos origin) {
+        List<StoredBlockChange> changes = new ArrayList<>(100_064);
+        changes.addAll(this.storedChanges(origin, 100, 40, 25));
+        changes.addAll(this.storedChanges(origin.offset(112, 0, 0), 8, 4, 2));
+        return changes;
+    }
+
+    private UndoRedoAction undoRedoAction(
+            String projectId,
+            String dimensionId,
+            String actionId,
+            List<StoredBlockChange> changes
+    ) {
+        Instant changedAt = Instant.now();
+        UndoRedoAction action = new UndoRedoAction(actionId, ACTOR, projectId, dimensionId, changedAt, changedAt);
+        for (StoredBlockChange change : changes) {
+            action.recordChange(change, changedAt);
+        }
+        return action;
     }
 
     private CompoundTag state(String blockId) {

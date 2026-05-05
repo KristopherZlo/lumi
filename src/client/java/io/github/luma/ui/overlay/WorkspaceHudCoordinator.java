@@ -7,6 +7,10 @@ import io.github.luma.domain.model.WorkspaceHudSnapshot;
 import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.controller.WorkspaceHudController;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Minecraft;
@@ -26,7 +30,13 @@ public final class WorkspaceHudCoordinator {
     private static final WorkspaceHudCoordinator INSTANCE = new WorkspaceHudCoordinator();
 
     private final WorkspaceHudController controller = new WorkspaceHudController();
+    private final ExecutorService refreshExecutor = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "lumi-hud-worker");
+        thread.setDaemon(true);
+        return thread;
+    });
     private WorkspaceHudSnapshot workspaceSnapshot;
+    private CompletableFuture<WorkspaceHudSnapshot> pendingWorkspaceRefresh;
     private OperationSnapshot activeOperation;
     private OperationSnapshot retainedTerminalOperation;
     private String retainedTerminalFingerprint = "";
@@ -56,25 +66,14 @@ public final class WorkspaceHudCoordinator {
             return;
         }
 
-        this.refreshCooldown -= 1;
-        if (this.refreshCooldown <= 0 || this.workspaceSnapshot == null) {
-            this.workspaceSnapshot = this.controller.loadCurrentWorkspaceSnapshot();
-            this.refreshCooldown = this.hasActiveOperation(this.workspaceSnapshot)
-                    ? ACTIVE_REFRESH_INTERVAL_TICKS
-                    : IDLE_REFRESH_INTERVAL_TICKS;
-            if (this.workspaceSnapshot != null && this.workspaceSnapshot.debugEnabled()) {
-                LumaDebugLog.log(
-                        "hud",
-                        "Refreshed HUD snapshot for {} branch={} pending(+{}, -{}) operation={}",
-                        this.workspaceSnapshot.projectName(),
-                        this.workspaceSnapshot.activeVariantId(),
-                        this.workspaceSnapshot.plusCount(),
-                        this.workspaceSnapshot.minusCount(),
-                        this.workspaceSnapshot.operationSnapshot() == null
-                                ? "none"
-                                : this.workspaceSnapshot.operationSnapshot().stage()
-                );
-            }
+        boolean refreshed = this.completePendingRefresh();
+        if (!refreshed) {
+            this.refreshCooldown -= 1;
+        }
+        if (!refreshed
+                && this.pendingWorkspaceRefresh == null
+                && (this.refreshCooldown <= 0 || this.workspaceSnapshot == null)) {
+            this.startWorkspaceRefresh();
         }
 
         OperationSnapshot current = this.workspaceSnapshot == null ? null : this.workspaceSnapshot.operationSnapshot();
@@ -132,6 +131,10 @@ public final class WorkspaceHudCoordinator {
 
     private void clear() {
         this.workspaceSnapshot = null;
+        if (this.pendingWorkspaceRefresh != null) {
+            this.pendingWorkspaceRefresh.cancel(false);
+            this.pendingWorkspaceRefresh = null;
+        }
         this.activeOperation = null;
         this.retainedTerminalOperation = null;
         this.retainedTerminalFingerprint = "";
@@ -145,6 +148,52 @@ public final class WorkspaceHudCoordinator {
         return snapshot != null
                 && snapshot.operationSnapshot() != null
                 && !snapshot.operationSnapshot().terminal();
+    }
+
+    private void startWorkspaceRefresh() {
+        this.pendingWorkspaceRefresh = CompletableFuture.supplyAsync(
+                this.controller::loadCurrentWorkspaceSnapshot,
+                this.refreshExecutor
+        );
+        this.refreshCooldown = 1;
+    }
+
+    private boolean completePendingRefresh() {
+        if (this.pendingWorkspaceRefresh == null || !this.pendingWorkspaceRefresh.isDone()) {
+            return false;
+        }
+
+        CompletableFuture<WorkspaceHudSnapshot> completed = this.pendingWorkspaceRefresh;
+        this.pendingWorkspaceRefresh = null;
+        try {
+            this.workspaceSnapshot = completed.join();
+            this.refreshCooldown = this.hasActiveOperation(this.workspaceSnapshot)
+                    ? ACTIVE_REFRESH_INTERVAL_TICKS
+                    : IDLE_REFRESH_INTERVAL_TICKS;
+            this.logSnapshotRefresh();
+        } catch (CompletionException exception) {
+            LumaMod.LOGGER.debug("Failed to refresh Lumi workspace HUD snapshot", exception.getCause() == null
+                    ? exception
+                    : exception.getCause());
+            this.refreshCooldown = IDLE_REFRESH_INTERVAL_TICKS;
+        }
+        return true;
+    }
+
+    private void logSnapshotRefresh() {
+        if (this.workspaceSnapshot != null && this.workspaceSnapshot.debugEnabled()) {
+            LumaDebugLog.log(
+                    "hud",
+                    "Refreshed HUD snapshot for {} branch={} pending(+{}, -{}) operation={}",
+                    this.workspaceSnapshot.projectName(),
+                    this.workspaceSnapshot.activeVariantId(),
+                    this.workspaceSnapshot.plusCount(),
+                    this.workspaceSnapshot.minusCount(),
+                    this.workspaceSnapshot.operationSnapshot() == null
+                            ? "none"
+                            : this.workspaceSnapshot.operationSnapshot().stage()
+            );
+        }
     }
 
     private void updateActionbar(Minecraft client, OperationSnapshot snapshot) {
