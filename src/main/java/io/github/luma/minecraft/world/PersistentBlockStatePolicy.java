@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.world;
 
 import java.util.Objects;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.Blocks;
@@ -77,8 +78,48 @@ public final class PersistentBlockStatePolicy {
         return changed;
     }
 
+    public boolean isRuntimeOnlyStateTagChange(CompoundTag oldStateTag, CompoundTag newStateTag) {
+        if (oldStateTag == null || newStateTag == null || Objects.equals(oldStateTag, newStateTag)) {
+            return false;
+        }
+        if (!Objects.equals(this.blockId(oldStateTag), this.blockId(newStateTag))) {
+            return false;
+        }
+
+        CompoundTag oldProperties = this.properties(oldStateTag);
+        CompoundTag newProperties = this.properties(newStateTag);
+        if (Objects.equals(oldProperties, newProperties)) {
+            return false;
+        }
+
+        boolean changed = false;
+        Set<String> propertyNames = new LinkedHashSet<>();
+        propertyNames.addAll(oldProperties.keySet());
+        propertyNames.addAll(newProperties.keySet());
+        for (String propertyName : propertyNames) {
+            String oldValue = oldProperties.getString(propertyName).orElse("");
+            String newValue = newProperties.getString(propertyName).orElse("");
+            if (Objects.equals(oldValue, newValue)) {
+                continue;
+            }
+            if (!RUNTIME_PROPERTY_NAMES.contains(propertyName)) {
+                return false;
+            }
+            changed = true;
+        }
+        return changed;
+    }
+
     private boolean isPistonBaseState(BlockState state) {
         return state.is(Blocks.PISTON) || state.is(Blocks.STICKY_PISTON);
+    }
+
+    private String blockId(CompoundTag stateTag) {
+        return stateTag.getString("Name").orElse("");
+    }
+
+    private CompoundTag properties(CompoundTag stateTag) {
+        return stateTag.getCompound("Properties").orElseGet(CompoundTag::new);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

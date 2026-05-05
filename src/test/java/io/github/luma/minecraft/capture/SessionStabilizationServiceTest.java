@@ -130,6 +130,49 @@ class SessionStabilizationServiceTest {
         assertTrue(service.diffChunk(baseline, live, null).isEmpty());
     }
 
+    @Test
+    void diffChunkSkipsRuntimeOnlyRedstonePropertyDeltas() {
+        assertTrue(this.diffSingleState(
+                stateTag("minecraft:redstone_lamp", "lit", "false"),
+                stateTag("minecraft:redstone_lamp", "lit", "true")
+        ).isEmpty());
+        assertTrue(this.diffSingleState(
+                stateTag("minecraft:lever", "powered", "false"),
+                stateTag("minecraft:lever", "powered", "true")
+        ).isEmpty());
+        assertTrue(this.diffSingleState(
+                stateTag("minecraft:redstone_wire", "power", "0"),
+                stateTag("minecraft:redstone_wire", "power", "15")
+        ).isEmpty());
+    }
+
+    @Test
+    void diffChunkKeepsStructuralStateDeltas() {
+        List<StoredBlockChange> changes = this.diffSingleState(
+                stateTag("minecraft:redstone_lamp", "lit", "false"),
+                stateTag("minecraft:copper_block")
+        );
+
+        assertEquals(4096, changes.size());
+    }
+
+    @Test
+    void stabilizationFilterKeepsPendingStructuralStateWhenOnlyRuntimePropertyChanged() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        StoredBlockChange placedLamp = new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:air"),
+                new StatePayload(stateTag("minecraft:redstone_lamp", "lit", "false"), null)
+        );
+        StoredBlockChange litFallout = new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:air"),
+                new StatePayload(stateTag("minecraft:redstone_lamp", "lit", "true"), null)
+        );
+
+        assertTrue(service.filterRuntimeOnlyDeltaChanges(List.of(placedLamp), List.of(litFallout)).isEmpty());
+    }
+
     private static StoredBlockChange changeAt(int x) {
         return new StoredBlockChange(
                 new BlockPoint(x, 64, 0),
@@ -146,6 +189,35 @@ class SessionStabilizationServiceTest {
         CompoundTag state = new CompoundTag();
         state.putString("Name", blockId);
         return state;
+    }
+
+    private static CompoundTag stateTag(String blockId, String propertyName, String propertyValue) {
+        CompoundTag state = stateTag(blockId);
+        CompoundTag properties = new CompoundTag();
+        properties.putString(propertyName, propertyValue);
+        state.put("Properties", properties);
+        return state;
+    }
+
+    private List<StoredBlockChange> diffSingleState(CompoundTag baselineState, CompoundTag liveState) {
+        SessionStabilizationService service = new SessionStabilizationService();
+        ChunkSnapshotPayload baseline = new ChunkSnapshotPayload(
+                0,
+                0,
+                64,
+                79,
+                List.of(new ChunkSectionSnapshotPayload(4, List.of(baselineState), new long[0], 0)),
+                Map.of()
+        );
+        ChunkSnapshotPayload live = new ChunkSnapshotPayload(
+                0,
+                0,
+                64,
+                79,
+                List.of(new ChunkSectionSnapshotPayload(4, List.of(liveState), new long[0], 0)),
+                Map.of()
+        );
+        return service.diffChunk(baseline, live, null);
     }
 
     private static CompoundTag blockEntity(String id, String marker) {

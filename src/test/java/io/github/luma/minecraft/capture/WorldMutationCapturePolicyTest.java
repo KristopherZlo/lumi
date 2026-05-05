@@ -20,6 +20,17 @@ class WorldMutationCapturePolicyTest {
 
     @Test
     void rejectsPistonSourceMutations() {
+        assertEquals(
+                WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION,
+                this.policy.evaluate(
+                        WorldMutationSource.PISTON,
+                        POS,
+                        Blocks.STONE.defaultBlockState(),
+                        Blocks.AIR.defaultBlockState(),
+                        null,
+                        null
+                ).decision()
+        );
         assertTrue(this.policy.capture(
                 WorldMutationSource.PISTON,
                 POS,
@@ -47,7 +58,34 @@ class WorldMutationCapturePolicyTest {
         BlockState offLever = withProperty(Blocks.LEVER.defaultBlockState(), "powered", false);
         BlockState onLever = withProperty(Blocks.LEVER.defaultBlockState(), "powered", true);
 
+        assertEquals(
+                WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION,
+                this.policy.evaluate(WorldMutationSource.PLAYER, POS, offLever, onLever, null, null).decision()
+        );
         assertTrue(this.policy.capture(WorldMutationSource.PLAYER, POS, offLever, onLever, null, null).isEmpty());
+    }
+
+    @Test
+    void defersBlockUpdateMutationsToStabilization() {
+        assertEquals(
+                WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION,
+                this.policy.evaluate(
+                        WorldMutationSource.BLOCK_UPDATE,
+                        POS,
+                        Blocks.STONE.defaultBlockState(),
+                        Blocks.COPPER_BLOCK.defaultBlockState(),
+                        null,
+                        null
+                ).decision()
+        );
+        assertTrue(this.policy.capture(
+                WorldMutationSource.BLOCK_UPDATE,
+                POS,
+                Blocks.STONE.defaultBlockState(),
+                Blocks.COPPER_BLOCK.defaultBlockState(),
+                null,
+                null
+        ).isEmpty());
     }
 
     @Test

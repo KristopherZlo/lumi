@@ -25,7 +25,7 @@ public final class WorldMutationCapturePolicy {
         this.blockStatePolicy = blockStatePolicy;
     }
 
-    public Optional<CapturedMutation> capture(
+    public CaptureResult evaluate(
             WorldMutationSource source,
             BlockPos pos,
             BlockState oldState,
@@ -34,10 +34,12 @@ public final class WorldMutationCapturePolicy {
             CompoundTag newBlockEntity
     ) {
         if (pos == null || !this.shouldCaptureMutation(source)) {
-            return Optional.empty();
+            return CaptureResult.rejected();
         }
-        if (source == WorldMutationSource.PISTON || this.blockStatePolicy.isRuntimeOnlyStateChange(oldState, newState)) {
-            return Optional.empty();
+        if (source == WorldMutationSource.BLOCK_UPDATE
+                || source == WorldMutationSource.PISTON
+                || this.blockStatePolicy.isRuntimeOnlyStateChange(oldState, newState)) {
+            return CaptureResult.deferToStabilization();
         }
 
         PersistentBlockStatePolicy.PersistentBlockState oldPersistent = this.blockStatePolicy.normalize(oldState, oldBlockEntity);
@@ -48,15 +50,29 @@ public final class WorldMutationCapturePolicy {
                 StatePayload.capture(newPersistent.state(), newPersistent.blockEntityTag())
         );
         if (change.isNoOp()) {
-            return Optional.empty();
+            return CaptureResult.rejected();
         }
-        return Optional.of(new CapturedMutation(
+        return CaptureResult.captured(new CapturedMutation(
                 change,
                 oldPersistent.state(),
                 newPersistent.state(),
                 oldPersistent.blockEntityTag(),
                 newPersistent.blockEntityTag()
         ));
+    }
+
+    public Optional<CapturedMutation> capture(
+            WorldMutationSource source,
+            BlockPos pos,
+            BlockState oldState,
+            BlockState newState,
+            CompoundTag oldBlockEntity,
+            CompoundTag newBlockEntity
+    ) {
+        CaptureResult result = this.evaluate(source, pos, oldState, newState, oldBlockEntity, newBlockEntity);
+        return result.decision() == CaptureDecision.CAPTURED
+                ? Optional.of(result.mutation())
+                : Optional.empty();
     }
 
     public boolean shouldCaptureMutation(WorldMutationSource source) {
@@ -77,9 +93,31 @@ public final class WorldMutationCapturePolicy {
                     EXTERNAL_TOOL,
                     WORLDEDIT,
                     FAWE,
-                    AXIOM -> true;
-            case PISTON, RESTORE, SYSTEM -> false;
+                    AXIOM,
+                    PISTON -> true;
+            case RESTORE, SYSTEM -> false;
         };
+    }
+
+    public enum CaptureDecision {
+        CAPTURED,
+        DEFER_TO_STABILIZATION,
+        REJECTED
+    }
+
+    public record CaptureResult(CaptureDecision decision, CapturedMutation mutation) {
+
+        static CaptureResult captured(CapturedMutation mutation) {
+            return new CaptureResult(CaptureDecision.CAPTURED, mutation);
+        }
+
+        static CaptureResult deferToStabilization() {
+            return new CaptureResult(CaptureDecision.DEFER_TO_STABILIZATION, null);
+        }
+
+        static CaptureResult rejected() {
+            return new CaptureResult(CaptureDecision.REJECTED, null);
+        }
     }
 
     public record CapturedMutation(

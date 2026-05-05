@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
@@ -9,6 +10,7 @@ import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
+import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,6 +36,7 @@ public final class SessionStabilizationService {
 
     private static final CompoundTag AIR_STATE = airState();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
+    private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
 
     public ReconciliationResult stabilizePendingChunks(
             ServerLevel level,
@@ -80,7 +83,8 @@ public final class SessionStabilizationService {
 
             List<StoredBlockChange> deltaChanges = this.deltaChanges(project, session, capturedChunks.captured());
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
-            List<StoredBlockChange> composedChanges = composeChanges(currentChanges, deltaChanges);
+            List<StoredBlockChange> filteredDeltaChanges = this.filterRuntimeOnlyDeltaChanges(currentChanges, deltaChanges);
+            List<StoredBlockChange> composedChanges = composeChanges(currentChanges, filteredDeltaChanges);
             int bufferBefore = session.buffer().size();
             boolean bufferChanged = !currentChanges.equals(composedChanges);
             if (bufferChanged) {
@@ -99,7 +103,7 @@ public final class SessionStabilizationService {
                     bufferAfter,
                     false,
                     bufferChanged,
-                    deltaChanges
+                    filteredDeltaChanges
             );
         } catch (RuntimeException exception) {
             session.requeuePendingChunks(pendingChunks);
@@ -199,8 +203,12 @@ public final class SessionStabilizationService {
                         CompoundTag liveState = this.readStateTag(liveSection, localX, localY, localZ);
                         CompoundTag baselineBlockEntity = this.readBlockEntityTag(baseline, y, localX, localZ);
                         CompoundTag liveBlockEntity = this.readBlockEntityTag(live, y, localX, localZ);
-                        if (Objects.equals(baselineState, liveState)
-                                && Objects.equals(baselineBlockEntity, liveBlockEntity)) {
+                        if (this.samePersistentCell(
+                                baselineState,
+                                liveState,
+                                baselineBlockEntity,
+                                liveBlockEntity
+                        )) {
                             continue;
                         }
                         changes.add(new StoredBlockChange(
@@ -213,6 +221,47 @@ public final class SessionStabilizationService {
             }
         }
         return changes;
+    }
+
+    private boolean samePersistentCell(
+            CompoundTag baselineState,
+            CompoundTag liveState,
+            CompoundTag baselineBlockEntity,
+            CompoundTag liveBlockEntity
+    ) {
+        if (Objects.equals(baselineState, liveState) && Objects.equals(baselineBlockEntity, liveBlockEntity)) {
+            return true;
+        }
+        return Objects.equals(baselineBlockEntity, liveBlockEntity)
+                && this.blockStatePolicy.isRuntimeOnlyStateTagChange(baselineState, liveState);
+    }
+
+    List<StoredBlockChange> filterRuntimeOnlyDeltaChanges(
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> deltaChanges
+    ) {
+        if (deltaChanges == null || deltaChanges.isEmpty()) {
+            return List.of();
+        }
+        Map<BlockPoint, StoredBlockChange> currentByPos = new LinkedHashMap<>();
+        for (StoredBlockChange currentChange : currentChanges == null ? List.<StoredBlockChange>of() : currentChanges) {
+            currentByPos.put(currentChange.pos(), currentChange);
+        }
+
+        List<StoredBlockChange> filtered = new ArrayList<>();
+        for (StoredBlockChange deltaChange : deltaChanges) {
+            StoredBlockChange currentChange = currentByPos.get(deltaChange.pos());
+            if (currentChange != null
+                    && Objects.equals(currentChange.newValue().blockEntityTag(), deltaChange.newValue().blockEntityTag())
+                    && this.blockStatePolicy.isRuntimeOnlyStateTagChange(
+                            currentChange.newValue().stateTag(),
+                            deltaChange.newValue().stateTag()
+                    )) {
+                continue;
+            }
+            filtered.add(deltaChange);
+        }
+        return List.copyOf(filtered);
     }
 
     private boolean sectionsEqual(ChunkSectionSnapshotPayload baseline, ChunkSectionSnapshotPayload live) {

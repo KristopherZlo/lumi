@@ -99,7 +99,7 @@ public final class HistoryCaptureManager {
 
         try {
             Instant now = Instant.now();
-            Optional<WorldMutationCapturePolicy.CapturedMutation> capturedMutation = CAPTURE_POLICY.capture(
+            WorldMutationCapturePolicy.CaptureResult captureResult = CAPTURE_POLICY.evaluate(
                     source,
                     pos,
                     oldState,
@@ -107,10 +107,10 @@ public final class HistoryCaptureManager {
                     oldBlockEntity,
                     newBlockEntity
             );
-            if (capturedMutation.isEmpty()) {
+            if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.REJECTED) {
                 LumaDebugLog.log(
                         "capture",
-                        "Skipped {} mutation at {} in {} because it is runtime-only or transient: {} -> {}",
+                        "Skipped {} mutation at {} in {} because it is unsupported, unchanged, or transient: {} -> {}",
                         source,
                         pos,
                         level.dimension().identifier(),
@@ -119,11 +119,10 @@ public final class HistoryCaptureManager {
                 );
                 return;
             }
-            WorldMutationCapturePolicy.CapturedMutation mutation = capturedMutation.get();
-            StoredBlockChange capturedChange = mutation.change();
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
             if (matchingProjects.isEmpty()) {
-                if (!allowsAutomaticProjectCreation(source)) {
+                if (captureResult.decision() != WorldMutationCapturePolicy.CaptureDecision.CAPTURED
+                        || !allowsAutomaticProjectCreation(source)) {
                     LumaDebugLog.log(
                             "capture",
                             "Skipped {} mutation at {} in {} because no tracked workspace exists and the source cannot bootstrap one",
@@ -150,6 +149,8 @@ public final class HistoryCaptureManager {
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
+                WorldMutationCapturePolicy.CapturedMutation mutation = captureResult.mutation();
+                StoredBlockChange capturedChange = mutation == null ? null : mutation.change();
                 LumaDebugLog.log(
                         trackedProject.project(),
                         "capture",
@@ -172,12 +173,25 @@ public final class HistoryCaptureManager {
                         trackedProject,
                         level,
                         pos,
-                        mutation.oldState(),
-                        mutation.oldBlockEntity(),
+                        mutation == null ? oldState : mutation.oldState(),
+                        mutation == null ? oldBlockEntity : mutation.oldBlockEntity(),
                         source,
                         activeSessionRegion,
                         now
                 )) {
+                    continue;
+                }
+                if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION) {
+                    this.recordDeferredBlockMutation(
+                            trackedProject,
+                            level,
+                            source,
+                            pos,
+                            chunk,
+                            oldState,
+                            oldBlockEntity,
+                            now
+                    );
                     continue;
                 }
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
@@ -1187,6 +1201,50 @@ public final class HistoryCaptureManager {
 
     private boolean usesDeferredStabilization(BuildProject project, io.github.luma.domain.model.WorldMutationSource source) {
         return SOURCE_POLICY.usesDeferredStabilization(project, source);
+    }
+
+    private void recordDeferredBlockMutation(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            io.github.luma.domain.model.WorldMutationSource source,
+            BlockPos pos,
+            ChunkPoint chunk,
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            Instant now
+    ) throws IOException {
+        String projectId = trackedProject.project().id().toString();
+        TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
+        CaptureSessionState session = this.sessionRegistry.session(projectId);
+        if (session == null) {
+            return;
+        }
+        if (this.isExplicitRootSource(source)) {
+            session.addRootChunk(chunk);
+        }
+        this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
+        session.markDirtyChunk(chunk);
+        this.sessionRegistry.markDirty(projectId);
+        CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
+        diagnostics.record(
+                source,
+                pos,
+                oldState,
+                level.getBlockState(pos),
+                oldBlockEntity != null,
+                level.getBlockEntity(pos) != null
+        );
+        LumaDebugLog.log(
+                trackedProject.project(),
+                "capture",
+                "Deferred {} mutation at {} for project {} into stabilization chunk {}:{} with pending buffer size {}",
+                source,
+                pos,
+                trackedProject.project().name(),
+                chunk.x(),
+                chunk.z(),
+                buffer.size()
+        );
     }
 
     private void captureSessionChunkBaseline(

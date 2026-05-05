@@ -217,7 +217,7 @@ Current payload characteristics:
 - block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
 - schema v3-v5 legacy payloads still load from the older single LZ4 stream format
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
-- runtime-only redstone state flips and piston animation states are filtered before new patch payloads are written
+- runtime-only redstone state flips, redstone block-update fallout, and piston animation states are resolved through session stabilization before new patch payloads are written; property-only runtime deltas are filtered during composition, so this behavior does not require a patch schema change
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.

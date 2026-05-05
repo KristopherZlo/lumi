@@ -31,20 +31,28 @@ class MutationSourcePolicyTest {
 
         assertTrue(this.policy.usesDeferredStabilization(wholeDimension, WorldMutationSource.FLUID));
         assertTrue(this.policy.usesDeferredStabilization(wholeDimension, WorldMutationSource.FALLING_BLOCK));
+        assertTrue(this.policy.usesDeferredStabilization(wholeDimension, WorldMutationSource.BLOCK_UPDATE));
+        assertTrue(this.policy.usesDeferredStabilization(wholeDimension, WorldMutationSource.PISTON));
         assertFalse(this.policy.usesDeferredStabilization(wholeDimension, WorldMutationSource.EXPLOSION));
         assertFalse(this.policy.usesDeferredStabilization(wholeDimension, WorldMutationSource.EXPLOSIVE));
         assertFalse(this.policy.usesDeferredStabilization(wholeDimension, WorldMutationSource.FIRE));
         assertFalse(this.policy.usesDeferredStabilization(bounded, WorldMutationSource.FLUID));
+        assertTrue(this.policy.usesDeferredStabilization(bounded, WorldMutationSource.BLOCK_UPDATE));
+        assertTrue(this.policy.usesDeferredStabilization(bounded, WorldMutationSource.PISTON));
     }
 
     @Test
     void activeSessionRegionCanExpandTrackedChunksForSecondarySources() {
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FLUID, false));
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH, false));
+        assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.BLOCK_UPDATE, false));
+        assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.PISTON, false));
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK, false));
 
         assertTrue(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FLUID, true));
         assertTrue(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH, true));
+        assertTrue(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.BLOCK_UPDATE, true));
+        assertTrue(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.PISTON, true));
         assertTrue(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK, true));
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.SYSTEM, true));
     }

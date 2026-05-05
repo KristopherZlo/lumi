@@ -35,7 +35,6 @@ final class MutationSourcePolicy {
                     ENTITY,
                     EXPLOSION,
                     FIRE,
-                    BLOCK_UPDATE,
                     MOB,
                     EXPLOSIVE,
                     EXTERNAL_TOOL,
@@ -44,6 +43,7 @@ final class MutationSourcePolicy {
                     AXIOM -> true;
             case FLUID,
                     GROWTH,
+                    BLOCK_UPDATE,
                     PISTON,
                     FALLING_BLOCK -> false;
             case RESTORE, SYSTEM -> false;
@@ -65,6 +65,7 @@ final class MutationSourcePolicy {
                     FIRE,
                     GROWTH,
                     BLOCK_UPDATE,
+                    PISTON,
                     FALLING_BLOCK,
                     MOB -> true;
             case PLAYER,
@@ -74,7 +75,6 @@ final class MutationSourcePolicy {
                     WORLDEDIT,
                     FAWE,
                     AXIOM,
-                    PISTON,
                     RESTORE,
                     SYSTEM -> false;
         };
@@ -88,8 +88,10 @@ final class MutationSourcePolicy {
         if (project == null || source == null) {
             return false;
         }
-        return project.tracksWholeDimension()
-                && (source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK);
+        return source == WorldMutationSource.BLOCK_UPDATE
+                || source == WorldMutationSource.PISTON
+                || (project.tracksWholeDimension()
+                && (source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK));
     }
 
     String defaultActor(WorldMutationSource source) {
