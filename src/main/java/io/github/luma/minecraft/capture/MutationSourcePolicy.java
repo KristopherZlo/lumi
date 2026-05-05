@@ -50,6 +50,11 @@ final class MutationSourcePolicy {
         };
     }
 
+    boolean allowsTrackedChunkExpansion(WorldMutationSource source, boolean activeSessionRegion) {
+        return this.allowsTrackedChunkExpansion(source)
+                || (activeSessionRegion && this.requiresActiveRegionMembership(source));
+    }
+
     boolean requiresActiveRegionMembership(WorldMutationSource source) {
         if (source == null) {
             return false;

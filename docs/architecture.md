@@ -162,9 +162,9 @@ Responsibilities are split as follows:
 2. `WorldMutationContext` accepts explicit player/tool scopes and targeted secondary scopes. Ambient random ticks are marked as `GROWTH` and do not inherit player action IDs, so natural kelp, vine, grass, or amethyst growth cannot masquerade as a builder action.
 3. `HistoryCaptureManager` finds matching projects for the block position or entity position through a cached dimension/chunk tracking index.
 4. `WorldMutationCapturePolicy` drops piston animation sources, transient piston blocks, and runtime-only redstone state flips before they can enter drafts or live undo/redo.
-5. Explicit root mutations define a session-local causal envelope. Chunk baselines inside that envelope are captured lazily when those chunks first need stabilization.
+5. Explicit root mutations define a session-local causal envelope. Secondary mutations may also join from chunks currently loaded for a player in the same dimension. Chunk baselines inside that active session region are captured lazily when those chunks first need stabilization or first-touch tracking.
 6. A per-project `TrackedChangeBuffer` merges explicit and targeted realtime changes by packed block position and entity UUID. For entities, the first old full-NBT payload and latest new full-NBT payload win.
-7. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that causal envelope for deferred stabilization. Natural growth cannot expand tracked chunks.
+7. Ambient fallout such as fluid spread and falling blocks only mark dirty chunks inside that active session region for deferred stabilization. Natural growth, ice melting, redstone-driven block updates, and similar secondary changes can expand tracked chunks only after an explicit session exists and the mutated chunk is inside that region.
 8. `SessionStabilizationService` reconciles those dirty chunks against the current world before snapshotting, flushing, saving, freezing, consuming the draft, or choosing a live undo/redo action, and exposes the reconciled delta so undo/redo can attach it to the latest nearby action.
 9. Idle or dirty sessions are flushed into recovery storage only when the live buffer fingerprint changed since the last queued draft flush.
 10. Item drops created by explosions, fluid, falling blocks, and nearby block-update fallout are captured into the in-memory undo/redo action only. They are removed on undo and respawned on redo, but they do not enter recovery drafts or saved version payloads.
@@ -258,7 +258,7 @@ Recovery is designed to survive crash-like exits without rewriting one large dra
 
 Current strategy:
 
-- active sessions live in memory as `CaptureSessionState`, which owns the mutable `TrackedChangeBuffer`, chunk envelope, compact session-start chunk baselines, and pending stabilization state
+- active sessions live in memory as `CaptureSessionState`, which owns the mutable `TrackedChangeBuffer`, chunk envelope, compact session-start chunk baselines, and pending stabilization state; Minecraft-side capture expands active membership with currently player-loaded chunks through `ActiveSessionRegionPolicy`
 - periodic flushes enqueue immutable `RecoveryDraft` snapshots to a dedicated capture-maintenance executor, skipping repeated stabilization cycles that leave the live buffer unchanged
 - that executor appends `recovery/draft.wal.lz4` entries and performs WAL compaction into `recovery/draft.bin.lz4`
 - draft flushes and first-touch whole-dimension baseline writes use separate low-priority capture executors, so a baseline backlog cannot delay recovery WAL durability

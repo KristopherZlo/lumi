@@ -67,6 +67,7 @@ public final class HistoryCaptureManager {
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final CaptureSessionRegistry sessionRegistry = new CaptureSessionRegistry();
     private final CaptureDiagnosticsRegistry diagnosticsRegistry = new CaptureDiagnosticsRegistry();
+    private final ActiveSessionRegionPolicy activeSessionRegionPolicy = new ActiveSessionRegionPolicy();
 
     private HistoryCaptureManager() {
     }
@@ -160,28 +161,39 @@ public final class HistoryCaptureManager {
                         oldState,
                         newState
                 );
-                if (!this.canCaptureIntoSession(trackedProject, source, pos)) {
-                    continue;
-                }
-                if (!this.ensureTrackedChunk(trackedProject, level, pos, mutation.oldState(), mutation.oldBlockEntity(), source, now)) {
+                if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
                 String projectId = trackedProject.project().id().toString();
+                CaptureSessionState existingSession = this.sessionRegistry.session(projectId);
+                ChunkPoint chunk = ChunkPoint.from(pos);
+                boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
+                if (!this.ensureTrackedChunk(
+                        trackedProject,
+                        level,
+                        pos,
+                        mutation.oldState(),
+                        mutation.oldBlockEntity(),
+                        source,
+                        activeSessionRegion,
+                        now
+                )) {
+                    continue;
+                }
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
                 CaptureSessionState session = this.sessionRegistry.session(projectId);
                 if (session == null) {
                     continue;
                 }
-                ChunkPoint chunk = ChunkPoint.from(pos);
                 if (this.isExplicitRootSource(source)) {
                     this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
                     session.addRootChunk(chunk);
                 } else if (this.usesDeferredStabilization(trackedProject.project(), source)) {
-                    if (!session.isWithinStabilizationEnvelope(chunk)) {
+                    if (!this.activeSessionRegionPolicy.contains(level, session, chunk)) {
                         LumaDebugLog.log(
                                 trackedProject.project(),
                                 "capture",
-                                "Skipped deferred {} mutation at {} for project {} because chunk {}:{} is outside the causal envelope",
+                                "Skipped deferred {} mutation at {} for project {} because chunk {}:{} is outside the active session region",
                                 source,
                                 pos,
                                 trackedProject.project().name(),
@@ -285,9 +297,16 @@ public final class HistoryCaptureManager {
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
-                if (!this.canCaptureIntoSession(trackedProject, source, pos)) {
+                if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
+                String projectId = trackedProject.project().id().toString();
+                ChunkPoint chunk = ChunkPoint.from(pos);
+                boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(
+                        level,
+                        this.sessionRegistry.session(projectId),
+                        chunk
+                );
                 if (!this.ensureTrackedChunk(
                         trackedProject,
                         level,
@@ -297,16 +316,16 @@ public final class HistoryCaptureManager {
                         capturedChange.oldValue(),
                         capturedChange.newValue(),
                         source,
+                        activeSessionRegion,
                         now
                 )) {
                     continue;
                 }
 
-                String projectId = trackedProject.project().id().toString();
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
                 CaptureSessionState session = this.sessionRegistry.session(projectId);
                 if (session != null) {
-                    session.addRootChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
+                    session.addRootChunk(chunk);
                 }
 
                 int pendingBefore = buffer.size();
@@ -1046,9 +1065,21 @@ public final class HistoryCaptureManager {
             BlockState oldState,
             CompoundTag oldBlockEntity,
             io.github.luma.domain.model.WorldMutationSource source,
+            boolean activeSessionRegion,
             Instant now
     ) throws IOException {
-        return this.ensureTrackedChunk(trackedProject, level, pos, oldState, oldBlockEntity, null, null, source, now);
+        return this.ensureTrackedChunk(
+                trackedProject,
+                level,
+                pos,
+                oldState,
+                oldBlockEntity,
+                null,
+                null,
+                source,
+                activeSessionRegion,
+                now
+        );
     }
 
     private boolean ensureTrackedChunk(
@@ -1060,6 +1091,7 @@ public final class HistoryCaptureManager {
             EntityPayload oldEntityPayload,
             EntityPayload newEntityPayload,
             io.github.luma.domain.model.WorldMutationSource source,
+            boolean activeSessionRegion,
             Instant now
     ) throws IOException {
         ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
@@ -1073,7 +1105,7 @@ public final class HistoryCaptureManager {
         if (this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
             return true;
         }
-        if (!allowsTrackedChunkExpansion(source)) {
+        if (!SOURCE_POLICY.allowsTrackedChunkExpansion(source, activeSessionRegion)) {
             LumaDebugLog.log(
                     trackedProject.project(),
                     "capture",
@@ -1101,6 +1133,7 @@ public final class HistoryCaptureManager {
 
     private boolean canCaptureIntoSession(
             TrackedProject trackedProject,
+            ServerLevel level,
             io.github.luma.domain.model.WorldMutationSource source,
             BlockPos pos
     ) {
@@ -1111,7 +1144,7 @@ public final class HistoryCaptureManager {
             }
             ChunkPoint chunk = ChunkPoint.from(pos);
             CaptureSessionState sessionState = this.sessionRegistry.session(projectId);
-            if (sessionState != null && sessionState.isWithinStabilizationEnvelope(chunk)) {
+            if (this.activeSessionRegionPolicy.contains(level, sessionState, chunk)) {
                 return true;
             }
             LumaDebugLog.log(

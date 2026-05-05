@@ -36,4 +36,16 @@ class MutationSourcePolicyTest {
         assertFalse(this.policy.usesDeferredStabilization(wholeDimension, WorldMutationSource.FIRE));
         assertFalse(this.policy.usesDeferredStabilization(bounded, WorldMutationSource.FLUID));
     }
+
+    @Test
+    void activeSessionRegionCanExpandTrackedChunksForSecondarySources() {
+        assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FLUID, false));
+        assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH, false));
+        assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK, false));
+
+        assertTrue(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FLUID, true));
+        assertTrue(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH, true));
+        assertTrue(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK, true));
+        assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.SYSTEM, true));
+    }
 }
