@@ -65,6 +65,7 @@ public final class UndoRedoKeyChordTracker {
         TickResult result = new TickResult(
                 undoRequested,
                 redoRequested,
+                currentUndoHeld || currentRedoHeld || undoRequested || redoRequested,
                 (currentRedoHeld || redoRequested) && !(currentUndoHeld || undoRequested)
                         ? RecentChangesOverlayCoordinator.PreviewTarget.REDO
                         : RecentChangesOverlayCoordinator.PreviewTarget.UNDO
@@ -89,10 +90,11 @@ public final class UndoRedoKeyChordTracker {
     public record TickResult(
             boolean undoPressed,
             boolean redoPressed,
+            boolean previewActive,
             RecentChangesOverlayCoordinator.PreviewTarget previewTarget
     ) {
         public static TickResult idle() {
-            return new TickResult(false, false, RecentChangesOverlayCoordinator.PreviewTarget.UNDO);
+            return new TickResult(false, false, false, RecentChangesOverlayCoordinator.PreviewTarget.UNDO);
         }
     }
 }

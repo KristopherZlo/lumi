@@ -18,8 +18,10 @@ class UndoRedoKeyChordTrackerTest {
 
         assertTrue(first.undoPressed());
         assertFalse(first.redoPressed());
+        assertTrue(first.previewActive());
         assertFalse(held.undoPressed());
         assertFalse(held.redoPressed());
+        assertTrue(held.previewActive());
     }
 
     @Test
@@ -32,6 +34,7 @@ class UndoRedoKeyChordTrackerTest {
 
         assertFalse(inactive.undoPressed());
         assertFalse(inactive.redoPressed());
+        assertFalse(inactive.previewActive());
         assertEquals(RecentChangesOverlayCoordinator.PreviewTarget.UNDO, inactive.previewTarget());
         assertTrue(activeAgain.undoPressed());
     }
@@ -44,6 +47,7 @@ class UndoRedoKeyChordTrackerTest {
 
         assertTrue(result.undoPressed());
         assertFalse(result.redoPressed());
+        assertTrue(result.previewActive());
         assertEquals(RecentChangesOverlayCoordinator.PreviewTarget.UNDO, result.previewTarget());
     }
 
@@ -55,6 +59,7 @@ class UndoRedoKeyChordTrackerTest {
 
         assertFalse(redo.undoPressed());
         assertTrue(redo.redoPressed());
+        assertTrue(redo.previewActive());
         assertEquals(RecentChangesOverlayCoordinator.PreviewTarget.REDO, redo.previewTarget());
     }
 
@@ -66,6 +71,7 @@ class UndoRedoKeyChordTrackerTest {
 
         assertFalse(result.undoPressed());
         assertFalse(result.redoPressed());
+        assertFalse(result.previewActive());
         assertEquals(RecentChangesOverlayCoordinator.PreviewTarget.UNDO, result.previewTarget());
     }
 }

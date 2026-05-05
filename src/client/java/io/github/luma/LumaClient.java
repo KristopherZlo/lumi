@@ -20,6 +20,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.overlay.CompareOverlayCoordinator;
+import io.github.luma.ui.overlay.PendingChangesOverlayCoordinator;
+import io.github.luma.ui.overlay.PendingChangesOverlayRenderer;
 import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayRenderer;
 import io.github.luma.ui.overlay.LumiRegionSelectionRenderer;
@@ -111,6 +113,7 @@ public final class LumaClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
         WorldRenderEvents.END_MAIN.register(CompareOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(LumiRegionSelectionRenderer::render);
+        WorldRenderEvents.END_MAIN.register(PendingChangesOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(RecentChangesOverlayRenderer::render);
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 new LumaClientCommands(this.workspaceOpenService).register(dispatcher));
@@ -139,9 +142,13 @@ public final class LumaClient implements ClientModInitializer {
         );
         CompareOverlayRenderer.setXrayEnabled(overlayHold);
         CompareOverlayCoordinator.getInstance().tick(client);
+        PendingChangesOverlayCoordinator.getInstance().tick(
+                client,
+                shortcutInputActive && overlayHold && !undoRedoKeys.previewActive()
+        );
         RecentChangesOverlayCoordinator.getInstance().tick(
                 client,
-                shortcutInputActive && overlayHold,
+                shortcutInputActive && overlayHold && undoRedoKeys.previewActive(),
                 undoRedoKeys.previewTarget()
         );
         OverlayDiagnostics.getInstance().clientTick(
