@@ -81,18 +81,24 @@ class RecentChangesOverlayRendererStateTest {
     }
 
     @Test
-    void giantRecentOverlayFallsBackToOneMergedVolumeMesh() {
+    void giantRecentOverlayUsesSurfaceMeshInsteadOfMergedVolumeChunks() {
         UndoRedoAction action = action();
-        recordCuboidChanges(action, 64, 40, 40, 64);
+        int sizeX = 64;
+        int sizeY = 40;
+        int sizeZ = 40;
+        recordCuboidChanges(action, sizeX, sizeY, sizeZ, 64);
 
         RecentChangesOverlayRenderer.show("project", List.of(action));
 
+        int expectedSurfaceEntries = exposedShellBlockCount(sizeX, sizeY, sizeZ);
         assertTrue(RecentChangesOverlayRenderer.visible());
-        assertEquals(0, RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(8.5D, 80.5D, 8.5D));
-        assertEquals(1, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(8.5D, 80.5D, 8.5D));
-        assertEquals(1, RecentChangesOverlayRenderer.meshSectionCountForTest());
-        assertEquals(1, RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
-        assertEquals(1, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 80.5D, 8.5D, 0));
+        assertEquals(expectedSurfaceEntries, RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(8.5D, 80.5D, 8.5D));
+        assertEquals(0, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(8.5D, 80.5D, 8.5D));
+        assertEquals(34, RecentChangesOverlayRenderer.meshSectionCountForTest());
+        assertEquals(expectedSurfaceEntries, RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
+        int nearbySections = RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 80.5D, 8.5D, 0);
+        assertTrue(nearbySections > 0);
+        assertTrue(nearbySections < RecentChangesOverlayRenderer.meshSectionCountForTest());
         assertEquals(0, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(2048.0D, 80.5D, 2048.0D, 0));
     }
 

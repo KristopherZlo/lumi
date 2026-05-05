@@ -16,7 +16,6 @@ import net.minecraft.core.BlockPos;
 
 public final class RecentChangesOverlayRenderer {
 
-    private static final int DENSE_BLOB_THRESHOLD = 100_000;
     private static final int MAX_SECTION_UPLOADS_PER_FRAME = 48;
     private static final int MAX_ACTIONS = 10;
     private static final int BASE_ALPHA = 136;
@@ -24,11 +23,8 @@ public final class RecentChangesOverlayRenderer {
     private static final float FILL_ALPHA_SCALE = 0.38F;
     private static final int MIN_FILL_ALPHA = 24;
     private static final float OUTLINE_WIDTH = 2.75F;
-    private static final float VOLUME_OUTLINE_WIDTH = 1.5F;
     private static final float FACE_OUTSET = 0.003F;
-    private static final int DENSE_BLOB_FILL_ALPHA = 28;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
-    private static final OverlayVolumeMerger VOLUME_MERGER = new OverlayVolumeMerger();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
 
     private RecentChangesOverlayRenderer() {
@@ -313,10 +309,8 @@ public final class RecentChangesOverlayRenderer {
         private final RecentChangesOverlayCoordinator.PreviewTarget previewTarget;
         private final List<RecentChangeEntry> entries;
         private final List<SurfaceEntry> surfaceEntries;
-        private final List<OverlayVolumeMerger.OverlayBox> volumeBoxes;
         private final OverlayMeshBatch meshBatch;
         private final boolean debugEnabled;
-        private final boolean denseBlob;
 
         private OverlayState(
                 String projectId,
@@ -332,16 +326,7 @@ public final class RecentChangesOverlayRenderer {
                     : previewTarget;
             this.entries = List.copyOf(entries);
             this.debugEnabled = debugEnabled;
-            this.denseBlob = this.entries.size() > DENSE_BLOB_THRESHOLD;
-            if (this.denseBlob) {
-                this.surfaceEntries = List.of();
-                this.volumeBoxes = VOLUME_MERGER.merge(this.entries.stream()
-                        .map(RecentChangeEntry::pos)
-                        .toList());
-            } else {
-                this.surfaceEntries = this.buildSurfaceEntries(this.entries);
-                this.volumeBoxes = List.of();
-            }
+            this.surfaceEntries = this.buildSurfaceEntries(this.entries);
             this.meshBatch = this.buildMeshBatch();
         }
 
@@ -354,7 +339,7 @@ public final class RecentChangesOverlayRenderer {
         }
 
         private boolean denseBlob() {
-            return this.denseBlob;
+            return false;
         }
 
         private boolean matches(
@@ -374,7 +359,7 @@ public final class RecentChangesOverlayRenderer {
         }
 
         private int volumeBoxCount() {
-            return this.volumeBoxes.size();
+            return 0;
         }
 
         private int meshSectionCount() {
@@ -420,24 +405,6 @@ public final class RecentChangesOverlayRenderer {
                         0xFFFF9C3A,
                         OUTLINE_WIDTH,
                         FACE_OUTSET
-                );
-            }
-            for (OverlayVolumeMerger.OverlayBox box : this.volumeBoxes) {
-                builder.addBox(
-                        box.minX(),
-                        box.minY(),
-                        box.minZ(),
-                        box.maxX(),
-                        box.maxY(),
-                        box.maxZ(),
-                        0xFF,
-                        0x9C,
-                        0x3A,
-                        DENSE_BLOB_FILL_ALPHA,
-                        0xB3FF9C3A,
-                        VOLUME_OUTLINE_WIDTH,
-                        FACE_OUTSET,
-                        0.0F
                 );
             }
             return builder.build();
