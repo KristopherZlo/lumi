@@ -121,6 +121,22 @@ public final class UndoRedoHistoryManager {
         return this.stack(projectId).recentRedoActions(count);
     }
 
+    public synchronized RecentActionsSnapshot recentUndoActionsSnapshot(String projectId, int count) {
+        if (projectId == null || projectId.isBlank()) {
+            return new RecentActionsSnapshot(0L, List.of());
+        }
+        UndoRedoActionStack stack = this.stack(projectId);
+        return new RecentActionsSnapshot(stack.revision(), stack.recentUndoActions(count));
+    }
+
+    public synchronized RecentActionsSnapshot recentRedoActionsSnapshot(String projectId, int count) {
+        if (projectId == null || projectId.isBlank()) {
+            return new RecentActionsSnapshot(0L, List.of());
+        }
+        UndoRedoActionStack stack = this.stack(projectId);
+        return new RecentActionsSnapshot(stack.revision(), stack.recentRedoActions(count));
+    }
+
     public synchronized long revision(String projectId) {
         if (projectId == null || projectId.isBlank()) {
             return 0L;
@@ -138,5 +154,12 @@ public final class UndoRedoHistoryManager {
 
     private UndoRedoActionStack stack(String projectId) {
         return this.projectStacks.computeIfAbsent(projectId, ignored -> new UndoRedoActionStack());
+    }
+
+    public record RecentActionsSnapshot(long revision, List<UndoRedoAction> actions) {
+
+        public RecentActionsSnapshot {
+            actions = actions == null ? List.of() : List.copyOf(actions);
+        }
     }
 }
