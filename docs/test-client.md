@@ -2,7 +2,7 @@
 
 This repository ships a dedicated Fabric development profile for a local singleplayer test client.
 
-The automated `runClientGameTest` profile runs a dedicated client overlay smoke GameTest and invokes `/lumi testing singleplayer`, including the real storage-backed large save, branch, and restore diagnostics described in `docs/commands.md`. Overlay smoke covers small compare/recent overlays through the live renderer, large cached overlay meshes in client context, and pinned recent overlays that must survive live edits while the action key is held.
+The automated `runClientGameTest` profile runs a dedicated client overlay smoke GameTest and invokes `/lumi testing singleplayer`, including the real storage-backed large save, branch, and restore diagnostics described in `docs/commands.md`. Overlay smoke covers small compare/recent overlays through the live renderer, large cached overlay meshes in client context, pending-draft overlays for cumulative unsaved changes, and pinned recent overlays that must survive live edits while the undo/redo preview chord is held.
 
 ## Launch
 

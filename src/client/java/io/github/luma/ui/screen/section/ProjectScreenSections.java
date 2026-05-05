@@ -92,6 +92,18 @@ public final class ProjectScreenSections {
         ));
         changesButton.active(activeHead != null);
         secondary.child(changesButton);
+        ButtonComponent quickRollbackButton = LumaUi.button(
+                Component.translatable("luma.action.quick_rollback"),
+                button -> this.actions.quickRollback()
+        );
+        quickRollbackButton.active(activeHead != null && !operationActive);
+        secondary.child(quickRollbackButton);
+        ButtonComponent returnButton = LumaUi.button(
+                Component.translatable("luma.action.return_before_restore"),
+                button -> this.actions.returnBeforeRestore()
+        );
+        returnButton.active(model.state().hasRestoreReturnPoint() && !operationActive);
+        secondary.child(returnButton);
         secondary.child(LumaUi.button(Component.translatable("luma.action.ideas"), button -> this.actions.openVariants()));
         section.child(secondary);
 
@@ -368,6 +380,10 @@ public final class ProjectScreenSections {
         void openVariants();
 
         void openRecovery();
+
+        void quickRollback();
+
+        void returnBeforeRestore();
 
         void openSaveDetails(String versionId);
 

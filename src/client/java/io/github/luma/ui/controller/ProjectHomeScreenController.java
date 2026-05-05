@@ -72,7 +72,8 @@ public final class ProjectHomeScreenController {
                     interruptedDraft,
                     this.query.loadOperationSnapshot(project),
                     advanced,
-                    status == null || status.isBlank() ? "luma.status.project_ready" : status
+                    status == null || status.isBlank() ? "luma.status.project_ready" : status,
+                    this.query.hasRestoreReturnPoint(projectName)
             );
         } catch (Exception exception) {
             return new ProjectHomeViewState(
@@ -124,6 +125,8 @@ public final class ProjectHomeScreenController {
         List<IntegrationStatus> loadIntegrations();
 
         OperationSnapshot loadOperationSnapshot(BuildProject project) throws Exception;
+
+        boolean hasRestoreReturnPoint(String projectName) throws Exception;
     }
 
     private static final class ServiceQuery implements Query {
@@ -188,6 +191,11 @@ public final class ProjectHomeScreenController {
         @Override
         public OperationSnapshot loadOperationSnapshot(BuildProject project) throws Exception {
             return this.operationSnapshotViewService.loadVisibleSnapshot(this.server(), project.id().toString());
+        }
+
+        @Override
+        public boolean hasRestoreReturnPoint(String projectName) throws Exception {
+            return this.recoveryService.loadRestoreReturnPoint(this.server(), projectName).isPresent();
         }
 
         private MinecraftServer server() {

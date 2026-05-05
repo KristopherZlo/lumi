@@ -15,6 +15,20 @@ public record ProjectHomeViewState(
         boolean hasRecoveryDraft,
         OperationSnapshot operationSnapshot,
         ProjectAdvancedViewState advanced,
-        String status
+        String status,
+        boolean hasRestoreReturnPoint
 ) {
+
+    public ProjectHomeViewState(
+            BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            PendingChangeSummary pendingChanges,
+            boolean hasRecoveryDraft,
+            OperationSnapshot operationSnapshot,
+            ProjectAdvancedViewState advanced,
+            String status
+    ) {
+        this(project, versions, variants, pendingChanges, hasRecoveryDraft, operationSnapshot, advanced, status, false);
+    }
 }

@@ -147,6 +147,11 @@ class ProjectHomeScreenControllerTest {
                     instant(120)
             );
         }
+
+        @Override
+        public boolean hasRestoreReturnPoint(String projectName) {
+            return false;
+        }
     }
 
     private static BuildProject project(String name) {

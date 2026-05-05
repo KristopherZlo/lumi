@@ -297,6 +297,12 @@ Maintenance cleanup may delete this file only when no Lumi world operation is ac
 
 Stores recovery, restore, migration, and other workflow events shown in the Log tab.
 
+### `recovery/last-restore-return.json`
+
+Stores the local return-before-restore pointer written before each full restore. It contains the project id, variant id, version id to restore back to, creation timestamp, and the restore target version id that caused the pointer to be written.
+
+If a full restore starts with unsaved draft changes, Lumi first writes a `RESTORE` checkpoint and stores that checkpoint id as the return target. If the draft is clean, Lumi stores the current active branch head id. This file is local operational recovery state and is not included in project or variant archives.
+
 ### `cache/`
 
 Reserved for future cache artifacts and rebuildable derived data.

@@ -13,6 +13,7 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.RestorePlanSummary;
 import io.github.luma.domain.model.StoredBlockChange;
@@ -119,6 +120,15 @@ public final class RestoreService {
         return this.restore(level, projectName, targetVariant.headVersionId(), targetVariant.id(), false);
     }
 
+    public OperationHandle restoreToVariant(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            String targetVariantId
+    ) throws IOException {
+        return this.restore(level, projectName, versionId, targetVariantId, false);
+    }
+
     private OperationHandle restore(
             ServerLevel level,
             String projectName,
@@ -134,6 +144,8 @@ public final class RestoreService {
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion version = this.resolveVersion(project, versions, variants, versionId);
         ProjectVariant targetVariant = this.restoreTargetVariant(variants, version, targetVariantId);
+        ProjectVariant activeVariant = this.activeVariant(project, variants);
+        String activeHeadVersionId = activeVariant.headVersionId();
         this.requireTrustedImportedRestore(level, layout, project, versions, trustedImportedPackage);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
@@ -174,7 +186,8 @@ public final class RestoreService {
                 "blocks",
                 LumaDebugLog.enabled(project),
                 progressSink -> {
-                    if (project.settings().safetySnapshotBeforeRestore() && pendingDraft != null && !pendingDraft.isEmpty()) {
+                    String returnVersionId = activeHeadVersionId;
+                    if (pendingDraft != null && !pendingDraft.isEmpty()) {
                         LumaMod.LOGGER.info(
                                 "Creating safety checkpoint before restore for project {} with {} pending changes",
                                 project.name(),
@@ -188,7 +201,7 @@ public final class RestoreService {
                                 pendingDraft.totalChangeCount()
                         );
                         progressSink.update(OperationStage.WRITING, 0, pendingDraft.totalChangeCount(), "Writing restore checkpoint");
-                        this.versionService.writeVersion(
+                        ProjectVersion checkpoint = this.versionService.writeVersion(
                                 level,
                                 layout,
                                 project,
@@ -199,7 +212,9 @@ public final class RestoreService {
                                 false,
                                 progressSink
                         );
+                        returnVersionId = checkpoint.id();
                     }
+                    this.saveRestoreReturnPoint(layout, project, activeVariant, returnVersionId, version);
 
                     Optional<List<PreparedChunkBatch>> prepared = this.tryDecodeDirectRestore(
                             layout,
@@ -422,6 +437,33 @@ public final class RestoreService {
                 draft.draft().changes().size(),
                 draft.draft().entityChanges().size()
         );
+    }
+
+    private void saveRestoreReturnPoint(
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            ProjectVariant activeVariant,
+            String returnVersionId,
+            ProjectVersion restoreTarget
+    ) throws IOException {
+        if (returnVersionId == null || returnVersionId.isBlank()) {
+            return;
+        }
+        RestoreReturnPoint point = new RestoreReturnPoint(
+                project.id().toString(),
+                activeVariant.id(),
+                returnVersionId,
+                Instant.now(),
+                restoreTarget.id()
+        );
+        this.recoveryRepository.saveRestoreReturnPoint(layout, point);
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                point.createdAt(),
+                "restore-return-point-saved",
+                "Saved return point before restore",
+                point.versionId(),
+                point.variantId()
+        ));
     }
 
     private PartialRestoreDraft buildPartialRestoreDraft(

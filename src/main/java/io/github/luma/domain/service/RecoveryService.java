@@ -7,6 +7,7 @@ import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryDraftSummary;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -50,6 +51,10 @@ public final class RecoveryService {
 
     public List<RecoveryJournalEntry> loadJournal(MinecraftServer server, String projectName) throws IOException {
         return this.recoveryRepository.loadJournal(this.projectService.resolveLayout(server, projectName));
+    }
+
+    public Optional<RestoreReturnPoint> loadRestoreReturnPoint(MinecraftServer server, String projectName) throws IOException {
+        return this.recoveryRepository.loadRestoreReturnPoint(this.projectService.resolveLayout(server, projectName));
     }
 
     public Optional<RecoveryDraftSummary> summarizeDraft(MinecraftServer server, String projectName) throws IOException {

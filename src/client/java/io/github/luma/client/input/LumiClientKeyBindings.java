@@ -18,9 +18,10 @@ public final class LumiClientKeyBindings {
             KeyMapping undo,
             KeyMapping redo,
             KeyMapping compare,
+            KeyMapping quickRollback,
             KeyMapping action
     ) {
-        bindings = new Bindings(openWorkspace, quickSave, undo, redo, compare, action);
+        bindings = new Bindings(openWorkspace, quickSave, undo, redo, compare, quickRollback, action);
     }
 
     public static KeyMapping key(Role role) {
@@ -33,6 +34,7 @@ public final class LumiClientKeyBindings {
         UNDO,
         REDO,
         COMPARE,
+        QUICK_ROLLBACK,
         ACTION
     }
 
@@ -42,10 +44,11 @@ public final class LumiClientKeyBindings {
             KeyMapping undo,
             KeyMapping redo,
             KeyMapping compare,
+            KeyMapping quickRollback,
             KeyMapping action
     ) {
         private static Bindings empty() {
-            return new Bindings(null, null, null, null, null, null);
+            return new Bindings(null, null, null, null, null, null, null);
         }
 
         private KeyMapping key(Role role) {
@@ -55,6 +58,7 @@ public final class LumiClientKeyBindings {
                 case UNDO -> this.undo;
                 case REDO -> this.redo;
                 case COMPARE -> this.compare;
+                case QUICK_ROLLBACK -> this.quickRollback;
                 case ACTION -> this.action;
             };
         }

@@ -3,6 +3,7 @@ package io.github.luma.storage.repository;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
@@ -176,6 +177,26 @@ class RecoveryRepositoryTest {
         assertTrue(this.repository.loadDraft(layout).isEmpty());
         assertFalse(Files.exists(layout.recoveryWalFile()));
         assertTrue(hasQuarantinedWal(layout));
+    }
+
+    @Test
+    void roundTripsRestoreReturnPoint() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RestoreReturnPoint point = new RestoreReturnPoint(
+                "project",
+                "main",
+                "v0002",
+                Instant.parse("2026-04-20T10:10:00Z"),
+                "v0001"
+        );
+
+        this.repository.saveRestoreReturnPoint(layout, point);
+
+        assertEquals(point, this.repository.loadRestoreReturnPoint(layout).orElseThrow());
+
+        this.repository.deleteRestoreReturnPoint(layout);
+
+        assertTrue(this.repository.loadRestoreReturnPoint(layout).isEmpty());
     }
 
     private static RecoveryDraft draft(String blockId, Instant updatedAt) {

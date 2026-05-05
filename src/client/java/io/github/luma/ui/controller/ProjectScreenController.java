@@ -2,6 +2,7 @@ package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
 import io.github.luma.domain.service.HistoryEditService;
@@ -25,6 +26,7 @@ public final class ProjectScreenController {
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
     private final RestoreService restoreService = new RestoreService();
+    private final QuickRollbackService quickRollbackService = new QuickRollbackService();
     private final HistoryEditService historyEditService = new HistoryEditService();
     private final VariantService variantService = new VariantService();
     private final VariantMergeService variantMergeService = new VariantMergeService();
@@ -189,6 +191,44 @@ public final class ProjectScreenController {
             return "luma.status.world_operation_busy";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Restore request failed for project {}", projectName, exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
+    public String quickRollback(String projectName) {
+        try {
+            this.quickRollbackService.quickRollback(
+                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
+                    projectName
+            );
+            return "luma.status.quick_rollback_started";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Quick rollback request rejected for project {}", projectName, exception);
+            return "luma.status.world_operation_busy";
+        } catch (IllegalArgumentException exception) {
+            LumaMod.LOGGER.warn("Quick rollback unavailable for project {}", projectName, exception);
+            return "luma.status.quick_rollback_unavailable";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Quick rollback request failed for project {}", projectName, exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
+    public String returnBeforeRestore(String projectName) {
+        try {
+            this.quickRollbackService.returnBeforeLastRestore(
+                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
+                    projectName
+            );
+            return "luma.status.return_before_restore_started";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Return-before-restore request rejected for project {}", projectName, exception);
+            return "luma.status.world_operation_busy";
+        } catch (IllegalArgumentException exception) {
+            LumaMod.LOGGER.warn("Return-before-restore unavailable for project {}", projectName, exception);
+            return "luma.status.return_before_restore_unavailable";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Return-before-restore request failed for project {}", projectName, exception);
             return "luma.status.operation_failed";
         }
     }

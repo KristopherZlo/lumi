@@ -357,6 +357,16 @@ public final class ProjectScreen extends LumaScreen {
         }
 
         @Override
+        public void quickRollback() {
+            refresh(actionController.quickRollback(projectName));
+        }
+
+        @Override
+        public void returnBeforeRestore() {
+            refresh(actionController.returnBeforeRestore(projectName));
+        }
+
+        @Override
         public void openSaveDetails(String versionId) {
             router.openSaveDetails(ProjectScreen.this, projectName, versionId);
         }

@@ -9,6 +9,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import io.github.luma.client.command.LumaClientCommands;
 import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.client.input.LumiClientKeyBindings;
+import io.github.luma.client.input.QuickRollbackKeyController;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
@@ -41,6 +42,7 @@ public final class LumaClient implements ClientModInitializer {
     private static final String UNDO_KEY = "key.lumi.undo";
     private static final String REDO_KEY = "key.lumi.redo";
     private static final String TOGGLE_COMPARE_OVERLAY_KEY = "key.lumi.toggle_compare_overlay";
+    private static final String QUICK_ROLLBACK_KEY = "key.lumi.quick_rollback";
     private static final String COMPARE_OVERLAY_XRAY_KEY = "key.lumi.compare_overlay_xray";
 
     private KeyMapping openDashboardKey;
@@ -48,10 +50,12 @@ public final class LumaClient implements ClientModInitializer {
     private KeyMapping undoKey;
     private KeyMapping redoKey;
     private KeyMapping toggleCompareOverlayKey;
+    private KeyMapping quickRollbackKey;
     private KeyMapping lumiActionButtonKey;
     private final KeyBindingState keyBindingState = new KeyBindingState();
     private final UndoRedoKeyChordTracker undoRedoKeyChordTracker = new UndoRedoKeyChordTracker();
     private final UndoRedoKeyController undoRedoKeyController = new UndoRedoKeyController();
+    private final QuickRollbackKeyController quickRollbackKeyController = new QuickRollbackKeyController();
     private final ClientWorkspaceOpenService workspaceOpenService = new ClientWorkspaceOpenService();
 
     static {
@@ -92,6 +96,12 @@ public final class LumaClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_H,
                 KEY_CATEGORY
         ));
+        this.quickRollbackKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                QUICK_ROLLBACK_KEY,
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_R,
+                KEY_CATEGORY
+        ));
         this.lumiActionButtonKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 COMPARE_OVERLAY_XRAY_KEY,
                 InputConstants.Type.KEYSYM,
@@ -104,6 +114,7 @@ public final class LumaClient implements ClientModInitializer {
                 this.undoKey,
                 this.redoKey,
                 this.toggleCompareOverlayKey,
+                this.quickRollbackKey,
                 this.lumiActionButtonKey
         );
         LumiRegionSelectionController.getInstance().configureActionButton(this.lumiActionButtonKey, this.keyBindingState);
@@ -168,6 +179,18 @@ public final class LumaClient implements ClientModInitializer {
         }
         if (undoRedoKeys.redoPressed()) {
             this.undoRedoKeyController.redo(client);
+        }
+
+        boolean quickRollbackClicked = false;
+        while (this.quickRollbackKey.consumeClick()) {
+            quickRollbackClicked = true;
+        }
+        if (shortcutInputActive && quickRollbackClicked) {
+            if (overlayHold) {
+                this.quickRollbackKeyController.returnBeforeRestore(client);
+            } else {
+                this.quickRollbackKeyController.quickRollback(client);
+            }
         }
 
         boolean quickSaveClicked = false;

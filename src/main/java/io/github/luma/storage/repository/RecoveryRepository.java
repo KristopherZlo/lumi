@@ -5,6 +5,7 @@ import com.google.gson.reflect.TypeToken;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
@@ -135,6 +136,33 @@ public final class RecoveryRepository {
         StorageIo.writeAtomically(layout.recoveryJournalFile(), output -> output.write(
                 GsonProvider.compactGson().toJson(entries).getBytes(StandardCharsets.UTF_8)
         ));
+    }
+
+    public Optional<RestoreReturnPoint> loadRestoreReturnPoint(ProjectLayout layout) throws IOException {
+        Path file = layout.restoreReturnPointFile();
+        if (!Files.exists(file)) {
+            return Optional.empty();
+        }
+        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            RestoreReturnPoint point = GsonProvider.gson().fromJson(reader, RestoreReturnPoint.class);
+            return point == null || !point.valid() ? Optional.empty() : Optional.of(point);
+        } catch (JsonSyntaxException exception) {
+            StorageIo.quarantineCorruptedFile(file, exception);
+            return Optional.empty();
+        }
+    }
+
+    public void saveRestoreReturnPoint(ProjectLayout layout, RestoreReturnPoint point) throws IOException {
+        if (point == null || !point.valid()) {
+            throw new IllegalArgumentException("Restore return point is incomplete");
+        }
+        StorageIo.writeAtomically(layout.restoreReturnPointFile(), output -> output.write(
+                GsonProvider.compactGson().toJson(point).getBytes(StandardCharsets.UTF_8)
+        ));
+    }
+
+    public void deleteRestoreReturnPoint(ProjectLayout layout) throws IOException {
+        Files.deleteIfExists(layout.restoreReturnPointFile());
     }
 
     private boolean shouldCompact(ProjectLayout layout) throws IOException {
