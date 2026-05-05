@@ -24,14 +24,7 @@ class RecentChangesOverlayRendererStateTest {
 
     @Test
     void showAndClearToggleVisibility() {
-        UndoRedoAction action = new UndoRedoAction(
-                "action",
-                "Alex",
-                "project",
-                "minecraft:overworld",
-                Instant.parse("2026-04-23T08:00:00Z"),
-                Instant.parse("2026-04-23T08:00:00Z")
-        );
+        UndoRedoAction action = action();
         action.recordChange(new StoredBlockChange(
                 new BlockPoint(10, 64, 10),
                 new StatePayload(state("minecraft:stone"), null),
@@ -42,6 +35,10 @@ class RecentChangesOverlayRendererStateTest {
 
         assertTrue(RecentChangesOverlayRenderer.visible());
         assertTrue(RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(10.5D, 64.5D, 10.5D) > 0);
+        assertEquals(1, RecentChangesOverlayRenderer.meshSectionCountForTest());
+        assertEquals(1, RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
+        assertEquals(1, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(10.5D, 64.5D, 10.5D, 1));
+        assertEquals(0, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(1024.0D, 64.5D, 1024.0D, 1));
 
         RecentChangesOverlayRenderer.clear();
 
@@ -50,14 +47,7 @@ class RecentChangesOverlayRendererStateTest {
 
     @Test
     void largeRecentActionUsesExposedSurfaceMeshes() {
-        UndoRedoAction action = new UndoRedoAction(
-                "action",
-                "Alex",
-                "project",
-                "minecraft:overworld",
-                Instant.parse("2026-04-23T08:00:00Z"),
-                Instant.parse("2026-04-23T08:00:00Z")
-        );
+        UndoRedoAction action = action();
         for (StoredBlockChange change : denseCubeChanges()) {
             action.recordChange(change, Instant.parse("2026-04-23T08:00:01Z"));
         }
@@ -68,12 +58,59 @@ class RecentChangesOverlayRendererStateTest {
         int renderedSurfaceEntries = RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(10.5D, 70.5D, 10.5D);
         assertEquals(2168, renderedSurfaceEntries);
         assertEquals(0, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(10.5D, 70.5D, 10.5D));
+        assertEquals(8, RecentChangesOverlayRenderer.meshSectionCountForTest());
+        assertEquals(2168, RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
+    }
+
+    @Test
+    void giantRecentSurfaceMeshIsChunkedAndRenderDistanceCulled() {
+        int size = 32;
+        UndoRedoAction action = action();
+        recordCuboidChanges(action, size, size, size, 64);
+
+        RecentChangesOverlayRenderer.show("project", List.of(action));
+
+        int expectedSurfaceEntries = exposedShellBlockCount(size, size, size);
+        assertTrue(RecentChangesOverlayRenderer.visible());
+        assertEquals(expectedSurfaceEntries, RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(8.5D, 80.5D, 8.5D));
+        assertEquals(0, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(8.5D, 80.5D, 8.5D));
+        assertEquals(8, RecentChangesOverlayRenderer.meshSectionCountForTest());
+        assertEquals(expectedSurfaceEntries, RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
+        assertEquals(8, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 80.5D, 8.5D, 0));
+        assertEquals(0, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(2048.0D, 80.5D, 2048.0D, 0));
+    }
+
+    @Test
+    void giantRecentOverlayFallsBackToOneMergedVolumeMesh() {
+        UndoRedoAction action = action();
+        recordCuboidChanges(action, 64, 40, 40, 64);
+
+        RecentChangesOverlayRenderer.show("project", List.of(action));
+
+        assertTrue(RecentChangesOverlayRenderer.visible());
+        assertEquals(0, RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(8.5D, 80.5D, 8.5D));
+        assertEquals(1, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(8.5D, 80.5D, 8.5D));
+        assertEquals(1, RecentChangesOverlayRenderer.meshSectionCountForTest());
+        assertEquals(1, RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
+        assertEquals(1, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 80.5D, 8.5D, 0));
+        assertEquals(0, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(2048.0D, 80.5D, 2048.0D, 0));
     }
 
     private static CompoundTag state(String blockId) {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", blockId);
         return tag;
+    }
+
+    private static UndoRedoAction action() {
+        return new UndoRedoAction(
+                "action",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                Instant.parse("2026-04-23T08:00:00Z"),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
     }
 
     private static List<StoredBlockChange> denseCubeChanges() {
@@ -90,5 +127,22 @@ class RecentChangesOverlayRendererStateTest {
             }
         }
         return List.copyOf(changes);
+    }
+
+    private static void recordCuboidChanges(UndoRedoAction action, int sizeX, int sizeY, int sizeZ, int minY) {
+        StatePayload oldValue = new StatePayload(state("minecraft:stone"), null);
+        StatePayload newValue = new StatePayload(state("minecraft:glass"), null);
+        Instant changedAt = Instant.parse("2026-04-23T08:00:01Z");
+        for (int x = 0; x < sizeX; x++) {
+            for (int y = minY; y < minY + sizeY; y++) {
+                for (int z = 0; z < sizeZ; z++) {
+                    action.recordChange(new StoredBlockChange(new BlockPoint(x, y, z), oldValue, newValue), changedAt);
+                }
+            }
+        }
+    }
+
+    private static int exposedShellBlockCount(int sizeX, int sizeY, int sizeZ) {
+        return (sizeX * sizeY * sizeZ) - ((sizeX - 2) * (sizeY - 2) * (sizeZ - 2));
     }
 }

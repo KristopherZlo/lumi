@@ -221,6 +221,28 @@ public final class CompareOverlayRenderer {
         return state == null ? 0 : state.volumeBoxCount();
     }
 
+    static int meshSectionCountForTest() {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null ? 0 : state.meshSectionCount();
+    }
+
+    static int meshPrimitiveCountForTest() {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null ? 0 : state.meshPrimitiveCount();
+    }
+
+    static int visibleMeshSectionCountForTest(
+            double cameraX,
+            double cameraY,
+            double cameraZ,
+            int renderDistanceChunks
+    ) {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null
+                ? 0
+                : state.visibleMeshSectionCount(cameraX, cameraY, cameraZ, renderDistanceChunks);
+    }
+
     public static void render(WorldRenderContext context) {
         OverlayState state = ACTIVE_STATE.get();
         if (state == null) {
@@ -522,6 +544,24 @@ public final class CompareOverlayRenderer {
 
         private int meshSectionCount() {
             return this.normalMeshBatch.sectionCount();
+        }
+
+        private int meshPrimitiveCount() {
+            return this.normalMeshBatch.primitiveCountForTest();
+        }
+
+        private int visibleMeshSectionCount(
+                double cameraX,
+                double cameraY,
+                double cameraZ,
+                int renderDistanceChunks
+        ) {
+            return this.normalMeshBatch.visibleSectionCountForTest(
+                    cameraX,
+                    cameraY,
+                    cameraZ,
+                    renderDistanceChunks
+            );
         }
 
         private OverlayMeshBatch meshBatch(boolean xrayEnabled) {

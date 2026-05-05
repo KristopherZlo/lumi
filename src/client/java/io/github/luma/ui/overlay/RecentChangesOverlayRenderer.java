@@ -129,6 +129,28 @@ public final class RecentChangesOverlayRenderer {
         return state == null ? 0 : state.volumeBoxCount();
     }
 
+    static int meshSectionCountForTest() {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null ? 0 : state.meshSectionCount();
+    }
+
+    static int meshPrimitiveCountForTest() {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null ? 0 : state.meshPrimitiveCount();
+    }
+
+    static int visibleMeshSectionCountForTest(
+            double cameraX,
+            double cameraY,
+            double cameraZ,
+            int renderDistanceChunks
+    ) {
+        OverlayState state = ACTIVE_STATE.get();
+        return state == null
+                ? 0
+                : state.visibleMeshSectionCount(cameraX, cameraY, cameraZ, renderDistanceChunks);
+    }
+
     public static void render(WorldRenderContext context) {
         OverlayState state = ACTIVE_STATE.get();
         if (state == null) {
@@ -357,6 +379,24 @@ public final class RecentChangesOverlayRenderer {
 
         private int meshSectionCount() {
             return this.meshBatch.sectionCount();
+        }
+
+        private int meshPrimitiveCount() {
+            return this.meshBatch.primitiveCountForTest();
+        }
+
+        private int visibleMeshSectionCount(
+                double cameraX,
+                double cameraY,
+                double cameraZ,
+                int renderDistanceChunks
+        ) {
+            return this.meshBatch.visibleSectionCountForTest(
+                    cameraX,
+                    cameraY,
+                    cameraZ,
+                    renderDistanceChunks
+            );
         }
 
         private OverlayMeshBatch meshBatch() {

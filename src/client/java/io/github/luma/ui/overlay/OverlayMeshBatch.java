@@ -55,6 +55,25 @@ final class OverlayMeshBatch implements AutoCloseable {
         return this.sections.size();
     }
 
+    int primitiveCountForTest() {
+        int count = 0;
+        for (SectionMesh section : this.sections) {
+            count += section.primitiveCount();
+        }
+        return count;
+    }
+
+    int visibleSectionCountForTest(double cameraX, double cameraY, double cameraZ, int renderDistanceChunks) {
+        Vec3 camera = new Vec3(cameraX, cameraY, cameraZ);
+        int count = 0;
+        for (SectionMesh section : this.sections) {
+            if (section.visibleFrom(camera, renderDistanceChunks)) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
     RenderStats render(RenderType fillType, RenderType outlineType, Vec3 camera, int renderDistanceChunks) {
         return this.render(fillType, outlineType, camera, renderDistanceChunks, DEFAULT_UPLOAD_BUDGET);
     }
@@ -567,6 +586,10 @@ final class OverlayMeshBatch implements AutoCloseable {
 
         private boolean uploaded() {
             return this.uploaded;
+        }
+
+        private int primitiveCount() {
+            return this.primitives.size();
         }
 
         private boolean hasUploadedBuffers() {

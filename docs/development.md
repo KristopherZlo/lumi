@@ -46,7 +46,7 @@ This now includes regression checks for:
 - auto-checkpoint command classification for large `/fill` and `/clone` commands
 - capture source permission gates and AutoCloseable context guard cleanup
 - runtime Lumi region selection state and selection-backed partial restore form filling
-- compare overlay spatial selection and cached section mesh behavior
+- compare/recent overlay spatial selection, cached section mesh behavior, and small/large/extreme overlay geometry paths
 - commit graph layout on large histories
 - detached commit visibility after a restore-style reset
 - recovery draft isolation while save/amend operations run
