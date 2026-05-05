@@ -157,7 +157,7 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
-    void stabilizationFilterKeepsPendingStructuralStateWhenOnlyRuntimePropertyChanged() {
+    void stabilizationKeepsPendingStructuralStateWhenOnlyRuntimePropertyChanged() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange placedLamp = new StoredBlockChange(
                 new BlockPoint(1, 64, 1),
@@ -170,7 +170,25 @@ class SessionStabilizationServiceTest {
                 new StatePayload(stateTag("minecraft:redstone_lamp", "lit", "true"), null)
         );
 
-        assertTrue(service.filterRuntimeOnlyDeltaChanges(List.of(placedLamp), List.of(litFallout)).isEmpty());
+        List<StoredBlockChange> persistentDeltas = service.persistentDeltaChanges(List.of(placedLamp), List.of(litFallout));
+
+        assertEquals(List.of(placedLamp), persistentDeltas);
+    }
+
+    @Test
+    void stabilizationCompositionRemovesCurrentChangesThatSettledBackToBaseline() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        StoredBlockChange placedThenMovedBlock = new StoredBlockChange(
+                new BlockPoint(2, 64, 1),
+                payload("minecraft:air"),
+                payload("minecraft:oak_planks")
+        );
+
+        assertTrue(service.composeStabilizedChanges(
+                List.of(),
+                List.of(placedThenMovedBlock),
+                List.of()
+        ).isEmpty());
     }
 
     private static StoredBlockChange changeAt(int x) {

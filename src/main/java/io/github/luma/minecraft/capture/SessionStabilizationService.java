@@ -82,9 +82,10 @@ public final class SessionStabilizationService {
             }
 
             List<StoredBlockChange> deltaChanges = this.deltaChanges(project, session, capturedChunks.captured());
+            List<StoredBlockChange> startingChanges = session.startingChunkChanges(processedChunks);
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
-            List<StoredBlockChange> filteredDeltaChanges = this.filterRuntimeOnlyDeltaChanges(currentChanges, deltaChanges);
-            List<StoredBlockChange> composedChanges = composeChanges(currentChanges, filteredDeltaChanges);
+            List<StoredBlockChange> persistentDeltaChanges = this.persistentDeltaChanges(currentChanges, deltaChanges);
+            List<StoredBlockChange> composedChanges = composeChanges(startingChanges, persistentDeltaChanges);
             int bufferBefore = session.buffer().size();
             boolean bufferChanged = !currentChanges.equals(composedChanges);
             if (bufferChanged) {
@@ -103,7 +104,7 @@ public final class SessionStabilizationService {
                     bufferAfter,
                     false,
                     bufferChanged,
-                    filteredDeltaChanges
+                    persistentDeltaChanges
             );
         } catch (RuntimeException exception) {
             session.requeuePendingChunks(pendingChunks);
@@ -236,7 +237,7 @@ public final class SessionStabilizationService {
                 && this.blockStatePolicy.isRuntimeOnlyStateTagChange(baselineState, liveState);
     }
 
-    List<StoredBlockChange> filterRuntimeOnlyDeltaChanges(
+    List<StoredBlockChange> persistentDeltaChanges(
             List<StoredBlockChange> currentChanges,
             List<StoredBlockChange> deltaChanges
     ) {
@@ -257,11 +258,23 @@ public final class SessionStabilizationService {
                             currentChange.newValue().stateTag(),
                             deltaChange.newValue().stateTag()
                     )) {
+                StoredBlockChange persistentChange = deltaChange.withLatestState(currentChange.newValue());
+                if (!persistentChange.isNoOp()) {
+                    filtered.add(persistentChange);
+                }
                 continue;
             }
             filtered.add(deltaChange);
         }
         return List.copyOf(filtered);
+    }
+
+    List<StoredBlockChange> composeStabilizedChanges(
+            List<StoredBlockChange> startingChanges,
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> deltaChanges
+    ) {
+        return composeChanges(startingChanges, this.persistentDeltaChanges(currentChanges, deltaChanges));
     }
 
     private boolean sectionsEqual(ChunkSectionSnapshotPayload baseline, ChunkSectionSnapshotPayload live) {
