@@ -145,6 +145,11 @@ final class OverlayMeshBatch implements AutoCloseable {
             return 0;
         }
 
+        List<DrawItem> drawItems = this.prepareDrawItems(camera, drawableSections, layer);
+        if (drawItems.isEmpty()) {
+            return 0;
+        }
+
         int drawn = 0;
         RenderTarget renderTarget = Minecraft.getInstance().getMainRenderTarget();
         GpuTextureView colorTexture = RenderSystem.outputColorTextureOverride == null
@@ -171,20 +176,31 @@ final class OverlayMeshBatch implements AutoCloseable {
                 renderPass.enableScissor(scissorState.x(), scissorState.y(), scissorState.width(), scissorState.height());
             }
             RenderSystem.bindDefaultUniforms(renderPass);
-            Matrix4fStack stack = RenderSystem.getModelViewStack();
-            stack.pushMatrix();
-            try {
-                RenderSystem.getProjectionType().applyLayeringTransform(stack, 1.0F);
-                for (SectionMesh section : drawableSections) {
-                    if (section.draw(renderPass, camera, layer)) {
-                        drawn += 1;
-                    }
+            for (DrawItem item : drawItems) {
+                if (item.draw(renderPass)) {
+                    drawn += 1;
                 }
-            } finally {
-                stack.popMatrix();
             }
         }
         return drawn;
+    }
+
+    private List<DrawItem> prepareDrawItems(Vec3 camera, List<SectionMesh> drawableSections, MeshLayer layer) {
+        Matrix4fStack stack = RenderSystem.getModelViewStack();
+        stack.pushMatrix();
+        try {
+            RenderSystem.getProjectionType().applyLayeringTransform(stack, 1.0F);
+            List<DrawItem> drawItems = new ArrayList<>(drawableSections.size());
+            for (SectionMesh section : drawableSections) {
+                DrawItem item = section.prepareDraw(camera, layer);
+                if (item != null) {
+                    drawItems.add(item);
+                }
+            }
+            return drawItems;
+        } finally {
+            stack.popMatrix();
+        }
     }
 
     record RenderStats(
@@ -584,10 +600,10 @@ final class OverlayMeshBatch implements AutoCloseable {
             return buffer.build();
         }
 
-        private boolean draw(RenderPass renderPass, Vec3 camera, MeshLayer layer) {
+        private DrawItem prepareDraw(Vec3 camera, MeshLayer layer) {
             MeshBuffer mesh = layer == MeshLayer.FILL ? this.fillMesh : this.outlineMesh;
             if (!mesh.ready()) {
-                return false;
+                return null;
             }
 
             Matrix4fStack stack = RenderSystem.getModelViewStack();
@@ -598,8 +614,7 @@ final class OverlayMeshBatch implements AutoCloseable {
                         (float) (this.key.originY() - camera.y),
                         (float) (this.key.originZ() - camera.z)
                 );
-                mesh.draw(renderPass);
-                return true;
+                return mesh.drawItem();
             } finally {
                 stack.popMatrix();
             }
@@ -654,13 +669,17 @@ final class OverlayMeshBatch implements AutoCloseable {
             }
         }
 
-        private void draw(RenderPass renderPass) {
+        private DrawItem drawItem() {
             GpuBufferSlice transforms = RenderSystem.getDynamicUniforms().writeTransform(
                     RenderSystem.getModelViewMatrix(),
                     DEFAULT_COLOR_MODULATOR,
                     DEFAULT_MODEL_OFFSET,
                     new Matrix4f()
             );
+            return new DrawItem(this, transforms);
+        }
+
+        private void draw(RenderPass renderPass, GpuBufferSlice transforms) {
             renderPass.setUniform("DynamicTransforms", transforms);
             renderPass.setVertexBuffer(0, this.vertexBuffer);
             if (this.indexBuffer == null) {
@@ -684,6 +703,17 @@ final class OverlayMeshBatch implements AutoCloseable {
             this.indexCount = 0;
             this.mode = null;
             this.indexType = null;
+        }
+    }
+
+    private record DrawItem(MeshBuffer mesh, GpuBufferSlice transforms) {
+
+        private boolean draw(RenderPass renderPass) {
+            if (!this.mesh.ready()) {
+                return false;
+            }
+            this.mesh.draw(renderPass, this.transforms);
+            return true;
         }
     }
 
