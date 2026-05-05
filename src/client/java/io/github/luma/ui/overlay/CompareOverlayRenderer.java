@@ -51,22 +51,60 @@ public final class CompareOverlayRenderer {
             List<DiffBlockEntry> changedBlocks,
             boolean debugEnabled
     ) {
+        activate(prepare(projectName, leftVersionId, rightVersionId, changedBlocks, debugEnabled, true));
+    }
+
+    static PreparedOverlay prepare(
+            String projectName,
+            String leftVersionId,
+            String rightVersionId,
+            List<DiffBlockEntry> changedBlocks,
+            boolean debugEnabled,
+            boolean visible
+    ) {
         boolean resolvedDebug = debugEnabled || LumaDebugLog.globalEnabled();
         List<DiffBlockEntry> resolvedBlocks = changedBlocks == null ? List.of() : changedBlocks;
-        OverlayState state = new OverlayState(projectName, leftVersionId, rightVersionId, resolvedBlocks, resolvedDebug, true);
-        closePrevious(ACTIVE_STATE.getAndSet(state));
-        OverlayDiagnostics.getInstance().logNow(
-                resolvedDebug,
-                "compare-overlay",
-                "Activated compare overlay {} -> {} with changedBlocks={} surfaceBlocks={} volumeBoxes={} meshSections={} denseBlob={}",
+        OverlayState state = new OverlayState(projectName, leftVersionId, rightVersionId, resolvedBlocks, resolvedDebug, visible);
+        return new PreparedOverlay(
+                projectName == null ? "" : projectName,
                 leftVersionId,
                 rightVersionId,
                 resolvedBlocks.size(),
                 state.surfaceBlockCount(),
                 state.volumeBoxCount(),
                 state.meshSectionCount(),
-                state.denseBlob()
+                state.denseBlob(),
+                resolvedDebug,
+                visible,
+                state
         );
+    }
+
+    static void activate(PreparedOverlay prepared) {
+        if (prepared == null) {
+            clear();
+            return;
+        }
+        OverlayState state = prepared.state();
+        closePrevious(ACTIVE_STATE.getAndSet(state));
+        OverlayDiagnostics.getInstance().logNow(
+                prepared.debugEnabled(),
+                "compare-overlay",
+                "Activated compare overlay {} -> {} with changedBlocks={} surfaceBlocks={} volumeBoxes={} meshSections={} denseBlob={}",
+                prepared.leftVersionId(),
+                prepared.rightVersionId(),
+                prepared.changedBlockCount(),
+                prepared.surfaceBlockCount(),
+                prepared.volumeBoxCount(),
+                prepared.meshSectionCount(),
+                prepared.denseBlob()
+        );
+    }
+
+    static void discard(PreparedOverlay prepared) {
+        if (prepared != null && prepared.state() != null) {
+            prepared.state().close();
+        }
     }
 
     public static void clear() {
@@ -103,6 +141,10 @@ public final class CompareOverlayRenderer {
 
     public static boolean visible() {
         return active();
+    }
+
+    public static boolean shouldPrepareInBackground(List<DiffBlockEntry> changedBlocks) {
+        return changedBlocks != null && changedBlocks.size() > DETAILED_DIFF_RENDER_LIMIT;
     }
 
     public static RefreshRequest refreshRequest() {
@@ -407,6 +449,21 @@ public final class CompareOverlayRenderer {
     }
 
     private record VolumeBox(OverlayVolumeMerger.OverlayBox box, ChangeType changeType) {
+    }
+
+    record PreparedOverlay(
+            String projectName,
+            String leftVersionId,
+            String rightVersionId,
+            int changedBlockCount,
+            int surfaceBlockCount,
+            int volumeBoxCount,
+            int meshSectionCount,
+            boolean denseBlob,
+            boolean debugEnabled,
+            boolean visible,
+            OverlayState state
+    ) {
     }
 
     public record RefreshRequest(

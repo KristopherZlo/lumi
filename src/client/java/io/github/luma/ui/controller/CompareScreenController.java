@@ -8,6 +8,7 @@ import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.ui.overlay.CompareOverlayPreparationService;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.CompareLoadState;
 import io.github.luma.ui.state.CompareViewState;
@@ -251,6 +252,17 @@ public final class CompareScreenController {
             return "luma.status.compare_failed";
         }
 
+        if (CompareOverlayRenderer.shouldPrepareInBackground(state.diff().changedBlocks())) {
+            CompareOverlayPreparationService.getInstance().prepareAndShow(
+                    projectName,
+                    state.leftResolvedVersionId(),
+                    state.rightResolvedVersionId(),
+                    state.diff().changedBlocks(),
+                    state.debugEnabled()
+            );
+            return "luma.status.compare_overlay_loading";
+        }
+
         CompareOverlayRenderer.show(
                 projectName,
                 state.leftResolvedVersionId(),
@@ -262,6 +274,7 @@ public final class CompareScreenController {
     }
 
     public String clearOverlay() {
+        CompareOverlayPreparationService.getInstance().cancelPending();
         CompareOverlayRenderer.clear();
         return "luma.status.compare_overlay_cleared";
     }

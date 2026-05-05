@@ -438,6 +438,7 @@
   "luma.status.project_invalid_name": "Projektin nimi ei voi olla tyhjä.",
   "luma.status.compare_ready": "Vertailunäkymä valmis.",
   "luma.status.compare_loading": "Building compare in the background.",
+  "luma.status.compare_overlay_loading": "Preparing world highlight in the background.",
   "luma.status.compare_failed": "Vertailutoiminto epäonnistui.",
   "luma.status.compare_overlay_enabled": "Maailman kohokohta käytössä.",
   "luma.status.compare_overlay_hidden": "Maailman kohokohta piilotettu.",

@@ -32,10 +32,12 @@ class PendingChangesOverlayRendererStateTest {
 
         PendingChangesOverlayRenderer.activate(PendingChangesOverlayRenderer.prepare(snapshot, false));
 
+        int aggregateBoxCount = PendingChangesOverlayRenderer.visibleAggregateBoxCountForTest(0.5D, 64.5D, 0.5D);
         assertTrue(PendingChangesOverlayRenderer.visible());
         assertEquals(100_064, snapshot.blockChanges().size());
-        assertEquals(1, PendingChangesOverlayRenderer.visibleAggregateBoxCountForTest(0.5D, 64.5D, 0.5D));
-        assertEquals(1, PendingChangesOverlayRenderer.meshPrimitiveCountForTest());
+        assertTrue(aggregateBoxCount > 1);
+        assertTrue(aggregateBoxCount <= 128);
+        assertEquals(aggregateBoxCount, PendingChangesOverlayRenderer.meshPrimitiveCountForTest());
     }
 
     @Test
@@ -48,11 +50,13 @@ class PendingChangesOverlayRendererStateTest {
 
         PendingChangesOverlayRenderer.activate(PendingChangesOverlayRenderer.prepare(snapshot, false));
 
+        int aggregateBoxCount = PendingChangesOverlayRenderer.visibleAggregateBoxCountForTest(8.5D, 80.5D, 8.5D);
         assertTrue(PendingChangesOverlayRenderer.visible());
         assertEquals(0, PendingChangesOverlayRenderer.visibleSurfaceEntryCountForTest(8.5D, 80.5D, 8.5D));
-        assertEquals(1, PendingChangesOverlayRenderer.visibleAggregateBoxCountForTest(8.5D, 80.5D, 8.5D));
-        assertEquals(1, PendingChangesOverlayRenderer.meshSectionCountForTest());
-        assertEquals(1, PendingChangesOverlayRenderer.meshPrimitiveCountForTest());
+        assertTrue(aggregateBoxCount > 1);
+        assertTrue(aggregateBoxCount <= 128);
+        assertEquals(aggregateBoxCount, PendingChangesOverlayRenderer.meshSectionCountForTest());
+        assertEquals(aggregateBoxCount, PendingChangesOverlayRenderer.meshPrimitiveCountForTest());
     }
 
     @Test

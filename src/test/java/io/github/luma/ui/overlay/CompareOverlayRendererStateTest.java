@@ -75,6 +75,12 @@ class CompareOverlayRendererStateTest {
     }
 
     @Test
+    void largeOverlaysAreMarkedForBackgroundPreparation() {
+        assertFalse(CompareOverlayRenderer.shouldPrepareInBackground(lineEntries(CompareOverlayRenderer.DETAILED_DIFF_RENDER_LIMIT)));
+        assertTrue(CompareOverlayRenderer.shouldPrepareInBackground(lineEntries(CompareOverlayRenderer.DETAILED_DIFF_RENDER_LIMIT + 1)));
+    }
+
+    @Test
     void smallChangedOverlayBuildsSingleCachedSection() {
         CompareOverlayRenderer.show("v0001", "v0002", List.of(sampleEntry()), false);
 
@@ -125,14 +131,29 @@ class CompareOverlayRendererStateTest {
 
         CompareOverlayRenderer.show("v0001", "v0002", lineEntries(changedBlockCount), false);
 
+        int volumeBoxCount = CompareOverlayRenderer.visibleVolumeBoxCountForTest(8.5D, 80.5D, 8.5D);
         assertTrue(CompareOverlayRenderer.visible());
         assertEquals(changedBlockCount, CompareOverlayRenderer.changedBlockCount());
         assertEquals(0, CompareOverlayRenderer.visibleSurfaceBlockCountForTest(8.5D, 80.5D, 8.5D));
-        assertEquals(1, CompareOverlayRenderer.visibleVolumeBoxCountForTest(8.5D, 80.5D, 8.5D));
-        assertEquals(1, CompareOverlayRenderer.meshSectionCountForTest());
-        assertEquals(1, CompareOverlayRenderer.meshPrimitiveCountForTest());
+        assertTrue(volumeBoxCount > 1);
+        assertTrue(volumeBoxCount <= 128);
+        assertEquals(volumeBoxCount, CompareOverlayRenderer.meshSectionCountForTest());
+        assertEquals(volumeBoxCount, CompareOverlayRenderer.meshPrimitiveCountForTest());
         assertEquals(1, CompareOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 80.5D, 8.5D, 0));
         assertEquals(0, CompareOverlayRenderer.visibleMeshSectionCountForTest(2048.0D, 80.5D, 2048.0D, 0));
+    }
+
+    @Test
+    void overCapDenseCompareOverlayUsesTiledCoarseVolumeMesh() {
+        CompareOverlayRenderer.show("v0001", "v0002", cuboidEntries(80, 64, 64, 64), false);
+
+        int volumeBoxCount = CompareOverlayRenderer.visibleVolumeBoxCountForTest(8.5D, 80.5D, 8.5D);
+        assertTrue(CompareOverlayRenderer.visible());
+        assertEquals(327_680, CompareOverlayRenderer.changedBlockCount());
+        assertEquals(0, CompareOverlayRenderer.visibleSurfaceBlockCountForTest(8.5D, 80.5D, 8.5D));
+        assertTrue(volumeBoxCount > 1);
+        assertTrue(volumeBoxCount <= 128);
+        assertEquals(volumeBoxCount, CompareOverlayRenderer.meshPrimitiveCountForTest());
     }
 
     private static DiffBlockEntry sampleEntry() {

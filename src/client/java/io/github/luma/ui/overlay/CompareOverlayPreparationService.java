@@ -1,0 +1,103 @@
+package io.github.luma.ui.overlay;
+
+import io.github.luma.LumaMod;
+import io.github.luma.domain.model.DiffBlockEntry;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
+import net.minecraft.client.Minecraft;
+
+/**
+ * Keeps heavy compare overlay geometry preparation off the client thread.
+ */
+public final class CompareOverlayPreparationService {
+
+    private static final CompareOverlayPreparationService INSTANCE = new CompareOverlayPreparationService();
+
+    private final ExecutorService executor = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "lumi-overlay-worker");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final AtomicLong revision = new AtomicLong();
+
+    private CompareOverlayPreparationService() {
+    }
+
+    public static CompareOverlayPreparationService getInstance() {
+        return INSTANCE;
+    }
+
+    public void prepareAndShow(
+            String projectName,
+            String leftVersionId,
+            String rightVersionId,
+            List<DiffBlockEntry> changedBlocks,
+            boolean debugEnabled
+    ) {
+        long requestRevision = this.revision.incrementAndGet();
+        CompletableFuture
+                .supplyAsync(() -> this.prepare(projectName, leftVersionId, rightVersionId, changedBlocks, debugEnabled), this.executor)
+                .whenComplete((prepared, failure) -> this.apply(requestRevision, prepared, failure));
+    }
+
+    public void cancelPending() {
+        this.revision.incrementAndGet();
+    }
+
+    private CompareOverlayRenderer.PreparedOverlay prepare(
+            String projectName,
+            String leftVersionId,
+            String rightVersionId,
+            List<DiffBlockEntry> changedBlocks,
+            boolean debugEnabled
+    ) {
+        try {
+            return CompareOverlayRenderer.prepare(
+                    projectName,
+                    leftVersionId,
+                    rightVersionId,
+                    changedBlocks,
+                    debugEnabled,
+                    true
+            );
+        } catch (RuntimeException exception) {
+            throw new CompletionException(exception);
+        }
+    }
+
+    private void apply(
+            long requestRevision,
+            CompareOverlayRenderer.PreparedOverlay prepared,
+            Throwable failure
+    ) {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null) {
+            CompareOverlayRenderer.discard(prepared);
+            return;
+        }
+        client.execute(() -> this.applyOnClientThread(requestRevision, prepared, failure));
+    }
+
+    private void applyOnClientThread(
+            long requestRevision,
+            CompareOverlayRenderer.PreparedOverlay prepared,
+            Throwable failure
+    ) {
+        if (requestRevision != this.revision.get()) {
+            CompareOverlayRenderer.discard(prepared);
+            return;
+        }
+        if (failure != null) {
+            Throwable cause = failure instanceof CompletionException && failure.getCause() != null
+                    ? failure.getCause()
+                    : failure;
+            LumaMod.LOGGER.warn("Failed to prepare compare overlay in the background", cause);
+            return;
+        }
+        CompareOverlayRenderer.activate(prepared);
+    }
+}

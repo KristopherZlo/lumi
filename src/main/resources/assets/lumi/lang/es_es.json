@@ -438,6 +438,7 @@
   "luma.status.project_invalid_name": "El nombre del proyecto no puede estar vacío.",
   "luma.status.compare_ready": "Vista comparativa lista.",
   "luma.status.compare_loading": "Building compare in the background.",
+  "luma.status.compare_overlay_loading": "Preparing world highlight in the background.",
   "luma.status.compare_failed": "La operación de comparación falló.",
   "luma.status.compare_overlay_enabled": "Resaltado mundial habilitado.",
   "luma.status.compare_overlay_hidden": "Destacado mundial oculto.",

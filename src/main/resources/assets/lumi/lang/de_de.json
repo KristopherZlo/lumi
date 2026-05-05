@@ -438,6 +438,7 @@
   "luma.status.project_invalid_name": "Der Projektname darf nicht leer sein.",
   "luma.status.compare_ready": "Vergleichsansicht bereit.",
   "luma.status.compare_loading": "Building compare in the background.",
+  "luma.status.compare_overlay_loading": "Preparing world highlight in the background.",
   "luma.status.compare_failed": "Der Vergleichsvorgang ist fehlgeschlagen.",
   "luma.status.compare_overlay_enabled": "Welt-Highlight aktiviert.",
   "luma.status.compare_overlay_hidden": "Welthighlight ausgeblendet.",

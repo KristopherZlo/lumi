@@ -438,6 +438,7 @@
   "luma.status.project_invalid_name": "Le nom du projet ne peut pas être vide.",
   "luma.status.compare_ready": "Comparez la vue prête.",
   "luma.status.compare_loading": "Building compare in the background.",
+  "luma.status.compare_overlay_loading": "Preparing world highlight in the background.",
   "luma.status.compare_failed": "L’opération de comparaison a échoué.",
   "luma.status.compare_overlay_enabled": "Highlight mondial activé.",
   "luma.status.compare_overlay_hidden": "Point culminant du monde caché.",

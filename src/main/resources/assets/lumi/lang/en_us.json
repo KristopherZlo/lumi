@@ -468,6 +468,7 @@
   "luma.status.project_invalid_name": "Project name cannot be empty.",
   "luma.status.compare_ready": "Compare view ready.",
   "luma.status.compare_loading": "Building compare in the background.",
+  "luma.status.compare_overlay_loading": "Preparing world highlight in the background.",
   "luma.status.compare_failed": "Compare operation failed.",
   "luma.status.compare_overlay_enabled": "World highlight enabled.",
   "luma.status.compare_overlay_hidden": "World highlight hidden.",
