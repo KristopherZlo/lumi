@@ -1,8 +1,10 @@
 package io.github.luma.ui.overlay;
 
 import io.github.luma.domain.model.VersionDiff;
+import io.github.luma.ui.controller.AsyncCompareCache;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import io.github.luma.ui.controller.CompareScreenController;
+import io.github.luma.ui.controller.CompareRequestKey;
 import net.minecraft.client.Minecraft;
 
 /**
@@ -16,7 +18,9 @@ public final class CompareOverlayCoordinator {
     private static final CompareOverlayCoordinator INSTANCE = new CompareOverlayCoordinator();
 
     private final CompareScreenController controller = new CompareScreenController();
+    private final AsyncCompareCache asyncCompareCache = AsyncCompareCache.getInstance();
     private int refreshCooldown = 0;
+    private CompareRequestKey pendingRefreshKey;
 
     private CompareOverlayCoordinator() {
     }
@@ -53,12 +57,38 @@ public final class CompareOverlayCoordinator {
         }
 
         try {
-            VersionDiff diff = this.controller.buildDiff(
-                    ClientProjectAccess.requireSingleplayerServer(client),
+            CompareRequestKey key = new CompareRequestKey(
                     request.projectName(),
                     request.leftVersionId(),
                     request.rightVersionId()
             );
+            boolean startNewRefresh = !key.equals(this.pendingRefreshKey);
+            if (startNewRefresh) {
+                this.pendingRefreshKey = key;
+            }
+            AsyncCompareCache.CompareResultState asyncState = this.asyncCompareCache.request(
+                    key,
+                    () -> new AsyncCompareCache.CompareResult(
+                            this.controller.buildDiff(
+                                    ClientProjectAccess.requireSingleplayerServer(client),
+                                    request.projectName(),
+                                    request.leftVersionId(),
+                                    request.rightVersionId()
+                            ),
+                            java.util.List.of()
+                    ),
+                    startNewRefresh
+            );
+            if (asyncState.status() == AsyncCompareCache.Status.LOADING) {
+                this.logSkip(request.debugEnabled(), "refresh-loading", request.leftVersionId(), request.rightVersionId());
+                return;
+            }
+            this.pendingRefreshKey = null;
+            if (asyncState.status() == AsyncCompareCache.Status.FAILED) {
+                this.logSkip(request.debugEnabled(), "refresh-failed", request.leftVersionId(), request.rightVersionId());
+                return;
+            }
+            VersionDiff diff = asyncState.result() == null ? null : asyncState.result().diff();
             if (diff == null) {
                 this.logSkip(request.debugEnabled(), "diff-null", request.leftVersionId(), request.rightVersionId());
                 CompareOverlayRenderer.clear();

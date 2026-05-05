@@ -9,6 +9,7 @@ import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
+import io.github.luma.ui.state.CompareLoadState;
 import io.github.luma.ui.state.CompareViewState;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ public final class CompareScreenController {
     private final DiffService diffService = new DiffService();
     private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
     private final ProjectService projectService = new ProjectService();
+    private final AsyncCompareCache asyncCompareCache = AsyncCompareCache.getInstance();
 
     public static boolean isCurrentWorldReference(String reference) {
         if (reference == null) {
@@ -51,6 +53,16 @@ public final class CompareScreenController {
     }
 
     public CompareViewState loadState(String projectName, String leftReference, String rightReference, String status) {
+        return this.loadState(projectName, leftReference, rightReference, status, false);
+    }
+
+    public CompareViewState loadState(
+            String projectName,
+            String leftReference,
+            String rightReference,
+            String status,
+            boolean refresh
+    ) {
         if (!this.client.hasSingleplayerServer()) {
             return new CompareViewState(
                     List.of(),
@@ -63,7 +75,8 @@ public final class CompareScreenController {
                     null,
                     List.of(),
                     "luma.status.singleplayer_only",
-                    LumaDebugLog.globalEnabled()
+                    LumaDebugLog.globalEnabled(),
+                    CompareLoadState.FAILED
             );
         }
 
@@ -106,8 +119,66 @@ public final class CompareScreenController {
                     variants.size()
             );
 
-            VersionDiff diff = this.buildDiff(server, projectName, resolvedLeft, resolvedRight);
-            List<MaterialDeltaEntry> materialDelta = diff == null ? List.of() : this.materialDeltaService.summarize(diff);
+            String finalResolvedLeft = resolvedLeft;
+            String finalResolvedRight = resolvedRight;
+            CompareRequestKey requestKey = new CompareRequestKey(projectName, finalResolvedLeft, finalResolvedRight);
+            AsyncCompareCache.CompareResultState asyncState = this.asyncCompareCache.request(
+                    requestKey,
+                    () -> {
+                        VersionDiff diff = this.buildDiff(server, projectName, finalResolvedLeft, finalResolvedRight);
+                        List<MaterialDeltaEntry> materialDelta = diff == null
+                                ? List.of()
+                                : this.materialDeltaService.summarize(diff);
+                        return new AsyncCompareCache.CompareResult(diff, materialDelta);
+                    },
+                    refresh
+            );
+            if (asyncState.status() == AsyncCompareCache.Status.LOADING) {
+                return new CompareViewState(
+                        versions,
+                        variants,
+                        activeVariantId,
+                        leftReference == null ? "" : leftReference,
+                        rightReference == null ? "" : rightReference,
+                        resolvedLeft,
+                        resolvedRight,
+                        null,
+                        List.of(),
+                        "luma.status.compare_loading",
+                        debugEnabled,
+                        CompareLoadState.LOADING
+                );
+            }
+            if (asyncState.status() == AsyncCompareCache.Status.FAILED) {
+                LumaDebugLog.log(
+                        project,
+                        "compare",
+                        "Failed compare diff {} -> {} with {}: {}",
+                        resolvedLeft,
+                        resolvedRight,
+                        asyncState.failure() == null ? "unknown" : asyncState.failure().getClass().getSimpleName(),
+                        asyncState.failure() == null ? "" : asyncState.failure().getMessage()
+                );
+                return new CompareViewState(
+                        versions,
+                        variants,
+                        activeVariantId,
+                        leftReference == null ? "" : leftReference,
+                        rightReference == null ? "" : rightReference,
+                        resolvedLeft,
+                        resolvedRight,
+                        null,
+                        List.of(),
+                        "luma.status.compare_failed",
+                        debugEnabled,
+                        CompareLoadState.FAILED
+                );
+            }
+
+            VersionDiff diff = asyncState.result() == null ? null : asyncState.result().diff();
+            List<MaterialDeltaEntry> materialDelta = asyncState.result() == null
+                    ? List.of()
+                    : asyncState.result().materialDelta();
             if (diff != null) {
                 LumaDebugLog.log(
                         project,
@@ -131,7 +202,8 @@ public final class CompareScreenController {
                     diff,
                     materialDelta,
                     status == null || status.isBlank() ? "luma.status.compare_ready" : status,
-                    debugEnabled
+                    debugEnabled,
+                    CompareLoadState.READY
             );
         } catch (Exception exception) {
             return new CompareViewState(
@@ -145,7 +217,8 @@ public final class CompareScreenController {
                     null,
                     List.of(),
                     "luma.status.compare_failed",
-                    LumaDebugLog.globalEnabled()
+                    LumaDebugLog.globalEnabled(),
+                    CompareLoadState.FAILED
             );
         }
     }

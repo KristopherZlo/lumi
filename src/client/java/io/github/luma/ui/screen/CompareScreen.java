@@ -9,6 +9,7 @@ import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.screen.section.CompareScreenSections;
+import io.github.luma.ui.state.CompareLoadState;
 import io.github.luma.ui.state.CompareViewState;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -41,7 +42,8 @@ public final class CompareScreen extends LumaScreen {
             null,
             List.of(),
             "luma.status.compare_ready",
-            false
+            false,
+            CompareLoadState.READY
     );
     private String leftReference;
     private String rightReference;
@@ -49,6 +51,7 @@ public final class CompareScreen extends LumaScreen {
     private boolean showMoreDetails = false;
     private boolean showManualCompare = false;
     private boolean initialOverlayAttempted = false;
+    private int refreshCooldown = 0;
 
     public CompareScreen(Screen parent, String projectName, String leftReference, String rightReference) {
         this(parent, projectName, leftReference, rightReference, "");
@@ -99,6 +102,15 @@ public final class CompareScreen extends LumaScreen {
         new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
                 .addHint(body, ClientContextualHelpHint.COMPARE);
         CompareScreenSections.Model model = this.sectionModel();
+        if (this.state.loadState() == CompareLoadState.LOADING) {
+            body.child(LumaUi.emptyState(
+                    Component.translatable("luma.compare.loading_title"),
+                    Component.translatable("luma.compare.loading")
+            ));
+            body.child(this.sections.referenceSection(model));
+            body.child(LumaUi.bottomSpacer());
+            return;
+        }
         if (this.state.diff() == null) {
             body.child(LumaUi.emptyState(
                     Component.translatable("luma.compare.empty_title"),
@@ -145,8 +157,14 @@ public final class CompareScreen extends LumaScreen {
                 this.projectName,
                 this.leftReference,
                 this.rightReference,
-                "luma.status.compare_ready"
+                "luma.status.compare_ready",
+                true
         );
+        if (comparedState.loadState() == CompareLoadState.LOADING) {
+            this.status = comparedState.status();
+            this.rebuild();
+            return;
+        }
         if (comparedState.diff() == null) {
             CompareOverlayRenderer.clear();
             this.status = comparedState.status();
@@ -170,6 +188,9 @@ public final class CompareScreen extends LumaScreen {
 
     private void autoShowInitialOverlay() {
         if (this.initialOverlayAttempted || this.leftReference.isBlank() || this.rightReference.isBlank()) {
+            return;
+        }
+        if (this.state.loadState() == CompareLoadState.LOADING) {
             return;
         }
         this.initialOverlayAttempted = true;
@@ -199,8 +220,31 @@ public final class CompareScreen extends LumaScreen {
                 source.diff(),
                 source.materialDelta(),
                 nextStatus,
-                source.debugEnabled()
+                source.debugEnabled(),
+                source.loadState()
         );
+    }
+
+    @Override
+    protected void onLumaTick() {
+        if (this.state.loadState() != CompareLoadState.LOADING) {
+            this.refreshCooldown = 0;
+            return;
+        }
+        if (++this.refreshCooldown < 10) {
+            return;
+        }
+        this.refreshCooldown = 0;
+        CompareViewState refreshed = this.controller.loadState(
+                this.projectName,
+                this.leftReference,
+                this.rightReference,
+                this.status
+        );
+        if (refreshed.loadState() != CompareLoadState.LOADING || !refreshed.equals(this.state)) {
+            this.state = refreshed;
+            this.rebuild();
+        }
     }
 
     private final class SectionActions implements CompareScreenSections.Actions {
@@ -222,7 +266,9 @@ public final class CompareScreen extends LumaScreen {
 
         @Override
         public void toggleOverlay() {
-            if (state.diff() == null) {
+            if (state.loadState() == CompareLoadState.LOADING) {
+                status = "luma.status.compare_loading";
+            } else if (state.diff() == null) {
                 status = "luma.status.compare_failed";
             } else if (CompareOverlayRenderer.hasDataFor(
                     projectName,
