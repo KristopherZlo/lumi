@@ -383,6 +383,10 @@ final class SingleplayerTestRun {
                 this.check(capturedBlocks.contains(expectedBlock),
                         "Gameplay draft includes block " + this.format(expectedBlock.toBlockPos()));
             }
+            for (BlockPoint unexpectedBlock : report.unexpectedDraftBlocks()) {
+                this.check(!capturedBlocks.contains(unexpectedBlock),
+                        "Gameplay draft excludes transient block " + this.format(unexpectedBlock.toBlockPos()));
+            }
             this.check(draft.entityChanges().size() >= report.expectedEntityChanges(),
                     "Gameplay draft includes builder-relevant entity changes");
             this.check(draft.totalChangeCount() <= 128,

@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.RedstoneLampBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 /**
@@ -75,6 +76,7 @@ final class SingleplayerGameplayRegressionSuite {
     record GameplayRegressionReport(
             List<GameplayCheck> checks,
             Set<BlockPoint> expectedDraftBlocks,
+            Set<BlockPoint> unexpectedDraftBlocks,
             Set<BlockPoint> latestUndoRedoBlocks,
             int expectedEntityChanges,
             List<Entity> spawnedEntities,
@@ -124,6 +126,7 @@ final class SingleplayerGameplayRegressionSuite {
         private final GameplayChecks checks;
         private final SingleplayerPlayerActionDriver playerActions;
         private final Set<BlockPoint> expectedDraftBlocks = new LinkedHashSet<>();
+        private final Set<BlockPoint> unexpectedDraftBlocks = new LinkedHashSet<>();
         private final Set<BlockPoint> latestUndoRedoBlocks = new LinkedHashSet<>();
         private final List<Entity> spawnedEntities = new ArrayList<>();
         private final List<GameplayTiming> timings = new ArrayList<>();
@@ -157,6 +160,10 @@ final class SingleplayerGameplayRegressionSuite {
             this.expectedDraftBlocks.add(BlockPoint.from(pos));
         }
 
+        private void expectNoDraftBlock(BlockPos pos) {
+            this.unexpectedDraftBlocks.add(BlockPoint.from(pos));
+        }
+
         private void expectLatestUndoRedoBlock(BlockPos pos) {
             this.latestUndoRedoBlocks.add(BlockPoint.from(pos));
             this.expectDraftBlock(pos);
@@ -179,6 +186,7 @@ final class SingleplayerGameplayRegressionSuite {
             return new GameplayRegressionReport(
                     this.checks.results(),
                     Set.copyOf(this.expectedDraftBlocks),
+                    Set.copyOf(this.unexpectedDraftBlocks),
                     Set.copyOf(this.latestUndoRedoBlocks),
                     this.expectedEntityChanges,
                     List.copyOf(this.spawnedEntities),
@@ -262,6 +270,26 @@ final class SingleplayerGameplayRegressionSuite {
                     "gameplay redstone lamp lit");
             context.expectDraftBlock(lamp);
             context.expectDraftBlock(power);
+
+            BlockPos piston = context.volume.min().offset(6, 1, 3);
+            BlockPos movedFrom = piston.east();
+            BlockPos movedTo = movedFrom.east();
+            context.trackedPlayerAction(() -> {
+                context.level.setBlock(piston, Blocks.PISTON.defaultBlockState()
+                        .setValue(PistonBaseBlock.FACING, Direction.EAST), 3);
+                context.level.setBlock(movedFrom, Blocks.OAK_PLANKS.defaultBlockState(), 3);
+                WorldMutationContext.runWithSource(WorldMutationSource.PISTON, () -> {
+                    context.level.setBlock(movedFrom, Blocks.AIR.defaultBlockState(), 3);
+                    context.level.setBlock(movedTo, Blocks.OAK_PLANKS.defaultBlockState(), 3);
+                });
+            });
+            context.checks.check(context.level.getBlockState(movedFrom).isAir(),
+                    "gameplay piston fallout cleared the source block");
+            context.checks.check(context.level.getBlockState(movedTo).is(Blocks.OAK_PLANKS),
+                    "gameplay piston fallout kept the final moved block");
+            context.expectDraftBlock(piston);
+            context.expectDraftBlock(movedTo);
+            context.expectNoDraftBlock(movedFrom);
         }
     }
 
