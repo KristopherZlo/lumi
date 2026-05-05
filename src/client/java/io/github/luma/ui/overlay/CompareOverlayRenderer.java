@@ -1,6 +1,5 @@
 package io.github.luma.ui.overlay;
 
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BlockPoint;
@@ -18,18 +17,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.Mth;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.shapes.Shapes;
 
 public final class CompareOverlayRenderer {
 
     private static final String CURRENT_WORLD_REFERENCE = "current";
     private static final int MAX_RENDERED_BLOCKS = 2048;
-    private static final int DENSE_BLOB_THRESHOLD = 4096;
-    private static final int MAX_RENDERED_VOLUME_BOXES = 128;
+    private static final int DENSE_BLOB_THRESHOLD = 250_000;
+    private static final int MAX_SECTION_UPLOADS_PER_FRAME = 64;
     private static final float NORMAL_FILL_ALPHA = 48.0F;
     private static final float XRAY_FILL_ALPHA = 96.0F;
     private static final float DENSE_NORMAL_FILL_ALPHA = 32.0F;
@@ -59,22 +54,23 @@ public final class CompareOverlayRenderer {
         boolean resolvedDebug = debugEnabled || LumaDebugLog.globalEnabled();
         List<DiffBlockEntry> resolvedBlocks = changedBlocks == null ? List.of() : changedBlocks;
         OverlayState state = new OverlayState(projectName, leftVersionId, rightVersionId, resolvedBlocks, resolvedDebug, true);
-        ACTIVE_STATE.set(state);
+        closePrevious(ACTIVE_STATE.getAndSet(state));
         OverlayDiagnostics.getInstance().logNow(
                 resolvedDebug,
                 "compare-overlay",
-                "Activated compare overlay {} -> {} with changedBlocks={} surfaceBlocks={} volumeBoxes={} denseBlob={}",
+                "Activated compare overlay {} -> {} with changedBlocks={} surfaceBlocks={} volumeBoxes={} meshSections={} denseBlob={}",
                 leftVersionId,
                 rightVersionId,
                 resolvedBlocks.size(),
                 state.surfaceBlockCount(),
                 state.volumeBoxCount(),
+                state.meshSectionCount(),
                 state.denseBlob()
         );
     }
 
     public static void clear() {
-        OverlayState state = ACTIVE_STATE.get();
+        OverlayState state = ACTIVE_STATE.getAndSet(null);
         if (state != null && (state.debugEnabled() || LumaDebugLog.globalEnabled())) {
             LumaDebugLog.log(
                     "compare-overlay",
@@ -83,7 +79,7 @@ public final class CompareOverlayRenderer {
                     state.rightVersionId()
             );
         }
-        ACTIVE_STATE.set(null);
+        closePrevious(state);
     }
 
     public static boolean active() {
@@ -146,17 +142,18 @@ public final class CompareOverlayRenderer {
                 resolvedDebug,
                 current.visible()
         );
-        ACTIVE_STATE.set(replacement);
+        closePrevious(ACTIVE_STATE.getAndSet(replacement));
         OverlayDiagnostics.getInstance().log(
                 resolvedDebug,
                 "compare-refresh",
                 "compare-overlay",
-                "Refreshed compare overlay {} -> {} with changedBlocks={} surfaceBlocks={} volumeBoxes={} denseBlob={} visible={}",
+                "Refreshed compare overlay {} -> {} with changedBlocks={} surfaceBlocks={} volumeBoxes={} meshSections={} denseBlob={} visible={}",
                 leftVersionId,
                 rightVersionId,
                 replacement.changedBlockCount(),
                 replacement.surfaceBlockCount(),
                 replacement.volumeBoxCount(),
+                replacement.meshSectionCount(),
                 replacement.denseBlob(),
                 replacement.visible()
         );
@@ -216,12 +213,12 @@ public final class CompareOverlayRenderer {
 
     static int visibleSurfaceBlockCountForTest(double cameraX, double cameraY, double cameraZ) {
         OverlayState state = ACTIVE_STATE.get();
-        return state == null ? 0 : state.visibleSurfaceBlocks(cameraX, cameraY, cameraZ).size();
+        return state == null ? 0 : state.surfaceBlockCount();
     }
 
     static int visibleVolumeBoxCountForTest(double cameraX, double cameraY, double cameraZ) {
         OverlayState state = ACTIVE_STATE.get();
-        return state == null ? 0 : state.visibleSelection(cameraX, cameraY, cameraZ).volumeBoxes().size();
+        return state == null ? 0 : state.volumeBoxCount();
     }
 
     public static void render(WorldRenderContext context) {
@@ -283,6 +280,12 @@ public final class CompareOverlayRenderer {
         }
     }
 
+    private static void closePrevious(OverlayState state) {
+        if (state != null) {
+            state.close();
+        }
+    }
+
     private static void renderOverlay(WorldRenderContext context, OverlayState state) {
         boolean xrayEnabled = XRAY_ENABLED.get();
         if (context == null) {
@@ -299,8 +302,7 @@ public final class CompareOverlayRenderer {
             );
             return;
         }
-        var matrices = context.matrices();
-        if (matrices == null) {
+        if (context.matrices() == null) {
             OverlayDiagnostics.getInstance().log(
                     state.debugEnabled(),
                     "compare-skip-null-matrices",
@@ -315,138 +317,36 @@ public final class CompareOverlayRenderer {
             return;
         }
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        VisibleSelection selection = state.visibleSelection(
-                camera.x,
-                camera.y,
-                camera.z
+        OverlayMeshBatch.RenderStats renderStats = state.meshBatch(xrayEnabled).render(
+                CompareOverlayRenderTypes.fill(xrayEnabled),
+                CompareOverlayRenderTypes.outline(xrayEnabled),
+                camera,
+                renderDistanceChunks(),
+                MAX_SECTION_UPLOADS_PER_FRAME
         );
-        List<CompareOverlaySurfaceResolver.SurfaceBlock> visibleSurfaceBlocks = selection.surfaceBlocks();
-        List<VolumeBox> visibleVolumeBoxes = selection.volumeBoxes();
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),
                 "compare-frame",
                 "compare-overlay",
-                "Render frame changedBlocks={} surfaceBlocks={} renderedBlocks={} volumeBoxes={} denseBlob={} xray={} camera={}:{}:{}",
+                "Render frame changedBlocks={} surfaceBlocks={} volumeBoxes={} meshSections={}/{} uploaded={} skipped={} denseBlob={} xray={} camera={}:{}:{}",
                 state.changedBlockCount(),
                 state.surfaceBlockCount(),
-                visibleSurfaceBlocks.size(),
-                visibleVolumeBoxes.size(),
+                state.volumeBoxCount(),
+                renderStats.filledSections(),
+                renderStats.totalSections(),
+                renderStats.uploadedSections(),
+                renderStats.skippedSections(),
                 state.denseBlob(),
                 xrayEnabled,
                 camera.x,
                 camera.y,
                 camera.z
         );
+    }
 
-        var fillType = CompareOverlayRenderTypes.fill(xrayEnabled);
-        var fillBuffer = OverlayImmediateRenderer.begin(fillType);
-        VertexConsumer fillConsumer = fillBuffer;
-        int filledFaceCount = 0;
-        int fillAlpha = Math.round(xrayEnabled ? XRAY_FILL_ALPHA : NORMAL_FILL_ALPHA);
-        int denseFillAlpha = Math.round(xrayEnabled ? DENSE_XRAY_FILL_ALPHA : DENSE_NORMAL_FILL_ALPHA);
-        for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
-            DiffBlockEntry entry = surfaceBlock.entry();
-            ColorChannels color = ColorChannels.of(entry.changeType());
-            float minX = (float) (entry.pos().x() - camera.x) - FACE_OUTSET;
-            float minY = (float) (entry.pos().y() - camera.y) - FACE_OUTSET;
-            float minZ = (float) (entry.pos().z() - camera.z) - FACE_OUTSET;
-            float maxX = (float) (entry.pos().x() + 1.0D - camera.x) + FACE_OUTSET;
-            float maxY = (float) (entry.pos().y() + 1.0D - camera.y) + FACE_OUTSET;
-            float maxZ = (float) (entry.pos().z() + 1.0D - camera.z) + FACE_OUTSET;
-
-            filledFaceCount += OverlayFaceRenderer.renderFilledBox(
-                    matrices,
-                    fillConsumer,
-                    minX,
-                    minY,
-                    minZ,
-                    maxX,
-                    maxY,
-                    maxZ,
-                    surfaceBlock,
-                    color.red(),
-                    color.green(),
-                    color.blue(),
-                    fillAlpha
-            );
-        }
-        for (VolumeBox volumeBox : visibleVolumeBoxes) {
-            OverlayVolumeMerger.OverlayBox box = volumeBox.box();
-            ColorChannels color = ColorChannels.of(volumeBox.changeType());
-            filledFaceCount += OverlayFaceRenderer.renderSolidBox(
-                    matrices,
-                    fillConsumer,
-                    (float) (box.minX() - camera.x) - FACE_OUTSET,
-                    (float) (box.minY() - camera.y) - FACE_OUTSET,
-                    (float) (box.minZ() - camera.z) - FACE_OUTSET,
-                    (float) (box.maxX() - camera.x) + FACE_OUTSET,
-                    (float) (box.maxY() - camera.y) + FACE_OUTSET,
-                    (float) (box.maxZ() - camera.z) + FACE_OUTSET,
-                    color.red(),
-                    color.green(),
-                    color.blue(),
-                    denseFillAlpha
-            );
-        }
-        boolean fillDrawn = OverlayImmediateRenderer.draw(fillType, fillBuffer);
-
-        OverlayDiagnostics.getInstance().log(
-                state.debugEnabled(),
-                "compare-fill-pass",
-                "compare-overlay",
-                "Fill pass blocks={} volumeBoxes={} faces={} vertices={} alpha={} denseAlpha={} drawn={} renderType={} consumer={} xray={} outset={}",
-                visibleSurfaceBlocks.size(),
-                visibleVolumeBoxes.size(),
-                filledFaceCount,
-                filledFaceCount * 4,
-                fillAlpha,
-                denseFillAlpha,
-                fillDrawn,
-                fillType,
-                fillConsumer.getClass().getName(),
-                xrayEnabled,
-                FACE_OUTSET
-        );
-
-        var outlineType = CompareOverlayRenderTypes.outline(xrayEnabled);
-        var lineBuffer = OverlayImmediateRenderer.begin(outlineType);
-        VertexConsumer lineConsumer = lineBuffer;
-        for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : visibleSurfaceBlocks) {
-            DiffBlockEntry entry = surfaceBlock.entry();
-            ColorChannels color = ColorChannels.of(entry.changeType());
-            ShapeRenderer.renderShape(
-                    matrices,
-                    lineConsumer,
-                    Shapes.block(),
-                    entry.pos().x() - camera.x,
-                    entry.pos().y() - camera.y,
-                    entry.pos().z() - camera.z,
-                    color.argb(),
-                    OUTLINE_WIDTH
-            );
-        }
-        for (VolumeBox volumeBox : visibleVolumeBoxes) {
-            OverlayVolumeMerger.OverlayBox box = volumeBox.box();
-            ColorChannels color = ColorChannels.of(volumeBox.changeType());
-            ShapeRenderer.renderShape(
-                    matrices,
-                    lineConsumer,
-                    Shapes.create(new AABB(
-                            0.0D,
-                            0.0D,
-                            0.0D,
-                            box.maxX() - box.minX(),
-                            box.maxY() - box.minY(),
-                            box.maxZ() - box.minZ()
-                    )),
-                    box.minX() - camera.x,
-                    box.minY() - camera.y,
-                    box.minZ() - camera.z,
-                    color.argb(0xB3),
-                    DENSE_OUTLINE_WIDTH
-            );
-        }
-        OverlayImmediateRenderer.draw(outlineType, lineBuffer);
+    private static int renderDistanceChunks() {
+        Minecraft client = Minecraft.getInstance();
+        return client == null || client.options == null ? 8 : client.options.getEffectiveRenderDistance();
     }
 
     private record ColorChannels(int red, int green, int blue, int argb) {
@@ -484,19 +384,7 @@ public final class CompareOverlayRenderer {
     private record RankedEntry(DiffBlockEntry entry, double distanceSquared) {
     }
 
-    private record RankedVolumeBox(VolumeBox volumeBox, double distanceSquared) {
-    }
-
     private record VolumeBox(OverlayVolumeMerger.OverlayBox box, ChangeType changeType) {
-
-        private double distanceSquared(double cameraX, double cameraY, double cameraZ) {
-            return this.box.distanceSquared(cameraX, cameraY, cameraZ);
-        }
-    }
-
-    private record VisibleSelection(
-            List<CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocks,
-            List<VolumeBox> volumeBoxes) {
     }
 
     public record RefreshRequest(
@@ -522,15 +410,12 @@ public final class CompareOverlayRenderer {
         private final String rightVersionId;
         private final int changedBlockCount;
         private final Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocksByPosition;
-        private final CompareOverlaySpatialIndex spatialIndex;
         private final List<VolumeBox> volumeBoxes;
+        private final OverlayMeshBatch normalMeshBatch;
+        private final OverlayMeshBatch xrayMeshBatch;
         private final boolean denseBlob;
         private final boolean debugEnabled;
         private final boolean visible;
-        private int cachedCameraBlockX = Integer.MIN_VALUE;
-        private int cachedCameraBlockY = Integer.MIN_VALUE;
-        private int cachedCameraBlockZ = Integer.MIN_VALUE;
-        private VisibleSelection cachedVisibleSelection = new VisibleSelection(List.of(), List.of());
 
         private OverlayState(
                 String projectName,
@@ -546,8 +431,9 @@ public final class CompareOverlayRenderer {
             this.changedBlockCount = changedBlocks == null ? 0 : changedBlocks.size();
             OverlayGeometry geometry = buildGeometry(changedBlocks == null ? List.of() : changedBlocks);
             this.surfaceBlocksByPosition = geometry.surfaceBlocksByPosition();
-            this.spatialIndex = geometry.spatialIndex();
             this.volumeBoxes = geometry.volumeBoxes();
+            this.normalMeshBatch = buildMeshBatch(this.surfaceBlocksByPosition.values().stream().toList(), this.volumeBoxes, false);
+            this.xrayMeshBatch = buildMeshBatch(this.surfaceBlocksByPosition.values().stream().toList(), this.volumeBoxes, true);
             this.denseBlob = geometry.denseBlob();
             this.debugEnabled = debugEnabled;
             this.visible = visible;
@@ -559,8 +445,9 @@ public final class CompareOverlayRenderer {
                 String rightVersionId,
                 int changedBlockCount,
                 Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocksByPosition,
-                CompareOverlaySpatialIndex spatialIndex,
                 List<VolumeBox> volumeBoxes,
+                OverlayMeshBatch normalMeshBatch,
+                OverlayMeshBatch xrayMeshBatch,
                 boolean denseBlob,
                 boolean debugEnabled,
                 boolean visible
@@ -570,8 +457,9 @@ public final class CompareOverlayRenderer {
             this.rightVersionId = rightVersionId;
             this.changedBlockCount = changedBlockCount;
             this.surfaceBlocksByPosition = surfaceBlocksByPosition;
-            this.spatialIndex = spatialIndex;
             this.volumeBoxes = volumeBoxes;
+            this.normalMeshBatch = normalMeshBatch;
+            this.xrayMeshBatch = xrayMeshBatch;
             this.denseBlob = denseBlob;
             this.debugEnabled = debugEnabled;
             this.visible = visible;
@@ -610,16 +498,13 @@ public final class CompareOverlayRenderer {
                     this.rightVersionId,
                     this.changedBlockCount,
                     this.surfaceBlocksByPosition,
-                    this.spatialIndex,
                     this.volumeBoxes,
+                    this.normalMeshBatch,
+                    this.xrayMeshBatch,
                     this.denseBlob,
                     this.debugEnabled,
                     nextVisible
             );
-            replacement.cachedCameraBlockX = this.cachedCameraBlockX;
-            replacement.cachedCameraBlockY = this.cachedCameraBlockY;
-            replacement.cachedCameraBlockZ = this.cachedCameraBlockZ;
-            replacement.cachedVisibleSelection = this.cachedVisibleSelection;
             return replacement;
         }
 
@@ -635,69 +520,21 @@ public final class CompareOverlayRenderer {
             return this.volumeBoxes.size();
         }
 
+        private int meshSectionCount() {
+            return this.normalMeshBatch.sectionCount();
+        }
+
+        private OverlayMeshBatch meshBatch(boolean xrayEnabled) {
+            return xrayEnabled ? this.xrayMeshBatch : this.normalMeshBatch;
+        }
+
         private boolean denseBlob() {
             return this.denseBlob;
         }
 
-        private synchronized List<CompareOverlaySurfaceResolver.SurfaceBlock> visibleSurfaceBlocks(
-                double cameraX,
-                double cameraY,
-                double cameraZ
-        ) {
-            return this.visibleSelection(cameraX, cameraY, cameraZ).surfaceBlocks();
-        }
-
-        private synchronized VisibleSelection visibleSelection(
-                double cameraX,
-                double cameraY,
-                double cameraZ
-        ) {
-            int cameraBlockX = Mth.floor(cameraX);
-            int cameraBlockY = Mth.floor(cameraY);
-            int cameraBlockZ = Mth.floor(cameraZ);
-            if (cameraBlockX == this.cachedCameraBlockX
-                    && cameraBlockY == this.cachedCameraBlockY
-                    && cameraBlockZ == this.cachedCameraBlockZ) {
-                return this.cachedVisibleSelection;
-            }
-
-            this.cachedCameraBlockX = cameraBlockX;
-            this.cachedCameraBlockY = cameraBlockY;
-            this.cachedCameraBlockZ = cameraBlockZ;
-            long startedAt = System.nanoTime();
-            if (this.denseBlob) {
-                this.cachedVisibleSelection = new VisibleSelection(
-                        List.of(),
-                        selectNearestVolumeBoxes(this.volumeBoxes, cameraX, cameraY, cameraZ)
-                );
-            } else {
-                List<DiffBlockEntry> nearestEntries = this.spatialIndex.selectNearestEntries(cameraX, cameraY, cameraZ);
-                List<CompareOverlaySurfaceResolver.SurfaceBlock> nearestSurfaceBlocks = new ArrayList<>(nearestEntries.size());
-                for (DiffBlockEntry entry : nearestEntries) {
-                    CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock = this.surfaceBlocksByPosition.get(pack(entry.pos()));
-                    if (surfaceBlock != null) {
-                        nearestSurfaceBlocks.add(surfaceBlock);
-                    }
-                }
-                this.cachedVisibleSelection = new VisibleSelection(List.copyOf(nearestSurfaceBlocks), List.of());
-            }
-            if (this.debugEnabled) {
-                LumaDebugLog.log(
-                        "compare-overlay",
-                        "Rebuilt visible overlay cache for {} -> {} at {}:{}:{}: total={} surface={} volume={} dense={} in {} us",
-                        this.leftVersionId,
-                        this.rightVersionId,
-                        cameraBlockX,
-                        cameraBlockY,
-                        cameraBlockZ,
-                        this.changedBlockCount,
-                        this.cachedVisibleSelection.surfaceBlocks().size(),
-                        this.cachedVisibleSelection.volumeBoxes().size(),
-                        this.denseBlob,
-                        (System.nanoTime() - startedAt) / 1_000L
-                );
-            }
-            return this.cachedVisibleSelection;
+        private void close() {
+            this.normalMeshBatch.close();
+            this.xrayMeshBatch.close();
         }
 
         private static OverlayGeometry buildGeometry(List<DiffBlockEntry> changedBlocks) {
@@ -707,7 +544,6 @@ public final class CompareOverlayRenderer {
             if (changedBlocks.size() > DENSE_BLOB_THRESHOLD) {
                 return new OverlayGeometry(
                         Map.of(),
-                        CompareOverlaySpatialIndex.EMPTY,
                         buildVolumeBoxes(changedBlocks),
                         true
                 );
@@ -717,9 +553,6 @@ public final class CompareOverlayRenderer {
                     buildSurfaceBlocksByPosition(changedBlocks);
             return new OverlayGeometry(
                     surfaceBlocksByPosition,
-                    CompareOverlaySpatialIndex.build(surfaceBlocksByPosition.values().stream()
-                            .map(CompareOverlaySurfaceResolver.SurfaceBlock::entry)
-                            .toList()),
                     List.of(),
                     false
             );
@@ -756,44 +589,48 @@ public final class CompareOverlayRenderer {
             return List.copyOf(volumeBoxes);
         }
 
-        private static List<VolumeBox> selectNearestVolumeBoxes(
-                List<VolumeBox> boxes,
-                double cameraX,
-                double cameraY,
-                double cameraZ
+        private static OverlayMeshBatch buildMeshBatch(
+                List<CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocks,
+                List<VolumeBox> volumeBoxes,
+                boolean xrayEnabled
         ) {
-            if (boxes.isEmpty()) {
-                return List.of();
+            OverlayMeshBatch.Builder builder = OverlayMeshBatch.builder();
+            int fillAlpha = Math.round(xrayEnabled ? XRAY_FILL_ALPHA : NORMAL_FILL_ALPHA);
+            int denseFillAlpha = Math.round(xrayEnabled ? DENSE_XRAY_FILL_ALPHA : DENSE_NORMAL_FILL_ALPHA);
+            for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : surfaceBlocks) {
+                ColorChannels color = ColorChannels.of(surfaceBlock.entry().changeType());
+                builder.addSurfaceBlock(
+                        surfaceBlock,
+                        color.red(),
+                        color.green(),
+                        color.blue(),
+                        fillAlpha,
+                        color.argb(),
+                        OUTLINE_WIDTH,
+                        FACE_OUTSET
+                );
             }
-            if (boxes.size() <= MAX_RENDERED_VOLUME_BOXES) {
-                return boxes;
+            for (VolumeBox volumeBox : volumeBoxes) {
+                OverlayVolumeMerger.OverlayBox box = volumeBox.box();
+                ColorChannels color = ColorChannels.of(volumeBox.changeType());
+                builder.addBox(
+                        box.minX(),
+                        box.minY(),
+                        box.minZ(),
+                        box.maxX(),
+                        box.maxY(),
+                        box.maxZ(),
+                        color.red(),
+                        color.green(),
+                        color.blue(),
+                        denseFillAlpha,
+                        color.argb(0xB3),
+                        DENSE_OUTLINE_WIDTH,
+                        FACE_OUTSET,
+                        0.0F
+                );
             }
-
-            PriorityQueue<RankedVolumeBox> selected = new PriorityQueue<>(
-                    MAX_RENDERED_VOLUME_BOXES,
-                    Comparator.comparingDouble(RankedVolumeBox::distanceSquared).reversed()
-            );
-            for (VolumeBox box : boxes) {
-                double distanceSquared = box.distanceSquared(cameraX, cameraY, cameraZ);
-                if (selected.size() < MAX_RENDERED_VOLUME_BOXES) {
-                    selected.add(new RankedVolumeBox(box, distanceSquared));
-                    continue;
-                }
-
-                RankedVolumeBox farthest = selected.peek();
-                if (farthest != null && distanceSquared < farthest.distanceSquared()) {
-                    selected.poll();
-                    selected.add(new RankedVolumeBox(box, distanceSquared));
-                }
-            }
-
-            List<RankedVolumeBox> ranked = new ArrayList<>(selected);
-            ranked.sort(Comparator.comparingDouble(RankedVolumeBox::distanceSquared));
-            List<VolumeBox> result = new ArrayList<>(ranked.size());
-            for (RankedVolumeBox entry : ranked) {
-                result.add(entry.volumeBox());
-            }
-            return List.copyOf(result);
+            return builder.build();
         }
 
         private static ChangeType normalizedType(ChangeType type) {
@@ -806,13 +643,11 @@ public final class CompareOverlayRenderer {
 
         private record OverlayGeometry(
                 Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocksByPosition,
-                CompareOverlaySpatialIndex spatialIndex,
                 List<VolumeBox> volumeBoxes,
                 boolean denseBlob) {
 
             private static final OverlayGeometry EMPTY = new OverlayGeometry(
                     Map.of(),
-                    CompareOverlaySpatialIndex.EMPTY,
                     List.of(),
                     false
             );
