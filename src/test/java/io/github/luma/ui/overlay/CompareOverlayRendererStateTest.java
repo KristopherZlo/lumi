@@ -101,10 +101,10 @@ class CompareOverlayRendererStateTest {
     }
 
     @Test
-    void giantCompareSurfaceMeshIsChunkedAndRenderDistanceCulled() {
-        int sizeX = 96;
-        int sizeY = 16;
-        int sizeZ = 96;
+    void belowCapCompareSurfaceMeshIsChunkedAndRenderDistanceCulled() {
+        int sizeX = 64;
+        int sizeY = 12;
+        int sizeZ = 64;
 
         CompareOverlayRenderer.show("v0001", "v0002", cuboidEntries(sizeX, sizeY, sizeZ, 64), false);
 
@@ -113,22 +113,20 @@ class CompareOverlayRendererStateTest {
         assertEquals(sizeX * sizeY * sizeZ, CompareOverlayRenderer.changedBlockCount());
         assertEquals(expectedSurfaceBlocks, CompareOverlayRenderer.visibleSurfaceBlockCountForTest(8.5D, 80.5D, 8.5D));
         assertEquals(0, CompareOverlayRenderer.visibleVolumeBoxCountForTest(8.5D, 80.5D, 8.5D));
-        assertEquals(36, CompareOverlayRenderer.meshSectionCountForTest());
+        assertEquals(16, CompareOverlayRenderer.meshSectionCountForTest());
         assertEquals(expectedSurfaceBlocks, CompareOverlayRenderer.meshPrimitiveCountForTest());
         assertEquals(16, CompareOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 72.5D, 8.5D, 0));
         assertEquals(0, CompareOverlayRenderer.visibleMeshSectionCountForTest(2048.0D, 80.5D, 2048.0D, 0));
     }
 
     @Test
-    void giantCompareOverlayFallsBackToOneMergedVolumeMesh() {
-        int sizeX = 80;
-        int sizeY = 64;
-        int sizeZ = 64;
+    void justOverCapCompareOverlayFallsBackToMergedVolumeMesh() {
+        int changedBlockCount = CompareOverlayRenderer.DETAILED_DIFF_RENDER_LIMIT + 1;
 
-        CompareOverlayRenderer.show("v0001", "v0002", cuboidEntries(sizeX, sizeY, sizeZ, 64), false);
+        CompareOverlayRenderer.show("v0001", "v0002", lineEntries(changedBlockCount), false);
 
         assertTrue(CompareOverlayRenderer.visible());
-        assertEquals(sizeX * sizeY * sizeZ, CompareOverlayRenderer.changedBlockCount());
+        assertEquals(changedBlockCount, CompareOverlayRenderer.changedBlockCount());
         assertEquals(0, CompareOverlayRenderer.visibleSurfaceBlockCountForTest(8.5D, 80.5D, 8.5D));
         assertEquals(1, CompareOverlayRenderer.visibleVolumeBoxCountForTest(8.5D, 80.5D, 8.5D));
         assertEquals(1, CompareOverlayRenderer.meshSectionCountForTest());
@@ -158,6 +156,19 @@ class CompareOverlayRendererStateTest {
                     ));
                 }
             }
+        }
+        return List.copyOf(entries);
+    }
+
+    private static List<DiffBlockEntry> lineEntries(int count) {
+        List<DiffBlockEntry> entries = new ArrayList<>(count);
+        for (int x = 0; x < count; x++) {
+            entries.add(new DiffBlockEntry(
+                    new BlockPoint(x, 64, 0),
+                    "minecraft:stone",
+                    "minecraft:glass",
+                    ChangeType.CHANGED
+            ));
         }
         return List.copyOf(entries);
     }

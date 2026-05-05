@@ -23,7 +23,7 @@ public final class CompareOverlayRenderer {
 
     private static final String CURRENT_WORLD_REFERENCE = "current";
     private static final int MAX_RENDERED_BLOCKS = 2048;
-    private static final int DENSE_BLOB_THRESHOLD = 250_000;
+    static final int DETAILED_DIFF_RENDER_LIMIT = 50_000;
     private static final int MAX_SECTION_UPLOADS_PER_FRAME = 64;
     private static final float NORMAL_FILL_ALPHA = 48.0F;
     private static final float XRAY_FILL_ALPHA = 96.0F;
@@ -581,7 +581,7 @@ public final class CompareOverlayRenderer {
             if (changedBlocks.isEmpty()) {
                 return OverlayGeometry.EMPTY;
             }
-            if (changedBlocks.size() > DENSE_BLOB_THRESHOLD) {
+            if (changedBlocks.size() > DETAILED_DIFF_RENDER_LIMIT) {
                 return new OverlayGeometry(
                         Map.of(),
                         buildVolumeBoxes(changedBlocks),
