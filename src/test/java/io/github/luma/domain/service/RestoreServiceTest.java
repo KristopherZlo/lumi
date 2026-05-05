@@ -9,7 +9,11 @@ import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
@@ -167,6 +171,35 @@ class RestoreServiceTest {
         assertEquals("feature", target.id());
     }
 
+    @Test
+    void quickRollbackUndoActionReappliesPreRestoreDraftState() {
+        RestoreService service = new RestoreService();
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0002",
+                "Alex",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                List.of(change(1, "minecraft:stone", "minecraft:glass"))
+        );
+
+        RestoreService.RestoreUndoAction action = service.quickRollbackUndoAction(
+                "project",
+                "minecraft:overworld",
+                "v0002",
+                draft
+        );
+
+        assertNotNull(action);
+        assertEquals("Lumi quick rollback", action.actor());
+        assertEquals("project", action.projectId());
+        assertEquals("minecraft:overworld", action.dimensionId());
+        assertEquals("minecraft:glass", action.changes().getFirst().oldValue().blockId());
+        assertEquals("minecraft:stone", action.changes().getFirst().newValue().blockId());
+    }
+
     private static BuildProject project(String activeVariantId) {
         return BuildProject.create(
                         "project",
@@ -192,7 +225,21 @@ class RestoreServiceTest {
                 ChangeStats.empty(),
                 PreviewInfo.none(),
                 ExternalSourceInfo.manual(),
-                NOW
+            NOW
         );
+    }
+
+    private static StoredBlockChange change(int x, String oldBlock, String newBlock) {
+        return new StoredBlockChange(
+                new BlockPoint(x, 64, 1),
+                new StatePayload(state(oldBlock), null),
+                new StatePayload(state(newBlock), null)
+        );
+    }
+
+    private static CompoundTag state(String blockId) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", blockId);
+        return tag;
     }
 }

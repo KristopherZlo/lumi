@@ -67,7 +67,7 @@ Use Lumi if you want to:
 - lightweight save, branch, import/export, settings, storage cleanup, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
 - remappable quick-save chord, default `Left Alt+S`, that opens a standalone save-name dialog without entering Build History
-- remappable quick rollback key, default `R`, that restores the active branch head without opening a screen; the next undo returns to the pre-restore state, and holding the Lumi action button with `R` does the same return-before-restore action directly
+- remappable quick rollback key, default `R`, that restores the active branch head without opening a screen; the next undo returns to the pre-restore state without moving the saved branch head, redo reapplies the rollback, and holding the Lumi action button with `R` runs an explicit hard return-before-restore
 - dedicated save screen with optional `Replace latest save`
 - save details screen with isometric preview, restore, see-changes, rename, soft-delete, and branch actions
 - See Changes screen for saved states, branches, and the current build, with background-loaded diffs and manual raw-reference compare available under `More`

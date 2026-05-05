@@ -108,6 +108,19 @@ public final class RestoreService {
      * branch line.
      */
     public OperationHandle restoreVariantHead(ServerLevel level, String projectName, String targetVariantId) throws IOException {
+        return this.restoreVariantHead(level, projectName, targetVariantId, false);
+    }
+
+    public OperationHandle restoreVariantHeadUndoable(ServerLevel level, String projectName, String targetVariantId) throws IOException {
+        return this.restoreVariantHead(level, projectName, targetVariantId, true);
+    }
+
+    private OperationHandle restoreVariantHead(
+            ServerLevel level,
+            String projectName,
+            String targetVariantId,
+            boolean recordUndoRedoAction
+    ) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVariant targetVariant = variants.stream()
@@ -117,7 +130,7 @@ public final class RestoreService {
         if (targetVariant.headVersionId() == null || targetVariant.headVersionId().isBlank()) {
             throw new IllegalArgumentException("Variant head version is missing: " + targetVariantId);
         }
-        return this.restore(level, projectName, targetVariant.headVersionId(), targetVariant.id(), false);
+        return this.restore(level, projectName, targetVariant.headVersionId(), targetVariant.id(), false, recordUndoRedoAction);
     }
 
     public OperationHandle restoreToVariant(
@@ -135,6 +148,17 @@ public final class RestoreService {
             String versionId,
             String targetVariantId,
             boolean trustedImportedPackage
+    ) throws IOException {
+        return this.restore(level, projectName, versionId, targetVariantId, trustedImportedPackage, false);
+    }
+
+    private OperationHandle restore(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            String targetVariantId,
+            boolean trustedImportedPackage,
+            boolean recordUndoRedoAction
     ) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
@@ -215,6 +239,14 @@ public final class RestoreService {
                         returnVersionId = checkpoint.id();
                     }
                     this.saveRestoreReturnPoint(layout, project, activeVariant, returnVersionId, version);
+                    RestoreUndoAction restoreUndoAction = recordUndoRedoAction
+                            ? this.quickRollbackUndoAction(
+                                    project.id().toString(),
+                                    level.dimension().identifier().toString(),
+                                    version.id(),
+                                    pendingDraft
+                            )
+                            : null;
 
                     Optional<List<PreparedChunkBatch>> prepared = this.tryDecodeDirectRestore(
                             layout,
@@ -228,27 +260,36 @@ public final class RestoreService {
                     );
 
                     List<PreparedChunkBatch> batches = prepared.orElseGet(() -> {
-                                try {
-                                    if (version.versionKind() == VersionKind.WORLD_ROOT) {
-                                        return this.decodeWorldRootRestore(layout, project, level, progressSink);
-                                    }
-                                    progressSink.update(OperationStage.PREPARING, 0, 1, "Planning restore");
-                                    RestorePlan plan = this.buildPlan(layout, project, versions, version);
-                                    LumaMod.LOGGER.info(
-                                            "Restore plan for project {} uses anchor={}, patches={}, baselineGaps={}",
-                                            project.name(),
-                                            plan.anchor().id(),
-                                            plan.patchChain().size(),
-                                            plan.baselineGaps().size()
-                                    );
-                                    return this.decodePlan(layout, level, plan, progressSink);
-                                } catch (IOException exception) {
-                                    throw new RuntimeException(exception);
-                                }
-                            });
+                        try {
+                            if (version.versionKind() == VersionKind.WORLD_ROOT) {
+                                return this.decodeWorldRootRestore(layout, project, level, progressSink);
+                            }
+                            progressSink.update(OperationStage.PREPARING, 0, 1, "Planning restore");
+                            RestorePlan plan = this.buildPlan(layout, project, versions, version);
+                            LumaMod.LOGGER.info(
+                                    "Restore plan for project {} uses anchor={}, patches={}, baselineGaps={}",
+                                    project.name(),
+                                    plan.anchor().id(),
+                                    plan.patchChain().size(),
+                                    plan.baselineGaps().size()
+                            );
+                            return this.decodePlan(layout, level, plan, progressSink);
+                        } catch (IOException exception) {
+                            throw new RuntimeException(exception);
+                        }
+                    });
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,
-                            () -> this.completeRestore(level, layout, project, variants, targetVariant, version, batches.size())
+                            () -> this.completeRestore(
+                                    level,
+                                    layout,
+                                    project,
+                                    variants,
+                                    targetVariant,
+                                    version,
+                                    batches.size(),
+                                    restoreUndoAction
+                            )
                     );
                 }
         );
@@ -755,7 +796,8 @@ public final class RestoreService {
             List<ProjectVariant> variants,
             ProjectVariant targetVariant,
             ProjectVersion version,
-            int batchCount
+            int batchCount,
+            RestoreUndoAction restoreUndoAction
     ) throws IOException {
         Instant now = Instant.now();
         List<ProjectVariant> latestVariants = this.variantRepository.loadAll(layout);
@@ -771,6 +813,7 @@ public final class RestoreService {
         this.projectRepository.save(layout, updatedProject);
         this.recoveryRepository.deleteDraft(layout);
         this.undoRedoHistoryManager.clearProject(project.id().toString());
+        this.recordRestoreUndoAction(restoreUndoAction, now);
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,
                 "restore-completed",
@@ -786,6 +829,53 @@ public final class RestoreService {
                 targetVariant.id(),
                 batchCount
         );
+    }
+
+    RestoreUndoAction quickRollbackUndoAction(
+            String projectId,
+            String dimensionId,
+            String targetVersionId,
+            RecoveryDraft pendingDraft
+    ) {
+        if (pendingDraft == null || pendingDraft.isEmpty()) {
+            return null;
+        }
+        List<StoredBlockChange> changes = pendingDraft.changes().stream()
+                .map(RestoreService::inverse)
+                .toList();
+        List<StoredEntityChange> entityChanges = pendingDraft.entityChanges().stream()
+                .map(StoredEntityChange::inverse)
+                .toList();
+        if (changes.isEmpty() && entityChanges.isEmpty()) {
+            return null;
+        }
+        return new RestoreUndoAction(
+                "quick-rollback-" + targetVersionId + "-" + UUID.randomUUID(),
+                "Lumi quick rollback",
+                projectId,
+                dimensionId,
+                changes,
+                entityChanges
+        );
+    }
+
+    private void recordRestoreUndoAction(RestoreUndoAction action, Instant now) {
+        if (action == null || action.isEmpty()) {
+            return;
+        }
+        this.undoRedoHistoryManager.recordAction(
+                action.projectId(),
+                action.dimensionId(),
+                action.actionId(),
+                action.actor(),
+                action.changes(),
+                action.entityChanges(),
+                now
+        );
+    }
+
+    private static StoredBlockChange inverse(StoredBlockChange change) {
+        return new StoredBlockChange(change.pos(), change.newValue(), change.oldValue());
     }
 
     private List<PreparedChunkBatch> decodeWorldRootRestore(
@@ -1498,6 +1588,25 @@ public final class RestoreService {
     }
 
     private record PartialRestoreDraft(RestorePlanMode mode, RecoveryDraft draft) {
+    }
+
+    record RestoreUndoAction(
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges
+    ) {
+
+        RestoreUndoAction {
+            changes = changes == null ? List.of() : List.copyOf(changes);
+            entityChanges = entityChanges == null ? List.of() : List.copyOf(entityChanges);
+        }
+
+        private boolean isEmpty() {
+            return this.changes.isEmpty() && this.entityChanges.isEmpty();
+        }
     }
 
     private record ChunkPointAccumulator(int chunkX, int chunkZ) {

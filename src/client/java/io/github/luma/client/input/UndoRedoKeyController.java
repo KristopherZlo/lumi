@@ -7,7 +7,6 @@ import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import io.github.luma.domain.service.ProjectService;
-import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
@@ -30,7 +29,6 @@ public final class UndoRedoKeyController {
 
     private final ProjectService projectService = new ProjectService();
     private final UndoRedoService undoRedoService = new UndoRedoService();
-    private final QuickRollbackService quickRollbackService = new QuickRollbackService();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final ExternalUndoRedoPolicy externalUndoRedoPolicy = new ExternalUndoRedoPolicy();
@@ -68,9 +66,6 @@ public final class UndoRedoKeyController {
                     undo ? "luma.status.undo_started" : "luma.status.redo_started"
             ), false);
         } catch (Exception exception) {
-            if (undo && this.tryReturnBeforeRestore(client, exception)) {
-                return;
-            }
             client.gui.setOverlayMessage(this.statusMessage(this.statusKey(exception, undo)), false);
         }
     }
@@ -200,34 +195,6 @@ public final class UndoRedoKeyController {
                 actor,
                 Instant.now()
         );
-    }
-
-    private boolean tryReturnBeforeRestore(Minecraft client, Exception undoFailure) {
-        if (!this.isUndoUnavailable(undoFailure)) {
-            return false;
-        }
-        try {
-            ServerLevel level = this.currentLevel(client);
-            var project = this.projectService.findWorldProject(level)
-                    .orElseThrow(() -> new IllegalArgumentException("No active Lumi workspace in this dimension"));
-            this.quickRollbackService.returnBeforeLastRestore(level, project.name());
-            client.gui.setOverlayMessage(ActionBarMessagePresenter.info(
-                    "luma.status.return_before_restore_started"
-            ), false);
-            return true;
-        } catch (Exception restoreException) {
-            String message = restoreException.getMessage() == null ? "" : restoreException.getMessage();
-            if (message.contains("Another world operation is already running")) {
-                client.gui.setOverlayMessage(this.statusMessage("luma.status.world_operation_busy"), false);
-                return true;
-            }
-            return false;
-        }
-    }
-
-    private boolean isUndoUnavailable(Exception exception) {
-        String message = exception.getMessage() == null ? "" : exception.getMessage();
-        return message.contains("No Lumi action");
     }
 
     private String statusKey(Exception exception, boolean undo) {

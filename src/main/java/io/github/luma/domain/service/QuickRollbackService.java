@@ -33,7 +33,7 @@ public final class QuickRollbackService {
         if (activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
             throw new IllegalArgumentException("Current branch has no committed head yet");
         }
-        return this.restoreService.restoreVariantHead(level, projectName, activeVariant.id());
+        return this.restoreService.restoreVariantHeadUndoable(level, projectName, activeVariant.id());
     }
 
     public OperationHandle returnBeforeLastRestore(ServerLevel level, String projectName) throws IOException {
