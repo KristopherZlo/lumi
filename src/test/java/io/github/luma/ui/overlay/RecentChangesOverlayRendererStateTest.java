@@ -49,7 +49,7 @@ class RecentChangesOverlayRendererStateTest {
     }
 
     @Test
-    void denseRecentActionCollapsesToMergedBlob() {
+    void largeRecentActionUsesExposedSurfaceMeshes() {
         UndoRedoAction action = new UndoRedoAction(
                 "action",
                 "Alex",
@@ -66,8 +66,8 @@ class RecentChangesOverlayRendererStateTest {
 
         assertTrue(RecentChangesOverlayRenderer.visible());
         int renderedSurfaceEntries = RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(10.5D, 70.5D, 10.5D);
-        assertEquals(0, renderedSurfaceEntries);
-        assertEquals(1, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(10.5D, 70.5D, 10.5D));
+        assertEquals(2168, renderedSurfaceEntries);
+        assertEquals(0, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(10.5D, 70.5D, 10.5D));
     }
 
     private static CompoundTag state(String blockId) {

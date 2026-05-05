@@ -1,41 +1,31 @@
 package io.github.luma.ui.overlay;
 
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.UndoRedoAction;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.Mth;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.shapes.Shapes;
 
 public final class RecentChangesOverlayRenderer {
 
-    private static final int MAX_RECENT_RENDERED_BLOCKS = 512;
-    private static final int MAX_RECENT_VOLUME_BOXES = 96;
-    private static final int AGGREGATE_THRESHOLD = 512;
-    private static final int DENSE_BLOB_THRESHOLD = 4096;
+    private static final int DENSE_BLOB_THRESHOLD = 100_000;
+    private static final int MAX_SECTION_UPLOADS_PER_FRAME = 48;
     private static final int MAX_ACTIONS = 10;
     private static final int BASE_ALPHA = 136;
     private static final int ALPHA_STEP = 12;
     private static final float FILL_ALPHA_SCALE = 0.38F;
     private static final int MIN_FILL_ALPHA = 24;
     private static final float OUTLINE_WIDTH = 2.75F;
-    private static final float AGGREGATE_OUTLINE_WIDTH = 1.5F;
+    private static final float VOLUME_OUTLINE_WIDTH = 1.5F;
     private static final float FACE_OUTSET = 0.003F;
-    private static final int AGGREGATE_FILL_ALPHA = 18;
     private static final int DENSE_BLOB_FILL_ALPHA = 28;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final OverlayVolumeMerger VOLUME_MERGER = new OverlayVolumeMerger();
@@ -99,24 +89,25 @@ public final class RecentChangesOverlayRenderer {
             return;
         }
         OverlayState state = prepared.state();
-        ACTIVE_STATE.set(state);
+        closePrevious(ACTIVE_STATE.getAndSet(state));
         OverlayDiagnostics.getInstance().log(
                 prepared.debugEnabled(),
                 "recent-show",
                 "recent-overlay",
-                "Loaded recent overlay project={} preview={} revision={} actions={} entries={} surfaceEntries={} volumeBoxes={}",
+                "Loaded recent overlay project={} preview={} revision={} actions={} entries={} surfaceEntries={} volumeBoxes={} meshSections={}",
                 prepared.projectId(),
                 prepared.previewTarget(),
                 prepared.revision(),
                 prepared.actionCount(),
                 prepared.entryCount(),
                 prepared.surfaceEntryCount(),
-                prepared.volumeBoxCount()
+                prepared.volumeBoxCount(),
+                state == null ? 0 : state.meshSectionCount()
         );
     }
 
     public static void clear() {
-        ACTIVE_STATE.set(null);
+        closePrevious(ACTIVE_STATE.getAndSet(null));
     }
 
     public static boolean visible() {
@@ -130,12 +121,12 @@ public final class RecentChangesOverlayRenderer {
 
     static int visibleSurfaceEntryCountForTest(double cameraX, double cameraY, double cameraZ) {
         OverlayState state = ACTIVE_STATE.get();
-        return state == null ? 0 : state.visibleSelection(cameraX, cameraY, cameraZ).surfaceEntries().size();
+        return state == null ? 0 : state.surfaceEntryCount();
     }
 
     static int visibleAggregateBoxCountForTest(double cameraX, double cameraY, double cameraZ) {
         OverlayState state = ACTIVE_STATE.get();
-        return state == null ? 0 : state.visibleSelection(cameraX, cameraY, cameraZ).volumeBoxes().size();
+        return state == null ? 0 : state.volumeBoxCount();
     }
 
     public static void render(WorldRenderContext context) {
@@ -174,8 +165,16 @@ public final class RecentChangesOverlayRenderer {
                     exception.getClass().getSimpleName(),
                     exception.getMessage()
             );
-            ACTIVE_STATE.compareAndSet(state, null);
+            if (ACTIVE_STATE.compareAndSet(state, null)) {
+                state.close();
+            }
             LumaMod.LOGGER.warn("Disabled recent changes overlay after a render pipeline failure", exception);
+        }
+    }
+
+    private static void closePrevious(OverlayState state) {
+        if (state != null) {
+            state.close();
         }
     }
 
@@ -206,125 +205,35 @@ public final class RecentChangesOverlayRenderer {
             return;
         }
         var camera = Minecraft.getInstance().gameRenderer.getMainCamera().position();
-        VisibleSelection selection = state.visibleSelection(camera.x, camera.y, camera.z);
-        List<SurfaceEntry> visibleSurfaceEntries = selection.surfaceEntries();
-        List<OverlayVolumeMerger.OverlayBox> volumeBoxes = selection.volumeBoxes();
+        OverlayMeshBatch.RenderStats renderStats = state.meshBatch().render(
+                CompareOverlayRenderTypes.fill(false),
+                CompareOverlayRenderTypes.outline(false),
+                camera,
+                renderDistanceChunks(),
+                MAX_SECTION_UPLOADS_PER_FRAME
+        );
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),
                 "recent-frame",
                 "recent-overlay",
-                "Render frame entries={} surfaceEntries={} renderedEntries={} volumeBoxes={} denseBlob={} camera={}:{}:{}",
+                "Render frame entries={} surfaceEntries={} volumeBoxes={} meshSections={}/{} uploaded={} skipped={} denseBlob={} camera={}:{}:{}",
                 state.entries().size(),
                 state.surfaceEntryCount(),
-                visibleSurfaceEntries.size(),
-                volumeBoxes.size(),
+                state.volumeBoxCount(),
+                renderStats.filledSections(),
+                renderStats.totalSections(),
+                renderStats.uploadedSections(),
+                renderStats.skippedSections(),
                 state.denseBlob(),
                 camera.x,
                 camera.y,
                 camera.z
         );
+    }
 
-        var fillType = CompareOverlayRenderTypes.fill(false);
-        var fillBuffer = OverlayImmediateRenderer.begin(fillType);
-        VertexConsumer fillConsumer = fillBuffer;
-        int filledFaceCount = 0;
-        int minFillAlpha = Integer.MAX_VALUE;
-        int maxFillAlpha = Integer.MIN_VALUE;
-        for (SurfaceEntry surfaceEntry : visibleSurfaceEntries) {
-            RecentChangeEntry entry = surfaceEntry.entry();
-            float minX = (float) (entry.pos().x() - camera.x) - FACE_OUTSET;
-            float minY = (float) (entry.pos().y() - camera.y) - FACE_OUTSET;
-            float minZ = (float) (entry.pos().z() - camera.z) - FACE_OUTSET;
-            float maxX = (float) (entry.pos().x() + 1.0D - camera.x) + FACE_OUTSET;
-            float maxY = (float) (entry.pos().y() + 1.0D - camera.y) + FACE_OUTSET;
-            float maxZ = (float) (entry.pos().z() + 1.0D - camera.z) + FACE_OUTSET;
-            int fillAlpha = Math.max(MIN_FILL_ALPHA, Math.round(entry.alpha() * FILL_ALPHA_SCALE));
-            minFillAlpha = Math.min(minFillAlpha, fillAlpha);
-            maxFillAlpha = Math.max(maxFillAlpha, fillAlpha);
-            filledFaceCount += OverlayFaceRenderer.renderFilledBox(
-                    matrices,
-                    fillConsumer,
-                    minX,
-                    minY,
-                    minZ,
-                    maxX,
-                    maxY,
-                    maxZ,
-                    surfaceEntry.surfaceBlock(),
-                    0xFF,
-                    0x9C,
-                    0x3A,
-                    fillAlpha
-            );
-        }
-        if (visibleSurfaceEntries.isEmpty()) {
-            minFillAlpha = 0;
-            maxFillAlpha = 0;
-        }
-        int volumeFillAlpha = state.denseBlob() ? DENSE_BLOB_FILL_ALPHA : AGGREGATE_FILL_ALPHA;
-        for (OverlayVolumeMerger.OverlayBox box : volumeBoxes) {
-            filledFaceCount += OverlayFaceRenderer.renderSolidBox(
-                    matrices,
-                    fillConsumer,
-                    (float) (box.minX() - camera.x) - FACE_OUTSET,
-                    (float) (box.minY() - camera.y) - FACE_OUTSET,
-                    (float) (box.minZ() - camera.z) - FACE_OUTSET,
-                    (float) (box.maxX() - camera.x) + FACE_OUTSET,
-                    (float) (box.maxY() - camera.y) + FACE_OUTSET,
-                    (float) (box.maxZ() - camera.z) + FACE_OUTSET,
-                    0xFF,
-                    0x9C,
-                    0x3A,
-                    volumeFillAlpha
-            );
-        }
-        boolean fillDrawn = OverlayImmediateRenderer.draw(fillType, fillBuffer);
-
-        OverlayDiagnostics.getInstance().log(
-                state.debugEnabled(),
-                "recent-fill-pass",
-                "recent-overlay",
-                "Fill pass entries={} volumeBoxes={} faces={} vertices={} alphaRange={}..{} drawn={} renderType={} consumer={} outset={}",
-                visibleSurfaceEntries.size(),
-                volumeBoxes.size(),
-                filledFaceCount,
-                filledFaceCount * 4,
-                minFillAlpha,
-                maxFillAlpha,
-                fillDrawn,
-                fillType,
-                fillConsumer.getClass().getName(),
-                FACE_OUTSET
-        );
-
-        var outlineType = CompareOverlayRenderTypes.outline(false);
-        var lineBuffer = OverlayImmediateRenderer.begin(outlineType);
-        VertexConsumer lineConsumer = lineBuffer;
-        for (SurfaceEntry surfaceEntry : visibleSurfaceEntries) {
-            RecentChangeEntry entry = surfaceEntry.entry();
-            ShapeRenderer.renderShape(
-                    matrices,
-                    lineConsumer,
-                    Shapes.block(),
-                    entry.pos().x() - camera.x,
-                    entry.pos().y() - camera.y,
-                    entry.pos().z() - camera.z,
-                    0xFFFF9C3A,
-                    OUTLINE_WIDTH);
-        }
-        int volumeOutlineColor = state.denseBlob() ? 0xB3FF9C3A : 0x99FF9C3A;
-        for (OverlayVolumeMerger.OverlayBox box : volumeBoxes) {
-            ShapeRenderer.renderShape(
-                    matrices,
-                    lineConsumer,
-                    Shapes.create(new AABB(0.0D, 0.0D, 0.0D, box.maxX() - box.minX(), box.maxY() - box.minY(), box.maxZ() - box.minZ())),
-                    box.minX() - camera.x,
-                    box.minY() - camera.y,
-                    box.minZ() - camera.z,
-                    volumeOutlineColor,
-                    AGGREGATE_OUTLINE_WIDTH);
-        }
-        OverlayImmediateRenderer.draw(outlineType, lineBuffer);
+    private static int renderDistanceChunks() {
+        Minecraft client = Minecraft.getInstance();
+        return client == null || client.options == null ? 8 : client.options.getEffectiveRenderDistance();
     }
 
     private static List<RecentChangeEntry> flatten(List<UndoRedoAction> actions) {
@@ -355,155 +264,12 @@ public final class RecentChangesOverlayRenderer {
         return actions == null ? 0 : actions.size();
     }
 
-    private static List<SurfaceEntry> selectNearestSurfaceEntries(
-            List<SurfaceEntry> entries,
-            double cameraX,
-            double cameraY,
-            double cameraZ) {
-        if (entries.isEmpty()) {
-            return List.of();
-        }
-
-        PriorityQueue<RankedEntry> selected = new PriorityQueue<>(
-                MAX_RECENT_RENDERED_BLOCKS,
-                Comparator.comparingDouble(RankedEntry::distanceSquared).reversed());
-        for (SurfaceEntry entry : entries) {
-            double distanceSquared = distanceSquared(entry.entry(), cameraX, cameraY, cameraZ);
-            if (selected.size() < MAX_RECENT_RENDERED_BLOCKS) {
-                selected.add(new RankedEntry(entry, distanceSquared));
-                continue;
-            }
-
-            RankedEntry farthest = selected.peek();
-            if (farthest != null && distanceSquared < farthest.distanceSquared()) {
-                selected.poll();
-                selected.add(new RankedEntry(entry, distanceSquared));
-            }
-        }
-
-        List<RankedEntry> ranked = new ArrayList<>(selected);
-        ranked.sort(Comparator.comparingDouble(RankedEntry::distanceSquared));
-        List<SurfaceEntry> result = new ArrayList<>(ranked.size());
-        for (RankedEntry entry : ranked) {
-            result.add(entry.entry());
-        }
-        return List.copyOf(result);
-    }
-
-    private static List<OverlayVolumeMerger.OverlayBox> selectNearestAggregateBoxes(
-            List<SurfaceEntry> surfaceEntries,
-            List<SurfaceEntry> selectedEntries,
-            double cameraX,
-            double cameraY,
-            double cameraZ
-    ) {
-        if (surfaceEntries.size() <= AGGREGATE_THRESHOLD || selectedEntries.size() >= surfaceEntries.size()) {
-            return List.of();
-        }
-
-        java.util.HashSet<Long> selectedPositions = new java.util.HashSet<>((selectedEntries.size() * 4 / 3) + 1);
-        for (SurfaceEntry entry : selectedEntries) {
-            selectedPositions.add(pack(entry.entry().pos()));
-        }
-
-        Map<AggregateKey, OverlayVolumeMerger.OverlayBox> boxes = new LinkedHashMap<>();
-        for (SurfaceEntry entry : surfaceEntries) {
-            if (selectedPositions.contains(pack(entry.entry().pos()))) {
-                continue;
-            }
-            AggregateKey key = AggregateKey.from(entry.entry().pos());
-            boxes.putIfAbsent(key, key.toBox());
-        }
-
-        PriorityQueue<RankedAggregateBox> selected = new PriorityQueue<>(
-                MAX_RECENT_VOLUME_BOXES,
-                Comparator.comparingDouble(RankedAggregateBox::distanceSquared).reversed());
-        for (OverlayVolumeMerger.OverlayBox box : boxes.values()) {
-            double distanceSquared = box.distanceSquared(cameraX, cameraY, cameraZ);
-            if (selected.size() < MAX_RECENT_VOLUME_BOXES) {
-                selected.add(new RankedAggregateBox(box, distanceSquared));
-                continue;
-            }
-
-            RankedAggregateBox farthest = selected.peek();
-            if (farthest != null && distanceSquared < farthest.distanceSquared()) {
-                selected.poll();
-                selected.add(new RankedAggregateBox(box, distanceSquared));
-            }
-        }
-
-        List<RankedAggregateBox> ranked = new ArrayList<>(selected);
-        ranked.sort(Comparator.comparingDouble(RankedAggregateBox::distanceSquared));
-        List<OverlayVolumeMerger.OverlayBox> result = new ArrayList<>(ranked.size());
-        for (RankedAggregateBox entry : ranked) {
-            result.add(entry.box());
-        }
-        return List.copyOf(result);
-    }
-
-    private static List<OverlayVolumeMerger.OverlayBox> selectNearestVolumeBoxes(
-            List<OverlayVolumeMerger.OverlayBox> boxes,
-            double cameraX,
-            double cameraY,
-            double cameraZ
-    ) {
-        if (boxes.isEmpty()) {
-            return List.of();
-        }
-        if (boxes.size() <= MAX_RECENT_VOLUME_BOXES) {
-            return boxes;
-        }
-
-        PriorityQueue<RankedAggregateBox> selected = new PriorityQueue<>(
-                MAX_RECENT_VOLUME_BOXES,
-                Comparator.comparingDouble(RankedAggregateBox::distanceSquared).reversed());
-        for (OverlayVolumeMerger.OverlayBox box : boxes) {
-            double distanceSquared = box.distanceSquared(cameraX, cameraY, cameraZ);
-            if (selected.size() < MAX_RECENT_VOLUME_BOXES) {
-                selected.add(new RankedAggregateBox(box, distanceSquared));
-                continue;
-            }
-
-            RankedAggregateBox farthest = selected.peek();
-            if (farthest != null && distanceSquared < farthest.distanceSquared()) {
-                selected.poll();
-                selected.add(new RankedAggregateBox(box, distanceSquared));
-            }
-        }
-
-        List<RankedAggregateBox> ranked = new ArrayList<>(selected);
-        ranked.sort(Comparator.comparingDouble(RankedAggregateBox::distanceSquared));
-        List<OverlayVolumeMerger.OverlayBox> result = new ArrayList<>(ranked.size());
-        for (RankedAggregateBox entry : ranked) {
-            result.add(entry.box());
-        }
-        return List.copyOf(result);
-    }
-
-    private static double distanceSquared(RecentChangeEntry entry, double cameraX, double cameraY, double cameraZ) {
-        double dx = (entry.pos().x() + 0.5D) - cameraX;
-        double dy = (entry.pos().y() + 0.5D) - cameraY;
-        double dz = (entry.pos().z() + 0.5D) - cameraZ;
-        return (dx * dx) + (dy * dy) + (dz * dz);
-    }
-
-    private record RankedEntry(SurfaceEntry entry, double distanceSquared) {
-    }
-
-    private record RankedAggregateBox(OverlayVolumeMerger.OverlayBox box, double distanceSquared) {
-    }
-
     private record RecentChangeEntry(BlockPoint pos, int alpha) {
     }
 
     private record SurfaceEntry(
             RecentChangeEntry entry,
             CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock) {
-    }
-
-    private record VisibleSelection(
-            List<SurfaceEntry> surfaceEntries,
-            List<OverlayVolumeMerger.OverlayBox> volumeBoxes) {
     }
 
     record PreparedOverlay(
@@ -518,24 +284,6 @@ public final class RecentChangesOverlayRenderer {
             OverlayState state) {
     }
 
-    private record AggregateKey(int chunkX, int sectionY, int chunkZ) {
-
-        private static AggregateKey from(BlockPoint pos) {
-            return new AggregateKey(Math.floorDiv(pos.x(), 16), Math.floorDiv(pos.y(), 16), Math.floorDiv(pos.z(), 16));
-        }
-
-        private OverlayVolumeMerger.OverlayBox toBox() {
-            return new OverlayVolumeMerger.OverlayBox(
-                    this.chunkX << 4,
-                    this.sectionY << 4,
-                    this.chunkZ << 4,
-                    (this.chunkX + 1) << 4,
-                    (this.sectionY + 1) << 4,
-                    (this.chunkZ + 1) << 4
-            );
-        }
-    }
-
     private static final class OverlayState {
 
         private final String projectId;
@@ -544,12 +292,9 @@ public final class RecentChangesOverlayRenderer {
         private final List<RecentChangeEntry> entries;
         private final List<SurfaceEntry> surfaceEntries;
         private final List<OverlayVolumeMerger.OverlayBox> volumeBoxes;
+        private final OverlayMeshBatch meshBatch;
         private final boolean debugEnabled;
         private final boolean denseBlob;
-        private int cachedCameraBlockX = Integer.MIN_VALUE;
-        private int cachedCameraBlockY = Integer.MIN_VALUE;
-        private int cachedCameraBlockZ = Integer.MIN_VALUE;
-        private VisibleSelection cachedVisibleSelection = new VisibleSelection(List.of(), List.of());
 
         private OverlayState(
                 String projectId,
@@ -575,6 +320,7 @@ public final class RecentChangesOverlayRenderer {
                 this.surfaceEntries = this.buildSurfaceEntries(this.entries);
                 this.volumeBoxes = List.of();
             }
+            this.meshBatch = this.buildMeshBatch();
         }
 
         private List<RecentChangeEntry> entries() {
@@ -609,27 +355,52 @@ public final class RecentChangesOverlayRenderer {
             return this.volumeBoxes.size();
         }
 
-        private synchronized VisibleSelection visibleSelection(double cameraX, double cameraY, double cameraZ) {
-            int cameraBlockX = Mth.floor(cameraX);
-            int cameraBlockY = Mth.floor(cameraY);
-            int cameraBlockZ = Mth.floor(cameraZ);
-            if (cameraBlockX == this.cachedCameraBlockX
-                    && cameraBlockY == this.cachedCameraBlockY
-                    && cameraBlockZ == this.cachedCameraBlockZ) {
-                return this.cachedVisibleSelection;
-            }
+        private int meshSectionCount() {
+            return this.meshBatch.sectionCount();
+        }
 
-            this.cachedCameraBlockX = cameraBlockX;
-            this.cachedCameraBlockY = cameraBlockY;
-            this.cachedCameraBlockZ = cameraBlockZ;
-            List<SurfaceEntry> visibleEntries = selectNearestSurfaceEntries(this.surfaceEntries, cameraX, cameraY, cameraZ);
-            this.cachedVisibleSelection = new VisibleSelection(
-                    visibleEntries,
-                    this.denseBlob
-                            ? selectNearestVolumeBoxes(this.volumeBoxes, cameraX, cameraY, cameraZ)
-                            : selectNearestAggregateBoxes(this.surfaceEntries, visibleEntries, cameraX, cameraY, cameraZ)
-            );
-            return this.cachedVisibleSelection;
+        private OverlayMeshBatch meshBatch() {
+            return this.meshBatch;
+        }
+
+        private void close() {
+            this.meshBatch.close();
+        }
+
+        private OverlayMeshBatch buildMeshBatch() {
+            OverlayMeshBatch.Builder builder = OverlayMeshBatch.builder();
+            for (SurfaceEntry surfaceEntry : this.surfaceEntries) {
+                int fillAlpha = Math.max(MIN_FILL_ALPHA, Math.round(surfaceEntry.entry().alpha() * FILL_ALPHA_SCALE));
+                builder.addSurfaceBlock(
+                        surfaceEntry.surfaceBlock(),
+                        0xFF,
+                        0x9C,
+                        0x3A,
+                        fillAlpha,
+                        0xFFFF9C3A,
+                        OUTLINE_WIDTH,
+                        FACE_OUTSET
+                );
+            }
+            for (OverlayVolumeMerger.OverlayBox box : this.volumeBoxes) {
+                builder.addBox(
+                        box.minX(),
+                        box.minY(),
+                        box.minZ(),
+                        box.maxX(),
+                        box.maxY(),
+                        box.maxZ(),
+                        0xFF,
+                        0x9C,
+                        0x3A,
+                        DENSE_BLOB_FILL_ALPHA,
+                        0xB3FF9C3A,
+                        VOLUME_OUTLINE_WIDTH,
+                        FACE_OUTSET,
+                        0.0F
+                );
+            }
+            return builder.build();
         }
 
         private List<SurfaceEntry> buildSurfaceEntries(List<RecentChangeEntry> entries) {
@@ -664,7 +435,4 @@ public final class RecentChangesOverlayRenderer {
         }
     }
 
-    private static long pack(BlockPoint pos) {
-        return BlockPos.asLong(pos.x(), pos.y(), pos.z());
-    }
 }
