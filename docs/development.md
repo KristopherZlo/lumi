@@ -46,7 +46,7 @@ This now includes regression checks for:
 - auto-checkpoint command classification for large `/fill` and `/clone` commands
 - capture source permission gates and AutoCloseable context guard cleanup
 - runtime Lumi region selection state and selection-backed partial restore form filling
-- compare overlay nearest-entry selection
+- compare overlay spatial selection and cached section mesh behavior
 - commit graph layout on large histories
 - detached commit visibility after a restore-style reset
 - recovery draft isolation while save/amend operations run
@@ -132,8 +132,8 @@ Enable verbose runtime tracing for debugging:
 - accepted capture sessions keep the first 32 per-mutation traces behind debug logging, while info level stays focused on buffer checkpoints, queued/completed maintenance work, and reconcile summaries
 - whole-dimension stabilization now logs dirty-chunk reconcile summaries before draft flush/save/freeze, so startup diagnostics and reconcile summaries should be inspected together when ambient fallout looks suspicious
 - prepared world operations keep their final fast-apply metrics available to runtime tests and also log them under `world-op` debug tracing, including prepare/preload/apply/light/total durations, max apply/preload tick times, native sections/cells, rewrite sections/cells, direct/fallback sections, section packets, block-entity packets, deferred light checks, apply ticks, work-per-tick counters, light-drain ticks/duration, and fallback reasons. The `world-op-apply` debug category adds per-apply-tick budgets, stop reasons, chunk batch composition, section/chunk path timings, fallback summaries, and deferred light drain counts for restore/undo/redo speed diagnosis. Apply uses explicit `NORMAL`, `HISTORY_FAST`, and `DIAGNOSTIC_TURBO` profiles: ordinary work keeps conservative limits, restore/recovery/merge/undo/redo use faster history budgets, and bulk diagnostics can use larger sparse direct-section and light-drain caps while remaining deadline-bound and adaptive.
-- client overlay diagnostics log overlay-key state, compare/recent coordinator skip reasons, render callback health, selected surface counts, fill-pass face/vertex/alpha/render-type details, and render failures under `overlay-input`, `overlay-render`, `compare-overlay`, and `recent-overlay`
-- compare and recent-action overlay geometry is drawn as immediate `END_MAIN` world-render quads/lines so fill buffers are flushed in the same callback instead of relying on the shared world `MultiBufferSource`
+- client overlay diagnostics log overlay-key state, compare/recent coordinator skip reasons, render callback health, cached surface/volume counts, section mesh upload counts, render-distance skips, and render failures under `overlay-input`, `overlay-render`, `compare-overlay`, and `recent-overlay`
+- compare, recent-action, and region-selection overlay geometry is cached into section-scoped GPU meshes. Overlay states rebuild CPU geometry only when the diff, recent-action revision, or selected bounds change; frame rendering reuses uploaded buffers and lazily uploads newly visible sections instead of rebuilding all vertices every frame.
 
 ## Repository layout
 
@@ -180,8 +180,8 @@ Current UX assumptions:
 - opening See Changes with a resolved pair or pressing `Compare` enables the world highlight immediately for that diff
 - comparing against `current` refreshes the active world highlight automatically every few client ticks while the overlay data is present, except very large active overlays which keep their initial snapshot to avoid client stalls
 - holding the Lumi action button shows the compare highlight through blocks while held, with `Left Alt` as the default remappable control
-- compare overlays and small recent-action previews build their render selection from exposed changed blocks, so dense fills still have visible surfaces even when the camera is nearest to internal changed blocks; very large compare diffs collapse to merged low-alpha volume blobs by change type
-- holding the same remappable action button while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay; small actions render translucent exposed sides with thicker outlines, while dense actions collapse into merged low-alpha volume blobs prepared off the client tick. Holding the action button plus redo previews redo actions.
+- compare overlays and recent-action previews build their cached section meshes from exposed changed blocks, so dense fills still have visible surfaces even when the camera is nearest to internal changed blocks; extremely large overlays collapse to merged low-alpha volume blobs by change type
+- holding the same remappable action button while compare highlight is inactive shows the latest 10 undo actions with a fading temporary overlay; actions render translucent exposed sides with thicker outlines, while extremely large actions collapse into merged low-alpha volume blobs prepared off the client tick. Holding the action button plus redo previews redo actions.
 - the dashboard is a project picker outside the focused workspace menu
 - the workspace home screen is Build History: a compact owo-ui window with `Save build` as the only primary action, one-click `See changes`, recent saves, and `Branches`; maintenance tools stay in the sidebar `More` route
 - settings include a HUD section that can hide the persistent top-right Lumi panel without disabling action-bar operation progress, and settings persist immediately on valid field changes

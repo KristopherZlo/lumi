@@ -270,7 +270,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
 6. Use the Lumi action button plus `Z` / `Y` to undo or redo the latest tracked action while no screen is open. The default action button is `Left Alt`, and changing it changes these chords too. WorldEdit/FAWE actions use native tool undo/redo; captured Axiom capability actions replay through Lumi.
-7. Hold the Lumi action button to preview the latest 10 undo actions, or hold it plus `Y` to preview redo actions, when the compare overlay is not active. Small previews render nearest exposed changed blocks; dense previews collapse into merged low-alpha volume blobs so large edits do not draw thousands of separate block overlays.
+7. Hold the Lumi action button to preview the latest 10 undo actions, or hold it plus `Y` to preview redo actions, when the compare overlay is not active. Previews render cached exposed changed-block meshes; extremely large previews collapse into merged low-alpha volume blobs so the client does not build unbounded overlay geometry.
    Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
 8. Press the Lumi action button plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
 9. Use `Save build` when you want the full save screen with manual naming or replace-latest tools.
@@ -285,7 +285,7 @@ Current scope:
 - menu flow first, with commands limited to diagnostics/help and the explicit `/lumi testing singleplayer` runtime test suite
 - combine currently works through imported review projects for the same project lineage, with background review, block-level same-area detection, and validation messages before Lumi writes a combined save
 - partial restore is available from save details with manual bounds or a wooden-sword Lumi selection, including inside-selection and everything-except-selection modes
-- compare overlay marks changed positions, not a full 3D preview; very large comparisons collapse into merged volume blobs so the client does not draw hundreds of thousands of separate block overlays
+- compare overlay marks changed positions, not a full 3D preview; it caches exposed changed-block meshes by section and reuses uploaded GPU buffers between frames, while extremely large comparisons collapse into merged volume blobs so the client does not build unbounded overlay geometry
 
 ## TODO
 
