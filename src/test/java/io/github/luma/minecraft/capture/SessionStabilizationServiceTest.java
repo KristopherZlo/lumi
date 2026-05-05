@@ -191,6 +191,26 @@ class SessionStabilizationServiceTest {
         ).isEmpty());
     }
 
+    @Test
+    void reconciliationRelatedDeltasExcludeAlreadyTrackedDirectChanges() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        StoredBlockChange directPlacement = new StoredBlockChange(
+                new BlockPoint(2, 64, 1),
+                payload("minecraft:air"),
+                payload("minecraft:oak_planks")
+        );
+        StoredBlockChange secondaryPlacement = new StoredBlockChange(
+                new BlockPoint(3, 64, 1),
+                payload("minecraft:air"),
+                payload("minecraft:oak_planks")
+        );
+
+        assertEquals(
+                List.of(secondaryPlacement),
+                service.relatedDeltaChanges(List.of(directPlacement), List.of(directPlacement, secondaryPlacement))
+        );
+    }
+
     private static StoredBlockChange changeAt(int x) {
         return new StoredBlockChange(
                 new BlockPoint(x, 64, 0),

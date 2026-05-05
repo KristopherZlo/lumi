@@ -85,6 +85,7 @@ public final class SessionStabilizationService {
             List<StoredBlockChange> startingChanges = session.startingChunkChanges(processedChunks);
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
             List<StoredBlockChange> persistentDeltaChanges = this.persistentDeltaChanges(currentChanges, deltaChanges);
+            List<StoredBlockChange> relatedDeltaChanges = this.relatedDeltaChanges(currentChanges, persistentDeltaChanges);
             List<StoredBlockChange> composedChanges = composeChanges(startingChanges, persistentDeltaChanges);
             int bufferBefore = session.buffer().size();
             boolean bufferChanged = !currentChanges.equals(composedChanges);
@@ -104,7 +105,7 @@ public final class SessionStabilizationService {
                     bufferAfter,
                     false,
                     bufferChanged,
-                    persistentDeltaChanges
+                    relatedDeltaChanges
             );
         } catch (RuntimeException exception) {
             session.requeuePendingChunks(pendingChunks);
@@ -275,6 +276,29 @@ public final class SessionStabilizationService {
             List<StoredBlockChange> deltaChanges
     ) {
         return composeChanges(startingChanges, this.persistentDeltaChanges(currentChanges, deltaChanges));
+    }
+
+    List<StoredBlockChange> relatedDeltaChanges(
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> persistentDeltaChanges
+    ) {
+        if (persistentDeltaChanges == null || persistentDeltaChanges.isEmpty()) {
+            return List.of();
+        }
+        Map<BlockPoint, StoredBlockChange> currentByPos = new LinkedHashMap<>();
+        for (StoredBlockChange currentChange : currentChanges == null ? List.<StoredBlockChange>of() : currentChanges) {
+            currentByPos.put(currentChange.pos(), currentChange);
+        }
+
+        List<StoredBlockChange> related = new ArrayList<>();
+        for (StoredBlockChange deltaChange : persistentDeltaChanges) {
+            StoredBlockChange currentChange = currentByPos.get(deltaChange.pos());
+            if (currentChange != null && Objects.equals(currentChange.newValue(), deltaChange.newValue())) {
+                continue;
+            }
+            related.add(deltaChange);
+        }
+        return List.copyOf(related);
     }
 
     private boolean sectionsEqual(ChunkSectionSnapshotPayload baseline, ChunkSectionSnapshotPayload live) {

@@ -515,11 +515,15 @@ public final class HistoryCaptureManager {
     }
 
     private Optional<RecoveryDraft> snapshotDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        CaptureSessionState sessionState = this.sessionRegistry.session(projectId);
+        if (trackedProject != null && sessionState != null) {
+            this.reconcileSession(server, trackedProject, sessionState, true);
+        }
         TrackedChangeBuffer buffer = this.sessionRegistry.buffer(projectId);
         if (buffer != null) {
             return buffer.isEmpty() ? Optional.empty() : Optional.of(buffer.toDraft());
         }
-        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         if (trackedProject == null) {
             return Optional.empty();
         }
