@@ -4,6 +4,7 @@ import io.github.luma.LumaMod;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.domain.service.UndoRedoService;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.ArrayList;
@@ -39,6 +40,7 @@ final class SingleplayerStructureFixtureScenario {
     private final String projectName;
     private final String projectId;
     private final UndoRedoService undoRedoService = new UndoRedoService();
+    private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final SingleplayerPlayerActionDriver playerActions;
     private final List<StructureFixtureCheck> checks = new ArrayList<>();
@@ -73,6 +75,13 @@ final class SingleplayerStructureFixtureScenario {
             switch (this.stage) {
                 case PREPARE_FIXTURE -> this.prepareFixture(server, messages);
                 case LOAD_CONTROL_CASE -> this.loadControlCase(server, messages);
+                case WAIT_AFTER_LOAD -> {
+                    this.waitTicks += 1;
+                    if (this.waitTicks < SETTLE_TICKS) {
+                        return StructureFixtureStepResult.pending(messages);
+                    }
+                    this.captureLoadedBaseline(server, messages);
+                }
                 case PRESS_CONTROL -> this.pressControl(messages);
                 case WAIT_AFTER_CONTROL -> {
                     this.waitTicks += 1;
@@ -86,6 +95,13 @@ final class SingleplayerStructureFixtureScenario {
                     if (handle != null) {
                         return StructureFixtureStepResult.operation(messages, handle);
                     }
+                }
+                case WAIT_AFTER_UNDO -> {
+                    this.waitTicks += 1;
+                    if (this.waitTicks < SETTLE_TICKS) {
+                        return StructureFixtureStepResult.pending(messages);
+                    }
+                    this.stage = Stage.VERIFY_UNDO;
                 }
                 case VERIFY_UNDO -> this.verifyUndo(messages);
                 case FINISHED -> {
@@ -153,20 +169,41 @@ final class SingleplayerStructureFixtureScenario {
             return;
         }
 
+        if (!this.resetLiveHistory(server)) {
+            this.record(false, this.currentFixture.name() + " fixture reset live history for control "
+                    + (this.controlIndex + 1));
+            this.controlIndex += 1;
+            this.stage = Stage.LOAD_CONTROL_CASE;
+            return;
+        }
         this.loadTemplate(template);
-        this.historyManager.clearProject(this.projectId);
         this.currentControl = this.controls.get(this.controlIndex).at(this.volume.min());
-        this.baseline = StructureFixtureSnapshot.capture(this.level, this.volume);
         messages.add("Lumi structure fixture " + this.currentFixture.name()
                 + " control " + (this.controlIndex + 1) + "/" + this.controls.size()
-                + " at " + this.format(this.currentControl.pos()));
+                + " at " + this.format(this.currentControl.pos())
+                + "; settling loaded fixture for " + SETTLE_TICKS + " ticks");
+        this.waitTicks = 0;
+        this.stage = Stage.WAIT_AFTER_LOAD;
+    }
+
+    private void captureLoadedBaseline(MinecraftServer server, List<String> messages) {
+        if (!this.resetLiveHistory(server)) {
+            this.record(false, this.currentFixture.name() + " fixture reset settled history for control "
+                    + (this.controlIndex + 1));
+            this.controlIndex += 1;
+            this.stage = Stage.LOAD_CONTROL_CASE;
+            return;
+        }
+        this.baseline = StructureFixtureSnapshot.capture(this.level, this.volume);
+        messages.add("Captured settled baseline for " + this.currentFixture.name()
+                + " " + this.currentControl.label());
         this.stage = Stage.PRESS_CONTROL;
     }
 
     private void pressControl(List<String> messages) {
         boolean baselineLoaded = this.baseline.matches(StructureFixtureSnapshot.capture(this.level, this.volume));
         this.record(baselineLoaded, this.currentFixture.name() + " "
-                + this.currentControl.label() + " starts from the saved fixture state");
+                + this.currentControl.label() + " starts from the settled loaded fixture state");
 
         boolean used = this.playerActions.useBlock(this.currentControl.pos(), this.currentControl.face());
         this.record(used, this.currentFixture.name() + " "
@@ -192,8 +229,10 @@ final class SingleplayerStructureFixtureScenario {
         try {
             OperationHandle handle = this.undoRedoService.undo(this.level, this.projectName);
             messages.add("Queued Alt+Z-equivalent Lumi undo for "
-                    + this.currentFixture.name() + " " + this.currentControl.label());
-            this.stage = Stage.VERIFY_UNDO;
+                    + this.currentFixture.name() + " " + this.currentControl.label()
+                    + "; waiting " + SETTLE_TICKS + " ticks after undo");
+            this.waitTicks = 0;
+            this.stage = Stage.WAIT_AFTER_UNDO;
             return handle;
         } catch (Exception exception) {
             this.record(false, this.currentFixture.name() + " " + this.currentControl.label()
@@ -204,11 +243,21 @@ final class SingleplayerStructureFixtureScenario {
         }
     }
 
+    private boolean resetLiveHistory(MinecraftServer server) {
+        try {
+            this.captureManager.discardSession(server, this.projectId);
+            this.historyManager.clearProject(this.projectId);
+            return true;
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
     private void verifyUndo(List<String> messages) {
         StructureFixtureSnapshot restored = StructureFixtureSnapshot.capture(this.level, this.volume);
         boolean matches = this.baseline.matches(restored);
         this.record(matches, this.currentFixture.name() + " " + this.currentControl.label()
-                + " returned exactly to the saved fixture after undo"
+                + " returned exactly to the settled loaded fixture after undo"
                 + (matches ? "" : ": " + this.baseline.diff(restored)));
         messages.add("Verified undo for " + this.currentFixture.name() + " " + this.currentControl.label());
         this.controlIndex += 1;
@@ -281,9 +330,11 @@ final class SingleplayerStructureFixtureScenario {
     private enum Stage {
         PREPARE_FIXTURE,
         LOAD_CONTROL_CASE,
+        WAIT_AFTER_LOAD,
         PRESS_CONTROL,
         WAIT_AFTER_CONTROL,
         CHECK_CHANGED,
+        WAIT_AFTER_UNDO,
         VERIFY_UNDO,
         FINISHED
     }

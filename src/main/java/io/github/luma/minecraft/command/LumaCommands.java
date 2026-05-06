@@ -33,7 +33,10 @@ public final class LumaCommands {
 
         root.then(Commands.literal("testing")
                 .then(Commands.literal("singleplayer")
-                        .executes(context -> this.execute(context.getSource(), this.singleplayerTestingService::start))));
+                        .executes(context -> this.execute(context.getSource(), this.singleplayerTestingService::start)))
+                .then(Commands.literal("structures")
+                        .executes(context -> this.execute(context.getSource(),
+                                this.singleplayerTestingService::startStructureFixtures))));
 
         dispatcher.register(root);
     }
@@ -43,6 +46,7 @@ public final class LumaCommands {
         source.sendSuccess(() -> Component.literal("/lumi-onboarding - replay the short Lumi onboarding tour"), false);
         source.sendSuccess(() -> Component.literal("/lumi status - show project and operation status"), false);
         source.sendSuccess(() -> Component.literal("/lumi testing singleplayer - run the integrated-world Lumi regression suite"), false);
+        source.sendSuccess(() -> Component.literal("/lumi testing structures - run only saved structure fixture diagnostics"), false);
         source.sendSuccess(() -> Component.literal("Use the Lumi UI for project creation, save, restore, variants, recovery, share, merge, import/export, and cleanup."), false);
         return 1;
     }

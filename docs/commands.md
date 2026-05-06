@@ -40,9 +40,12 @@ Shows:
 
 ```mcfunction
 /lumi testing singleplayer
+/lumi testing structures
 ```
 
 Runs an integrated-server regression suite against the real in-world Lumi services. The command is singleplayer-only, refuses to start while another Lumi world operation is active, and needs a small empty air volume above the player's current chunk.
+
+`/lumi testing structures` runs only the saved structure fixture diagnostics. It creates the same temporary bounded project, then skips the broader save, restore, gameplay, bulk apply, and performance phases.
 
 The suite shows phase progress in chat, records every check as pass/fail, and keeps running after failed checks when the next workflow can still be exercised. Hard workflow errors are logged, then the runner skips to the next safe phase or cleanup.
 
@@ -52,7 +55,7 @@ After the normal workflow budget checks, the command runs a large storage-backed
 
 The command then runs bulk apply diagnostics. These prepare and apply three large block batches: a dense rewrite-friendly `64x64x64` case, a same-sized block-entity fallback case, and a sparse direct-section case with about 250k changed cells spread across high-altitude chunks. The diagnostics preflight target cells for air before writing; a scenario is skipped instead of overwriting existing player blocks when any target cell is occupied. The test log records save/restore/fill/delete durations, work units, and fast-apply counters such as rewrite/native/direct/fallback sections, packets, light checks, apply ticks, work-per-tick counters, light-drain ticks/duration, and fallback reasons. It also logs per-gameplay-scenario timings so the performance budget can identify the slow interaction. It removes test blocks and archives the temporary project when the run finishes or fails.
 
-Finally, the command loads the saved structure fixtures bundled under `data/lumi/structure/testing`: `bud`, `door`, and `main`. Each fixture is loaded into the reserved test volume from a clean baseline. The runner discovers every button and lever in the loaded structure, isolates the live undo stack for that control, presses the control through normal server-side player interaction, waits 40 ticks for redstone, block-entity, and entity fallout to settle, verifies that the fixture changed, then queues the same Lumi undo operation used by the Alt+Z shortcut. After each undo completes, the runner compares the whole reserved volume against the saved fixture baseline, including block states, block entity NBT such as inventory item counts, and non-player entity snapshots.
+Finally, the command loads the saved structure fixtures bundled under `data/lumi/structure/testing`: `bud`, `door`, and `main`. Each fixture is loaded into the reserved test volume from a clean baseline. The runner discovers every button and lever in the loaded structure, reloads the fixture for each control, waits 40 ticks for the loaded structure to settle, isolates the live undo stack, then records the settled loaded fixture as the comparison baseline. It presses the control through normal server-side player interaction, waits 40 ticks for redstone, block-entity, and entity fallout to settle, verifies that the fixture changed, then queues the same Lumi undo operation used by the Alt+Z shortcut. After each undo completes, the runner waits another 40 ticks for vanilla redstone and entity fallout, then compares the whole reserved volume against the baseline, including block states, block entity NBT such as inventory item counts, and non-player entity snapshots.
 
 Each run writes a detailed log to:
 

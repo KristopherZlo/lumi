@@ -1,7 +1,9 @@
 package io.github.luma.minecraft.testing;
 
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +21,7 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 record StructureFixtureSnapshot(
         Map<BlockPos, BlockSnapshot> blocks,
-        List<String> entities
+        List<EntitySnapshot> entities
 ) {
 
     static StructureFixtureSnapshot capture(ServerLevel level, SingleplayerTestVolume volume) {
@@ -32,15 +34,16 @@ record StructureFixtureSnapshot(
         }
 
         EntitySnapshotService entitySnapshotService = new EntitySnapshotService();
-        List<String> entities = new ArrayList<>();
+        List<EntitySnapshot> entities = new ArrayList<>();
         for (Entity entity : level.getEntities((Entity) null, volume.bounds(),
                 entity -> !(entity instanceof ServerPlayer))) {
             var payload = entitySnapshotService.capture(level, entity);
             if (payload != null) {
-                entities.add(snbt(payload.copyTag()));
+                CompoundTag tag = payload.copyTag();
+                entities.add(new EntitySnapshot(snbt(tag), entitySummary(tag)));
             }
         }
-        entities.sort(String::compareTo);
+        entities.sort(Comparator.comparing(EntitySnapshot::snbt));
         return new StructureFixtureSnapshot(Map.copyOf(blocks), List.copyOf(entities));
     }
 
@@ -57,14 +60,56 @@ record StructureFixtureSnapshot(
         for (Map.Entry<BlockPos, BlockSnapshot> entry : this.blocks.entrySet()) {
             BlockSnapshot restored = other.blocks.get(entry.getKey());
             if (!entry.getValue().equals(restored)) {
-                return "block mismatch at " + this.format(entry.getKey());
+                return "block mismatch at " + this.format(entry.getKey())
+                        + " expectedState=" + truncated(entry.getValue().stateSnbt())
+                        + " actualState=" + truncated(restored == null ? "" : restored.stateSnbt())
+                        + this.blockEntityDiff(entry.getValue(), restored);
             }
         }
         if (!this.entities.equals(other.entities)) {
             return "entity snapshot mismatch expected=" + this.entities.size()
-                    + " actual=" + other.entities.size();
+                    + " actual=" + other.entities.size()
+                    + this.entityDiff(other);
         }
         return "unknown mismatch";
+    }
+
+    private String entityDiff(StructureFixtureSnapshot other) {
+        Map<String, Integer> actualCounts = new LinkedHashMap<>();
+        for (EntitySnapshot entity : other.entities) {
+            actualCounts.merge(entity.snbt(), 1, Integer::sum);
+        }
+
+        List<String> missing = new ArrayList<>();
+        for (EntitySnapshot entity : this.entities) {
+            int count = actualCounts.getOrDefault(entity.snbt(), 0);
+            if (count <= 0) {
+                missing.add(entity.summary());
+                continue;
+            }
+            actualCounts.put(entity.snbt(), count - 1);
+        }
+
+        List<String> extra = new ArrayList<>();
+        for (EntitySnapshot entity : other.entities) {
+            int count = actualCounts.getOrDefault(entity.snbt(), 0);
+            if (count > 0) {
+                extra.add(entity.summary());
+                actualCounts.put(entity.snbt(), count - 1);
+            }
+        }
+
+        return " missing=" + firstSummaries(missing)
+                + " extra=" + firstSummaries(extra);
+    }
+
+    private String blockEntityDiff(BlockSnapshot expected, BlockSnapshot actual) {
+        String actualSnbt = actual == null ? "" : actual.blockEntitySnbt();
+        if (expected.blockEntitySnbt().equals(actualSnbt)) {
+            return "";
+        }
+        return " expectedBlockEntity=" + truncated(expected.blockEntitySnbt())
+                + " actualBlockEntity=" + truncated(actualSnbt);
     }
 
     private String format(BlockPos pos) {
@@ -81,7 +126,47 @@ record StructureFixtureSnapshot(
         }
     }
 
+    private record EntitySnapshot(String snbt, String summary) {
+    }
+
     private static String snbt(CompoundTag tag) {
         return tag == null ? "" : NbtUtils.structureToSnbt(tag.copy());
+    }
+
+    private static String entitySummary(CompoundTag tag) {
+        if (tag == null) {
+            return "unknown";
+        }
+        String type = tag.getString("id").orElse("unknown");
+        String uuid = EntityPayload.readUuid(tag)
+                .map(java.util.UUID::toString)
+                .orElse("no-uuid");
+        var pos = tag.getListOrEmpty("Pos");
+        if (pos.size() < 3) {
+            return type + "@" + uuid;
+        }
+        return type + "@" + uuid
+                + "[" + rounded(pos.getDoubleOr(0, 0.0D))
+                + "," + rounded(pos.getDoubleOr(1, 0.0D))
+                + "," + rounded(pos.getDoubleOr(2, 0.0D)) + "]";
+    }
+
+    private static String firstSummaries(List<String> summaries) {
+        if (summaries.isEmpty()) {
+            return "[]";
+        }
+        int limit = Math.min(3, summaries.size());
+        return summaries.subList(0, limit) + (summaries.size() > limit ? "..." : "");
+    }
+
+    private static String rounded(double value) {
+        return String.format(java.util.Locale.ROOT, "%.2f", value);
+    }
+
+    private static String truncated(String value) {
+        if (value == null || value.length() <= 180) {
+            return value == null ? "" : value;
+        }
+        return value.substring(0, 180) + "...";
     }
 }

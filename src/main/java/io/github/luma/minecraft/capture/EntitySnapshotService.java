@@ -14,11 +14,14 @@ public final class EntitySnapshotService {
 
     private static final Set<String> VOLATILE_TAGS = Set.of(
             "Air",
+            "Age",
             "FallDistance",
             "Fire",
             "HurtByTimestamp",
             "HurtTime",
+            "Motion",
             "OnGround",
+            "PickupDelay",
             "PortalCooldown",
             "TicksFrozen"
     );
@@ -38,10 +41,7 @@ public final class EntitySnapshotService {
             return null;
         }
 
-        CompoundTag tag = output.buildResult();
-        for (String volatileTag : VOLATILE_TAGS) {
-            tag.remove(volatileTag);
-        }
+        CompoundTag tag = normalizeForHistory(output.buildResult());
         if (!tag.contains("id")) {
             tag.putString("id", net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
         }
@@ -49,6 +49,14 @@ public final class EntitySnapshotService {
             tag.putString("UUID", entity.getUUID().toString());
         }
         return new EntityPayload(tag);
+    }
+
+    static CompoundTag normalizeForHistory(CompoundTag source) {
+        CompoundTag tag = source == null ? new CompoundTag() : source.copy();
+        for (String volatileTag : VOLATILE_TAGS) {
+            tag.remove(volatileTag);
+        }
+        return tag;
     }
 
     private String entityType(Entity entity) {

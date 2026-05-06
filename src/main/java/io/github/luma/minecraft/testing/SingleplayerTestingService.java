@@ -32,6 +32,25 @@ public final class SingleplayerTestingService {
     }
 
     public synchronized int start(MinecraftServer server, ServerLevel level, ServerPlayer player) throws Exception {
+        return this.start(server, level, player, SingleplayerTestMode.FULL);
+    }
+
+    public synchronized int startStructureFixtures(CommandSourceStack source) throws Exception {
+        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
+                SingleplayerTestMode.STRUCTURE_FIXTURES);
+    }
+
+    public synchronized int startStructureFixtures(MinecraftServer server, ServerLevel level, ServerPlayer player)
+            throws Exception {
+        return this.start(server, level, player, SingleplayerTestMode.STRUCTURE_FIXTURES);
+    }
+
+    private int start(
+            MinecraftServer server,
+            ServerLevel level,
+            ServerPlayer player,
+            SingleplayerTestMode mode
+    ) throws Exception {
         if (server.isDedicatedServer()) {
             throw new IllegalStateException("/lumi testing singleplayer can only run in an integrated singleplayer world");
         }
@@ -46,8 +65,8 @@ public final class SingleplayerTestingService {
                 .orElseThrow(() -> new IllegalStateException("No empty 5x4x5 air volume was found above the player chunk"));
         this.lastRunServerKey = serverKey(server);
         this.lastRunPassed = false;
-        this.activeRun = new SingleplayerTestRun(server, level, player, volume);
-        this.activeRun.message(server, "Lumi singleplayer testing started at " + this.activeRun.describeVolume());
+        this.activeRun = new SingleplayerTestRun(server, level, player, volume, mode);
+        this.activeRun.message(server, "Lumi " + mode.label() + " started at " + this.activeRun.describeVolume());
         return 1;
     }
 

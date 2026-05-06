@@ -56,6 +56,7 @@ final class SingleplayerTestRun {
     private static final int EXPLOSION_WAIT_TIMEOUT_TICKS = 20 * 10;
 
     private final String serverKey;
+    private final SingleplayerTestMode mode;
     private final ServerLevel level;
     private final ServerPlayer player;
     private final SingleplayerTestVolume volume;
@@ -100,7 +101,18 @@ final class SingleplayerTestRun {
     private boolean done;
 
     SingleplayerTestRun(MinecraftServer server, ServerLevel level, ServerPlayer player, SingleplayerTestVolume volume) {
+        this(server, level, player, volume, SingleplayerTestMode.FULL);
+    }
+
+    SingleplayerTestRun(
+            MinecraftServer server,
+            ServerLevel level,
+            ServerPlayer player,
+            SingleplayerTestVolume volume,
+            SingleplayerTestMode mode
+    ) {
         this.serverKey = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize().toString();
+        this.mode = mode == null ? SingleplayerTestMode.FULL : mode;
         this.level = level;
         this.player = player;
         this.volume = volume;
@@ -206,7 +218,9 @@ final class SingleplayerTestRun {
         this.check("Initial version v0001 was created", () -> this.projectService.loadVersions(server, projectName).size() == 1);
         this.check("Main branch metadata was created", () -> this.projectService.loadVariants(server, projectName).size() == 1);
         this.check("Fresh project integrity report is valid", () -> this.integrityService.inspect(server, projectName).valid());
-        this.completePhase(server, Phase.CAPTURE_DRAFT);
+        this.completePhase(server, this.mode == SingleplayerTestMode.STRUCTURE_FIXTURES
+                ? Phase.START_STRUCTURE_FIXTURE_TESTS
+                : Phase.CAPTURE_DRAFT);
     }
 
     private void captureDraft(MinecraftServer server) throws Exception {
