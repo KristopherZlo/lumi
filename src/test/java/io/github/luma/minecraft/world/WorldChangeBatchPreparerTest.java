@@ -218,6 +218,36 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void blockChangesReplaceNormalizedMovingPistonAirWithSettledHead() throws Exception {
+        BlockPos base = new BlockPos(0, 64, 0);
+        BlockState retracted = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST);
+        BlockState extended = retracted.setValue(PistonBaseBlock.EXTENDED, true);
+
+        List<PreparedChunkBatch> batches = this.preparer.prepare(
+                null,
+                List.of(
+                        new StoredBlockChange(
+                                BlockPoint.from(base),
+                                payload(retracted),
+                                payload(extended)
+                        ),
+                        new StoredBlockChange(
+                                BlockPoint.from(base.east()),
+                                payload(Blocks.MOVING_PISTON.defaultBlockState()),
+                                payload(Blocks.AIR.defaultBlockState())
+                        )
+                ),
+                List.of(),
+                true
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(Blocks.PISTON_HEAD, stateAt(batches.getFirst(), base.east()).getBlock());
+        assertEquals(Direction.EAST, stateAt(batches.getFirst(), base.east()).getValue(PistonHeadBlock.FACING));
+    }
+
+    @Test
     void blockChangesClearOldPistonHeadWhenExtendedBaseRetracts() throws Exception {
         BlockPos base = new BlockPos(0, 64, 0);
         BlockState extended = Blocks.PISTON.defaultBlockState()
@@ -239,6 +269,41 @@ class WorldChangeBatchPreparerTest {
         assertEquals(1, batches.size());
         assertEquals(retracted, stateAt(batches.getFirst(), base));
         assertEquals(Blocks.AIR.defaultBlockState(), stateAt(batches.getFirst(), base.east()));
+    }
+
+    @Test
+    void sectionFramesReplaceNormalizedMovingPistonAirWithSettledHeadCompanion() throws Exception {
+        BlockState retracted = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST);
+        BlockState extended = retracted.setValue(PistonBaseBlock.EXTENDED, true);
+        int[] blockEntityIds = {-1, -1};
+
+        PatchSectionFrame frame = new PatchSectionFrame(
+                0,
+                0,
+                4,
+                mask(2),
+                List.of(stateTag(retracted), stateTag(Blocks.MOVING_PISTON.defaultBlockState())),
+                List.of(stateTag(extended), stateTag(Blocks.AIR.defaultBlockState())),
+                new int[] {0, 1},
+                new int[] {0, 1},
+                List.of(),
+                List.of(),
+                blockEntityIds,
+                blockEntityIds
+        );
+
+        List<PreparedChunkBatch> batches = this.preparer.prepare(
+                null,
+                new PatchSectionWorldChanges(List.of(frame), List.of()),
+                true,
+                null
+        );
+
+        assertEquals(1, batches.size());
+        BlockState head = stateAt(batches.getFirst(), new BlockPos(1, 64, 0));
+        assertEquals(Blocks.PISTON_HEAD, head.getBlock());
+        assertEquals(Direction.EAST, head.getValue(PistonHeadBlock.FACING));
     }
 
     @Test
@@ -306,11 +371,7 @@ class WorldChangeBatchPreparerTest {
     }
 
     private static net.minecraft.world.level.block.state.BlockState stateAt(PreparedChunkBatch batch, BlockPos pos) {
-        for (PreparedBlockPlacement placement : batch.placements()) {
-            if (placement.pos().equals(pos)) {
-                return placement.state();
-            }
-        }
+        net.minecraft.world.level.block.state.BlockState resolved = null;
         for (PreparedSectionApplyBatch section : batch.nativeSections()) {
             if (section.sectionY() != Math.floorDiv(pos.getY(), 16)) {
                 continue;
@@ -319,10 +380,15 @@ class WorldChangeBatchPreparerTest {
                     SectionChangeMask.localIndex(pos.getX(), pos.getY(), pos.getZ())
             );
             if (state != null) {
-                return state;
+                resolved = state;
             }
         }
-        return null;
+        for (PreparedBlockPlacement placement : batch.placements()) {
+            if (placement.pos().equals(pos)) {
+                resolved = placement.state();
+            }
+        }
+        return resolved;
     }
 
     private static long[] mask(int changedCells) {
@@ -337,6 +403,10 @@ class WorldChangeBatchPreparerTest {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", name);
         return tag;
+    }
+
+    private static CompoundTag stateTag(BlockState state) {
+        return BlockStateNbtCodec.serializeBlockStateTag(state);
     }
 
     private static CompoundTag blockEntityTag(String id) {

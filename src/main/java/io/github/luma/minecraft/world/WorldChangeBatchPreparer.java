@@ -171,7 +171,17 @@ public final class WorldChangeBatchPreparer {
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
         for (PatchSectionFrame frame : changes.sectionFrames()) {
             ChunkPoint chunk = new ChunkPoint(frame.chunkX(), frame.chunkZ());
-            LumiSectionBuffer buffer = this.toSectionBuffer(level, frame, applyNewValues, completed, total, progressListener, blockStateDecoder);
+            DecodedSectionChanges decoded = this.decodeSectionChanges(
+                    level,
+                    frame,
+                    applyNewValues,
+                    completed,
+                    total,
+                    progressListener,
+                    blockStateDecoder
+            );
+            LumiSectionBuffer buffer = decoded.targetBuffer();
+            List<PreparedBlockPlacement> mechanismCompanions = this.generatedMechanismCompanions(decoded.changes());
             boolean fullSection = buffer.changedCellCount() == SectionChangeMask.ENTRY_COUNT;
             SectionApplySafetyProfile profile = this.sectionApplySafetyClassifier.classify(buffer, fullSection);
             PreparedSectionApplyBatch nativeBatch = new PreparedSectionApplyBatch(
@@ -183,8 +193,10 @@ public final class WorldChangeBatchPreparer {
             );
             if (profile.path() == SectionApplyPath.DIRECT_SECTION) {
                 sparsePlacements.computeIfAbsent(chunk, ignored -> new ArrayList<>()).addAll(nativeBatch.toPlacements());
+                this.addSparsePlacements(sparsePlacements, mechanismCompanions);
             } else {
                 nativeSections.computeIfAbsent(chunk, ignored -> new ArrayList<>()).add(nativeBatch);
+                this.addSparsePlacements(sparsePlacements, mechanismCompanions);
             }
         }
 
@@ -214,7 +226,7 @@ public final class WorldChangeBatchPreparer {
         return batches;
     }
 
-    private LumiSectionBuffer toSectionBuffer(
+    private DecodedSectionChanges decodeSectionChanges(
             ServerLevel level,
             PatchSectionFrame frame,
             boolean applyNewValues,
@@ -226,22 +238,41 @@ public final class WorldChangeBatchPreparer {
         LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(frame.sectionY());
         List<Integer> localIndexes = new ArrayList<>();
         new SectionChangeMask(frame.changedMask()).forEachSetCell(localIndexes::add);
-        int[] stateIds = applyNewValues ? frame.newStateIds() : frame.oldStateIds();
+        int[] sourceStateIds = applyNewValues ? frame.oldStateIds() : frame.newStateIds();
+        int[] targetStateIds = applyNewValues ? frame.newStateIds() : frame.oldStateIds();
         int[] blockEntityIds = applyNewValues ? frame.newBlockEntityIds() : frame.oldBlockEntityIds();
-        List<CompoundTag> statePalette = applyNewValues ? frame.newStatePalette() : frame.oldStatePalette();
+        List<CompoundTag> sourceStatePalette = applyNewValues ? frame.oldStatePalette() : frame.newStatePalette();
+        List<CompoundTag> targetStatePalette = applyNewValues ? frame.newStatePalette() : frame.oldStatePalette();
         List<CompoundTag> blockEntityPalette = applyNewValues ? frame.newBlockEntityPalette() : frame.oldBlockEntityPalette();
-        BlockState[] decodedPalette = this.decodePalette(level, statePalette, blockStateDecoder);
+        BlockState[] decodedSourcePalette = this.decodePalette(level, sourceStatePalette, blockStateDecoder);
+        BlockState[] decodedTargetPalette = this.decodePalette(level, targetStatePalette, blockStateDecoder);
+        List<ConnectedBlockPlacementExpander.ChangePlacement> decodedChanges = new ArrayList<>();
         for (int index = 0; index < localIndexes.size(); index++) {
             int localIndex = localIndexes.get(index);
+            BlockState sourceState = decodedSourcePalette[sourceStateIds[index]];
+            BlockState targetState = decodedTargetPalette[targetStateIds[index]];
+            CompoundTag blockEntityTag = this.blockEntityAt(blockEntityPalette, blockEntityIds[index]);
             builder.set(
                     localIndex,
-                    decodedPalette[stateIds[index]],
-                    this.blockEntityAt(blockEntityPalette, blockEntityIds[index])
+                    targetState,
+                    blockEntityTag
             );
+            decodedChanges.add(new ConnectedBlockPlacementExpander.ChangePlacement(
+                    new PreparedBlockPlacement(
+                            new BlockPos(
+                                    (frame.chunkX() << 4) + SectionChangeMask.localX(localIndex),
+                                    (frame.sectionY() << 4) + SectionChangeMask.localY(localIndex),
+                                    (frame.chunkZ() << 4) + SectionChangeMask.localZ(localIndex)
+                            ),
+                            targetState,
+                            blockEntityTag
+                    ),
+                    sourceState
+            ));
             completed[0] += 1;
             progressListener.onDecoded(completed[0], total);
         }
-        return builder.build();
+        return new DecodedSectionChanges(builder.build(), List.copyOf(decodedChanges));
     }
 
     private BlockState[] decodePalette(
@@ -349,12 +380,82 @@ public final class WorldChangeBatchPreparer {
     ) {
         LinkedHashMap<Long, PreparedBlockPlacement> merged = new LinkedHashMap<>();
         for (PreparedBlockPlacement placement : primary == null ? List.<PreparedBlockPlacement>of() : primary) {
-            merged.put(BlockPos.asLong(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ()), placement);
+            merged.put(packed(placement), placement);
         }
         for (PreparedBlockPlacement placement : secondary == null ? List.<PreparedBlockPlacement>of() : secondary) {
-            merged.putIfAbsent(BlockPos.asLong(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ()), placement);
+            long key = packed(placement);
+            PreparedBlockPlacement existing = merged.get(key);
+            if (existing == null || shouldOverrideExplicitAir(existing, placement)) {
+                merged.put(key, placement);
+            }
         }
         return PistonMechanismPlacementExpander.ordered(merged.values());
+    }
+
+    private List<PreparedBlockPlacement> generatedMechanismCompanions(
+            List<ConnectedBlockPlacementExpander.ChangePlacement> changes
+    ) {
+        LinkedHashMap<Long, PreparedBlockPlacement> explicit = new LinkedHashMap<>();
+        for (ConnectedBlockPlacementExpander.ChangePlacement change : changes == null
+                ? List.<ConnectedBlockPlacementExpander.ChangePlacement>of()
+                : changes) {
+            if (change == null || change.placement() == null) {
+                continue;
+            }
+            explicit.put(packed(change.placement()), change.placement());
+        }
+
+        LinkedHashMap<Long, PreparedBlockPlacement> companions = new LinkedHashMap<>();
+        this.collectGeneratedCompanions(
+                companions,
+                explicit,
+                this.connectedBlockPlacementExpander.expandChanges(changes)
+        );
+
+        List<PistonMechanismPlacementExpander.ChangePlacement> pistonChanges = new ArrayList<>();
+        for (ConnectedBlockPlacementExpander.ChangePlacement change : changes == null
+                ? List.<ConnectedBlockPlacementExpander.ChangePlacement>of()
+                : changes) {
+            if (change == null) {
+                continue;
+            }
+            pistonChanges.add(new PistonMechanismPlacementExpander.ChangePlacement(
+                    change.placement(),
+                    change.sourceState()
+            ));
+        }
+        this.collectGeneratedCompanions(
+                companions,
+                explicit,
+                this.pistonMechanismPlacementExpander.expandChanges(pistonChanges)
+        );
+        return PistonMechanismPlacementExpander.ordered(
+                ConnectedBlockPlacementExpander.ordered(new ArrayList<>(companions.values()))
+        );
+    }
+
+    private void collectGeneratedCompanions(
+            LinkedHashMap<Long, PreparedBlockPlacement> companions,
+            LinkedHashMap<Long, PreparedBlockPlacement> explicit,
+            List<PreparedBlockPlacement> expanded
+    ) {
+        for (PreparedBlockPlacement placement : expanded == null ? List.<PreparedBlockPlacement>of() : expanded) {
+            long key = packed(placement);
+            PreparedBlockPlacement explicitPlacement = explicit.get(key);
+            if (explicitPlacement == null || shouldOverrideExplicitAir(explicitPlacement, placement)) {
+                companions.put(key, placement);
+            }
+        }
+    }
+
+    private void addSparsePlacements(
+            Map<ChunkPoint, List<PreparedBlockPlacement>> sparsePlacements,
+            List<PreparedBlockPlacement> placements
+    ) {
+        for (PreparedBlockPlacement placement : placements == null ? List.<PreparedBlockPlacement>of() : placements) {
+            sparsePlacements.computeIfAbsent(ChunkPoint.from(placement.pos()), ignored -> new ArrayList<>())
+                    .add(placement);
+        }
     }
 
     private List<PreparedChunkBatch> prepareUndoRedoSectionFirst(
@@ -453,6 +554,26 @@ public final class WorldChangeBatchPreparer {
         return builder.build();
     }
 
+    private static boolean shouldOverrideExplicitAir(
+            PreparedBlockPlacement existing,
+            PreparedBlockPlacement replacement
+    ) {
+        return existing != null
+                && replacement != null
+                && existing.state() != null
+                && existing.state().isAir()
+                && replacement.state() != null
+                && !replacement.state().isAir();
+    }
+
+    private static long packed(PreparedBlockPlacement placement) {
+        return BlockPos.asLong(
+                placement.pos().getX(),
+                placement.pos().getY(),
+                placement.pos().getZ()
+        );
+    }
+
     EntityBatch toEntityBatch(List<StoredEntityChange> changes, boolean applyNewValues) {
         List<CompoundTag> spawns = new ArrayList<>();
         List<String> removals = new ArrayList<>();
@@ -482,6 +603,12 @@ public final class WorldChangeBatchPreparer {
     private record SectionSplit(
             List<PreparedBlockPlacement> sparsePlacements,
             List<PreparedSectionApplyBatch> nativeSections
+    ) {
+    }
+
+    private record DecodedSectionChanges(
+            LumiSectionBuffer targetBuffer,
+            List<ConnectedBlockPlacementExpander.ChangePlacement> changes
     ) {
     }
 
