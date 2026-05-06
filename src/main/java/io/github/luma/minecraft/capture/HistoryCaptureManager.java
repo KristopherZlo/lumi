@@ -220,7 +220,7 @@ public final class HistoryCaptureManager {
                         continue;
                     }
                     this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
-                    session.markDirtyChunk(chunk);
+                    session.markDirtyChunk(chunk, this.deferredActionContext());
                     this.sessionRegistry.markDirty(projectId);
                     LumaDebugLog.log(
                         trackedProject.project(),
@@ -1292,7 +1292,7 @@ public final class HistoryCaptureManager {
             session.addRootChunk(chunk);
         }
         this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
-        session.markDirtyChunk(chunk);
+        session.markDirtyChunk(chunk, this.deferredActionContext());
         this.sessionRegistry.markDirty(projectId);
         CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
         diagnostics.record(
@@ -1374,7 +1374,7 @@ public final class HistoryCaptureManager {
         }
         String projectId = trackedProject.project().id().toString();
         this.logReconciliation(trackedProject, result);
-        this.recordReconciledUndoRedoChanges(trackedProject, level, result.deltaChanges(), Instant.now());
+        this.recordReconciledUndoRedoChanges(trackedProject, level, result, Instant.now());
         if (session.buffer().isEmpty()) {
             this.sessionRegistry.clearCurrentRunDraft(projectId);
             this.sessionRegistry.close(projectId);
@@ -1420,16 +1420,44 @@ public final class HistoryCaptureManager {
     private void recordReconciledUndoRedoChanges(
             TrackedProject trackedProject,
             ServerLevel level,
-            List<StoredBlockChange> changes,
+            SessionStabilizationService.ReconciliationResult result,
             Instant now
     ) {
+        List<StoredBlockChange> changes = result == null ? List.of() : result.deltaChanges();
         if (changes == null || changes.isEmpty()) {
             return;
         }
+        Map<CaptureSessionState.DeferredActionContext, List<StoredBlockChange>> actionChanges = new LinkedHashMap<>();
+        List<StoredBlockChange> relatedChanges = new ArrayList<>();
+        Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredContexts =
+                result.deferredActionContexts();
         for (StoredBlockChange change : changes) {
             if (change == null || change.isNoOp()) {
                 continue;
             }
+            CaptureSessionState.DeferredActionContext deferredContext =
+                    deferredContexts.get(ChunkPoint.from(change.pos()));
+            if (this.canRecordDeferredAction(level, deferredContext)) {
+                actionChanges.computeIfAbsent(deferredContext, ignored -> new ArrayList<>()).add(change);
+            } else {
+                relatedChanges.add(change);
+            }
+        }
+
+        for (Map.Entry<CaptureSessionState.DeferredActionContext, List<StoredBlockChange>> entry : actionChanges.entrySet()) {
+            CaptureSessionState.DeferredActionContext context = entry.getKey();
+            UndoRedoHistoryManager.getInstance().recordAction(
+                    trackedProject.project().id().toString(),
+                    level.dimension().identifier().toString(),
+                    context.actionId(),
+                    context.actor(),
+                    entry.getValue(),
+                    List.of(),
+                    now
+            );
+        }
+
+        for (StoredBlockChange change : relatedChanges) {
             UndoRedoHistoryManager.getInstance().recordRelatedChange(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
@@ -1439,6 +1467,28 @@ public final class HistoryCaptureManager {
                     SECONDARY_SOURCE_JOIN_RADIUS
             );
         }
+    }
+
+    private boolean canRecordDeferredAction(
+            ServerLevel level,
+            CaptureSessionState.DeferredActionContext deferredContext
+    ) {
+        if (deferredContext == null || !deferredContext.hasAction()) {
+            return false;
+        }
+        return deferredContext.accessAllowed() || !level.getServer().isDedicatedServer();
+    }
+
+    private CaptureSessionState.DeferredActionContext deferredActionContext() {
+        String actionId = WorldMutationContext.currentActionId();
+        if (actionId == null || actionId.isBlank()) {
+            return null;
+        }
+        return new CaptureSessionState.DeferredActionContext(
+                actionId,
+                WorldMutationContext.currentActor(),
+                WorldMutationContext.currentAccessAllowed()
+        );
     }
 
     private ServerLevel resolveProjectLevel(MinecraftServer server, BuildProject project) {

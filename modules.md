@@ -145,6 +145,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `WorldMutationCaptureGuard`: duplicate hook protection.
 - `WorldMutationCapturePolicy`: block mutation classification for direct capture, deferred stabilization, and transient-state rejection.
 - `BlockUpdateCaptureContext`: redstone/mechanism neighbor and scheduled-tick source scoping for final-state stabilization.
+- `DeferredWorldMutationContext`, `DeferredWorldMutationContexts`: action/source/access propagation for delayed vanilla block events, scheduled ticks, and moving piston block entities so their settled fallout can join the originating live undo/redo action.
 - `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling.
 - `AutoCheckpointService`, `AutoCheckpointCommandClassifier`: pending-draft auto checkpoints before large vanilla commands and external WorldEdit/Axiom edits.
 - `MutationSourcePolicy`: mutation source classification.
@@ -192,7 +193,7 @@ Use `src/main/java/io/github/luma/mixin` only for Minecraft hook entrypoints. Mi
 - Entity hooks: `EntityMutationMixin`, `ServerLevelEntityLifecycleMixin`, `ServerLevelEntityTickMixin`.
 - Player/input/server hooks: `ServerPlayerGameModeMixin`, `ServerGamePacketListenerMixin`.
 - Explosion/TNT/falling hooks: `TntBlockMixin`, `ServerLevelExplosionMixin`, `LevelExplosionMixin`, `FallingBlockMixin`, `FallingBlockEntityMixin`.
-- Growth/fluid/fire/redstone/piston hooks: `SaplingBlockMixin`, `StemBlockMixin`, `CropBlockMixin`, `FlowingFluidMixin`, `FireBlockMixin`, `BlockUpdateCaptureMixin`, `PistonBaseBlockMixin` for piston capture scoping and internal replay piston-physics suppression.
+- Growth/fluid/fire/redstone/piston hooks: `SaplingBlockMixin`, `StemBlockMixin`, `CropBlockMixin`, `FlowingFluidMixin`, `FireBlockMixin`, `BlockUpdateCaptureMixin`, `BlockEventDataContextMixin`, `ScheduledTickContextMixin`, `LevelTicksContextMixin`, `ServerLevelBlockEventContextMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityContextMixin`, and `MovingPistonBlockTickerMixin` for delayed mechanism context propagation, piston capture scoping, and internal replay piston-physics suppression.
 - Client interaction hooks: `MouseHandlerMixin`, `MinecraftInteractionMixin`. These must only establish input suppression/selection context and delegate to client services such as `LumiShortcutInteractionGate`.
 - Section ownership and Axiom fallback: `ChunkAccessSectionOwnershipMixin`, `AxiomSetBufferPacketMixin`.
 

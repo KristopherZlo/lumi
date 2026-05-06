@@ -76,7 +76,9 @@ class CaptureSessionStateTest {
     void reconciliationDrainAndTrackedFallingEntitiesRemainCoalesced() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
         state.addRootChunk(new ChunkPoint(0, 0));
-        state.markDirtyChunk(new ChunkPoint(0, 0));
+        CaptureSessionState.DeferredActionContext deferredAction =
+                new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
+        state.markDirtyChunk(new ChunkPoint(0, 0), deferredAction);
         state.markDirtyChunk(new ChunkPoint(1, 0));
 
         UUID entityId = UUID.randomUUID();
@@ -88,10 +90,16 @@ class CaptureSessionStateTest {
 
         List<ChunkPoint> drained = state.drainPendingReconcileChunks();
         assertEquals(2, drained.size());
+        assertEquals(
+                deferredAction,
+                state.deferredActionContexts(List.of(new ChunkPoint(0, 0), new ChunkPoint(1, 0)))
+                        .get(new ChunkPoint(0, 0))
+        );
 
         state.finishReconciliation(drained);
         assertFalse(state.reconciliationInFlight());
         assertFalse(state.hasPendingReconciliation());
+        assertTrue(state.deferredActionContexts(List.of(new ChunkPoint(0, 0))).isEmpty());
         assertTrue(state.untrackFallingEntity(entityId));
         assertFalse(state.isTrackedFallingEntity(entityId));
     }

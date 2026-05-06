@@ -150,8 +150,20 @@ public final class WorldMutationContext {
 
     private static boolean inheritsParentAction(WorldMutationSource source) {
         return switch (source) {
-            case PLAYER, ENTITY, EXPLOSIVE, EXTERNAL_TOOL, WORLDEDIT, FAWE, AXIOM -> true;
-            case EXPLOSION, FLUID, FIRE, GROWTH, BLOCK_UPDATE, PISTON, FALLING_BLOCK, MOB, RESTORE, SYSTEM -> false;
+            case PLAYER,
+                    ENTITY,
+                    EXPLOSION,
+                    FLUID,
+                    FIRE,
+                    BLOCK_UPDATE,
+                    PISTON,
+                    FALLING_BLOCK,
+                    EXPLOSIVE,
+                    EXTERNAL_TOOL,
+                    WORLDEDIT,
+                    FAWE,
+                    AXIOM -> true;
+            case GROWTH, MOB, RESTORE, SYSTEM -> false;
         };
     }
 

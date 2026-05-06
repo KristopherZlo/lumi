@@ -96,18 +96,22 @@ public final class SessionStabilizationService {
                 session.replaceChunkChanges(processedChunks, composedChanges, Instant.now());
             }
             int bufferAfter = bufferChanged ? session.buffer().size() : bufferBefore;
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts =
+                    session.deferredActionContexts(processedChunks);
             session.finishReconciliation(processedChunks);
             if (!capturedChunks.missingChunks().isEmpty()) {
                 session.requeuePendingChunks(capturedChunks.missingChunks());
             }
             return new ReconciliationResult(
                     processedChunks.size(),
+                    processedChunks,
                     deltaChanges.size(),
                     composedChanges.size(),
                     bufferBefore,
                     bufferAfter,
                     false,
                     bufferChanged,
+                    deferredActionContexts,
                     relatedDeltaChanges
             );
         } catch (RuntimeException exception) {
@@ -484,25 +488,29 @@ public final class SessionStabilizationService {
 
     public record ReconciliationResult(
             int chunkCount,
+            List<ChunkPoint> chunks,
             int deltaChangeCount,
             int composedChangeCount,
             int bufferBefore,
             int bufferAfter,
             boolean inFlight,
             boolean bufferChanged,
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts,
             List<StoredBlockChange> deltaChanges
     ) {
 
         public ReconciliationResult {
+            chunks = chunks == null ? List.of() : List.copyOf(chunks);
+            deferredActionContexts = deferredActionContexts == null ? Map.of() : Map.copyOf(deferredActionContexts);
             deltaChanges = deltaChanges == null ? List.of() : List.copyOf(deltaChanges);
         }
 
         public static ReconciliationResult noOp() {
-            return new ReconciliationResult(0, 0, 0, 0, 0, false, false, List.of());
+            return new ReconciliationResult(0, List.of(), 0, 0, 0, 0, false, false, Map.of(), List.of());
         }
 
         public static ReconciliationResult busy() {
-            return new ReconciliationResult(0, 0, 0, 0, 0, true, false, List.of());
+            return new ReconciliationResult(0, List.of(), 0, 0, 0, 0, true, false, Map.of(), List.of());
         }
     }
 

@@ -27,6 +27,7 @@ public final class CaptureSessionState {
     private final LinkedHashSet<ChunkPoint> rootChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> dirtyChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> pendingReconcileChunks = new LinkedHashSet<>();
+    private final LinkedHashMap<ChunkPoint, DeferredActionContext> deferredActionContexts = new LinkedHashMap<>();
     private final LinkedHashSet<UUID> trackedFallingEntities = new LinkedHashSet<>();
     private boolean reconciliationInFlight;
 
@@ -59,11 +60,18 @@ public final class CaptureSessionState {
     }
 
     public boolean markDirtyChunk(ChunkPoint chunk) {
+        return this.markDirtyChunk(chunk, null);
+    }
+
+    public boolean markDirtyChunk(ChunkPoint chunk, DeferredActionContext deferredActionContext) {
         if (chunk == null) {
             return false;
         }
         boolean dirtyChanged = this.dirtyChunks.add(chunk);
         boolean pendingChanged = this.pendingReconcileChunks.add(chunk);
+        if (deferredActionContext != null && deferredActionContext.hasAction()) {
+            this.deferredActionContexts.putIfAbsent(chunk, deferredActionContext);
+        }
         return dirtyChanged || pendingChanged;
     }
 
@@ -116,6 +124,9 @@ public final class CaptureSessionState {
             return;
         }
         this.dirtyChunks.removeAll(reconciledChunks);
+        for (ChunkPoint chunk : reconciledChunks) {
+            this.deferredActionContexts.remove(chunk);
+        }
     }
 
     public void requeuePendingChunks(Collection<ChunkPoint> chunks) {
@@ -187,6 +198,20 @@ public final class CaptureSessionState {
         return List.copyOf(changes);
     }
 
+    public Map<ChunkPoint, DeferredActionContext> deferredActionContexts(Collection<ChunkPoint> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return Map.of();
+        }
+        LinkedHashMap<ChunkPoint, DeferredActionContext> contexts = new LinkedHashMap<>();
+        for (ChunkPoint chunk : chunks) {
+            DeferredActionContext context = this.deferredActionContexts.get(chunk);
+            if (context != null && context.hasAction()) {
+                contexts.put(chunk, context);
+            }
+        }
+        return Map.copyOf(contexts);
+    }
+
     public boolean trackFallingEntity(UUID entityId) {
         return entityId != null && this.trackedFallingEntities.add(entityId);
     }
@@ -206,5 +231,21 @@ public final class CaptureSessionState {
             grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>()).add(change);
         }
         return grouped;
+    }
+
+    public record DeferredActionContext(
+            String actionId,
+            String actor,
+            boolean accessAllowed
+    ) {
+
+        public DeferredActionContext {
+            actionId = actionId == null ? "" : actionId;
+            actor = actor == null || actor.isBlank() ? "player" : actor;
+        }
+
+        public boolean hasAction() {
+            return !this.actionId.isBlank();
+        }
     }
 }

@@ -1,0 +1,60 @@
+package io.github.luma.minecraft.capture;
+
+import io.github.luma.domain.model.WorldMutationSource;
+import java.util.ArrayDeque;
+import java.util.Deque;
+
+/**
+ * Utility for copying and replaying causal context on delayed vanilla mutation
+ * carriers such as block events, scheduled ticks, and moving piston block
+ * entities.
+ */
+public final class DeferredWorldMutationContexts {
+
+    private static final ThreadLocal<Deque<AppliedFrame>> APPLIED_FRAMES =
+            ThreadLocal.withInitial(ArrayDeque::new);
+
+    private DeferredWorldMutationContexts() {
+    }
+
+    public static void remember(Object carrier, WorldMutationSource deferredSource) {
+        if (!(carrier instanceof DeferredWorldMutationContextAccess access)) {
+            return;
+        }
+        DeferredWorldMutationContext.captureCurrent(deferredSource)
+                .ifPresent(access::luma$setDeferredMutationContext);
+    }
+
+    public static DeferredWorldMutationContext context(Object carrier) {
+        if (!(carrier instanceof DeferredWorldMutationContextAccess access)) {
+            return null;
+        }
+        DeferredWorldMutationContext context = access.luma$deferredMutationContext();
+        return context != null && context.hasAction() ? context : null;
+    }
+
+    public static void push(Object carrier) {
+        DeferredWorldMutationContext context = context(carrier);
+        APPLIED_FRAMES.get().push(new AppliedFrame(context == null ? null : context.push()));
+    }
+
+    public static void pop() {
+        Deque<AppliedFrame> frames = APPLIED_FRAMES.get();
+        if (frames.isEmpty()) {
+            return;
+        }
+        try {
+            AppliedFrame frame = frames.pop();
+            if (frame.sourceFrame != null) {
+                frame.sourceFrame.close();
+            }
+        } finally {
+            if (frames.isEmpty()) {
+                APPLIED_FRAMES.remove();
+            }
+        }
+    }
+
+    private record AppliedFrame(WorldMutationContext.SourceFrame sourceFrame) {
+    }
+}

@@ -26,18 +26,21 @@ class SessionStabilizationServiceTest {
 
         SessionStabilizationService.ReconciliationResult result = new SessionStabilizationService.ReconciliationResult(
                 1,
+                List.of(new ChunkPoint(0, 0)),
                 1,
                 1,
                 0,
                 1,
                 false,
                 true,
+                Map.of(),
                 deltas
         );
 
         deltas.clear();
 
         assertEquals(1, result.deltaChanges().size());
+        assertEquals(List.of(new ChunkPoint(0, 0)), result.chunks());
         assertTrue(result.bufferChanged());
         assertThrows(UnsupportedOperationException.class, () -> result.deltaChanges().add(changeAt(2)));
     }

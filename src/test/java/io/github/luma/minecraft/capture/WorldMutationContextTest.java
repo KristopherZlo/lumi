@@ -106,6 +106,35 @@ class WorldMutationContextTest {
     }
 
     @Test
+    void deferredMechanismSourcesKeepPlayerActionIdentity() {
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "builder", true);
+        String playerActionId = WorldMutationContext.currentActionId();
+        try {
+            WorldMutationContext.pushSource(WorldMutationSource.BLOCK_UPDATE);
+            try {
+                assertEquals(WorldMutationSource.BLOCK_UPDATE, WorldMutationContext.currentSource());
+                assertEquals("builder", WorldMutationContext.currentActor());
+                assertEquals(playerActionId, WorldMutationContext.currentActionId());
+                assertTrue(WorldMutationContext.currentAccessAllowed());
+
+                WorldMutationContext.pushSource(WorldMutationSource.PISTON);
+                try {
+                    assertEquals(WorldMutationSource.PISTON, WorldMutationContext.currentSource());
+                    assertEquals("builder", WorldMutationContext.currentActor());
+                    assertEquals(playerActionId, WorldMutationContext.currentActionId());
+                    assertTrue(WorldMutationContext.currentAccessAllowed());
+                } finally {
+                    WorldMutationContext.popSource();
+                }
+            } finally {
+                WorldMutationContext.popSource();
+            }
+        } finally {
+            WorldMutationContext.popSource();
+        }
+    }
+
+    @Test
     void captureSuppressionIsScoped() {
         assertFalse(WorldMutationContext.captureSuppressed());
 
