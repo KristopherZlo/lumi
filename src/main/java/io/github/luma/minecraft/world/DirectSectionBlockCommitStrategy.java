@@ -19,6 +19,7 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
     private final ChunkSectionUpdateBroadcaster updateBroadcaster;
     private final DirectSectionCommitEligibility eligibility = new DirectSectionCommitEligibility();
     private final SectionLightUpdatePlanner lightUpdatePlanner = new SectionLightUpdatePlanner();
+    private final RedstoneReplayUpdatePlanner redstoneUpdatePlanner = new RedstoneReplayUpdatePlanner();
 
     DirectSectionBlockCommitStrategy(
             PersistentBlockStatePolicy blockStatePolicy,
@@ -80,6 +81,7 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
             this.updateHeightmaps(chunk, pos, targetState);
             level.updatePOIOnBlockStateChange(pos, currentState, targetState);
             this.lightUpdatePlanner.plan(lightBatch, pos, currentState, targetState);
+            this.redstoneUpdatePlanner.propagate(level, pos, currentState, targetState);
             changedPositions.add(pos.immutable());
         }
 

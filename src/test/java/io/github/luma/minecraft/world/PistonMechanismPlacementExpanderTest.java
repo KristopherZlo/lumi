@@ -86,6 +86,28 @@ class PistonMechanismPlacementExpanderTest {
     }
 
     @Test
+    void generatedHeadOverridesExplicitAirAtHeadPosition() {
+        BlockPos base = new BlockPos(0, 64, 0);
+        BlockState extended = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                .setValue(PistonBaseBlock.EXTENDED, true);
+
+        List<PreparedBlockPlacement> expanded = this.expander.expandChanges(List.of(
+                new PistonMechanismPlacementExpander.ChangePlacement(
+                        new PreparedBlockPlacement(base, extended, null),
+                        extended.setValue(PistonBaseBlock.EXTENDED, false)
+                ),
+                new PistonMechanismPlacementExpander.ChangePlacement(
+                        new PreparedBlockPlacement(base.east(), Blocks.AIR.defaultBlockState(), null),
+                        Blocks.MOVING_PISTON.defaultBlockState()
+                )
+        ));
+
+        assertEquals(2, expanded.size());
+        assertTrue(stateAt(expanded, base.east()).is(Blocks.PISTON_HEAD));
+    }
+
+    @Test
     void generatedHeadIsAppliedBeforeBase() {
         BlockPos base = new BlockPos(0, 64, 0);
         BlockState extended = Blocks.PISTON.defaultBlockState()

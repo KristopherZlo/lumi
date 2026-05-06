@@ -20,6 +20,7 @@ final class DirectChunkBlockCommitStrategy {
     private final ChunkSectionUpdateBroadcaster updateBroadcaster;
     private final DirectSectionBlockCommitStrategy sectionFallback;
     private final SectionLightUpdatePlanner lightUpdatePlanner = new SectionLightUpdatePlanner();
+    private final RedstoneReplayUpdatePlanner redstoneUpdatePlanner = new RedstoneReplayUpdatePlanner();
     private final SparseDeleteFastPathClassifier deleteFastPathClassifier = new SparseDeleteFastPathClassifier();
 
     DirectChunkBlockCommitStrategy(
@@ -261,6 +262,7 @@ final class DirectChunkBlockCommitStrategy {
         section.setBlockState(localX, localY, localZ, targetState, false);
         heightmapPlan.record(sectionY, SectionChangeMask.localIndex(localX, localY, localZ));
         this.lightUpdatePlanner.plan(lightBatch, mutablePos, currentState, targetState);
+        this.redstoneUpdatePlanner.propagate(level, mutablePos, currentState, targetState);
         update.changedCells().add(SectionPos.sectionRelativePos(mutablePos));
         return CellResult.changedResult();
     }

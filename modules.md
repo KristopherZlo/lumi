@@ -166,9 +166,10 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `ChunkSectionUpdateBroadcaster`, `WorldLightUpdateQueue`, `WorldLightUpdateContext`: batched section/block-entity client update packets and operation-scoped deferred light maintenance after fast commits.
 - `WorldApplyMetrics`: debug counters for rewrite/native/direct/fallback sections, changed blocks, packets, light checks, apply/work ticks, light-drain ticks/duration, and fallback reasons.
 - `WorldApplyBlockUpdatePolicy`: side-effect-suppressed update flags and apply behavior.
+- `RedstoneReplayUpdatePlanner`: scoped neighbor notification planning for replayed durable redstone/mechanism state changes.
 - `PersistentBlockStatePolicy`: restore/snapshot normalization for unsafe transient states such as `moving_piston`.
 - `ConnectedBlockPlacementExpander`: paired blocks such as beds, doors, tall plants.
-- `PistonMechanismPlacementExpander`: settled piston base/head replay companions. It may add the expected `piston_head` for an explicit extended piston base or clear the old head for a known retracting base; it must not infer a piston base from a head-only placement.
+- `PistonMechanismPlacementExpander`: settled piston base/head replay companions. It may add the expected `piston_head` for an explicit extended piston base, replace normalized transient air at the expected head position, or clear the old head for a known retracting base; it must not infer a piston base from a head-only placement.
 - `PreparedBlockPlacement`, `PreparedChunkBatch`, `PreparedSectionApplyBatch`, `PreparedChunkBatchCollapser`, `LumiSectionBuffer`, `SectionChangeMask`: prepared immutable apply data and collapse logic for sparse and section-native work.
 - `ChunkBatch`, `SectionBatch`, `EntityBatch`: per-chunk apply units.
 - `GlobalDispatcher`, `LocalQueue`, `BatchState`, `BatchProcessor`, `HistoryStore`: queue/runtime state for bounded apply.

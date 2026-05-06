@@ -17,6 +17,7 @@ final class SectionContainerRewriteCommitStrategy {
     private final SectionRewritePreflight preflight;
     private final SectionHeightmapUpdater heightmapUpdater = new SectionHeightmapUpdater();
     private final SectionLightUpdatePlanner lightUpdatePlanner = new SectionLightUpdatePlanner();
+    private final RedstoneReplayUpdatePlanner redstoneUpdatePlanner = new RedstoneReplayUpdatePlanner();
 
     SectionContainerRewriteCommitStrategy(
             PersistentBlockStatePolicy blockStatePolicy,
@@ -89,6 +90,12 @@ final class SectionContainerRewriteCommitStrategy {
             );
             this.lightUpdatePlanner.plan(
                     lightBatch,
+                    mutablePos,
+                    plan.currentStateAt(index),
+                    plan.changedTargetStateAt(index)
+            );
+            this.redstoneUpdatePlanner.propagate(
+                    level,
                     mutablePos,
                     plan.currentStateAt(index),
                     plan.changedTargetStateAt(index)

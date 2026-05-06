@@ -20,6 +20,7 @@ final class SectionNativeBlockCommitStrategy {
     private final SectionHeightmapUpdater heightmapUpdater = new SectionHeightmapUpdater();
     private final SectionPoiUpdatePlanner poiUpdatePlanner = new SectionPoiUpdatePlanner();
     private final SectionLightUpdatePlanner lightUpdatePlanner = new SectionLightUpdatePlanner();
+    private final RedstoneReplayUpdatePlanner redstoneUpdatePlanner = new RedstoneReplayUpdatePlanner();
 
     SectionNativeBlockCommitStrategy(
             PersistentBlockStatePolicy blockStatePolicy,
@@ -194,6 +195,7 @@ final class SectionNativeBlockCommitStrategy {
         this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, targetState);
         this.poiUpdatePlanner.update(level, mutablePos, currentState, targetState);
         this.lightUpdatePlanner.plan(lightBatch, mutablePos, currentState, targetState);
+        this.redstoneUpdatePlanner.propagate(level, mutablePos, currentState, targetState);
         changedCells.add(SectionPos.sectionRelativePos(mutablePos));
         counters.changedBlocks += 1;
 
@@ -234,6 +236,7 @@ final class SectionNativeBlockCommitStrategy {
         this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, targetState);
         this.poiUpdatePlanner.update(level, mutablePos, currentState, targetState);
         this.lightUpdatePlanner.plan(cursor.lightBatch(), mutablePos, currentState, targetState);
+        this.redstoneUpdatePlanner.propagate(level, mutablePos, currentState, targetState);
         int blockEntityPackets = 0;
         if (targetState.hasBlockEntity()) {
             blockEntityPackets = this.createTargetBlockEntity(level, mutablePos.immutable(), targetState, targetBlockEntityTag);

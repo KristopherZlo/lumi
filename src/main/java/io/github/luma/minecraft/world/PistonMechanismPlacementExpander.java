@@ -25,7 +25,7 @@ public final class PistonMechanismPlacementExpander {
         LinkedHashMap<Long, PreparedBlockPlacement> explicit = this.indexPlacements(placements);
         LinkedHashMap<Long, PreparedBlockPlacement> expanded = new LinkedHashMap<>(explicit);
         for (PreparedBlockPlacement placement : explicit.values()) {
-            this.addIfAbsent(expanded, explicit, this.targetHeadCompanion(placement));
+            this.addHeadCompanion(expanded, explicit, this.targetHeadCompanion(placement));
         }
         return ordered(expanded.values());
     }
@@ -44,7 +44,7 @@ public final class PistonMechanismPlacementExpander {
                 continue;
             }
             PreparedBlockPlacement placement = change.placement();
-            this.addIfAbsent(expanded, explicit, this.targetHeadCompanion(placement));
+            this.addHeadCompanion(expanded, explicit, this.targetHeadCompanion(placement));
             this.addIfAbsent(expanded, explicit, this.sourceHeadRemovalCompanion(
                     placement.pos(),
                     change.sourceState(),
@@ -89,6 +89,21 @@ public final class PistonMechanismPlacementExpander {
         }
     }
 
+    private void addHeadCompanion(
+            LinkedHashMap<Long, PreparedBlockPlacement> expanded,
+            LinkedHashMap<Long, PreparedBlockPlacement> explicit,
+            PreparedBlockPlacement placement
+    ) {
+        if (placement == null || placement.pos() == null) {
+            return;
+        }
+        long key = packed(placement.pos());
+        PreparedBlockPlacement explicitPlacement = explicit.get(key);
+        if (explicitPlacement == null || this.isAir(explicitPlacement.state())) {
+            expanded.put(key, placement);
+        }
+    }
+
     private PreparedBlockPlacement targetHeadCompanion(PreparedBlockPlacement placement) {
         if (placement == null || placement.pos() == null || !this.isExtendedBase(placement.state())) {
             return null;
@@ -124,6 +139,10 @@ public final class PistonMechanismPlacementExpander {
                 && (state.is(Blocks.PISTON) || state.is(Blocks.STICKY_PISTON))
                 && state.hasProperty(PistonBaseBlock.EXTENDED)
                 && state.getValue(PistonBaseBlock.EXTENDED);
+    }
+
+    private boolean isAir(BlockState state) {
+        return state == null || state.isAir();
     }
 
     private static int applyPriority(PreparedBlockPlacement placement) {

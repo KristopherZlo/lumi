@@ -22,6 +22,7 @@ public final class BlockChangeApplier {
 
     private static final PersistentBlockStatePolicy BLOCK_STATE_POLICY = new PersistentBlockStatePolicy();
     private static final WorldApplyBlockUpdatePolicy UPDATE_POLICY = new WorldApplyBlockUpdatePolicy();
+    private static final RedstoneReplayUpdatePlanner REDSTONE_UPDATE_PLANNER = new RedstoneReplayUpdatePlanner();
     private static final BlockPlacementUpdateDecider UPDATE_DECIDER = new BlockPlacementUpdateDecider();
     private static final ChunkSectionUpdateBroadcaster UPDATE_BROADCASTER = new ChunkSectionUpdateBroadcaster();
     private static final DirectSectionBlockCommitStrategy DIRECT_SECTION_COMMIT_STRATEGY = new DirectSectionBlockCommitStrategy(
@@ -291,12 +292,14 @@ public final class BlockChangeApplier {
     }
 
     private static void applyRawBlockState(ServerLevel level, BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
-        if (!requiresUpdate(level, pos, state, blockEntityTag)) {
+        BlockState currentState = level.getBlockState(pos);
+        if (!requiresUpdate(level, pos, currentState, state, blockEntityTag)) {
             return;
         }
 
         level.removeBlockEntity(pos);
         level.setBlock(pos, state, UPDATE_POLICY.placementFlags(state));
+        REDSTONE_UPDATE_PLANNER.propagate(level, pos, currentState, state);
 
         if (blockEntityTag != null) {
             BlockEntity blockEntity = BlockEntity.loadStatic(pos, state, blockEntityTag.copy(), level.registryAccess());
@@ -319,12 +322,14 @@ public final class BlockChangeApplier {
         PersistentBlockStatePolicy.PersistentBlockState persistentState = BLOCK_STATE_POLICY.normalize(state, targetBlockEntityTag);
         state = persistentState.state();
         targetBlockEntityTag = persistentState.blockEntityTag();
-        if (!requiresUpdate(level, pos, state, targetBlockEntityTag)) {
+        BlockState currentState = level.getBlockState(pos);
+        if (!requiresUpdate(level, pos, currentState, state, targetBlockEntityTag)) {
             return false;
         }
 
         level.removeBlockEntity(pos);
         level.setBlock(pos, state, UPDATE_POLICY.placementFlags(state));
+        REDSTONE_UPDATE_PLANNER.propagate(level, pos, currentState, state);
         return true;
     }
 
@@ -347,7 +352,16 @@ public final class BlockChangeApplier {
     }
 
     private static boolean requiresUpdate(ServerLevel level, BlockPos pos, BlockState targetState, CompoundTag targetBlockEntityTag) {
-        BlockState currentState = level.getBlockState(pos);
+        return requiresUpdate(level, pos, level.getBlockState(pos), targetState, targetBlockEntityTag);
+    }
+
+    private static boolean requiresUpdate(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState currentState,
+            BlockState targetState,
+            CompoundTag targetBlockEntityTag
+    ) {
         return UPDATE_DECIDER.requiresUpdate(level, pos, currentState, targetState, targetBlockEntityTag);
     }
 
