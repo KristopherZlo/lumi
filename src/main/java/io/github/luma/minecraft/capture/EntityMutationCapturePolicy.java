@@ -9,7 +9,7 @@ import java.util.Set;
 
 public final class EntityMutationCapturePolicy {
 
-    private static final Set<String> BUILDER_RELEVANT_ENTITY_TYPES = Set.of(
+    private static final Set<String> FALLBACK_INSPECTED_ENTITY_TYPES = Set.of(
             "minecraft:armor_stand",
             "minecraft:block_display",
             "minecraft:glow_item_frame",
@@ -19,6 +19,7 @@ public final class EntityMutationCapturePolicy {
             "minecraft:painting",
             "minecraft:text_display"
     );
+    private static final Set<String> EXCLUDED_ENTITY_TYPES = Set.of("minecraft:player");
     private static final Set<WorldMutationSource> UNDO_ONLY_ITEM_DROP_SOURCES = EnumSet.of(
             WorldMutationSource.EXPLOSION,
             WorldMutationSource.EXPLOSIVE,
@@ -76,20 +77,22 @@ public final class EntityMutationCapturePolicy {
         if (source == null || source == WorldMutationSource.RESTORE || source == WorldMutationSource.SYSTEM) {
             return false;
         }
+        if (EXCLUDED_ENTITY_TYPES.contains(entityType)) {
+            return false;
+        }
         if (source == WorldMutationSource.EXTERNAL_TOOL
                 || source == WorldMutationSource.WORLDEDIT
                 || source == WorldMutationSource.FAWE
-                || source == WorldMutationSource.AXIOM) {
+                || source == WorldMutationSource.AXIOM
+                || source == WorldMutationSource.PLAYER
+                || source == WorldMutationSource.ENTITY) {
             return true;
         }
-        if (source != WorldMutationSource.PLAYER) {
-            return false;
-        }
-        return BUILDER_RELEVANT_ENTITY_TYPES.contains(entityType);
+        return false;
     }
 
     boolean shouldInspectExternalToolFallback(String entityType) {
-        return BUILDER_RELEVANT_ENTITY_TYPES.contains(entityType);
+        return FALLBACK_INSPECTED_ENTITY_TYPES.contains(entityType);
     }
 
     boolean shouldInspectUndoOnlyMutation(WorldMutationSource source, String entityType) {

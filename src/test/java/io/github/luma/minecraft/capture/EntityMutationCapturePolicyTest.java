@@ -24,16 +24,26 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
-    void playerCapturesBuilderRelevantEntitiesOnly() {
+    void playerCapturesAnyNonPlayerEntity() {
         assertTrue(this.policy.capture(
                 WorldMutationSource.PLAYER,
                 null,
                 entity("minecraft:armor_stand", "00000000-0000-0000-0000-000000000041", 1.0D)
         ).isPresent());
-        assertFalse(this.policy.capture(
+        assertTrue(this.policy.capture(
                 WorldMutationSource.PLAYER,
                 null,
                 entity("minecraft:zombie", "00000000-0000-0000-0000-000000000042", 1.0D)
+        ).isPresent());
+        assertTrue(this.policy.capture(
+                WorldMutationSource.PLAYER,
+                null,
+                entity("minecraft:item", "00000000-0000-0000-0000-000000000045", 1.0D)
+        ).isPresent());
+        assertFalse(this.policy.capture(
+                WorldMutationSource.PLAYER,
+                null,
+                entity("minecraft:player", "00000000-0000-0000-0000-000000000046", 1.0D)
         ).isPresent());
     }
 
@@ -50,12 +60,14 @@ class EntityMutationCapturePolicyTest {
     void inspectionSkipsSourcesThatCanNeverRecordEntityHistory() {
         assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.FALLING_BLOCK, "minecraft:falling_block"));
         assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.MOB, "minecraft:zombie"));
+        assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.PLAYER, "minecraft:player"));
     }
 
     @Test
-    void inspectionKeepsPlayerBuilderEntitiesAndExternalToolEntities() {
+    void inspectionKeepsExplicitRootAndExternalToolEntities() {
         assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.PLAYER, "minecraft:armor_stand"));
-        assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.PLAYER, "minecraft:zombie"));
+        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.PLAYER, "minecraft:zombie"));
+        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.ENTITY, "minecraft:item"));
         assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.AXIOM, "minecraft:zombie"));
     }
 

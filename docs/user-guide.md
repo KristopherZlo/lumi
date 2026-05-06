@@ -80,6 +80,7 @@ Checkpoint snapshots are added by policy.
 Tracked history includes:
 
 - player block edits
+- non-player entity spawn, removal, position, and persistent state changes from explicit player or supported builder-tool actions
 - supported falling-block outcomes inside an active causal envelope
 - supported mob edits
 - TNT ignition

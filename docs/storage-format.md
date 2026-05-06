@@ -213,7 +213,7 @@ Current payload characteristics:
 - section-local old/new palettes for block states
 - section-local old/new palettes for block entity payloads
 - mask-order state and block-entity ids so restore can build `LumiSectionBuffer` batches without first materializing a flat per-block list
-- per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload
+- per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload for non-player entity spawn/remove/update, including position and persistent state
 - block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
 - schema v3-v5 legacy payloads still load from the older single LZ4 stream format
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
@@ -234,7 +234,7 @@ Current snapshot characteristics:
 - chunk -> section -> palette structure
 - only non-empty sections are stored
 - block entities are kept in a sparse side table keyed by local block index
-- schema v5 writes per-chunk entity snapshots; schema v3/v4 snapshots still load as block-only snapshots
+- schema v5 writes per-chunk non-player entity snapshots with position and persistent state; schema v3/v4 snapshots still load as block-only snapshots
 - `piston_head` and `moving_piston` states are normalized to air during new snapshot capture, and piston bases are stored retracted
 - restore planning can list snapshot chunks by scanning the length-prefixed structure and skipping NBT payload bytes, without materializing `SnapshotData` or deserializing block/entity tags
 - live chunk capture is performed on the Minecraft server thread into immutable compact payloads; snapshot storage only serializes and reads those prepared payloads

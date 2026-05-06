@@ -6,8 +6,8 @@ import net.minecraft.nbt.CompoundTag;
 /**
  * Chunk-scoped entity changes prepared off-thread.
  *
- * <p>Entity diff capture is introduced incrementally, so the first pass keeps
- * the structure but may carry empty lists for save/restore/recovery.
+ * <p>Entity diffs carry full persistent NBT payloads for non-player spawn,
+ * removal, and update operations.
  */
 public record EntityBatch(
         List<CompoundTag> entitiesToSpawn,

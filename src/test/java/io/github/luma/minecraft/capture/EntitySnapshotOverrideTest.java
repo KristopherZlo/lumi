@@ -1,7 +1,10 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import java.util.List;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.ListTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,6 +38,17 @@ class EntitySnapshotOverrideTest {
         assertEquals(List.of(otherPayload, oldPayload), override.applyTo(List.of(newPayload, otherPayload)));
     }
 
+    @Test
+    void movedEntityBaselineOnlyAddsOldPayloadToOldChunk() {
+        String entityId = "00000000-0000-0000-0000-000000000014";
+        EntityPayload oldPayload = entityAt("minecraft:cow", entityId, 1.0D);
+        EntityPayload newPayload = entityAt("minecraft:cow", entityId, 32.0D);
+        EntitySnapshotOverride override = new EntitySnapshotOverride(oldPayload, newPayload);
+
+        assertEquals(List.of(oldPayload), override.applyTo(List.of(), new ChunkPoint(0, 0)));
+        assertEquals(List.of(), override.applyTo(List.of(newPayload), new ChunkPoint(2, 0)));
+    }
+
     private static EntityPayload entity(String type, String uuid) {
         return entity(type, uuid, "");
     }
@@ -46,6 +60,16 @@ class EntitySnapshotOverrideTest {
         if (!customName.isBlank()) {
             tag.putString("CustomName", customName);
         }
+        return new EntityPayload(tag);
+    }
+
+    private static EntityPayload entityAt(String type, String uuid, double x) {
+        net.minecraft.nbt.CompoundTag tag = entity(type, uuid).copyTag();
+        ListTag pos = new ListTag();
+        pos.add(DoubleTag.valueOf(x));
+        pos.add(DoubleTag.valueOf(64.0D));
+        pos.add(DoubleTag.valueOf(1.0D));
+        tag.put("Pos", pos);
         return new EntityPayload(tag);
     }
 }

@@ -228,7 +228,10 @@ public final class ChunkSnapshotCaptureService {
                 snapshots.add(payload);
             }
         }
-        return (entityOverride == null ? EntitySnapshotOverride.none() : entityOverride).applyTo(snapshots);
+        return (entityOverride == null ? EntitySnapshotOverride.none() : entityOverride).applyTo(
+                snapshots,
+                new ChunkPoint(chunkX, chunkZ)
+        );
     }
 
     private boolean isInChunk(Entity entity, int chunkX, int chunkZ) {

@@ -72,6 +72,7 @@ Use Lumi if you want to:
 - save details screen with isometric preview, restore, see-changes, rename, soft-delete, and branch actions
 - See Changes screen for saved states, branches, and the current build, with background-loaded diffs and manual raw-reference compare available under `More`
 - live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi action button; changing the action button changes these chords too. WorldEdit and FAWE actions route those chords through the tools' native undo/redo commands, while captured Axiom capability actions replay through Lumi so tool-assisted breaks and placements use the state Lumi recorded.
+- non-player entity edits from explicit player and supported builder-tool actions are saved with their persistent NBT position and state, including mobs, item entities, display entities, paintings, and armor stands
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step when it settles right after the edit; undo/redo drains already-dirty stabilization chunks first so poured fluid, contact-created source blocks, falling-block deltas, redstone block updates, and piston fallout can join before the action is selected, and this passive fallout does not discard an available redo
 - item drops produced by explosions, fluid, falling blocks, or nearby block-update fallout are captured only for the matching undo/redo action; undo removes those dropped item entities and redo respawns them without storing them in recovery drafts or saved versions
 - undo/redo replays stored block states without immediate redstone neighbor updates or placement physics, so restored TNT beside powered redstone is visible but not auto-primed by the replay
@@ -91,7 +92,7 @@ Use Lumi if you want to:
 - conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica/Tweakeroo placement paths, and known tool stacks that reach Minecraft block or entity mutation paths
 - stable external capability reporting: WorldEdit session selection/clipboard/schematic support uses public `LocalSession`/clipboard format APIs, FAWE inherits those claims only when the same compatible APIs are present, and Axiom remains limited to its custom region API plus fallback capture
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
-- capture of player edits plus builder-relevant entity spawn/remove/update and supported explosion edits, including TNT damage tied back to the action that primed it
+- capture of player edits plus non-player entity spawn/remove/update with full persistent NBT position/state payloads, and supported explosion edits including TNT damage tied back to the action that primed it
 - temporary action-button preview for the latest 10 undo actions, or redo actions while the Lumi action button plus redo is held, with translucent exposed sides for small edits and merged volume blobs for dense edits when compare highlight is not active
 
 ## How It Works
@@ -102,7 +103,7 @@ Use Lumi if you want to:
 2. `HistoryCaptureManager` finds matching projects.
 3. Explicit builder-driven sources can bootstrap a dimension project on demand, but ambient world-settling sources do not.
 4. `WorldMutationCapturePolicy` classifies block mutations as direct captures, deferred stabilization work, or rejected runtime noise. Redstone block updates, piston fallout, and runtime-only redstone flips mark the active session dirty instead of being replayed as event history.
-5. `EntityMutationCapturePolicy` rejects non-entity-history sources before Lumi asks Minecraft to serialize entity NBT, so transient falling-block or mob internals cannot crash capture.
+5. `EntityMutationCapturePolicy` captures explicit player and known-tool non-player entity changes, but rejects non-history sources before Lumi asks Minecraft to serialize entity NBT, so transient falling-block or ambient mob internals cannot crash capture.
 6. Whole-dimension sessions keep a causal chunk envelope rooted in explicit builder edits. The root chunk defines a one-chunk halo envelope, and Lumi captures per-chunk baselines lazily when a chunk inside that envelope first needs stabilization.
 7. Ambient fallout such as fluid spread, falling blocks, redstone block updates, and piston movement no longer appends directly into the live draft. It only re-marks chunks inside that causal envelope as dirty.
 8. Related item drops from explosions, water flow, falling blocks, and block-update fallout are attached to the latest nearby undo/redo action only; they are deliberately excluded from recovery drafts and saved versions.

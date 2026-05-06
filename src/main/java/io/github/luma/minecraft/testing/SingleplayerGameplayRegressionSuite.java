@@ -79,6 +79,7 @@ final class SingleplayerGameplayRegressionSuite {
             Set<BlockPoint> unexpectedDraftBlocks,
             Set<BlockPoint> latestUndoRedoBlocks,
             int expectedEntityChanges,
+            Set<String> expectedEntityIds,
             List<Entity> spawnedEntities,
             List<GameplayTiming> timings
     ) {
@@ -128,6 +129,7 @@ final class SingleplayerGameplayRegressionSuite {
         private final Set<BlockPoint> expectedDraftBlocks = new LinkedHashSet<>();
         private final Set<BlockPoint> unexpectedDraftBlocks = new LinkedHashSet<>();
         private final Set<BlockPoint> latestUndoRedoBlocks = new LinkedHashSet<>();
+        private final Set<String> expectedEntityIds = new LinkedHashSet<>();
         private final List<Entity> spawnedEntities = new ArrayList<>();
         private final List<GameplayTiming> timings = new ArrayList<>();
         private int expectedEntityChanges;
@@ -171,6 +173,9 @@ final class SingleplayerGameplayRegressionSuite {
 
         private void expectEntityChange(Entity entity) {
             this.expectedEntityChanges += 1;
+            if (entity != null) {
+                this.expectedEntityIds.add(entity.getStringUUID());
+            }
             this.trackSpawnedEntity(entity);
         }
 
@@ -189,6 +194,7 @@ final class SingleplayerGameplayRegressionSuite {
                     Set.copyOf(this.unexpectedDraftBlocks),
                     Set.copyOf(this.latestUndoRedoBlocks),
                     this.expectedEntityChanges,
+                    Set.copyOf(this.expectedEntityIds),
                     List.copyOf(this.spawnedEntities),
                     List.copyOf(this.timings)
             );
@@ -308,18 +314,22 @@ final class SingleplayerGameplayRegressionSuite {
 
         @Override
         public void run(GameplayScenarioContext context) {
-            Entity entity = EntityType.ARMOR_STAND.create(context.level, EntitySpawnReason.COMMAND);
-            context.checks.check(entity != null, "gameplay created a builder-relevant entity");
+            Entity entity = EntityType.COW.create(context.level, EntitySpawnReason.COMMAND);
+            context.checks.check(entity != null, "gameplay created a non-player entity");
             if (entity == null) {
                 return;
             }
 
             BlockPos marker = context.volume.min().offset(2, 1, 2);
             entity.snapTo(marker.getX() + 0.5D, marker.getY(), marker.getZ() + 0.5D, 0.0F, 0.0F);
-            entity.setCustomName(Component.literal("lumi-runtime-entity"));
-            entity.setGlowingTag(true);
-            context.trackedPlayerAction(() -> context.level.addFreshEntity(entity));
+            context.trackedPlayerAction(() -> {
+                context.level.addFreshEntity(entity);
+                entity.snapTo(marker.getX() + 1.5D, marker.getY(), marker.getZ() + 0.5D, 90.0F, 0.0F);
+                entity.setCustomName(Component.literal("lumi-runtime-entity"));
+                entity.setGlowingTag(true);
+            });
             context.checks.check(!entity.isRemoved(), "gameplay spawned an entity");
+            context.checks.check(entity.blockPosition().equals(marker.east()), "gameplay updated entity position");
             context.checks.check(entity.hasCustomName(), "gameplay updated entity custom name");
             context.checks.check(entity.isCurrentlyGlowing(), "gameplay updated entity glowing state");
             context.expectEntityChange(entity);
@@ -406,9 +416,7 @@ final class SingleplayerGameplayRegressionSuite {
             );
             context.trackedPlayerAction(() -> context.level.addFreshEntity(item));
             context.checks.check(!item.isRemoved(), "gameplay spawned item entity");
-            item.discard();
-            context.checks.check(item.isRemoved(), "gameplay removed item entity");
-            context.trackSpawnedEntity(item);
+            context.expectEntityChange(item);
         }
     }
 

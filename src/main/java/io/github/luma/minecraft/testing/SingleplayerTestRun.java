@@ -388,7 +388,14 @@ final class SingleplayerTestRun {
                         "Gameplay draft excludes transient block " + this.format(unexpectedBlock.toBlockPos()));
             }
             this.check(draft.entityChanges().size() >= report.expectedEntityChanges(),
-                    "Gameplay draft includes builder-relevant entity changes");
+                    "Gameplay draft includes expected entity changes");
+            Set<String> capturedEntityIds = draft.entityChanges().stream()
+                    .map(change -> change.entityId())
+                    .collect(java.util.stream.Collectors.toSet());
+            for (String expectedEntityId : report.expectedEntityIds()) {
+                this.check(capturedEntityIds.contains(expectedEntityId),
+                        "Gameplay draft includes entity " + expectedEntityId);
+            }
             this.check(draft.totalChangeCount() <= 128,
                     "Gameplay draft stayed scoped instead of growing into unrelated world noise");
         }

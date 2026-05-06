@@ -22,6 +22,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -291,8 +293,9 @@ public final class HistoryCaptureManager {
             }
             StoredEntityChange capturedChange = capturedMutation.get();
             BlockPos pos = this.entityMutationPos(oldPayload, newPayload);
+            List<BlockPos> mutationPositions = this.entityMutationPositions(oldPayload, newPayload);
             Instant now = Instant.now();
-            List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
+            List<TrackedProject> matchingProjects = this.matchingEntityProjects(level, mutationPositions);
             if (matchingProjects.isEmpty()) {
                 if (!allowsAutomaticProjectCreation(source)) {
                     LumaDebugLog.log(
@@ -306,7 +309,7 @@ public final class HistoryCaptureManager {
                 }
                 this.projectService.ensureWorldProject(level, defaultActor(source));
                 this.invalidateProjectCache(level.getServer());
-                matchingProjects = this.matchingProjects(level, pos);
+                matchingProjects = this.matchingEntityProjects(level, mutationPositions);
                 LumaMod.LOGGER.info("Created world workspace automatically for entity mutation in {}", level.dimension().identifier());
             }
 
@@ -315,22 +318,15 @@ public final class HistoryCaptureManager {
                     continue;
                 }
                 String projectId = trackedProject.project().id().toString();
-                ChunkPoint chunk = ChunkPoint.from(pos);
-                boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(
-                        level,
-                        this.sessionRegistry.session(projectId),
-                        chunk
-                );
-                if (!this.ensureTrackedChunk(
+                CaptureSessionState existingSession = this.sessionRegistry.session(projectId);
+                List<ChunkPoint> mutationChunks = this.entityMutationChunks(mutationPositions);
+                if (!this.ensureTrackedEntityChunks(
                         trackedProject,
                         level,
-                        pos,
-                        null,
-                        null,
-                        capturedChange.oldValue(),
-                        capturedChange.newValue(),
+                        mutationPositions,
+                        capturedChange,
                         source,
-                        activeSessionRegion,
+                        existingSession,
                         now
                 )) {
                     continue;
@@ -339,7 +335,9 @@ public final class HistoryCaptureManager {
                 TrackedChangeBuffer buffer = this.getOrCreateBuffer(trackedProject, source, now);
                 CaptureSessionState session = this.sessionRegistry.session(projectId);
                 if (session != null) {
-                    session.addRootChunk(chunk);
+                    for (ChunkPoint chunk : mutationChunks) {
+                        session.addRootChunk(chunk);
+                    }
                 }
 
                 int pendingBefore = buffer.size();
@@ -923,6 +921,68 @@ public final class HistoryCaptureManager {
             return newPayload.blockPos();
         }
         return oldPayload == null ? BlockPos.ZERO : oldPayload.blockPos();
+    }
+
+    private List<BlockPos> entityMutationPositions(EntityPayload oldPayload, EntityPayload newPayload) {
+        LinkedHashSet<BlockPos> positions = new LinkedHashSet<>();
+        if (oldPayload != null) {
+            positions.add(oldPayload.blockPos());
+        }
+        if (newPayload != null) {
+            positions.add(newPayload.blockPos());
+        }
+        if (positions.isEmpty()) {
+            positions.add(BlockPos.ZERO);
+        }
+        return List.copyOf(positions);
+    }
+
+    private List<ChunkPoint> entityMutationChunks(List<BlockPos> positions) {
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
+        for (BlockPos pos : positions == null ? List.<BlockPos>of() : positions) {
+            chunks.add(ChunkPoint.from(pos));
+        }
+        return List.copyOf(chunks);
+    }
+
+    private List<TrackedProject> matchingEntityProjects(ServerLevel level, List<BlockPos> positions) throws IOException {
+        LinkedHashMap<String, TrackedProject> projects = new LinkedHashMap<>();
+        for (BlockPos pos : positions == null ? List.<BlockPos>of() : positions) {
+            for (TrackedProject trackedProject : this.matchingProjects(level, pos)) {
+                projects.putIfAbsent(trackedProject.project().id().toString(), trackedProject);
+            }
+        }
+        return List.copyOf(projects.values());
+    }
+
+    private boolean ensureTrackedEntityChunks(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            List<BlockPos> positions,
+            StoredEntityChange capturedChange,
+            io.github.luma.domain.model.WorldMutationSource source,
+            CaptureSessionState existingSession,
+            Instant now
+    ) throws IOException {
+        for (BlockPos mutationPos : positions == null ? List.<BlockPos>of() : positions) {
+            ChunkPoint chunk = ChunkPoint.from(mutationPos);
+            boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
+            if (!this.ensureTrackedChunk(
+                    trackedProject,
+                    level,
+                    mutationPos,
+                    null,
+                    null,
+                    capturedChange.oldValue(),
+                    capturedChange.newValue(),
+                    source,
+                    activeSessionRegion,
+                    now
+            )) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private TrackedChangeBuffer getOrCreateBuffer(
