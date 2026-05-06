@@ -1,9 +1,11 @@
 package io.github.luma.mixin.client;
 
+import io.github.luma.client.input.LumiShortcutInteractionGate;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.input.MouseButtonInfo;
+import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -15,8 +17,15 @@ public final class MouseHandlerMixin {
     @Inject(method = "onButton", at = @At("HEAD"), cancellable = true)
     private void lumi$handleSelectionButton(long window, MouseButtonInfo button, int action, CallbackInfo callback) {
         Minecraft client = Minecraft.getInstance();
-        if (this.sameWindow(client, window)
-                && LumiRegionSelectionController.getInstance().handleMouseButton(
+        if (!this.sameWindow(client, window)) {
+            return;
+        }
+        if (action == GLFW.GLFW_PRESS
+                && LumiShortcutInteractionGate.getInstance().shouldSuppressWorldInteraction(client)) {
+            callback.cancel();
+            return;
+        }
+        if (LumiRegionSelectionController.getInstance().handleMouseButton(
                 client,
                 button.button(),
                 action,

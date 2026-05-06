@@ -9,6 +9,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import io.github.luma.client.command.LumaClientCommands;
 import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.client.input.LumiClientKeyBindings;
+import io.github.luma.client.input.LumiShortcutInteractionGate;
 import io.github.luma.client.input.QuickRollbackKeyController;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
@@ -117,6 +118,12 @@ public final class LumaClient implements ClientModInitializer {
                 this.quickRollbackKey,
                 this.lumiActionButtonKey
         );
+        LumiShortcutInteractionGate.getInstance().configure(
+                this.lumiActionButtonKey,
+                this.undoKey,
+                this.redoKey,
+                this.keyBindingState
+        );
         LumiRegionSelectionController.getInstance().configureActionButton(this.lumiActionButtonKey, this.keyBindingState);
         StartupProfiler.logElapsed("client.key-bindings", keyBindingsStartedAt);
 
@@ -151,6 +158,7 @@ public final class LumaClient implements ClientModInitializer {
                 this.undoKey,
                 this.redoKey
         );
+        LumiShortcutInteractionGate.getInstance().tick(shortcutInputActive, undoRedoKeys);
         CompareOverlayRenderer.setXrayEnabled(overlayHold);
         CompareOverlayCoordinator.getInstance().tick(client);
         PendingChangesOverlayCoordinator.getInstance().tick(

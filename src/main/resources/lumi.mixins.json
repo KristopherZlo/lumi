@@ -28,6 +28,7 @@
     "TntBlockMixin"
   ],
   "client": [
+    "client.MinecraftInteractionMixin",
     "client.MouseHandlerMixin"
   ],
   "injectors": {
