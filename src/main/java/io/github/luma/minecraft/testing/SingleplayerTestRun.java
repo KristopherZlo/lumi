@@ -19,6 +19,7 @@ import io.github.luma.domain.service.ProjectArchiveService;
 import io.github.luma.domain.service.ProjectCleanupService;
 import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
 import io.github.luma.domain.service.UndoRedoService;
@@ -33,10 +34,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.LevelResource;
@@ -57,6 +61,7 @@ final class SingleplayerTestRun {
     private final SingleplayerTestLog log = new SingleplayerTestLog();
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
+    private final QuickRollbackService quickRollbackService = new QuickRollbackService();
     private final RestoreService restoreService = new RestoreService();
     private final UndoRedoService undoRedoService = new UndoRedoService();
     private final VariantService variantService = new VariantService();
@@ -81,9 +86,13 @@ final class SingleplayerTestRun {
     private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
     private SingleplayerLargeHistoryScenario largeHistoryScenario;
     private String gameplaySaveVersionId = "";
+    private String gameplayEntityUpdateSaveVersionId = "";
+    private String savedGameplayEntityId = "";
+    private BlockPoint savedGameplayEntityPosition;
     private int previewWaitTicks;
     private int explosionWaitTicks;
     private boolean gameplaySaveValidated;
+    private boolean gameplayEntityUpdateSaveValidated;
     private int phaseStartPasses;
     private int phaseStartFailures;
     private boolean done;
@@ -155,6 +164,10 @@ final class SingleplayerTestRun {
                 case CHECK_GAMEPLAY_REDO -> this.checkGameplayRedo();
                 case START_GAMEPLAY_SAVE -> this.startGameplaySave(server);
                 case CHECK_GAMEPLAY_SAVE -> this.checkGameplaySave(server);
+                case START_ENTITY_QUICK_ROLLBACK -> this.startEntityQuickRollback(server);
+                case CHECK_ENTITY_QUICK_ROLLBACK -> this.checkEntityQuickRollback(server);
+                case START_GAMEPLAY_ENTITY_UPDATE_SAVE -> this.startGameplayEntityUpdateSave(server);
+                case CHECK_GAMEPLAY_ENTITY_UPDATE_SAVE -> this.checkGameplayEntityUpdateSave(server);
                 case START_EXPLOSION_INTERACTION -> this.startExplosionInteraction(server);
                 case CHECK_EXPLOSION_CAPTURE -> this.checkExplosionCapture(server);
                 case START_EXPLOSION_UNDO -> this.startExplosionUndo();
@@ -477,6 +490,83 @@ final class SingleplayerTestRun {
         } else {
             this.check(true, "Gameplay save preview PNG and metadata were written");
         }
+        this.completePhase(server, Phase.START_ENTITY_QUICK_ROLLBACK);
+    }
+
+    private void startEntityQuickRollback(MinecraftServer server) throws Exception {
+        Entity entity = this.gameplayEntity();
+        if (entity == null) {
+            this.recordFailure("Gameplay saved entity is available for quick rollback");
+            this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
+            return;
+        }
+
+        this.savedGameplayEntityId = entity.getStringUUID();
+        this.savedGameplayEntityPosition = this.gameplayReport == null
+                ? BlockPoint.from(entity.blockPosition())
+                : this.gameplayReport.expectedEntityPositions()
+                        .getOrDefault(this.savedGameplayEntityId, BlockPoint.from(entity.blockPosition()));
+        BlockPos moved = this.volume.min().offset(9, 1, 9);
+        WorldMutationContext.runWithSource(WorldMutationSource.PLAYER, () -> {
+            entity.snapTo(moved.getX() + 0.5D, moved.getY(), moved.getZ() + 0.5D, 180.0F, 0.0F);
+            entity.setCustomName(Component.literal("lumi-quickrollback-mutated"));
+        });
+        this.check(entity.blockPosition().equals(moved), "Gameplay entity pending update moved before quick rollback");
+        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
+        this.log.info("Queued entity quick rollback operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_ENTITY_QUICK_ROLLBACK);
+    }
+
+    private void checkEntityQuickRollback(MinecraftServer server) {
+        Entity entity = this.entityById(this.savedGameplayEntityId);
+        this.check(entity != null && !entity.isRemoved(), "Quick rollback kept the saved gameplay entity alive");
+        if (entity != null) {
+            this.check(this.savedGameplayEntityPosition != null
+                            && this.savedGameplayEntityPosition.equals(BlockPoint.from(entity.blockPosition())),
+                    "Quick rollback restored gameplay entity position");
+            this.check(entity.hasCustomName()
+                            && "lumi-runtime-entity".equals(entity.getCustomName().getString()),
+                    "Quick rollback restored gameplay entity name");
+        }
+        this.completePhase(server, Phase.START_GAMEPLAY_ENTITY_UPDATE_SAVE);
+    }
+
+    private void startGameplayEntityUpdateSave(MinecraftServer server) throws Exception {
+        Entity entity = this.entityById(this.savedGameplayEntityId);
+        if (entity == null) {
+            this.recordFailure("Gameplay saved entity is available for update save");
+            this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
+            return;
+        }
+
+        BlockPos moved = this.volume.min().offset(9, 1, 8);
+        WorldMutationContext.runWithSource(WorldMutationSource.PLAYER, () -> {
+            entity.snapTo(moved.getX() + 0.5D, moved.getY(), moved.getZ() + 0.5D, 270.0F, 0.0F);
+            entity.setCustomName(Component.literal("lumi-saved-entity-update"));
+        });
+        this.check(entity.blockPosition().equals(moved), "Gameplay entity saved update moved before save");
+        this.gameplayEntityUpdateSaveVersionId = ProjectService.versionId(this.projectService.loadVersions(server, this.project.name()).size() + 1);
+        this.gameplayEntityUpdateSaveValidated = false;
+        this.pendingOperation = this.versionService.startSaveVersion(this.level, this.project.name(), "Singleplayer entity update save", ACTOR);
+        this.log.info("Queued gameplay entity update save operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_GAMEPLAY_ENTITY_UPDATE_SAVE);
+    }
+
+    private void checkGameplayEntityUpdateSave(MinecraftServer server) throws Exception {
+        if (!this.gameplayEntityUpdateSaveValidated) {
+            this.check("Gameplay entity update save created " + this.gameplayEntityUpdateSaveVersionId, () ->
+                    this.projectService.loadVersions(server, this.project.name()).stream()
+                            .anyMatch(version -> this.gameplayEntityUpdateSaveVersionId.equals(version.id())));
+            VersionDiff diff = this.value("Gameplay entity update diff can be built", () ->
+                    this.diffService.compareVersionToParent(server, this.project.name(), this.gameplayEntityUpdateSaveVersionId));
+            if (diff != null) {
+                this.check(diff.changedEntities().stream()
+                                .anyMatch(change -> change.entityId().equals(this.savedGameplayEntityId)),
+                        "Gameplay entity update save includes the entity");
+            }
+            this.check("Gameplay entity update save consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
+            this.gameplayEntityUpdateSaveValidated = true;
+        }
         this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
     }
 
@@ -558,6 +648,11 @@ final class SingleplayerTestRun {
                     "Full restore removed gameplay entities");
             this.gameplayReport.cleanup();
             this.gameplayReport = null;
+        }
+        if (!this.savedGameplayEntityId.isBlank()) {
+            Entity entity = this.entityById(this.savedGameplayEntityId);
+            this.check(entity == null || entity.isRemoved(),
+                    "Full restore removed saved gameplay entity after saved update");
         }
         this.explosionReport = null;
         this.check("Gameplay restore consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
@@ -867,6 +962,32 @@ final class SingleplayerTestRun {
         return Files.exists(previewFile) && Files.size(previewFile) > 0L;
     }
 
+    private Entity gameplayEntity() {
+        if (this.gameplayReport == null) {
+            return null;
+        }
+        for (Entity entity : this.gameplayReport.spawnedEntities()) {
+            if (entity != null
+                    && !entity.isRemoved()
+                    && entity.hasCustomName()
+                    && "lumi-runtime-entity".equals(entity.getCustomName().getString())) {
+                return entity;
+            }
+        }
+        return null;
+    }
+
+    private Entity entityById(String entityId) {
+        if (entityId == null || entityId.isBlank()) {
+            return null;
+        }
+        try {
+            return this.level.getEntity(UUID.fromString(entityId));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
     private boolean check(String label, CheckedBooleanSupplier assertion) {
         try {
             return this.check(assertion.getAsBoolean(), label);
@@ -953,6 +1074,10 @@ final class SingleplayerTestRun {
         CHECK_GAMEPLAY_REDO("Verify gameplay redo", "check that the latest water-bridge placement returned"),
         START_GAMEPLAY_SAVE("Queue gameplay save", "save the player-built gameplay draft"),
         CHECK_GAMEPLAY_SAVE("Verify gameplay save", "check gameplay save output and preview fulfillment"),
+        START_ENTITY_QUICK_ROLLBACK("Queue entity quick rollback", "mutate a saved entity and restore the active head"),
+        CHECK_ENTITY_QUICK_ROLLBACK("Verify entity quick rollback", "check saved entity state after quick rollback"),
+        START_GAMEPLAY_ENTITY_UPDATE_SAVE("Queue entity update save", "save an update to an existing gameplay entity"),
+        CHECK_GAMEPLAY_ENTITY_UPDATE_SAVE("Verify entity update save", "check saved entity history before full restore"),
         START_EXPLOSION_INTERACTION("TNT interaction", "place and ignite TNT through player game-mode actions"),
         CHECK_EXPLOSION_CAPTURE("Verify TNT capture", "wait for the controlled explosion and inspect its draft"),
         START_EXPLOSION_UNDO("Queue TNT undo", "undo the controlled explosion through the operation model"),
@@ -1018,7 +1143,10 @@ final class SingleplayerTestRun {
                 case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
                 case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CHECK_PLAYER_INTERACTIONS,
                      START_GAMEPLAY_UNDO, CHECK_GAMEPLAY_UNDO, START_GAMEPLAY_REDO, CHECK_GAMEPLAY_REDO,
-                     START_GAMEPLAY_SAVE, CHECK_GAMEPLAY_SAVE, START_EXPLOSION_INTERACTION,
+                     START_GAMEPLAY_SAVE, CHECK_GAMEPLAY_SAVE,
+                     START_ENTITY_QUICK_ROLLBACK, CHECK_ENTITY_QUICK_ROLLBACK,
+                     START_GAMEPLAY_ENTITY_UPDATE_SAVE, CHECK_GAMEPLAY_ENTITY_UPDATE_SAVE,
+                     START_EXPLOSION_INTERACTION,
                      CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
                      START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,
                      START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS, CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS,

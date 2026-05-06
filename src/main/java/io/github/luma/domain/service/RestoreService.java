@@ -16,6 +16,7 @@ import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.RestorePlanSummary;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -43,10 +44,12 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -977,7 +980,13 @@ public final class RestoreService {
         List<PreparedChunkBatch> batches = new ArrayList<>();
 
         if (pendingDraft != null && !pendingDraft.isEmpty()) {
-            batches.addAll(this.decodeStoredChanges(level, pendingDraft.changes(), pendingDraft.entityChanges(), false));
+            RecoveryDraft rollbackDraft = this.alignPendingEntityRollbackWithTarget(
+                    layout,
+                    versions,
+                    targetVersion,
+                    pendingDraft
+            );
+            batches.addAll(this.decodeStoredChanges(level, rollbackDraft.changes(), rollbackDraft.entityChanges(), false));
             completedSources += 1;
             progressSink.update(
                     OperationStage.PREPARING,
@@ -1039,6 +1048,85 @@ public final class RestoreService {
                 collapsedPlacements
         );
         return Optional.of(collapsed);
+    }
+
+    private RecoveryDraft alignPendingEntityRollbackWithTarget(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft
+    ) throws IOException {
+        if (pendingDraft == null || pendingDraft.entityChanges().isEmpty()) {
+            return pendingDraft;
+        }
+
+        Set<String> entityIds = new HashSet<>();
+        for (StoredEntityChange change : pendingDraft.entityChanges()) {
+            if (change != null && change.entityId() != null && !change.entityId().isBlank()) {
+                entityIds.add(change.entityId());
+            }
+        }
+        if (entityIds.isEmpty()) {
+            return pendingDraft;
+        }
+
+        Map<String, EntityPayload> targetStates = this.targetEntityStates(layout, versions, targetVersion, entityIds);
+        List<StoredEntityChange> alignedEntities = pendingDraft.entityChanges().stream()
+                .map(change -> new StoredEntityChange(
+                        change.entityId(),
+                        change.entityType(),
+                        targetStates.get(change.entityId()),
+                        change.newValue()
+                ))
+                .filter(change -> !change.isNoOp())
+                .toList();
+        return new RecoveryDraft(
+                pendingDraft.projectId(),
+                pendingDraft.variantId(),
+                pendingDraft.baseVersionId(),
+                pendingDraft.actor(),
+                pendingDraft.mutationSource(),
+                pendingDraft.startedAt(),
+                pendingDraft.updatedAt(),
+                pendingDraft.changes(),
+                alignedEntities
+        );
+    }
+
+    private Map<String, EntityPayload> targetEntityStates(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            ProjectVersion targetVersion,
+            Set<String> entityIds
+    ) throws IOException {
+        if (targetVersion == null || entityIds == null || entityIds.isEmpty()) {
+            return Map.of();
+        }
+
+        RestoreChain chain = this.resolveChain(versions, targetVersion);
+        Map<String, EntityPayload> states = new LinkedHashMap<>();
+        if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
+            for (var chunk : this.snapshotReader.readFile(layout.snapshotFile(chain.anchor().snapshotId())).chunks()) {
+                for (EntityPayload entity : chunk.entitySnapshots()) {
+                    if (entityIds.contains(entity.entityId())) {
+                        states.put(entity.entityId(), entity);
+                    }
+                }
+            }
+        }
+        for (ProjectVersion version : chain.patchVersions()) {
+            for (StoredEntityChange change : this.loadVersionWorldChanges(layout, List.of(version)).entityChanges()) {
+                if (!entityIds.contains(change.entityId())) {
+                    continue;
+                }
+                if (change.newValue() == null) {
+                    states.remove(change.entityId());
+                } else {
+                    states.put(change.entityId(), change.newValue());
+                }
+            }
+        }
+        return states;
     }
 
     private boolean shouldAppendInitialSnapshot(ProjectVersion targetVersion, RecoveryDraft pendingDraft) {
