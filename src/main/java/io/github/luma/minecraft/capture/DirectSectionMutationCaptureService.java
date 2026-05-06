@@ -63,8 +63,9 @@ public final class DirectSectionMutationCaptureService {
             return PendingDirectSectionMutation.skipped();
         }
 
-        ObservedExternalToolOperation operation = this.detectOperation();
-        if (operation == null) {
+        boolean captureCurrentSource = this.currentSourceCaptures();
+        ObservedExternalToolOperation operation = this.detectOperation(captureCurrentSource);
+        if (operation == null && !captureCurrentSource) {
             return PendingDirectSectionMutation.skipped();
         }
 
@@ -75,7 +76,8 @@ public final class DirectSectionMutationCaptureService {
                 pos,
                 oldState,
                 this.blockEntityTag(sectionOwner.level(), pos, oldState),
-                operation
+                operation,
+                operation == null
         );
     }
 
@@ -97,6 +99,18 @@ public final class DirectSectionMutationCaptureService {
 
         ServerLevel level = owner.get().level();
         BlockState appliedState = section.getBlockState(localX, localY, localZ);
+        if (mutation.currentSource()) {
+            HistoryCaptureManager.getInstance().recordBlockChange(
+                    level,
+                    mutation.pos(),
+                    mutation.oldState(),
+                    appliedState,
+                    mutation.oldBlockEntity(),
+                    this.blockEntityTag(level, mutation.pos(), appliedState)
+            );
+            return;
+        }
+
         boolean accessAllowed = this.accessAllowed(level, mutation.operation());
         try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
                 mutation.operation().source(),
@@ -116,17 +130,21 @@ public final class DirectSectionMutationCaptureService {
     }
 
     private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos, BlockState state) {
-        if (state == null || !state.hasBlockEntity()) {
+        if (level == null || state == null || !state.hasBlockEntity()) {
             return null;
         }
         BlockEntity blockEntity = level.getBlockEntity(pos);
         return blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
     }
 
-    private ObservedExternalToolOperation detectOperation() {
+    private boolean currentSourceCaptures() {
+        return HistoryCaptureManager.shouldCaptureMutation(WorldMutationContext.currentSource());
+    }
+
+    private ObservedExternalToolOperation detectOperation(boolean currentSourceCaptures) {
         var currentSource = WorldMutationContext.currentSource();
         boolean captureSuppressed = WorldMutationContext.captureSuppressed();
-        if (HistoryCaptureManager.shouldCaptureMutation(currentSource)) {
+        if (currentSourceCaptures) {
             return this.sourceResolver.detectPlayerSourceOverride(currentSource, captureSuppressed)
                     .map(operation -> operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed()))
                     .orElse(null);
@@ -146,15 +164,16 @@ public final class DirectSectionMutationCaptureService {
             BlockPos pos,
             BlockState oldState,
             CompoundTag oldBlockEntity,
-            ObservedExternalToolOperation operation
+            ObservedExternalToolOperation operation,
+            boolean currentSource
     ) {
 
         private static PendingDirectSectionMutation skipped() {
-            return new PendingDirectSectionMutation(null, null, null, null);
+            return new PendingDirectSectionMutation(null, null, null, null, false);
         }
 
         private boolean shouldCapture() {
-            return this.operation != null;
+            return this.operation != null || this.currentSource;
         }
     }
 }

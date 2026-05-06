@@ -41,7 +41,7 @@ abstract class LevelChunkSetBlockStateMixin {
             return original.call(pos, newState, flags);
         }
 
-        PendingExternalToolBlockMutation mutation = this.luma$captureBeforeChunkSetBlock(serverLevel, pos);
+        PendingBlockMutation mutation = this.luma$captureBeforeChunkSetBlock(serverLevel, pos);
         if (mutation == null) {
             return original.call(pos, newState, flags);
         }
@@ -52,13 +52,7 @@ abstract class LevelChunkSetBlockStateMixin {
                 LevelChunk chunk = (LevelChunk) (Object) this;
                 BlockState appliedState = chunk.getBlockState(mutation.pos());
                 CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, mutation.pos(), appliedState);
-                boolean accessAllowed = mutation.operation().accessAllowed() || !serverLevel.getServer().isDedicatedServer();
-                try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
-                        mutation.operation().source(),
-                        mutation.operation().actor(),
-                        mutation.operation().actionId(),
-                        accessAllowed
-                )) {
+                if (mutation.operation() == null) {
                     HistoryCaptureManager.getInstance().recordBlockChange(
                             serverLevel,
                             mutation.pos(),
@@ -67,6 +61,24 @@ abstract class LevelChunkSetBlockStateMixin {
                             mutation.oldBlockEntity(),
                             newBlockEntity
                     );
+                } else {
+                    boolean accessAllowed = mutation.operation().accessAllowed()
+                            || !serverLevel.getServer().isDedicatedServer();
+                    try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                            mutation.operation().source(),
+                            mutation.operation().actor(),
+                            mutation.operation().actionId(),
+                            accessAllowed
+                    )) {
+                        HistoryCaptureManager.getInstance().recordBlockChange(
+                                serverLevel,
+                                mutation.pos(),
+                                mutation.oldState(),
+                                appliedState,
+                                mutation.oldBlockEntity(),
+                                newBlockEntity
+                        );
+                    }
                 }
             }
             return previous;
@@ -76,7 +88,7 @@ abstract class LevelChunkSetBlockStateMixin {
     }
 
     @Unique
-    private PendingExternalToolBlockMutation luma$captureBeforeChunkSetBlock(ServerLevel serverLevel, BlockPos pos) {
+    private PendingBlockMutation luma$captureBeforeChunkSetBlock(ServerLevel serverLevel, BlockPos pos) {
         if (WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
             return null;
         }
@@ -90,7 +102,7 @@ abstract class LevelChunkSetBlockStateMixin {
         if (operation != null && currentSourceCaptures) {
             operation = operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed());
         }
-        if (operation == null) {
+        if (operation == null && !currentSourceCaptures) {
             return null;
         }
 
@@ -98,7 +110,7 @@ abstract class LevelChunkSetBlockStateMixin {
         BlockState oldState = chunk.getBlockState(pos);
         CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, pos, oldState);
         WorldMutationCaptureGuard.CaptureBoundary boundary = WorldMutationCaptureGuard.pushChunkSetBlockBoundary();
-        return new PendingExternalToolBlockMutation(
+        return new PendingBlockMutation(
                 pos.immutable(),
                 oldState,
                 oldBlockEntity,
@@ -117,7 +129,7 @@ abstract class LevelChunkSetBlockStateMixin {
     }
 
     @Unique
-    private record PendingExternalToolBlockMutation(
+    private record PendingBlockMutation(
             BlockPos pos,
             BlockState oldState,
             CompoundTag oldBlockEntity,
