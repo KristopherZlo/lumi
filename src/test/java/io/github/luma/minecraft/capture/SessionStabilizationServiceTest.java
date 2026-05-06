@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.StatePayload;
@@ -192,6 +193,42 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void stabilizationCompositionKeepsCurrentChangeWhenLateBaselineAlreadyContainsTarget() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        StoredBlockChange directBreak = new StoredBlockChange(
+                new BlockPoint(5, 64, 5),
+                payload("minecraft:grass_block"),
+                payload("minecraft:air")
+        );
+
+        List<StoredBlockChange> composedChanges = service.composeStabilizedChanges(
+                List.of(),
+                List.of(directBreak),
+                List.of(),
+                Map.of(new ChunkPoint(0, 0), uniformChunk("minecraft:air"))
+        );
+
+        assertEquals(List.of(directBreak), composedChanges);
+    }
+
+    @Test
+    void stabilizationCompositionDropsCurrentChangeWhenLiveStateReturnedToBaseline() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        StoredBlockChange movedSource = new StoredBlockChange(
+                new BlockPoint(2, 64, 1),
+                payload("minecraft:air"),
+                payload("minecraft:oak_planks")
+        );
+
+        assertTrue(service.composeStabilizedChanges(
+                List.of(),
+                List.of(movedSource),
+                List.of(),
+                Map.of(new ChunkPoint(0, 0), uniformChunk("minecraft:air"))
+        ).isEmpty());
+    }
+
+    @Test
     void reconciliationRelatedDeltasExcludeAlreadyTrackedDirectChanges() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange directPlacement = new StoredBlockChange(
@@ -256,6 +293,17 @@ class SessionStabilizationServiceTest {
                 Map.of()
         );
         return service.diffChunk(baseline, live, null);
+    }
+
+    private static ChunkSnapshotPayload uniformChunk(String blockId) {
+        return new ChunkSnapshotPayload(
+                0,
+                0,
+                64,
+                79,
+                List.of(new ChunkSectionSnapshotPayload(4, List.of(stateTag(blockId)), new long[0], 0)),
+                Map.of()
+        );
     }
 
     private static CompoundTag blockEntity(String id, String marker) {

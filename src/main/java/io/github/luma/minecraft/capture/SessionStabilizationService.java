@@ -86,7 +86,12 @@ public final class SessionStabilizationService {
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
             List<StoredBlockChange> persistentDeltaChanges = this.persistentDeltaChanges(currentChanges, deltaChanges);
             List<StoredBlockChange> relatedDeltaChanges = this.relatedDeltaChanges(currentChanges, persistentDeltaChanges);
-            List<StoredBlockChange> composedChanges = composeChanges(startingChanges, persistentDeltaChanges);
+            List<StoredBlockChange> composedChanges = this.composeStabilizedChanges(
+                    startingChanges,
+                    currentChanges,
+                    persistentDeltaChanges,
+                    capturedChunks.captured()
+            );
             int bufferBefore = session.buffer().size();
             boolean bufferChanged = !currentChanges.equals(composedChanges);
             if (bufferChanged) {
@@ -275,7 +280,95 @@ public final class SessionStabilizationService {
             List<StoredBlockChange> currentChanges,
             List<StoredBlockChange> deltaChanges
     ) {
-        return composeChanges(startingChanges, this.persistentDeltaChanges(currentChanges, deltaChanges));
+        return this.composeStabilizedChanges(
+                startingChanges,
+                currentChanges,
+                this.persistentDeltaChanges(currentChanges, deltaChanges),
+                Map.of()
+        );
+    }
+
+    List<StoredBlockChange> composeStabilizedChanges(
+            List<StoredBlockChange> startingChanges,
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> persistentDeltaChanges,
+            Map<ChunkPoint, ChunkSnapshotPayload> liveChunks
+    ) {
+        List<StoredBlockChange> preservedCurrentChanges = this.preservedCurrentChanges(
+                currentChanges,
+                persistentDeltaChanges,
+                liveChunks
+        );
+        return composeChanges(composeChanges(startingChanges, preservedCurrentChanges), persistentDeltaChanges);
+    }
+
+    private List<StoredBlockChange> preservedCurrentChanges(
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> persistentDeltaChanges,
+            Map<ChunkPoint, ChunkSnapshotPayload> liveChunks
+    ) {
+        if (currentChanges == null || currentChanges.isEmpty() || liveChunks == null || liveChunks.isEmpty()) {
+            return List.of();
+        }
+
+        Set<BlockPoint> deltaPositions = new LinkedHashSet<>();
+        for (StoredBlockChange deltaChange : persistentDeltaChanges == null
+                ? List.<StoredBlockChange>of()
+                : persistentDeltaChanges) {
+            deltaPositions.add(deltaChange.pos());
+        }
+
+        List<StoredBlockChange> preserved = new ArrayList<>();
+        Map<ChunkPoint, Map<Integer, ChunkSectionSnapshotPayload>> liveSectionIndexes = new HashMap<>();
+        for (StoredBlockChange currentChange : currentChanges) {
+            if (deltaPositions.contains(currentChange.pos())) {
+                continue;
+            }
+            StatePayload livePayload = this.livePayload(currentChange.pos(), liveChunks, liveSectionIndexes);
+            if (this.matchesLiveTarget(currentChange.newValue(), livePayload)) {
+                preserved.add(currentChange);
+            }
+        }
+        return List.copyOf(preserved);
+    }
+
+    private StatePayload livePayload(
+            BlockPoint pos,
+            Map<ChunkPoint, ChunkSnapshotPayload> liveChunks,
+            Map<ChunkPoint, Map<Integer, ChunkSectionSnapshotPayload>> liveSectionIndexes
+    ) {
+        ChunkPoint chunk = ChunkPoint.from(pos);
+        ChunkSnapshotPayload liveChunk = liveChunks.get(chunk);
+        if (liveChunk == null) {
+            return null;
+        }
+        if (pos.y() < liveChunk.minBuildHeight() || pos.y() > liveChunk.maxBuildHeight()) {
+            return StatePayload.air();
+        }
+
+        Map<Integer, ChunkSectionSnapshotPayload> sections = liveSectionIndexes.computeIfAbsent(
+                chunk,
+                ignored -> indexSections(liveChunk)
+        );
+        ChunkSectionSnapshotPayload section = sections.get(pos.y() >> 4);
+        int localX = pos.x() & 15;
+        int localY = pos.y() & 15;
+        int localZ = pos.z() & 15;
+        return payload(
+                this.readStateTag(section, localX, localY, localZ),
+                this.readBlockEntityTag(liveChunk, pos.y(), localX, localZ)
+        );
+    }
+
+    private boolean matchesLiveTarget(StatePayload target, StatePayload live) {
+        if (target == null || live == null) {
+            return Objects.equals(target, live);
+        }
+        if (target.equalsState(live)) {
+            return true;
+        }
+        return Objects.equals(target.blockEntityTag(), live.blockEntityTag())
+                && this.blockStatePolicy.isRuntimeOnlyStateTagChange(target.stateTag(), live.stateTag());
     }
 
     List<StoredBlockChange> relatedDeltaChanges(

@@ -15,7 +15,7 @@ final class SingleplayerPerformanceMonitor {
 
     private static final long MAX_SYNC_SLICE_NANOS = Duration.ofSeconds(1).toNanos();
     private static final long MAX_SYNC_TOTAL_NANOS = Duration.ofSeconds(5).toNanos();
-    private static final int MAX_ACTION_APPLY_BLOCKS = 16;
+    private static final int MAX_ACTION_APPLY_BLOCKS = 17;
     private static final int MAX_PARTIAL_RESTORE_BLOCKS = 16;
     private static final int MAX_FULL_RESTORE_BLOCKS = 512;
 
