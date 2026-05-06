@@ -62,7 +62,9 @@ public record ChunkBatch(
                         new SectionBatch(
                                 entry.getKey(),
                                 changedMasks.getOrDefault(entry.getKey(), new BitSet(4096)),
-                                ConnectedBlockPlacementExpander.ordered(entry.getValue())
+                                PistonMechanismPlacementExpander.ordered(
+                                        ConnectedBlockPlacementExpander.ordered(entry.getValue())
+                                )
                         )
                 ));
 

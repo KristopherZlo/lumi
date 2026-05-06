@@ -20,17 +20,20 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class PreparedChunkBatchCollapser {
 
     private final ConnectedBlockPlacementExpander connectedBlockPlacementExpander;
+    private final PistonMechanismPlacementExpander pistonMechanismPlacementExpander;
     private final SectionApplySafetyClassifier sectionApplySafetyClassifier;
 
     public PreparedChunkBatchCollapser() {
-        this(new ConnectedBlockPlacementExpander(), new SectionApplySafetyClassifier());
+        this(new ConnectedBlockPlacementExpander(), new PistonMechanismPlacementExpander(), new SectionApplySafetyClassifier());
     }
 
     PreparedChunkBatchCollapser(
             ConnectedBlockPlacementExpander connectedBlockPlacementExpander,
+            PistonMechanismPlacementExpander pistonMechanismPlacementExpander,
             SectionApplySafetyClassifier sectionApplySafetyClassifier
     ) {
         this.connectedBlockPlacementExpander = connectedBlockPlacementExpander;
+        this.pistonMechanismPlacementExpander = pistonMechanismPlacementExpander;
         this.sectionApplySafetyClassifier = sectionApplySafetyClassifier;
     }
 
@@ -53,6 +56,7 @@ public final class PreparedChunkBatchCollapser {
         }
 
         this.expandConnectedPlacements(sections);
+        this.expandPistonPlacements(sections);
         return this.toBatches(sections, entities.toBatchesByChunk());
     }
 
@@ -120,6 +124,21 @@ public final class PreparedChunkBatchCollapser {
         }
     }
 
+    private void expandPistonPlacements(Map<SectionKey, SectionAccumulator> sections) {
+        List<PreparedBlockPlacement> candidates = new ArrayList<>();
+        for (SectionAccumulator section : sections.values()) {
+            candidates.addAll(section.placements());
+        }
+        List<PreparedBlockPlacement> expanded = this.pistonMechanismPlacementExpander.expandTargets(candidates);
+        for (PreparedBlockPlacement placement : expanded) {
+            SectionAccumulator section = sections.get(SectionKey.from(placement.pos()));
+            if (section != null && section.contains(placement.pos())) {
+                continue;
+            }
+            this.addPlacement(sections, placement, false);
+        }
+    }
+
     private List<PreparedChunkBatch> toBatches(
             Map<SectionKey, SectionAccumulator> sections,
             Map<ChunkPoint, EntityAccumulator> entities
@@ -154,8 +173,8 @@ public final class PreparedChunkBatchCollapser {
         chunks.addAll(nativeSections.keySet());
         chunks.addAll(entities.keySet());
         for (ChunkPoint chunk : chunks) {
-            List<PreparedBlockPlacement> placements = ConnectedBlockPlacementExpander.ordered(
-                    sparsePlacements.getOrDefault(chunk, List.of())
+            List<PreparedBlockPlacement> placements = PistonMechanismPlacementExpander.ordered(
+                    ConnectedBlockPlacementExpander.ordered(sparsePlacements.getOrDefault(chunk, List.of()))
             );
             EntityAccumulator entityAccumulator = entities.get(chunk);
             EntityBatch entityBatch = entityAccumulator == null
@@ -219,6 +238,16 @@ public final class PreparedChunkBatchCollapser {
                     continue;
                 }
                 placements.add(this.toPlacement(localIndex));
+            }
+            return placements;
+        }
+
+        private List<PreparedBlockPlacement> placements() {
+            List<PreparedBlockPlacement> placements = new ArrayList<>();
+            for (int localIndex = 0; localIndex < this.changedCells.length; localIndex++) {
+                if (this.changedCells[localIndex]) {
+                    placements.add(this.toPlacement(localIndex));
+                }
             }
             return placements;
         }

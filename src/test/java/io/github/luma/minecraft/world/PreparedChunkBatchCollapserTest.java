@@ -5,18 +5,23 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.block.piston.PistonHeadBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PreparedChunkBatchCollapserTest {
@@ -209,6 +214,65 @@ class PreparedChunkBatchCollapserTest {
         );
     }
 
+    @Test
+    void sparsePistonBaseAddsSettledHeadCompanion() {
+        BlockPos base = new BlockPos(1, 64, 1);
+        BlockState extended = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                .setValue(PistonBaseBlock.EXTENDED, true);
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(
+                new PreparedChunkBatch(
+                        new ChunkPoint(0, 0),
+                        List.of(new PreparedBlockPlacement(base, extended, null))
+                )
+        ));
+
+        assertEquals(1, collapsed.size());
+        BlockState head = stateAt(collapsed.getFirst(), base.east());
+        assertTrue(head.is(Blocks.PISTON_HEAD));
+        assertEquals(Direction.EAST, head.getValue(PistonHeadBlock.FACING));
+    }
+
+    @Test
+    void pistonHeadCompanionCanCrossChunkBoundaries() {
+        BlockPos base = new BlockPos(15, 64, 1);
+        BlockState extended = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                .setValue(PistonBaseBlock.EXTENDED, true);
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(
+                new PreparedChunkBatch(
+                        new ChunkPoint(0, 0),
+                        List.of(new PreparedBlockPlacement(base, extended, null))
+                )
+        ));
+
+        assertEquals(2, collapsed.size());
+        assertEquals(extended, stateAt(batchFor(collapsed, new ChunkPoint(0, 0)), base));
+        BlockState head = stateAt(batchFor(collapsed, new ChunkPoint(1, 0)), base.east());
+        assertTrue(head.is(Blocks.PISTON_HEAD));
+        assertEquals(Direction.EAST, head.getValue(PistonHeadBlock.FACING));
+    }
+
+    @Test
+    void pistonHeadOnlyDoesNotCreateAdjacentBase() {
+        BlockPos headPos = new BlockPos(2, 64, 1);
+        BlockState head = Blocks.PISTON_HEAD.defaultBlockState()
+                .setValue(PistonHeadBlock.FACING, Direction.EAST);
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(
+                new PreparedChunkBatch(
+                        new ChunkPoint(0, 0),
+                        List.of(new PreparedBlockPlacement(headPos, head, null))
+                )
+        ));
+
+        assertEquals(1, collapsed.size());
+        assertEquals(head, stateAt(collapsed.getFirst(), headPos));
+        assertNull(stateAt(collapsed.getFirst(), headPos.west()));
+    }
+
     private static PreparedSectionApplyBatch fullSection(
             int chunkX,
             int sectionY,
@@ -247,6 +311,13 @@ class PreparedChunkBatchCollapserTest {
             }
         }
         return null;
+    }
+
+    private static PreparedChunkBatch batchFor(List<PreparedChunkBatch> batches, ChunkPoint chunk) {
+        return batches.stream()
+                .filter(batch -> batch.chunk().equals(chunk))
+                .findFirst()
+                .orElseThrow();
     }
 
     private static CompoundTag entity(String entityId, double x) {

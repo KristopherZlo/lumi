@@ -12,11 +12,15 @@ import java.util.Arrays;
 import java.util.List;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.block.piston.PistonHeadBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -190,6 +194,54 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void blockChangesAddSettledPistonHeadCompanionForExtendedBase() throws Exception {
+        BlockPos base = new BlockPos(0, 64, 0);
+        BlockState retracted = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST);
+        BlockState extended = retracted.setValue(PistonBaseBlock.EXTENDED, true);
+
+        List<PreparedChunkBatch> batches = this.preparer.prepare(
+                null,
+                List.of(new StoredBlockChange(
+                        BlockPoint.from(base),
+                        payload(retracted),
+                        payload(extended)
+                )),
+                List.of(),
+                true
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(extended, stateAt(batches.getFirst(), base));
+        assertEquals(Blocks.PISTON_HEAD, stateAt(batches.getFirst(), base.east()).getBlock());
+        assertEquals(Direction.EAST, stateAt(batches.getFirst(), base.east()).getValue(PistonHeadBlock.FACING));
+    }
+
+    @Test
+    void blockChangesClearOldPistonHeadWhenExtendedBaseRetracts() throws Exception {
+        BlockPos base = new BlockPos(0, 64, 0);
+        BlockState extended = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                .setValue(PistonBaseBlock.EXTENDED, true);
+        BlockState retracted = extended.setValue(PistonBaseBlock.EXTENDED, false);
+
+        List<PreparedChunkBatch> batches = this.preparer.prepare(
+                null,
+                List.of(new StoredBlockChange(
+                        BlockPoint.from(base),
+                        payload(extended),
+                        payload(retracted)
+                )),
+                List.of(),
+                true
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(retracted, stateAt(batches.getFirst(), base));
+        assertEquals(Blocks.AIR.defaultBlockState(), stateAt(batches.getFirst(), base.east()));
+    }
+
+    @Test
     void sectionFramesDecodeRepeatedPaletteTagsOnceAndKeepBlockEntities() throws Exception {
         CountingBlockStateDecoder decoder = new CountingBlockStateDecoder();
         WorldChangeBatchPreparer preparer = new WorldChangeBatchPreparer(decoder);
@@ -251,6 +303,26 @@ class WorldChangeBatchPreparerTest {
 
     private static StatePayload payload(net.minecraft.world.level.block.state.BlockState state) {
         return new StatePayload(BlockStateNbtCodec.serializeBlockStateTag(state), null);
+    }
+
+    private static net.minecraft.world.level.block.state.BlockState stateAt(PreparedChunkBatch batch, BlockPos pos) {
+        for (PreparedBlockPlacement placement : batch.placements()) {
+            if (placement.pos().equals(pos)) {
+                return placement.state();
+            }
+        }
+        for (PreparedSectionApplyBatch section : batch.nativeSections()) {
+            if (section.sectionY() != Math.floorDiv(pos.getY(), 16)) {
+                continue;
+            }
+            net.minecraft.world.level.block.state.BlockState state = section.buffer().targetStateAt(
+                    SectionChangeMask.localIndex(pos.getX(), pos.getY(), pos.getZ())
+            );
+            if (state != null) {
+                return state;
+            }
+        }
+        return null;
     }
 
     private static long[] mask(int changedCells) {

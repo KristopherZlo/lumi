@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class WorldChangeBatchPreparer {
 
     private final ConnectedBlockPlacementExpander connectedBlockPlacementExpander = new ConnectedBlockPlacementExpander();
+    private final PistonMechanismPlacementExpander pistonMechanismPlacementExpander = new PistonMechanismPlacementExpander();
     private final SectionApplySafetyClassifier sectionApplySafetyClassifier = new SectionApplySafetyClassifier();
     private final Supplier<BlockStateDecoder> blockStateDecoderFactory;
 
@@ -102,7 +103,7 @@ public final class WorldChangeBatchPreparer {
             progressListener.onDecoded(completed, total);
         }
         Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = this.connectedBlockPlacementExpander.groupByChunk(
-                this.connectedBlockPlacementExpander.expandChanges(blockPlacements)
+                this.expandMechanismChanges(blockPlacements)
         );
         for (StoredEntityChange change : entityChanges) {
             groupedEntities.computeIfAbsent(change.chunk(), ignored -> new ArrayList<>()).add(change);
@@ -320,6 +321,42 @@ public final class WorldChangeBatchPreparer {
         return new SectionSplit(List.copyOf(sparse), List.copyOf(nativeSections));
     }
 
+    private List<PreparedBlockPlacement> expandMechanismChanges(
+            List<ConnectedBlockPlacementExpander.ChangePlacement> changes
+    ) {
+        List<PreparedBlockPlacement> connectedPlacements = this.connectedBlockPlacementExpander.expandChanges(changes);
+        List<PistonMechanismPlacementExpander.ChangePlacement> pistonChanges = new ArrayList<>();
+        for (ConnectedBlockPlacementExpander.ChangePlacement change : changes == null
+                ? List.<ConnectedBlockPlacementExpander.ChangePlacement>of()
+                : changes) {
+            if (change == null) {
+                continue;
+            }
+            pistonChanges.add(new PistonMechanismPlacementExpander.ChangePlacement(
+                    change.placement(),
+                    change.sourceState()
+            ));
+        }
+        return this.mergePlacements(
+                connectedPlacements,
+                this.pistonMechanismPlacementExpander.expandChanges(pistonChanges)
+        );
+    }
+
+    private List<PreparedBlockPlacement> mergePlacements(
+            List<PreparedBlockPlacement> primary,
+            List<PreparedBlockPlacement> secondary
+    ) {
+        LinkedHashMap<Long, PreparedBlockPlacement> merged = new LinkedHashMap<>();
+        for (PreparedBlockPlacement placement : primary == null ? List.<PreparedBlockPlacement>of() : primary) {
+            merged.put(BlockPos.asLong(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ()), placement);
+        }
+        for (PreparedBlockPlacement placement : secondary == null ? List.<PreparedBlockPlacement>of() : secondary) {
+            merged.putIfAbsent(BlockPos.asLong(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ()), placement);
+        }
+        return PistonMechanismPlacementExpander.ordered(merged.values());
+    }
+
     private List<PreparedChunkBatch> prepareUndoRedoSectionFirst(
             ServerLevel level,
             List<StoredBlockChange> changes,
@@ -338,7 +375,9 @@ public final class WorldChangeBatchPreparer {
             BlockState sourceState = blockStateDecoder.decode(level, source == null ? null : source.stateTag());
             BlockState targetState = blockStateDecoder.decode(level, target == null ? null : target.stateTag());
             if (this.connectedBlockPlacementExpander.requiresCompanion(sourceState)
-                    || this.connectedBlockPlacementExpander.requiresCompanion(targetState)) {
+                    || this.connectedBlockPlacementExpander.requiresCompanion(targetState)
+                    || this.pistonMechanismPlacementExpander.requiresCompanion(sourceState)
+                    || this.pistonMechanismPlacementExpander.requiresCompanion(targetState)) {
                 return null;
             }
 
