@@ -72,6 +72,20 @@ class ProjectIntegrityServiceTest {
         assertTrue(report.warnings().stream().anyMatch(warning -> warning.contains("Version index")));
     }
 
+    @Test
+    void rejectsRandomPatchPayloadBytesAsCorrupt() throws Exception {
+        ProjectLayout layout = this.layout();
+        this.writeProjectMetadata(layout);
+        this.versionRepository.save(layout, version("v0001", "", List.of("patch-random")));
+        Files.createDirectories(layout.patchesDir());
+        Files.writeString(layout.patchMetaFile("patch-random"), "{\"id\":\"patch-random\"}", StandardCharsets.UTF_8);
+        Files.write(layout.patchDataFile("patch-random"), new byte[] {1, 2, 3, 4, 5, 6, 7, 8});
+
+        ProjectIntegrityReport report = this.service.inspect(layout);
+
+        assertTrue(report.errors().stream().anyMatch(error -> error.contains("Corrupt patch payload header patch-random")));
+    }
+
     private ProjectLayout layout() {
         return ProjectLayout.of(this.tempDir, "Integrity");
     }

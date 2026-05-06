@@ -18,6 +18,7 @@ public final class ProjectIntegrityService {
 
     private final ProjectService projectService = new ProjectService();
     private final io.github.luma.storage.repository.VersionRepository versionRepository = new io.github.luma.storage.repository.VersionRepository();
+    private final io.github.luma.storage.repository.PatchMetaRepository patchMetaRepository = new io.github.luma.storage.repository.PatchMetaRepository();
 
     public ProjectIntegrityReport inspect(MinecraftServer server, String projectName) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
@@ -49,6 +50,8 @@ public final class ProjectIntegrityService {
             for (String patchId : version.patchIds()) {
                 if (!Files.exists(layout.patchMetaFile(patchId))) {
                     errors.add("Missing patch metadata " + patchId + " for " + version.id());
+                } else if (!this.hasReadablePatchMetadata(layout, patchId)) {
+                    errors.add("Corrupt patch metadata " + patchId + " for " + version.id());
                 }
                 if (!Files.exists(layout.patchDataFile(patchId))) {
                     errors.add("Missing patch payload " + patchId + " for " + version.id());
@@ -68,6 +71,14 @@ public final class ProjectIntegrityService {
         return new ProjectIntegrityReport(errors.isEmpty(), List.copyOf(warnings), List.copyOf(errors));
     }
 
+    private boolean hasReadablePatchMetadata(ProjectLayout layout, String patchId) {
+        try {
+            return this.patchMetaRepository.load(layout, patchId).isPresent();
+        } catch (IOException | RuntimeException exception) {
+            return false;
+        }
+    }
+
     private boolean hasReadablePatchHeader(ProjectLayout layout, String patchId) {
         try {
             if (Files.size(layout.patchDataFile(patchId)) < Integer.BYTES * 2L) {
@@ -76,7 +87,16 @@ public final class ProjectIntegrityService {
             try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(layout.patchDataFile(patchId))))) {
                 int magic = input.readInt();
                 int version = input.readInt();
-                return magic != PATCH_MAGIC || version == 6 || version == 7;
+                if (magic == PATCH_MAGIC) {
+                    return version == 6 || version == 7;
+                }
+            }
+            try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
+                    new BufferedInputStream(Files.newInputStream(layout.patchDataFile(patchId)))
+            ))) {
+                int magic = input.readInt();
+                int version = input.readInt();
+                return magic == PATCH_MAGIC && (version == 3 || version == 4 || version == 5);
             }
         } catch (IOException exception) {
             return false;

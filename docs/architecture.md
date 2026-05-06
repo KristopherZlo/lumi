@@ -117,7 +117,7 @@ Important boundaries:
 - repositories do not depend on `ServerLevel`, block-state codecs, or apply-batch runtime types
 - preview request repositories persist lightweight capture jobs for the client renderer
 - history tombstone repositories persist soft-delete visibility metadata without touching history payloads
-- `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export, including manifest size limits, safe storage-id validation, bounded entry copying, and symlink rejection
+- `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export, including manifest size limits, safe storage-id validation, stable source-file hashing, bounded entry copying, entry digest verification, and symlink rejection
 - `ProjectCleanupRepository` owns file scanning and deletion for conservative storage cleanup, resolving deletion candidates through the project root and skipping symlink directories during empty-folder pruning
 - `StorageIo` owns low-level atomic-write and NBT binary helpers
 

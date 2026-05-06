@@ -138,6 +138,39 @@ class ProjectArchiveRepositoryTest {
     }
 
     @Test
+    void exportArchiveHashesEntriesAndImportRejectsTamperedPayload() throws Exception {
+        ProjectLayout sourceLayout = this.seedProject(this.tempDir.resolve("source-hash").resolve("tower.mbp"));
+        Path archiveFile = this.tempDir.resolve("tower-hash.zip");
+
+        ProjectArchiveManifest manifest = this.projectArchiveRepository.exportArchive(
+                sourceLayout,
+                this.projectRepository.load(sourceLayout).orElseThrow(),
+                archiveFile,
+                false
+        );
+
+        ProjectArchiveEntry patchEntry = manifest.entries().stream()
+                .filter(entry -> entry.path().equals("project/patches/patch-0001.bin.lz4"))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(patchEntry.sha256Hex().matches("[0-9a-f]{64}"));
+
+        Map<String, byte[]> payloads = new LinkedHashMap<>();
+        for (ProjectArchiveEntry entry : manifest.entries()) {
+            payloads.put(entry.path(), this.readArchiveSource(sourceLayout, entry.path()));
+        }
+        payloads.put(patchEntry.path(), new byte[] {3, 2, 1});
+
+        Path tamperedArchive = this.tempDir.resolve("tower-hash-tampered.zip");
+        this.writeArchive(tamperedArchive, manifest, payloads);
+
+        assertThrows(IOException.class, () -> this.projectArchiveRepository.importArchive(
+                this.tempDir.resolve("target-tampered"),
+                tamperedArchive
+        ));
+    }
+
+    @Test
     void importArchiveRejectsUnsafeProjectFolderName() throws Exception {
         Path archiveFile = this.tempDir.resolve("bad-folder.zip");
         this.writeArchive(
@@ -298,6 +331,10 @@ class ProjectArchiveRepositoryTest {
                 zip.closeEntry();
             }
         }
+    }
+
+    private byte[] readArchiveSource(ProjectLayout layout, String archivePath) throws IOException {
+        return Files.readAllBytes(layout.root().resolve(archivePath.substring("project/".length())));
     }
 
     private ProjectLayout seedProjectWithVariant(Path root) throws Exception {

@@ -45,6 +45,7 @@ public final class ProjectArchiveRepository {
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
+    private final FileContentHasher fileContentHasher = new FileContentHasher();
 
     public ProjectArchiveManifest exportArchive(
             ProjectLayout layout,
@@ -71,12 +72,7 @@ public final class ProjectArchiveRepository {
                 GsonProvider.compactGson().toJson(manifest, writer);
                 writer.flush();
                 zip.closeEntry();
-                for (ProjectArchiveEntry entry : entries) {
-                    this.validateArchiveEntry(entry.path());
-                    zip.putNextEntry(new ZipEntry(entry.path()));
-                    Files.copy(this.resolveSource(layout, entry.path()), zip);
-                    zip.closeEntry();
-                }
+                this.writeArchiveEntries(layout, entries, zip);
             }
         });
         return manifest;
@@ -109,12 +105,7 @@ public final class ProjectArchiveRepository {
                 GsonProvider.compactGson().toJson(manifest, writer);
                 writer.flush();
                 zip.closeEntry();
-                for (ProjectArchiveEntry entry : entries) {
-                    this.validateArchiveEntry(entry.path());
-                    zip.putNextEntry(new ZipEntry(entry.path()));
-                    Files.copy(this.resolveSource(layout, entry.path()), zip);
-                    zip.closeEntry();
-                }
+                this.writeArchiveEntries(layout, entries, zip);
             }
         });
         return manifest;
@@ -144,6 +135,10 @@ public final class ProjectArchiveRepository {
                 }
                 if (manifest.entries().size() > MAX_ARCHIVE_ENTRIES) {
                     throw new IOException("Archive has too many entries");
+                }
+                for (ProjectArchiveEntry archiveEntry : manifest.entries()) {
+                    this.validateArchiveEntry(archiveEntry.path());
+                    this.validateArchiveEntryHash(archiveEntry);
                 }
                 StoragePathPolicy.requireArchiveFolderName(manifest.projectFolderName(), "archive project folder");
                 return manifest;
@@ -326,12 +321,14 @@ public final class ProjectArchiveRepository {
             throw new IOException("Missing required project file " + file.getFileName());
         }
         this.rejectSymbolicLink(file);
-        return new ProjectArchiveEntry(archivePath, Files.size(file), false);
+        FileContentHash hash = this.fileContentHasher.hashStable(file);
+        return new ProjectArchiveEntry(archivePath, hash.sizeBytes(), false, hash.sha256Hex());
     }
 
     private ProjectArchiveEntry optionalEntry(Path file, String archivePath) throws IOException {
         this.rejectSymbolicLink(file);
-        return new ProjectArchiveEntry(archivePath, Files.size(file), true);
+        FileContentHash hash = this.fileContentHasher.hashStable(file);
+        return new ProjectArchiveEntry(archivePath, hash.sizeBytes(), true, hash.sha256Hex());
     }
 
     private Path resolveSource(ProjectLayout layout, String archivePath) throws IOException {
@@ -351,6 +348,21 @@ public final class ProjectArchiveRepository {
 
     private void putEntry(Map<String, ProjectArchiveEntry> entries, ProjectArchiveEntry entry) {
         entries.putIfAbsent(entry.path(), entry);
+    }
+
+    private void writeArchiveEntries(
+            ProjectLayout layout,
+            List<ProjectArchiveEntry> entries,
+            ZipOutputStream zip
+    ) throws IOException {
+        for (ProjectArchiveEntry entry : entries) {
+            this.validateArchiveEntry(entry.path());
+            Path source = this.resolveSource(layout, entry.path());
+            zip.putNextEntry(new ZipEntry(entry.path()));
+            FileContentHash copied = this.fileContentHasher.copyStable(source, zip);
+            this.validateEntryContent(entry, copied);
+            zip.closeEntry();
+        }
     }
 
     private String projectRelativePath(String archivePath) {
@@ -402,6 +414,7 @@ public final class ProjectArchiveRepository {
         if (zipEntry.getSize() >= 0L && zipEntry.getSize() != entry.size()) {
             throw new IOException("Archive entry size mismatch: " + entry.path());
         }
+        this.validateArchiveEntryHash(entry);
     }
 
     private void validateKnownEntrySize(ZipEntry entry, long maxBytes, String label) throws IOException {
@@ -412,22 +425,36 @@ public final class ProjectArchiveRepository {
     }
 
     private long copyBounded(InputStream input, Path target, ProjectArchiveEntry entry) throws IOException {
-        byte[] buffer = new byte[8192];
-        long total = 0L;
         try (OutputStream output = Files.newOutputStream(target)) {
-            int read;
-            while ((read = input.read(buffer)) >= 0) {
-                total += read;
-                if (total > MAX_ENTRY_BYTES) {
-                    throw new IOException("Archive entry is too large: " + entry.path());
-                }
-                output.write(buffer, 0, read);
-            }
+            FileContentHash copied = this.fileContentHasher.copyBounded(input, output, MAX_ENTRY_BYTES, entry.path());
+            this.validateEntryContent(entry, copied);
+            return copied.sizeBytes();
         }
-        if (entry.size() >= 0L && total != entry.size()) {
+    }
+
+    private void validateEntryContent(ProjectArchiveEntry entry, FileContentHash actual) throws IOException {
+        if (entry.size() >= 0L && actual.sizeBytes() != entry.size()) {
             throw new IOException("Archive entry size mismatch: " + entry.path());
         }
-        return total;
+        if (entry.hasSha256() && !actual.sha256Hex().equalsIgnoreCase(entry.sha256Hex())) {
+            throw new IOException("Archive entry hash mismatch: " + entry.path());
+        }
+    }
+
+    private void validateArchiveEntryHash(ProjectArchiveEntry entry) throws IOException {
+        if (!entry.hasSha256()) {
+            return;
+        }
+        String value = entry.sha256Hex();
+        if (value.length() != 64) {
+            throw new IOException("Archive entry hash is invalid: " + entry.path());
+        }
+        for (int index = 0; index < value.length(); index++) {
+            char current = value.charAt(index);
+            if (!(current >= '0' && current <= '9') && !(current >= 'a' && current <= 'f') && !(current >= 'A' && current <= 'F')) {
+                throw new IOException("Archive entry hash is invalid: " + entry.path());
+            }
+        }
     }
 
     private void validateImportedStorage(ProjectLayout layout) throws IOException {
