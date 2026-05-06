@@ -6,6 +6,8 @@ import java.util.List;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
@@ -88,9 +90,7 @@ class PreparedChunkBatchCollapserTest {
 
     @Test
     void entityOnlyBatchesArePreserved() {
-        CompoundTag entity = new CompoundTag();
-        entity.putString("id", "minecraft:block_display");
-        entity.putString("UUID", "00000000-0000-0000-0000-000000000050");
+        CompoundTag entity = entity("00000000-0000-0000-0000-000000000050", 32.0D);
         PreparedChunkBatch batch = new PreparedChunkBatch(
                 new ChunkPoint(2, 3),
                 List.of(),
@@ -101,6 +101,93 @@ class PreparedChunkBatchCollapserTest {
 
         assertEquals(1, collapsed.size());
         assertEquals(1, collapsed.getFirst().entityBatch().entitiesToSpawn().size());
+    }
+
+    @Test
+    void laterEntityRemovalWinsOverEarlierUpdate() {
+        String entityId = "00000000-0000-0000-0000-000000000051";
+        PreparedChunkBatch update = new PreparedChunkBatch(
+                new ChunkPoint(1, 0),
+                List.of(),
+                new EntityBatch(List.of(), List.of(), List.of(entity(entityId, 16.0D)))
+        );
+        PreparedChunkBatch removal = new PreparedChunkBatch(
+                new ChunkPoint(1, 0),
+                List.of(),
+                new EntityBatch(List.of(), List.of(entityId), List.of())
+        );
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(update, removal));
+
+        assertEquals(1, collapsed.size());
+        assertEquals(List.of(entityId), collapsed.getFirst().entityBatch().entityIdsToRemove());
+        assertTrue(collapsed.getFirst().entityBatch().entitiesToUpdate().isEmpty());
+    }
+
+    @Test
+    void spawnThenRemovalCollapsesToNoEntityOperation() {
+        String entityId = "00000000-0000-0000-0000-000000000052";
+        PreparedChunkBatch spawn = new PreparedChunkBatch(
+                new ChunkPoint(1, 0),
+                List.of(),
+                new EntityBatch(List.of(entity(entityId, 16.0D)), List.of(), List.of())
+        );
+        PreparedChunkBatch removal = new PreparedChunkBatch(
+                new ChunkPoint(1, 0),
+                List.of(),
+                new EntityBatch(List.of(), List.of(entityId), List.of())
+        );
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(spawn, removal));
+
+        assertTrue(collapsed.isEmpty());
+    }
+
+    @Test
+    void removalThenSpawnBecomesReplacingUpdate() {
+        String entityId = "00000000-0000-0000-0000-000000000053";
+        PreparedChunkBatch removal = new PreparedChunkBatch(
+                new ChunkPoint(0, 0),
+                List.of(),
+                new EntityBatch(List.of(), List.of(entityId), List.of())
+        );
+        PreparedChunkBatch spawn = new PreparedChunkBatch(
+                new ChunkPoint(2, 0),
+                List.of(),
+                new EntityBatch(List.of(entity(entityId, 32.0D)), List.of(), List.of())
+        );
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(removal, spawn));
+
+        assertEquals(1, collapsed.size());
+        assertEquals(2, collapsed.getFirst().chunk().x());
+        assertTrue(collapsed.getFirst().entityBatch().entitiesToSpawn().isEmpty());
+        assertEquals(1, collapsed.getFirst().entityBatch().entitiesToUpdate().size());
+    }
+
+    @Test
+    void latestEntityTargetMovesToFinalChunk() {
+        String entityId = "00000000-0000-0000-0000-000000000054";
+        PreparedChunkBatch first = new PreparedChunkBatch(
+                new ChunkPoint(1, 0),
+                List.of(),
+                new EntityBatch(List.of(), List.of(), List.of(entity(entityId, 16.0D)))
+        );
+        PreparedChunkBatch second = new PreparedChunkBatch(
+                new ChunkPoint(3, 0),
+                List.of(),
+                new EntityBatch(List.of(), List.of(), List.of(entity(entityId, 48.0D)))
+        );
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(first, second));
+
+        assertEquals(1, collapsed.size());
+        assertEquals(3, collapsed.getFirst().chunk().x());
+        assertEquals(48.0D, collapsed.getFirst().entityBatch()
+                .entitiesToUpdate()
+                .getFirst()
+                .getListOrEmpty("Pos")
+                .getDoubleOr(0, 0.0D));
     }
 
     @Test
@@ -160,5 +247,17 @@ class PreparedChunkBatchCollapserTest {
             }
         }
         return null;
+    }
+
+    private static CompoundTag entity(String entityId, double x) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", "minecraft:block_display");
+        tag.putString("UUID", entityId);
+        ListTag pos = new ListTag();
+        pos.add(DoubleTag.valueOf(x));
+        pos.add(DoubleTag.valueOf(64.0D));
+        pos.add(DoubleTag.valueOf(1.0D));
+        tag.put("Pos", pos);
+        return tag;
     }
 }

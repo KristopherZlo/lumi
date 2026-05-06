@@ -1,11 +1,14 @@
 package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.EntityPayload;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.Blocks;
@@ -33,7 +36,7 @@ public final class PreparedChunkBatchCollapser {
 
     public List<PreparedChunkBatch> collapse(List<PreparedChunkBatch> batches) {
         Map<SectionKey, SectionAccumulator> sections = new LinkedHashMap<>();
-        Map<ChunkPoint, EntityAccumulator> entities = new LinkedHashMap<>();
+        EntityOperationAccumulator entities = new EntityOperationAccumulator();
         for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
             if (batch == null) {
                 continue;
@@ -45,13 +48,12 @@ public final class PreparedChunkBatchCollapser {
                 this.addPlacement(sections, placement, true);
             }
             if (!batch.entityBatch().isEmpty()) {
-                entities.computeIfAbsent(batch.chunk(), ignored -> new EntityAccumulator())
-                        .add(batch.entityBatch());
+                entities.add(batch.chunk(), batch.entityBatch());
             }
         }
 
         this.expandConnectedPlacements(sections);
-        return this.toBatches(sections, entities);
+        return this.toBatches(sections, entities.toBatchesByChunk());
     }
 
     private void addNativeSection(
@@ -155,7 +157,10 @@ public final class PreparedChunkBatchCollapser {
             List<PreparedBlockPlacement> placements = ConnectedBlockPlacementExpander.ordered(
                     sparsePlacements.getOrDefault(chunk, List.of())
             );
-            EntityBatch entityBatch = entities.getOrDefault(chunk, EntityAccumulator.EMPTY).toBatch();
+            EntityAccumulator entityAccumulator = entities.get(chunk);
+            EntityBatch entityBatch = entityAccumulator == null
+                    ? EntityBatch.empty()
+                    : entityAccumulator.toBatch();
             List<PreparedSectionApplyBatch> sectionBatches = nativeSections.getOrDefault(chunk, List.of());
             if (!placements.isEmpty() || !sectionBatches.isEmpty() || !entityBatch.isEmpty()) {
                 result.add(new PreparedChunkBatch(chunk, placements, sectionBatches, entityBatch));
@@ -244,20 +249,112 @@ public final class PreparedChunkBatchCollapser {
 
     private static final class EntityAccumulator {
 
-        private static final EntityAccumulator EMPTY = new EntityAccumulator();
-
         private final List<CompoundTag> spawns = new ArrayList<>();
         private final List<String> removals = new ArrayList<>();
         private final List<CompoundTag> updates = new ArrayList<>();
 
-        private void add(EntityBatch batch) {
-            this.spawns.addAll(batch.entitiesToSpawn());
-            this.removals.addAll(batch.entityIdsToRemove());
-            this.updates.addAll(batch.entitiesToUpdate());
-        }
-
         private EntityBatch toBatch() {
             return new EntityBatch(this.spawns, this.removals, this.updates);
         }
+    }
+
+    private static final class EntityOperationAccumulator {
+
+        private final Map<String, EntityOperation> operations = new LinkedHashMap<>();
+        private int anonymousIndex;
+
+        private void add(ChunkPoint chunk, EntityBatch batch) {
+            for (String entityId : batch.entityIdsToRemove()) {
+                this.addRemoval(chunk, entityId);
+            }
+            for (CompoundTag tag : batch.entitiesToUpdate()) {
+                this.addTarget(chunkFor(tag, chunk), tag, EntityOperationKind.UPDATE);
+            }
+            for (CompoundTag tag : batch.entitiesToSpawn()) {
+                this.addTarget(chunkFor(tag, chunk), tag, EntityOperationKind.SPAWN);
+            }
+        }
+
+        private void addRemoval(ChunkPoint chunk, String entityId) {
+            if (entityId == null || entityId.isBlank()) {
+                return;
+            }
+            EntityOperation current = this.operations.get(entityId);
+            if (current == null) {
+                this.operations.put(entityId, EntityOperation.remove(entityId, chunk));
+            } else if (current.kind() == EntityOperationKind.SPAWN) {
+                this.operations.remove(entityId);
+            } else {
+                this.operations.put(entityId, EntityOperation.remove(entityId, chunk));
+            }
+        }
+
+        private void addTarget(ChunkPoint chunk, CompoundTag tag, EntityOperationKind incomingKind) {
+            String entityId = this.entityId(tag);
+            EntityOperation current = this.operations.get(entityId);
+            EntityOperationKind nextKind = incomingKind;
+            if (current != null) {
+                nextKind = current.kind() == EntityOperationKind.SPAWN
+                        ? EntityOperationKind.SPAWN
+                        : EntityOperationKind.UPDATE;
+            }
+            this.operations.put(entityId, EntityOperation.target(entityId, chunk, tag, nextKind));
+        }
+
+        private Map<ChunkPoint, EntityAccumulator> toBatchesByChunk() {
+            Map<ChunkPoint, EntityAccumulator> chunks = new LinkedHashMap<>();
+            for (EntityOperation operation : this.operations.values()) {
+                EntityAccumulator accumulator = chunks.computeIfAbsent(operation.chunk(), ignored -> new EntityAccumulator());
+                switch (operation.kind()) {
+                    case SPAWN -> accumulator.spawns.add(operation.tag().copy());
+                    case REMOVE -> accumulator.removals.add(operation.entityId());
+                    case UPDATE -> accumulator.updates.add(operation.tag().copy());
+                }
+            }
+            return chunks;
+        }
+
+        private String entityId(CompoundTag tag) {
+            Optional<UUID> uuid = EntityPayload.readUuid(tag);
+            if (uuid.isPresent()) {
+                return uuid.get().toString();
+            }
+            return "__anonymous_entity_" + this.anonymousIndex++;
+        }
+
+        private static ChunkPoint chunkFor(CompoundTag tag, ChunkPoint fallback) {
+            if (tag == null || tag.isEmpty()) {
+                return fallback;
+            }
+            ChunkPoint chunk = new EntityPayload(tag).chunk();
+            return chunk == null ? fallback : chunk;
+        }
+    }
+
+    private record EntityOperation(
+            String entityId,
+            ChunkPoint chunk,
+            CompoundTag tag,
+            EntityOperationKind kind
+    ) {
+
+        private static EntityOperation remove(String entityId, ChunkPoint chunk) {
+            return new EntityOperation(entityId, chunk, new CompoundTag(), EntityOperationKind.REMOVE);
+        }
+
+        private static EntityOperation target(
+                String entityId,
+                ChunkPoint chunk,
+                CompoundTag tag,
+                EntityOperationKind kind
+        ) {
+            return new EntityOperation(entityId, chunk, tag == null ? new CompoundTag() : tag.copy(), kind);
+        }
+    }
+
+    private enum EntityOperationKind {
+        SPAWN,
+        REMOVE,
+        UPDATE
     }
 }
