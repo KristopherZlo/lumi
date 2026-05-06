@@ -37,8 +37,7 @@ public final class WorldMutationCapturePolicy {
             return CaptureResult.rejected();
         }
         if (source == WorldMutationSource.BLOCK_UPDATE
-                || source == WorldMutationSource.PISTON
-                || this.blockStatePolicy.isRuntimeOnlyStateChange(oldState, newState)) {
+                || source == WorldMutationSource.PISTON) {
             return CaptureResult.deferToStabilization();
         }
 

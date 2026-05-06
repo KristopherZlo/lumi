@@ -132,19 +132,19 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
-    void diffChunkSkipsRuntimeOnlyRedstonePropertyDeltas() {
-        assertTrue(this.diffSingleState(
+    void diffChunkKeepsRedstonePropertyDeltas() {
+        assertEquals(4096, this.diffSingleState(
                 stateTag("minecraft:redstone_lamp", "lit", "false"),
                 stateTag("minecraft:redstone_lamp", "lit", "true")
-        ).isEmpty());
-        assertTrue(this.diffSingleState(
+        ).size());
+        assertEquals(4096, this.diffSingleState(
                 stateTag("minecraft:lever", "powered", "false"),
                 stateTag("minecraft:lever", "powered", "true")
-        ).isEmpty());
-        assertTrue(this.diffSingleState(
+        ).size());
+        assertEquals(4096, this.diffSingleState(
                 stateTag("minecraft:redstone_wire", "power", "0"),
                 stateTag("minecraft:redstone_wire", "power", "15")
-        ).isEmpty());
+        ).size());
     }
 
     @Test
@@ -158,7 +158,7 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
-    void stabilizationKeepsPendingStructuralStateWhenOnlyRuntimePropertyChanged() {
+    void stabilizationUsesSettledRedstoneStateWhenPropertyChanged() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange placedLamp = new StoredBlockChange(
                 new BlockPoint(1, 64, 1),
@@ -173,7 +173,19 @@ class SessionStabilizationServiceTest {
 
         List<StoredBlockChange> persistentDeltas = service.persistentDeltaChanges(List.of(placedLamp), List.of(litFallout));
 
-        assertEquals(List.of(placedLamp), persistentDeltas);
+        assertEquals(List.of(litFallout), persistentDeltas);
+    }
+
+    @Test
+    void diffChunkKeepsSettledPistonDeltas() {
+        assertEquals(4096, this.diffSingleState(
+                stateTag("minecraft:piston", "extended", "false"),
+                stateTag("minecraft:piston", "extended", "true")
+        ).size());
+        assertEquals(4096, this.diffSingleState(
+                stateTag("minecraft:air"),
+                stateTag("minecraft:piston_head")
+        ).size());
     }
 
     @Test

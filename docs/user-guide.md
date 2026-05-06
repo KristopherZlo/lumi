@@ -95,7 +95,7 @@ When TNT is primed by a tracked builder action, Lumi keeps that action context t
 Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
 Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi keeps a one-chunk halo around the root chunk and also accepts secondary fallout inside chunks currently loaded for a player, captures per-chunk baselines lazily as fallout reaches those chunks, then reconciles later fallout such as falling gravel, fluid spread, redstone block updates, and piston movement against the current world before the draft is flushed, saved, frozen, or used to choose a live undo/redo action.
 Secondary effects such as falling gravel, fire spread, fluid spread, redstone-driven block updates, ice melting, piston fallout, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay inside the active session region.
-Runtime-only redstone state flips are ignored after stabilization. Piston animation blocks such as `minecraft:piston_head` and `minecraft:moving_piston` are normalized out of new history storage so active mechanisms do not clutter saves or the recent action overlay.
+Redstone and mechanism state is saved as final settled block state. Lumi records lever `powered`, redstone wire `power`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `minecraft:piston_head`, and moved blocks. Short-lived `minecraft:moving_piston` animation state is still normalized away.
 
 For automatic dimension projects, the first node is `Initial`.
 

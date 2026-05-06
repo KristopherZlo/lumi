@@ -35,6 +35,10 @@ final class SingleplayerPlayerActionDriver {
         return this.performUseItemOn(clickedPos, face, stack).consumesAction();
     }
 
+    boolean useBlock(BlockPos clickedPos, Direction face) {
+        return this.performUseItemOn(clickedPos, face, ItemStack.EMPTY).consumesAction();
+    }
+
     private InteractionResult performUseItemOn(BlockPos clickedPos, Direction face, ItemStack stack) {
         this.moveNear(clickedPos);
         this.player.setItemInHand(InteractionHand.MAIN_HAND, stack);

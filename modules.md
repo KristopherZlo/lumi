@@ -143,7 +143,8 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `TrackedProject`, `ProjectTrackingIndex`: dimension/chunk membership for tracked workspaces.
 - `WorldMutationContext`: prevents Lumi operations from reentering capture and suppresses fallback capture while internal prepared apply, native WorldEdit/FAWE undo/redo, or experimental native Axiom replay diagnostics are running.
 - `WorldMutationCaptureGuard`: duplicate hook protection.
-- `WorldMutationCapturePolicy`: block mutation filtering and runtime-only state rejection.
+- `WorldMutationCapturePolicy`: block mutation classification for direct capture, deferred stabilization, and transient-state rejection.
+- `BlockUpdateCaptureContext`: redstone/mechanism neighbor and scheduled-tick source scoping for final-state stabilization.
 - `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling.
 - `AutoCheckpointService`, `AutoCheckpointCommandClassifier`: pending-draft auto checkpoints before large vanilla commands and external WorldEdit/Axiom edits.
 - `MutationSourcePolicy`: mutation source classification.
@@ -165,7 +166,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `ChunkSectionUpdateBroadcaster`, `WorldLightUpdateQueue`, `WorldLightUpdateContext`: batched section/block-entity client update packets and operation-scoped deferred light maintenance after fast commits.
 - `WorldApplyMetrics`: debug counters for rewrite/native/direct/fallback sections, changed blocks, packets, light checks, apply/work ticks, light-drain ticks/duration, and fallback reasons.
 - `WorldApplyBlockUpdatePolicy`: side-effect-suppressed update flags and apply behavior.
-- `PersistentBlockStatePolicy`: restore/snapshot normalization for runtime-only states.
+- `PersistentBlockStatePolicy`: restore/snapshot normalization for unsafe transient states such as `moving_piston`.
 - `ConnectedBlockPlacementExpander`: paired blocks such as beds, doors, tall plants.
 - `PreparedBlockPlacement`, `PreparedChunkBatch`, `PreparedSectionApplyBatch`, `PreparedChunkBatchCollapser`, `LumiSectionBuffer`, `SectionChangeMask`: prepared immutable apply data and collapse logic for sparse and section-native work.
 - `ChunkBatch`, `SectionBatch`, `EntityBatch`: per-chunk apply units.
@@ -188,7 +189,7 @@ Use `src/main/java/io/github/luma/mixin` only for Minecraft hook entrypoints. Mi
 - Entity hooks: `EntityMutationMixin`, `ServerLevelEntityLifecycleMixin`, `ServerLevelEntityTickMixin`.
 - Player/input/server hooks: `ServerPlayerGameModeMixin`, `ServerGamePacketListenerMixin`.
 - Explosion/TNT/falling hooks: `TntBlockMixin`, `ServerLevelExplosionMixin`, `LevelExplosionMixin`, `FallingBlockMixin`, `FallingBlockEntityMixin`.
-- Growth/fluid/fire/piston hooks: `SaplingBlockMixin`, `StemBlockMixin`, `CropBlockMixin`, `FlowingFluidMixin`, `FireBlockMixin`, `PistonBaseBlockMixin`.
+- Growth/fluid/fire/redstone/piston hooks: `SaplingBlockMixin`, `StemBlockMixin`, `CropBlockMixin`, `FlowingFluidMixin`, `FireBlockMixin`, `BlockUpdateCaptureMixin`, `PistonBaseBlockMixin`.
 - Section ownership and Axiom fallback: `ChunkAccessSectionOwnershipMixin`, `AxiomSetBufferPacketMixin`.
 
 ## Optional Integrations

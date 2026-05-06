@@ -217,7 +217,7 @@ Current payload characteristics:
 - block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
 - schema v3-v5 legacy payloads still load from the older single LZ4 stream format
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
-- runtime-only redstone state flips, redstone block-update fallout, and piston animation states are resolved through session stabilization before new patch payloads are written; property-only runtime deltas are filtered during composition, so this behavior does not require a patch schema change
+- settled redstone and mechanism state is stored with the normal block-state NBT already present in patch palettes. Lever `powered`, wire `power`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `piston_head`, and moved blocks are schema-compatible state deltas; only short-lived `moving_piston` animation state is normalized to air before new patch payloads are written
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
@@ -235,7 +235,7 @@ Current snapshot characteristics:
 - only non-empty sections are stored
 - block entities are kept in a sparse side table keyed by local block index
 - schema v5 writes per-chunk non-player entity snapshots with position and persistent state; schema v3/v4 snapshots still load as block-only snapshots
-- `piston_head` and `moving_piston` states are normalized to air during new snapshot capture, and piston bases are stored retracted
+- `moving_piston` states are normalized to air during new snapshot capture; settled `piston_head` states and piston bases, including `extended=true`, are stored as normal block states
 - restore planning can list snapshot chunks by scanning the length-prefixed structure and skipping NBT payload bytes, without materializing `SnapshotData` or deserializing block/entity tags
 - live chunk capture is performed on the Minecraft server thread into immutable compact payloads; snapshot storage only serializes and reads those prepared payloads
 - snapshot readers return persisted payloads, while Minecraft-layer preparers convert them into apply batches off the tick-thread path

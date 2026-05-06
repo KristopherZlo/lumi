@@ -10,7 +10,6 @@ import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
-import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,7 +35,6 @@ public final class SessionStabilizationService {
 
     private static final CompoundTag AIR_STATE = airState();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
-    private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
 
     public ReconciliationResult stabilizePendingChunks(
             ServerLevel level,
@@ -239,8 +237,7 @@ public final class SessionStabilizationService {
         if (Objects.equals(baselineState, liveState) && Objects.equals(baselineBlockEntity, liveBlockEntity)) {
             return true;
         }
-        return Objects.equals(baselineBlockEntity, liveBlockEntity)
-                && this.blockStatePolicy.isRuntimeOnlyStateTagChange(baselineState, liveState);
+        return false;
     }
 
     List<StoredBlockChange> persistentDeltaChanges(
@@ -250,29 +247,7 @@ public final class SessionStabilizationService {
         if (deltaChanges == null || deltaChanges.isEmpty()) {
             return List.of();
         }
-        Map<BlockPoint, StoredBlockChange> currentByPos = new LinkedHashMap<>();
-        for (StoredBlockChange currentChange : currentChanges == null ? List.<StoredBlockChange>of() : currentChanges) {
-            currentByPos.put(currentChange.pos(), currentChange);
-        }
-
-        List<StoredBlockChange> filtered = new ArrayList<>();
-        for (StoredBlockChange deltaChange : deltaChanges) {
-            StoredBlockChange currentChange = currentByPos.get(deltaChange.pos());
-            if (currentChange != null
-                    && Objects.equals(currentChange.newValue().blockEntityTag(), deltaChange.newValue().blockEntityTag())
-                    && this.blockStatePolicy.isRuntimeOnlyStateTagChange(
-                            currentChange.newValue().stateTag(),
-                            deltaChange.newValue().stateTag()
-                    )) {
-                StoredBlockChange persistentChange = deltaChange.withLatestState(currentChange.newValue());
-                if (!persistentChange.isNoOp()) {
-                    filtered.add(persistentChange);
-                }
-                continue;
-            }
-            filtered.add(deltaChange);
-        }
-        return List.copyOf(filtered);
+        return List.copyOf(deltaChanges);
     }
 
     List<StoredBlockChange> composeStabilizedChanges(
@@ -367,8 +342,7 @@ public final class SessionStabilizationService {
         if (target.equalsState(live)) {
             return true;
         }
-        return Objects.equals(target.blockEntityTag(), live.blockEntityTag())
-                && this.blockStatePolicy.isRuntimeOnlyStateTagChange(target.stateTag(), live.stateTag());
+        return false;
     }
 
     List<StoredBlockChange> relatedDeltaChanges(

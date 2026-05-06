@@ -1,8 +1,11 @@
 package io.github.luma.minecraft.world;
 
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -12,35 +15,33 @@ class PersistentBlockStatePolicyTest {
 
     private final PersistentBlockStatePolicy policy = new PersistentBlockStatePolicy();
 
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
+
     @Test
-    void normalizesTransientPistonBlocksToAir() {
-        assertTrue(this.policy.normalizeState(Blocks.PISTON_HEAD.defaultBlockState()).isAir());
+    void normalizesOnlyMovingPistonBlocksToAir() {
+        assertFalse(this.policy.normalizeState(Blocks.PISTON_HEAD.defaultBlockState()).isAir());
         assertTrue(this.policy.normalizeState(Blocks.MOVING_PISTON.defaultBlockState()).isAir());
     }
 
     @Test
-    void normalizesPistonBaseToRetractedState() {
+    void keepsSettledPistonBaseState() {
         BlockState extendedPiston = withProperty(Blocks.PISTON.defaultBlockState(), "extended", true);
 
         BlockState normalized = this.policy.normalizeState(extendedPiston);
 
-        assertFalse((Boolean) propertyValue(normalized, "extended"));
+        assertTrue((Boolean) propertyValue(normalized, "extended"));
     }
 
     @Test
-    void detectsRuntimeOnlyStateChanges() {
+    void keepsRedstoneStateChangesPersistent() {
         BlockState offLever = withProperty(Blocks.LEVER.defaultBlockState(), "powered", false);
         BlockState onLever = withProperty(Blocks.LEVER.defaultBlockState(), "powered", true);
 
-        assertTrue(this.policy.isRuntimeOnlyStateChange(offLever, onLever));
-    }
-
-    @Test
-    void keepsConfigurationStateChanges() {
-        BlockState defaultRepeater = Blocks.REPEATER.defaultBlockState();
-        BlockState delayedRepeater = withProperty(defaultRepeater, "delay", 2);
-
-        assertFalse(this.policy.isRuntimeOnlyStateChange(defaultRepeater, delayedRepeater));
+        assertFalse(this.policy.normalizeState(offLever).equals(this.policy.normalizeState(onLever)));
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

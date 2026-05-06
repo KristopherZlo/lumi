@@ -23,12 +23,17 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.RedstoneLampBlock;
+import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.block.piston.PistonHeadBlock;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.PistonType;
 
 /**
  * Real integrated-world gameplay actions used by the Lumi runtime suite.
@@ -80,6 +85,7 @@ final class SingleplayerGameplayRegressionSuite {
             List<GameplayCheck> checks,
             Set<BlockPoint> expectedDraftBlocks,
             Set<BlockPoint> unexpectedDraftBlocks,
+            Map<BlockPoint, Map<String, String>> expectedDraftProperties,
             Set<BlockPoint> latestUndoRedoBlocks,
             int expectedEntityChanges,
             Set<String> expectedEntityIds,
@@ -132,6 +138,7 @@ final class SingleplayerGameplayRegressionSuite {
         private final SingleplayerPlayerActionDriver playerActions;
         private final Set<BlockPoint> expectedDraftBlocks = new LinkedHashSet<>();
         private final Set<BlockPoint> unexpectedDraftBlocks = new LinkedHashSet<>();
+        private final Map<BlockPoint, Map<String, String>> expectedDraftProperties = new LinkedHashMap<>();
         private final Set<BlockPoint> latestUndoRedoBlocks = new LinkedHashSet<>();
         private final Set<String> expectedEntityIds = new LinkedHashSet<>();
         private final Map<String, BlockPoint> expectedEntityPositions = new LinkedHashMap<>();
@@ -171,6 +178,13 @@ final class SingleplayerGameplayRegressionSuite {
             this.unexpectedDraftBlocks.add(BlockPoint.from(pos));
         }
 
+        private void expectDraftProperty(BlockPos pos, String propertyName, String propertyValue) {
+            this.expectDraftBlock(pos);
+            this.expectedDraftProperties
+                    .computeIfAbsent(BlockPoint.from(pos), ignored -> new LinkedHashMap<>())
+                    .put(propertyName, propertyValue);
+        }
+
         private void expectLatestUndoRedoBlock(BlockPos pos) {
             this.latestUndoRedoBlocks.add(BlockPoint.from(pos));
             this.expectDraftBlock(pos);
@@ -198,6 +212,7 @@ final class SingleplayerGameplayRegressionSuite {
                     this.checks.results(),
                     Set.copyOf(this.expectedDraftBlocks),
                     Set.copyOf(this.unexpectedDraftBlocks),
+                    this.expectedDraftProperties(),
                     Set.copyOf(this.latestUndoRedoBlocks),
                     this.expectedEntityChanges,
                     Set.copyOf(this.expectedEntityIds),
@@ -205,6 +220,14 @@ final class SingleplayerGameplayRegressionSuite {
                     List.copyOf(this.spawnedEntities),
                     List.copyOf(this.timings)
             );
+        }
+
+        private Map<BlockPoint, Map<String, String>> expectedDraftProperties() {
+            LinkedHashMap<BlockPoint, Map<String, String>> copy = new LinkedHashMap<>();
+            for (Map.Entry<BlockPoint, Map<String, String>> entry : this.expectedDraftProperties.entrySet()) {
+                copy.put(entry.getKey(), Map.copyOf(entry.getValue()));
+            }
+            return Map.copyOf(copy);
         }
     }
 
@@ -282,27 +305,51 @@ final class SingleplayerGameplayRegressionSuite {
             context.checks.check(context.level.getBlockState(lamp).getValue(RedstoneLampBlock.LIT),
                     "gameplay redstone lamp lit");
             context.expectDraftBlock(lamp);
+            context.expectDraftProperty(lamp, "lit", "true");
             context.expectDraftBlock(power);
 
+            BlockPos leverSupport = context.volume.min().offset(10, 1, 3);
+            BlockPos lever = leverSupport.above();
+            context.trackedPlayerAction(() -> {
+                context.level.setBlock(leverSupport, Blocks.STONE.defaultBlockState(), 3);
+                context.level.setBlock(lever, Blocks.LEVER.defaultBlockState()
+                        .setValue(LeverBlock.FACE, AttachFace.FLOOR)
+                        .setValue(LeverBlock.FACING, Direction.NORTH)
+                        .setValue(LeverBlock.POWERED, false), 3);
+            });
+            boolean usedLever = context.playerActions.useBlock(lever, Direction.UP);
+            context.checks.check(usedLever, "gameplay player toggled lever");
+            context.checks.check(context.level.getBlockState(lever).getValue(LeverBlock.POWERED),
+                    "gameplay lever stored powered state");
+            context.expectDraftBlock(leverSupport);
+            context.expectDraftProperty(lever, "powered", "true");
+
             BlockPos piston = context.volume.min().offset(6, 1, 3);
-            BlockPos movedFrom = piston.east();
-            BlockPos movedTo = movedFrom.east();
+            BlockPos head = piston.east();
+            BlockPos movedTo = head.east();
             context.trackedPlayerAction(() -> {
                 context.level.setBlock(piston, Blocks.PISTON.defaultBlockState()
                         .setValue(PistonBaseBlock.FACING, Direction.EAST), 3);
-                context.level.setBlock(movedFrom, Blocks.OAK_PLANKS.defaultBlockState(), 3);
+                context.level.setBlock(head, Blocks.OAK_PLANKS.defaultBlockState(), 3);
                 WorldMutationContext.runWithSource(WorldMutationSource.PISTON, () -> {
-                    context.level.setBlock(movedFrom, Blocks.AIR.defaultBlockState(), 3);
+                    context.level.setBlock(piston, Blocks.PISTON.defaultBlockState()
+                            .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                            .setValue(PistonBaseBlock.EXTENDED, true), 3);
+                    context.level.setBlock(head, Blocks.PISTON_HEAD.defaultBlockState()
+                            .setValue(PistonHeadBlock.FACING, Direction.EAST)
+                            .setValue(PistonHeadBlock.TYPE, PistonType.DEFAULT), 3);
                     context.level.setBlock(movedTo, Blocks.OAK_PLANKS.defaultBlockState(), 3);
                 });
             });
-            context.checks.check(context.level.getBlockState(movedFrom).isAir(),
-                    "gameplay piston fallout cleared the source block");
+            context.checks.check(context.level.getBlockState(piston).getValue(PistonBaseBlock.EXTENDED),
+                    "gameplay piston fallout kept extended base");
+            context.checks.check(context.level.getBlockState(head).is(Blocks.PISTON_HEAD),
+                    "gameplay piston fallout kept settled head");
             context.checks.check(context.level.getBlockState(movedTo).is(Blocks.OAK_PLANKS),
                     "gameplay piston fallout kept the final moved block");
-            context.expectDraftBlock(piston);
+            context.expectDraftProperty(piston, "extended", "true");
+            context.expectDraftBlock(head);
             context.expectDraftBlock(movedTo);
-            context.expectNoDraftBlock(movedFrom);
         }
     }
 
@@ -340,8 +387,14 @@ final class SingleplayerGameplayRegressionSuite {
 
             supports.forEach(context::expectDraftBlock);
             wires.forEach(context::expectDraftBlock);
+            context.expectDraftProperty(
+                    wires.getFirst(),
+                    "power",
+                    String.valueOf(context.level.getBlockState(wires.getFirst()).getValue(RedStoneWireBlock.POWER))
+            );
             context.expectDraftBlock(power);
             context.expectDraftBlock(lamp);
+            context.expectDraftProperty(lamp, "lit", "true");
         }
     }
 

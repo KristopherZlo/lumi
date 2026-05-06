@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -390,12 +391,23 @@ final class SingleplayerTestRun {
                 HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
         if (draft != null) {
             Set<BlockPoint> capturedBlocks = new HashSet<>();
+            Map<BlockPoint, io.github.luma.domain.model.StoredBlockChange> capturedBlockChanges = new HashMap<>();
             for (var change : draft.changes()) {
                 capturedBlocks.add(change.pos());
+                capturedBlockChanges.put(change.pos(), change);
             }
             for (BlockPoint expectedBlock : report.expectedDraftBlocks()) {
                 this.check(capturedBlocks.contains(expectedBlock),
                         "Gameplay draft includes block " + this.format(expectedBlock.toBlockPos()));
+            }
+            for (Map.Entry<BlockPoint, Map<String, String>> expectedState : report.expectedDraftProperties().entrySet()) {
+                var change = capturedBlockChanges.get(expectedState.getKey());
+                for (Map.Entry<String, String> expectedProperty : expectedState.getValue().entrySet()) {
+                    this.check(expectedProperty.getValue().equals(this.stateProperty(change, expectedProperty.getKey())),
+                            "Gameplay draft stores " + expectedProperty.getKey()
+                                    + "=" + expectedProperty.getValue()
+                                    + " at " + this.format(expectedState.getKey().toBlockPos()));
+                }
             }
             for (BlockPoint unexpectedBlock : report.unexpectedDraftBlocks()) {
                 this.check(!capturedBlocks.contains(unexpectedBlock),
@@ -975,6 +987,14 @@ final class SingleplayerTestRun {
             }
         }
         return null;
+    }
+
+    private String stateProperty(io.github.luma.domain.model.StoredBlockChange change, String propertyName) {
+        if (change == null || change.newValue() == null || change.newValue().stateTag() == null) {
+            return "";
+        }
+        CompoundTag properties = change.newValue().stateTag().getCompound("Properties").orElseGet(CompoundTag::new);
+        return properties.getString(propertyName).orElse("");
     }
 
     private Entity entityById(String entityId) {
