@@ -7,6 +7,7 @@ import io.github.luma.integration.common.ObservedExternalToolOperation;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -25,6 +26,9 @@ abstract class LevelChunkSetBlockStateMixin {
     @Unique
     private static final ExternalToolMutationSourceResolver LUMA_TOOL_SOURCE_RESOLVER =
             ExternalToolMutationSourceResolver.getInstance();
+    @Unique
+    private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
+            WorldReplayTickSuppression.getInstance();
 
     @Shadow
     @Final
@@ -40,8 +44,15 @@ abstract class LevelChunkSetBlockStateMixin {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return original.call(pos, newState, flags);
         }
+        if (LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppressMutation(
+                serverLevel,
+                pos,
+                WorldMutationContext.currentSource()
+        )) {
+            return null;
+        }
 
-        PendingBlockMutation mutation = this.luma$captureBeforeChunkSetBlock(serverLevel, pos);
+        PendingBlockMutation mutation = this.luma$captureBeforeChunkSetBlock(serverLevel, pos, newState);
         if (mutation == null) {
             return original.call(pos, newState, flags);
         }
@@ -88,7 +99,7 @@ abstract class LevelChunkSetBlockStateMixin {
     }
 
     @Unique
-    private PendingBlockMutation luma$captureBeforeChunkSetBlock(ServerLevel serverLevel, BlockPos pos) {
+    private PendingBlockMutation luma$captureBeforeChunkSetBlock(ServerLevel serverLevel, BlockPos pos, BlockState newState) {
         if (WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
             return null;
         }
@@ -109,6 +120,14 @@ abstract class LevelChunkSetBlockStateMixin {
         LevelChunk chunk = (LevelChunk) (Object) this;
         BlockState oldState = chunk.getBlockState(pos);
         CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, pos, oldState);
+        if (currentSourceCaptures && !oldState.equals(newState)) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(
+                    serverLevel,
+                    pos,
+                    oldState,
+                    oldBlockEntity
+            );
+        }
         WorldMutationCaptureGuard.CaptureBoundary boundary = WorldMutationCaptureGuard.pushChunkSetBlockBoundary();
         return new PendingBlockMutation(
                 pos.immutable(),

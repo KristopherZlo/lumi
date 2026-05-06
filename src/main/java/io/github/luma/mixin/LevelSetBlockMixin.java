@@ -7,6 +7,7 @@ import io.github.luma.integration.common.ObservedExternalToolOperation;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -22,6 +23,9 @@ abstract class LevelSetBlockMixin {
     @Unique
     private static final ExternalToolMutationSourceResolver LUMA_TOOL_SOURCE_RESOLVER =
             ExternalToolMutationSourceResolver.getInstance();
+    @Unique
+    private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
+            WorldReplayTickSuppression.getInstance();
 
     @WrapMethod(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z")
     private boolean luma$wrapSetBlock(
@@ -35,8 +39,15 @@ abstract class LevelSetBlockMixin {
         if (!(level instanceof ServerLevel serverLevel)) {
             return original.call(pos, newState, flags, recursionLeft);
         }
+        if (LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppressMutation(
+                serverLevel,
+                pos,
+                WorldMutationContext.currentSource()
+        )) {
+            return false;
+        }
 
-        PendingBlockMutation mutation = this.luma$captureBeforeSetBlock(serverLevel, pos);
+        PendingBlockMutation mutation = this.luma$captureBeforeSetBlock(serverLevel, pos, newState);
         if (mutation == null) {
             return original.call(pos, newState, flags, recursionLeft);
         }
@@ -55,7 +66,7 @@ abstract class LevelSetBlockMixin {
     }
 
     @Unique
-    private PendingBlockMutation luma$captureBeforeSetBlock(ServerLevel serverLevel, BlockPos pos) {
+    private PendingBlockMutation luma$captureBeforeSetBlock(ServerLevel serverLevel, BlockPos pos, BlockState newState) {
         var currentSource = WorldMutationContext.currentSource();
         boolean captureSuppressed = WorldMutationContext.captureSuppressed();
         boolean currentSourceCaptures = HistoryCaptureManager.shouldCaptureMutation(currentSource);
@@ -71,6 +82,14 @@ abstract class LevelSetBlockMixin {
 
         BlockState oldState = serverLevel.getBlockState(pos);
         CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, pos, oldState);
+        if (currentSourceCaptures && !oldState.equals(newState)) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(
+                    serverLevel,
+                    pos,
+                    oldState,
+                    oldBlockEntity
+            );
+        }
         WorldMutationCaptureGuard.CaptureBoundary boundary = WorldMutationCaptureGuard.pushLevelSetBlockBoundary();
         return new PendingBlockMutation(
                 pos.immutable(),

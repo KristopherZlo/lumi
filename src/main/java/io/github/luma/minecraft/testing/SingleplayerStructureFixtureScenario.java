@@ -28,6 +28,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 final class SingleplayerStructureFixtureScenario {
 
     private static final int SETTLE_TICKS = 40;
+    private static final int FIXTURE_LOAD_FLAGS = 2;
     private static final List<FixtureSpec> FIXTURES = List.of(
             new FixtureSpec("bud", Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "testing/bud")),
             new FixtureSpec("door", Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "testing/door")),
@@ -91,7 +92,7 @@ final class SingleplayerStructureFixtureScenario {
                     this.stage = Stage.CHECK_CHANGED;
                 }
                 case CHECK_CHANGED -> {
-                    OperationHandle handle = this.checkChangedAndQueueUndo(messages);
+                    OperationHandle handle = this.checkChangedAndQueueUndo(server, messages);
                     if (handle != null) {
                         return StructureFixtureStepResult.operation(messages, handle);
                     }
@@ -214,7 +215,7 @@ final class SingleplayerStructureFixtureScenario {
         this.stage = Stage.WAIT_AFTER_CONTROL;
     }
 
-    private OperationHandle checkChangedAndQueueUndo(List<String> messages) {
+    private OperationHandle checkChangedAndQueueUndo(MinecraftServer server, List<String> messages) {
         StructureFixtureSnapshot changed = StructureFixtureSnapshot.capture(this.level, this.volume);
         boolean changedAfterPress = !this.baseline.matches(changed);
         this.record(changedAfterPress, this.currentFixture.name() + " "
@@ -227,6 +228,7 @@ final class SingleplayerStructureFixtureScenario {
         }
 
         try {
+            this.captureManager.drainUndoRedoStabilization(server, this.projectId);
             OperationHandle handle = this.undoRedoService.undo(this.level, this.projectName);
             messages.add("Queued Alt+Z-equivalent Lumi undo for "
                     + this.currentFixture.name() + " " + this.currentControl.label()
@@ -288,7 +290,7 @@ final class SingleplayerStructureFixtureScenario {
                     this.volume.min(),
                     settings,
                     RandomSource.create(1L),
-                    3);
+                    FIXTURE_LOAD_FLAGS);
         }
     }
 
@@ -300,7 +302,11 @@ final class SingleplayerStructureFixtureScenario {
                 entity.discard();
             }
             for (BlockPos pos : BlockPos.betweenClosed(this.volume.min(), this.volume.max())) {
-                this.level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+                this.level.setBlock(pos, Blocks.AIR.defaultBlockState(), FIXTURE_LOAD_FLAGS);
+            }
+            for (Entity entity : this.level.getEntities((Entity) null, this.volume.bounds(),
+                    entity -> !(entity instanceof ServerPlayer))) {
+                entity.discard();
             }
         }
     }

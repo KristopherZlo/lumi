@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.minecraft.capture.BlockUpdateCaptureContext;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
@@ -21,6 +22,9 @@ abstract class BlockUpdateCaptureMixin {
     @Unique
     private static final BlockUpdateCaptureContext LUMA_BLOCK_UPDATE_CONTEXT =
             BlockUpdateCaptureContext.getInstance();
+    @Unique
+    private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
+            WorldReplayTickSuppression.getInstance();
 
     @WrapMethod(method = "handleNeighborChanged")
     private void luma$wrapNeighborChanged(
@@ -31,6 +35,9 @@ abstract class BlockUpdateCaptureMixin {
             boolean movedByPiston,
             Operation<Void> original
     ) {
+        if (level instanceof ServerLevel serverLevel && LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppress(serverLevel, pos)) {
+            return;
+        }
         WorldMutationContext.SourceFrame sourceFrame = LUMA_BLOCK_UPDATE_CONTEXT.pushFor(this.luma$state());
         try {
             original.call(level, pos, block, orientation, movedByPiston);
@@ -46,6 +53,9 @@ abstract class BlockUpdateCaptureMixin {
             RandomSource random,
             Operation<Void> original
     ) {
+        if (LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppress(level, pos)) {
+            return;
+        }
         WorldMutationContext.SourceFrame sourceFrame = LUMA_BLOCK_UPDATE_CONTEXT.pushFor(this.luma$state());
         try {
             original.call(level, pos, random);

@@ -37,6 +37,7 @@ public final class WorldOperationManager {
 
     private static final int MAX_BLOCK_ENTITIES_PER_TICK = 64;
     private static final int MAX_ENTITY_OPERATIONS_PER_TICK = 32;
+    private static final int EXACT_REPLAY_GUARD_TICKS = 40;
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
     private static final double MAX_ADAPTIVE_SCALE = 1.25D;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
@@ -130,6 +131,7 @@ public final class WorldOperationManager {
         String serverKey = this.serverKey(level.getServer());
         synchronized (this) {
             this.ensureIdle(serverKey);
+            ExactReplayStateGuard.getInstance().clear(level);
             PreparedApplyActiveOperation operation = new PreparedApplyActiveOperation(
                     level,
                     new OperationHandle(UUID.randomUUID().toString(), projectId, label, Instant.now(), debugEnabled),
@@ -161,6 +163,8 @@ public final class WorldOperationManager {
      * budget for the current tick.
      */
     public void tick(MinecraftServer server) {
+        ExactReplayStateGuard.getInstance().tick(server);
+
         ActiveOperation operation;
         synchronized (this) {
             operation = this.activeOperations.get(this.serverKey(server));
@@ -504,6 +508,7 @@ public final class WorldOperationManager {
         private final WorldApplyMetrics applyMetrics = new WorldApplyMetrics();
         private final WorldLightUpdateQueue lightUpdateQueue = new WorldLightUpdateQueue();
         private final RedstoneReplayUpdateQueue redstoneUpdateQueue = new RedstoneReplayUpdateQueue();
+        private final ExactReplayStateQueue exactReplayStateQueue = new ExactReplayStateQueue();
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -711,6 +716,7 @@ public final class WorldOperationManager {
                     finishedChunksThisTick += 1;
                     this.prepared.historyStore().record(this.currentBatch);
                     this.prepared.batchProcessor().postProcessSet(this.currentBatch);
+                    this.exactReplayStateQueue.record(this.currentBatch);
                     this.currentBatch = null;
                     this.currentNativeSections = List.of();
                     this.currentSections = List.of();
@@ -740,6 +746,9 @@ public final class WorldOperationManager {
 
             if (this.currentBatch == null && (this.dispatcher == null || !this.dispatcher.hasPending())) {
                 if (!this.drainDeferredRedstoneUpdates(budget, deadlineNanos)) {
+                    return false;
+                }
+                if (!this.drainExactReplayStates(budget, deadlineNanos)) {
                     return false;
                 }
                 if (!this.drainDeferredLightUpdates(budget, deadlineNanos)) {
@@ -842,6 +851,39 @@ public final class WorldOperationManager {
                     this.applyDetail("Updating light, " + this.lightUpdateQueue.pendingCount() + " checks queued")
             );
             return !this.lightUpdateQueue.hasPending();
+        }
+
+        private boolean drainExactReplayStates(WorldApplyBudget budget, long deadlineNanos) {
+            if (!this.exactReplayStateQueue.hasPending()) {
+                return true;
+            }
+
+            int maxBlocks = Math.max(32, budget.maxBlocks());
+            int reapplied;
+            try (
+                    WorldMutationContext.SourceFrame ignoredSource =
+                            WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
+                    WorldMutationContext.SuppressionFrame ignoredSuppression =
+                            WorldMutationContext.pushCaptureSuppression()
+            ) {
+                reapplied = this.exactReplayStateQueue.drain(this.level(), maxBlocks, deadlineNanos);
+            }
+            if (!this.exactReplayStateQueue.hasPending()) {
+                ExactReplayStateGuard.getInstance().guard(
+                        this.level(),
+                        this.exactReplayStateQueue.takeRecordedPlacements(),
+                        EXACT_REPLAY_GUARD_TICKS
+                );
+            }
+            this.progressSink().update(
+                    OperationStage.FINALIZING,
+                    this.appliedWorkUnits,
+                    this.prepared.totalWorkUnits(),
+                    this.applyDetail("Reasserting exact states, "
+                            + this.exactReplayStateQueue.pendingCount()
+                            + " blocks queued")
+            );
+            return !this.exactReplayStateQueue.hasPending() || reapplied > 0;
         }
 
         private boolean drainDeferredRedstoneUpdates(WorldApplyBudget budget, long deadlineNanos) {

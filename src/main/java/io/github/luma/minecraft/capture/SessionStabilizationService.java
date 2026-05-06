@@ -13,15 +13,15 @@ import io.github.luma.domain.model.TrackedChangeBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.LinkedHashMap;
-import java.util.HashMap;
 import java.util.Objects;
 import java.util.Set;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
 
 /**
  * Reconciles causal envelopes against the live world after ambient fallout.
@@ -79,7 +79,13 @@ public final class SessionStabilizationService {
                 return ReconciliationResult.noOp();
             }
 
-            List<StoredBlockChange> deltaChanges = this.deltaChanges(project, session, capturedChunks.captured());
+            Map<BlockPoint, StatePayload> baselineCorrections = session.baselineCorrections(processedChunks);
+            List<StoredBlockChange> deltaChanges = this.deltaChanges(
+                    project,
+                    session,
+                    capturedChunks.captured(),
+                    baselineCorrections
+            );
             List<StoredBlockChange> startingChanges = session.startingChunkChanges(processedChunks);
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
             List<StoredBlockChange> persistentDeltaChanges = this.persistentDeltaChanges(currentChanges, deltaChanges);
@@ -147,7 +153,8 @@ public final class SessionStabilizationService {
     private List<StoredBlockChange> deltaChanges(
             BuildProject project,
             CaptureSessionState session,
-            Map<ChunkPoint, ChunkSnapshotPayload> liveChunks
+            Map<ChunkPoint, ChunkSnapshotPayload> liveChunks,
+            Map<BlockPoint, StatePayload> baselineCorrections
     ) {
         List<StoredBlockChange> changes = new ArrayList<>();
         for (Map.Entry<ChunkPoint, ChunkSnapshotPayload> entry : liveChunks.entrySet()) {
@@ -158,7 +165,8 @@ public final class SessionStabilizationService {
             changes.addAll(this.diffChunk(
                     baseline,
                     entry.getValue(),
-                    project == null ? null : project.bounds()
+                    project == null ? null : project.bounds(),
+                    baselineCorrections
             ));
         }
         return List.copyOf(changes);
@@ -168,6 +176,15 @@ public final class SessionStabilizationService {
             ChunkSnapshotPayload baseline,
             ChunkSnapshotPayload live,
             Bounds3i bounds
+    ) {
+        return this.diffChunk(baseline, live, bounds, Map.of());
+    }
+
+    List<StoredBlockChange> diffChunk(
+            ChunkSnapshotPayload baseline,
+            ChunkSnapshotPayload live,
+            Bounds3i bounds,
+            Map<BlockPoint, StatePayload> baselineCorrections
     ) {
         List<StoredBlockChange> changes = new ArrayList<>();
         int minX = baseline.chunkX() << 4;
@@ -196,7 +213,8 @@ public final class SessionStabilizationService {
             ChunkSectionSnapshotPayload baselineSection = baselineSections.get(sectionY);
             ChunkSectionSnapshotPayload liveSection = liveSections.get(sectionY);
             if (this.sectionsEqual(baselineSection, liveSection)
-                    && this.blockEntitiesEqualInSection(baseline, live, sectionY)) {
+                    && this.blockEntitiesEqualInSection(baseline, live, sectionY)
+                    && !this.hasBaselineCorrectionInSection(baselineCorrections, sectionY, bounds)) {
                 continue;
             }
 
@@ -208,9 +226,17 @@ public final class SessionStabilizationService {
                     int localZ = z & 15;
                     for (int x = minX; x <= maxX; x++) {
                         int localX = x & 15;
+                        BlockPoint worldPos = new BlockPoint(x, y, z);
                         CompoundTag baselineState = this.readStateTag(baselineSection, localX, localY, localZ);
-                        CompoundTag liveState = this.readStateTag(liveSection, localX, localY, localZ);
                         CompoundTag baselineBlockEntity = this.readBlockEntityTag(baseline, y, localX, localZ);
+                        StatePayload correctedBaseline = baselineCorrections == null
+                                ? null
+                                : baselineCorrections.get(worldPos);
+                        if (correctedBaseline != null) {
+                            baselineState = correctedBaseline.stateTag();
+                            baselineBlockEntity = correctedBaseline.blockEntityTag();
+                        }
+                        CompoundTag liveState = this.readStateTag(liveSection, localX, localY, localZ);
                         CompoundTag liveBlockEntity = this.readBlockEntityTag(live, y, localX, localZ);
                         if (this.samePersistentCell(
                                 baselineState,
@@ -221,7 +247,7 @@ public final class SessionStabilizationService {
                             continue;
                         }
                         changes.add(new StoredBlockChange(
-                                new io.github.luma.domain.model.BlockPoint(x, y, z),
+                                worldPos,
                                 payload(baselineState, baselineBlockEntity),
                                 payload(liveState, liveBlockEntity)
                         ));
@@ -230,6 +256,26 @@ public final class SessionStabilizationService {
             }
         }
         return changes;
+    }
+
+    private boolean hasBaselineCorrectionInSection(
+            Map<BlockPoint, StatePayload> baselineCorrections,
+            int sectionY,
+            Bounds3i bounds
+    ) {
+        if (baselineCorrections == null || baselineCorrections.isEmpty()) {
+            return false;
+        }
+        for (BlockPoint pos : baselineCorrections.keySet()) {
+            if ((pos.y() >> 4) != sectionY) {
+                continue;
+            }
+            if (bounds != null && !bounds.contains(pos)) {
+                continue;
+            }
+            return true;
+        }
+        return false;
     }
 
     private boolean samePersistentCell(

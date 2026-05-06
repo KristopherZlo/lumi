@@ -151,6 +151,54 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void diffChunkUsesBaselineCorrectionWhenDeferredMutationPollutedSnapshot() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint pos = new BlockPoint(1, 64, 1);
+        StatePayload trueBaseline = new StatePayload(stateTag("minecraft:redstone_wire", "power", "0"), null);
+        ChunkSnapshotPayload pollutedBaseline = chunkWithSingleState(
+                pos,
+                stateTag("minecraft:air"),
+                stateTag("minecraft:redstone_wire", "power", "15")
+        );
+        ChunkSnapshotPayload live = chunkWithSingleState(
+                pos,
+                stateTag("minecraft:air"),
+                stateTag("minecraft:redstone_wire", "power", "0")
+        );
+
+        assertTrue(service.diffChunk(pollutedBaseline, live, null, Map.of(pos, trueBaseline)).isEmpty());
+    }
+
+    @Test
+    void diffChunkUsesBaselineCorrectionEvenWhenSnapshotMatchesLive() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint pos = new BlockPoint(1, 64, 1);
+        StatePayload trueBaseline = new StatePayload(stateTag("minecraft:dispenser", "triggered", "false"), null);
+        ChunkSnapshotPayload pollutedBaseline = chunkWithSingleState(
+                pos,
+                stateTag("minecraft:air"),
+                stateTag("minecraft:dispenser", "triggered", "true")
+        );
+        ChunkSnapshotPayload live = chunkWithSingleState(
+                pos,
+                stateTag("minecraft:air"),
+                stateTag("minecraft:dispenser", "triggered", "true")
+        );
+
+        List<StoredBlockChange> changes = service.diffChunk(
+                pollutedBaseline,
+                live,
+                null,
+                Map.of(pos, trueBaseline)
+        );
+
+        assertEquals(1, changes.size());
+        assertEquals(pos, changes.getFirst().pos());
+        assertEquals(trueBaseline.stateTag(), changes.getFirst().oldValue().stateTag());
+        assertEquals(stateTag("minecraft:dispenser", "triggered", "true"), changes.getFirst().newValue().stateTag());
+    }
+
+    @Test
     void diffChunkKeepsStructuralStateDeltas() {
         List<StoredBlockChange> changes = this.diffSingleState(
                 stateTag("minecraft:redstone_lamp", "lit", "false"),
@@ -317,6 +365,28 @@ class SessionStabilizationServiceTest {
                 64,
                 79,
                 List.of(new ChunkSectionSnapshotPayload(4, List.of(stateTag(blockId)), new long[0], 0)),
+                Map.of()
+        );
+    }
+
+    private static ChunkSnapshotPayload chunkWithSingleState(
+            BlockPoint pos,
+            CompoundTag defaultState,
+            CompoundTag specialState
+    ) {
+        short[] indexes = new short[4096];
+        indexes[ChunkSectionSnapshotPayload.localIndex(pos.x() & 15, pos.y() & 15, pos.z() & 15)] = 1;
+        return new ChunkSnapshotPayload(
+                pos.x() >> 4,
+                pos.z() >> 4,
+                64,
+                79,
+                List.of(new ChunkSectionSnapshotPayload(
+                        pos.y() >> 4,
+                        List.of(defaultState, specialState),
+                        packMinecraftIndexes(indexes, 1),
+                        1
+                )),
                 Map.of()
         );
     }

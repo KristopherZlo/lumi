@@ -2,6 +2,7 @@ package io.github.luma.minecraft.capture;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
@@ -9,6 +10,7 @@ import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -77,6 +79,69 @@ public final class HistoryCaptureManager {
 
     public static HistoryCaptureManager getInstance() {
         return INSTANCE;
+    }
+
+    /**
+     * Captures the active-session baseline before a root mutation can trigger
+     * synchronous neighbor fallout in the same chunk.
+     */
+    public void capturePreMutationBaseline(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity
+    ) {
+        io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
+        if (level == null
+                || pos == null
+                || !shouldCaptureMutation(source)
+                || !this.canUseMutationSource(level.getServer(), source)
+                || !this.isExplicitRootSource(source)) {
+            return;
+        }
+
+        try {
+            Instant now = Instant.now();
+            List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
+            if (matchingProjects.isEmpty()) {
+                if (!allowsAutomaticProjectCreation(source)) {
+                    return;
+                }
+                this.projectService.ensureWorldProject(level, defaultActor(source));
+                this.invalidateProjectCache(level.getServer());
+                matchingProjects = this.matchingProjects(level, pos);
+            }
+
+            for (TrackedProject trackedProject : matchingProjects) {
+                if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
+                    continue;
+                }
+
+                String projectId = trackedProject.project().id().toString();
+                CaptureSessionState existingSession = this.sessionRegistry.session(projectId);
+                ChunkPoint chunk = ChunkPoint.from(pos);
+                boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
+                this.getOrCreateBuffer(trackedProject, source, now);
+                CaptureSessionState session = this.sessionRegistry.session(projectId);
+                if (session == null || !this.ensureTrackedChunk(
+                        trackedProject,
+                        level,
+                        pos,
+                        oldState,
+                        oldBlockEntity,
+                        source,
+                        activeSessionRegion,
+                        now
+                )) {
+                    continue;
+                }
+
+                this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
+                session.addRootChunk(chunk);
+            }
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to capture pre-mutation baseline at {} in {}", pos, level.dimension().identifier(), exception);
+        }
     }
 
     /**
@@ -201,6 +266,12 @@ public final class HistoryCaptureManager {
                 CaptureSessionState session = this.sessionRegistry.session(projectId);
                 if (session == null) {
                     continue;
+                }
+                if (mutation != null && !session.isRootChunk(chunk)) {
+                    session.recordBaselineCorrection(
+                            BlockPoint.from(pos),
+                            StatePayload.capture(mutation.oldState(), mutation.oldBlockEntity())
+                    );
                 }
                 if (this.isExplicitRootSource(source)) {
                     this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
@@ -1290,6 +1361,9 @@ public final class HistoryCaptureManager {
         }
         if (this.isExplicitRootSource(source)) {
             session.addRootChunk(chunk);
+        }
+        if (!session.isRootChunk(chunk)) {
+            session.recordBaselineCorrection(BlockPoint.from(pos), StatePayload.capture(oldState, oldBlockEntity));
         }
         this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
         session.markDirtyChunk(chunk, this.deferredActionContext());

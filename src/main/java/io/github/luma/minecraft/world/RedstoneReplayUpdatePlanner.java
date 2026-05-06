@@ -1,10 +1,10 @@
 package io.github.luma.minecraft.world;
 
 import java.util.LinkedHashSet;
-import java.util.Locale;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -16,15 +16,14 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 
 /**
- * Replays neighbor notifications for persisted redstone state transitions.
+ * Replays neighbor notifications only when the signal-capable block itself changes.
+ *
+ * <p>Persisted redstone properties such as power, powered, and lit are restored
+ * as exact history state. Re-simulating those property transitions during replay
+ * can schedule a fresh pulse after undo/redo and move the world away from the
+ * state being restored.
  */
 final class RedstoneReplayUpdatePlanner {
-
-    private static final Set<String> POWER_PROPERTIES = Set.of(
-            "powered",
-            "power"
-    );
-    private static final String LIT_PROPERTY = "lit";
 
     void propagate(ServerLevel level, BlockPos pos, BlockState currentState, BlockState targetState) {
         if (level == null || pos == null) {
@@ -58,16 +57,7 @@ final class RedstoneReplayUpdatePlanner {
         if (Objects.equals(currentState, targetState)) {
             return false;
         }
-        if (this.signalSourceBlockChanged(currentState, targetState)) {
-            return true;
-        }
-        for (String property : POWER_PROPERTIES) {
-            if (this.propertyChanged(currentState, targetState, property)) {
-                return true;
-            }
-        }
-        return this.propertyChanged(currentState, targetState, LIT_PROPERTY)
-                && (this.signalSource(currentState) || this.signalSource(targetState));
+        return this.signalSourceBlockChanged(currentState, targetState);
     }
 
     Set<BlockPos> updatePositions(BlockPos pos, BlockState currentState, BlockState targetState) {
@@ -101,21 +91,12 @@ final class RedstoneReplayUpdatePlanner {
         return state != null && state.hasAnalogOutputSignal();
     }
 
-    private boolean propertyChanged(BlockState currentState, BlockState targetState, String propertyName) {
-        Optional<String> currentValue = this.propertyValue(currentState, propertyName);
-        Optional<String> targetValue = this.propertyValue(targetState, propertyName);
-        if (currentValue.isEmpty() && targetValue.isEmpty()) {
-            return false;
-        }
-        return !Objects.equals(currentValue, targetValue);
-    }
-
     private Optional<BlockPos> attachedNeighbor(BlockPos pos, BlockState state) {
         if (pos == null || state == null || !this.hasProperty(state, "face")) {
             return Optional.empty();
         }
 
-        String face = this.propertyValue(state, "face").orElse("");
+        String face = this.stringPropertyValue(state, "face").orElse("");
         if ("floor".equals(face)) {
             return Optional.of(pos.below());
         }
@@ -137,7 +118,7 @@ final class RedstoneReplayUpdatePlanner {
         return false;
     }
 
-    private Optional<String> propertyValue(BlockState state, String propertyName) {
+    private Optional<String> stringPropertyValue(BlockState state, String propertyName) {
         if (state == null) {
             return Optional.empty();
         }

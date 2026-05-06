@@ -72,6 +72,15 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
+    void blockUpdateInspectionKeepsMechanismEntitiesOnly() {
+        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.BLOCK_UPDATE, "minecraft:minecart"));
+        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.BLOCK_UPDATE, "minecraft:chest_minecart"));
+        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.BLOCK_UPDATE, "minecraft:arrow"));
+        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.BLOCK_UPDATE, "minecraft:firework_rocket"));
+        assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.BLOCK_UPDATE, "minecraft:zombie"));
+    }
+
+    @Test
     void externalToolFallbackInspectsBuilderRelevantEntitiesOnly() {
         assertTrue(this.policy.shouldInspectExternalToolFallback("minecraft:armor_stand"));
         assertTrue(this.policy.shouldInspectExternalToolFallback("minecraft:block_display"));

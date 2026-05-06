@@ -18,6 +18,8 @@ class CaptureSessionStateTest {
         assertTrue(state.addRootChunk(new ChunkPoint(10, -4)));
         assertFalse(state.addRootChunk(new ChunkPoint(10, -4)));
         assertEquals(List.of(new ChunkPoint(10, -4)), state.rootChunks());
+        assertTrue(state.isRootChunk(new ChunkPoint(10, -4)));
+        assertFalse(state.isRootChunk(new ChunkPoint(10, -3)));
         assertTrue(state.isWithinStabilizationEnvelope(new ChunkPoint(11, -3)));
         assertFalse(state.isWithinStabilizationEnvelope(new ChunkPoint(12, -4)));
         assertTrue(state.dirtyChunks().isEmpty());

@@ -29,14 +29,14 @@ class RedstoneReplayUpdatePlannerTest {
     }
 
     @Test
-    void poweredStateChangeRequiresNeighborPropagation() {
+    void poweredStateChangeRestoresExactlyWithoutNeighborPropagation() {
         BlockState off = Blocks.LEVER.defaultBlockState()
                 .setValue(LeverBlock.FACE, AttachFace.FLOOR)
                 .setValue(LeverBlock.FACING, Direction.NORTH)
                 .setValue(LeverBlock.POWERED, false);
         BlockState on = off.setValue(LeverBlock.POWERED, true);
 
-        assertTrue(this.planner.requiresPropagation(off, on));
+        assertFalse(this.planner.requiresPropagation(off, on));
     }
 
     @Test
@@ -68,13 +68,12 @@ class RedstoneReplayUpdatePlannerTest {
     @Test
     void floorAttachedControlsUpdateTheirSupportingBlock() {
         BlockPos pos = new BlockPos(3, 64, 5);
-        BlockState off = Blocks.LEVER.defaultBlockState()
+        BlockState on = Blocks.LEVER.defaultBlockState()
                 .setValue(LeverBlock.FACE, AttachFace.FLOOR)
                 .setValue(LeverBlock.FACING, Direction.NORTH)
-                .setValue(LeverBlock.POWERED, false);
-        BlockState on = off.setValue(LeverBlock.POWERED, true);
+                .setValue(LeverBlock.POWERED, true);
 
-        Set<BlockPos> positions = this.planner.updatePositions(pos, off, on);
+        Set<BlockPos> positions = this.planner.updatePositions(pos, Blocks.AIR.defaultBlockState(), on);
 
         assertTrue(positions.contains(pos));
         assertTrue(positions.contains(pos.below()));

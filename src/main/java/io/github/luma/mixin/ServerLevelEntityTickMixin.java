@@ -13,6 +13,7 @@ import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.EnderMan;
 import net.minecraft.world.entity.monster.Ravager;
 import net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull;
+import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
@@ -39,6 +40,9 @@ abstract class ServerLevelEntityTickMixin {
         }
         if (entity instanceof FallingBlockEntity) {
             return WorldMutationSource.FALLING_BLOCK;
+        }
+        if (entity instanceof AbstractMinecart) {
+            return WorldMutationSource.BLOCK_UPDATE;
         }
         if (entity instanceof EnderMan
                 || entity instanceof Creeper

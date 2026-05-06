@@ -24,6 +24,8 @@ public final class CaptureSessionState {
     private final TrackedChangeBuffer buffer;
     private final LinkedHashMap<ChunkPoint, List<StoredBlockChange>> startingChunkChanges;
     private final LinkedHashMap<ChunkPoint, ChunkSnapshotPayload> baselineChunkStates = new LinkedHashMap<>();
+    private final LinkedHashMap<ChunkPoint, LinkedHashMap<BlockPoint, StatePayload>> baselineCorrections =
+            new LinkedHashMap<>();
     private final LinkedHashSet<ChunkPoint> rootChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> dirtyChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> pendingReconcileChunks = new LinkedHashSet<>();
@@ -92,6 +94,10 @@ public final class CaptureSessionState {
         return List.copyOf(this.rootChunks);
     }
 
+    public boolean isRootChunk(ChunkPoint chunk) {
+        return chunk != null && this.rootChunks.contains(chunk);
+    }
+
     public List<ChunkPoint> dirtyChunks() {
         return List.copyOf(this.dirtyChunks);
     }
@@ -154,12 +160,36 @@ public final class CaptureSessionState {
         this.baselineChunkStates.put(chunk, snapshot);
     }
 
+    public void recordBaselineCorrection(BlockPoint pos, StatePayload originalValue) {
+        if (pos == null || originalValue == null) {
+            return;
+        }
+        ChunkPoint chunk = ChunkPoint.from(pos);
+        this.baselineCorrections
+                .computeIfAbsent(chunk, ignored -> new LinkedHashMap<>())
+                .putIfAbsent(pos, originalValue);
+    }
+
     public boolean hasBaselineChunk(ChunkPoint chunk) {
         return chunk != null && this.baselineChunkStates.containsKey(chunk);
     }
 
     public ChunkSnapshotPayload baselineChunkState(ChunkPoint chunk) {
         return this.baselineChunkStates.get(chunk);
+    }
+
+    public Map<BlockPoint, StatePayload> baselineCorrections(Collection<ChunkPoint> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return Map.of();
+        }
+        LinkedHashMap<BlockPoint, StatePayload> corrections = new LinkedHashMap<>();
+        for (ChunkPoint chunk : chunks) {
+            if (chunk == null) {
+                continue;
+            }
+            corrections.putAll(this.baselineCorrections.getOrDefault(chunk, new LinkedHashMap<>()));
+        }
+        return Map.copyOf(corrections);
     }
 
     public List<StoredBlockChange> startingChunkChanges(Collection<ChunkPoint> chunks) {
