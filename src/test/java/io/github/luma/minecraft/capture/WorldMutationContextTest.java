@@ -92,6 +92,20 @@ class WorldMutationContextTest {
     }
 
     @Test
+    void internalWorldApplyTracksRestoreSourceOnly() {
+        assertFalse(WorldMutationContext.internalWorldApplyActive());
+
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.RESTORE)) {
+            assertTrue(WorldMutationContext.internalWorldApplyActive());
+        }
+
+        assertFalse(WorldMutationContext.internalWorldApplyActive());
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.PISTON)) {
+            assertFalse(WorldMutationContext.internalWorldApplyActive());
+        }
+    }
+
+    @Test
     void captureSuppressionIsScoped() {
         assertFalse(WorldMutationContext.captureSuppressed());
 

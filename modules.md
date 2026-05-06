@@ -192,7 +192,7 @@ Use `src/main/java/io/github/luma/mixin` only for Minecraft hook entrypoints. Mi
 - Entity hooks: `EntityMutationMixin`, `ServerLevelEntityLifecycleMixin`, `ServerLevelEntityTickMixin`.
 - Player/input/server hooks: `ServerPlayerGameModeMixin`, `ServerGamePacketListenerMixin`.
 - Explosion/TNT/falling hooks: `TntBlockMixin`, `ServerLevelExplosionMixin`, `LevelExplosionMixin`, `FallingBlockMixin`, `FallingBlockEntityMixin`.
-- Growth/fluid/fire/redstone/piston hooks: `SaplingBlockMixin`, `StemBlockMixin`, `CropBlockMixin`, `FlowingFluidMixin`, `FireBlockMixin`, `BlockUpdateCaptureMixin`, `PistonBaseBlockMixin`.
+- Growth/fluid/fire/redstone/piston hooks: `SaplingBlockMixin`, `StemBlockMixin`, `CropBlockMixin`, `FlowingFluidMixin`, `FireBlockMixin`, `BlockUpdateCaptureMixin`, `PistonBaseBlockMixin` for piston capture scoping and internal replay piston-physics suppression.
 - Client interaction hooks: `MouseHandlerMixin`, `MinecraftInteractionMixin`. These must only establish input suppression/selection context and delegate to client services such as `LumiShortcutInteractionGate`.
 - Section ownership and Axiom fallback: `ChunkAccessSectionOwnershipMixin`, `AxiomSetBufferPacketMixin`.
 

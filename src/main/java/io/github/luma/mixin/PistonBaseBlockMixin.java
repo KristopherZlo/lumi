@@ -25,9 +25,26 @@ abstract class PistonBaseBlockMixin {
         if (level.isClientSide()) {
             return original.call(state, level, pos, type, data);
         }
+        if (WorldMutationContext.internalWorldApplyActive()) {
+            return false;
+        }
 
         try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.PISTON)) {
             return original.call(state, level, pos, type, data);
         }
+    }
+
+    @WrapMethod(method = "checkIfExtend")
+    private void luma$wrapPistonExtensionCheck(
+            Level level,
+            BlockPos pos,
+            BlockState state,
+            Operation<Void> original
+    ) {
+        if (!level.isClientSide() && WorldMutationContext.internalWorldApplyActive()) {
+            return;
+        }
+
+        original.call(level, pos, state);
     }
 }

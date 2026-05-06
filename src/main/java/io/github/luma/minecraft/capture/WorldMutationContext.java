@@ -37,6 +37,10 @@ public final class WorldMutationContext {
         return CAPTURE_SUPPRESSION_DEPTH.get() > 0;
     }
 
+    public static boolean internalWorldApplyActive() {
+        return currentSource() == WorldMutationSource.RESTORE;
+    }
+
     public static SourceFrame pushSource(WorldMutationSource source) {
         WorldMutationSource resolvedSource = source == null ? WorldMutationSource.SYSTEM : source;
         Frame parent = currentFrame();
