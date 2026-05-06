@@ -29,6 +29,7 @@ final class BaselineGameplaySuite {
             new BulkBlockScenario(),
             new BlockEntityScenario(),
             new RedstoneScenario(),
+            new ClosedMechanismScenario(),
             new FluidScenario(),
             new DoorScenario(),
             new OrientationScenario(),
@@ -146,6 +147,37 @@ final class BaselineGameplaySuite {
         }
     }
 
+    private static final class ClosedMechanismScenario implements BaselineScenario {
+
+        @Override
+        public void run(BaselineScenarioContext context, BaselineChecks checks) {
+            BlockPos loopBase = context.origin().offset(3, 1, 3);
+            List<BlockPos> supports = List.of(
+                    loopBase,
+                    loopBase.east(),
+                    loopBase.east().south(),
+                    loopBase.south()
+            );
+            List<BlockPos> wires = supports.stream()
+                    .map(BlockPos::above)
+                    .toList();
+            BlockPos power = wires.getFirst().west();
+            BlockPos lamp = supports.get(2);
+
+            supports.forEach(pos -> context.level().setBlock(pos, Blocks.STONE.defaultBlockState(), 3));
+            context.level().setBlock(lamp, Blocks.REDSTONE_LAMP.defaultBlockState(), 3);
+            wires.forEach(pos -> context.level().setBlock(pos, Blocks.REDSTONE_WIRE.defaultBlockState(), 3));
+            context.level().setBlock(power, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+
+            long liveWires = wires.stream()
+                    .filter(pos -> context.level().getBlockState(pos).is(Blocks.REDSTONE_WIRE))
+                    .count();
+            checks.check(liveWires == wires.size(), "baseline closed mechanism kept its redstone loop");
+            checks.check(context.level().getBlockState(lamp).getValue(RedstoneLampBlock.LIT),
+                    "baseline closed mechanism powered its lamp");
+        }
+    }
+
     private static final class FluidScenario implements BaselineScenario {
 
         @Override
@@ -160,18 +192,20 @@ final class BaselineGameplaySuite {
 
         @Override
         public void run(BaselineScenarioContext context, BaselineChecks checks) {
-            Entity entity = EntityType.ARMOR_STAND.create(context.level(), EntitySpawnReason.COMMAND);
-            checks.check(entity != null, "baseline created an interaction entity");
+            Entity entity = EntityType.COW.create(context.level(), EntitySpawnReason.COMMAND);
+            checks.check(entity != null, "baseline created a non-player entity");
             if (entity == null) {
                 return;
             }
 
             BlockPos marker = context.origin().offset(1, 1, 1);
             entity.snapTo(marker.getX() + 0.5D, marker.getY(), marker.getZ() + 0.5D, 0.0F, 0.0F);
+            context.level().addFreshEntity(entity);
+            entity.snapTo(marker.getX() + 1.5D, marker.getY(), marker.getZ() + 0.5D, 90.0F, 0.0F);
             entity.setCustomName(Component.literal("baseline-entity"));
             entity.setGlowingTag(true);
-            context.level().addFreshEntity(entity);
             checks.check(!entity.isRemoved(), "baseline spawned an entity");
+            checks.check(entity.blockPosition().equals(marker.east()), "baseline updated entity position");
             checks.check(entity.hasCustomName(), "baseline updated entity custom name");
             checks.check(entity.isCurrentlyGlowing(), "baseline updated entity glowing state");
             entity.discard();

@@ -4,8 +4,10 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -38,6 +40,7 @@ final class SingleplayerGameplayRegressionSuite {
             new BulkPlacementScenario(),
             new BlockEntityScenario(),
             new RedstoneScenario(),
+            new ClosedMechanismScenario(),
             new FluidScenario(),
             new DoorScenario(),
             new OrientationScenario(),
@@ -80,6 +83,7 @@ final class SingleplayerGameplayRegressionSuite {
             Set<BlockPoint> latestUndoRedoBlocks,
             int expectedEntityChanges,
             Set<String> expectedEntityIds,
+            Map<String, BlockPoint> expectedEntityPositions,
             List<Entity> spawnedEntities,
             List<GameplayTiming> timings
     ) {
@@ -130,6 +134,7 @@ final class SingleplayerGameplayRegressionSuite {
         private final Set<BlockPoint> unexpectedDraftBlocks = new LinkedHashSet<>();
         private final Set<BlockPoint> latestUndoRedoBlocks = new LinkedHashSet<>();
         private final Set<String> expectedEntityIds = new LinkedHashSet<>();
+        private final Map<String, BlockPoint> expectedEntityPositions = new LinkedHashMap<>();
         private final List<Entity> spawnedEntities = new ArrayList<>();
         private final List<GameplayTiming> timings = new ArrayList<>();
         private int expectedEntityChanges;
@@ -175,6 +180,7 @@ final class SingleplayerGameplayRegressionSuite {
             this.expectedEntityChanges += 1;
             if (entity != null) {
                 this.expectedEntityIds.add(entity.getStringUUID());
+                this.expectedEntityPositions.put(entity.getStringUUID(), BlockPoint.from(entity.blockPosition()));
             }
             this.trackSpawnedEntity(entity);
         }
@@ -195,6 +201,7 @@ final class SingleplayerGameplayRegressionSuite {
                     Set.copyOf(this.latestUndoRedoBlocks),
                     this.expectedEntityChanges,
                     Set.copyOf(this.expectedEntityIds),
+                    Map.copyOf(this.expectedEntityPositions),
                     List.copyOf(this.spawnedEntities),
                     List.copyOf(this.timings)
             );
@@ -296,6 +303,45 @@ final class SingleplayerGameplayRegressionSuite {
             context.expectDraftBlock(piston);
             context.expectDraftBlock(movedTo);
             context.expectNoDraftBlock(movedFrom);
+        }
+    }
+
+    private static final class ClosedMechanismScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos loopBase = context.volume.min().offset(6, 1, 6);
+            List<BlockPos> supports = List.of(
+                    loopBase,
+                    loopBase.east(),
+                    loopBase.east().south(),
+                    loopBase.south()
+            );
+            List<BlockPos> wires = supports.stream()
+                    .map(BlockPos::above)
+                    .toList();
+            BlockPos power = wires.getFirst().west();
+            BlockPos lamp = supports.get(2);
+
+            context.trackedPlayerAction(() -> {
+                supports.forEach(pos -> context.level.setBlock(pos, Blocks.STONE.defaultBlockState(), 3));
+                context.level.setBlock(lamp, Blocks.REDSTONE_LAMP.defaultBlockState(), 3);
+                wires.forEach(pos -> context.level.setBlock(pos, Blocks.REDSTONE_WIRE.defaultBlockState(), 3));
+                context.level.setBlock(power, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+            });
+
+            long liveWires = wires.stream()
+                    .filter(pos -> context.level.getBlockState(pos).is(Blocks.REDSTONE_WIRE))
+                    .count();
+            context.checks.check(liveWires == wires.size(),
+                    "gameplay closed mechanism kept its redstone loop");
+            context.checks.check(context.level.getBlockState(lamp).getValue(RedstoneLampBlock.LIT),
+                    "gameplay closed mechanism powered its lamp");
+
+            supports.forEach(context::expectDraftBlock);
+            wires.forEach(context::expectDraftBlock);
+            context.expectDraftBlock(power);
+            context.expectDraftBlock(lamp);
         }
     }
 

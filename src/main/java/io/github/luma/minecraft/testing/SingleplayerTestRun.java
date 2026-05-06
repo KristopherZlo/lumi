@@ -29,6 +29,7 @@ import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -389,12 +390,22 @@ final class SingleplayerTestRun {
             }
             this.check(draft.entityChanges().size() >= report.expectedEntityChanges(),
                     "Gameplay draft includes expected entity changes");
-            Set<String> capturedEntityIds = draft.entityChanges().stream()
-                    .map(change -> change.entityId())
-                    .collect(java.util.stream.Collectors.toSet());
+            Map<String, io.github.luma.domain.model.StoredEntityChange> capturedEntityChanges = new HashMap<>();
+            for (var change : draft.entityChanges()) {
+                capturedEntityChanges.put(change.entityId(), change);
+            }
+            Set<String> capturedEntityIds = capturedEntityChanges.keySet();
             for (String expectedEntityId : report.expectedEntityIds()) {
                 this.check(capturedEntityIds.contains(expectedEntityId),
                         "Gameplay draft includes entity " + expectedEntityId);
+            }
+            for (Map.Entry<String, BlockPoint> entry : report.expectedEntityPositions().entrySet()) {
+                var change = capturedEntityChanges.get(entry.getKey());
+                BlockPoint capturedPosition = change == null || change.newValue() == null
+                        ? null
+                        : BlockPoint.from(change.newValue().blockPos());
+                this.check(entry.getValue().equals(capturedPosition),
+                        "Gameplay draft stores entity position " + this.format(entry.getValue().toBlockPos()));
             }
             this.check(draft.totalChangeCount() <= 128,
                     "Gameplay draft stayed scoped instead of growing into unrelated world noise");
