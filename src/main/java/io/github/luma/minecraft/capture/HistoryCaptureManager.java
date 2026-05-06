@@ -52,6 +52,7 @@ public final class HistoryCaptureManager {
     private static final WorldMutationCapturePolicy CAPTURE_POLICY = new WorldMutationCapturePolicy();
     private static final EntityMutationCapturePolicy ENTITY_CAPTURE_POLICY = new EntityMutationCapturePolicy();
     private static final MutationSourcePolicy SOURCE_POLICY = new MutationSourcePolicy();
+    private static final UndoRedoActionGroupingPolicy UNDO_REDO_GROUPING_POLICY = new UndoRedoActionGroupingPolicy();
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -850,7 +851,11 @@ public final class HistoryCaptureManager {
             return;
         }
 
-        String actionId = WorldMutationContext.currentActionId();
+        String actionId = UNDO_REDO_GROUPING_POLICY.actionIdForBlockChange(
+                WorldMutationContext.currentSource(),
+                WorldMutationContext.currentActionId(),
+                change
+        );
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
         if (actionAllowed && !actionId.isBlank()) {
             UndoRedoHistoryManager.getInstance().recordChange(

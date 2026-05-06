@@ -154,6 +154,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `ChunkSnapshotCaptureService`, `SnapshotCaptureService`: server-thread chunk/snapshot capture into immutable payloads.
 - `ChunkSectionOwnershipRegistry`, `ChunkSectionOwnerLookup`, `DirectSectionMutationCaptureService`: lower-level section owner fallback capture.
 - `UndoRedoHistoryManager`: live undo/redo stacks and recent action source data.
+- `UndoRedoActionGroupingPolicy`: source-aware live action identity selection, including block-scoped Axiom simple place/break captures.
 - `ServerThreadExecutor`: marshals capture state work to the Minecraft server thread.
 
 ### World Apply
