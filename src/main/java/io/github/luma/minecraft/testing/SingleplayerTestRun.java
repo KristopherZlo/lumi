@@ -86,6 +86,7 @@ final class SingleplayerTestRun {
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
     private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
     private SingleplayerLargeHistoryScenario largeHistoryScenario;
+    private SingleplayerStructureFixtureScenario structureFixtureScenario;
     private String gameplaySaveVersionId = "";
     private String gameplayEntityUpdateSaveVersionId = "";
     private String savedGameplayEntityId = "";
@@ -182,6 +183,8 @@ final class SingleplayerTestRun {
                 case RUN_LARGE_HISTORY_DIAGNOSTICS -> this.runLargeHistoryDiagnostics(server);
                 case START_BULK_APPLY_DIAGNOSTICS -> this.startBulkApplyDiagnostics(server);
                 case RUN_BULK_APPLY_DIAGNOSTICS -> this.runBulkApplyDiagnostics(server);
+                case START_STRUCTURE_FIXTURE_TESTS -> this.startStructureFixtureTests(server);
+                case RUN_STRUCTURE_FIXTURE_TESTS -> this.runStructureFixtureTests(server);
                 case CLEANUP -> this.finish(server);
             }
         } catch (Exception exception) {
@@ -747,6 +750,45 @@ final class SingleplayerTestRun {
         for (SingleplayerBulkApplyDiagnostics.DiagnosticCheck check : this.bulkApplyDiagnostics.checks()) {
             this.check(check.passed(), check.label() + " (" + check.detail() + ")");
         }
+        this.completePhase(server, Phase.START_STRUCTURE_FIXTURE_TESTS);
+    }
+
+    private void startStructureFixtureTests(MinecraftServer server) {
+        this.structureFixtureScenario = new SingleplayerStructureFixtureScenario(
+                this.level,
+                this.player,
+                this.volume,
+                this.project.name(),
+                this.project.id().toString()
+        );
+        this.completePhase(server, Phase.RUN_STRUCTURE_FIXTURE_TESTS);
+    }
+
+    private void runStructureFixtureTests(MinecraftServer server) {
+        if (this.structureFixtureScenario == null) {
+            this.recordFailure("Structure fixture tests were not initialized");
+            this.completePhase(server, Phase.CLEANUP);
+            return;
+        }
+
+        StructureFixtureStepResult result = this.structureFixtureScenario.advance(server);
+        for (String message : result.messages()) {
+            this.message(server, message);
+        }
+        if (result.operationHandle() != null) {
+            this.pendingOperation = result.operationHandle();
+            this.log.info("Queued structure fixture operation "
+                    + this.pendingOperation.label() + " " + this.pendingOperation.id());
+            return;
+        }
+        if (!result.finished()) {
+            return;
+        }
+
+        for (SingleplayerStructureFixtureScenario.StructureFixtureCheck check
+                : this.structureFixtureScenario.checks()) {
+            this.check(check.passed(), check.label());
+        }
         this.completePhase(server, Phase.CLEANUP);
     }
 
@@ -903,6 +945,13 @@ final class SingleplayerTestRun {
                 this.log.fail(Phase.CLEANUP.title(), "Large history diagnostics cleanup failed", exception);
             }
         }
+        if (this.structureFixtureScenario != null) {
+            try {
+                this.structureFixtureScenario.cleanup();
+            } catch (Exception exception) {
+                this.log.fail(Phase.CLEANUP.title(), "Structure fixture cleanup failed", exception);
+            }
+        }
         try {
             this.clearVolume();
         } catch (Exception exception) {
@@ -925,6 +974,10 @@ final class SingleplayerTestRun {
 
     private void clearVolume() {
         WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+            for (Entity entity : this.level.getEntities((Entity) null, this.volume.bounds(),
+                    entity -> !(entity instanceof ServerPlayer))) {
+                entity.discard();
+            }
             for (BlockPos pos : BlockPos.betweenClosed(this.volume.min(), this.volume.max())) {
                 this.level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
             }
@@ -1123,6 +1176,14 @@ final class SingleplayerTestRun {
         ),
         START_BULK_APPLY_DIAGNOSTICS("Bulk apply diagnostics", "prepare large dense, fallback, and sparse apply scenarios"),
         RUN_BULK_APPLY_DIAGNOSTICS("Run bulk apply diagnostics", "apply and delete large prepared block batches with metrics"),
+        START_STRUCTURE_FIXTURE_TESTS(
+                "Structure fixture setup",
+                "prepare saved redstone fixture structures for control-by-control undo checks"
+        ),
+        RUN_STRUCTURE_FIXTURE_TESTS(
+                "Structure fixture undo checks",
+                "press every saved fixture button and lever, then verify live undo restores blocks, inventories, and entities"
+        ),
         CLEANUP("Cleanup and report", "remove test blocks, archive the test project, and write the log");
 
         private final String title;
@@ -1172,6 +1233,7 @@ final class SingleplayerTestRun {
                      START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS, CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS,
                      CHECK_PERFORMANCE, START_LARGE_HISTORY_DIAGNOSTICS, RUN_LARGE_HISTORY_DIAGNOSTICS,
                      START_BULK_APPLY_DIAGNOSTICS, RUN_BULK_APPLY_DIAGNOSTICS,
+                     START_STRUCTURE_FIXTURE_TESTS, RUN_STRUCTURE_FIXTURE_TESTS,
                      CLEANUP -> CLEANUP;
             };
         }
