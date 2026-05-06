@@ -8,6 +8,7 @@ record WorldApplyBudget(
         int maxRewriteSections,
         int maxDirectSections,
         int maxLightChecks,
+        int maxRedstoneUpdates,
         int sparseStepCap,
         int maxPreloadChunks
 ) {
@@ -20,6 +21,7 @@ record WorldApplyBudget(
                 + ", maxRewriteSections=" + this.maxRewriteSections
                 + ", maxDirectSections=" + this.maxDirectSections
                 + ", maxLightChecks=" + this.maxLightChecks
+                + ", maxRedstoneUpdates=" + this.maxRedstoneUpdates
                 + ", sparseStepCap=" + this.sparseStepCap
                 + ", maxPreloadChunks=" + this.maxPreloadChunks;
     }

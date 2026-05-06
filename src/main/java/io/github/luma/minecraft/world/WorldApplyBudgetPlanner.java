@@ -25,6 +25,9 @@ final class WorldApplyBudgetPlanner {
     private static final int NORMAL_MAX_LIGHT_CHECKS_PER_TICK = 512;
     private static final int RESTORE_MAX_LIGHT_CHECKS_PER_TICK = 16_384;
     private static final int TURBO_MAX_LIGHT_CHECKS_PER_TICK = 32_768;
+    private static final int NORMAL_MAX_REDSTONE_UPDATES_PER_TICK = 128;
+    private static final int RESTORE_MAX_REDSTONE_UPDATES_PER_TICK = 4_096;
+    private static final int TURBO_MAX_REDSTONE_UPDATES_PER_TICK = 16_384;
     private static final int NORMAL_SPARSE_STEP_CAP = 128;
     private static final int RESTORE_SPARSE_STEP_CAP = 4096;
     private static final int TURBO_SPARSE_STEP_CAP = 32_768;
@@ -94,6 +97,11 @@ final class WorldApplyBudgetPlanner {
             case HISTORY_FAST -> Math.max(4096, scaledInt(4096, RESTORE_MAX_LIGHT_CHECKS_PER_TICK, fraction, scale));
             case DIAGNOSTIC_TURBO -> Math.max(8192, scaledInt(8192, TURBO_MAX_LIGHT_CHECKS_PER_TICK, fraction, scale));
         };
+        int redstoneUpdates = switch (resolvedProfile) {
+            case NORMAL -> Math.max(32, Math.min(NORMAL_MAX_REDSTONE_UPDATES_PER_TICK, blocks));
+            case HISTORY_FAST -> Math.max(256, scaledInt(256, RESTORE_MAX_REDSTONE_UPDATES_PER_TICK, fraction, scale));
+            case DIAGNOSTIC_TURBO -> Math.max(512, scaledInt(512, TURBO_MAX_REDSTONE_UPDATES_PER_TICK, fraction, scale));
+        };
         int sparseStepCap = switch (resolvedProfile) {
             case NORMAL -> NORMAL_SPARSE_STEP_CAP;
             case HISTORY_FAST -> RESTORE_SPARSE_STEP_CAP;
@@ -116,6 +124,7 @@ final class WorldApplyBudgetPlanner {
         };
         sparseStepCap = Math.max(1, Math.min(sparseStepCap, blocks));
         lightChecks = Math.max(1, lightChecks);
+        redstoneUpdates = Math.max(1, redstoneUpdates);
         long minimumProfileNanos = switch (resolvedProfile) {
             case NORMAL -> 250_000L;
             case HISTORY_FAST -> RESTORE_MIN_NANOS_PER_TICK;
@@ -133,6 +142,7 @@ final class WorldApplyBudgetPlanner {
                 rewriteSections,
                 directSections,
                 lightChecks,
+                redstoneUpdates,
                 sparseStepCap,
                 preloadChunks
         );

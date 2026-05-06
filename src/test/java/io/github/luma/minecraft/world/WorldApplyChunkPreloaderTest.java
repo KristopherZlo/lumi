@@ -35,7 +35,7 @@ class WorldApplyChunkPreloaderTest {
         WorldApplyChunkPreloader preloader = WorldApplyChunkPreloader.create(queue, WorldApplyProfile.HISTORY_FAST);
         FakeChunkPreloadAccess access = new FakeChunkPreloadAccess();
         access.loaded.add(new ChunkPoint(1, 2));
-        WorldApplyBudget budget = new WorldApplyBudget(512, 1_000_000L, 1, 512, 1, 1, 512, 128, 2);
+        WorldApplyBudget budget = new WorldApplyBudget(512, 1_000_000L, 1, 512, 1, 1, 512, 128, 128, 2);
 
         WorldApplyChunkPreloader.PreloadTickResult first = preloader.advance(access, budget, Long.MAX_VALUE);
 

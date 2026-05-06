@@ -503,6 +503,7 @@ public final class WorldOperationManager {
         private String preparationMarkerDetail = "";
         private final WorldApplyMetrics applyMetrics = new WorldApplyMetrics();
         private final WorldLightUpdateQueue lightUpdateQueue = new WorldLightUpdateQueue();
+        private final RedstoneReplayUpdateQueue redstoneUpdateQueue = new RedstoneReplayUpdateQueue();
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -582,7 +583,7 @@ public final class WorldOperationManager {
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op-apply",
-                        "Apply tick start label={} progress={}/{} adaptiveScale={} budget=[{}] currentBatch={} dispatcherPending={} lightPending={}",
+                        "Apply tick start label={} progress={}/{} adaptiveScale={} budget=[{}] currentBatch={} dispatcherPending={} lightPending={} redstonePending={}",
                         this.handle().label(),
                         this.appliedWorkUnits,
                         this.prepared.totalWorkUnits(),
@@ -590,7 +591,8 @@ public final class WorldOperationManager {
                         budget.summary(),
                         this.currentBatch == null ? "none" : this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z(),
                         this.dispatcher != null && this.dispatcher.hasPending(),
-                        this.lightUpdateQueue.pendingCount()
+                        this.lightUpdateQueue.pendingCount(),
+                        this.redstoneUpdateQueue.pendingCount()
                 );
             }
             while (System.nanoTime() < deadlineNanos) {
@@ -655,6 +657,7 @@ public final class WorldOperationManager {
                         WorldMutationContext.SuppressionFrame ignoredSuppression =
                                 WorldMutationContext.pushCaptureSuppression()
                 ) {
+                    WorldRedstoneReplayUpdateContext.push(this.redstoneUpdateQueue);
                     WorldLightUpdateContext.push(this.lightUpdateQueue);
                     boolean allowSynchronousChunkLoad = this.allowsSynchronousChunkLoad();
                     if (allowSynchronousChunkLoad) {
@@ -669,6 +672,7 @@ public final class WorldOperationManager {
                             WorldApplyChunkLoadContext.pop();
                         }
                         WorldLightUpdateContext.pop();
+                        WorldRedstoneReplayUpdateContext.pop();
                     }
                 }
 
@@ -735,6 +739,9 @@ public final class WorldOperationManager {
             this.applyMetrics.recordApplyTick(processedWorkThisTick, System.nanoTime() - applyTickStartedAt);
 
             if (this.currentBatch == null && (this.dispatcher == null || !this.dispatcher.hasPending())) {
+                if (!this.drainDeferredRedstoneUpdates(budget, deadlineNanos)) {
+                    return false;
+                }
                 if (!this.drainDeferredLightUpdates(budget, deadlineNanos)) {
                     return false;
                 }
@@ -837,6 +844,47 @@ public final class WorldOperationManager {
             return !this.lightUpdateQueue.hasPending();
         }
 
+        private boolean drainDeferredRedstoneUpdates(WorldApplyBudget budget, long deadlineNanos) {
+            if (!this.redstoneUpdateQueue.hasPending()) {
+                return true;
+            }
+
+            int maxUpdates = Math.max(32, budget.maxRedstoneUpdates());
+            int pendingBefore = this.redstoneUpdateQueue.pendingCount();
+            long startedAt = System.nanoTime();
+            int appliedUpdates;
+            try (
+                    WorldMutationContext.SourceFrame ignoredSource =
+                            WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
+                    WorldMutationContext.SuppressionFrame ignoredSuppression =
+                            WorldMutationContext.pushCaptureSuppression()
+            ) {
+                appliedUpdates = this.redstoneUpdateQueue.drain(this.level(), maxUpdates, deadlineNanos);
+            }
+            long elapsedNanos = System.nanoTime() - startedAt;
+            this.applyMetrics.recordRedstoneUpdates(appliedUpdates);
+            this.applyMetrics.recordRedstoneDrainTick(elapsedNanos);
+            if (this.debugApplyEnabled()) {
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op-apply",
+                        "Redstone drain maxUpdates={} applied={} pendingBefore={} pendingAfter={} elapsedMicros={}",
+                        maxUpdates,
+                        appliedUpdates,
+                        pendingBefore,
+                        this.redstoneUpdateQueue.pendingCount(),
+                        elapsedNanos / 1_000L
+                );
+            }
+            this.progressSink().update(
+                    OperationStage.FINALIZING,
+                    this.appliedWorkUnits,
+                    this.prepared.totalWorkUnits(),
+                    this.applyDetail("Updating redstone, " + this.redstoneUpdateQueue.pendingCount() + " updates queued")
+            );
+            return !this.redstoneUpdateQueue.hasPending();
+        }
+
         private String preservedPreparationMarker(String detail) {
             if (detail == null || !detail.startsWith("Decoded initial snapshot")) {
                 return "";
@@ -872,7 +920,7 @@ public final class WorldOperationManager {
             LumaDebugLog.log(
                     this.handle(),
                     "world-op-apply",
-                    "Apply tick stop={} workThisTick={} nativeSectionsThisTick={} nativeCellsThisTick={} rewriteSectionsThisTick={} directSectionsThisTick={} chunksStarted={} chunksFinished={} totalsDelta=[processedBlocks={}, rewriteSections={}, nativeSections={}, fallbackSections={}, lightChecks={}] currentBatch={} dispatcherPending={} lightPending={}",
+                    "Apply tick stop={} workThisTick={} nativeSectionsThisTick={} nativeCellsThisTick={} rewriteSectionsThisTick={} directSectionsThisTick={} chunksStarted={} chunksFinished={} totalsDelta=[processedBlocks={}, rewriteSections={}, nativeSections={}, fallbackSections={}, lightChecks={}] currentBatch={} dispatcherPending={} lightPending={} redstonePending={}",
                     stopReason,
                     processedWorkThisTick,
                     processedNativeSectionsThisTick,
@@ -888,7 +936,8 @@ public final class WorldOperationManager {
                     this.applyMetrics.lightChecks() - tickStartLightChecks,
                     this.currentBatch == null ? "none" : this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z(),
                     this.dispatcher != null && this.dispatcher.hasPending(),
-                    this.lightUpdateQueue.pendingCount()
+                    this.lightUpdateQueue.pendingCount(),
+                    this.redstoneUpdateQueue.pendingCount()
             );
         }
 

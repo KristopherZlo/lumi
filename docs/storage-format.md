@@ -94,7 +94,7 @@ Each log includes:
 - phase progress messages
 - per-check PASS/FAIL entries
 - stack traces for unexpected phase or operation errors
-- completed prepared-apply metrics, including changed/skipped blocks, rewrite/native/direct/fallback section counts, packets, light checks, apply/work ticks, light-drain ticks/duration, and fallback reasons
+- completed prepared-apply metrics, including changed/skipped blocks, rewrite/native/direct/fallback section counts, packets, redstone updates, light checks, apply/work ticks, redstone/light-drain ticks/duration, and fallback reasons
 - bulk apply diagnostic summaries for dense rewrite-friendly, block-entity fallback, and sparse direct-section batches when the singleplayer suite can reserve safe high-altitude target cells
 
 These logs are diagnostic artifacts only. They are not referenced by project history, cleanup policies, import/export packages, or restore workflows.
@@ -217,7 +217,7 @@ Current payload characteristics:
 - block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
 - schema v3-v5 legacy payloads still load from the older single LZ4 stream format
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
-- settled redstone and mechanism state is stored with the normal block-state NBT already present in patch palettes. Lever/button `powered`, wire `power`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `piston_head`, and moved blocks are schema-compatible state deltas; no schema bump is needed because these properties already fit the existing block-state tag payload. Apply preparation may synthesize missing settled piston head/removal companions from a recorded piston base for replay safety, and may replace normalized transient air at the expected head position when an extended base requires it, but storage still contains ordinary per-position old/new state tags. Only short-lived `moving_piston` animation state is normalized to air before new patch payloads are written
+- settled redstone and mechanism state is stored with the normal block-state NBT already present in patch palettes. Lever/button `powered`, wire `power`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `piston_head`, and moved blocks are schema-compatible state deltas; no schema bump is needed because these properties already fit the existing block-state tag payload. Apply preparation may synthesize missing settled piston head/removal companions from a recorded piston base for replay safety, and may replace normalized transient air at the expected head position when an extended base requires it, but storage still contains ordinary per-position old/new state tags. Runtime replay queues vanilla neighbor updates from redstone power/source transitions after stored blocks have been applied; it does not add storage records for pulses or update events. Only short-lived `moving_piston` animation state is normalized to air before new patch payloads are written
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.

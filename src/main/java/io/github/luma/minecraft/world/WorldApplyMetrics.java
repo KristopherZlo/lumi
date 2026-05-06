@@ -20,14 +20,17 @@ final class WorldApplyMetrics {
     private int sectionPackets;
     private int blockEntityPackets;
     private int lightChecks;
+    private int redstoneUpdates;
     private int applyTicks;
     private int workTicks;
     private int maxWorkPerTick;
     private int lightDrainTicks;
+    private int redstoneDrainTicks;
     private long preparationNanos;
     private long preloadNanos;
     private long applyNanos;
     private long lightDrainNanos;
+    private long redstoneDrainNanos;
     private long totalNanos;
     private long maxApplyTickNanos;
     private long maxPreloadTickNanos;
@@ -75,6 +78,10 @@ final class WorldApplyMetrics {
         this.lightChecks += Math.max(0, lightChecks);
     }
 
+    void recordRedstoneUpdates(int redstoneUpdates) {
+        this.redstoneUpdates += Math.max(0, redstoneUpdates);
+    }
+
     void recordApplyTick(int workUnits) {
         this.recordApplyTick(workUnits, 0L);
     }
@@ -94,6 +101,11 @@ final class WorldApplyMetrics {
     void recordLightDrainTick(long elapsedNanos) {
         this.lightDrainTicks += 1;
         this.lightDrainNanos += Math.max(0L, elapsedNanos);
+    }
+
+    void recordRedstoneDrainTick(long elapsedNanos) {
+        this.redstoneDrainTicks += 1;
+        this.redstoneDrainNanos += Math.max(0L, elapsedNanos);
     }
 
     void recordPreparationDuration(long elapsedNanos) {
@@ -142,6 +154,7 @@ final class WorldApplyMetrics {
                 + ", loadedBeforeApply=" + this.loadedBeforeApply
                 + ", missedAtApply=" + this.missedAtApply
                 + ", applyDurationMs=" + this.millis(this.applyNanos)
+                + ", redstoneFinalizeDurationMs=" + this.redstoneDrainDurationMillis()
                 + ", lightFinalizeDurationMs=" + this.lightDrainDurationMillis()
                 + ", totalOperationDurationMs=" + this.millis(this.totalNanos)
                 + ", maxApplyTickMs=" + this.millis(this.maxApplyTickNanos)
@@ -159,11 +172,14 @@ final class WorldApplyMetrics {
                 + ", sectionPackets=" + this.sectionPackets
                 + ", blockEntityPackets=" + this.blockEntityPackets
                 + ", lightChecks=" + this.lightChecks
+                + ", redstoneUpdates=" + this.redstoneUpdates
                 + ", applyTicks=" + this.applyTicks
                 + ", workTicks=" + this.workTicks
                 + ", avgWorkPerTick=" + this.avgWorkPerTick()
                 + ", maxWorkPerTick=" + this.maxWorkPerTick
                 + ", lightDrainTicks=" + this.lightDrainTicks
+                + ", redstoneDrainTicks=" + this.redstoneDrainTicks
+                + ", redstoneDrainDurationMs=" + this.redstoneDrainDurationMillis()
                 + ", lightDrainDurationMs=" + this.lightDrainDurationMillis()
                 + ", fallbackReasons=" + this.fallbackReasonsSummary();
     }
@@ -174,6 +190,10 @@ final class WorldApplyMetrics {
 
     private long lightDrainDurationMillis() {
         return this.millis(this.lightDrainNanos);
+    }
+
+    private long redstoneDrainDurationMillis() {
+        return this.millis(this.redstoneDrainNanos);
     }
 
     private long millis(long nanos) {
