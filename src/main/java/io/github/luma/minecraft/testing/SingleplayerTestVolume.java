@@ -3,6 +3,9 @@ package io.github.luma.minecraft.testing;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.AABB;
 
 /**
  * Small empty world volume reserved for the singleplayer runtime test suite.
@@ -46,6 +49,16 @@ final class SingleplayerTestVolume {
         return this.max;
     }
 
+    AABB bounds() {
+        return new AABB(
+                this.min.getX(),
+                this.min.getY(),
+                this.min.getZ(),
+                this.max.getX() + 1.0D,
+                this.max.getY() + 1.0D,
+                this.max.getZ() + 1.0D);
+    }
+
     BlockPos markerA() {
         return this.min.offset(1, 1, 1);
     }
@@ -68,6 +81,6 @@ final class SingleplayerTestVolume {
                 return false;
             }
         }
-        return true;
+        return level.getEntities((Entity) null, this.bounds(), entity -> !(entity instanceof ServerPlayer)).isEmpty();
     }
 }
