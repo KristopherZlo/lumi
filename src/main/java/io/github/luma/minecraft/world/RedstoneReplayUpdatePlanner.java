@@ -2,6 +2,9 @@ package io.github.luma.minecraft.world;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -17,33 +20,54 @@ import net.minecraft.world.level.block.state.properties.Property;
  */
 final class RedstoneReplayUpdatePlanner {
 
-    private static final Set<String> REDSTONE_PROPERTIES = Set.of(
+    private static final Set<String> POWER_PROPERTIES = Set.of(
             "powered",
-            "power",
-            "lit",
-            "open",
-            "enabled",
-            "locked",
-            "triggered",
-            "extended"
+            "power"
     );
+    private static final String LIT_PROPERTY = "lit";
 
     void propagate(ServerLevel level, BlockPos pos, BlockState currentState, BlockState targetState) {
-        if (level == null || pos == null || !this.requiresPropagation(currentState, targetState)) {
+        if (level == null || pos == null) {
             return;
         }
 
-        Block sourceBlock = this.sourceBlock(currentState, targetState);
-        for (BlockPos updatePos : this.updatePositions(pos, currentState, targetState)) {
-            level.updateNeighborsAt(updatePos, sourceBlock);
+        RedstoneReplayUpdateBatch batch = this.plan(pos, currentState, targetState);
+        if (batch.isEmpty()) {
+            return;
         }
+        if (WorldRedstoneReplayUpdateContext.enqueue(batch)) {
+            return;
+        }
+        batch.propagate(level);
+    }
+
+    RedstoneReplayUpdateBatch plan(BlockPos pos, BlockState currentState, BlockState targetState) {
+        if (pos == null || !this.requiresPropagation(currentState, targetState)) {
+            return RedstoneReplayUpdateBatch.empty();
+        }
+
+        Block sourceBlock = this.sourceBlock(currentState, targetState);
+        List<RedstoneReplayUpdate> updates = new ArrayList<>();
+        for (BlockPos updatePos : this.updatePositions(pos, currentState, targetState)) {
+            updates.add(new RedstoneReplayUpdate(updatePos, sourceBlock));
+        }
+        return RedstoneReplayUpdateBatch.of(updates);
     }
 
     boolean requiresPropagation(BlockState currentState, BlockState targetState) {
         if (Objects.equals(currentState, targetState)) {
             return false;
         }
-        return this.hasRedstoneProperty(currentState) || this.hasRedstoneProperty(targetState);
+        if (this.signalSourceBlockChanged(currentState, targetState)) {
+            return true;
+        }
+        for (String property : POWER_PROPERTIES) {
+            if (this.propertyChanged(currentState, targetState, property)) {
+                return true;
+            }
+        }
+        return this.propertyChanged(currentState, targetState, LIT_PROPERTY)
+                && (this.signalSource(currentState) || this.signalSource(targetState));
     }
 
     Set<BlockPos> updatePositions(BlockPos pos, BlockState currentState, BlockState targetState) {
@@ -54,19 +78,36 @@ final class RedstoneReplayUpdatePlanner {
         positions.add(pos.immutable());
         this.attachedNeighbor(pos, currentState).ifPresent(positions::add);
         this.attachedNeighbor(pos, targetState).ifPresent(positions::add);
-        return Set.copyOf(positions);
+        return Collections.unmodifiableSet(positions);
     }
 
-    private boolean hasRedstoneProperty(BlockState state) {
-        if (state == null) {
+    private boolean signalSourceBlockChanged(BlockState currentState, BlockState targetState) {
+        if (currentState == null || targetState == null) {
+            return this.signalRelevant(currentState) || this.signalRelevant(targetState);
+        }
+        return currentState.getBlock() != targetState.getBlock()
+                && (this.signalRelevant(currentState) || this.signalRelevant(targetState));
+    }
+
+    private boolean signalRelevant(BlockState state) {
+        return this.signalSource(state) || this.analogSignalSource(state);
+    }
+
+    private boolean signalSource(BlockState state) {
+        return state != null && state.isSignalSource();
+    }
+
+    private boolean analogSignalSource(BlockState state) {
+        return state != null && state.hasAnalogOutputSignal();
+    }
+
+    private boolean propertyChanged(BlockState currentState, BlockState targetState, String propertyName) {
+        Optional<String> currentValue = this.propertyValue(currentState, propertyName);
+        Optional<String> targetValue = this.propertyValue(targetState, propertyName);
+        if (currentValue.isEmpty() && targetValue.isEmpty()) {
             return false;
         }
-        for (Property<?> property : state.getProperties()) {
-            if (REDSTONE_PROPERTIES.contains(property.getName())) {
-                return true;
-            }
-        }
-        return false;
+        return !Objects.equals(currentValue, targetValue);
     }
 
     private Optional<BlockPos> attachedNeighbor(BlockPos pos, BlockState state) {
@@ -74,7 +115,7 @@ final class RedstoneReplayUpdatePlanner {
             return Optional.empty();
         }
 
-        String face = this.propertyValue(state, "face");
+        String face = this.propertyValue(state, "face").orElse("");
         if ("floor".equals(face)) {
             return Optional.of(pos.below());
         }
@@ -96,13 +137,16 @@ final class RedstoneReplayUpdatePlanner {
         return false;
     }
 
-    private String propertyValue(BlockState state, String propertyName) {
+    private Optional<String> propertyValue(BlockState state, String propertyName) {
+        if (state == null) {
+            return Optional.empty();
+        }
         for (Property<?> property : state.getProperties()) {
             if (property.getName().equals(propertyName)) {
-                return String.valueOf(state.getValue(property)).toLowerCase(Locale.ROOT);
+                return Optional.of(String.valueOf(state.getValue(property)).toLowerCase(Locale.ROOT));
             }
         }
-        return "";
+        return Optional.empty();
     }
 
     private Direction directionProperty(BlockState state, String propertyName) {
