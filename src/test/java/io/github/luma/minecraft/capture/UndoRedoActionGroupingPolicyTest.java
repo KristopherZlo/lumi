@@ -11,7 +11,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class UndoRedoActionGroupingPolicyTest {
 
@@ -24,19 +23,19 @@ class UndoRedoActionGroupingPolicyTest {
     }
 
     @Test
-    void axiomSimplePlaceUsesBlockScopedUndoActionId() {
+    void axiomSimplePlaceKeepsBatchActionId() {
         StoredBlockChange first = placeChange(new BlockPoint(1, 64, 1));
         StoredBlockChange second = placeChange(new BlockPoint(2, 64, 1));
 
         String firstId = this.policy.actionIdForBlockChange(WorldMutationSource.AXIOM, "axiom-buffer", first);
         String secondId = this.policy.actionIdForBlockChange(WorldMutationSource.AXIOM, "axiom-buffer", second);
 
-        assertNotEquals(firstId, secondId);
-        assertEquals("axiom-buffer:block:1,64,1", firstId);
+        assertEquals("axiom-buffer", firstId);
+        assertEquals("axiom-buffer", secondId);
     }
 
     @Test
-    void axiomSimpleBreakUsesBlockScopedUndoActionId() {
+    void axiomSimpleBreakKeepsBatchActionId() {
         StoredBlockChange change = new StoredBlockChange(
                 new BlockPoint(4, 64, 1),
                 StatePayload.capture(Blocks.STONE.defaultBlockState(), null),
@@ -44,7 +43,7 @@ class UndoRedoActionGroupingPolicyTest {
         );
 
         assertEquals(
-                "axiom-buffer:block:4,64,1",
+                "axiom-buffer",
                 this.policy.actionIdForBlockChange(WorldMutationSource.AXIOM, "axiom-buffer", change)
         );
     }

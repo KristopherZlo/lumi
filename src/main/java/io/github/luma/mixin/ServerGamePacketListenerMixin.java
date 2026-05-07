@@ -8,6 +8,7 @@ import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket;
+import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import org.spongepowered.asm.mixin.Mixin;
@@ -38,6 +39,16 @@ abstract class ServerGamePacketListenerMixin {
     private void luma$wrapSignedChatCommand(ServerboundChatCommandSignedPacket packet, Operation<Void> original) {
         this.luma$pushPlayerSource();
         AutoCheckpointService.getInstance().checkpointBeforeCommand(this.player, packet.command());
+        try {
+            original.call(packet);
+        } finally {
+            this.luma$popPlayerSource();
+        }
+    }
+
+    @WrapMethod(method = "handleInteract")
+    private void luma$wrapInteract(ServerboundInteractPacket packet, Operation<Void> original) {
+        this.luma$pushPlayerSource();
         try {
             original.call(packet);
         } finally {

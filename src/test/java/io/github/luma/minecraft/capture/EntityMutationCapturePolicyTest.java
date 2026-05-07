@@ -7,6 +7,7 @@ import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,6 +46,22 @@ class EntityMutationCapturePolicyTest {
                 null,
                 entity("minecraft:player", "00000000-0000-0000-0000-000000000046", 1.0D)
         ).isPresent());
+    }
+
+    @Test
+    void playerEntityRemovalKeepsFullOldPayloadForReplay() {
+        EntityPayload cow = entityWithVariant(
+                "minecraft:cow",
+                "00000000-0000-0000-0000-000000000047",
+                1.0D,
+                "minecraft:cold"
+        );
+
+        var captured = this.policy.capture(WorldMutationSource.PLAYER, cow, null);
+
+        assertTrue(captured.isPresent());
+        assertEquals("minecraft:cow", captured.get().entityType());
+        assertEquals("minecraft:cold", captured.get().oldValue().copyTag().getString("variant").orElse(""));
     }
 
     @Test
@@ -107,6 +124,12 @@ class EntityMutationCapturePolicyTest {
         pos.add(DoubleTag.valueOf(64.0D));
         pos.add(DoubleTag.valueOf(1.0D));
         tag.put("Pos", pos);
+        return new EntityPayload(tag);
+    }
+
+    private static EntityPayload entityWithVariant(String type, String uuid, double x, String variant) {
+        CompoundTag tag = entity(type, uuid, x).copyTag();
+        tag.putString("variant", variant);
         return new EntityPayload(tag);
     }
 }

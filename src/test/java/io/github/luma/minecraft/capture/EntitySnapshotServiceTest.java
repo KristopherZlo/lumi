@@ -16,12 +16,14 @@ class EntitySnapshotServiceTest {
         tag.putInt("Age", 12);
         tag.putString("Motion", "transient");
         tag.putInt("PickupDelay", 20);
+        tag.putString("variant", "minecraft:cold");
 
         CompoundTag normalized = EntitySnapshotService.normalizeForHistory(tag);
 
         assertEquals(12, normalized.getIntOr("Age", -1));
         assertEquals("transient", normalized.getString("Motion").orElse(""));
         assertEquals(20, normalized.getIntOr("PickupDelay", -1));
+        assertEquals("minecraft:cold", normalized.getString("variant").orElse(""));
         assertTrue(normalized.contains("id"));
         assertTrue(normalized.contains("UUID"));
     }

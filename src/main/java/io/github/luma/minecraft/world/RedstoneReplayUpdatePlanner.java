@@ -11,7 +11,12 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.BasePressurePlateBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.TripWireBlock;
+import net.minecraft.world.level.block.TripWireHookBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 
@@ -57,7 +62,8 @@ final class RedstoneReplayUpdatePlanner {
         if (Objects.equals(currentState, targetState)) {
             return false;
         }
-        return this.signalSourceBlockChanged(currentState, targetState);
+        return this.signalSourceBlockChanged(currentState, targetState)
+                || this.playerInputSignalChanged(currentState, targetState);
     }
 
     Set<BlockPos> updatePositions(BlockPos pos, BlockState currentState, BlockState targetState) {
@@ -77,6 +83,32 @@ final class RedstoneReplayUpdatePlanner {
         }
         return currentState.getBlock() != targetState.getBlock()
                 && (this.signalRelevant(currentState) || this.signalRelevant(targetState));
+    }
+
+    private boolean playerInputSignalChanged(BlockState currentState, BlockState targetState) {
+        if (currentState == null || targetState == null || currentState.getBlock() != targetState.getBlock()) {
+            return false;
+        }
+        if (!this.isPlayerInputControl(currentState) && !this.isPlayerInputControl(targetState)) {
+            return false;
+        }
+        return this.propertyChanged(currentState, targetState, "powered")
+                || this.propertyChanged(currentState, targetState, "power");
+    }
+
+    private boolean isPlayerInputControl(BlockState state) {
+        Block block = state.getBlock();
+        return block instanceof LeverBlock
+                || block instanceof ButtonBlock
+                || block instanceof BasePressurePlateBlock
+                || block instanceof TripWireBlock
+                || block instanceof TripWireHookBlock;
+    }
+
+    private boolean propertyChanged(BlockState currentState, BlockState targetState, String propertyName) {
+        Optional<String> currentValue = this.stringPropertyValue(currentState, propertyName);
+        Optional<String> targetValue = this.stringPropertyValue(targetState, propertyName);
+        return currentValue.isPresent() && targetValue.isPresent() && !currentValue.equals(targetValue);
     }
 
     private boolean signalRelevant(BlockState state) {

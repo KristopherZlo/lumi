@@ -8,6 +8,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
@@ -29,12 +30,21 @@ class RedstoneReplayUpdatePlannerTest {
     }
 
     @Test
-    void poweredStateChangeRestoresExactlyWithoutNeighborPropagation() {
+    void playerInputPowerChangePropagatesSignalOnReplay() {
         BlockState off = Blocks.LEVER.defaultBlockState()
                 .setValue(LeverBlock.FACE, AttachFace.FLOOR)
                 .setValue(LeverBlock.FACING, Direction.NORTH)
                 .setValue(LeverBlock.POWERED, false);
         BlockState on = off.setValue(LeverBlock.POWERED, true);
+
+        assertTrue(this.planner.requiresPropagation(off, on));
+    }
+
+    @Test
+    void derivedRedstonePowerChangeRestoresExactlyWithoutNeighborPropagation() {
+        BlockState off = Blocks.REDSTONE_WIRE.defaultBlockState()
+                .setValue(RedStoneWireBlock.POWER, 0);
+        BlockState on = off.setValue(RedStoneWireBlock.POWER, 15);
 
         assertFalse(this.planner.requiresPropagation(off, on));
     }
