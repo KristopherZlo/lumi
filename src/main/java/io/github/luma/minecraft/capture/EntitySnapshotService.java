@@ -2,7 +2,6 @@ package io.github.luma.minecraft.capture;
 
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.EntityPayload;
-import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,20 +10,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.storage.TagValueOutput;
 
 public final class EntitySnapshotService {
-
-    private static final Set<String> VOLATILE_TAGS = Set.of(
-            "Air",
-            "Age",
-            "FallDistance",
-            "Fire",
-            "HurtByTimestamp",
-            "HurtTime",
-            "Motion",
-            "OnGround",
-            "PickupDelay",
-            "PortalCooldown",
-            "TicksFrozen"
-    );
 
     public EntityPayload capture(ServerLevel level, Entity entity) {
         if (level == null || entity == null || entity instanceof ServerPlayer) {
@@ -52,11 +37,7 @@ public final class EntitySnapshotService {
     }
 
     static CompoundTag normalizeForHistory(CompoundTag source) {
-        CompoundTag tag = source == null ? new CompoundTag() : source.copy();
-        for (String volatileTag : VOLATILE_TAGS) {
-            tag.remove(volatileTag);
-        }
-        return tag;
+        return source == null ? new CompoundTag() : source.copy();
     }
 
     private String entityType(Entity entity) {

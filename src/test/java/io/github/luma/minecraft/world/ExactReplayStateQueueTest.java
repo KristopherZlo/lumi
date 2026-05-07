@@ -7,7 +7,9 @@ import java.util.Map;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeverBlock;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -52,11 +54,36 @@ class ExactReplayStateQueueTest {
                 Blocks.TARGET.defaultBlockState(),
                 null
         )));
+        assertTrue(guard.shouldGuard(new PreparedBlockPlacement(
+                pos,
+                Blocks.PISTON.defaultBlockState(),
+                null
+        )));
+        assertFalse(guard.shouldGuard(new PreparedBlockPlacement(
+                pos,
+                Blocks.LEVER.defaultBlockState().setValue(LeverBlock.POWERED, true),
+                null
+        )));
+        assertFalse(guard.shouldGuard(new PreparedBlockPlacement(
+                pos,
+                Blocks.STONE_BUTTON.defaultBlockState().setValue(ButtonBlock.POWERED, true),
+                null
+        )));
         assertFalse(guard.shouldGuard(new PreparedBlockPlacement(
                 pos,
                 Blocks.STONE.defaultBlockState(),
                 null
         )));
+    }
+
+    @Test
+    void guardReleasesForNewExplicitBuilderMutationsOnly() {
+        ExactReplayStateGuard guard = new ExactReplayStateGuard();
+
+        assertTrue(guard.isExplicitBuilderSource(io.github.luma.domain.model.WorldMutationSource.PLAYER));
+        assertTrue(guard.isExplicitBuilderSource(io.github.luma.domain.model.WorldMutationSource.AXIOM));
+        assertFalse(guard.isExplicitBuilderSource(io.github.luma.domain.model.WorldMutationSource.BLOCK_UPDATE));
+        assertFalse(guard.isExplicitBuilderSource(io.github.luma.domain.model.WorldMutationSource.RESTORE));
     }
 
     private static ChunkBatch batch(PreparedBlockPlacement placement) {

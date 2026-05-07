@@ -7,46 +7,31 @@ import java.util.Collection;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.Property;
 
 /**
  * Holds exact redstone-like replay states steady while vanilla delayed updates
  * from the previous operation finish ticking.
  */
-final class ExactReplayStateGuard {
+public final class ExactReplayStateGuard {
 
     private static final int MAX_REASSERTIONS_PER_TICK = 4096;
     private static final ExactReplayStateGuard INSTANCE = new ExactReplayStateGuard();
-    private static final Set<String> VOLATILE_PROPERTY_NAMES = Set.of(
-            "delay",
-            "east",
-            "lit",
-            "locked",
-            "mode",
-            "north",
-            "power",
-            "powered",
-            "south",
-            "triggered",
-            "west"
-    );
 
     private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
+    private final ExactReplayGuardBlockPolicy guardBlockPolicy = new ExactReplayGuardBlockPolicy();
     private final BlockPlacementUpdateDecider updateDecider = new BlockPlacementUpdateDecider();
     private final WorldApplyBlockUpdatePolicy updatePolicy = new WorldApplyBlockUpdatePolicy();
     private final WorldReplayTickSuppression replaySuppression = WorldReplayTickSuppression.getInstance();
     private final Map<ServerLevel, GuardedWorld> guardedWorlds = new IdentityHashMap<>();
 
-    static ExactReplayStateGuard getInstance() {
+    public static ExactReplayStateGuard getInstance() {
         return INSTANCE;
     }
 
@@ -63,8 +48,8 @@ final class ExactReplayStateGuard {
             if (copied == null) {
                 continue;
             }
-            protectedPositions.add(copied.pos());
             if (this.shouldGuard(copied)) {
+                protectedPositions.add(copied.pos());
                 guardedWorld.guard(copied, expiresAt);
             }
         }
@@ -94,8 +79,25 @@ final class ExactReplayStateGuard {
         this.replaySuppression.clear(level);
     }
 
+    public void releaseForExplicitMutation(ServerLevel level, WorldMutationSource source) {
+        if (!this.isExplicitBuilderSource(source)) {
+            return;
+        }
+        this.clear(level);
+    }
+
     boolean shouldGuard(PreparedBlockPlacement placement) {
         return placement != null && this.shouldGuard(placement.state());
+    }
+
+    boolean isExplicitBuilderSource(WorldMutationSource source) {
+        if (source == null) {
+            return false;
+        }
+        return switch (source) {
+            case PLAYER, ENTITY, EXPLOSIVE, EXTERNAL_TOOL, WORLDEDIT, FAWE, AXIOM -> true;
+            case EXPLOSION, FLUID, FIRE, GROWTH, BLOCK_UPDATE, PISTON, FALLING_BLOCK, MOB, RESTORE, SYSTEM -> false;
+        };
     }
 
     private void tick(ServerLevel level) {
@@ -135,18 +137,7 @@ final class ExactReplayStateGuard {
     }
 
     private boolean shouldGuard(BlockState state) {
-        if (state == null || state.isAir()) {
-            return false;
-        }
-        if (state.isSignalSource() || state.hasAnalogOutputSignal()) {
-            return true;
-        }
-        for (Property<?> property : state.getProperties()) {
-            if (VOLATILE_PROPERTY_NAMES.contains(property.getName().toLowerCase(Locale.ROOT))) {
-                return true;
-            }
-        }
-        return false;
+        return this.guardBlockPolicy.shouldGuard(state);
     }
 
     private boolean applyExact(ServerLevel level, PreparedBlockPlacement placement) {

@@ -7,6 +7,7 @@ import io.github.luma.integration.common.ObservedExternalToolOperation;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.world.ExactReplayStateGuard;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -26,6 +27,9 @@ abstract class LevelSetBlockMixin {
     @Unique
     private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
             WorldReplayTickSuppression.getInstance();
+    @Unique
+    private static final ExactReplayStateGuard LUMA_EXACT_REPLAY_STATE_GUARD =
+            ExactReplayStateGuard.getInstance();
 
     @WrapMethod(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z")
     private boolean luma$wrapSetBlock(
@@ -38,6 +42,12 @@ abstract class LevelSetBlockMixin {
         Level level = (Level) (Object) this;
         if (!(level instanceof ServerLevel serverLevel)) {
             return original.call(pos, newState, flags, recursionLeft);
+        }
+        if (!WorldMutationContext.captureSuppressed()) {
+            LUMA_EXACT_REPLAY_STATE_GUARD.releaseForExplicitMutation(
+                    serverLevel,
+                    WorldMutationContext.currentSource()
+            );
         }
         if (LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppressMutation(
                 serverLevel,

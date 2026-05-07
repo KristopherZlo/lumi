@@ -35,7 +35,8 @@ abstract class BlockUpdateCaptureMixin {
             boolean movedByPiston,
             Operation<Void> original
     ) {
-        if (level instanceof ServerLevel serverLevel && LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppress(serverLevel, pos)) {
+        if (level instanceof ServerLevel serverLevel
+                && LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppressCallback(serverLevel, pos)) {
             return;
         }
         WorldMutationContext.SourceFrame sourceFrame = LUMA_BLOCK_UPDATE_CONTEXT.pushFor(this.luma$state());
@@ -53,7 +54,7 @@ abstract class BlockUpdateCaptureMixin {
             RandomSource random,
             Operation<Void> original
     ) {
-        if (LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppress(level, pos)) {
+        if (LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppressCallback(level, pos)) {
             return;
         }
         WorldMutationContext.SourceFrame sourceFrame = LUMA_BLOCK_UPDATE_CONTEXT.pushFor(this.luma$state());

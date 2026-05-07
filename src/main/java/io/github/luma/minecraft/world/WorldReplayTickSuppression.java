@@ -3,6 +3,7 @@ package io.github.luma.minecraft.world;
 import it.unimi.dsi.fastutil.longs.Long2LongLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.Collection;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -67,9 +68,27 @@ public final class WorldReplayTickSuppression {
         return expiresAt >= now;
     }
 
+    public boolean shouldSuppressCallback(ServerLevel level, BlockPos pos) {
+        if (!this.isReplayCallbackSource(WorldMutationContext.currentSource())) {
+            return false;
+        }
+        return this.shouldSuppress(level, pos);
+    }
+
     public boolean shouldSuppressMutation(ServerLevel level, BlockPos pos, WorldMutationSource source) {
         return (source == WorldMutationSource.BLOCK_UPDATE || source == WorldMutationSource.PISTON)
                 && this.shouldSuppress(level, pos);
+    }
+
+    private boolean isReplayCallbackSource(WorldMutationSource source) {
+        if (source == null) {
+            return true;
+        }
+        return switch (source) {
+            case BLOCK_UPDATE, PISTON, RESTORE, SYSTEM -> true;
+            case PLAYER, ENTITY, EXPLOSION, FLUID, FIRE, GROWTH, FALLING_BLOCK, EXPLOSIVE,
+                    MOB, EXTERNAL_TOOL, WORLDEDIT, FAWE, AXIOM -> false;
+        };
     }
 
     private void removeExpired(ServerLevel level, Long2LongLinkedOpenHashMap worldPositions, long now) {

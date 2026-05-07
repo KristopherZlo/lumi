@@ -3,13 +3,13 @@ package io.github.luma.minecraft.capture;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EntitySnapshotServiceTest {
 
     @Test
-    void normalizationRemovesTickVolatileEntityTags() {
+    void normalizationPreservesEntityNbtForReplay() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", "minecraft:item");
         tag.putString("UUID", "00000000-0000-0000-0000-000000000001");
@@ -19,9 +19,9 @@ class EntitySnapshotServiceTest {
 
         CompoundTag normalized = EntitySnapshotService.normalizeForHistory(tag);
 
-        assertFalse(normalized.contains("Age"));
-        assertFalse(normalized.contains("Motion"));
-        assertFalse(normalized.contains("PickupDelay"));
+        assertEquals(12, normalized.getIntOr("Age", -1));
+        assertEquals("transient", normalized.getString("Motion").orElse(""));
+        assertEquals(20, normalized.getIntOr("PickupDelay", -1));
         assertTrue(normalized.contains("id"));
         assertTrue(normalized.contains("UUID"));
     }

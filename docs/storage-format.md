@@ -213,7 +213,7 @@ Current payload characteristics:
 - section-local old/new palettes for block states
 - section-local old/new palettes for block entity payloads
 - mask-order state and block-entity ids so restore can build `LumiSectionBuffer` batches without first materializing a flat per-block list
-- per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload for non-player entity spawn/remove/update, including position and persistent state
+- per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload for non-player entity spawn/remove/update, including position and the saved entity NBT as captured by Minecraft; tick fields such as item age, motion, and pickup delay are not stripped before storage
 - block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
 - schema v3-v5 legacy payloads still load from the older single LZ4 stream format
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
