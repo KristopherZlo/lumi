@@ -928,12 +928,21 @@ public final class HistoryCaptureManager {
                 change
         );
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
-        if (actionAllowed && !actionId.isBlank()) {
+        if (actionAllowed && !actionId.isBlank() && this.isExplicitRootSource(WorldMutationContext.currentSource())) {
             UndoRedoHistoryManager.getInstance().recordChange(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
                     actionId,
                     WorldMutationContext.currentActor(),
+                    change,
+                    now
+            );
+            return;
+        }
+        if (actionAllowed && !actionId.isBlank()) {
+            UndoRedoHistoryManager.getInstance().recordCausalChange(
+                    trackedProject.project().id().toString(),
+                    actionId,
                     change,
                     now
             );
@@ -966,12 +975,21 @@ public final class HistoryCaptureManager {
 
         String actionId = WorldMutationContext.currentActionId();
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
-        if (actionAllowed && !actionId.isBlank()) {
+        if (actionAllowed && !actionId.isBlank() && this.isExplicitRootSource(WorldMutationContext.currentSource())) {
             UndoRedoHistoryManager.getInstance().recordEntityChange(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
                     actionId,
                     WorldMutationContext.currentActor(),
+                    change,
+                    now
+            );
+            return;
+        }
+        if (actionAllowed && !actionId.isBlank()) {
+            UndoRedoHistoryManager.getInstance().recordCausalEntityChange(
+                    trackedProject.project().id().toString(),
+                    actionId,
                     change,
                     now
             );
@@ -1520,11 +1538,9 @@ public final class HistoryCaptureManager {
 
         for (Map.Entry<CaptureSessionState.DeferredActionContext, List<StoredBlockChange>> entry : actionChanges.entrySet()) {
             CaptureSessionState.DeferredActionContext context = entry.getKey();
-            UndoRedoHistoryManager.getInstance().recordAction(
+            UndoRedoHistoryManager.getInstance().recordCausalAction(
                     trackedProject.project().id().toString(),
-                    level.dimension().identifier().toString(),
                     context.actionId(),
-                    context.actor(),
                     entry.getValue(),
                     List.of(),
                     now

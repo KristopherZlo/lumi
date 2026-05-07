@@ -134,6 +134,65 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void causalChangesDoNotCreateNewTopActionAfterNewerBuilderAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:air", "minecraft:lever"), NOW);
+        stack.recordChange("latest-placement", "Alex", "project", "minecraft:overworld",
+                change(30, "minecraft:air", "minecraft:stone"), NOW.plusSeconds(1));
+
+        stack.recordCausalChange(
+                "redstone-toggle",
+                change(2, "minecraft:repeater", "minecraft:comparator"),
+                NOW.plusSeconds(2)
+        );
+
+        List<UndoRedoAction> recent = stack.recentUndoActions(2);
+        assertEquals(List.of("latest-placement", "redstone-toggle"), recent.stream().map(UndoRedoAction::id).toList());
+        assertEquals(1, recent.getFirst().size());
+        assertEquals(1, recent.get(1).size());
+    }
+
+    @Test
+    void causalChangesCanStillJoinCurrentTopAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:air", "minecraft:lever"), NOW);
+
+        stack.recordCausalChange(
+                "redstone-toggle",
+                change(2, "minecraft:repeater", "minecraft:comparator"),
+                NOW.plusSeconds(1)
+        );
+
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
+        assertNotNull(selection);
+        assertEquals("redstone-toggle", selection.action().id());
+        assertEquals(2, selection.action().size());
+    }
+
+    @Test
+    void causalBatchDoesNotPromoteOlderRedstoneAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:air", "minecraft:lever"), NOW);
+        stack.recordChange("latest-placement", "Alex", "project", "minecraft:overworld",
+                change(30, "minecraft:air", "minecraft:stone"), NOW.plusSeconds(1));
+
+        stack.recordCausalAction(
+                "redstone-toggle",
+                List.of(change(2, "minecraft:repeater", "minecraft:comparator")),
+                List.of(),
+                NOW.plusSeconds(2)
+        );
+
+        List<UndoRedoAction> recent = stack.recentUndoActions(2);
+        assertEquals(List.of("latest-placement", "redstone-toggle"), recent.stream().map(UndoRedoAction::id).toList());
+        assertEquals(1, recent.getFirst().size());
+        assertEquals(1, recent.get(1).size());
+    }
+
+    @Test
     void staleSelectionDoesNotDropUndoHistory() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);

@@ -65,6 +65,23 @@ public final class UndoRedoActionStack {
         return this.recordIntoAction(action, change, now, false);
     }
 
+    public long recordCausalChange(
+            String actionId,
+            StoredBlockChange change,
+            Instant now
+    ) {
+        if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
+            return this.revision;
+        }
+
+        UndoRedoAction action = this.undoStack.peekFirst();
+        if (action == null || !action.id().equals(actionId)) {
+            return this.revision;
+        }
+
+        return this.recordIntoAction(action, change, now, false);
+    }
+
     public long recordRelatedEntityChange(
             String dimensionId,
             StoredEntityChange change,
@@ -74,6 +91,23 @@ public final class UndoRedoActionStack {
     ) {
         UndoRedoAction action = this.undoStack.peekFirst();
         if (action == null || !action.canAbsorbRelatedEntityChange(dimensionId, change, now, maxIdle, chunkRadius)) {
+            return this.revision;
+        }
+
+        return this.recordEntityIntoAction(action, change, now, false);
+    }
+
+    public long recordCausalEntityChange(
+            String actionId,
+            StoredEntityChange change,
+            Instant now
+    ) {
+        if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
+            return this.revision;
+        }
+
+        UndoRedoAction action = this.undoStack.peekFirst();
+        if (action == null || !action.id().equals(actionId)) {
             return this.revision;
         }
 
@@ -122,21 +156,25 @@ public final class UndoRedoActionStack {
             this.trimUndoStack();
         }
 
-        int before = action.size();
-        for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
-            action.recordChange(change, now);
+        return this.recordIntoExistingAction(action, changes, entityChanges, now, true);
+    }
+
+    public long recordCausalAction(
+            String actionId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            Instant now
+    ) {
+        if (actionId == null || actionId.isBlank()) {
+            return this.revision;
         }
-        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
-            action.recordEntityChange(change, now);
+
+        UndoRedoAction action = this.undoStack.peekFirst();
+        if (action == null || !action.id().equals(actionId)) {
+            return this.revision;
         }
-        if (action.isEmpty()) {
-            this.undoStack.remove(action);
-        }
-        if (before != action.size() || !action.isEmpty()) {
-            this.redoStack.clear();
-            this.revision += 1;
-        }
-        return this.revision;
+
+        return this.recordIntoExistingAction(action, changes, entityChanges, now, false);
     }
 
     public Selection selectUndo() {
@@ -218,6 +256,32 @@ public final class UndoRedoActionStack {
         this.undoStack.clear();
         this.redoStack.clear();
         this.revision += 1;
+    }
+
+    private long recordIntoExistingAction(
+            UndoRedoAction action,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            Instant now,
+            boolean clearRedoOnMutation
+    ) {
+        int before = action.size();
+        for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
+            action.recordChange(change, now);
+        }
+        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
+            action.recordEntityChange(change, now);
+        }
+        if (action.isEmpty()) {
+            this.undoStack.remove(action);
+        }
+        if (before != action.size() || !action.isEmpty()) {
+            if (clearRedoOnMutation) {
+                this.redoStack.clear();
+            }
+            this.revision += 1;
+        }
+        return this.revision;
     }
 
     private long recordIntoAction(

@@ -54,6 +54,18 @@ public final class UndoRedoHistoryManager {
         this.stack(projectId).recordRelatedChange(dimensionId, change, now, maxIdle, chunkRadius);
     }
 
+    public synchronized void recordCausalChange(
+            String projectId,
+            String actionId,
+            StoredBlockChange change,
+            Instant now
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        this.stack(projectId).recordCausalChange(actionId, change, now);
+    }
+
     public synchronized void recordRelatedEntityChange(
             String projectId,
             String dimensionId,
@@ -66,6 +78,18 @@ public final class UndoRedoHistoryManager {
             return;
         }
         this.stack(projectId).recordRelatedEntityChange(dimensionId, change, now, maxIdle, chunkRadius);
+    }
+
+    public synchronized void recordCausalEntityChange(
+            String projectId,
+            String actionId,
+            StoredEntityChange change,
+            Instant now
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        this.stack(projectId).recordCausalEntityChange(actionId, change, now);
     }
 
     public synchronized void recordEntityChange(
@@ -95,6 +119,19 @@ public final class UndoRedoHistoryManager {
             return;
         }
         this.stack(projectId).recordAction(actionId, actor, projectId, dimensionId, changes, entityChanges, now);
+    }
+
+    public synchronized void recordCausalAction(
+            String projectId,
+            String actionId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            Instant now
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        this.stack(projectId).recordCausalAction(actionId, changes, entityChanges, now);
     }
 
     public synchronized UndoRedoActionStack.Selection selectUndo(String projectId) {
