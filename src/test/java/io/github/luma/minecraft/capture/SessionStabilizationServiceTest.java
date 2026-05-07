@@ -311,6 +311,34 @@ class SessionStabilizationServiceTest {
         );
     }
 
+    @Test
+    void reconciliationRelatedDeltasUseTrackedCurrentStateAsUndoBaseline() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint pos = new BlockPoint(2, 64, 1);
+        StatePayload placedPiston = new StatePayload(stateTag("minecraft:piston", "extended", "false"), null);
+        StatePayload extendedPiston = new StatePayload(stateTag("minecraft:piston", "extended", "true"), null);
+        StoredBlockChange directPlacement = new StoredBlockChange(
+                pos,
+                payload("minecraft:air"),
+                placedPiston
+        );
+        StoredBlockChange settledPiston = new StoredBlockChange(
+                pos,
+                payload("minecraft:air"),
+                extendedPiston
+        );
+
+        List<StoredBlockChange> related = service.relatedDeltaChanges(
+                List.of(directPlacement),
+                List.of(settledPiston)
+        );
+
+        assertEquals(1, related.size());
+        assertEquals(pos, related.getFirst().pos());
+        assertEquals(placedPiston, related.getFirst().oldValue());
+        assertEquals(extendedPiston, related.getFirst().newValue());
+    }
+
     private static StoredBlockChange changeAt(int x) {
         return new StoredBlockChange(
                 new BlockPoint(x, 64, 0),

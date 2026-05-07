@@ -410,10 +410,19 @@ public final class SessionStabilizationService {
         List<StoredBlockChange> related = new ArrayList<>();
         for (StoredBlockChange deltaChange : persistentDeltaChanges) {
             StoredBlockChange currentChange = currentByPos.get(deltaChange.pos());
-            if (currentChange != null && Objects.equals(currentChange.newValue(), deltaChange.newValue())) {
+            if (currentChange == null) {
+                related.add(deltaChange);
                 continue;
             }
-            related.add(deltaChange);
+
+            StoredBlockChange relatedChange = new StoredBlockChange(
+                    deltaChange.pos(),
+                    currentChange.newValue(),
+                    deltaChange.newValue()
+            );
+            if (!relatedChange.isNoOp()) {
+                related.add(relatedChange);
+            }
         }
         return List.copyOf(related);
     }
