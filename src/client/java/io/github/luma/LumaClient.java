@@ -15,6 +15,7 @@ import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
 import io.github.luma.client.selection.LumiRegionSelectionController;
+import io.github.luma.client.selection.LumiRegionSelectionTeachingController;
 import io.github.luma.debug.StartupProfiler;
 import io.github.luma.ui.controller.ClientWorkspaceOpenService;
 import net.minecraft.client.KeyMapping;
@@ -57,6 +58,7 @@ public final class LumaClient implements ClientModInitializer {
     private final UndoRedoKeyChordTracker undoRedoKeyChordTracker = new UndoRedoKeyChordTracker();
     private final UndoRedoKeyController undoRedoKeyController = new UndoRedoKeyController();
     private final QuickRollbackKeyController quickRollbackKeyController = new QuickRollbackKeyController();
+    private final LumiRegionSelectionTeachingController selectionTeachingController = new LumiRegionSelectionTeachingController();
     private final ClientWorkspaceOpenService workspaceOpenService = new ClientWorkspaceOpenService();
 
     static {
@@ -151,6 +153,7 @@ public final class LumaClient implements ClientModInitializer {
                 && client.level != null;
         WorkspaceHudCoordinator.getInstance().tick(client);
         PreviewCaptureCoordinator.getInstance().tick(client);
+        this.selectionTeachingController.tick(client);
         UndoRedoKeyChordTracker.TickResult undoRedoKeys = this.undoRedoKeyChordTracker.tick(
                 client,
                 shortcutInputActive,

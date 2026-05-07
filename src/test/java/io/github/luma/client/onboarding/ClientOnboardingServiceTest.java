@@ -43,6 +43,16 @@ class ClientOnboardingServiceTest {
     }
 
     @Test
+    void previousOnboardingBaselineShowsExpandedTour() throws Exception {
+        Path file = this.tempDir.resolve("lumi-client.json");
+        ClientOnboardingStateRepository repository = new ClientOnboardingStateRepository(file);
+        repository.save(ClientOnboardingState.empty().withCompletedVersion(1));
+        ClientOnboardingService service = new ClientOnboardingService(repository);
+
+        Assertions.assertTrue(service.shouldShowOnboarding());
+    }
+
+    @Test
     void completingOnboardingPreservesDismissedContextualHints() throws Exception {
         Path file = this.tempDir.resolve("lumi-client.json");
         ClientOnboardingStateRepository repository = new ClientOnboardingStateRepository(file);

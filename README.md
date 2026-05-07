@@ -62,7 +62,7 @@ Use Lumi if you want to:
 
 - automatic dimension projects
 - builder-first Build History UI built around `Save build`, `See changes`, recent saves, and `Branches`, with maintenance tools kept in the sidebar `More` route
-- one-time interactive onboarding wizard that explains safe save, undo/redo, restore, branch, compare, recovery, and import/export workflows, plus dismissible contextual hints on the main tabs and workflows; the tour shows remapped shortcuts as pixel key icons, continues over the Lumi workspace after the open shortcut, and can be replayed from `More` or `/lumi-onboarding`
+- one-time interactive onboarding wizard that explains safe save, undo/redo, quick rollback, return-before-restore, restore, branch, compare, recovery, wooden-sword selection, and import/export workflows, plus dismissible contextual hints on the main tabs and workflows; the tour shows remapped shortcuts as pixel key icons, continues over the Lumi workspace after the open shortcut, and can be replayed from `More` or `/lumi-onboarding`
 - localized UI resources for English, Russian, French, Spanish, German, and Finnish
 - lightweight save, branch, import/export, settings, storage cleanup, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
@@ -79,7 +79,7 @@ Use Lumi if you want to:
 - redstone and mechanism state is saved and replayed as final settled block state, including lever `powered`, button `powered`, wire `power`, lamp `lit`, openable `open`, repeater/comparator state, piston base `extended`, settled `piston_head`, and moved blocks. Stabilization waits a short tick window after the last causal redstone/piston mutation before snapshotting dirty chunks, so transient `moving_piston` animation is not captured as the final state. Apply preparation completes missing settled piston head/removal companions from an explicit piston base, recovers a retracted base when undo targets a transient moving-piston base, overwrites normalized transient air at the expected head position when needed, but never creates a piston base from a head-only record. Only short-lived `moving_piston` animation state is normalized away
 - hard restore that moves the active branch head
 - region-scoped partial restore from save details as a primary save action, written back as a new `PARTIAL_RESTORE` save, with `Only selected area` and `Everything except selection` modes using optional wooden-sword selected bounds or manual XYZ bounds. The applied partial restore is also recorded as a live undo/redo action.
-- runtime-only wooden-sword region selection with `corners` and `extend` modes, long loaded-chunk targeting, Lumi action button + scroll mode switching, Lumi action button + right click deselect, and an in-world highlighted cuboid overlay
+- runtime-only wooden-sword region selection with a one-time in-world teaching hint, `corners` and `extend` modes, long loaded-chunk targeting, Lumi action button + scroll mode switching, Lumi action button + right click deselect, and an in-world highlighted cuboid overlay
 - history editing: rename saves, soft-delete safe saves, soft-delete inactive branches, and merge another local branch into the current branch as a new `MERGE` save
 - soft-deleted save files remain accessible from the More screen's deleted saves section
 - recovery drafts with WAL compaction, restore return points, and a direct recovery screen prompt only when a project opens with interrupted persisted draft work from a previous session
@@ -276,10 +276,12 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 6. Use the Lumi action button plus `Z` / `Y` to undo or redo the latest tracked action while no screen is open. The default action button is `Left Alt`, and changing it changes these chords too. Lumi suppresses vanilla use/attack while these chords are active, so the same input does not also interact with levers or blocks in front of the player. WorldEdit/FAWE actions use native tool undo/redo; captured Axiom capability actions replay through Lumi, and simple Axiom place/break buffers are split into block-scoped undo steps.
 7. Hold the Lumi action button to show all pending unsaved changes since the active head, or hold it plus `Z`/`Y` to preview undo/redo actions when the compare overlay is not active. Pending overlays above the detailed cap collapse into bounded tiled orange volume blobs so the client does not build unbounded overlay geometry.
    Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
-8. Press the Lumi action button plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
-9. Use `Save build` when you want the full save screen with manual naming or replace-latest tools.
-10. Open a save when you want details, restore, see changes, or create a branch from it.
-11. Use `Branches` for alternate build directions, the sidebar for Import / Export and Settings, and `More` for storage cleanup, manual compare, the history graph, raw references, or the Deleted saves tab.
+8. Press `R` for quick rollback to the active branch head, or hold the Lumi action button plus `R` to return before the last full restore.
+9. Press the Lumi action button plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
+10. Use `Save build` when you want the full save screen with manual naming or replace-latest tools.
+11. Open a save when you want details, restore, see changes, or create a branch from it.
+12. Hold a wooden sword in a Lumi workspace to select partial-restore bounds. Lumi shows a one-time actionbar hint; left/right click set corners, Lumi action button + scroll switches selection mode, and Lumi action button + right click clears the selection.
+13. Use `Branches` for alternate build directions, the sidebar for Import / Export and Settings, and `More` for storage cleanup, manual compare, the history graph, raw references, or the Deleted saves tab.
 
 ## Scope
 

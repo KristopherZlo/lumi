@@ -150,8 +150,12 @@ public final class ProjectScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         window.content().child(this.bodyScroll);
 
-        new ContextualHelpPresenter(this.contextualHelpService, () -> this.refresh(this.statusKey))
-                .addHint(body, ClientContextualHelpHint.HISTORY);
+        ContextualHelpPresenter contextualHelp = new ContextualHelpPresenter(
+                this.contextualHelpService,
+                () -> this.refresh(this.statusKey)
+        );
+        contextualHelp.addHint(body, ClientContextualHelpHint.HISTORY);
+        contextualHelp.addHint(body, ClientContextualHelpHint.SHORTCUTS);
         body.child(this.sections.buildSection(model));
         body.child(this.sections.historySection(model));
         body.child(LumaUi.bottomSpacer());

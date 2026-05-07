@@ -35,8 +35,11 @@ public final class OnboardingTour {
             Page.shortcut("save", LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.QUICK_SAVE),
             Page.shortcut("undo", LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.UNDO),
             Page.shortcut("redo", LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.REDO),
-            Page.shortcut("compare", LumiClientKeyBindings.Role.COMPARE),
             Page.shortcut("preview", LumiClientKeyBindings.Role.ACTION),
+            Page.shortcut("quick_rollback", LumiClientKeyBindings.Role.QUICK_ROLLBACK),
+            Page.shortcut("return_before_restore", LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.QUICK_ROLLBACK),
+            Page.shortcut("compare", LumiClientKeyBindings.Role.COMPARE),
+            Page.info("selection_tool"),
             Page.info("restore"),
             Page.info("more")
     );

@@ -67,6 +67,14 @@ public final class ActionBarMessagePresenter {
         return info(key);
     }
 
+    public static Component selectionToolHint(Component actionKey) {
+        return baseMessage()
+                .append(Component.translatable(
+                        "luma.selection.tool_hint",
+                        actionKey == null ? Component.empty() : actionKey
+                ).withStyle(ChatFormatting.GRAY));
+    }
+
     public static boolean shouldShowProgressBar(OperationSnapshot snapshot) {
         if (snapshot == null || snapshot.terminal()) {
             return false;

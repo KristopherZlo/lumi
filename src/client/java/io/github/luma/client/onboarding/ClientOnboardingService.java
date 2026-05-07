@@ -5,7 +5,7 @@ import java.io.IOException;
 
 public final class ClientOnboardingService {
 
-    public static final int CURRENT_ONBOARDING_VERSION = 1;
+    public static final int CURRENT_ONBOARDING_VERSION = 2;
 
     private final ClientOnboardingStateRepository repository;
 

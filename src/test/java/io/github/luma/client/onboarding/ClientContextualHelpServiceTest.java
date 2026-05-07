@@ -25,13 +25,17 @@ class ClientContextualHelpServiceTest {
         ClientContextualHelpService service = service(file);
 
         service.dismissHint(ClientContextualHelpHint.PARTIAL_RESTORE);
+        service.dismissHint(ClientContextualHelpHint.SELECTION_TOOL);
 
         Assertions.assertFalse(service.shouldShowHint(ClientContextualHelpHint.PARTIAL_RESTORE));
+        Assertions.assertFalse(service.shouldShowHint(ClientContextualHelpHint.SELECTION_TOOL));
+        Assertions.assertTrue(service.shouldShowHint(ClientContextualHelpHint.SHORTCUTS));
         Assertions.assertTrue(service.shouldShowHint(ClientContextualHelpHint.RESTORE));
 
         service.resetHints();
 
         Assertions.assertTrue(service.shouldShowHint(ClientContextualHelpHint.PARTIAL_RESTORE));
+        Assertions.assertTrue(service.shouldShowHint(ClientContextualHelpHint.SELECTION_TOOL));
     }
 
     private static ClientContextualHelpService service(Path file) {

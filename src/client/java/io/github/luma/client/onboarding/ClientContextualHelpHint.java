@@ -2,6 +2,7 @@ package io.github.luma.client.onboarding;
 
 public enum ClientContextualHelpHint {
     HISTORY("history"),
+    SHORTCUTS("shortcuts"),
     BRANCHES("branches"),
     IMPORT_EXPORT("import_export"),
     SETTINGS("settings"),
@@ -10,7 +11,8 @@ public enum ClientContextualHelpHint {
     RESTORE("restore"),
     COMPARE("compare"),
     PARTIAL_RESTORE("partial_restore"),
-    RECOVERY("recovery");
+    RECOVERY("recovery"),
+    SELECTION_TOOL("selection_tool");
 
     private final String id;
     private final String titleKey;

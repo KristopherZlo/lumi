@@ -17,6 +17,7 @@ Lumi's UI operations are intended for the local world owner. Dedicated servers s
 - Press the Lumi action button plus `S` to open Quick save while no screen is open. The default chord is `Left Alt+S`, and both keys are remappable in Minecraft `Controls` under `Lumi`.
 - Use the Lumi action button plus `Z` to undo the latest tracked action while no screen is open. The default action button is `Left Alt`. Lumi suppresses normal use/attack while this chord is active, so pressing undo does not also click the lever, button, or block you are looking at.
 - Use the Lumi action button plus `Y` to redo the latest undone tracked action while no screen is open. The same use/attack suppression applies to redo.
+- Press `R` to quick rollback to the active branch head. Hold the Lumi action button plus `R` for the explicit return-before-restore path written before the last full restore.
 - For WorldEdit and FAWE edits, those chords call the tools' native undo/redo commands and then update Lumi's pending draft. Captured Axiom capability edits replay through Lumi undo/redo, including tool-assisted breaks and placements. Simple Axiom place/break buffers, such as bulldozer and fast-place style hand edits, become block-scoped undo steps instead of one broad batch.
 - Diagnostics lists stable public-API capabilities separately from fallback capture. WorldEdit and compatible FAWE installs may show stable selection, clipboard, and schematic-format support; Axiom does not claim those capabilities unless a stable API exists.
 - Undo and redo restore the stored block states with side-effect-suppressed placement flags. Redstone power/source changes, such as undoing a lever or button toggle, send scoped neighbor updates after the stored state is written so nearby circuitry settles, while ordinary replay still avoids placement physics and piston event cascades. Delayed redstone and piston callbacks that were queued by the action before undo/redo, or created inside the replayed piston/observer envelope, are dropped after that action is replayed, so a repeater chain or piston clock cannot keep propagating the old signal/motion. Replay does not hold levers, buttons, pressure plates, tripwire controls, pistons, piston heads, moving pistons, or observers after the operation; a new explicit edit releases the short redstone stabilization guard.
@@ -295,6 +296,7 @@ Use `See changes` for the full added/removed/changed breakdown, material delta, 
 You can fill those bounds from Lumi's wooden-sword selection:
 
 - Hold `minecraft:wooden_sword`.
+- The first time you hold it in a Lumi workspace, Lumi shows a short actionbar hint. Resetting tips from `More` makes that hint eligible again.
 - Look at a block in loaded chunks; it can be beyond normal interaction reach.
 - Left click sets corner A in `corners` mode.
 - Right click sets corner B in `corners` mode.
