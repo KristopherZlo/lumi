@@ -42,7 +42,7 @@ Run the automated test suite:
 This now includes regression checks for:
 
 - undo-only item drops attached to live undo/redo without persisting into recovery drafts or saved versions
-- delayed block events, scheduled ticks, and moving piston block entities preserving the builder action id for live undo/redo grouping
+- delayed block events, scheduled ticks, and moving piston block entities preserving the builder action id for live undo/redo grouping, plus stale delayed callbacks being suppressed once that action is replayed by undo/redo
 - history rename, save soft-delete, branch soft-delete, tombstone filtering, and local branch merge behavior
 - auto-checkpoint command classification for large `/fill` and `/clone` commands
 - capture source permission gates and AutoCloseable context guard cleanup

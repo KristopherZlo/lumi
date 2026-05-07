@@ -9,6 +9,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
+import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
@@ -27,6 +28,7 @@ public final class UndoRedoService {
     private final ProjectService projectService = new ProjectService();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
+    private final DeferredActionFalloutGuard deferredActionFalloutGuard = DeferredActionFalloutGuard.getInstance();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
@@ -71,6 +73,7 @@ public final class UndoRedoService {
                 : action.redoEntityChanges();
         String label = direction == Direction.UNDO ? "undo-action" : "redo-action";
         int totalChanges = targetChanges.size() + targetEntityChanges.size();
+        this.deferredActionFalloutGuard.suppressAction(action.id(), level.getGameTime());
 
         return this.worldOperationManager.startPreparedApplyOperation(
                 level,
