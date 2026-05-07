@@ -2,8 +2,10 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.EntityMutationTracker.PendingEntityMutation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Entity.RemovalReason;
@@ -13,6 +15,10 @@ import org.spongepowered.asm.mixin.Unique;
 
 @Mixin(Entity.class)
 abstract class EntityMutationMixin {
+
+    @Unique
+    private static final EntityCausalContextRegistry LUMA_ENTITY_CAUSAL_CONTEXTS =
+            EntityCausalContextRegistry.getInstance();
 
     @WrapMethod(method = "setPos(DDD)V")
     private void luma$wrapSetPos(double x, double y, double z, Operation<Void> original) {
@@ -99,9 +105,21 @@ abstract class EntityMutationMixin {
 
     @WrapMethod(method = "remove")
     private void luma$wrapRemove(RemovalReason reason, Operation<Void> original) {
-        PendingEntityMutation pending = EntityMutationTracker.captureRemoval((Entity) (Object) this);
-        original.call(reason);
-        this.luma$captureAfter(pending);
+        Entity entity = (Entity) (Object) this;
+        if (!(entity.level() instanceof ServerLevel level)) {
+            original.call(reason);
+            return;
+        }
+        try (EntityCausalContextRegistry.ContextFrame ignored =
+                     LUMA_ENTITY_CAUSAL_CONTEXTS.pushIfPresent(entity, level)) {
+            PendingEntityMutation pending = EntityMutationTracker.captureRemoval(entity);
+            original.call(reason);
+            this.luma$captureAfter(pending);
+        } finally {
+            if (reason != null && reason.shouldDestroy()) {
+                LUMA_ENTITY_CAUSAL_CONTEXTS.clear(entity);
+            }
+        }
     }
 
     @Unique

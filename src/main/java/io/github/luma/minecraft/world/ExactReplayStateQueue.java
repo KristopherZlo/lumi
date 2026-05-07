@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.OperationHandle;
+import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,6 +25,7 @@ final class ExactReplayStateQueue {
     private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
     private final BlockPlacementUpdateDecider updateDecider = new BlockPlacementUpdateDecider();
     private final WorldApplyBlockUpdatePolicy updatePolicy = new WorldApplyBlockUpdatePolicy();
+    private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final Map<Long, PreparedBlockPlacement> pending = new LinkedHashMap<>();
     private final Map<Long, PreparedBlockPlacement> recordedPlacements = new LinkedHashMap<>();
     private List<PreparedBlockPlacement> drainPlacements = List.of();
@@ -56,6 +59,10 @@ final class ExactReplayStateQueue {
     }
 
     int drain(ServerLevel level, int maxBlocks, long deadlineNanos) {
+        return this.drain(level, maxBlocks, deadlineNanos, null);
+    }
+
+    int drain(ServerLevel level, int maxBlocks, long deadlineNanos, OperationHandle handle) {
         if (level == null || maxBlocks <= 0 || !this.hasPending()) {
             return 0;
         }
@@ -63,7 +70,7 @@ final class ExactReplayStateQueue {
         this.prepareDrainPlacements();
         int applied = 0;
         while (this.hasPending() && applied < maxBlocks && System.nanoTime() < deadlineNanos) {
-            this.applyExact(level, this.drainPlacements.get(this.nextIndex));
+            this.applyExact(level, this.drainPlacements.get(this.nextIndex), handle);
             this.nextIndex += 1;
             applied += 1;
         }
@@ -102,7 +109,7 @@ final class ExactReplayStateQueue {
         }
     }
 
-    private void applyExact(ServerLevel level, PreparedBlockPlacement placement) {
+    private void applyExact(ServerLevel level, PreparedBlockPlacement placement, OperationHandle handle) {
         PersistentBlockStatePolicy.PersistentBlockState target = this.blockStatePolicy.normalize(
                 placement.state(),
                 placement.blockEntityTag()
@@ -112,6 +119,7 @@ final class ExactReplayStateQueue {
         BlockState targetState = target.state();
         CompoundTag targetBlockEntityTag = target.blockEntityTag();
         if (!this.updateDecider.requiresUpdate(level, pos, currentState, targetState, targetBlockEntityTag)) {
+            this.historyDebugLog.logExactReplay(handle, level, "final-pass", pos, currentState, targetState, false);
             return;
         }
 
@@ -128,6 +136,7 @@ final class ExactReplayStateQueue {
                 level.setBlockEntity(blockEntity);
             }
         }
+        this.historyDebugLog.logExactReplay(handle, level, "final-pass", pos, currentState, targetState, true);
     }
 
     private void prepareDrainPlacements() {

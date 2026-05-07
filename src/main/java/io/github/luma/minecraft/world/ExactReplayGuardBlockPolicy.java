@@ -4,6 +4,7 @@ import java.util.Locale;
 import java.util.Set;
 import net.minecraft.world.level.block.BasePressurePlateBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.TripWireBlock;
@@ -33,7 +34,8 @@ final class ExactReplayGuardBlockPolicy {
     );
 
     boolean shouldGuard(BlockState state) {
-        if (state == null || state.isAir() || this.isPlayerInputControl(state)) {
+        if (state == null || state.isAir() || this.isPlayerInputControl(state)
+                || this.isPistonMechanismParticipant(state)) {
             return false;
         }
         for (Property<?> property : state.getProperties()) {
@@ -44,6 +46,12 @@ final class ExactReplayGuardBlockPolicy {
         return false;
     }
 
+    boolean shouldSuppressCallbacks(BlockState state) {
+        return state != null
+                && !state.isAir()
+                && (this.shouldGuard(state) || this.isPistonMechanismParticipant(state));
+    }
+
     private boolean isPlayerInputControl(BlockState state) {
         Block block = state.getBlock();
         return block instanceof LeverBlock
@@ -51,5 +59,13 @@ final class ExactReplayGuardBlockPolicy {
                 || block instanceof BasePressurePlateBlock
                 || block instanceof TripWireBlock
                 || block instanceof TripWireHookBlock;
+    }
+
+    private boolean isPistonMechanismParticipant(BlockState state) {
+        return state.is(Blocks.PISTON)
+                || state.is(Blocks.STICKY_PISTON)
+                || state.is(Blocks.PISTON_HEAD)
+                || state.is(Blocks.MOVING_PISTON)
+                || state.is(Blocks.OBSERVER);
     }
 }

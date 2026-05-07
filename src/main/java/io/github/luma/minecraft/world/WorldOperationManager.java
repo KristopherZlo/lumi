@@ -8,6 +8,7 @@ import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.time.Instant;
 import java.time.Duration;
 import java.util.List;
@@ -45,6 +46,7 @@ public final class WorldOperationManager {
     private final WorldApplyOperationProfile applyOperationProfile = new WorldApplyOperationProfile();
     private final WorldApplyBudgetPlanner budgetPlanner = new WorldApplyBudgetPlanner();
     private final WorldApplyTickWorkGate tickWorkGate = new WorldApplyTickWorkGate();
+    private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private ExecutorService backgroundExecutor = createExecutor();
     private final Map<String, ActiveOperation> activeOperations = new HashMap<>();
     private final Map<String, OperationSnapshot> lastSnapshots = new HashMap<>();
@@ -638,6 +640,7 @@ public final class WorldOperationManager {
                                 BlockChangeApplier.entityOperationCount(this.currentBatch.entityBatch())
                         );
                     }
+                    WorldOperationManager.this.historyDebugLog.logReplayBatch(this.handle(), this.currentBatch);
                 }
 
                 WorldApplyTickGateDecision decision = WorldOperationManager.this.tickWorkGate.decide(
@@ -866,7 +869,7 @@ public final class WorldOperationManager {
                     WorldMutationContext.SuppressionFrame ignoredSuppression =
                             WorldMutationContext.pushCaptureSuppression()
             ) {
-                reapplied = this.exactReplayStateQueue.drain(this.level(), maxBlocks, deadlineNanos);
+                reapplied = this.exactReplayStateQueue.drain(this.level(), maxBlocks, deadlineNanos, this.handle());
             }
             if (!this.exactReplayStateQueue.hasPending()) {
                 ExactReplayStateGuard.getInstance().guard(

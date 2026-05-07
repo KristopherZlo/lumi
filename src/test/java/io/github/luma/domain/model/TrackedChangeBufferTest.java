@@ -174,6 +174,38 @@ class TrackedChangeBufferTest {
         assertTrue(buffer.touchesChunk(new ChunkPoint(0, 0)));
     }
 
+    @Test
+    void delayedEntitySpawnKeepsSpawnBaselineWhenUpdateArrivesFirst() {
+        Instant now = Instant.parse("2026-04-20T10:15:30Z");
+        TrackedChangeBuffer buffer = TrackedChangeBuffer.create(
+                "session",
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                now
+        );
+
+        String entityId = "00000000-0000-0000-0000-000000000002";
+        buffer.addEntityChange(new StoredEntityChange(
+                entityId,
+                "minecraft:cow",
+                entity("minecraft:cow", entityId, 1.0D),
+                entity("minecraft:cow", entityId, 2.0D)
+        ), now);
+        buffer.addEntityChange(new StoredEntityChange(
+                entityId,
+                "minecraft:cow",
+                null,
+                entity("minecraft:cow", entityId, 2.0D)
+        ), now.plusMillis(50));
+
+        StoredEntityChange stored = buffer.orderedEntityChanges().getFirst();
+        assertTrue(stored.isSpawn());
+        assertEquals(2.0D, stored.newValue().entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
+    }
+
     private static StatePayload payload(String blockId) {
         CompoundTag state = new CompoundTag();
         state.putString("Name", blockId);

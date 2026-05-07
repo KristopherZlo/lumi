@@ -10,6 +10,8 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeverBlock;
+import net.minecraft.world.level.block.ObserverBlock;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -54,11 +56,6 @@ class ExactReplayStateQueueTest {
                 Blocks.TARGET.defaultBlockState(),
                 null
         )));
-        assertTrue(guard.shouldGuard(new PreparedBlockPlacement(
-                pos,
-                Blocks.PISTON.defaultBlockState(),
-                null
-        )));
         assertFalse(guard.shouldGuard(new PreparedBlockPlacement(
                 pos,
                 Blocks.LEVER.defaultBlockState().setValue(LeverBlock.POWERED, true),
@@ -74,6 +71,69 @@ class ExactReplayStateQueueTest {
                 Blocks.STONE.defaultBlockState(),
                 null
         )));
+    }
+
+    @Test
+    void guardDoesNotHoldPistonMechanismParticipants() {
+        ExactReplayStateGuard guard = new ExactReplayStateGuard();
+        BlockPos pos = new BlockPos(1, 64, 1);
+
+        assertFalse(guard.shouldGuard(new PreparedBlockPlacement(
+                pos,
+                Blocks.PISTON.defaultBlockState(),
+                null
+        )));
+        assertFalse(guard.shouldGuard(new PreparedBlockPlacement(
+                pos,
+                Blocks.STICKY_PISTON.defaultBlockState(),
+                null
+        )));
+        assertFalse(guard.shouldGuard(new PreparedBlockPlacement(
+                pos,
+                Blocks.PISTON_HEAD.defaultBlockState(),
+                null
+        )));
+        assertFalse(guard.shouldGuard(new PreparedBlockPlacement(
+                pos,
+                Blocks.MOVING_PISTON.defaultBlockState(),
+                null
+        )));
+        assertFalse(guard.shouldGuard(new PreparedBlockPlacement(
+                pos,
+                Blocks.OBSERVER.defaultBlockState(),
+                null
+        )));
+    }
+
+    @Test
+    void callbackSuppressionCoversPistonObserverMechanismEnvelope() {
+        ExactReplayStateGuard guard = new ExactReplayStateGuard();
+        BlockPos pos = new BlockPos(1, 64, 1);
+
+        List<BlockPos> observerPositions = guard.callbackSuppressionPositions(new PreparedBlockPlacement(
+                pos,
+                Blocks.OBSERVER.defaultBlockState().setValue(ObserverBlock.FACING, net.minecraft.core.Direction.EAST),
+                null
+        ));
+        List<BlockPos> pistonPositions = guard.callbackSuppressionPositions(new PreparedBlockPlacement(
+                pos,
+                Blocks.STICKY_PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, net.minecraft.core.Direction.UP),
+                null
+        ));
+
+        assertTrue(observerPositions.contains(pos));
+        assertTrue(observerPositions.contains(pos.east()));
+        assertTrue(pistonPositions.contains(pos));
+        assertTrue(pistonPositions.contains(pos.above()));
+    }
+
+    @Test
+    void replaySuppressionTreatsBlankCallbackSourceAsReplayFallout() {
+        WorldReplayTickSuppression suppression = WorldReplayTickSuppression.getInstance();
+
+        assertTrue(suppression.isReplayCallbackSource(null));
+        assertTrue(suppression.isReplayCallbackSource(io.github.luma.domain.model.WorldMutationSource.SYSTEM));
+        assertFalse(suppression.isReplayCallbackSource(io.github.luma.domain.model.WorldMutationSource.PLAYER));
     }
 
     @Test

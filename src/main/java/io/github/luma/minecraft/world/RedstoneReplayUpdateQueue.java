@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.world;
 
 import it.unimi.dsi.fastutil.longs.LongComparator;
+import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,6 +13,7 @@ import net.minecraft.world.level.block.Block;
 
 final class RedstoneReplayUpdateQueue {
 
+    private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final Map<UpdateKey, RedstoneReplayUpdate> pendingUpdates = new LinkedHashMap<>();
     private List<RedstoneReplayUpdate> drainUpdates = List.of();
     private int nextIndex = 0;
@@ -49,6 +51,7 @@ final class RedstoneReplayUpdateQueue {
         int applied = 0;
         while (this.hasPending() && applied < maxUpdates && System.nanoTime() < deadlineNanos) {
             RedstoneReplayUpdate update = this.drainUpdates.get(this.nextIndex);
+            this.historyDebugLog.logRedstoneReplayUpdate(level, update.pos(), update.sourceBlock());
             level.updateNeighborsAt(update.pos(), update.sourceBlock());
             this.nextIndex += 1;
             applied += 1;

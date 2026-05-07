@@ -136,6 +136,30 @@ public final class UndoRedoActionStack {
         return this.recordEntityIntoAction(action, change, now, true);
     }
 
+    public long recordDelayedEntityChange(
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            StoredEntityChange change,
+            Instant actionStartedAt,
+            Instant now
+    ) {
+        if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
+            return this.revision;
+        }
+
+        UndoRedoAction action = this.findUndoAction(actionId);
+        if (action == null) {
+            Instant startedAt = actionStartedAt == null ? now : actionStartedAt;
+            action = new UndoRedoAction(actionId, actor, projectId, dimensionId, startedAt, startedAt);
+            this.insertUndoActionByStartedAt(action);
+            this.trimUndoStack();
+        }
+
+        return this.recordEntityIntoAction(action, change, now, true);
+    }
+
     public long recordAction(
             String actionId,
             String actor,
@@ -238,6 +262,48 @@ public final class UndoRedoActionStack {
             }
         }
         return List.copyOf(actions);
+    }
+
+    private UndoRedoAction findUndoAction(String actionId) {
+        if (actionId == null || actionId.isBlank()) {
+            return null;
+        }
+        for (UndoRedoAction action : this.undoStack) {
+            if (action.id().equals(actionId)) {
+                return action;
+            }
+        }
+        return null;
+    }
+
+    private void insertUndoActionByStartedAt(UndoRedoAction action) {
+        if (action == null) {
+            return;
+        }
+        if (this.undoStack.isEmpty()) {
+            this.undoStack.addFirst(action);
+            return;
+        }
+        if (action.startedAt().isAfter(this.undoStack.peekFirst().startedAt())) {
+            this.undoStack.addFirst(action);
+            return;
+        }
+        if (!action.startedAt().isAfter(this.undoStack.peekLast().startedAt())) {
+            this.undoStack.addLast(action);
+            return;
+        }
+
+        List<UndoRedoAction> actions = new ArrayList<>(this.undoStack);
+        int insertionIndex = actions.size();
+        for (int index = 0; index < actions.size(); index++) {
+            if (action.startedAt().isAfter(actions.get(index).startedAt())) {
+                insertionIndex = index;
+                break;
+            }
+        }
+        actions.add(insertionIndex, action);
+        this.undoStack.clear();
+        this.undoStack.addAll(actions);
     }
 
     public boolean canUndo() {

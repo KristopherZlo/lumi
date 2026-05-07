@@ -57,14 +57,12 @@ record StructureFixtureSnapshot(
         if (other == null) {
             return "missing restored snapshot";
         }
-        for (Map.Entry<BlockPos, BlockSnapshot> entry : this.blocks.entrySet()) {
-            BlockSnapshot restored = other.blocks.get(entry.getKey());
-            if (!entry.getValue().equals(restored)) {
-                return "block mismatch at " + this.format(entry.getKey())
-                        + " expectedState=" + truncated(entry.getValue().stateSnbt())
-                        + " actualState=" + truncated(restored == null ? "" : restored.stateSnbt())
-                        + this.blockEntityDiff(entry.getValue(), restored);
-            }
+        BlockMismatch mismatch = this.firstBlockMismatch(other);
+        if (mismatch != null) {
+            return "block mismatch at " + this.format(mismatch.pos())
+                    + " expectedState=" + truncated(mismatch.expectedStateSnbt())
+                    + " actualState=" + truncated(mismatch.actualStateSnbt())
+                    + this.blockEntityDiff(mismatch);
         }
         if (!this.entities.equals(other.entities)) {
             return "entity snapshot mismatch expected=" + this.entities.size()
@@ -72,6 +70,19 @@ record StructureFixtureSnapshot(
                     + this.entityDiff(other);
         }
         return "unknown mismatch";
+    }
+
+    BlockMismatch firstBlockMismatch(StructureFixtureSnapshot other) {
+        if (other == null) {
+            return null;
+        }
+        for (Map.Entry<BlockPos, BlockSnapshot> entry : this.blocks.entrySet()) {
+            BlockSnapshot restored = other.blocks.get(entry.getKey());
+            if (!entry.getValue().equals(restored)) {
+                return BlockMismatch.of(entry.getKey(), entry.getValue(), restored);
+            }
+        }
+        return null;
     }
 
     private String entityDiff(StructureFixtureSnapshot other) {
@@ -103,13 +114,12 @@ record StructureFixtureSnapshot(
                 + " extra=" + firstSummaries(extra);
     }
 
-    private String blockEntityDiff(BlockSnapshot expected, BlockSnapshot actual) {
-        String actualSnbt = actual == null ? "" : actual.blockEntitySnbt();
-        if (expected.blockEntitySnbt().equals(actualSnbt)) {
+    private String blockEntityDiff(BlockMismatch mismatch) {
+        if (mismatch.expectedBlockEntitySnbt().equals(mismatch.actualBlockEntitySnbt())) {
             return "";
         }
-        return " expectedBlockEntity=" + truncated(expected.blockEntitySnbt())
-                + " actualBlockEntity=" + truncated(actualSnbt);
+        return " expectedBlockEntity=" + truncated(mismatch.expectedBlockEntitySnbt())
+                + " actualBlockEntity=" + truncated(mismatch.actualBlockEntitySnbt());
     }
 
     private String format(BlockPos pos) {
@@ -123,6 +133,25 @@ record StructureFixtureSnapshot(
                     ? null
                     : blockEntity.saveWithFullMetadata(level.registryAccess());
             return new BlockSnapshot(snbt(NbtUtils.writeBlockState(state)), snbt(blockEntityTag));
+        }
+    }
+
+    record BlockMismatch(
+            BlockPos pos,
+            String expectedStateSnbt,
+            String actualStateSnbt,
+            String expectedBlockEntitySnbt,
+            String actualBlockEntitySnbt
+    ) {
+
+        private static BlockMismatch of(BlockPos pos, BlockSnapshot expected, BlockSnapshot actual) {
+            return new BlockMismatch(
+                    pos.immutable(),
+                    expected == null ? "" : expected.stateSnbt(),
+                    actual == null ? "" : actual.stateSnbt(),
+                    expected == null ? "" : expected.blockEntitySnbt(),
+                    actual == null ? "" : actual.blockEntitySnbt()
+            );
         }
     }
 

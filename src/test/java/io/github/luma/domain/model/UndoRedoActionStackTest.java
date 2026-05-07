@@ -236,6 +236,107 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void delayedEntitySpawnKeepsActionSpawnWhenUpdateArrivesFirst() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String entityId = "00000000-0000-0000-0000-000000000013";
+
+        stack.recordEntityChange(
+                "action-entity",
+                "tester",
+                "project",
+                "minecraft:overworld",
+                new StoredEntityChange(
+                        entityId,
+                        "minecraft:cow",
+                        entity("minecraft:cow", entityId, 1.0D),
+                        entity("minecraft:cow", entityId, 2.0D)
+                ),
+                NOW
+        );
+        stack.recordEntityChange(
+                "action-entity",
+                "tester",
+                "project",
+                "minecraft:overworld",
+                new StoredEntityChange(
+                        entityId,
+                        "minecraft:cow",
+                        null,
+                        entity("minecraft:cow", entityId, 2.0D)
+                ),
+                NOW.plusMillis(50)
+        );
+
+        UndoRedoAction action = stack.selectUndo().action();
+        StoredEntityChange undo = action.undoEntityChanges().getFirst();
+        assertTrue(undo.isSpawn());
+        assertTrue(action.inverseEntityChanges().getFirst().isRemove());
+        assertEquals(entityId, undo.entityId());
+    }
+
+    @Test
+    void delayedEntitySpawnDoesNotBecomeLatestUndoAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String entityId = "00000000-0000-0000-0000-000000000014";
+
+        stack.recordChange("earlier-placement", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:air", "minecraft:stone"), NOW);
+        stack.recordChange("latest-bridge", "Alex", "project", "minecraft:overworld",
+                change(30, "minecraft:air", "minecraft:spruce_planks"), NOW.plusSeconds(2));
+        stack.recordDelayedEntityChange(
+                "entity-spawn",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                new StoredEntityChange(entityId, "minecraft:item", null, entity("minecraft:item", entityId, 2.0D)),
+                NOW.plusSeconds(1),
+                NOW.plusSeconds(3)
+        );
+
+        List<UndoRedoAction> recent = stack.recentUndoActions(3);
+        assertEquals(List.of("latest-bridge", "entity-spawn", "earlier-placement"),
+                recent.stream().map(UndoRedoAction::id).toList());
+        assertEquals("latest-bridge", stack.selectUndo().action().id());
+    }
+
+    @Test
+    void delayedEntitySpawnMergesExistingActionWithoutPromotion() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String entityId = "00000000-0000-0000-0000-000000000015";
+
+        stack.recordEntityChange(
+                "entity-spawn",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                new StoredEntityChange(
+                        entityId,
+                        "minecraft:cow",
+                        entity("minecraft:cow", entityId, 1.0D),
+                        entity("minecraft:cow", entityId, 2.0D)
+                ),
+                NOW
+        );
+        stack.recordChange("latest-bridge", "Alex", "project", "minecraft:overworld",
+                change(30, "minecraft:air", "minecraft:spruce_planks"), NOW.plusSeconds(1));
+        stack.recordDelayedEntityChange(
+                "entity-spawn",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                new StoredEntityChange(entityId, "minecraft:cow", null, entity("minecraft:cow", entityId, 2.0D)),
+                NOW,
+                NOW.plusSeconds(2)
+        );
+
+        List<UndoRedoAction> recent = stack.recentUndoActions(2);
+        assertEquals(List.of("latest-bridge", "entity-spawn"), recent.stream().map(UndoRedoAction::id).toList());
+        StoredEntityChange stored = recent.get(1).undoEntityChanges().getFirst();
+        assertTrue(stored.isSpawn());
+        assertTrue(recent.get(1).inverseEntityChanges().getFirst().isRemove());
+    }
+
+    @Test
     void batchActionsCanBeUndoneAndRedone() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String entityId = "00000000-0000-0000-0000-000000000012";
@@ -290,6 +391,48 @@ class UndoRedoActionStackTest {
         assertNotNull(selection);
         assertEquals(2, selection.action().size());
         assertEquals(entityId, selection.action().undoEntityChanges().getFirst().entityId());
+    }
+
+    @Test
+    void entityDeathAndDropsReplayAsOnePlayerAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String cowId = "00000000-0000-0000-0000-000000000016";
+        String dropId = "00000000-0000-0000-0000-000000000017";
+
+        stack.recordDelayedEntityChange(
+                "kill-cow",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                new StoredEntityChange(cowId, "minecraft:cow", entity("minecraft:cow", cowId, 1.0D), null),
+                NOW,
+                NOW
+        );
+        stack.recordDelayedEntityChange(
+                "kill-cow",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                new StoredEntityChange(dropId, "minecraft:item", null, entity("minecraft:item", dropId, 1.0D)),
+                NOW,
+                NOW.plusMillis(50)
+        );
+
+        UndoRedoAction action = stack.selectUndo().action();
+        List<StoredEntityChange> undo = action.undoEntityChanges();
+        assertEquals(List.of(dropId, cowId), undo.stream().map(StoredEntityChange::entityId).toList());
+        assertTrue(undo.get(0).isSpawn());
+        assertTrue(undo.get(1).isRemove());
+
+        List<StoredEntityChange> undoApply = action.inverseEntityChanges();
+        assertEquals(List.of(dropId, cowId), undoApply.stream().map(StoredEntityChange::entityId).toList());
+        assertTrue(undoApply.get(0).isRemove());
+        assertTrue(undoApply.get(1).isSpawn());
+
+        List<StoredEntityChange> redo = action.redoEntityChanges();
+        assertEquals(List.of(cowId, dropId), redo.stream().map(StoredEntityChange::entityId).toList());
+        assertTrue(redo.get(0).isRemove());
+        assertTrue(redo.get(1).isSpawn());
     }
 
     private static StoredBlockChange change(int x, String oldBlock, String newBlock) {

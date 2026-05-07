@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.util.LinkedHashSet;
 import java.util.Collections;
 import java.util.ArrayList;
@@ -30,6 +31,8 @@ import net.minecraft.world.level.block.state.properties.Property;
  */
 final class RedstoneReplayUpdatePlanner {
 
+    private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
+
     void propagate(ServerLevel level, BlockPos pos, BlockState currentState, BlockState targetState) {
         if (level == null || pos == null) {
             return;
@@ -39,7 +42,15 @@ final class RedstoneReplayUpdatePlanner {
         if (batch.isEmpty()) {
             return;
         }
-        if (WorldRedstoneReplayUpdateContext.enqueue(batch)) {
+        boolean queued = WorldRedstoneReplayUpdateContext.enqueue(batch);
+        this.historyDebugLog.logRedstoneReplayPlan(
+                pos,
+                currentState,
+                targetState,
+                batch.updates().size(),
+                queued
+        );
+        if (queued) {
             return;
         }
         batch.propagate(level);

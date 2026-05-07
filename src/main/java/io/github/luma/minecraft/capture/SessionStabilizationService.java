@@ -89,7 +89,11 @@ public final class SessionStabilizationService {
             List<StoredBlockChange> startingChanges = session.startingChunkChanges(processedChunks);
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
             List<StoredBlockChange> persistentDeltaChanges = this.persistentDeltaChanges(currentChanges, deltaChanges);
-            List<StoredBlockChange> relatedDeltaChanges = this.relatedDeltaChanges(currentChanges, persistentDeltaChanges);
+            List<StoredBlockChange> relatedDeltaChanges = this.relatedActionChanges(
+                    currentChanges,
+                    persistentDeltaChanges,
+                    capturedChunks.captured()
+            );
             List<StoredBlockChange> composedChanges = this.composeStabilizedChanges(
                     startingChanges,
                     currentChanges,
@@ -399,7 +403,17 @@ public final class SessionStabilizationService {
             List<StoredBlockChange> currentChanges,
             List<StoredBlockChange> persistentDeltaChanges
     ) {
-        if (persistentDeltaChanges == null || persistentDeltaChanges.isEmpty()) {
+        return this.relatedActionChanges(currentChanges, persistentDeltaChanges, Map.of());
+    }
+
+    List<StoredBlockChange> relatedActionChanges(
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> persistentDeltaChanges,
+            Map<ChunkPoint, ChunkSnapshotPayload> liveChunks
+    ) {
+        boolean hasPersistentDeltas = persistentDeltaChanges != null && !persistentDeltaChanges.isEmpty();
+        boolean canReadLiveState = liveChunks != null && !liveChunks.isEmpty();
+        if (!hasPersistentDeltas && !canReadLiveState) {
             return List.of();
         }
         Map<BlockPoint, StoredBlockChange> currentByPos = new LinkedHashMap<>();
@@ -408,7 +422,11 @@ public final class SessionStabilizationService {
         }
 
         List<StoredBlockChange> related = new ArrayList<>();
-        for (StoredBlockChange deltaChange : persistentDeltaChanges) {
+        Set<BlockPoint> deltaPositions = new LinkedHashSet<>();
+        for (StoredBlockChange deltaChange : persistentDeltaChanges == null
+                ? List.<StoredBlockChange>of()
+                : persistentDeltaChanges) {
+            deltaPositions.add(deltaChange.pos());
             StoredBlockChange currentChange = currentByPos.get(deltaChange.pos());
             if (currentChange == null) {
                 related.add(deltaChange);
@@ -422,6 +440,26 @@ public final class SessionStabilizationService {
             );
             if (!relatedChange.isNoOp()) {
                 related.add(relatedChange);
+            }
+        }
+        if (canReadLiveState) {
+            Map<ChunkPoint, Map<Integer, ChunkSectionSnapshotPayload>> liveSectionIndexes = new HashMap<>();
+            for (StoredBlockChange currentChange : currentByPos.values()) {
+                if (deltaPositions.contains(currentChange.pos())) {
+                    continue;
+                }
+                StatePayload livePayload = this.livePayload(currentChange.pos(), liveChunks, liveSectionIndexes);
+                if (livePayload == null || this.matchesLiveTarget(currentChange.newValue(), livePayload)) {
+                    continue;
+                }
+                StoredBlockChange revertedCurrentChange = new StoredBlockChange(
+                        currentChange.pos(),
+                        currentChange.newValue(),
+                        livePayload
+                );
+                if (!revertedCurrentChange.isNoOp()) {
+                    related.add(revertedCurrentChange);
+                }
             }
         }
         return List.copyOf(related);

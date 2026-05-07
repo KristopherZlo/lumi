@@ -292,6 +292,26 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void reconciliationRelatedActionChangesRecordCurrentChangeThatReturnedToBaseline() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint pos = new BlockPoint(2, 64, 1);
+        StatePayload air = payload("minecraft:air");
+        StatePayload movedObserver = payload("minecraft:observer");
+        StoredBlockChange liftedBlock = new StoredBlockChange(pos, air, movedObserver);
+
+        List<StoredBlockChange> related = service.relatedActionChanges(
+                List.of(liftedBlock),
+                List.of(),
+                Map.of(new ChunkPoint(0, 0), uniformChunk("minecraft:air"))
+        );
+
+        assertEquals(1, related.size());
+        assertEquals(pos, related.getFirst().pos());
+        assertEquals(movedObserver, related.getFirst().oldValue());
+        assertEquals(air, related.getFirst().newValue());
+    }
+
+    @Test
     void reconciliationRelatedDeltasExcludeAlreadyTrackedDirectChanges() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange directPlacement = new StoredBlockChange(

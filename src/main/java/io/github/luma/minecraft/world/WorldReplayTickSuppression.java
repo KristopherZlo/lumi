@@ -80,7 +80,7 @@ public final class WorldReplayTickSuppression {
                 && this.shouldSuppress(level, pos);
     }
 
-    private boolean isReplayCallbackSource(WorldMutationSource source) {
+    boolean isReplayCallbackSource(WorldMutationSource source) {
         if (source == null) {
             return true;
         }

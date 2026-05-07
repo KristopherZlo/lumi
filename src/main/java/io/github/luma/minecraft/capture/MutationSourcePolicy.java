@@ -94,6 +94,15 @@ final class MutationSourcePolicy {
                 && (source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK));
     }
 
+    boolean requiresCausalActionForDeferredStabilization(WorldMutationSource source) {
+        return source == WorldMutationSource.BLOCK_UPDATE || source == WorldMutationSource.PISTON;
+    }
+
+    boolean canUseDeferredStabilization(WorldMutationSource source, String actionId) {
+        return !this.requiresCausalActionForDeferredStabilization(source)
+                || (actionId != null && !actionId.isBlank());
+    }
+
     String defaultActor(WorldMutationSource source) {
         if (source == null) {
             return "world";

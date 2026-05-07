@@ -36,11 +36,11 @@ Lumi is organized around project history for builders: project, version, branch,
 | Work area | Start here | Then inspect | Tests/docs |
 | --- | --- | --- | --- |
 | Project creation, settings, workspace open, `WORLD_ROOT` | `ProjectService`, `ClientWorkspaceOpenService`, `WorldBootstrapService` | `ProjectRepository`, `VariantRepository`, `WorldOriginRepository`, `RecoveryRepository`, `ProjectLayout` | `ProjectServiceTest`, `WorldOriginRepositoryTest`, `docs/storage-format.md` |
-| Save, amend, quick save | `VersionService`, `QuickSaveScreenController` | `CaptureSessionRegistry`, `CapturePersistenceCoordinator`, `PatchDataRepository`, `PatchMetaRepository`, `SnapshotCaptureService`, `PreviewCaptureRequestService` | `VersionServiceTest`, `PatchDataRepositoryTest`, `SnapshotStorageTest` |
+| Save, amend, quick save | `VersionService`, `QuickSaveScreenController` | `WorkingDraftSessionManager`, `CaptureSessionRegistry`, `CapturePersistenceCoordinator`, `PatchDataRepository`, `PatchMetaRepository`, `SnapshotCaptureService`, `PreviewCaptureRequestService` | `VersionServiceTest`, `PatchDataRepositoryTest`, `SnapshotStorageTest` |
 | Restore, quick rollback, full rollback, operation progress | `RestoreService`, `QuickRollbackService` | `VersionLineageService`, `WorldOperationManager`, `WorldApplyBudgetPlanner`, `WorldChangeBatchPreparer`, `SnapshotBatchPreparer`, `BlockChangeApplier`, `SectionContainerRewriteCommitStrategy`, `SectionNativeBlockCommitStrategy`, `DirectChunkBlockCommitStrategy`, `RecoveryRepository` | `RestoreServiceTest`, `RecoveryRepositoryTest`, `WorldChangeBatchPreparerTest`, `WorldApplyBudgetPlannerTest`, `docs/architecture.md` |
 | Partial restore | `RestoreService`, `PartialRestorePlanner`, `PartialRestoreTargetStatePlanner` | `SaveDetailsScreen`, `SaveDetailsScreenController`, `SaveDetailsPartialRestoreSection`, `LumiRegionSelectionController`, `LumiRegionSelectionRenderer`, `PatchDataRepository`, `SnapshotReader`, `BaselineChunkRepository` | `PartialRestorePlannerTest`, `PartialRestoreTargetStatePlannerTest`, `PartialRestoreFormStateTest`, `LumiRegionSelectionStateTest`, `docs/storage-format.md` |
-| Live capture and recovery draft creation | `HistoryCaptureManager` | `CaptureSessionRegistry`, `TrackedProjectCatalog`, `ProjectTrackingIndex`, `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, `SessionStabilizationService`, relevant mixin | capture tests under `src/test/java/io/github/luma/minecraft/capture` |
-| Undo/redo and recent actions | `UndoRedoService`, `UndoRedoHistoryManager`, `UndoRedoKeyController` | `ExternalUndoRedoPolicy`, `AxiomUndoRedoBridge`, `WorldOperationManager`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `LumiShortcutInteractionGate`, `EntityMutationCapturePolicy` | `UndoRedoActionStackTest`, `ExternalUndoRedoPolicyTest`, `AxiomUndoRedoBridgeTest`, `RecentChangesOverlayRendererStateTest`, `LumiShortcutInteractionGateTest` |
+| Live capture and recovery draft creation | `HistoryCaptureManager` | `WorkingDraftSessionManager`, `CaptureSessionRegistry`, `TrackedProjectCatalog`, `ProjectTrackingIndex`, `WorldMutationCapturePolicy`, `EntityMutationCapturePolicy`, `EntitySpawnCaptureQueue`, `SessionStabilizationService`, relevant mixin | capture tests under `src/test/java/io/github/luma/minecraft/capture` |
+| Undo/redo and recent actions | `UndoRedoService`, `UndoRedoHistoryManager`, `UndoRedoKeyController` | `LiveUndoRedoActionRecorder`, `ExternalUndoRedoPolicy`, `AxiomUndoRedoBridge`, `WorldOperationManager`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `LumiShortcutInteractionGate`, `EntityMutationCapturePolicy`, `EntitySpawnCaptureQueue` | `UndoRedoActionStackTest`, `ExternalUndoRedoPolicyTest`, `AxiomUndoRedoBridgeTest`, `RecentChangesOverlayRendererStateTest`, `LumiShortcutInteractionGateTest` |
 | Branches, branch switching, and history editing | `VariantService`, `HistoryEditService`, `VersionLineageService` | `VariantRepository`, `HistoryTombstoneRepository`, `VariantsScreenController`, `VariantsScreen`, `SaveDetailsScreen` | `VariantServiceTest`, `HistoryEditServiceTest`, `VersionLineageServiceTest`, `VariantsScreenControllerTest` |
 | Import/export/share/merge | `HistoryShareService`, `ProjectArchiveService`, `VariantMergeService` | `ProjectArchiveRepository`, `ShareScreenController`, `VariantsScreenController`, `MergePreviewCache`, `ShareMergeReviewSection` | `HistoryShareServiceTest`, `ProjectArchiveServiceTest`, `VariantMergeServiceTest` |
 | Compare and material summaries | `DiffService`, `MaterialDeltaService` | `CompareScreenController`, `AsyncCompareCache`, `CompareOverlayPreparationService`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySurfaceResolver` | `DiffServiceTest`, `AsyncCompareCacheTest`, compare overlay tests |
@@ -59,6 +59,7 @@ Lumi is organized around project history for builders: project, version, branch,
 - `src/main/resources/fabric.mod.json`: mod metadata, entrypoints, dependencies.
 - `src/main/resources/lumi.mixins.json`: mixin registration; inspect only when capture hooks or Minecraft mutation entrypoints change.
 - `src/main/java/io/github/luma/debug/LumaDebugLog.java`: debug logging categories and global/workspace debug checks.
+- `src/main/java/io/github/luma/minecraft/debug/HistoryDebugLog.java`: focused history capture, undo/redo selection, replay, redstone, and mechanism callback diagnostics for runtime debugging.
 - `src/main/java/io/github/luma/debug/StartupProfiler.java`: startup-only diagnostics behind `-Dlumi.startupProfile=true`.
 
 ## Domain Model
@@ -74,7 +75,7 @@ Use `src/main/java/io/github/luma/domain/model` for value objects, persisted rec
 - Diff/compare/material summaries: `VersionDiff`, `DiffBlockEntry`, `ChangeStats`, `PendingChangeSummary`, `MaterialDeltaEntry`.
 - Restore and partial restore: `RestorePlanSummary`, `RestorePlanMode`, `PartialRestoreRequest`, `PartialRestorePlanSummary`, `PartialRestoreMode`, `PartialRestoreRegionSource`.
 - Branch merge/share/archive: `VariantMergePlan`, `VariantMergeApplyRequest`, `MergeConflictZone`, `MergeConflictResolution`, `MergeConflictZoneResolution`, `ProjectArchiveManifest`, `ProjectArchiveEntry`, `ProjectArchiveScope`, `ProjectArchiveScopeType`, `ProjectArchiveExportResult`, `ProjectArchiveImportResult`, `HistoryPackageFileSummary`, `HistoryPackageImportResult`, `ImportedHistoryProjectSummary`, `ExternalSourceInfo`.
-- Live capture and undo/redo runtime: `TrackedChangeBuffer`, `CaptureSessionState`, `UndoRedoAction`, `UndoRedoActionStack`, `WorldMutationSource`.
+- Working draft and undo/redo runtime: `TrackedChangeBuffer`, `CaptureSessionState`, `UndoRedoAction`, `UndoRedoActionStack`, `WorldMutationSource`.
 - Preview: `PreviewInfo`, `PreviewCaptureRequest`.
 - History visibility: `HistoryTombstones`.
 - Cleanup/integrity: `ProjectCleanupPolicy`, `ProjectCleanupCandidate`, `ProjectCleanupReport`, `ProjectIntegrityReport`.
@@ -137,6 +138,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 
 - `HistoryCaptureManager`: mixin-facing capture facade.
 - `CaptureSessionRegistry`: active buffers, dirty flags, session states, flush fingerprints.
+- `WorkingDraftSessionManager`: durable working draft session ownership, recovery draft persistence, freeze/consume/snapshot/discard, idle flushes, and post-save working-draft base rebasing.
 - `ActiveSessionRegionPolicy`: active causal-envelope and player-loaded chunk membership for secondary capture.
 - `CaptureDiagnosticsRegistry`, `CaptureSessionDiagnostics`: accepted mutation traces and capture summaries.
 - `TrackedProjectCatalog`, `ProjectCatalogCache`: active project metadata cache for capture matching, refreshed only by explicit invalidation.
@@ -145,16 +147,17 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `WorldMutationCaptureGuard`: duplicate hook protection.
 - `WorldMutationCapturePolicy`: block mutation classification for direct capture, deferred stabilization, and transient-state rejection.
 - `BlockUpdateCaptureContext`: redstone/mechanism neighbor and scheduled-tick source scoping for final-state stabilization.
-- `DeferredWorldMutationContext`, `DeferredWorldMutationContexts`: action/source/access propagation for delayed vanilla block events, scheduled ticks, and moving piston block entities so their settled fallout can join the originating live undo/redo action.
-- `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling.
+- `DeferredWorldMutationContext`, `DeferredWorldMutationContexts`: action/source/access propagation for delayed vanilla block events, scheduled ticks, and moving piston block entities so their settled fallout can join the originating live undo/redo action. Block events and scheduled ticks consume bounded mechanism depth so self-sustaining redstone clocks cannot regenerate the same action indefinitely; moving piston block entities preserve the existing piston action id without increasing that depth so chained piston carriers still reconcile their moved blocks. Dirty chunks reconcile only after a short tick-settle window unless a final save/freeze drain explicitly requires immediate loaded-chunk reconciliation.
+- `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntityCausalContextRegistry`, `EntitySpawnCaptureQueue`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling, including player-caused death context and post-world-acceptance spawn snapshots that preserve the original live undo action order.
 - `AutoCheckpointService`, `AutoCheckpointCommandClassifier`: pending-draft auto checkpoints before large vanilla commands and external WorldEdit/Axiom edits.
 - `MutationSourcePolicy`: mutation source classification.
 - `ExplosiveEntityContextRegistry`: TNT/explosion causal context.
-- `SessionStabilizationService`: dirty chunk reconciliation before save/freeze/undo/redo.
+- `SessionStabilizationService`: dirty chunk reconciliation before save/freeze/undo/redo; pending dirty chunks keep the latest causal action context so repeated mechanism toggles in one chunk reconcile into the selected live undo/redo action.
 - `CapturePersistenceCoordinator`: separate async draft-flush and baseline-write queues for recovery and baseline persistence.
 - `ChunkSnapshotCaptureService`, `SnapshotCaptureService`: server-thread chunk/snapshot capture into immutable payloads.
 - `ChunkSectionOwnershipRegistry`, `ChunkSectionOwnerLookup`, `DirectSectionMutationCaptureService`: lower-level section owner fallback capture.
-- `UndoRedoHistoryManager`: live undo/redo stacks and recent action source data.
+- `LiveUndoRedoActionRecorder`: fan-out from accepted captured/stabilized deltas into the volatile live undo/redo action stack.
+- `UndoRedoHistoryManager`: in-memory live undo/redo stacks and recent action source data; these stacks do not survive restart and are not consumed by save/amend.
 - `UndoRedoActionGroupingPolicy`: source-aware live action identity selection, including buffer-level Axiom place/break captures.
 - `ServerThreadExecutor`: marshals capture state work to the Minecraft server thread.
 
@@ -168,10 +171,11 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `ChunkSectionUpdateBroadcaster`, `WorldLightUpdateQueue`, `WorldLightUpdateContext`: batched section/block-entity client update packets and operation-scoped deferred light maintenance after fast commits.
 - `WorldApplyMetrics`: debug counters for rewrite/native/direct/fallback sections, changed blocks, packets, redstone updates, light checks, apply/work ticks, redstone/light-drain ticks/duration, and fallback reasons.
 - `WorldApplyBlockUpdatePolicy`: side-effect-suppressed update flags and apply behavior.
-- `RedstoneReplayUpdatePlanner`, `RedstoneReplayUpdateQueue`, `WorldRedstoneReplayUpdateContext`: scoped, deduplicated neighbor notification planning for replayed redstone power/source state changes after the stored block state has been applied.
+- `RedstoneReplayUpdatePlanner`, `RedstoneReplayUpdateQueue`, `WorldRedstoneReplayUpdateContext`: scoped, deduplicated neighbor notification planning for replayed redstone power/source state changes after the stored block state has been applied, with focused debug traces for queued and applied neighbor updates.
+- `ExactReplayStateGuard`, `ExactReplayStateQueue`, `ExactReplayGuardBlockPolicy`, `WorldReplayTickSuppression`, `DeferredActionFalloutGuard`: short stale-callback replay protection for derived states and replay-created mechanism callbacks. Piston bases, piston heads, moving pistons, and observers are not held by the exact-state guard; their replay callback envelope is suppressed briefly instead. Mechanism replay and callback decisions are logged through `HistoryDebugLog` when debug tracing is enabled.
 - `PersistentBlockStatePolicy`: restore/snapshot normalization for unsafe transient states such as `moving_piston`.
 - `ConnectedBlockPlacementExpander`: paired blocks such as beds, doors, tall plants.
-- `PistonMechanismPlacementExpander`: settled piston base/head replay companions. It may add the expected `piston_head` for an explicit extended piston base, replace normalized transient air at the expected head position, or clear the old head for a known retracting base; it must not infer a piston base from a head-only placement.
+- `PistonMechanismPlacementExpander`: settled piston base/head replay companions. It may add the expected `piston_head` for an explicit extended piston base, replace normalized transient air at the expected head position, recover a retracted base when undo targets a transient moving-piston base, or clear the old head for a known retracting base; it must not infer a piston base from a head-only placement.
 - `PreparedBlockPlacement`, `PreparedChunkBatch`, `PreparedSectionApplyBatch`, `PreparedChunkBatchCollapser`, `LumiSectionBuffer`, `SectionChangeMask`: prepared immutable apply data and collapse logic for sparse and section-native work.
 - `ChunkBatch`, `SectionBatch`, `EntityBatch`: per-chunk apply units.
 - `GlobalDispatcher`, `LocalQueue`, `BatchState`, `BatchProcessor`, `HistoryStore`: queue/runtime state for bounded apply.

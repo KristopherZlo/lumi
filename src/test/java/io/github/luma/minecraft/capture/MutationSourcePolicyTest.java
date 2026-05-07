@@ -42,6 +42,21 @@ class MutationSourcePolicyTest {
     }
 
     @Test
+    void deferredMechanismStabilizationRequiresCausalAction() {
+        assertFalse(this.policy.canUseDeferredStabilization(WorldMutationSource.BLOCK_UPDATE, ""));
+        assertFalse(this.policy.canUseDeferredStabilization(WorldMutationSource.PISTON, null));
+
+        assertTrue(this.policy.canUseDeferredStabilization(WorldMutationSource.BLOCK_UPDATE, "action-1"));
+        assertTrue(this.policy.canUseDeferredStabilization(WorldMutationSource.PISTON, "action-1"));
+    }
+
+    @Test
+    void nonMechanismDeferredSourcesCanStillUseAmbientStabilization() {
+        assertTrue(this.policy.canUseDeferredStabilization(WorldMutationSource.FLUID, ""));
+        assertTrue(this.policy.canUseDeferredStabilization(WorldMutationSource.FALLING_BLOCK, null));
+    }
+
+    @Test
     void activeSessionRegionCanExpandTrackedChunksForSecondarySources() {
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FLUID, false));
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH, false));

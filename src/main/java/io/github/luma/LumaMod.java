@@ -3,6 +3,7 @@ package io.github.luma;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.debug.StartupProfiler;
 import io.github.luma.integration.OptionalIntegrationBootstrap;
+import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.command.LumaCommands;
 import io.github.luma.minecraft.bootstrap.WorldBootstrapService;
@@ -44,6 +45,7 @@ public final class LumaMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             WorldOperationManager.getInstance().tick(server);
             SingleplayerTestingService.getInstance().tick(server);
+            EntityMutationTracker.tick(server);
             HistoryCaptureManager.getInstance().flushIdleSessions(server);
             this.worldBootstrapService.tick(server);
         });

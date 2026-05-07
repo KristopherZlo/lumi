@@ -18,6 +18,10 @@ public record StoredEntityChange(
         return new StoredEntityChange(this.entityId, this.entityType, this.oldValue, newValue);
     }
 
+    public StoredEntityChange withInitialState(EntityPayload oldValue) {
+        return new StoredEntityChange(this.entityId, this.entityType, oldValue, this.newValue);
+    }
+
     public StoredEntityChange inverse() {
         return new StoredEntityChange(this.entityId, this.entityType, this.newValue, this.oldValue);
     }

@@ -2,13 +2,17 @@ package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -29,6 +33,7 @@ public final class ExactReplayStateGuard {
     private final BlockPlacementUpdateDecider updateDecider = new BlockPlacementUpdateDecider();
     private final WorldApplyBlockUpdatePolicy updatePolicy = new WorldApplyBlockUpdatePolicy();
     private final WorldReplayTickSuppression replaySuppression = WorldReplayTickSuppression.getInstance();
+    private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final Map<ServerLevel, GuardedWorld> guardedWorlds = new IdentityHashMap<>();
 
     public static ExactReplayStateGuard getInstance() {
@@ -40,21 +45,24 @@ public final class ExactReplayStateGuard {
             return;
         }
 
-        List<BlockPos> protectedPositions = new ArrayList<>();
+        Set<BlockPos> callbackProtectedPositions = new LinkedHashSet<>();
         GuardedWorld guardedWorld = this.guardedWorlds.computeIfAbsent(level, ignored -> new GuardedWorld());
         long expiresAt = level.getGameTime() + ticks;
+        int exactStates = 0;
         for (PreparedBlockPlacement placement : placements) {
             PreparedBlockPlacement copied = this.copy(placement);
             if (copied == null) {
                 continue;
             }
             if (this.shouldGuard(copied)) {
-                protectedPositions.add(copied.pos());
                 guardedWorld.guard(copied, expiresAt);
+                exactStates += 1;
             }
+            callbackProtectedPositions.addAll(this.callbackSuppressionPositions(copied));
         }
 
-        this.replaySuppression.protect(level, protectedPositions, ticks);
+        this.replaySuppression.protect(level, callbackProtectedPositions, ticks);
+        this.historyDebugLog.logExactGuard(level, exactStates, callbackProtectedPositions.size(), ticks);
         guardedWorld.removeExpired(level.getGameTime());
         if (guardedWorld.isEmpty()) {
             this.guardedWorlds.remove(level);
@@ -88,6 +96,21 @@ public final class ExactReplayStateGuard {
 
     boolean shouldGuard(PreparedBlockPlacement placement) {
         return placement != null && this.shouldGuard(placement.state());
+    }
+
+    List<BlockPos> callbackSuppressionPositions(PreparedBlockPlacement placement) {
+        if (placement == null || placement.pos() == null
+                || !this.guardBlockPolicy.shouldSuppressCallbacks(placement.state())) {
+            return List.of();
+        }
+
+        List<BlockPos> positions = new ArrayList<>();
+        BlockPos pos = placement.pos();
+        positions.add(pos.immutable());
+        for (Direction direction : Direction.values()) {
+            positions.add(pos.relative(direction).immutable());
+        }
+        return List.copyOf(positions);
     }
 
     boolean isExplicitBuilderSource(WorldMutationSource source) {
@@ -150,6 +173,7 @@ public final class ExactReplayStateGuard {
         BlockState targetState = target.state();
         CompoundTag targetBlockEntityTag = target.blockEntityTag();
         if (!this.updateDecider.requiresUpdate(level, pos, currentState, targetState, targetBlockEntityTag)) {
+            this.historyDebugLog.logExactReplay(null, level, "guard-tick", pos, currentState, targetState, false);
             return false;
         }
 
@@ -166,6 +190,7 @@ public final class ExactReplayStateGuard {
                 level.setBlockEntity(blockEntity);
             }
         }
+        this.historyDebugLog.logExactReplay(null, level, "guard-tick", pos, currentState, targetState, true);
         return true;
     }
 

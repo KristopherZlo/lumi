@@ -14,6 +14,7 @@ import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
+import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -56,6 +57,7 @@ public final class HistoryCaptureManager {
     private static final MutationSourcePolicy SOURCE_POLICY = new MutationSourcePolicy();
     private static final UndoRedoActionGroupingPolicy UNDO_REDO_GROUPING_POLICY = new UndoRedoActionGroupingPolicy();
 
+    private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
@@ -217,6 +219,26 @@ public final class HistoryCaptureManager {
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
+                if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION
+                        && !this.canUseDeferredStabilization(source)) {
+                    LumaDebugLog.log(
+                            trackedProject.project(),
+                            "capture",
+                            "Skipped deferred {} mutation at {} for project {} because no causal action is active",
+                            source,
+                            pos,
+                            trackedProject.project().name()
+                    );
+                    this.historyDebugLog.logSkippedDeferredBlock(
+                            trackedProject.project(),
+                            source,
+                            pos,
+                            oldState,
+                            newState,
+                            "missing-causal-action"
+                    );
+                    continue;
+                }
                 WorldMutationCapturePolicy.CapturedMutation mutation = captureResult.mutation();
                 StoredBlockChange capturedChange = mutation == null ? null : mutation.change();
                 LumaDebugLog.log(
@@ -308,6 +330,16 @@ public final class HistoryCaptureManager {
                 buffer.addChange(capturedChange, now);
                 this.recordUndoRedoAction(trackedProject, level, capturedChange, now);
                 int pendingAfter = buffer.size();
+                this.historyDebugLog.logCapturedBlock(
+                        trackedProject.project(),
+                        "direct",
+                        source,
+                        pos,
+                        mutation.oldState(),
+                        mutation.newState(),
+                        pendingBefore,
+                        pendingAfter
+                );
                 CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
                 diagnostics.record(
                         source,
@@ -352,6 +384,24 @@ public final class HistoryCaptureManager {
             ServerLevel level,
             EntityPayload oldPayload,
             EntityPayload newPayload
+    ) {
+        this.recordEntityChange(level, oldPayload, newPayload, null);
+    }
+
+    public void recordDelayedEntityChange(
+            ServerLevel level,
+            EntityPayload oldPayload,
+            EntityPayload newPayload,
+            Instant actionStartedAt
+    ) {
+        this.recordEntityChange(level, oldPayload, newPayload, actionStartedAt);
+    }
+
+    private void recordEntityChange(
+            ServerLevel level,
+            EntityPayload oldPayload,
+            EntityPayload newPayload,
+            Instant actionStartedAt
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
         if (!this.canUseMutationSource(level.getServer(), source)) {
@@ -414,7 +464,7 @@ public final class HistoryCaptureManager {
 
                 int pendingBefore = buffer.size();
                 buffer.addEntityChange(capturedChange, now);
-                this.recordUndoRedoEntityAction(trackedProject, level, capturedChange, now);
+                this.recordUndoRedoEntityAction(trackedProject, level, capturedChange, now, actionStartedAt);
                 int pendingAfter = buffer.size();
                 this.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
                 LumaDebugLog.log(
@@ -452,6 +502,24 @@ public final class HistoryCaptureManager {
             EntityPayload oldPayload,
             EntityPayload newPayload
     ) {
+        this.recordUndoOnlyEntityChange(level, oldPayload, newPayload, null);
+    }
+
+    public void recordDelayedUndoOnlyEntityChange(
+            ServerLevel level,
+            EntityPayload oldPayload,
+            EntityPayload newPayload,
+            Instant actionStartedAt
+    ) {
+        this.recordUndoOnlyEntityChange(level, oldPayload, newPayload, actionStartedAt);
+    }
+
+    private void recordUndoOnlyEntityChange(
+            ServerLevel level,
+            EntityPayload oldPayload,
+            EntityPayload newPayload,
+            Instant actionStartedAt
+    ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
         if (!this.canUseMutationSource(level.getServer(), source)) {
             return;
@@ -466,7 +534,7 @@ public final class HistoryCaptureManager {
             BlockPos pos = this.entityMutationPos(oldPayload, newPayload);
             Instant now = Instant.now();
             for (TrackedProject trackedProject : this.matchingProjects(level, pos)) {
-                this.recordUndoRedoEntityAction(trackedProject, level, capturedChange, now);
+                this.recordUndoRedoEntityAction(trackedProject, level, capturedChange, now, actionStartedAt);
                 LumaDebugLog.log(
                         trackedProject.project(),
                         "capture",
@@ -937,6 +1005,13 @@ public final class HistoryCaptureManager {
                     change,
                     now
             );
+            this.historyDebugLog.logLiveUndoRedoBlock(
+                    trackedProject.project(),
+                    "root",
+                    actionId,
+                    WorldMutationContext.currentSource(),
+                    change
+            );
             return;
         }
         if (actionAllowed && !actionId.isBlank()) {
@@ -945,6 +1020,13 @@ public final class HistoryCaptureManager {
                     actionId,
                     change,
                     now
+            );
+            this.historyDebugLog.logLiveUndoRedoBlock(
+                    trackedProject.project(),
+                    "causal",
+                    actionId,
+                    WorldMutationContext.currentSource(),
+                    change
             );
             return;
         }
@@ -961,13 +1043,21 @@ public final class HistoryCaptureManager {
                 SECONDARY_ACTION_JOIN_WINDOW,
                 SECONDARY_SOURCE_JOIN_RADIUS
         );
+        this.historyDebugLog.logLiveUndoRedoBlock(
+                trackedProject.project(),
+                "related",
+                actionId,
+                WorldMutationContext.currentSource(),
+                change
+        );
     }
 
     private void recordUndoRedoEntityAction(
             TrackedProject trackedProject,
             ServerLevel level,
             StoredEntityChange change,
-            Instant now
+            Instant now,
+            Instant actionStartedAt
     ) {
         if (change == null || change.isNoOp()) {
             return;
@@ -976,14 +1066,26 @@ public final class HistoryCaptureManager {
         String actionId = WorldMutationContext.currentActionId();
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
         if (actionAllowed && !actionId.isBlank() && this.isExplicitRootSource(WorldMutationContext.currentSource())) {
-            UndoRedoHistoryManager.getInstance().recordEntityChange(
-                    trackedProject.project().id().toString(),
-                    level.dimension().identifier().toString(),
-                    actionId,
-                    WorldMutationContext.currentActor(),
-                    change,
-                    now
-            );
+            if (actionStartedAt == null) {
+                UndoRedoHistoryManager.getInstance().recordEntityChange(
+                        trackedProject.project().id().toString(),
+                        level.dimension().identifier().toString(),
+                        actionId,
+                        WorldMutationContext.currentActor(),
+                        change,
+                        now
+                );
+            } else {
+                UndoRedoHistoryManager.getInstance().recordDelayedEntityChange(
+                        trackedProject.project().id().toString(),
+                        level.dimension().identifier().toString(),
+                        actionId,
+                        WorldMutationContext.currentActor(),
+                        change,
+                        actionStartedAt,
+                        now
+                );
+            }
             return;
         }
         if (actionAllowed && !actionId.isBlank()) {
@@ -1361,6 +1463,10 @@ public final class HistoryCaptureManager {
         return SOURCE_POLICY.usesDeferredStabilization(project, source);
     }
 
+    private boolean canUseDeferredStabilization(io.github.luma.domain.model.WorldMutationSource source) {
+        return SOURCE_POLICY.canUseDeferredStabilization(source, WorldMutationContext.currentActionId());
+    }
+
     private void recordDeferredBlockMutation(
             TrackedProject trackedProject,
             ServerLevel level,
@@ -1404,6 +1510,14 @@ public final class HistoryCaptureManager {
                 trackedProject.project().name(),
                 chunk.x(),
                 chunk.z(),
+                buffer.size()
+        );
+        this.historyDebugLog.logDeferredBlock(
+                trackedProject.project(),
+                source,
+                pos,
+                oldState,
+                level.getBlockState(pos),
                 buffer.size()
         );
     }

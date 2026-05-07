@@ -81,13 +81,18 @@ public final class UndoRedoAction {
         StoredEntityChange current = this.entityChanges.get(change.entityId());
         StoredEntityChange merged = current == null
                 ? change
-                : current.withLatestState(change.newValue());
+                : this.mergeEntityChange(current, change);
         if (merged.isNoOp()) {
             this.entityChanges.remove(change.entityId());
         } else {
             this.entityChanges.put(change.entityId(), merged);
         }
         this.updatedAt = now;
+    }
+
+    private StoredEntityChange mergeEntityChange(StoredEntityChange current, StoredEntityChange change) {
+        StoredEntityChange merged = current.withLatestState(change.newValue());
+        return change.isSpawn() ? merged.withInitialState(null) : merged;
     }
 
     public boolean canAbsorbRelatedChange(

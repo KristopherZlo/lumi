@@ -25,6 +25,7 @@ import io.github.luma.domain.service.RestoreService;
 import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
+import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -403,6 +404,7 @@ final class SingleplayerTestRun {
             this.log.info("Gameplay timing: scenario=" + timing.scenario()
                     + ", durationMs=" + timing.durationMillis());
         }
+        EntityMutationTracker.tick(server);
 
         RecoveryDraft draft = this.value("Live recovery draft can be loaded after gameplay actions", () ->
                 HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));

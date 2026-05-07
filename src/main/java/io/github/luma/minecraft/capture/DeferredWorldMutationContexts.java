@@ -21,7 +21,15 @@ public final class DeferredWorldMutationContexts {
         if (!(carrier instanceof DeferredWorldMutationContextAccess access)) {
             return;
         }
-        DeferredWorldMutationContext.captureCurrent(deferredSource)
+        DeferredWorldMutationContext.captureCurrent(deferredSource, currentPropagationDepth())
+                .ifPresent(access::luma$setDeferredMutationContext);
+    }
+
+    public static void rememberPistonMovement(Object carrier) {
+        if (!(carrier instanceof DeferredWorldMutationContextAccess access)) {
+            return;
+        }
+        DeferredWorldMutationContext.captureCurrentForPistonMovement(currentPropagationDepth())
                 .ifPresent(access::luma$setDeferredMutationContext);
     }
 
@@ -35,7 +43,7 @@ public final class DeferredWorldMutationContexts {
 
     public static void push(Object carrier) {
         DeferredWorldMutationContext context = context(carrier);
-        APPLIED_FRAMES.get().push(new AppliedFrame(context == null ? null : context.push()));
+        APPLIED_FRAMES.get().push(new AppliedFrame(context, context == null ? null : context.push()));
     }
 
     public static void pop() {
@@ -55,6 +63,18 @@ public final class DeferredWorldMutationContexts {
         }
     }
 
-    private record AppliedFrame(WorldMutationContext.SourceFrame sourceFrame) {
+    private static int currentPropagationDepth() {
+        Deque<AppliedFrame> frames = APPLIED_FRAMES.get();
+        if (frames.isEmpty()) {
+            return 0;
+        }
+        DeferredWorldMutationContext context = frames.peek().context();
+        return context == null ? 0 : context.propagationDepth();
+    }
+
+    private record AppliedFrame(
+            DeferredWorldMutationContext context,
+            WorldMutationContext.SourceFrame sourceFrame
+    ) {
     }
 }

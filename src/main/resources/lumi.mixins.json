@@ -19,6 +19,7 @@
     "LevelExplosionMixin",
     "LevelSetBlockMixin",
     "LevelTicksContextMixin",
+    "LivingEntityCausalContextMixin",
     "MovingPistonBlockTickerMixin",
     "PistonBaseBlockMixin",
     "PistonMovingBlockEntityContextMixin",

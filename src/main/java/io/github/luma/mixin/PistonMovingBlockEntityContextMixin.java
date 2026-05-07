@@ -1,6 +1,5 @@
 package io.github.luma.mixin;
 
-import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.DeferredWorldMutationContext;
 import io.github.luma.minecraft.capture.DeferredWorldMutationContextAccess;
 import io.github.luma.minecraft.capture.DeferredWorldMutationContexts;
@@ -30,7 +29,7 @@ abstract class PistonMovingBlockEntityContextMixin implements DeferredWorldMutat
             boolean sourcePiston,
             CallbackInfo ci
     ) {
-        DeferredWorldMutationContexts.remember(this, WorldMutationSource.PISTON);
+        DeferredWorldMutationContexts.rememberPistonMovement(this);
     }
 
     @Override
