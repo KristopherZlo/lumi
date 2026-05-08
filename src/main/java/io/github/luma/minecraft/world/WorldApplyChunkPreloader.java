@@ -26,6 +26,10 @@ final class WorldApplyChunkPreloader {
         return new WorldApplyChunkPreloader(queue.uniqueChunks());
     }
 
+    static WorldApplyChunkPreloader forChunks(List<ChunkPoint> chunks) {
+        return new WorldApplyChunkPreloader(chunks);
+    }
+
     PreloadTickResult advance(ChunkPreloadAccess access, WorldApplyBudget budget, long deadlineNanos) {
         if (access == null || budget == null || this.complete()) {
             return new PreloadTickResult(0, 0, this.nextIndex, this.chunks.size(), this.complete(), 0, this.ticketedChunks.size(), 0);

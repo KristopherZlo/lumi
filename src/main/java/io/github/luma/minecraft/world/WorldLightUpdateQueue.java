@@ -147,24 +147,30 @@ final class WorldLightUpdateQueue {
         return applied;
     }
 
-    int markTouchedChunksUnsaved(ServerLevel level, int maxChunks, long deadlineNanos) {
+    TouchedChunkMarkResult markTouchedChunksUnsaved(ServerLevel level, int maxChunks, long deadlineNanos) {
         if (level == null || maxChunks <= 0 || !this.drainPrepared) {
-            return 0;
+            return TouchedChunkMarkResult.empty(this.remainingDirtyChunks());
         }
         int marked = 0;
+        int missing = 0;
+        int attempted = 0;
         while (this.dirtyChunkIndex < this.dirtyChunks.size()
-                && marked < maxChunks
+                && attempted < maxChunks
                 && System.nanoTime() < deadlineNanos) {
             long packedChunk = this.dirtyChunks.getLong(this.dirtyChunkIndex);
             LevelChunk chunk = level.getChunkSource().getChunkNow(chunkX(packedChunk), chunkZ(packedChunk));
             if (chunk != null) {
                 chunk.markUnsaved();
+                marked += 1;
+            } else {
+                missing += 1;
             }
             this.dirtyChunkIndex += 1;
-            marked += 1;
+            attempted += 1;
         }
+        int remaining = this.remainingDirtyChunks();
         this.clearIfComplete();
-        return marked;
+        return new TouchedChunkMarkResult(marked, missing, attempted, remaining);
     }
 
     void prepareDrainPositions() {
@@ -257,6 +263,25 @@ final class WorldLightUpdateQueue {
             this.nextIndex = 0;
             this.dirtyChunkIndex = 0;
             this.drainPrepared = false;
+        }
+    }
+
+    private int remainingDirtyChunks() {
+        if (!this.drainPrepared) {
+            return 0;
+        }
+        return Math.max(0, this.dirtyChunks.size() - this.dirtyChunkIndex);
+    }
+
+    record TouchedChunkMarkResult(
+            int markedChunks,
+            int missingChunks,
+            int attemptedChunks,
+            int remainingChunks
+    ) {
+
+        private static TouchedChunkMarkResult empty(int remainingChunks) {
+            return new TouchedChunkMarkResult(0, 0, 0, Math.max(0, remainingChunks));
         }
     }
 

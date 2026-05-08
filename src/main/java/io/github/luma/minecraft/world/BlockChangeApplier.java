@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -412,7 +413,23 @@ public final class BlockChangeApplier {
         if (entity == null || entity instanceof ServerPlayer) {
             return;
         }
-        EntityPayload.readUuid(entityTag).map(UUID::toString).ifPresent(entityId -> removeEntity(level, entityId));
+        Optional<UUID> entityId = EntityPayload.readUuid(entityTag);
+        if (entityId.isPresent()) {
+            Entity existing = level.getEntity(entityId.get());
+            if (existing instanceof ServerPlayer) {
+                return;
+            }
+            if (existing != null) {
+                if (existing.getType() == entity.getType()) {
+                    existing.restoreFrom(entity);
+                    return;
+                }
+                existing.discard();
+                if (level.getEntity(entityId.get()) != null) {
+                    return;
+                }
+            }
+        }
         level.tryAddFreshEntityWithPassengers(entity);
     }
 

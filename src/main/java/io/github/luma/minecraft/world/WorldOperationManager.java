@@ -715,7 +715,8 @@ public final class WorldOperationManager {
                         processedNativeCellsThisTick,
                         processedRewriteSectionsThisTick,
                         processedDirectSectionsThisTick,
-                        budget
+                        budget,
+                        this.profile
                 );
                 if (!decision.canStart()) {
                     stopReason = decision.reason();
@@ -1242,7 +1243,6 @@ public final class WorldOperationManager {
 
         private boolean advanceCompletion() throws Exception {
             if (this.completionFuture == null) {
-                this.releasePreloadTickets();
                 this.progressSink().update(
                         OperationStage.FINALIZING,
                         this.appliedWorkUnits,
@@ -1629,13 +1629,16 @@ public final class WorldOperationManager {
                             Instant.now(),
                             this.handle().debugEnabled()
                     ),
-                    this.lightUpdateQueue
+                    this.lightUpdateQueue,
+                    this::releasePreloadTickets
             );
         }
 
         @Override
         protected void complete(String detail) {
-            this.releasePreloadTickets();
+            if (!this.lightUpdateQueue.hasPending()) {
+                this.releasePreloadTickets();
+            }
             super.complete(detail);
         }
 
@@ -1726,9 +1729,11 @@ public final class WorldOperationManager {
     private final class LightRefreshActiveOperation extends ActiveOperation {
 
         private final WorldLightUpdateQueue lightUpdateQueue;
+        private final Runnable inheritedTicketRelease;
         private final WorldApplyMetrics applyMetrics = new WorldApplyMetrics();
         private final long startedAtNanos = System.nanoTime();
         private List<ChunkPoint> dirtyChunks = List.of();
+        private WorldApplyChunkPreloader lightChunkPreloader;
         private CompletableFuture<?> lightBarrierFuture;
         private int publishTicksRemaining = -1;
         private boolean lightPreparationRecorded = false;
@@ -1736,18 +1741,23 @@ public final class WorldOperationManager {
         private boolean prepareWaitLogged = false;
         private boolean barrierCompleteLogged = false;
         private boolean publishStartLogged = false;
+        private boolean releasedTickets = false;
         private int totalAppliedChecks = 0;
         private int totalMarkedChunks = 0;
+        private int totalAttemptedDirtyChunks = 0;
+        private int totalMissingDirtyChunks = 0;
         private int preparedChecks = 0;
         private int preparedDirtyChunkCount = 0;
 
         private LightRefreshActiveOperation(
                 ServerLevel level,
                 OperationHandle handle,
-                WorldLightUpdateQueue lightUpdateQueue
+                WorldLightUpdateQueue lightUpdateQueue,
+                Runnable inheritedTicketRelease
         ) {
             super(level, handle, "light checks");
             this.lightUpdateQueue = lightUpdateQueue == null ? new WorldLightUpdateQueue() : lightUpdateQueue;
+            this.inheritedTicketRelease = inheritedTicketRelease == null ? () -> { } : inheritedTicketRelease;
             LumaDiagnosticsLog.lightEvent(
                     "operation-start",
                     "label=" + this.handle().label()
@@ -1777,8 +1787,11 @@ public final class WorldOperationManager {
                             + ", checkedLightWork=" + this.checkedLightWork
                             + ", totalAppliedChecks=" + this.totalAppliedChecks
                             + ", totalMarkedChunks=" + this.totalMarkedChunks
+                            + ", totalAttemptedDirtyChunks=" + this.totalAttemptedDirtyChunks
+                            + ", totalMissingDirtyChunks=" + this.totalMissingDirtyChunks
                             + ", preparedChecks=" + this.preparedChecks
                             + ", dirtyChunks=" + this.dirtyChunks.size()
+                            + ", lightPreloadComplete=" + (this.lightChunkPreloader == null || this.lightChunkPreloader.complete())
                             + ", dirtyChunkSummary=" + this.dirtyChunkSummary()
             );
             this.complete(this.checkedLightWork ? "Light refreshed" : "No light refresh needed");
@@ -1808,6 +1821,7 @@ public final class WorldOperationManager {
                 this.dirtyChunks = this.lightUpdateQueue.preparedDirtyChunks();
                 this.preparedChecks = this.lightUpdateQueue.preparedCheckCount();
                 this.preparedDirtyChunkCount = this.lightUpdateQueue.dirtyChunkCount();
+                this.lightChunkPreloader = WorldApplyChunkPreloader.forChunks(this.dirtyChunks);
                 this.applyMetrics.recordPreparationDuration(System.nanoTime() - this.startedAtNanos);
                 this.applyMetrics.recordLightPrepared(
                         this.lightUpdateQueue.preparedCheckCount(),
@@ -1824,18 +1838,24 @@ public final class WorldOperationManager {
                 );
             }
 
+            if (!this.advanceLightChunkPreload(budget, deadlineNanos)) {
+                return false;
+            }
+
             int pendingBefore = this.lightUpdateQueue.pendingCount();
             int maxChecks = Math.max(128, budget.maxLightChecks());
             long startedAt = System.nanoTime();
             int appliedChecks = this.lightUpdateQueue.drain(this.level(), maxChecks, deadlineNanos);
-            int markedChunks = this.lightUpdateQueue.markTouchedChunksUnsaved(
+            WorldLightUpdateQueue.TouchedChunkMarkResult markResult = this.lightUpdateQueue.markTouchedChunksUnsaved(
                     this.level(),
                     Math.max(1, budget.maxPreloadChunks() * 4),
                     deadlineNanos
             );
             long elapsedNanos = System.nanoTime() - startedAt;
             this.totalAppliedChecks += appliedChecks;
-            this.totalMarkedChunks += markedChunks;
+            this.totalMarkedChunks += markResult.markedChunks();
+            this.totalAttemptedDirtyChunks += markResult.attemptedChunks();
+            this.totalMissingDirtyChunks += markResult.missingChunks();
             this.applyMetrics.recordLightChecks(appliedChecks);
             this.applyMetrics.recordLightDrainTick(elapsedNanos);
             this.applyMetrics.recordApplyTick(appliedChecks, elapsedNanos);
@@ -1844,17 +1864,21 @@ public final class WorldOperationManager {
                     this.handle().label() + ".lightDrainTick",
                     elapsedNanos,
                     "appliedChecks=" + appliedChecks
-                            + ", markedChunks=" + markedChunks
+                            + ", markedChunks=" + markResult.markedChunks()
+                            + ", missingChunks=" + markResult.missingChunks()
+                            + ", attemptedChunks=" + markResult.attemptedChunks()
                             + ", pendingBefore=" + pendingBefore
             );
             if (this.debugApplyEnabled()) {
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op-apply",
-                        "Light refresh drain maxChecks={} applied={} markedChunks={} pendingBefore={} pendingAfter={} elapsedMicros={}",
+                        "Light refresh drain maxChecks={} applied={} markedChunks={} missingChunks={} attemptedChunks={} pendingBefore={} pendingAfter={} elapsedMicros={}",
                         maxChecks,
                         appliedChecks,
-                        markedChunks,
+                        markResult.markedChunks(),
+                        markResult.missingChunks(),
+                        markResult.attemptedChunks(),
                         pendingBefore,
                         this.lightUpdateQueue.pendingCount(),
                         elapsedNanos / 1_000L
@@ -1867,11 +1891,15 @@ public final class WorldOperationManager {
                             + ", operationId=" + this.handle().id()
                             + ", maxChecks=" + maxChecks
                             + ", appliedChecks=" + appliedChecks
-                            + ", markedChunks=" + markedChunks
+                            + ", markedChunks=" + markResult.markedChunks()
+                            + ", missingChunks=" + markResult.missingChunks()
+                            + ", attemptedChunks=" + markResult.attemptedChunks()
+                            + ", remainingDirtyChunks=" + markResult.remainingChunks()
                             + ", pendingBefore=" + pendingBefore
                             + ", pendingAfter=" + this.lightUpdateQueue.pendingCount()
                             + ", totalAppliedChecks=" + this.totalAppliedChecks
                             + ", totalMarkedChunks=" + this.totalMarkedChunks
+                            + ", totalMissingDirtyChunks=" + this.totalMissingDirtyChunks
                             + ", preparedChecks=" + this.preparedChecks
                             + ", dirtyChunks=" + this.preparedDirtyChunkCount
             );
@@ -1883,6 +1911,78 @@ public final class WorldOperationManager {
                     "Updating light"
             );
             return false;
+        }
+
+        private boolean advanceLightChunkPreload(WorldApplyBudget budget, long deadlineNanos) {
+            if (this.lightChunkPreloader == null
+                    || !this.lightChunkPreloader.required()
+                    || this.lightChunkPreloader.complete()) {
+                return true;
+            }
+            long startedAt = System.nanoTime();
+            WorldApplyChunkPreloader.PreloadTickResult result = this.lightChunkPreloader.advance(
+                    new ServerLevelChunkPreloadAccess(this.level()),
+                    budget,
+                    deadlineNanos
+            );
+            long elapsedNanos = System.nanoTime() - startedAt;
+            this.applyMetrics.recordPreloadTick(
+                    result.newlyLoadedChunks(),
+                    result.alreadyLoadedChunks(),
+                    elapsedNanos
+            );
+            this.applyMetrics.recordPreloadPipeline(
+                    result.ticketedChunks(),
+                    result.outstandingTickets(),
+                    result.syncFallbackLoads()
+            );
+            this.progressSink().update(
+                    OperationStage.PRELOADING,
+                    result.completedChunks(),
+                    result.totalChunks(),
+                    "Preloading light chunks " + result.completedChunks() + "/" + result.totalChunks()
+            );
+            LumaLoadLog.record(
+                    "world-op",
+                    this.handle().label() + ".lightPreloadTick",
+                    elapsedNanos,
+                    "chunks=" + result.completedChunks() + "/" + result.totalChunks()
+                            + ", newlyLoaded=" + result.newlyLoadedChunks()
+                            + ", alreadyLoaded=" + result.alreadyLoadedChunks()
+                            + ", ticketed=" + result.ticketedChunks()
+                            + ", outstandingTickets=" + result.outstandingTickets()
+                            + ", syncFallbackLoads=" + result.syncFallbackLoads()
+            );
+            if (this.debugApplyEnabled()) {
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op-apply",
+                        "Light chunk preload chunks={}/{} newlyLoaded={} alreadyLoaded={} ticketed={} outstandingTickets={} syncFallbackLoads={} elapsedMicros={} complete={}",
+                        result.completedChunks(),
+                        result.totalChunks(),
+                        result.newlyLoadedChunks(),
+                        result.alreadyLoadedChunks(),
+                        result.ticketedChunks(),
+                        result.outstandingTickets(),
+                        result.syncFallbackLoads(),
+                        elapsedNanos / 1_000L,
+                        result.complete()
+                );
+            }
+            LumaDiagnosticsLog.lightSpan(
+                    "preload-tick",
+                    elapsedNanos,
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", chunks=" + result.completedChunks() + "/" + result.totalChunks()
+                            + ", newlyLoaded=" + result.newlyLoadedChunks()
+                            + ", alreadyLoaded=" + result.alreadyLoadedChunks()
+                            + ", ticketed=" + result.ticketedChunks()
+                            + ", outstandingTickets=" + result.outstandingTickets()
+                            + ", syncFallbackLoads=" + result.syncFallbackLoads()
+                            + ", complete=" + result.complete()
+            );
+            return result.complete();
         }
 
         private boolean awaitLightEngineBarrier() {
@@ -2035,6 +2135,30 @@ public final class WorldOperationManager {
         protected Optional<String> applyMetricsSummary() {
             this.applyMetrics.recordTotalDuration(Duration.between(this.handle().startedAt(), Instant.now()).toNanos());
             return Optional.of(this.applyMetrics.summary());
+        }
+
+        @Override
+        protected void complete(String detail) {
+            this.releaseLightTickets();
+            super.complete(detail);
+        }
+
+        @Override
+        protected void fail(Exception exception) {
+            this.releaseLightTickets();
+            super.fail(exception);
+        }
+
+        private void releaseLightTickets() {
+            if (this.releasedTickets) {
+                return;
+            }
+            this.releasedTickets = true;
+            ChunkPreloadAccess access = new ServerLevelChunkPreloadAccess(this.level());
+            if (this.lightChunkPreloader != null) {
+                this.lightChunkPreloader.release(access);
+            }
+            this.inheritedTicketRelease.run();
         }
     }
 

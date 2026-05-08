@@ -100,6 +100,43 @@ class WorldApplyTickWorkGateTest {
     }
 
     @Test
+    void fastProfilesAllowMixedApplyPathsUntilBudgetsAreConsumed() {
+        assertTrue(this.gate.canStartNextStep(
+                true,
+                SectionApplyPath.SECTION_REWRITE,
+                64,
+                0,
+                64,
+                0,
+                0,
+                this.budget,
+                WorldApplyProfile.HISTORY_FAST
+        ));
+        assertTrue(this.gate.canStartNextStep(
+                true,
+                SectionApplyPath.SECTION_NATIVE,
+                SectionChangeMask.ENTRY_COUNT,
+                1,
+                0,
+                1,
+                0,
+                this.budget,
+                WorldApplyProfile.HISTORY_FAST
+        ));
+        assertTrue(this.gate.canStartNextStep(
+                false,
+                null,
+                64,
+                1,
+                0,
+                1,
+                0,
+                this.budget,
+                WorldApplyProfile.HISTORY_FAST
+        ));
+    }
+
+    @Test
     void stopsSparseDirectWorkWhenDirectSectionBudgetIsConsumed() {
         assertFalse(this.gate.canStartNextStep(
                 false,
