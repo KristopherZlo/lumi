@@ -60,7 +60,7 @@ This now includes regression checks for:
 - conservative cleanup flow for orphaned snapshots/previews/cache and interrupted operation-draft recovery, including root containment and symlink-directory pruning safety
 - material delta summarization on large diffs
 - project tracking index membership checks, chunk-addressable patch selective reads, and snapshot chunk-list scans
-- entity diff merge, entity policy filtering, recovery/patch round-trips, and entity-only restore batches
+- entity diff merge, entity policy filtering, safe projectile entity snapshot normalization, recovery/patch round-trips, and entity-only restore batches
 - delayed entity spawn snapshots preserving spawn baselines and original live undo action ordering after later edits
 - entity-preserving amend, imported-branch merge projection, version diff projection, and entity-only operation progress
 - lightweight home, variants, and share controller loading plus operation-state normalization

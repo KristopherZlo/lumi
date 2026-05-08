@@ -11,11 +11,14 @@ import net.minecraft.world.level.storage.TagValueOutput;
 
 public final class EntitySnapshotService {
 
+    private final EntitySnapshotSanitizer sanitizer = new EntitySnapshotSanitizer();
+
     public EntityPayload capture(ServerLevel level, Entity entity) {
         if (level == null || entity == null || entity instanceof ServerPlayer) {
             return null;
         }
 
+        this.sanitizer.sanitize(entity);
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
         try {
             if (!entity.save(output)) {

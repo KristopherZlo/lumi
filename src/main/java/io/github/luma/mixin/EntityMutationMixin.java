@@ -5,13 +5,18 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.EntityMutationTracker.PendingEntityMutation;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity.RemovalReason;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Entity.class)
 abstract class EntityMutationMixin {
@@ -19,6 +24,14 @@ abstract class EntityMutationMixin {
     @Unique
     private static final EntityCausalContextRegistry LUMA_ENTITY_CAUSAL_CONTEXTS =
             EntityCausalContextRegistry.getInstance();
+
+    @Unique
+    private boolean luma$baseEntityConstructed;
+
+    @Inject(method = "<init>", at = @At("RETURN"))
+    private void luma$markBaseEntityConstructed(EntityType<?> entityType, Level level, CallbackInfo ci) {
+        this.luma$baseEntityConstructed = true;
+    }
 
     @WrapMethod(method = "setPos(DDD)V")
     private void luma$wrapSetPos(double x, double y, double z, Operation<Void> original) {
@@ -124,6 +137,9 @@ abstract class EntityMutationMixin {
 
     @Unique
     private PendingEntityMutation luma$captureBefore() {
+        if (!this.luma$baseEntityConstructed) {
+            return PendingEntityMutation.empty();
+        }
         return EntityMutationTracker.captureBefore((Entity) (Object) this);
     }
 
