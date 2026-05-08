@@ -31,6 +31,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ThreadedLevelLightEngine;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.storage.LevelResource;
 
 /**
@@ -1780,12 +1781,15 @@ public final class WorldOperationManager {
         private boolean checkedLightWork = false;
         private boolean prepareWaitLogged = false;
         private boolean barrierCompleteLogged = false;
+        private boolean finalDirtyMarkDone = false;
         private boolean publishStartLogged = false;
         private boolean releasedTickets = false;
         private int totalAppliedChecks = 0;
         private int totalMarkedChunks = 0;
+        private int finalMarkedChunks = 0;
         private int totalAttemptedDirtyChunks = 0;
         private int totalMissingDirtyChunks = 0;
+        private int finalMissingDirtyChunks = 0;
         private int preparedChecks = 0;
         private int preparedDirtyChunkCount = 0;
 
@@ -1816,6 +1820,7 @@ public final class WorldOperationManager {
             if (!this.awaitLightEngineBarrier()) {
                 return false;
             }
+            this.markDirtyChunksAfterLightBarrier();
             if (!this.awaitLightPublishTicks()) {
                 return false;
             }
@@ -1827,8 +1832,10 @@ public final class WorldOperationManager {
                             + ", checkedLightWork=" + this.checkedLightWork
                             + ", totalAppliedChecks=" + this.totalAppliedChecks
                             + ", totalMarkedChunks=" + this.totalMarkedChunks
+                            + ", finalMarkedChunks=" + this.finalMarkedChunks
                             + ", totalAttemptedDirtyChunks=" + this.totalAttemptedDirtyChunks
                             + ", totalMissingDirtyChunks=" + this.totalMissingDirtyChunks
+                            + ", finalMissingDirtyChunks=" + this.finalMissingDirtyChunks
                             + ", preparedChecks=" + this.preparedChecks
                             + ", dirtyChunks=" + this.dirtyChunks.size()
                             + ", lightPreloadComplete=" + (this.lightChunkPreloader == null || this.lightChunkPreloader.complete())
@@ -1836,6 +1843,42 @@ public final class WorldOperationManager {
             );
             this.complete(this.checkedLightWork ? "Light refreshed" : "No light refresh needed");
             return true;
+        }
+
+        private void markDirtyChunksAfterLightBarrier() {
+            if (this.finalDirtyMarkDone) {
+                return;
+            }
+            this.finalDirtyMarkDone = true;
+            int marked = 0;
+            int missing = 0;
+            for (ChunkPoint dirtyChunk : this.dirtyChunks) {
+                if (dirtyChunk == null) {
+                    continue;
+                }
+                LevelChunk chunk = this.level().getChunkSource().getChunkNow(dirtyChunk.x(), dirtyChunk.z());
+                if (chunk == null) {
+                    missing += 1;
+                    continue;
+                }
+                chunk.markUnsaved();
+                marked += 1;
+            }
+            this.finalMarkedChunks = marked;
+            this.finalMissingDirtyChunks = missing;
+            this.totalMarkedChunks += marked;
+            this.totalAttemptedDirtyChunks += marked + missing;
+            this.totalMissingDirtyChunks += missing;
+            LumaDiagnosticsLog.lightEvent(
+                    "final-dirty-mark",
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", markedChunks=" + marked
+                            + ", missingChunks=" + missing
+                            + ", dirtyChunks=" + this.dirtyChunks.size()
+                            + ", checkedLightWork=" + this.checkedLightWork
+                            + ", dirtyChunkSummary=" + this.dirtyChunkSummary()
+            );
         }
 
         private boolean drainDeferredLightUpdates(WorldApplyBudget budget, long deadlineNanos) {
