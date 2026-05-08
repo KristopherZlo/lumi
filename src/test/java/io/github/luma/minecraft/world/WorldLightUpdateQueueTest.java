@@ -1,7 +1,10 @@
 package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.ChunkPoint;
+import java.util.HashSet;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -94,6 +97,24 @@ class WorldLightUpdateQueueTest {
         Assertions.assertEquals(
                 java.util.List.of(new ChunkPoint(1, -1)),
                 queue.preparedDirtyChunks()
+        );
+    }
+
+    @Test
+    void exposesDirtySectionsFromExactAndSurfaceCandidates() {
+        SectionLightUpdateBatch batch = new SectionLightUpdateBatch();
+        batch.addSurfaceCandidate(new BlockPos(1, 64, 1));
+        batch.addSurfaceCandidate(new BlockPos(1, 80, 1));
+        batch.addExact(new BlockPos(17, 64, 1));
+        WorldLightUpdateQueue queue = new WorldLightUpdateQueue();
+
+        queue.add(batch);
+        queue.prepareDrainPositions();
+
+        Assertions.assertEquals(3, queue.dirtySectionCount());
+        Assertions.assertEquals(
+                Set.of(SectionPos.of(0, 4, 0), SectionPos.of(0, 5, 0), SectionPos.of(1, 4, 0)),
+                new HashSet<>(queue.preparedDirtySections())
         );
     }
 }

@@ -30,6 +30,7 @@ final class WorldLightUpdateQueue {
     private LongSet surfaceCandidatePositions = new LongOpenHashSet();
     private final LongArrayList positions = new LongArrayList();
     private final LongArrayList dirtyChunks = new LongArrayList();
+    private final LongArrayList dirtySections = new LongArrayList();
     private CompletableFuture<PreparedDrain> preparedDrainFuture;
     private int nextIndex = 0;
     private int dirtyChunkIndex = 0;
@@ -86,6 +87,21 @@ final class WorldLightUpdateQueue {
         return List.copyOf(chunks);
     }
 
+    List<SectionPos> preparedDirtySections() {
+        if (!this.drainPrepared || this.dirtySections.isEmpty()) {
+            return List.of();
+        }
+        List<SectionPos> sections = new ArrayList<>(this.dirtySections.size());
+        for (long packedSection : this.dirtySections) {
+            sections.add(SectionPos.of(packedSection));
+        }
+        return List.copyOf(sections);
+    }
+
+    int dirtySectionCount() {
+        return this.dirtySections.size();
+    }
+
     boolean prepareDrainPositionsAsync(Executor executor) {
         if (this.drainPrepared) {
             return true;
@@ -113,6 +129,8 @@ final class WorldLightUpdateQueue {
             this.positions.addAll(prepared.positions());
             this.dirtyChunks.clear();
             this.dirtyChunks.addAll(prepared.dirtyChunks());
+            this.dirtySections.clear();
+            this.dirtySections.addAll(prepared.dirtySections());
             this.nextIndex = 0;
             this.dirtyChunkIndex = 0;
             this.drainPrepared = true;
@@ -183,6 +201,8 @@ final class WorldLightUpdateQueue {
         this.positions.addAll(prepared.positions());
         this.dirtyChunks.clear();
         this.dirtyChunks.addAll(prepared.dirtyChunks());
+        this.dirtySections.clear();
+        this.dirtySections.addAll(prepared.dirtySections());
         this.nextIndex = 0;
         this.dirtyChunkIndex = 0;
         this.drainPrepared = true;
@@ -196,11 +216,14 @@ final class WorldLightUpdateQueue {
                 : surfaceCandidatePositions;
         LongSet selected = new LongOpenHashSet(queue.exactPositions);
         LongSet dirtyChunks = new LongOpenHashSet();
+        LongSet dirtySections = new LongOpenHashSet();
         for (long packedPos : queue.exactPositions) {
             dirtyChunks.add(chunkKey(packedPos));
+            dirtySections.add(sectionKey(packedPos));
         }
         for (long packedPos : queue.surfaceCandidatePositions) {
             dirtyChunks.add(chunkKey(packedPos));
+            dirtySections.add(sectionKey(packedPos));
             if (queue.isSurfaceCandidate(packedPos)) {
                 selected.add(packedPos);
             }
@@ -209,7 +232,9 @@ final class WorldLightUpdateQueue {
         positions.sort(LOCALITY_ORDER);
         LongArrayList chunks = new LongArrayList(dirtyChunks);
         chunks.sort(Long::compare);
-        return new PreparedDrain(positions, chunks);
+        LongArrayList sections = new LongArrayList(dirtySections);
+        sections.sort(Long::compare);
+        return new PreparedDrain(positions, chunks, sections);
     }
 
     private static final LongComparator LOCALITY_ORDER = (first, second) -> {
@@ -260,6 +285,7 @@ final class WorldLightUpdateQueue {
             this.surfaceCandidatePositions.clear();
             this.positions.clear();
             this.dirtyChunks.clear();
+            this.dirtySections.clear();
             this.nextIndex = 0;
             this.dirtyChunkIndex = 0;
             this.drainPrepared = false;
@@ -285,6 +311,6 @@ final class WorldLightUpdateQueue {
         }
     }
 
-    private record PreparedDrain(LongArrayList positions, LongArrayList dirtyChunks) {
+    private record PreparedDrain(LongArrayList positions, LongArrayList dirtyChunks, LongArrayList dirtySections) {
     }
 }
