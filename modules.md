@@ -240,7 +240,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 
 ### Overlays, Input, Preview, Graphs
 
-- Input chords: `client/input/UndoRedoKeyController`, `UndoRedoKeyChordTracker`, `ExternalUndoRedoPolicy`, `KeyBindingState`, `LumiClientKeyBindings`, `LumiShortcutCatalog`.
+- Input chords: `client/input/UndoRedoKeyController`, `UndoRedoKeyChordTracker`, `LumiShortcutScreenPolicy`, `ExternalUndoRedoPolicy`, `KeyBindingState`, `LumiClientKeyBindings`, `LumiShortcutCatalog`.
 - HUD, selection, and compare/pending/recent overlays: `WorkspaceHudCoordinator`, `LumiRegionSelectionController`, `LumiRegionSelectionTeachingController`, `LoadedChunkBlockRaycaster`, `LumiRegionSelectionRenderer`, `CompareOverlayPreparationService`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySurfaceResolver`, `CompareOverlayRenderTypes`, `PendingChangesOverlayCoordinator`, `PendingChangesOverlayRenderer`, `RecentChangesOverlayCoordinator`, `RecentChangesOverlayRenderer`, `OverlayMeshBatch` for cached section GPU meshes, `OverlayVolumeMerger` for bounded tiled over-cap compare and pending blobs, `OverlayFaceRenderer`, `OverlayDiagnostics`.
 - Client preview renderer: `client/preview/TexturedPreviewCaptureService`, `PreviewCaptureCoordinator`, `PreviewRenderMeshBuilder`, `PreviewRenderMesh`, `PreviewImageCropper`, `PreviewFramingCalculator`, plus `ui/preview/ProjectPreviewTextureCache` and `ui/preview/LoadingAnimationComponent`.
 - Commit graph: `ui/graph/CommitGraphLayout`, `CommitGraphNode`, `CommitGraphComponent`.
