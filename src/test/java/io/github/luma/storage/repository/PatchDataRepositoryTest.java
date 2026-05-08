@@ -8,6 +8,7 @@ import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.PatchStats;
 import io.github.luma.domain.model.PatchWorldChanges;
+import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
@@ -139,6 +140,61 @@ class PatchDataRepositoryTest {
         assertEquals(2, frame.oldStateIds().length);
         assertEquals(2, frame.newStateIds().length);
         assertEquals(2, java.util.Arrays.stream(frame.changedMask()).map(Long::bitCount).sum());
+    }
+
+    @Test
+    void writesSectionFingerprintsIntoPatchChunkIndex() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        List<StoredBlockChange> changes = List.of(
+                new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:gold_block", null)
+                ),
+                new StoredBlockChange(
+                        new BlockPoint(1, 80, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:diamond_block", null)
+                )
+        );
+
+        PatchMetadata metadata = this.repository.writePayload(layout, "patch-fingerprint", "project", "v-fp", changes);
+
+        assertEquals(1, metadata.chunks().size());
+        assertEquals(2, metadata.chunks().getFirst().sectionFingerprints().size());
+        assertTrue(metadata.chunks().getFirst().sectionFingerprints().stream()
+                .allMatch(fingerprint -> fingerprint.xxHash64() != 0L && fingerprint.sha256().length() == 64));
+    }
+
+    @Test
+    void filtersCurrentSectionFramesByFingerprintIndex() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        List<StoredBlockChange> changes = List.of(
+                new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:gold_block", null)
+                ),
+                new StoredBlockChange(
+                        new BlockPoint(1, 80, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:diamond_block", null)
+                )
+        );
+
+        PatchMetadata metadata = this.repository.writePayload(layout, "patch-section-filter", "project", "v-filter", changes);
+        SectionFingerprint requested = metadata.chunks().getFirst().sectionFingerprints().stream()
+                .filter(fingerprint -> fingerprint.sectionY() == 5)
+                .findFirst()
+                .orElseThrow();
+        PatchSectionWorldChanges sectionChanges = this.repository.loadSectionWorldChanges(
+                layout,
+                metadata,
+                List.of(requested)
+        );
+
+        assertEquals(1, sectionChanges.sectionFrames().size());
+        assertEquals(5, sectionChanges.sectionFrames().getFirst().sectionY());
     }
 
     @Test

@@ -8,6 +8,7 @@ import io.github.luma.domain.model.PatchSectionFrame;
 import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.PatchStats;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.StatePayload;
@@ -19,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -40,7 +42,8 @@ import net.jpountz.lz4.LZ4FrameOutputStream;
 public final class PatchDataRepository {
 
     private static final int MAGIC = 0x4C504154;
-    private static final int VERSION = 8;
+    private static final int VERSION = 9;
+    private static final int HIDDEN_MASK_V8 = 8;
     private static final int CHUNK_ADDRESSABLE_V6 = 6;
     private static final int SECTION_FRAME_V7 = 7;
 
@@ -97,7 +100,15 @@ public final class PatchDataRepository {
             chunkEntityChanges.sort(Comparator.comparing(StoredEntityChange::entityId));
 
             byte[] chunkBytes = this.writeChunk(chunkX, chunkZ, chunkChanges, chunkEntityChanges);
-            frames.add(new ChunkFrame(chunkX, chunkZ, chunkChanges.size(), chunkBytes.length, this.compressFrame(chunkBytes)));
+            frames.add(new ChunkFrame(
+                    chunkX,
+                    chunkZ,
+                    chunkChanges.size(),
+                    chunkBytes.length,
+                    this.compressFrame(chunkBytes),
+                    this.sectionFingerprints(chunkX, chunkZ, chunkChanges),
+                    chunkEntityChanges.size()
+            ));
             chunkIndex += 1;
             BackgroundThrottle.pauseEvery(chunkIndex, 8, 250_000L);
         }
@@ -179,12 +190,43 @@ public final class PatchDataRepository {
             List<PatchSectionFrame> frames = new ArrayList<>();
             List<StoredEntityChange> entityChanges = new ArrayList<>();
             for (int index = 0; index < chunkCount; index++) {
-                PatchSectionWorldChanges chunk = this.readSectionChunkFrame(input);
+                PatchSectionWorldChanges chunk = this.readSectionChunkFrame(input, version);
                 frames.addAll(chunk.sectionFrames());
                 entityChanges.addAll(chunk.entityChanges());
             }
             return new PatchSectionWorldChanges(frames, entityChanges);
         }
+    }
+
+    public PatchSectionWorldChanges loadSectionWorldChanges(
+            ProjectLayout layout,
+            PatchMetadata metadata,
+            Collection<SectionFingerprint> sections
+    ) throws IOException {
+        if (metadata == null || sections == null || sections.isEmpty()) {
+            return new PatchSectionWorldChanges(List.of(), List.of());
+        }
+        Set<String> requestedSections = new HashSet<>();
+        Set<ChunkPoint> requestedChunks = new HashSet<>();
+        for (SectionFingerprint section : sections) {
+            if (section == null) {
+                continue;
+            }
+            requestedSections.add(sectionKey(section.chunkX(), section.chunkZ(), section.sectionY()));
+            requestedChunks.add(section.chunk());
+        }
+        if (requestedSections.isEmpty()) {
+            return new PatchSectionWorldChanges(List.of(), List.of());
+        }
+        PatchSectionWorldChanges selectedChunks = this.toSectionWorldChanges(
+                this.loadWorldChanges(layout, metadata, requestedChunks)
+        );
+        return new PatchSectionWorldChanges(
+                selectedChunks.sectionFrames().stream()
+                        .filter(frame -> requestedSections.contains(sectionKey(frame.chunkX(), frame.chunkZ(), frame.sectionY())))
+                        .toList(),
+                selectedChunks.entityChanges()
+        );
     }
 
     private PatchWorldChanges loadLegacyWorldChanges(Path dataFile, PatchMetadata metadata) throws IOException {
@@ -354,21 +396,40 @@ public final class PatchDataRepository {
             data.writeInt(frames.size());
             long offset = 12L;
             for (ChunkFrame frame : frames) {
+                byte[] frameHeader = this.writeFrameHeader(frame);
                 slices.add(new PatchChunkSlice(
                         frame.chunkX(),
                         frame.chunkZ(),
                         frame.changeCount(),
                         offset,
-                        frame.frameLength()
+                        frameHeader.length + frame.compressedBytes().length,
+                        frame.sectionFingerprints(),
+                        frame.entityCount()
                 ));
-                data.writeInt(frame.chunkX());
-                data.writeInt(frame.chunkZ());
-                data.writeInt(frame.uncompressedLength());
-                data.writeInt(frame.compressedBytes().length);
+                data.write(frameHeader);
                 data.write(frame.compressedBytes());
-                offset += frame.frameLength();
+                offset += frameHeader.length + frame.compressedBytes().length;
             }
         }
+    }
+
+    private byte[] writeFrameHeader(ChunkFrame frame) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream output = new DataOutputStream(bytes)) {
+            output.writeInt(frame.chunkX());
+            output.writeInt(frame.chunkZ());
+            output.writeInt(frame.sectionFingerprints().size());
+            for (SectionFingerprint fingerprint : frame.sectionFingerprints()) {
+                output.writeInt(fingerprint.sectionY());
+                output.writeInt(fingerprint.changedCount());
+                output.writeLong(fingerprint.xxHash64());
+                output.writeUTF(fingerprint.sha256());
+            }
+            output.writeInt(frame.entityCount());
+            output.writeInt(frame.uncompressedLength());
+            output.writeInt(frame.compressedBytes().length);
+        }
+        return bytes.toByteArray();
     }
 
     private boolean isChunkAddressablePayload(Path dataFile) throws IOException {
@@ -379,7 +440,10 @@ public final class PatchDataRepository {
             int magic = input.readInt();
             int version = input.readInt();
             return magic == MAGIC
-                    && (version == VERSION || version == SECTION_FRAME_V7 || version == CHUNK_ADDRESSABLE_V6);
+                    && (version == VERSION
+                    || version == HIDDEN_MASK_V8
+                    || version == SECTION_FRAME_V7
+                    || version == CHUNK_ADDRESSABLE_V6);
         }
     }
 
@@ -387,7 +451,10 @@ public final class PatchDataRepository {
         int magic = input.readInt();
         int version = input.readInt();
         if (magic != MAGIC
-                || (version != VERSION && version != SECTION_FRAME_V7 && version != CHUNK_ADDRESSABLE_V6)) {
+                || (version != VERSION
+                && version != HIDDEN_MASK_V8
+                && version != SECTION_FRAME_V7
+                && version != CHUNK_ADDRESSABLE_V6)) {
             throw new IOException("Unsupported patch payload format for " + dataFile.getFileName());
         }
         return version;
@@ -396,6 +463,7 @@ public final class PatchDataRepository {
     private PatchWorldChanges readChunkFrame(DataInputStream input, int version) throws IOException {
         int chunkX = input.readInt();
         int chunkZ = input.readInt();
+        this.skipFrameIndex(input, version);
         int uncompressedLength = this.readPatchFrameLength(input, "patch chunk frame uncompressed", StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES);
         int compressedLength = this.readPatchFrameLength(input, "patch chunk frame compressed", StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES);
         byte[] compressedBytes = StorageIo.readFullyBounded(
@@ -417,6 +485,7 @@ public final class PatchDataRepository {
         if (expectedChunk != null && (chunkX != expectedChunk.x() || chunkZ != expectedChunk.z())) {
             throw new IOException("Patch selected chunk slice coordinate mismatch");
         }
+        this.skipFrameIndex(input, version);
         int uncompressedLength = this.readPatchFrameLength(input, "patch chunk frame uncompressed", StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES);
         int compressedLength = this.readPatchFrameLength(input, "patch chunk frame compressed", StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES);
         byte[] compressedBytes = StorageIo.readFullyBounded(
@@ -538,9 +607,10 @@ public final class PatchDataRepository {
         return new PatchWorldChanges(changes, this.readEntityChanges(input));
     }
 
-    private PatchSectionWorldChanges readSectionChunkFrame(DataInputStream input) throws IOException {
+    private PatchSectionWorldChanges readSectionChunkFrame(DataInputStream input, int version) throws IOException {
         int chunkX = input.readInt();
         int chunkZ = input.readInt();
+        this.skipFrameIndex(input, version);
         int uncompressedLength = this.readPatchFrameLength(input, "patch section frame uncompressed", StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES);
         int compressedLength = this.readPatchFrameLength(input, "patch section frame compressed", StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES);
         byte[] compressedBytes = StorageIo.readFullyBounded(
@@ -564,10 +634,32 @@ public final class PatchDataRepository {
             );
             List<PatchSectionFrame> frames = new ArrayList<>();
             for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
-                frames.add(this.readSectionFrame(chunkX, chunkZ, chunkInput, VERSION));
+                frames.add(this.readSectionFrame(chunkX, chunkZ, chunkInput, version));
             }
             return new PatchSectionWorldChanges(frames, this.readEntityChanges(chunkInput));
         }
+    }
+
+    private void skipFrameIndex(DataInput input, int version) throws IOException {
+        if (version < VERSION) {
+            return;
+        }
+        int sectionCount = StorageLimits.requireLength(
+                "patch section fingerprint count",
+                input.readInt(),
+                StorageLimits.MAX_PATCH_SECTIONS_PER_CHUNK
+        );
+        for (int index = 0; index < sectionCount; index++) {
+            input.readInt();
+            input.readInt();
+            input.readLong();
+            input.readUTF();
+        }
+        StorageLimits.requireLength(
+                "patch entity count",
+                input.readInt(),
+                StorageLimits.MAX_ENTITY_CHANGES_PER_CHUNK
+        );
     }
 
     private PatchSectionFrame readSectionFrame(int chunkX, int chunkZ, DataInputStream input, int version) throws IOException {
@@ -592,7 +684,7 @@ public final class PatchDataRepository {
             newBlockEntityIds[index] = input.readInt();
         }
         long[] hiddenMask = new long[SectionChangeMask.WORD_COUNT];
-        if (version >= VERSION) {
+        if (version >= HIDDEN_MASK_V8) {
             for (int index = 0; index < hiddenMask.length; index++) {
                 hiddenMask[index] = input.readLong();
             }
@@ -881,6 +973,50 @@ public final class PatchDataRepository {
         return builder.build().words();
     }
 
+    private List<SectionFingerprint> sectionFingerprints(
+            int chunkX,
+            int chunkZ,
+            List<StoredBlockChange> chunkChanges
+    ) throws IOException {
+        if (chunkChanges == null || chunkChanges.isEmpty()) {
+            return List.of();
+        }
+        Map<Integer, List<StoredBlockChange>> bySection = new LinkedHashMap<>();
+        for (StoredBlockChange change : chunkChanges) {
+            bySection.computeIfAbsent(Math.floorDiv(change.pos().y(), 16), ignored -> new ArrayList<>()).add(change);
+        }
+        List<SectionFingerprint> fingerprints = new ArrayList<>(bySection.size());
+        for (Map.Entry<Integer, List<StoredBlockChange>> entry : bySection.entrySet()) {
+            List<StoredBlockChange> sorted = entry.getValue().stream()
+                    .sorted(Comparator.comparingInt(change -> sectionLocalIndex(change.pos())))
+                    .toList();
+            fingerprints.add(SectionFingerprint.fromBytes(
+                    chunkX,
+                    chunkZ,
+                    entry.getKey(),
+                    sorted.size(),
+                    this.fingerprintBytes(sorted)
+            ));
+        }
+        return List.copyOf(fingerprints);
+    }
+
+    private byte[] fingerprintBytes(List<StoredBlockChange> sectionChanges) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream output = new DataOutputStream(bytes)) {
+            output.writeInt(sectionChanges.size());
+            for (StoredBlockChange change : sectionChanges) {
+                output.writeInt(sectionLocalIndex(change.pos()));
+                StorageIo.writeNullableCompound(output, change.oldValue() == null ? null : change.oldValue().stateTag());
+                StorageIo.writeNullableCompound(output, change.oldValue() == null ? null : change.oldValue().blockEntityTag());
+                StorageIo.writeNullableCompound(output, change.newValue() == null ? null : change.newValue().stateTag());
+                StorageIo.writeNullableCompound(output, change.newValue() == null ? null : change.newValue().blockEntityTag());
+                output.writeBoolean(change.hidden());
+            }
+        }
+        return bytes.toByteArray();
+    }
+
     private static boolean isSet(long[] mask, int localIndex) {
         if (mask == null || localIndex < 0) {
             return false;
@@ -894,6 +1030,10 @@ public final class PatchDataRepository {
 
     private static int sectionLocalIndex(BlockPoint pos) {
         return SectionChangeMask.localIndex(pos.x() & 15, pos.y() & 15, pos.z() & 15);
+    }
+
+    private static String sectionKey(int chunkX, int chunkZ, int sectionY) {
+        return chunkX + ":" + chunkZ + ":" + sectionY;
     }
 
     private static BlockPoint unpackPosition(int chunkX, int chunkZ, int packed) {
@@ -915,11 +1055,13 @@ public final class PatchDataRepository {
             int chunkZ,
             int changeCount,
             int uncompressedLength,
-            byte[] compressedBytes
+            byte[] compressedBytes,
+            List<SectionFingerprint> sectionFingerprints,
+            int entityCount
     ) {
 
-        private int frameLength() {
-            return 16 + this.compressedBytes.length;
+        private ChunkFrame {
+            sectionFingerprints = sectionFingerprints == null ? List.of() : List.copyOf(sectionFingerprints);
         }
     }
 }

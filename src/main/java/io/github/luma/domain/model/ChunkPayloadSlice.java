@@ -2,28 +2,21 @@ package io.github.luma.domain.model;
 
 import java.util.List;
 
-public record PatchChunkSlice(
+public record ChunkPayloadSlice(
         int chunkX,
         int chunkZ,
-        int changeCount,
         long dataOffsetBytes,
         int dataLengthBytes,
         List<SectionFingerprint> sectionFingerprints,
         int entityCount
 ) {
 
-    public PatchChunkSlice {
+    public ChunkPayloadSlice {
         sectionFingerprints = sectionFingerprints == null ? List.of() : List.copyOf(sectionFingerprints);
     }
 
-    public PatchChunkSlice(
-            int chunkX,
-            int chunkZ,
-            int changeCount,
-            long dataOffsetBytes,
-            int dataLengthBytes
-    ) {
-        this(chunkX, chunkZ, changeCount, dataOffsetBytes, dataLengthBytes, List.of(), 0);
+    public ChunkPayloadSlice(int chunkX, int chunkZ, long dataOffsetBytes, int dataLengthBytes) {
+        this(chunkX, chunkZ, dataOffsetBytes, dataLengthBytes, List.of(), 0);
     }
 
     public ChunkPoint chunk() {
