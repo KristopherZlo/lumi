@@ -28,6 +28,13 @@ The optional runtime load log is stored at:
 <game>/logs/lumi-load.log
 ```
 
+Focused lighting and restore block-apply diagnostics are stored at:
+
+```text
+<game>/logs/lumi-light.log
+<game>/logs/lumi-block-apply.log
+```
+
 Project history archives and share packages exported from the UI are stored at:
 
 ```text
@@ -116,6 +123,20 @@ Each log uses key-value rows and may include:
 - `type="operation-metrics"` rows with completed prepared-apply counters such as prepare, preload, apply, light/redstone finalize duration, work ticks, max apply tick time, and fallback reasons
 
 The log is an operational artifact only. It is not stored in project folders, exported in history packages, or consumed by restore/cleanup workflows.
+
+### `<game>/logs/lumi-light.log`
+
+Stores focused lighting and shadow diagnostics when `-Dlumi.lightLog=true` is set. It is also enabled by `-Dlumi.loadLog=true`.
+
+Rows include `light-refresh` scheduling, async light-check preparation, dirty chunk bounds, per-tick `checkBlock` drain counts, touched chunk unsaved marks, light-engine barrier waits, publish ticks, and completion summaries. The log is intended for bugs where restored blocks look correct until the world is reloaded and stale shadows return.
+
+### `<game>/logs/lumi-block-apply.log`
+
+Stores focused restore/rollback block apply diagnostics when `-Dlumi.blockApplyLog=true` is set. It is also enabled by `-Dlumi.loadLog=true`.
+
+Rows include preparation, preload ticks, chunk-level set/delete target counts, native/rewrite/direct apply step timings, block-entity and entity tail work, per-apply-tick stop reasons, fallback summaries, and aggregate timing. It deliberately avoids per-block rows so diagnostic logging does not dominate large restores.
+
+These logs are operational artifacts only. They are not stored in project folders, exported in history packages, or consumed by restore/cleanup workflows.
 
 ### `config/lumi-client.json`
 

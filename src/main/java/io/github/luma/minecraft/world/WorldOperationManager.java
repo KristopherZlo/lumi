@@ -2,7 +2,9 @@ package io.github.luma.minecraft.world;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.LumaDiagnosticsLog;
 import io.github.luma.debug.LumaLoadLog;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationProgress;
 import io.github.luma.domain.model.OperationSnapshot;
@@ -10,12 +12,13 @@ import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
-import java.time.Instant;
 import java.time.Duration;
-import java.util.List;
+import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -26,6 +29,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ThreadedLevelLightEngine;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.LevelResource;
 
 /**
@@ -40,6 +45,7 @@ public final class WorldOperationManager {
     private static final int MAX_BLOCK_ENTITIES_PER_TICK = 64;
     private static final int MAX_ENTITY_OPERATIONS_PER_TICK = 32;
     private static final int EXACT_REPLAY_GUARD_TICKS = 40;
+    private static final int LIGHT_PUBLISH_TICKS = 2;
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
     private static final double MAX_ADAPTIVE_SCALE = 1.25D;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
@@ -613,6 +619,7 @@ public final class WorldOperationManager {
                         this.prepared.localQueue().completedCount(),
                         this.chunkPreloader.totalChunks()
                 );
+                this.logBlockApplyPrepared();
                 if (this.prepared.totalWorkUnits() == 0) {
                     return this.advanceCompletion();
                 }
@@ -696,6 +703,7 @@ public final class WorldOperationManager {
                                 BlockChangeApplier.entityOperationCount(this.currentBatch.entityBatch())
                         );
                     }
+                    this.logBlockApplyChunkStart(this.currentBatch);
                     WorldOperationManager.this.historyDebugLog.logReplayBatch(this.handle(), this.currentBatch);
                 }
 
@@ -776,6 +784,7 @@ public final class WorldOperationManager {
                     this.prepared.historyStore().record(this.currentBatch);
                     this.prepared.batchProcessor().postProcessSet(this.currentBatch);
                     this.exactReplayStateQueue.record(this.currentBatch);
+                    this.logBlockApplyChunkFinish(this.currentBatch);
                     this.currentBatch = null;
                     this.currentNativeSections = List.of();
                     this.currentSections = List.of();
@@ -803,6 +812,22 @@ public final class WorldOperationManager {
             );
             long applyTickElapsedNanos = System.nanoTime() - applyTickStartedAt;
             this.applyMetrics.recordApplyTick(processedWorkThisTick, applyTickElapsedNanos);
+            this.logBlockApplyTickSummary(
+                    stopReason,
+                    processedWorkThisTick,
+                    processedNativeSectionsThisTick,
+                    processedNativeCellsThisTick,
+                    processedRewriteSectionsThisTick,
+                    processedDirectSectionsThisTick,
+                    startedChunksThisTick,
+                    finishedChunksThisTick,
+                    tickStartProcessedBlocks,
+                    tickStartRewriteSections,
+                    tickStartNativeSections,
+                    tickStartFallbackSections,
+                    tickStartLightChecks,
+                    applyTickElapsedNanos
+            );
             LumaLoadLog.record(
                     "world-op",
                     this.handle().label() + ".applyTick",
@@ -881,6 +906,21 @@ public final class WorldOperationManager {
                         result.complete()
                 );
             }
+            if (this.blockApplyDiagnosticsEnabled()) {
+                LumaDiagnosticsLog.blockApplySpan(
+                        "preload-tick",
+                        elapsedNanos,
+                        "label=" + this.handle().label()
+                                + ", operationId=" + this.handle().id()
+                                + ", chunks=" + result.completedChunks() + "/" + result.totalChunks()
+                                + ", newlyLoaded=" + result.newlyLoadedChunks()
+                                + ", alreadyLoaded=" + result.alreadyLoadedChunks()
+                                + ", ticketed=" + result.ticketedChunks()
+                                + ", outstandingTickets=" + result.outstandingTickets()
+                                + ", syncFallbackLoads=" + result.syncFallbackLoads()
+                                + ", complete=" + result.complete()
+                );
+            }
             LumaLoadLog.record(
                     "world-op",
                     this.handle().label() + ".preloadTick",
@@ -898,6 +938,15 @@ public final class WorldOperationManager {
         private void startApply() {
             this.dispatcher = new GlobalDispatcher();
             this.dispatcher.enqueue(this.prepared.localQueue());
+            if (this.blockApplyDiagnosticsEnabled()) {
+                LumaDiagnosticsLog.blockApplyEvent(
+                        "apply-start",
+                        "label=" + this.handle().label()
+                                + ", operationId=" + this.handle().id()
+                                + ", profile=" + this.profile
+                                + ", totalWorkUnits=" + this.prepared.totalWorkUnits()
+                );
+            }
             this.progressSink().update(
                     OperationStage.APPLYING,
                     0,
@@ -1071,6 +1120,104 @@ public final class WorldOperationManager {
             );
         }
 
+        private void logBlockApplyPrepared() {
+            if (!this.blockApplyDiagnosticsEnabled()) {
+                return;
+            }
+            LumaDiagnosticsLog.blockApplyEvent(
+                    "prepared",
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", projectId=" + this.handle().projectId()
+                            + ", profile=" + this.profile
+                            + ", totalWorkUnits=" + this.prepared.totalWorkUnits()
+                            + ", readyChunkBatches=" + this.prepared.localQueue().completedCount()
+                            + ", preloadChunks=" + this.chunkPreloader.totalChunks()
+            );
+        }
+
+        private void logBlockApplyChunkStart(ChunkBatch batch) {
+            if (!this.blockApplyDiagnosticsEnabled() || batch == null) {
+                return;
+            }
+            BlockBatchShape shape = BlockBatchShape.from(batch);
+            LumaDiagnosticsLog.blockApplyEvent(
+                    "chunk-start",
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", chunk=" + batch.chunk().x() + ":" + batch.chunk().z()
+                            + ", placements=" + batch.totalPlacements()
+                            + ", setTargets=" + shape.setTargets()
+                            + ", deleteTargets=" + shape.deleteTargets()
+                            + ", sparseTargets=" + shape.sparseTargets()
+                            + ", nativeTargets=" + shape.nativeTargets()
+                            + ", rewriteTargets=" + shape.rewriteTargets()
+                            + ", nativeSections=" + this.currentNativeSections.size()
+                            + ", rewriteSections=" + this.rewriteSectionCount(batch)
+                            + ", directSections=" + this.currentSections.size()
+                            + ", blockEntities=" + this.currentBlockEntities.size()
+                            + ", entityOps=" + BlockChangeApplier.entityOperationCount(batch.entityBatch())
+            );
+        }
+
+        private void logBlockApplyChunkFinish(ChunkBatch batch) {
+            if (!this.blockApplyDiagnosticsEnabled() || batch == null) {
+                return;
+            }
+            LumaDiagnosticsLog.blockApplyEvent(
+                    "chunk-finish",
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", chunk=" + batch.chunk().x() + ":" + batch.chunk().z()
+                            + ", totalApplied=" + this.appliedWorkUnits
+                            + ", metrics=" + this.applyMetrics.summary()
+            );
+        }
+
+        private void logBlockApplyTickSummary(
+                String stopReason,
+                int processedWorkThisTick,
+                int processedNativeSectionsThisTick,
+                int processedNativeCellsThisTick,
+                int processedRewriteSectionsThisTick,
+                int processedDirectSectionsThisTick,
+                int startedChunksThisTick,
+                int finishedChunksThisTick,
+                int tickStartProcessedBlocks,
+                int tickStartRewriteSections,
+                int tickStartNativeSections,
+                int tickStartFallbackSections,
+                int tickStartLightChecks,
+                long elapsedNanos
+        ) {
+            if (!this.blockApplyDiagnosticsEnabled()) {
+                return;
+            }
+            LumaDiagnosticsLog.blockApplySpan(
+                    "apply-tick",
+                    elapsedNanos,
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", stop=" + stopReason
+                            + ", workThisTick=" + processedWorkThisTick
+                            + ", nativeSectionsThisTick=" + processedNativeSectionsThisTick
+                            + ", nativeCellsThisTick=" + processedNativeCellsThisTick
+                            + ", rewriteSectionsThisTick=" + processedRewriteSectionsThisTick
+                            + ", directSectionsThisTick=" + processedDirectSectionsThisTick
+                            + ", chunksStarted=" + startedChunksThisTick
+                            + ", chunksFinished=" + finishedChunksThisTick
+                            + ", processedDelta=" + (this.applyMetrics.processedBlocks() - tickStartProcessedBlocks)
+                            + ", rewriteSectionsDelta=" + (this.applyMetrics.rewriteSections() - tickStartRewriteSections)
+                            + ", nativeSectionsDelta=" + (this.applyMetrics.nativeSections() - tickStartNativeSections)
+                            + ", fallbackSectionsDelta=" + (this.applyMetrics.fallbackSections() - tickStartFallbackSections)
+                            + ", lightChecksDelta=" + (this.applyMetrics.lightChecks() - tickStartLightChecks)
+                            + ", currentBatch=" + (this.currentBatch == null ? "none" : this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z())
+                            + ", dispatcherPending=" + (this.dispatcher != null && this.dispatcher.hasPending())
+                            + ", lightPending=" + this.lightUpdateQueue.pendingCount()
+                            + ", redstonePending=" + this.redstoneUpdateQueue.pendingCount()
+            );
+        }
+
         private int maxWorkForCurrentStep(
                 WorldApplyBudget budget,
                 int processedWorkThisTick,
@@ -1156,6 +1303,7 @@ public final class WorldOperationManager {
                     this.nativeSectionIndex += 1;
                     this.nativeSectionCursor = null;
                 }
+                long elapsedNanos = System.nanoTime() - startedAt;
                 if (this.debugApplyEnabled()) {
                     LumaDebugLog.log(
                             this.handle(),
@@ -1169,8 +1317,24 @@ public final class WorldOperationManager {
                             maxBlocks,
                             result.processedCells(),
                             result.completedSection(),
-                            microsSince(startedAt),
+                            elapsedNanos / 1_000L,
                             this.commitSummary(result.commitResult())
+                    );
+                }
+                if (this.blockApplyDiagnosticsEnabled()) {
+                    LumaDiagnosticsLog.blockApplySpan(
+                            "native-section-step",
+                            elapsedNanos,
+                            "label=" + this.handle().label()
+                                    + ", operationId=" + this.handle().id()
+                                    + ", chunk=" + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
+                                    + ", sectionY=" + nativeSection.sectionY()
+                                    + ", path=" + nativeSection.safetyProfile().path()
+                                    + ", cells=" + nativeSection.changedCellCount()
+                                    + ", maxBlocks=" + maxBlocks
+                                    + ", processed=" + result.processedCells()
+                                    + ", completed=" + result.completedSection()
+                                    + ", commit=[" + this.commitSummary(result.commitResult()) + "]"
                     );
                 }
                 return new AppliedWork(
@@ -1196,6 +1360,7 @@ public final class WorldOperationManager {
                 int previousSectionIndex = this.sectionIndex;
                 this.sectionIndex = result.nextSectionIndex();
                 this.placementIndex = result.nextPlacementIndex();
+                long elapsedNanos = System.nanoTime() - startedAt;
                 if (this.debugApplyEnabled()) {
                     LumaDebugLog.log(
                             this.handle(),
@@ -1211,8 +1376,24 @@ public final class WorldOperationManager {
                             this.placementIndex,
                             result.commitResult().directSections(),
                             this.sectionIndex >= this.currentSections.size(),
-                            microsSince(startedAt),
+                            elapsedNanos / 1_000L,
                             this.commitSummary(result.commitResult())
+                    );
+                }
+                if (this.blockApplyDiagnosticsEnabled()) {
+                    LumaDiagnosticsLog.blockApplySpan(
+                            "sparse-chunk-step",
+                            elapsedNanos,
+                            "label=" + this.handle().label()
+                                    + ", operationId=" + this.handle().id()
+                                    + ", chunk=" + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
+                                    + ", sectionIndex=" + previousSectionIndex + "->" + this.sectionIndex
+                                    + ", maxBlocks=" + maxBlocks
+                                    + ", maxDirectSections=" + maxDirectSections
+                                    + ", processed=" + result.processedBlocks()
+                                    + ", nextPlacement=" + this.placementIndex
+                                    + ", completed=" + (this.sectionIndex >= this.currentSections.size())
+                                    + ", commit=[" + this.commitSummary(result.commitResult()) + "]"
                     );
                 }
                 return new AppliedWork(
@@ -1240,6 +1421,7 @@ public final class WorldOperationManager {
                     if (this.blockEntityIndex >= this.currentBlockEntities.size()) {
                         this.blockEntitiesApplied = true;
                     }
+                    long elapsedNanos = System.nanoTime() - startedAt;
                     if (this.debugApplyEnabled()) {
                         LumaDebugLog.log(
                                 this.handle(),
@@ -1252,7 +1434,21 @@ public final class WorldOperationManager {
                                 this.blockEntityIndex,
                                 this.currentBlockEntities.size(),
                                 this.blockEntitiesApplied,
-                                microsSince(startedAt)
+                                elapsedNanos / 1_000L
+                        );
+                    }
+                    if (this.blockApplyDiagnosticsEnabled()) {
+                        LumaDiagnosticsLog.blockApplySpan(
+                                "block-entity-step",
+                                elapsedNanos,
+                                "label=" + this.handle().label()
+                                        + ", operationId=" + this.handle().id()
+                                        + ", chunk=" + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
+                                        + ", max=" + Math.min(maxBlocks, MAX_BLOCK_ENTITIES_PER_TICK)
+                                        + ", processed=" + processed
+                                        + ", nextIndex=" + this.blockEntityIndex
+                                        + ", total=" + this.currentBlockEntities.size()
+                                        + ", completed=" + this.blockEntitiesApplied
                         );
                     }
                     return new AppliedWork(processed, 0, 0, 0, 0);
@@ -1277,6 +1473,7 @@ public final class WorldOperationManager {
                 if (this.entityIndex >= entityOperationCount) {
                     this.entitiesApplied = true;
                 }
+                long elapsedNanos = System.nanoTime() - startedAt;
                 if (this.debugApplyEnabled()) {
                     LumaDebugLog.log(
                             this.handle(),
@@ -1289,7 +1486,21 @@ public final class WorldOperationManager {
                             this.entityIndex,
                             entityOperationCount,
                             this.entitiesApplied,
-                            microsSince(startedAt)
+                            elapsedNanos / 1_000L
+                    );
+                }
+                if (this.blockApplyDiagnosticsEnabled()) {
+                    LumaDiagnosticsLog.blockApplySpan(
+                            "entity-step",
+                            elapsedNanos,
+                            "label=" + this.handle().label()
+                                    + ", operationId=" + this.handle().id()
+                                    + ", chunk=" + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
+                                    + ", max=" + Math.min(maxBlocks, MAX_ENTITY_OPERATIONS_PER_TICK)
+                                    + ", processed=" + processed
+                                    + ", nextIndex=" + this.entityIndex
+                                    + ", total=" + entityOperationCount
+                                    + ", completed=" + this.entitiesApplied
                     );
                 }
                 return new AppliedWork(processed, 0, 0, 0, 0);
@@ -1316,6 +1527,10 @@ public final class WorldOperationManager {
 
         private boolean debugApplyEnabled() {
             return LumaDebugLog.enabled(this.handle());
+        }
+
+        private boolean blockApplyDiagnosticsEnabled() {
+            return LumaDiagnosticsLog.blockApplyEnabled() && this.profile != WorldApplyProfile.NORMAL;
         }
 
         private int rewriteSectionCount(ChunkBatch batch) {
@@ -1398,6 +1613,13 @@ public final class WorldOperationManager {
             if (this.snapshot().stage() != OperationStage.COMPLETED || !this.lightUpdateQueue.hasPending()) {
                 return null;
             }
+            LumaDiagnosticsLog.lightEvent(
+                    "scheduled",
+                    "parentLabel=" + this.handle().label()
+                            + ", parentOperationId=" + this.handle().id()
+                            + ", pendingChecks=" + this.lightUpdateQueue.pendingCount()
+                            + ", projectId=" + this.handle().projectId()
+            );
             return new LightRefreshActiveOperation(
                     this.level(),
                     new OperationHandle(
@@ -1448,13 +1670,76 @@ public final class WorldOperationManager {
         }
     }
 
+    private record BlockBatchShape(
+            int setTargets,
+            int deleteTargets,
+            int sparseTargets,
+            int nativeTargets,
+            int rewriteTargets
+    ) {
+
+        private static BlockBatchShape from(ChunkBatch batch) {
+            if (batch == null) {
+                return new BlockBatchShape(0, 0, 0, 0, 0);
+            }
+            int[] counts = new int[5];
+            for (PreparedSectionApplyBatch section : batch.orderedNativeSections()) {
+                int before = counts[0] + counts[1];
+                addNativeTargets(counts, section);
+                int added = counts[0] + counts[1] - before;
+                if (section.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE) {
+                    counts[4] += added;
+                } else {
+                    counts[3] += added;
+                }
+            }
+            for (SectionBatch section : batch.orderedSections()) {
+                if (section.placements() == null) {
+                    continue;
+                }
+                for (PreparedBlockPlacement placement : section.placements()) {
+                    addTarget(counts, placement.state());
+                    counts[2] += 1;
+                }
+            }
+            return new BlockBatchShape(counts[0], counts[1], counts[2], counts[3], counts[4]);
+        }
+
+        private static void addNativeTargets(int[] counts, PreparedSectionApplyBatch section) {
+            if (section == null || section.buffer() == null) {
+                return;
+            }
+            section.buffer().changedCells().forEachSetCell(localIndex ->
+                    addTarget(counts, section.buffer().targetStateAt(localIndex))
+            );
+        }
+
+        private static void addTarget(int[] counts, BlockState state) {
+            if (state != null && state.isAir()) {
+                counts[1] += 1;
+            } else {
+                counts[0] += 1;
+            }
+        }
+    }
+
     private final class LightRefreshActiveOperation extends ActiveOperation {
 
         private final WorldLightUpdateQueue lightUpdateQueue;
         private final WorldApplyMetrics applyMetrics = new WorldApplyMetrics();
         private final long startedAtNanos = System.nanoTime();
+        private List<ChunkPoint> dirtyChunks = List.of();
+        private CompletableFuture<?> lightBarrierFuture;
+        private int publishTicksRemaining = -1;
         private boolean lightPreparationRecorded = false;
         private boolean checkedLightWork = false;
+        private boolean prepareWaitLogged = false;
+        private boolean barrierCompleteLogged = false;
+        private boolean publishStartLogged = false;
+        private int totalAppliedChecks = 0;
+        private int totalMarkedChunks = 0;
+        private int preparedChecks = 0;
+        private int preparedDirtyChunkCount = 0;
 
         private LightRefreshActiveOperation(
                 ServerLevel level,
@@ -1463,6 +1748,13 @@ public final class WorldOperationManager {
         ) {
             super(level, handle, "light checks");
             this.lightUpdateQueue = lightUpdateQueue == null ? new WorldLightUpdateQueue() : lightUpdateQueue;
+            LumaDiagnosticsLog.lightEvent(
+                    "operation-start",
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", projectId=" + this.handle().projectId()
+                            + ", pendingChecks=" + this.lightUpdateQueue.pendingCount()
+            );
         }
 
         @Override
@@ -1471,23 +1763,39 @@ public final class WorldOperationManager {
                 return this.drainDeferredLightUpdates(budget, deadlineNanos);
             }
 
-            if (this.level().getLightEngine().hasLightWork()) {
-                this.checkedLightWork = true;
-                this.progressSink().update(
-                        OperationStage.FINALIZING,
-                        this.lightUpdateQueue.preparedCheckCount(),
-                        Math.max(1, this.lightUpdateQueue.preparedCheckCount()),
-                        "Waiting for light engine"
-                );
+            if (!this.awaitLightEngineBarrier()) {
+                return false;
+            }
+            if (!this.awaitLightPublishTicks()) {
                 return false;
             }
 
+            LumaDiagnosticsLog.lightEvent(
+                    "operation-complete",
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", checkedLightWork=" + this.checkedLightWork
+                            + ", totalAppliedChecks=" + this.totalAppliedChecks
+                            + ", totalMarkedChunks=" + this.totalMarkedChunks
+                            + ", preparedChecks=" + this.preparedChecks
+                            + ", dirtyChunks=" + this.dirtyChunks.size()
+                            + ", dirtyChunkSummary=" + this.dirtyChunkSummary()
+            );
             this.complete(this.checkedLightWork ? "Light refreshed" : "No light refresh needed");
             return true;
         }
 
         private boolean drainDeferredLightUpdates(WorldApplyBudget budget, long deadlineNanos) {
             if (!this.lightUpdateQueue.prepareDrainPositionsAsync(WorldOperationManager.this.executor())) {
+                if (!this.prepareWaitLogged) {
+                    this.prepareWaitLogged = true;
+                    LumaDiagnosticsLog.lightEvent(
+                            "prepare-start",
+                            "label=" + this.handle().label()
+                                    + ", operationId=" + this.handle().id()
+                                    + ", pendingChecks=" + this.lightUpdateQueue.pendingCount()
+                    );
+                }
                 this.progressSink().update(
                         OperationStage.PREPARING,
                         0,
@@ -1497,12 +1805,23 @@ public final class WorldOperationManager {
                 return false;
             }
             if (!this.lightPreparationRecorded) {
+                this.dirtyChunks = this.lightUpdateQueue.preparedDirtyChunks();
+                this.preparedChecks = this.lightUpdateQueue.preparedCheckCount();
+                this.preparedDirtyChunkCount = this.lightUpdateQueue.dirtyChunkCount();
                 this.applyMetrics.recordPreparationDuration(System.nanoTime() - this.startedAtNanos);
                 this.applyMetrics.recordLightPrepared(
                         this.lightUpdateQueue.preparedCheckCount(),
                         this.lightUpdateQueue.dirtyChunkCount()
                 );
                 this.lightPreparationRecorded = true;
+                LumaDiagnosticsLog.lightEvent(
+                        "prepared",
+                        "label=" + this.handle().label()
+                                + ", operationId=" + this.handle().id()
+                                + ", preparedChecks=" + this.preparedChecks
+                                + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                + ", dirtyChunkSummary=" + this.dirtyChunkSummary()
+                );
             }
 
             int pendingBefore = this.lightUpdateQueue.pendingCount();
@@ -1515,6 +1834,8 @@ public final class WorldOperationManager {
                     deadlineNanos
             );
             long elapsedNanos = System.nanoTime() - startedAt;
+            this.totalAppliedChecks += appliedChecks;
+            this.totalMarkedChunks += markedChunks;
             this.applyMetrics.recordLightChecks(appliedChecks);
             this.applyMetrics.recordLightDrainTick(elapsedNanos);
             this.applyMetrics.recordApplyTick(appliedChecks, elapsedNanos);
@@ -1539,7 +1860,22 @@ public final class WorldOperationManager {
                         elapsedNanos / 1_000L
                 );
             }
-            int totalChecks = Math.max(1, this.lightUpdateQueue.preparedCheckCount());
+            LumaDiagnosticsLog.lightSpan(
+                    "drain-tick",
+                    elapsedNanos,
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", maxChecks=" + maxChecks
+                            + ", appliedChecks=" + appliedChecks
+                            + ", markedChunks=" + markedChunks
+                            + ", pendingBefore=" + pendingBefore
+                            + ", pendingAfter=" + this.lightUpdateQueue.pendingCount()
+                            + ", totalAppliedChecks=" + this.totalAppliedChecks
+                            + ", totalMarkedChunks=" + this.totalMarkedChunks
+                            + ", preparedChecks=" + this.preparedChecks
+                            + ", dirtyChunks=" + this.preparedDirtyChunkCount
+            );
+            int totalChecks = Math.max(1, this.preparedChecks);
             this.progressSink().update(
                     OperationStage.APPLYING,
                     Math.max(0, totalChecks - this.lightUpdateQueue.pendingCount()),
@@ -1547,6 +1883,148 @@ public final class WorldOperationManager {
                     "Updating light"
             );
             return false;
+        }
+
+        private boolean awaitLightEngineBarrier() {
+            ThreadedLevelLightEngine lightEngine = this.level().getChunkSource().getLightEngine();
+            lightEngine.tryScheduleUpdate();
+            if (this.lightBarrierFuture == null) {
+                this.lightBarrierFuture = this.createLightBarrier(lightEngine);
+                LumaLoadLog.record(
+                        "world-op",
+                        this.handle().label() + ".lightBarrier",
+                        0L,
+                        "dirtyChunks=" + this.dirtyChunks.size()
+                );
+                LumaDiagnosticsLog.lightEvent(
+                        "barrier-start",
+                        "label=" + this.handle().label()
+                                + ", operationId=" + this.handle().id()
+                                + ", preparedChecks=" + this.preparedChecks
+                                + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                + ", dirtyChunkSummary=" + this.dirtyChunkSummary()
+                );
+            }
+            boolean futureDone = this.lightBarrierFuture.isDone();
+            boolean hasLightWork = this.level().getLightEngine().hasLightWork();
+            if (!futureDone || hasLightWork) {
+                this.checkedLightWork = true;
+                this.applyMetrics.recordLightEngineFlushTick();
+                LumaDiagnosticsLog.lightEvent(
+                        "barrier-wait",
+                        "label=" + this.handle().label()
+                                + ", operationId=" + this.handle().id()
+                                + ", futureDone=" + futureDone
+                                + ", hasLightWork=" + hasLightWork
+                                + ", flushTicks=" + this.applyMetrics.lightEngineFlushTicks()
+                                + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                + ", preparedChecks=" + this.preparedChecks
+                );
+                this.progressSink().update(
+                        OperationStage.FINALIZING,
+                        this.preparedChecks,
+                        Math.max(1, this.preparedChecks),
+                        "Waiting for light engine"
+                );
+                return false;
+            }
+            this.lightBarrierFuture.join();
+            if (!this.barrierCompleteLogged) {
+                this.barrierCompleteLogged = true;
+                LumaDiagnosticsLog.lightEvent(
+                        "barrier-complete",
+                        "label=" + this.handle().label()
+                                + ", operationId=" + this.handle().id()
+                                + ", checkedLightWork=" + this.checkedLightWork
+                                + ", flushTicks=" + this.applyMetrics.lightEngineFlushTicks()
+                                + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                + ", preparedChecks=" + this.preparedChecks
+                );
+            }
+            return true;
+        }
+
+        private CompletableFuture<?> createLightBarrier(ThreadedLevelLightEngine lightEngine) {
+            if (this.dirtyChunks.isEmpty()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            CompletableFuture<?>[] futures = new CompletableFuture<?>[this.dirtyChunks.size()];
+            for (int index = 0; index < this.dirtyChunks.size(); index++) {
+                ChunkPoint chunk = this.dirtyChunks.get(index);
+                futures[index] = lightEngine.waitForPendingTasks(chunk.x(), chunk.z());
+            }
+            return CompletableFuture.allOf(futures);
+        }
+
+        private boolean awaitLightPublishTicks() {
+            if (this.publishTicksRemaining < 0) {
+                this.publishTicksRemaining = LIGHT_PUBLISH_TICKS;
+                this.publishStartLogged = true;
+                LumaDiagnosticsLog.lightEvent(
+                        "publish-start",
+                        "label=" + this.handle().label()
+                                + ", operationId=" + this.handle().id()
+                                + ", publishTicks=" + LIGHT_PUBLISH_TICKS
+                                + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                + ", preparedChecks=" + this.preparedChecks
+                );
+            }
+            if (this.publishTicksRemaining <= 0) {
+                if (this.publishStartLogged) {
+                    LumaDiagnosticsLog.lightEvent(
+                            "publish-complete",
+                            "label=" + this.handle().label()
+                                    + ", operationId=" + this.handle().id()
+                                    + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                    + ", preparedChecks=" + this.preparedChecks
+                    );
+                }
+                return true;
+            }
+            this.checkedLightWork = true;
+            this.publishTicksRemaining -= 1;
+            LumaDiagnosticsLog.lightEvent(
+                    "publish-tick",
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", remainingAfter=" + this.publishTicksRemaining
+                            + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                            + ", preparedChecks=" + this.preparedChecks
+            );
+            this.progressSink().update(
+                    OperationStage.FINALIZING,
+                    this.preparedChecks,
+                    Math.max(1, this.preparedChecks),
+                    "Publishing light updates"
+            );
+            return false;
+        }
+
+        private String dirtyChunkSummary() {
+            if (this.dirtyChunks.isEmpty()) {
+                return "none";
+            }
+            int minX = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE;
+            int minZ = Integer.MAX_VALUE;
+            int maxZ = Integer.MIN_VALUE;
+            StringJoiner sample = new StringJoiner("|");
+            for (int index = 0; index < this.dirtyChunks.size(); index++) {
+                ChunkPoint chunk = this.dirtyChunks.get(index);
+                minX = Math.min(minX, chunk.x());
+                maxX = Math.max(maxX, chunk.x());
+                minZ = Math.min(minZ, chunk.z());
+                maxZ = Math.max(maxZ, chunk.z());
+                if (index < 8) {
+                    sample.add(chunk.x() + ":" + chunk.z());
+                }
+            }
+            return "count=" + this.dirtyChunks.size()
+                    + ", minX=" + minX
+                    + ", maxX=" + maxX
+                    + ", minZ=" + minZ
+                    + ", maxZ=" + maxZ
+                    + ", sample=" + sample;
         }
 
         private boolean debugApplyEnabled() {

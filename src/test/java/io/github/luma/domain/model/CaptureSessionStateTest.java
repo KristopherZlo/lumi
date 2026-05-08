@@ -83,6 +83,8 @@ class CaptureSessionStateTest {
         state.markDirtyChunk(new ChunkPoint(0, 0), deferredAction);
         state.markDirtyChunk(new ChunkPoint(1, 0));
 
+        assertEquals(List.of(new ChunkPoint(0, 0), new ChunkPoint(1, 0)), state.pendingReconcileChunks());
+
         UUID entityId = UUID.randomUUID();
         assertTrue(state.trackFallingEntity(entityId));
         assertFalse(state.trackFallingEntity(entityId));

@@ -408,7 +408,7 @@ Rules:
 - undoing after a save creates a new pending draft on top of the saved head;
 - restarting the game keeps recovery drafts but not the step-by-step undo/redo stack;
 - redo remains available after passive fallout is folded into the active action;
-- undo/redo waits for still-settling redstone or piston chunks instead of selecting a partial lever-only action.
+- undo/redo waits for still-settling redstone or piston chunks instead of selecting a partial lever-only action, and it can load those pending chunks even if you have walked away from the edit area.
 
 Undo and redo restore stored block states with side-effect-suppressed placement flags.
 
@@ -924,7 +924,7 @@ If undo/redo does nothing:
 - the live stack may be empty;
 - the game may have restarted since the action;
 - an operation may be active;
-- redstone or piston fallout may still be settling.
+- redstone or piston fallout may still be inside the short settle window.
 
 If restore is blocked:
 

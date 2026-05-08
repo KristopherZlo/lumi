@@ -877,7 +877,53 @@ public final class HistoryCaptureManager {
             return;
         }
 
+        ServerLevel level = this.resolveProjectLevel(server, trackedProject.project());
+        this.loadUndoRedoStabilizationChunks(level, trackedProject.project(), sessionState);
         this.reconcileSession(server, trackedProject, sessionState, false);
+    }
+
+    private void loadUndoRedoStabilizationChunks(
+            ServerLevel level,
+            BuildProject project,
+            CaptureSessionState sessionState
+    ) {
+        if (level == null || project == null || sessionState == null) {
+            return;
+        }
+        List<ChunkPoint> pendingChunks = sessionState.pendingReconcileChunks();
+        if (pendingChunks.isEmpty()) {
+            return;
+        }
+        int loaded = 0;
+        int alreadyLoaded = 0;
+        for (ChunkPoint chunk : pendingChunks) {
+            if (chunk == null) {
+                continue;
+            }
+            if (level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null) {
+                alreadyLoaded += 1;
+                continue;
+            }
+            if (level.getChunk(chunk.x(), chunk.z()) != null) {
+                loaded += 1;
+            }
+        }
+        if (loaded > 0) {
+            LumaMod.LOGGER.info(
+                    "Loaded {} deferred stabilization chunks for undo/redo in project {} ({} already loaded)",
+                    loaded,
+                    project.name(),
+                    alreadyLoaded
+            );
+        }
+        LumaDebugLog.log(
+                project,
+                "capture",
+                "Undo/redo stabilization chunk load pending={} loaded={} alreadyLoaded={}",
+                pendingChunks.size(),
+                loaded,
+                alreadyLoaded
+        );
     }
 
     private boolean canUseMutationSource(MinecraftServer server, io.github.luma.domain.model.WorldMutationSource source) {

@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.world;
 
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.LinkedHashMap;
@@ -35,11 +37,12 @@ final class WorldApplyNoOpPruner {
 
         Map<Integer, PreparedSectionApplyBatch> nativeSections = new LinkedHashMap<>();
         Map<Integer, List<PreparedBlockPlacement>> sparsePlacements = new LinkedHashMap<>();
+        LongSet updatedPositions = this.updatedPositions(level, chunk, batch);
         for (PreparedSectionApplyBatch section : batch.orderedNativeSections()) {
-            this.pruneNativeSection(level, chunk, section, nativeSections, sparsePlacements);
+            this.pruneNativeSection(level, chunk, section, updatedPositions, nativeSections, sparsePlacements);
         }
         for (SectionBatch section : batch.orderedSections()) {
-            this.pruneSparseSection(level, chunk, section, sparsePlacements);
+            this.pruneSparseSection(level, chunk, section, updatedPositions, sparsePlacements);
         }
 
         Map<Integer, SectionBatch> sparseSections = this.toSparseSections(sparsePlacements);
@@ -66,6 +69,7 @@ final class WorldApplyNoOpPruner {
             ServerLevel level,
             LevelChunk chunk,
             PreparedSectionApplyBatch section,
+            LongSet updatedPositions,
             Map<Integer, PreparedSectionApplyBatch> nativeSections,
             Map<Integer, List<PreparedBlockPlacement>> sparsePlacements
     ) {
@@ -82,7 +86,7 @@ final class WorldApplyNoOpPruner {
         int[] keptCells = {0};
         section.buffer().changedCells().forEachSetCell(localIndex -> {
             PreparedBlockPlacement placement = this.placement(section, localIndex);
-            if (!this.shouldKeep(level, liveSection, placement)) {
+            if (!this.shouldKeep(level, liveSection, placement, updatedPositions)) {
                 return;
             }
             builder.set(
@@ -122,6 +126,7 @@ final class WorldApplyNoOpPruner {
             ServerLevel level,
             LevelChunk chunk,
             SectionBatch section,
+            LongSet updatedPositions,
             Map<Integer, List<PreparedBlockPlacement>> sparsePlacements
     ) {
         if (section == null || section.placementCount() <= 0) {
@@ -134,7 +139,7 @@ final class WorldApplyNoOpPruner {
             return;
         }
         for (PreparedBlockPlacement placement : section.placements()) {
-            if (this.shouldKeep(level, liveSection, placement)) {
+            if (this.shouldKeep(level, liveSection, placement, updatedPositions)) {
                 sparsePlacements.computeIfAbsent(section.sectionY(), ignored -> new ArrayList<>())
                         .add(placement);
             }
@@ -172,13 +177,73 @@ final class WorldApplyNoOpPruner {
         return chunk.getSection(sectionIndex);
     }
 
-    private boolean shouldKeep(ServerLevel level, LevelChunkSection section, PreparedBlockPlacement placement) {
+    private LongSet updatedPositions(ServerLevel level, LevelChunk chunk, ChunkBatch batch) {
+        LongOpenHashSet updatedPositions = new LongOpenHashSet();
+        for (PreparedSectionApplyBatch section : batch.orderedNativeSections()) {
+            if (section == null || section.buffer() == null) {
+                continue;
+            }
+            LevelChunkSection liveSection = this.liveSection(chunk, section.sectionY());
+            if (liveSection == null) {
+                continue;
+            }
+            section.buffer().changedCells().forEachSetCell(localIndex -> {
+                PreparedBlockPlacement placement = this.placement(section, localIndex);
+                if (this.requiresLiveUpdate(level, liveSection, placement)) {
+                    updatedPositions.add(placement.pos().asLong());
+                }
+            });
+        }
+        for (SectionBatch section : batch.orderedSections()) {
+            if (section == null || section.placementCount() <= 0) {
+                continue;
+            }
+            LevelChunkSection liveSection = this.liveSection(chunk, section.sectionY());
+            if (liveSection == null) {
+                continue;
+            }
+            for (PreparedBlockPlacement placement : section.placements()) {
+                if (this.requiresLiveUpdate(level, liveSection, placement)) {
+                    updatedPositions.add(placement.pos().asLong());
+                }
+            }
+        }
+        return updatedPositions;
+    }
+
+    private boolean shouldKeep(
+            ServerLevel level,
+            LevelChunkSection section,
+            PreparedBlockPlacement placement,
+            LongSet updatedPositions
+    ) {
         if (placement == null || placement.pos() == null || placement.state() == null) {
             return false;
         }
-        if (this.exactReplayTargetPolicy.requiresFinalReplay(placement)
-                || this.exactReplayTargetPolicy.requiresPostReplayGuard(placement)) {
+        if (this.requiresLiveUpdate(level, section, placement)) {
             return true;
+        }
+        return this.shouldKeepNoOpReplay(placement, updatedPositions);
+    }
+
+    boolean shouldKeepNoOpReplay(PreparedBlockPlacement placement, LongSet updatedPositions) {
+        if (placement == null || placement.pos() == null || placement.state() == null) {
+            return false;
+        }
+        if (placement.replayHint().forcesFinalReplay()) {
+            return true;
+        }
+        if (!this.exactReplayTargetPolicy.requiresFinalReplay(placement)
+                && !this.exactReplayTargetPolicy.requiresPostReplayGuard(placement)) {
+            return false;
+        }
+        return this.touchesUpdatedNeighbor(placement.pos(), updatedPositions)
+                || this.isChunkBoundary(placement.pos());
+    }
+
+    private boolean requiresLiveUpdate(ServerLevel level, LevelChunkSection section, PreparedBlockPlacement placement) {
+        if (placement == null || placement.pos() == null || placement.state() == null || section == null) {
+            return false;
         }
         PersistentBlockStatePolicy.PersistentBlockState target = this.blockStatePolicy.normalize(
                 placement.state(),
@@ -193,6 +258,28 @@ final class WorldApplyNoOpPruner {
                 target.state(),
                 target.blockEntityTag()
         );
+    }
+
+    private boolean touchesUpdatedNeighbor(BlockPos pos, LongSet updatedPositions) {
+        if (pos == null || updatedPositions == null || updatedPositions.isEmpty()) {
+            return false;
+        }
+        int x = pos.getX();
+        int y = pos.getY();
+        int z = pos.getZ();
+        return updatedPositions.contains(BlockPos.asLong(x + 1, y, z))
+                || updatedPositions.contains(BlockPos.asLong(x - 1, y, z))
+                || updatedPositions.contains(BlockPos.asLong(x, y + 1, z))
+                || updatedPositions.contains(BlockPos.asLong(x, y - 1, z))
+                || updatedPositions.contains(BlockPos.asLong(x, y, z + 1))
+                || updatedPositions.contains(BlockPos.asLong(x, y, z - 1));
+    }
+
+    private boolean isChunkBoundary(BlockPos pos) {
+        return pos != null && ((pos.getX() & 15) == 0
+                || (pos.getX() & 15) == 15
+                || (pos.getZ() & 15) == 0
+                || (pos.getZ() & 15) == 15);
     }
 
     private PreparedBlockPlacement placement(PreparedSectionApplyBatch section, int localIndex) {

@@ -7,7 +7,7 @@ import java.util.Set;
 
 final class WorldApplyChunkPreloader {
 
-    private static final int MAX_SYNC_FALLBACK_LOADS_PER_TICK = 2;
+    private static final int MAX_SYNC_FALLBACK_LOADS_PER_TICK = 32;
 
     private final List<ChunkPoint> chunks;
     private final Set<ChunkPoint> ticketedChunks = new LinkedHashSet<>();

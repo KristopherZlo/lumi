@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.ChunkPoint;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -79,5 +80,20 @@ class WorldLightUpdateQueueTest {
         Assertions.assertEquals(26, queue.pendingCount());
         Assertions.assertEquals(26, queue.preparedCheckCount());
         Assertions.assertEquals(1, queue.dirtyChunkCount());
+    }
+
+    @Test
+    void exposesPreparedDirtyChunksUntilDrainCompletes() {
+        SectionLightUpdateBatch batch = new SectionLightUpdateBatch();
+        batch.addExact(new BlockPos(17, 64, -1));
+        WorldLightUpdateQueue queue = new WorldLightUpdateQueue();
+
+        queue.add(batch);
+        queue.prepareDrainPositions();
+
+        Assertions.assertEquals(
+                java.util.List.of(new ChunkPoint(1, -1)),
+                queue.preparedDirtyChunks()
+        );
     }
 }

@@ -115,6 +115,10 @@ public final class CaptureSessionState {
         return List.copyOf(this.dirtyChunks);
     }
 
+    public List<ChunkPoint> pendingReconcileChunks() {
+        return List.copyOf(this.pendingReconcileChunks);
+    }
+
     public List<ChunkPoint> drainPendingReconcileChunks() {
         List<ChunkPoint> drained = List.copyOf(this.pendingReconcileChunks);
         this.pendingReconcileChunks.clear();

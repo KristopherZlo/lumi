@@ -1,6 +1,7 @@
 package io.github.luma;
 
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.LumaDiagnosticsLog;
 import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.debug.StartupProfiler;
 import io.github.luma.integration.OptionalIntegrationBootstrap;
@@ -84,6 +85,7 @@ public final class LumaMod implements ModInitializer {
                 HistoryCaptureManager.getInstance().flushAll(server);
                 WorldOperationManager.getInstance().shutdown();
             } finally {
+                LumaDiagnosticsLog.close();
                 LumaLoadLog.close();
             }
         });
@@ -95,6 +97,14 @@ public final class LumaMod implements ModInitializer {
         if (LumaLoadLog.enabled()) {
             LOGGER.info("{} load logging is enabled at {}", MOD_NAME, LumaLoadLog.configuredPath());
             LumaLoadLog.event("lifecycle", "mod-initialized", "path=" + LumaLoadLog.configuredPath());
+        }
+        if (LumaDiagnosticsLog.lightEnabled()) {
+            LOGGER.info("{} lighting diagnostics are enabled at {}", MOD_NAME, LumaDiagnosticsLog.lightPath());
+            LumaDiagnosticsLog.lightEvent("mod-initialized", "path=" + LumaDiagnosticsLog.lightPath());
+        }
+        if (LumaDiagnosticsLog.blockApplyEnabled()) {
+            LOGGER.info("{} block apply diagnostics are enabled at {}", MOD_NAME, LumaDiagnosticsLog.blockApplyPath());
+            LumaDiagnosticsLog.blockApplyEvent("mod-initialized", "path=" + LumaDiagnosticsLog.blockApplyPath());
         }
         StartupProfiler.logElapsed("main.onInitialize", startedAt);
     }

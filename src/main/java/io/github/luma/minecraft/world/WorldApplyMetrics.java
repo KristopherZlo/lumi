@@ -166,6 +166,10 @@ final class WorldApplyMetrics {
         return this.lightChecks;
     }
 
+    int lightEngineFlushTicks() {
+        return this.lightEngineFlushTicks;
+    }
+
     String summary() {
         return "processedBlocks=" + this.processedBlocks
                 + ", prepareDurationMs=" + this.millis(this.preparationNanos)

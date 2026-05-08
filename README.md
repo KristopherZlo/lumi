@@ -265,7 +265,7 @@ Enable the separate runtime load log when profiling save, restore, undo/redo, an
 -Dlumi.loadLog=true
 ```
 
-It writes `logs/lumi-load.log` in the game run directory. Start with `type="summary"` rows to find the most expensive Lumi areas, then use `type="span"` and `type="operation-metrics"` rows for the slow call and apply-counter details.
+It writes `logs/lumi-load.log` in the game run directory. Start with `type="summary"` rows to find the most expensive Lumi areas, then use `type="span"` and `type="operation-metrics"` rows for the slow call and apply-counter details. The same flag also enables `logs/lumi-light.log` for `light-refresh`/shadow diagnosis and `logs/lumi-block-apply.log` for restore/rollback block-apply bottleneck breakdowns.
 
 Run the local in-world regression suite from a singleplayer save with cheats enabled:
 

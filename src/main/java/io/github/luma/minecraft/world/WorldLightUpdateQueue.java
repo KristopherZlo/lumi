@@ -1,9 +1,12 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.ChunkPoint;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongComparator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -70,6 +73,17 @@ final class WorldLightUpdateQueue {
 
     int dirtyChunkCount() {
         return this.dirtyChunks.size();
+    }
+
+    List<ChunkPoint> preparedDirtyChunks() {
+        if (!this.drainPrepared || this.dirtyChunks.isEmpty()) {
+            return List.of();
+        }
+        List<ChunkPoint> chunks = new ArrayList<>(this.dirtyChunks.size());
+        for (long packedChunk : this.dirtyChunks) {
+            chunks.add(new ChunkPoint(chunkX(packedChunk), chunkZ(packedChunk)));
+        }
+        return List.copyOf(chunks);
     }
 
     boolean prepareDrainPositionsAsync(Executor executor) {

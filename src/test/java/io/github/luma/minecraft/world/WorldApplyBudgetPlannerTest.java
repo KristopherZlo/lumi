@@ -22,7 +22,7 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(highThroughput.maxPreloadChunks() > normal.maxPreloadChunks());
         assertEquals(highThroughput.maxBlocks(), highThroughput.maxNativeCells());
         assertEquals(1, normal.maxRewriteSections());
-        assertEquals(64, highThroughput.maxRewriteSections());
+        assertEquals(128, highThroughput.maxRewriteSections());
     }
 
     @Test
@@ -62,10 +62,10 @@ class WorldApplyBudgetPlannerTest {
 
         assertEquals(1, normal.maxDirectSections());
         assertEquals(250_000L, normal.maxNanos());
-        assertEquals(16, historyFast.maxDirectSections());
-        assertEquals(4_000_000L, historyFast.maxNanos());
-        assertEquals(64, turbo.maxDirectSections());
-        assertEquals(12_000_000L, turbo.maxNanos());
+        assertEquals(64, historyFast.maxDirectSections());
+        assertEquals(16_000_000L, historyFast.maxNanos());
+        assertEquals(128, turbo.maxDirectSections());
+        assertEquals(32_000_000L, turbo.maxNanos());
     }
 
     @Test
