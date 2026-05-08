@@ -167,11 +167,7 @@ final class DirectChunkBlockCommitStrategy {
         if (level == null || batch == null || batch.chunk() == null) {
             return null;
         }
-        LevelChunk chunk = level.getChunkSource().getChunkNow(batch.chunk().x(), batch.chunk().z());
-        if (chunk != null || !WorldApplyChunkLoadContext.allowsSynchronousLoad()) {
-            return chunk;
-        }
-        return level.getChunk(batch.chunk().x(), batch.chunk().z());
+        return WorldApplyChunkResolver.loadedOrLoad(level, batch.chunk().x(), batch.chunk().z());
     }
 
     private DirectChunkApplyResult combineWithFallback(

@@ -11,7 +11,8 @@ final class WorldApplyOperationProfile {
             "quick-rollback",
             "undo-action",
             "redo-action",
-            "merge-variant"
+            "merge-variant",
+            "light-refresh"
     );
 
     WorldApplyProfile profileFor(String label) {

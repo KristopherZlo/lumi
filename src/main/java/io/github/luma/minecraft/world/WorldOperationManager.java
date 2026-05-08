@@ -216,6 +216,29 @@ public final class WorldOperationManager {
                 this.lastApplyMetrics.put(operation.handle().id(), metrics);
                 LumaLoadLog.operationMetrics(operation.handle(), metrics);
             });
+            ActiveOperation followUp = operation.followUpOperation();
+            if (followUp != null) {
+                this.activeOperations.put(serverKey, followUp);
+                LumaMod.LOGGER.info(
+                        "Queued follow-up world operation {} for project {}",
+                        followUp.handle().label(),
+                        followUp.handle().projectId()
+                );
+                LumaDebugLog.log(
+                        followUp.handle(),
+                        "world-op",
+                        "Queued follow-up world operation {} after {}",
+                        followUp.handle().label(),
+                        operation.handle().label()
+                );
+                LumaLoadLog.event(
+                        "world-op",
+                        "queued-follow-up",
+                        "label=" + followUp.handle().label()
+                                + ", after=" + operation.handle().label()
+                                + ", projectId=" + followUp.handle().projectId()
+                );
+            }
         }
     }
 
@@ -430,6 +453,10 @@ public final class WorldOperationManager {
             return Optional.empty();
         }
 
+        protected ActiveOperation followUpOperation() {
+            return null;
+        }
+
         private void logProgressIfNeeded(OperationStage stage, OperationProgress progress, String detail) {
             int percent = progress.totalUnits() <= 0
                     ? -1
@@ -528,8 +555,7 @@ public final class WorldOperationManager {
         private final WorldLightUpdateQueue lightUpdateQueue = new WorldLightUpdateQueue();
         private final RedstoneReplayUpdateQueue redstoneUpdateQueue = new RedstoneReplayUpdateQueue();
         private final ExactReplayStateQueue exactReplayStateQueue = new ExactReplayStateQueue();
-        private boolean lightPreparationRecorded = false;
-        private boolean lightEngineFlushRequired = false;
+        private final WorldApplyNoOpPruner noOpPruner = new WorldApplyNoOpPruner();
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -637,7 +663,9 @@ public final class WorldOperationManager {
                         stopReason = "dispatcher-empty";
                         break;
                     }
-                    this.currentBatch = this.prepared.batchProcessor().processSet(this.currentBatch);
+                    this.currentBatch = this.pruneNoOpBatch(
+                            this.prepared.batchProcessor().processSet(this.currentBatch)
+                    );
                     startedChunksThisTick += 1;
                     this.currentNativeSections = this.currentBatch.orderedNativeSections();
                     this.currentSections = this.currentBatch.orderedSections();
@@ -793,12 +821,6 @@ public final class WorldOperationManager {
                 if (!this.drainExactReplayStates(budget, deadlineNanos)) {
                     return false;
                 }
-                if (!this.drainDeferredLightUpdates(budget, deadlineNanos)) {
-                    return false;
-                }
-                if (!this.flushLightEngine(deadlineNanos)) {
-                    return false;
-                }
                 this.progressSink().update(
                         OperationStage.FINALIZING,
                         this.appliedWorkUnits,
@@ -884,111 +906,25 @@ public final class WorldOperationManager {
             );
         }
 
-        private boolean drainDeferredLightUpdates(WorldApplyBudget budget, long deadlineNanos) {
-            if (!this.lightUpdateQueue.hasPending()) {
-                return true;
+        private ChunkBatch pruneNoOpBatch(ChunkBatch batch) {
+            if (batch == null || this.profile == WorldApplyProfile.NORMAL) {
+                return batch;
             }
-
-            if (!this.lightUpdateQueue.prepareDrainPositionsAsync(WorldOperationManager.this.executor())) {
-                this.progressSink().update(
-                        OperationStage.FINALIZING,
-                        this.appliedWorkUnits,
-                        this.prepared.totalWorkUnits(),
-                        this.applyDetail("Preparing light updates, "
-                                + this.lightUpdateQueue.pendingCount()
-                                + " checks queued")
-                );
-                return false;
-            }
-            if (!this.lightPreparationRecorded) {
-                this.applyMetrics.recordLightPrepared(
-                        this.lightUpdateQueue.preparedCheckCount(),
-                        this.lightUpdateQueue.dirtyChunkCount()
-                );
-                this.lightPreparationRecorded = true;
-            }
-            int maxChecks = Math.max(128, budget.maxLightChecks());
-            int pendingBefore = this.lightUpdateQueue.pendingCount();
-            long startedAt = System.nanoTime();
-            int appliedChecks = this.lightUpdateQueue.drain(this.level(), maxChecks, deadlineNanos);
-            int markedChunks = this.lightUpdateQueue.markTouchedChunksUnsaved(
-                    this.level(),
-                    Math.max(1, budget.maxPreloadChunks() * 4),
-                    deadlineNanos
-            );
-            long elapsedNanos = System.nanoTime() - startedAt;
-            this.applyMetrics.recordLightChecks(appliedChecks);
-            this.applyMetrics.recordLightDrainTick(elapsedNanos);
-            if (appliedChecks > 0) {
-                this.lightEngineFlushRequired = true;
-            }
-            LumaLoadLog.record(
-                    "world-op",
-                    this.handle().label() + ".lightDrainTick",
-                    elapsedNanos,
-                    "appliedChecks=" + appliedChecks
-                            + ", markedChunks=" + markedChunks
-                            + ", pendingBefore=" + pendingBefore
-            );
-            if (this.debugApplyEnabled()) {
+            int before = batch.totalPlacements();
+            ChunkBatch pruned = this.noOpPruner.prune(this.level(), batch);
+            int after = pruned == null ? 0 : pruned.totalPlacements();
+            if (before > after && this.debugApplyEnabled()) {
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op-apply",
-                        "Light drain maxChecks={} applied={} markedChunks={} pendingBefore={} pendingAfter={} elapsedMicros={}",
-                        maxChecks,
-                        appliedChecks,
-                        markedChunks,
-                        pendingBefore,
-                        this.lightUpdateQueue.pendingCount(),
-                        elapsedNanos / 1_000L
+                        "No-op pruned chunk {}:{} placements {} -> {}",
+                        batch.chunk().x(),
+                        batch.chunk().z(),
+                        before,
+                        after
                 );
             }
-            this.progressSink().update(
-                    OperationStage.FINALIZING,
-                    this.appliedWorkUnits,
-                    this.prepared.totalWorkUnits(),
-                    this.applyDetail("Updating light, " + this.lightUpdateQueue.pendingCount() + " checks queued")
-            );
-            return !this.lightUpdateQueue.hasPending();
-        }
-
-        private boolean flushLightEngine(long deadlineNanos) {
-            if (!this.lightEngineFlushRequired) {
-                return true;
-            }
-            if (System.nanoTime() >= deadlineNanos) {
-                return false;
-            }
-
-            long startedAt = System.nanoTime();
-            int updates = this.level().getLightEngine().runLightUpdates();
-            boolean hasMore = this.level().getLightEngine().hasLightWork();
-            long elapsedNanos = System.nanoTime() - startedAt;
-            this.applyMetrics.recordLightEngineFlushTick();
-            LumaLoadLog.record(
-                    "world-op",
-                    this.handle().label() + ".lightEngineFlushTick",
-                    elapsedNanos,
-                    "updates=" + updates + ", hasMore=" + hasMore
-            );
-            if (this.debugApplyEnabled()) {
-                LumaDebugLog.log(
-                        this.handle(),
-                        "world-op-apply",
-                        "Light engine flush updates={} hasMore={} elapsedMicros={}",
-                        updates,
-                        hasMore,
-                        elapsedNanos / 1_000L
-                );
-            }
-            this.progressSink().update(
-                    OperationStage.FINALIZING,
-                    this.appliedWorkUnits,
-                    this.prepared.totalWorkUnits(),
-                    this.applyDetail("Flushing light engine")
-            );
-            this.lightEngineFlushRequired = hasMore;
-            return !hasMore;
+            return pruned;
         }
 
         private boolean drainExactReplayStates(WorldApplyBudget budget, long deadlineNanos) {
@@ -1458,6 +1394,24 @@ public final class WorldOperationManager {
         }
 
         @Override
+        protected ActiveOperation followUpOperation() {
+            if (this.snapshot().stage() != OperationStage.COMPLETED || !this.lightUpdateQueue.hasPending()) {
+                return null;
+            }
+            return new LightRefreshActiveOperation(
+                    this.level(),
+                    new OperationHandle(
+                            UUID.randomUUID().toString(),
+                            this.handle().projectId(),
+                            "light-refresh",
+                            Instant.now(),
+                            this.handle().debugEnabled()
+                    ),
+                    this.lightUpdateQueue
+            );
+        }
+
+        @Override
         protected void complete(String detail) {
             this.releasePreloadTickets();
             super.complete(detail);
@@ -1491,6 +1445,118 @@ public final class WorldOperationManager {
             private static AppliedWork none() {
                 return new AppliedWork(0, 0, 0, 0, 0);
             }
+        }
+    }
+
+    private final class LightRefreshActiveOperation extends ActiveOperation {
+
+        private final WorldLightUpdateQueue lightUpdateQueue;
+        private final WorldApplyMetrics applyMetrics = new WorldApplyMetrics();
+        private final long startedAtNanos = System.nanoTime();
+        private boolean lightPreparationRecorded = false;
+        private boolean checkedLightWork = false;
+
+        private LightRefreshActiveOperation(
+                ServerLevel level,
+                OperationHandle handle,
+                WorldLightUpdateQueue lightUpdateQueue
+        ) {
+            super(level, handle, "light checks");
+            this.lightUpdateQueue = lightUpdateQueue == null ? new WorldLightUpdateQueue() : lightUpdateQueue;
+        }
+
+        @Override
+        boolean advance(WorldApplyBudget budget, long deadlineNanos) {
+            if (this.lightUpdateQueue.hasPending()) {
+                return this.drainDeferredLightUpdates(budget, deadlineNanos);
+            }
+
+            if (this.level().getLightEngine().hasLightWork()) {
+                this.checkedLightWork = true;
+                this.progressSink().update(
+                        OperationStage.FINALIZING,
+                        this.lightUpdateQueue.preparedCheckCount(),
+                        Math.max(1, this.lightUpdateQueue.preparedCheckCount()),
+                        "Waiting for light engine"
+                );
+                return false;
+            }
+
+            this.complete(this.checkedLightWork ? "Light refreshed" : "No light refresh needed");
+            return true;
+        }
+
+        private boolean drainDeferredLightUpdates(WorldApplyBudget budget, long deadlineNanos) {
+            if (!this.lightUpdateQueue.prepareDrainPositionsAsync(WorldOperationManager.this.executor())) {
+                this.progressSink().update(
+                        OperationStage.PREPARING,
+                        0,
+                        Math.max(1, this.lightUpdateQueue.pendingCount()),
+                        "Preparing light updates"
+                );
+                return false;
+            }
+            if (!this.lightPreparationRecorded) {
+                this.applyMetrics.recordPreparationDuration(System.nanoTime() - this.startedAtNanos);
+                this.applyMetrics.recordLightPrepared(
+                        this.lightUpdateQueue.preparedCheckCount(),
+                        this.lightUpdateQueue.dirtyChunkCount()
+                );
+                this.lightPreparationRecorded = true;
+            }
+
+            int pendingBefore = this.lightUpdateQueue.pendingCount();
+            int maxChecks = Math.max(128, budget.maxLightChecks());
+            long startedAt = System.nanoTime();
+            int appliedChecks = this.lightUpdateQueue.drain(this.level(), maxChecks, deadlineNanos);
+            int markedChunks = this.lightUpdateQueue.markTouchedChunksUnsaved(
+                    this.level(),
+                    Math.max(1, budget.maxPreloadChunks() * 4),
+                    deadlineNanos
+            );
+            long elapsedNanos = System.nanoTime() - startedAt;
+            this.applyMetrics.recordLightChecks(appliedChecks);
+            this.applyMetrics.recordLightDrainTick(elapsedNanos);
+            this.applyMetrics.recordApplyTick(appliedChecks, elapsedNanos);
+            LumaLoadLog.record(
+                    "world-op",
+                    this.handle().label() + ".lightDrainTick",
+                    elapsedNanos,
+                    "appliedChecks=" + appliedChecks
+                            + ", markedChunks=" + markedChunks
+                            + ", pendingBefore=" + pendingBefore
+            );
+            if (this.debugApplyEnabled()) {
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op-apply",
+                        "Light refresh drain maxChecks={} applied={} markedChunks={} pendingBefore={} pendingAfter={} elapsedMicros={}",
+                        maxChecks,
+                        appliedChecks,
+                        markedChunks,
+                        pendingBefore,
+                        this.lightUpdateQueue.pendingCount(),
+                        elapsedNanos / 1_000L
+                );
+            }
+            int totalChecks = Math.max(1, this.lightUpdateQueue.preparedCheckCount());
+            this.progressSink().update(
+                    OperationStage.APPLYING,
+                    Math.max(0, totalChecks - this.lightUpdateQueue.pendingCount()),
+                    totalChecks,
+                    "Updating light"
+            );
+            return false;
+        }
+
+        private boolean debugApplyEnabled() {
+            return LumaDebugLog.enabled(this.handle());
+        }
+
+        @Override
+        protected Optional<String> applyMetricsSummary() {
+            this.applyMetrics.recordTotalDuration(Duration.between(this.handle().startedAt(), Instant.now()).toNanos());
+            return Optional.of(this.applyMetrics.summary());
         }
     }
 

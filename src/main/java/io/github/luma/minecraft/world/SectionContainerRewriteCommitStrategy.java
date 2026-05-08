@@ -42,7 +42,7 @@ final class SectionContainerRewriteCommitStrategy {
             return this.fallback(level, batch, BlockCommitFallbackReason.REWRITE_UNAVAILABLE);
         }
 
-        LevelChunk chunk = level.getChunkSource().getChunkNow(batch.chunk().x(), batch.chunk().z());
+        LevelChunk chunk = WorldApplyChunkResolver.loadedOrLoad(level, batch.chunk().x(), batch.chunk().z());
         if (chunk == null) {
             return this.fallback(level, batch, BlockCommitFallbackReason.CHUNK_NOT_LOADED);
         }

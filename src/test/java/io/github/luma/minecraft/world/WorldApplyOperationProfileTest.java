@@ -17,6 +17,7 @@ class WorldApplyOperationProfileTest {
         assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("undo-action"));
         assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("redo-action"));
         assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("merge-variant"));
+        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("light-refresh"));
     }
 
     @Test

@@ -42,7 +42,7 @@ final class SectionNativeBlockCommitStrategy {
                     .apply(level, batch.toSectionBatch(), 0, batch.changedCellCount());
         }
 
-        LevelChunk chunk = level.getChunkSource().getChunkNow(batch.chunk().x(), batch.chunk().z());
+        LevelChunk chunk = WorldApplyChunkResolver.loadedOrLoad(level, batch.chunk().x(), batch.chunk().z());
         if (chunk == null) {
             return new VanillaBlockCommitStrategy(BlockCommitFallbackReason.CHUNK_NOT_LOADED)
                     .apply(level, batch.toSectionBatch(), 0, batch.changedCellCount());
@@ -105,7 +105,7 @@ final class SectionNativeBlockCommitStrategy {
             return this.completeWithFallback(level, cursor, BlockCommitFallbackReason.NATIVE_REJECTED);
         }
 
-        LevelChunk chunk = level.getChunkSource().getChunkNow(batch.chunk().x(), batch.chunk().z());
+        LevelChunk chunk = WorldApplyChunkResolver.loadedOrLoad(level, batch.chunk().x(), batch.chunk().z());
         if (chunk == null) {
             return this.completeWithFallback(level, cursor, BlockCommitFallbackReason.CHUNK_NOT_LOADED);
         }

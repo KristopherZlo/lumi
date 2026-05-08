@@ -41,7 +41,7 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
         PreparedBlockPlacement first = batch.placements().get(startIndex);
         int chunkX = first.pos().getX() >> 4;
         int chunkZ = first.pos().getZ() >> 4;
-        LevelChunk chunk = level.getChunkSource().getChunkNow(chunkX, chunkZ);
+        LevelChunk chunk = WorldApplyChunkResolver.loadedOrLoad(level, chunkX, chunkZ);
         if (chunk == null) {
             return new VanillaBlockCommitStrategy(BlockCommitFallbackReason.CHUNK_NOT_LOADED)
                     .apply(level, batch, startIndex, maxBlocks);
