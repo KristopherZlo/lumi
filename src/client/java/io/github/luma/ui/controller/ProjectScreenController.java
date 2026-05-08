@@ -469,6 +469,18 @@ public final class ProjectScreenController {
         }
     }
 
+    public boolean previewLoading(String projectName, String versionId) {
+        if (versionId == null || versionId.isBlank()) {
+            return false;
+        }
+        try {
+            var server = ClientProjectAccess.requireSingleplayerServer(this.client);
+            return java.nio.file.Files.exists(this.projectService.resolveLayout(server, projectName).previewRequestFile(versionId));
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
     public io.github.luma.domain.model.PendingChangeSummary summarizePending(io.github.luma.domain.model.RecoveryDraft draft) {
         if (draft == null || draft.isEmpty()) {
             return io.github.luma.domain.model.PendingChangeSummary.empty();

@@ -106,6 +106,38 @@ class CaptureSessionStateTest {
         assertFalse(state.isTrackedFallingEntity(entityId));
     }
 
+    @Test
+    void latestDeferredActionOwnsPendingChunkReconciliation() {
+        CaptureSessionState state = CaptureSessionState.create(buffer());
+        ChunkPoint chunk = new ChunkPoint(0, 0);
+        CaptureSessionState.DeferredActionContext firstAction =
+                new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
+        CaptureSessionState.DeferredActionContext secondAction =
+                new CaptureSessionState.DeferredActionContext("action-2", "builder", true);
+
+        assertTrue(state.markDirtyChunk(chunk, firstAction));
+        assertTrue(state.markDirtyChunk(chunk, secondAction));
+        state.markDirtyChunk(chunk);
+
+        assertEquals(secondAction, state.deferredActionContexts(List.of(chunk)).get(chunk));
+    }
+
+    @Test
+    void dirtyChunksWaitForSettleTicksBeforeReconciliation() {
+        CaptureSessionState state = CaptureSessionState.create(buffer());
+        ChunkPoint chunk = new ChunkPoint(0, 0);
+        CaptureSessionState.DeferredActionContext action =
+                new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
+
+        state.markDirtyChunk(chunk, action, 100L);
+
+        assertTrue(state.drainPendingReconcileChunks(103L, 4).isEmpty());
+        assertTrue(state.hasPendingReconciliation());
+        assertEquals(List.of(chunk), state.drainPendingReconcileChunks(104L, 4));
+        state.finishReconciliation(List.of(chunk));
+        assertFalse(state.hasPendingReconciliation());
+    }
+
     private static TrackedChangeBuffer buffer() {
         return TrackedChangeBuffer.create(
                 "session",

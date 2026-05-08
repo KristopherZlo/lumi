@@ -15,8 +15,40 @@ public record PatchSectionFrame(
         List<CompoundTag> oldBlockEntityPalette,
         List<CompoundTag> newBlockEntityPalette,
         int[] oldBlockEntityIds,
-        int[] newBlockEntityIds
+        int[] newBlockEntityIds,
+        long[] hiddenMask
 ) {
+
+    public PatchSectionFrame(
+            int chunkX,
+            int chunkZ,
+            int sectionY,
+            long[] changedMask,
+            List<CompoundTag> oldStatePalette,
+            List<CompoundTag> newStatePalette,
+            int[] oldStateIds,
+            int[] newStateIds,
+            List<CompoundTag> oldBlockEntityPalette,
+            List<CompoundTag> newBlockEntityPalette,
+            int[] oldBlockEntityIds,
+            int[] newBlockEntityIds
+    ) {
+        this(
+                chunkX,
+                chunkZ,
+                sectionY,
+                changedMask,
+                oldStatePalette,
+                newStatePalette,
+                oldStateIds,
+                newStateIds,
+                oldBlockEntityPalette,
+                newBlockEntityPalette,
+                oldBlockEntityIds,
+                newBlockEntityIds,
+                new long[64]
+        );
+    }
 
     public PatchSectionFrame {
         changedMask = changedMask == null ? new long[64] : changedMask.clone();
@@ -28,6 +60,7 @@ public record PatchSectionFrame(
         newBlockEntityPalette = copyPalette(newBlockEntityPalette);
         oldBlockEntityIds = oldBlockEntityIds == null ? new int[0] : oldBlockEntityIds.clone();
         newBlockEntityIds = newBlockEntityIds == null ? new int[0] : newBlockEntityIds.clone();
+        hiddenMask = hiddenMask == null ? new long[64] : hiddenMask.clone();
     }
 
     @Override
@@ -53,6 +86,11 @@ public record PatchSectionFrame(
     @Override
     public int[] newBlockEntityIds() {
         return this.newBlockEntityIds.clone();
+    }
+
+    @Override
+    public long[] hiddenMask() {
+        return this.hiddenMask.clone();
     }
 
     private static List<CompoundTag> copyPalette(List<CompoundTag> palette) {

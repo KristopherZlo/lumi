@@ -6,130 +6,302 @@ import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.state.OnboardingFlowState;
 import io.github.luma.ui.state.OnboardingHoldGate;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 
 /**
- * Stateful client-side onboarding tour shared by the standalone welcome screen
- * and the project workspace overlay.
+ * Stateful client-side onboarding tour shared by standalone, workspace, and
+ * in-world teaching surfaces.
  */
 public final class OnboardingTour {
 
-    private static final int MIN_DIALOG_WIDTH = 320;
-    private static final int MAX_DIALOG_WIDTH = 430;
-    private static final String OPEN_WORKSPACE_PAGE_ID = "open";
+    private static final int MIN_DIALOG_WIDTH = 300;
+    private static final int MAX_DIALOG_WIDTH = 320;
+    private static final int WORLD_CHANGE_DELAY_TICKS = 20;
     private static final List<Page> PAGES = List.of(
             Page.info("welcome"),
-            Page.shortcut(OPEN_WORKSPACE_PAGE_ID, LumiClientKeyBindings.Role.OPEN_WORKSPACE),
-            Page.shortcut("save", LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.QUICK_SAVE),
-            Page.shortcut("undo", LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.UNDO),
-            Page.shortcut("redo", LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.REDO),
-            Page.shortcut("preview", LumiClientKeyBindings.Role.ACTION),
-            Page.shortcut("quick_rollback", LumiClientKeyBindings.Role.QUICK_ROLLBACK),
-            Page.shortcut("return_before_restore", LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.QUICK_ROLLBACK),
-            Page.shortcut("compare", LumiClientKeyBindings.Role.COMPARE),
-            Page.info("selection_tool"),
-            Page.info("restore"),
-            Page.info("more")
+            Page.hold(
+                    "open",
+                    Transition.OPEN_WORKSPACE,
+                    "luma.onboarding.hold_open",
+                    LumiClientKeyBindings.Role.OPEN_WORKSPACE
+            ),
+            Page.spotlight("save_spotlight", SpotlightTarget.SAVE_BUILD),
+            Page.spotlight("changes_spotlight", SpotlightTarget.SEE_CHANGES),
+            Page.info("break_block"),
+            Page.hold(
+                    "undo_world",
+                    Transition.EXECUTE_UNDO,
+                    "luma.onboarding.hold_undo",
+                    LumiClientKeyBindings.Role.ACTION,
+                    LumiClientKeyBindings.Role.UNDO
+            ),
+            Page.hold(
+                    "redo_world",
+                    Transition.EXECUTE_REDO,
+                    "luma.onboarding.hold_redo",
+                    LumiClientKeyBindings.Role.ACTION,
+                    LumiClientKeyBindings.Role.REDO
+            ),
+            Page.info("shortcuts", true),
+            Page.info("finish")
     );
 
     private final KeyBindingState keyBindingState = new KeyBindingState();
     private final OnboardingHoldGate holdGate = new OnboardingHoldGate();
-    private final Set<String> completedShortcutPages = new HashSet<>();
     private OnboardingFlowState flow = OnboardingFlowState.first(PAGES.size());
     private long lastHoldSampleMillis;
+    private int hiddenTicks;
+    private int visibleAdvanceTicks;
+
+    public static int pageCount() {
+        return PAGES.size();
+    }
+
+    public static List<String> pageIds() {
+        return PAGES.stream().map(Page::id).toList();
+    }
 
     public Transition tick() {
+        if (this.visibleAdvanceTicks > 0) {
+            this.visibleAdvanceTicks -= 1;
+            if (this.visibleAdvanceTicks == 0) {
+                this.flow = this.flow.next();
+                this.resetHoldGate();
+                return Transition.REBUILD;
+            }
+            return Transition.NONE;
+        }
+
+        if (this.hiddenTicks > 0) {
+            this.hiddenTicks -= 1;
+            return this.hiddenTicks == 0 ? Transition.REBUILD : Transition.NONE;
+        }
+
         Page page = this.currentPage();
-        if (!this.requiresShortcut(page)) {
+        ShortcutCheck check = page.shortcutCheck();
+        if (check == null || this.shortcutUnbound(check.shortcut())) {
             this.resetHoldGate();
             return Transition.NONE;
         }
 
-        boolean held = this.shortcutHeld(page.shortcut());
+        boolean held = this.shortcutHeld(check.shortcut());
         long now = Util.getMillis();
         long elapsedMillis = held && this.lastHoldSampleMillis > 0L
                 ? Math.min(100L, now - this.lastHoldSampleMillis)
                 : 0L;
         this.lastHoldSampleMillis = held ? now : 0L;
-        if (this.holdGate.update(held, elapsedMillis)) {
-            this.completedShortcutPages.add(page.id());
-            return this.advanceAfterShortcut(page);
+        if (!this.holdGate.update(held, elapsedMillis)) {
+            return Transition.NONE;
         }
-        return Transition.NONE;
+
+        this.resetHoldGate();
+        return this.advanceAfterHold(page);
     }
 
     public FlowLayout panel(int screenWidth, Actions actions) {
-        FlowLayout frame = LumaUi.modalFrame(this.dialogWidth(screenWidth));
-        Page page = this.currentPage();
-        frame.child(this.header(page, actions));
-        frame.child(LumaUi.value(Component.translatable(page.titleKey())));
-        frame.child(LumaUi.caption(Component.translatable(page.helpKey())));
-        if (page.shortcut() != null) {
-            frame.child(this.shortcutPanel(page));
+        int dialogWidth = this.dialogWidth(screenWidth);
+        int contentWidth = Math.max(1, dialogWidth - 16);
+        FlowLayout frame = LumaUi.modalFrame(dialogWidth);
+        if (this.hidden()) {
+            return frame;
         }
-        frame.child(this.actions(page, actions));
-        if (this.requiresShortcut(page)) {
+
+        Page page = this.currentPage();
+        ShortcutCheck check = page.shortcutCheck();
+        frame.child(this.header(page, contentWidth, actions));
+        frame.child(this.wrappedValue(Component.translatable(page.helpKey()), contentWidth));
+        if (check != null) {
+            frame.child(this.holdRow(check, contentWidth));
+        }
+        if (page.shortcutsTable()) {
+            frame.child(this.shortcutsTable(contentWidth));
+        }
+        frame.child(this.actions(page, check, actions));
+        if (check != null && !this.shortcutUnbound(check.shortcut())) {
             frame.child(new OnboardingHoldProgressComponent(this.holdGate::progress));
         }
         return frame;
     }
 
-    private FlowLayout header(Page page, Actions actions) {
+    public Transition next() {
+        return this.nextPage();
+    }
+
+    public Transition back() {
+        if (!this.canGoBack()) {
+            return Transition.NONE;
+        }
+        this.flow = this.flow.previous();
+        this.resetHoldGate();
+        return Transition.REBUILD;
+    }
+
+    public boolean canGoBack() {
+        if (this.flow.firstPage()) {
+            return false;
+        }
+        return switch (this.currentPage().id()) {
+            case "save_spotlight", "break_block", "undo_world", "redo_world" -> false;
+            default -> true;
+        };
+    }
+
+    public Transition advanceAfterWorldEdit() {
+        if (!"break_block".equals(this.currentPage().id())) {
+            return Transition.NONE;
+        }
+        this.flow = this.flow.next();
+        this.resetHoldGate();
+        return Transition.REBUILD;
+    }
+
+    public boolean hidden() {
+        return this.hiddenTicks > 0;
+    }
+
+    public String currentPageId() {
+        return this.currentPage().id();
+    }
+
+    public int displayIndex() {
+        return this.flow.displayIndex();
+    }
+
+    public int pageCountValue() {
+        return this.flow.pageCount();
+    }
+
+    public Component headerText() {
+        return Component.translatable("luma.onboarding.header", this.flow.displayIndex(), this.flow.pageCount());
+    }
+
+    public Component pageName() {
+        return Component.translatable("luma.onboarding.topic_" + this.currentPage().id());
+    }
+
+    public Component helpText() {
+        return Component.translatable(this.currentPage().helpKey());
+    }
+
+    public SpotlightTarget workspaceSpotlightTarget() {
+        return this.currentPage().spotlightTarget();
+    }
+
+    private FlowLayout header(Page page, int contentWidth, Actions actions) {
         FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        header.gap(2);
         header.verticalAlignment(VerticalAlignment.CENTER);
-        header.gap(5);
-        header.child(LumaUi.stepBadge(Component.translatable(
-                "luma.onboarding.step",
-                this.flow.displayIndex(),
-                this.flow.pageCount()
-        )));
 
         FlowLayout text = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        int textWidth = Math.max(1, contentWidth - 28);
         text.gap(2);
-        text.child(LumaUi.caption(Component.translatable("luma.onboarding.label")));
-        text.child(LumaUi.accent(Component.translatable("luma.onboarding.topic_" + page.id())));
+        text.child(this.wrappedCaption(this.headerText(), textWidth));
+        text.child(this.wrappedAccent(Component.translatable("luma.onboarding.topic_" + page.id()), textWidth));
         header.child(text);
 
-        ButtonComponent close = LumaUi.button(Component.literal("X"), button -> actions.handle(Transition.COMPLETE));
-        close.sizing(Sizing.fixed(20), Sizing.fixed(20));
+        ButtonComponent close = LumaUi.button(
+                Component.translatable("luma.action.close_onboarding"),
+                button -> actions.handle(Transition.COMPLETE)
+        );
+        close.sizing(Sizing.fixed(20), Sizing.fixed(18));
         header.child(close);
         return header;
     }
 
-    private FlowLayout shortcutPanel(Page page) {
-        FlowLayout panel = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
-        panel.child(LumaUi.caption(Component.translatable("luma.onboarding.shortcut_hold")));
-        panel.child(this.shortcutRow(page.shortcut()));
-        if (this.requiresShortcut(page)) {
-            panel.child(LumaUi.caption(Component.translatable("luma.onboarding.shortcut_required")));
-        }
-        return panel;
-    }
-
-    private FlowLayout shortcutRow(Shortcut shortcut) {
+    private FlowLayout holdRow(ShortcutCheck check, int contentWidth) {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        row.horizontalAlignment(HorizontalAlignment.CENTER);
         row.verticalAlignment(VerticalAlignment.CENTER);
         row.gap(4);
+        row.child(this.wrappedCaption(Component.translatable(check.instructionKey()), contentWidth));
+        this.addShortcutVisuals(row, check.shortcut());
+        return row;
+    }
+
+    private FlowLayout shortcutsTable(int contentWidth) {
+        FlowLayout table = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        table.child(this.shortcutTableRow(
+                "luma.onboarding.shortcuts_open_workspace",
+                "luma.onboarding.shortcuts_open_workspace_help",
+                new Shortcut(List.of(LumiClientKeyBindings.Role.OPEN_WORKSPACE)),
+                contentWidth
+        ));
+        table.child(this.shortcutTableRow(
+                "luma.onboarding.shortcuts_quick_save",
+                "luma.onboarding.shortcuts_quick_save_help",
+                new Shortcut(List.of(LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.QUICK_SAVE)),
+                contentWidth
+        ));
+        table.child(this.shortcutTableRow(
+                "luma.onboarding.shortcuts_undo",
+                "luma.onboarding.shortcuts_undo_help",
+                new Shortcut(List.of(LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.UNDO)),
+                contentWidth
+        ));
+        table.child(this.shortcutTableRow(
+                "luma.onboarding.shortcuts_redo",
+                "luma.onboarding.shortcuts_redo_help",
+                new Shortcut(List.of(LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.REDO)),
+                contentWidth
+        ));
+        table.child(this.shortcutTableRow(
+                "luma.onboarding.shortcuts_quick_rollback",
+                "luma.onboarding.shortcuts_quick_rollback_help",
+                new Shortcut(List.of(LumiClientKeyBindings.Role.QUICK_ROLLBACK)),
+                contentWidth
+        ));
+        return table;
+    }
+
+    private FlowLayout shortcutTableRow(String labelKey, String helpKey, Shortcut shortcut, int contentWidth) {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.verticalAlignment(VerticalAlignment.CENTER);
+        row.gap(6);
+
+        FlowLayout keys = UIContainers.horizontalFlow(Sizing.fixed(84), Sizing.content());
+        keys.verticalAlignment(VerticalAlignment.CENTER);
+        keys.gap(3);
+        this.addShortcutVisuals(keys, shortcut);
+        row.child(keys);
+
+        FlowLayout text = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        int textWidth = Math.max(90, contentWidth - 110);
+        text.gap(1);
+        text.child(this.wrappedValue(Component.translatable(labelKey), textWidth));
+        text.child(this.wrappedCaption(Component.translatable(helpKey), textWidth));
+        row.child(text);
+        return row;
+    }
+
+    private LabelComponent wrappedValue(Component text, int maxWidth) {
+        return LumaUi.value(text).maxWidth(maxWidth);
+    }
+
+    private LabelComponent wrappedAccent(Component text, int maxWidth) {
+        return LumaUi.accent(text).maxWidth(maxWidth);
+    }
+
+    private LabelComponent wrappedCaption(Component text, int maxWidth) {
+        return LumaUi.caption(text).maxWidth(maxWidth);
+    }
+
+    private void addShortcutVisuals(FlowLayout row, Shortcut shortcut) {
         for (int index = 0; index < shortcut.roles().size(); index++) {
             if (index > 0) {
                 row.child(LumaUi.caption(Component.literal("+")));
             }
             row.child(this.keyVisual(shortcut.roles().get(index)));
         }
-        return row;
     }
 
     private UIComponent keyVisual(LumiClientKeyBindings.Role role) {
@@ -152,66 +324,73 @@ public final class OnboardingTour {
         return chip;
     }
 
-    private FlowLayout actions(Page page, Actions actions) {
+    private FlowLayout actions(Page page, ShortcutCheck check, Actions actions) {
         FlowLayout row = LumaUi.actionRow();
-        ButtonComponent back = LumaUi.button(Component.translatable("luma.action.back"), button -> {
-            this.previousPage();
-            actions.handle(Transition.REBUILD);
-        });
-        back.active(!this.flow.firstPage());
+        ButtonComponent back = LumaUi.button(Component.translatable("luma.action.back"), button ->
+                actions.handle(this.back()));
+        back.active(this.canGoBack());
         row.child(back);
 
-        ButtonComponent next;
-        if (this.flow.lastPage()) {
-            next = LumaUi.primaryButton(Component.translatable("luma.action.open_lumi"), button ->
-                    actions.handle(Transition.COMPLETE));
-        } else {
-            next = LumaUi.primaryButton(Component.translatable("luma.action.next"), button ->
-                    actions.handle(this.nextPage()));
+        if (check != null && this.shortcutUnbound(check.shortcut())) {
+            row.child(LumaUi.button(
+                    Component.translatable("luma.action.open_controls"),
+                    button -> actions.handle(Transition.OPEN_CONTROLS)
+            ));
+            row.child(LumaUi.button(
+                    Component.translatable("luma.action.skip"),
+                    button -> actions.handle(this.skipShortcutPage(page))
+            ));
         }
+
+        String key = this.flow.lastPage() ? "luma.action.finish" : "luma.action.next";
+        ButtonComponent next = LumaUi.primaryButton(Component.translatable(key), button ->
+                actions.handle(this.flow.lastPage() ? Transition.COMPLETE : this.nextPage()));
         next.active(this.canAdvance(page));
         row.child(next);
         return row;
     }
 
     private Transition nextPage() {
-        if (!this.canAdvance(this.currentPage())) {
+        Page page = this.currentPage();
+        if (!this.canAdvance(page)) {
             return Transition.NONE;
         }
-        this.flow = this.flow.next();
-        this.resetHoldGate();
-        return Transition.REBUILD;
-    }
-
-    private void previousPage() {
-        if (this.flow.firstPage()) {
-            return;
-        }
-        this.flow = this.flow.previous();
-        this.resetHoldGate();
-    }
-
-    private Transition advanceAfterShortcut(Page page) {
-        this.resetHoldGate();
         if (this.flow.lastPage()) {
             return Transition.COMPLETE;
         }
         this.flow = this.flow.next();
-        return OPEN_WORKSPACE_PAGE_ID.equals(page.id()) ? Transition.OPEN_WORKSPACE : Transition.REBUILD;
+        this.resetHoldGate();
+        return page.spotlightTarget() == SpotlightTarget.SEE_CHANGES ? Transition.CLOSE_WORKSPACE : Transition.REBUILD;
+    }
+
+    private Transition skipShortcutPage(Page page) {
+        return switch (page.onHold()) {
+            case OPEN_WORKSPACE -> this.advanceAfterHold(page);
+            case EXECUTE_UNDO, EXECUTE_REDO -> this.nextPage();
+            default -> this.nextPage();
+        };
+    }
+
+    private Transition advanceAfterHold(Page page) {
+        if (this.flow.lastPage()) {
+            return Transition.COMPLETE;
+        }
+        if (page.onHold() == Transition.EXECUTE_REDO) {
+            this.visibleAdvanceTicks = WORLD_CHANGE_DELAY_TICKS;
+            return page.onHold();
+        }
+        this.flow = this.flow.next();
+        if (page.onHold() == Transition.EXECUTE_UNDO) {
+            this.hiddenTicks = WORLD_CHANGE_DELAY_TICKS;
+        }
+        return page.onHold();
     }
 
     private boolean canAdvance(Page page) {
-        return !this.requiresShortcut(page);
-    }
-
-    private boolean requiresShortcut(Page page) {
-        return page.shortcut() != null && !this.completedShortcutPages.contains(page.id());
+        return page.shortcutCheck() == null || this.shortcutUnbound(page.shortcutCheck().shortcut());
     }
 
     private boolean shortcutHeld(Shortcut shortcut) {
-        if (shortcut == null) {
-            return false;
-        }
         for (LumiClientKeyBindings.Role role : shortcut.roles()) {
             KeyMapping key = LumiClientKeyBindings.key(role);
             if (key == null || key.isUnbound() || !this.keyBindingState.isDown(Minecraft.getInstance(), key)) {
@@ -219,6 +398,16 @@ public final class OnboardingTour {
             }
         }
         return true;
+    }
+
+    private boolean shortcutUnbound(Shortcut shortcut) {
+        for (LumiClientKeyBindings.Role role : shortcut.roles()) {
+            KeyMapping key = LumiClientKeyBindings.key(role);
+            if (key == null || key.isUnbound()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Page currentPage() {
@@ -231,13 +420,27 @@ public final class OnboardingTour {
     }
 
     private int dialogWidth(int screenWidth) {
-        return Math.max(MIN_DIALOG_WIDTH, Math.min(MAX_DIALOG_WIDTH, screenWidth - 20));
+        int availableWidth = Math.max(1, screenWidth - 20);
+        if (availableWidth < MIN_DIALOG_WIDTH) {
+            return availableWidth;
+        }
+        return Math.min(MAX_DIALOG_WIDTH, availableWidth);
+    }
+
+    public enum SpotlightTarget {
+        NONE,
+        SAVE_BUILD,
+        SEE_CHANGES
     }
 
     public enum Transition {
         NONE,
         REBUILD,
         OPEN_WORKSPACE,
+        CLOSE_WORKSPACE,
+        OPEN_CONTROLS,
+        EXECUTE_UNDO,
+        EXECUTE_REDO,
         COMPLETE
     }
 
@@ -245,19 +448,46 @@ public final class OnboardingTour {
         void handle(Transition transition);
     }
 
-    private record Page(String id, String titleKey, String helpKey, Shortcut shortcut) {
-        private static Page info(String id) {
-            return new Page(id, "luma.onboarding." + id + "_title", "luma.onboarding." + id + "_help", null);
+    private record Page(
+            String id,
+            ShortcutCheck shortcutCheck,
+            Transition onHold,
+            SpotlightTarget spotlightTarget,
+            boolean shortcutsTable
+    ) {
+        private String helpKey() {
+            return "luma.onboarding." + this.id + "_help";
         }
 
-        private static Page shortcut(String id, LumiClientKeyBindings.Role... roles) {
+        private static Page info(String id) {
+            return info(id, false);
+        }
+
+        private static Page info(String id, boolean shortcutsTable) {
+            return new Page(id, null, Transition.NONE, SpotlightTarget.NONE, shortcutsTable);
+        }
+
+        private static Page hold(
+                String id,
+                Transition onHold,
+                String instructionKey,
+                LumiClientKeyBindings.Role... roles
+        ) {
             return new Page(
                     id,
-                    "luma.onboarding." + id + "_title",
-                    "luma.onboarding." + id + "_help",
-                    new Shortcut(List.of(roles))
+                    new ShortcutCheck(instructionKey, new Shortcut(List.of(roles))),
+                    onHold,
+                    SpotlightTarget.NONE,
+                    false
             );
         }
+
+        private static Page spotlight(String id, SpotlightTarget target) {
+            return new Page(id, null, Transition.NONE, target, false);
+        }
+    }
+
+    private record ShortcutCheck(String instructionKey, Shortcut shortcut) {
     }
 
     private record Shortcut(List<LumiClientKeyBindings.Role> roles) {

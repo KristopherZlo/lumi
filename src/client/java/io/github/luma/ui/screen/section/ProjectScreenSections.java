@@ -12,11 +12,13 @@ import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
+import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.UIComponent;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -29,10 +31,27 @@ public final class ProjectScreenSections {
 
     private final ProjectScreenController previewController;
     private final Actions actions;
+    private OnboardingTour.SpotlightTarget onboardingSpotlightTarget = OnboardingTour.SpotlightTarget.NONE;
+    private ButtonComponent onboardingSaveButton;
+    private ButtonComponent onboardingChangesButton;
 
     public ProjectScreenSections(ProjectScreenController previewController, Actions actions) {
         this.previewController = Objects.requireNonNull(previewController, "previewController");
         this.actions = Objects.requireNonNull(actions, "actions");
+    }
+
+    public void prepareOnboardingSpotlight(OnboardingTour.SpotlightTarget target) {
+        this.onboardingSpotlightTarget = target == null ? OnboardingTour.SpotlightTarget.NONE : target;
+        this.onboardingSaveButton = null;
+        this.onboardingChangesButton = null;
+    }
+
+    public UIComponent onboardingTargetComponent(OnboardingTour.SpotlightTarget target) {
+        return switch (target == null ? OnboardingTour.SpotlightTarget.NONE : target) {
+            case SAVE_BUILD -> this.onboardingSaveButton;
+            case SEE_CHANGES -> this.onboardingChangesButton;
+            case NONE -> null;
+        };
     }
 
     public FlowLayout buildSection(Model model) {
@@ -76,7 +95,9 @@ public final class ProjectScreenSections {
                 Component.translatable("luma.action.save_build"),
                 button -> this.actions.openSave()
         );
-        saveButton.active(!pending.isEmpty() && !operationActive);
+        this.onboardingSaveButton = saveButton;
+        saveButton.active((!pending.isEmpty() && !operationActive)
+                || this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.SAVE_BUILD);
         FlowLayout primary = LumaUi.actionRow();
         primary.child(saveButton);
         if (pending.isEmpty()) {
@@ -90,7 +111,9 @@ public final class ProjectScreenSections {
                 CompareScreenController.CURRENT_WORLD_REFERENCE,
                 activeHead == null ? "" : activeHead.id()
         ));
-        changesButton.active(activeHead != null);
+        this.onboardingChangesButton = changesButton;
+        changesButton.active(activeHead != null
+                || this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.SEE_CHANGES);
         secondary.child(changesButton);
         ButtonComponent quickRollbackButton = LumaUi.button(
                 Component.translatable("luma.action.quick_rollback"),

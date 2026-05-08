@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.domain.model.WorldMutationSource;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
@@ -7,6 +8,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlockUpdateCaptureContextTest {
@@ -35,5 +37,14 @@ class BlockUpdateCaptureContextTest {
     void skipsOrdinaryBlockUpdates() {
         assertFalse(this.context.shouldScope(Blocks.STONE.defaultBlockState()));
         assertFalse(this.context.shouldScope(Blocks.OAK_PLANKS.defaultBlockState()));
+    }
+
+    @Test
+    void keepsFluidFalloutInFluidSourceContext() {
+        try (WorldMutationContext.SourceFrame ignored =
+                     WorldMutationContext.pushSource(WorldMutationSource.FLUID, "water", "action-1", true)) {
+            assertNull(this.context.pushFor(Blocks.LEVER.defaultBlockState()));
+            assertTrue(WorldMutationContext.currentSource() == WorldMutationSource.FLUID);
+        }
     }
 }

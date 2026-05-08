@@ -54,9 +54,9 @@ loom {
             runDir = 'run/test-client'
             programArg '--username'
             programArg providers.gradleProperty('lumi.testUsername').orElse('LumiTestClient').get()
-            if (lumiStartupProfileEnabled.get()) {
-                vmArg '-Dlumi.startupProfile=true'
-            }
+            vmArg '-Dlumi.debug=true'
+            vmArg '-Dlumi.startupProfile=true'
+            vmArg '-Dlumi.loadLog=true'
         }
 
         baselineClientGameTest {

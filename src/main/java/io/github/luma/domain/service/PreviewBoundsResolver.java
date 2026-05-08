@@ -71,11 +71,11 @@ public final class PreviewBoundsResolver {
             RecoveryDraft draft
     ) throws IOException {
         if (draft != null && !draft.isEmpty()) {
-            return List.copyOf(draft.changes());
+            return visibleChanges(draft.changes());
         }
 
         if (version != null && version.patchIds() != null && !version.patchIds().isEmpty()) {
-            List<StoredBlockChange> changes = this.loadPatchChanges(layout, version.patchIds());
+            List<StoredBlockChange> changes = visibleChanges(this.loadPatchChanges(layout, version.patchIds()));
             if (!changes.isEmpty()) {
                 return changes;
             }
@@ -96,10 +96,18 @@ public final class PreviewBoundsResolver {
             RecoveryDraft draft
     ) throws IOException {
         if (draft != null && !draft.isEmpty()) {
-            return ChunkSelectionFactory.fromStoredChanges(draft.changes());
+            return ChunkSelectionFactory.fromStoredChanges(visibleChanges(draft.changes()));
         }
 
         if (version != null && version.patchIds() != null && !version.patchIds().isEmpty()) {
+            List<StoredBlockChange> changes = visibleChanges(this.loadPatchChanges(layout, version.patchIds()));
+            if (!changes.isEmpty()) {
+                return ChunkSelectionFactory.fromStoredChanges(changes);
+            }
+            if (this.hasHiddenOnlyPatchChanges(layout, version.patchIds())) {
+                return List.of();
+            }
+
             Map<String, ChunkPoint> chunks = new HashMap<>();
             for (String patchId : version.patchIds()) {
                 Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
@@ -141,7 +149,7 @@ public final class PreviewBoundsResolver {
         int maxZ = Integer.MIN_VALUE;
 
         for (StoredBlockChange change : changes) {
-            if (change == null || change.pos() == null) {
+            if (change == null || change.pos() == null || !change.visibleInBuilderSurfaces()) {
                 continue;
             }
             BlockPoint pos = change.pos();
@@ -240,6 +248,20 @@ public final class PreviewBoundsResolver {
             return List.copyOf(chunks);
         }
 
-        return List.copyOf(ChunkSelectionFactory.merge(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes())));
+        return List.copyOf(ChunkSelectionFactory.merge(chunks, ChunkSelectionFactory.fromStoredChanges(visibleChanges(draft.changes()))));
+    }
+
+    private boolean hasHiddenOnlyPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
+        List<StoredBlockChange> changes = this.loadPatchChanges(layout, patchIds);
+        return !changes.isEmpty() && visibleChanges(changes).isEmpty();
+    }
+
+    private static List<StoredBlockChange> visibleChanges(Collection<StoredBlockChange> changes) {
+        if (changes == null || changes.isEmpty()) {
+            return List.of();
+        }
+        return changes.stream()
+                .filter(change -> change != null && change.visibleInBuilderSurfaces())
+                .toList();
     }
 }

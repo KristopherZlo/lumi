@@ -116,7 +116,8 @@ public final class PreparedChunkBatchCollapser {
         for (List<PreparedBlockPlacement> placements : grouped.values()) {
             for (PreparedBlockPlacement placement : placements) {
                 SectionAccumulator section = sections.get(SectionKey.from(placement.pos()));
-                if (section != null && section.contains(placement.pos())) {
+                if (section != null && section.contains(placement.pos())
+                        && !section.shouldReplaceTransient(placement)) {
                     continue;
                 }
                 this.addPlacement(sections, placement, false);
@@ -132,7 +133,8 @@ public final class PreparedChunkBatchCollapser {
         List<PreparedBlockPlacement> expanded = this.pistonMechanismPlacementExpander.expandTargets(candidates);
         for (PreparedBlockPlacement placement : expanded) {
             SectionAccumulator section = sections.get(SectionKey.from(placement.pos()));
-            if (section != null && section.contains(placement.pos())) {
+            if (section != null && section.contains(placement.pos())
+                    && !section.shouldReplaceTransient(placement)) {
                 continue;
             }
             this.addPlacement(sections, placement, false);
@@ -231,6 +233,19 @@ public final class PreparedChunkBatchCollapser {
             return pos != null && this.changedCells[SectionChangeMask.localIndex(pos.getX(), pos.getY(), pos.getZ())];
         }
 
+        private boolean shouldReplaceTransient(PreparedBlockPlacement placement) {
+            if (placement == null || placement.pos() == null || placement.state() == null || placement.state().isAir()) {
+                return false;
+            }
+            int localIndex = SectionChangeMask.localIndex(
+                    placement.pos().getX(),
+                    placement.pos().getY(),
+                    placement.pos().getZ()
+            );
+            BlockState currentState = this.states[localIndex];
+            return currentState != null && (currentState.isAir() || currentState.is(Blocks.MOVING_PISTON));
+        }
+
         private List<PreparedBlockPlacement> connectedExpansionCandidates() {
             List<PreparedBlockPlacement> placements = new ArrayList<>();
             for (int localIndex = 0; localIndex < this.connectedExpansionCandidates.length; localIndex++) {
@@ -281,9 +296,10 @@ public final class PreparedChunkBatchCollapser {
         private final List<CompoundTag> spawns = new ArrayList<>();
         private final List<String> removals = new ArrayList<>();
         private final List<CompoundTag> updates = new ArrayList<>();
+        private boolean replacePlacedEntities;
 
         private EntityBatch toBatch() {
-            return new EntityBatch(this.spawns, this.removals, this.updates);
+            return new EntityBatch(this.spawns, this.removals, this.updates, this.replacePlacedEntities);
         }
     }
 
@@ -293,11 +309,15 @@ public final class PreparedChunkBatchCollapser {
         private int anonymousIndex;
 
         private void add(ChunkPoint chunk, EntityBatch batch) {
+            if (batch.replacePlacedEntities()) {
+                this.markReplace(chunk);
+            }
             for (String entityId : batch.entityIdsToRemove()) {
                 this.addRemoval(chunk, entityId);
             }
             for (CompoundTag tag : batch.entitiesToUpdate()) {
-                this.addTarget(chunkFor(tag, chunk), tag, EntityOperationKind.UPDATE);
+                ChunkPoint targetChunk = batch.replacePlacedEntities() ? chunk : chunkFor(tag, chunk);
+                this.addTarget(targetChunk, tag, EntityOperationKind.UPDATE);
             }
             for (CompoundTag tag : batch.entitiesToSpawn()) {
                 this.addTarget(chunkFor(tag, chunk), tag, EntityOperationKind.SPAWN);
@@ -332,6 +352,9 @@ public final class PreparedChunkBatchCollapser {
 
         private Map<ChunkPoint, EntityAccumulator> toBatchesByChunk() {
             Map<ChunkPoint, EntityAccumulator> chunks = new LinkedHashMap<>();
+            for (ChunkPoint chunk : this.replaceChunks) {
+                chunks.computeIfAbsent(chunk, ignored -> new EntityAccumulator()).replacePlacedEntities = true;
+            }
             for (EntityOperation operation : this.operations.values()) {
                 EntityAccumulator accumulator = chunks.computeIfAbsent(operation.chunk(), ignored -> new EntityAccumulator());
                 switch (operation.kind()) {
@@ -341,6 +364,14 @@ public final class PreparedChunkBatchCollapser {
                 }
             }
             return chunks;
+        }
+
+        private final LinkedHashSet<ChunkPoint> replaceChunks = new LinkedHashSet<>();
+
+        private void markReplace(ChunkPoint chunk) {
+            if (chunk != null) {
+                this.replaceChunks.add(chunk);
+            }
         }
 
         private String entityId(CompoundTag tag) {

@@ -1,6 +1,7 @@
 package io.github.luma;
 
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.debug.StartupProfiler;
 import io.github.luma.integration.OptionalIntegrationBootstrap;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
@@ -8,6 +9,7 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.command.LumaCommands;
 import io.github.luma.minecraft.bootstrap.WorldBootstrapService;
 import io.github.luma.minecraft.testing.SingleplayerTestingService;
+import io.github.luma.minecraft.world.WorldOperationBossBarManager;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.api.ModInitializer;
@@ -31,6 +33,7 @@ public final class LumaMod implements ModInitializer {
     private final LumaCommands commands = new LumaCommands();
     private final WorldBootstrapService worldBootstrapService = new WorldBootstrapService();
     private final OptionalIntegrationBootstrap optionalIntegrations = new OptionalIntegrationBootstrap();
+    private final WorldOperationBossBarManager operationBossBars = new WorldOperationBossBarManager();
 
     @Override
     public void onInitialize() {
@@ -43,22 +46,55 @@ public final class LumaMod implements ModInitializer {
         StartupProfiler.logElapsed("main.command-registration-callback", commandsStartedAt);
         long eventsStartedAt = StartupProfiler.start();
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            WorldOperationManager.getInstance().tick(server);
-            SingleplayerTestingService.getInstance().tick(server);
-            EntityMutationTracker.tick(server);
-            HistoryCaptureManager.getInstance().flushIdleSessions(server);
-            this.worldBootstrapService.tick(server);
+            if (!LumaLoadLog.enabled()) {
+                WorldOperationManager.getInstance().tick(server);
+                this.operationBossBars.tick(server);
+                SingleplayerTestingService.getInstance().tick(server);
+                EntityMutationTracker.tick(server);
+                HistoryCaptureManager.getInstance().flushIdleSessions(server);
+                this.worldBootstrapService.tick(server);
+                return;
+            }
+            try (var ignored = LumaLoadLog.measure("server-tick", "LumaMod.endServerTick")) {
+                try (var worldOperationTick = LumaLoadLog.measure("server-tick", "WorldOperationManager.tick")) {
+                    WorldOperationManager.getInstance().tick(server);
+                }
+                try (var bossBarTick = LumaLoadLog.measure("server-tick", "WorldOperationBossBarManager.tick")) {
+                    this.operationBossBars.tick(server);
+                }
+                try (var testingTick = LumaLoadLog.measure("server-tick", "SingleplayerTestingService.tick")) {
+                    SingleplayerTestingService.getInstance().tick(server);
+                }
+                try (var entityMutationTick = LumaLoadLog.measure("server-tick", "EntityMutationTracker.tick")) {
+                    EntityMutationTracker.tick(server);
+                }
+                try (var idleFlushTick = LumaLoadLog.measure("server-tick", "HistoryCaptureManager.flushIdleSessions")) {
+                    HistoryCaptureManager.getInstance().flushIdleSessions(server);
+                }
+                try (var bootstrapTick = LumaLoadLog.measure("server-tick", "WorldBootstrapService.tick")) {
+                    this.worldBootstrapService.tick(server);
+                }
+            }
         });
         ServerLifecycleEvents.SERVER_STARTED.register(this.worldBootstrapService::bootstrap);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            this.worldBootstrapService.close();
-            HistoryCaptureManager.getInstance().flushAll(server);
-            WorldOperationManager.getInstance().shutdown();
+            try (var ignored = LumaLoadLog.measure("lifecycle", "server-stopping")) {
+                this.worldBootstrapService.close();
+                this.operationBossBars.clear();
+                HistoryCaptureManager.getInstance().flushAll(server);
+                WorldOperationManager.getInstance().shutdown();
+            } finally {
+                LumaLoadLog.close();
+            }
         });
         StartupProfiler.logElapsed("main.fabric-events", eventsStartedAt);
         LOGGER.info("{} bootstrap initialized", MOD_NAME);
         if (LumaDebugLog.globalEnabled()) {
             LOGGER.info("{} global debug logging is enabled via -Dlumi.debug=true", MOD_NAME);
+        }
+        if (LumaLoadLog.enabled()) {
+            LOGGER.info("{} load logging is enabled at {}", MOD_NAME, LumaLoadLog.configuredPath());
+            LumaLoadLog.event("lifecycle", "mod-initialized", "path=" + LumaLoadLog.configuredPath());
         }
         StartupProfiler.logElapsed("main.onInitialize", startedAt);
     }

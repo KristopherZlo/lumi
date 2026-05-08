@@ -69,6 +69,21 @@ class PendingChangesOverlayRendererStateTest {
         assertFalse(PendingChangesOverlayRenderer.visible());
     }
 
+    @Test
+    void hiddenDraftChangesDoNotEnterPendingOverlay() {
+        StatePayload oldValue = new StatePayload(state("minecraft:air"), null);
+        StatePayload newValue = new StatePayload(state("minecraft:wheat"), null);
+        PendingChangesOverlaySnapshot snapshot = PendingChangesOverlaySnapshot.fromDraft(
+                "project",
+                draft(List.of(new StoredBlockChange(new BlockPoint(1, 64, 1), oldValue, newValue, true)))
+        );
+
+        PendingChangesOverlayRenderer.activate(PendingChangesOverlayRenderer.prepare(snapshot, false));
+
+        assertTrue(snapshot.blockChanges().isEmpty());
+        assertFalse(PendingChangesOverlayRenderer.visible());
+    }
+
     private static RecoveryDraft draft(List<StoredBlockChange> changes) {
         return new RecoveryDraft(
                 "project",

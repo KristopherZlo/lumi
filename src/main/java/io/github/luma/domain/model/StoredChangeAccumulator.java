@@ -21,7 +21,7 @@ public final class StoredChangeAccumulator {
         StoredBlockChange current = this.blockChanges.get(key);
         StoredBlockChange merged = current == null
                 ? change
-                : current.withLatestState(change.newValue());
+                : current.withLatestChange(change);
         if (merged.isNoOp()) {
             this.blockChanges.remove(key);
         } else {

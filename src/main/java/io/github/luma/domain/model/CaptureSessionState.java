@@ -13,7 +13,7 @@ import java.util.UUID;
 /**
  * Mutable runtime state for one active capture session.
  *
- * <p>The live tracked buffer remains the source of truth for pending block
+ * <p>The working-draft buffer remains the source of truth for pending block
  * changes, while chunk-level root and dirty sets drive deferred stabilization
  * for causal-only ambient fallout such as fluid spread or falling blocks.
  */
@@ -29,6 +29,7 @@ public final class CaptureSessionState {
     private final LinkedHashSet<ChunkPoint> rootChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> dirtyChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> pendingReconcileChunks = new LinkedHashSet<>();
+    private final LinkedHashMap<ChunkPoint, Long> pendingReconcileGameTimes = new LinkedHashMap<>();
     private final LinkedHashMap<ChunkPoint, DeferredActionContext> deferredActionContexts = new LinkedHashMap<>();
     private final LinkedHashSet<UUID> trackedFallingEntities = new LinkedHashSet<>();
     private boolean reconciliationInFlight;
@@ -66,15 +67,27 @@ public final class CaptureSessionState {
     }
 
     public boolean markDirtyChunk(ChunkPoint chunk, DeferredActionContext deferredActionContext) {
+        return this.markDirtyChunk(chunk, deferredActionContext, Long.MIN_VALUE);
+    }
+
+    public boolean markDirtyChunk(
+            ChunkPoint chunk,
+            DeferredActionContext deferredActionContext,
+            long gameTime
+    ) {
         if (chunk == null) {
             return false;
         }
         boolean dirtyChanged = this.dirtyChunks.add(chunk);
         boolean pendingChanged = this.pendingReconcileChunks.add(chunk);
+        Long previousGameTime = this.pendingReconcileGameTimes.put(chunk, gameTime);
+        boolean gameTimeChanged = previousGameTime == null || previousGameTime.longValue() != gameTime;
+        boolean contextChanged = false;
         if (deferredActionContext != null && deferredActionContext.hasAction()) {
-            this.deferredActionContexts.putIfAbsent(chunk, deferredActionContext);
+            DeferredActionContext previous = this.deferredActionContexts.put(chunk, deferredActionContext);
+            contextChanged = !deferredActionContext.equals(previous);
         }
-        return dirtyChanged || pendingChanged;
+        return dirtyChanged || pendingChanged || gameTimeChanged || contextChanged;
     }
 
     public boolean isWithinStabilizationEnvelope(ChunkPoint chunk) {
@@ -108,6 +121,20 @@ public final class CaptureSessionState {
         return drained;
     }
 
+    public List<ChunkPoint> drainPendingReconcileChunks(long gameTime, int settleTicks) {
+        if (settleTicks <= 0) {
+            return this.drainPendingReconcileChunks();
+        }
+        List<ChunkPoint> drained = new ArrayList<>();
+        for (ChunkPoint chunk : this.pendingReconcileChunks) {
+            if (this.isReadyForReconciliation(chunk, gameTime, settleTicks)) {
+                drained.add(chunk);
+            }
+        }
+        this.pendingReconcileChunks.removeAll(drained);
+        return List.copyOf(drained);
+    }
+
     public boolean hasPendingReconciliation() {
         return !this.pendingReconcileChunks.isEmpty();
     }
@@ -132,6 +159,7 @@ public final class CaptureSessionState {
         this.dirtyChunks.removeAll(reconciledChunks);
         for (ChunkPoint chunk : reconciledChunks) {
             this.deferredActionContexts.remove(chunk);
+            this.pendingReconcileGameTimes.remove(chunk);
         }
     }
 
@@ -146,6 +174,7 @@ public final class CaptureSessionState {
             }
             this.dirtyChunks.add(chunk);
             this.pendingReconcileChunks.add(chunk);
+            this.pendingReconcileGameTimes.putIfAbsent(chunk, Long.MIN_VALUE);
         }
     }
 
@@ -261,6 +290,14 @@ public final class CaptureSessionState {
             grouped.computeIfAbsent(chunk, ignored -> new ArrayList<>()).add(change);
         }
         return grouped;
+    }
+
+    private boolean isReadyForReconciliation(ChunkPoint chunk, long gameTime, int settleTicks) {
+        Long dirtyAt = this.pendingReconcileGameTimes.get(chunk);
+        if (dirtyAt == null || dirtyAt == Long.MIN_VALUE) {
+            return true;
+        }
+        return gameTime - dirtyAt >= settleTicks;
     }
 
     public record DeferredActionContext(

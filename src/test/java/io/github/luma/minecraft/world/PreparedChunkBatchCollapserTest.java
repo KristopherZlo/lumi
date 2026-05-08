@@ -109,6 +109,22 @@ class PreparedChunkBatchCollapserTest {
     }
 
     @Test
+    void placedEntityReplacementFlagSurvivesCollapse() {
+        CompoundTag entity = entity("00000000-0000-0000-0000-000000000055", 32.0D);
+        PreparedChunkBatch batch = new PreparedChunkBatch(
+                new ChunkPoint(2, 3),
+                List.of(),
+                EntityBatch.replacePlacedEntities(List.of(entity))
+        );
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(batch));
+
+        assertEquals(1, collapsed.size());
+        assertTrue(collapsed.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(1, collapsed.getFirst().entityBatch().entitiesToUpdate().size());
+    }
+
+    @Test
     void laterEntityRemovalWinsOverEarlierUpdate() {
         String entityId = "00000000-0000-0000-0000-000000000051";
         PreparedChunkBatch update = new PreparedChunkBatch(
@@ -225,6 +241,29 @@ class PreparedChunkBatchCollapserTest {
                 new PreparedChunkBatch(
                         new ChunkPoint(0, 0),
                         List.of(new PreparedBlockPlacement(base, extended, null))
+                )
+        ));
+
+        assertEquals(1, collapsed.size());
+        BlockState head = stateAt(collapsed.getFirst(), base.east());
+        assertTrue(head.is(Blocks.PISTON_HEAD));
+        assertEquals(Direction.EAST, head.getValue(PistonHeadBlock.FACING));
+    }
+
+    @Test
+    void sparsePistonCompanionOverridesTransientHeadTarget() {
+        BlockPos base = new BlockPos(1, 64, 1);
+        BlockState extended = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                .setValue(PistonBaseBlock.EXTENDED, true);
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(
+                new PreparedChunkBatch(
+                        new ChunkPoint(0, 0),
+                        List.of(
+                                new PreparedBlockPlacement(base, extended, null),
+                                new PreparedBlockPlacement(base.east(), Blocks.MOVING_PISTON.defaultBlockState(), null)
+                        )
                 )
         ));
 

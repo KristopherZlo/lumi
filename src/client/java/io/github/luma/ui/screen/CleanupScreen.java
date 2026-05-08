@@ -1,6 +1,9 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.model.ProjectCleanupReport;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.CleanupScreenController;
 import io.wispforest.owo.ui.component.ButtonComponent;
@@ -18,6 +21,7 @@ public final class CleanupScreen extends LumaScreen {
     private final String projectName;
     private final Minecraft client = Minecraft.getInstance();
     private final CleanupScreenController controller = new CleanupScreenController();
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private ProjectCleanupReport report;
     private String status = "luma.status.cleanup_ready";
 
@@ -51,6 +55,8 @@ public final class CleanupScreen extends LumaScreen {
         FlowLayout body = LumaUi.screenBody();
         frame.child(LumaUi.screenScroll(body));
 
+        new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
+                .addHint(body, ClientContextualHelpHint.CLEANUP);
         body.child(this.actionsSection());
         if (this.report != null) {
             body.child(this.resultsSection());

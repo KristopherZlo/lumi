@@ -40,7 +40,7 @@ class DirectSectionMutationCaptureServiceTest {
                 section -> Optional.empty()
         );
 
-        service.captureBefore(null, 0, 0, 0);
+        service.captureBefore(null, 0, 0, 0, Blocks.AIR.defaultBlockState());
 
         assertFalse(inspectedStack.get());
     }
@@ -63,7 +63,7 @@ class DirectSectionMutationCaptureServiceTest {
 
         DirectSectionMutationCaptureService.PendingDirectSectionMutation mutation;
         try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.PISTON)) {
-            mutation = service.captureBefore(section, 1, 2, 3);
+            mutation = service.captureBefore(section, 1, 2, 3, Blocks.AIR.defaultBlockState());
         }
 
         assertFalse(inspectedStack.get());

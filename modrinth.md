@@ -27,13 +27,13 @@ Lumi is made for builders and redstoners who want to:
 ## Core Features
 
 - Automatic project history for the current dimension or tracked build area.
-- One-time interactive onboarding tour for the safe save, undo, restore, branch, compare, recovery, and import/export flow, with remapped shortcut icons, hold-to-continue steps, and manual replay from More or `/lumi-onboarding`.
 - Save versions with a message, stats, preview image, patch payload, and optional checkpoint snapshot.
 - Branch-like variants for alternate ideas.
 - Local branch merge into the current branch with conflict planning and a new merge save.
 - Rename saves, soft-delete saves, soft-delete inactive branches, and review deleted saves from the More screen.
 - Compare a save against its parent, another save, a branch head, or the live current build.
 - In-world compare highlight with an x-ray hold mode through the Lumi action button.
+- Hotkey information table with default `Left Alt+I`, using your current remapped Lumi controls.
 - Restore saved versions back into the world with progress reporting.
 - Partial restore from save details using manual XYZ bounds or the current Lumi selection, with `Only selected area` and `Everything except selection` modes, plus live undo/redo for the applied partial restore.
 - Runtime-only wooden-sword region selection with highlighted cuboid bounds.
@@ -50,6 +50,7 @@ Lumi tracks recent builder actions separately from saved versions.
 
 - Default undo chord: `Left Alt+Z`.
 - Default redo chord: `Left Alt+Y`.
+- Default hotkey information chord: `Left Alt+I`.
 - `Left Alt` is the default Lumi action button and can be rebound in Minecraft controls.
 - Changing the Lumi action button changes the undo, redo, quick-save, preview, selection, and deselect chords that use it.
 - WorldEdit and FAWE actions use the tools' native undo/redo commands through Lumi's hotkeys.

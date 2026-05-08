@@ -20,18 +20,21 @@ Use a custom nickname:
 
 The script automatically selects a compatible local JDK 21+ and prefers Java 21 when it is installed. It overrides an older shell `JAVA_HOME` for that launch only.
 
+The test-client Gradle profile always starts with Lumi diagnostics enabled:
+
+- `-Dlumi.debug=true`
+- `-Dlumi.startupProfile=true`
+- `-Dlumi.loadLog=true`
+
+The load log is written under `run/test-client/logs/lumi-load.log` by default.
+
 If you want to force a specific JDK:
 
 ```powershell
 .\scripts\run-test-client.ps1 -JavaHome "C:\Program Files\Java\jdk-21"
 ```
 
-Existing `JAVA_TOOL_OPTIONS` are preserved, so debug JVM flags can be set before launching:
-
-```powershell
-$env:JAVA_TOOL_OPTIONS = "-Dlumi.debug=true"
-.\scripts\run-test-client.ps1
-```
+Existing `JAVA_TOOL_OPTIONS` are preserved for additional JVM diagnostics.
 
 If you only want to verify the Gradle profile without starting Minecraft:
 

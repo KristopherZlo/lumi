@@ -240,6 +240,33 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void diffChunkKeepsPistonMovedSourceAndDestinationFromPreMotionBaseline() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint source = new BlockPoint(1, 64, 1);
+        BlockPoint destination = new BlockPoint(2, 64, 1);
+        ChunkSnapshotPayload baseline = chunkWithStates(
+                stateTag("minecraft:air"),
+                Map.of(source, stateTag("minecraft:oak_planks"))
+        );
+        ChunkSnapshotPayload live = chunkWithStates(
+                stateTag("minecraft:air"),
+                Map.of(destination, stateTag("minecraft:oak_planks"))
+        );
+
+        List<StoredBlockChange> changes = service.diffChunk(baseline, live, null);
+
+        assertEquals(2, changes.size());
+        Map<BlockPoint, StoredBlockChange> byPos = new java.util.HashMap<>();
+        for (StoredBlockChange change : changes) {
+            byPos.put(change.pos(), change);
+        }
+        assertEquals("minecraft:oak_planks", byPos.get(source).oldValue().blockId());
+        assertEquals("minecraft:air", byPos.get(source).newValue().blockId());
+        assertEquals("minecraft:air", byPos.get(destination).oldValue().blockId());
+        assertEquals("minecraft:oak_planks", byPos.get(destination).newValue().blockId());
+    }
+
+    @Test
     void stabilizationCompositionRemovesCurrentChangesThatSettledBackToBaseline() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange placedThenMovedBlock = new StoredBlockChange(
@@ -434,6 +461,39 @@ class SessionStabilizationServiceTest {
                         List.of(defaultState, specialState),
                         packMinecraftIndexes(indexes, 1),
                         1
+                )),
+                Map.of()
+        );
+    }
+
+    private static ChunkSnapshotPayload chunkWithStates(
+            CompoundTag defaultState,
+            Map<BlockPoint, CompoundTag> states
+    ) {
+        short[] indexes = new short[4096];
+        List<CompoundTag> palette = new ArrayList<>();
+        palette.add(defaultState);
+        int chunkX = 0;
+        int chunkZ = 0;
+        for (Map.Entry<BlockPoint, CompoundTag> entry : states.entrySet()) {
+            palette.add(entry.getValue());
+            BlockPoint pos = entry.getKey();
+            chunkX = pos.x() >> 4;
+            chunkZ = pos.z() >> 4;
+            indexes[ChunkSectionSnapshotPayload.localIndex(pos.x() & 15, pos.y() & 15, pos.z() & 15)] =
+                    (short) (palette.size() - 1);
+        }
+        int bitsPerEntry = palette.size() <= 2 ? 1 : 2;
+        return new ChunkSnapshotPayload(
+                chunkX,
+                chunkZ,
+                64,
+                79,
+                List.of(new ChunkSectionSnapshotPayload(
+                        4,
+                        palette,
+                        packMinecraftIndexes(indexes, bitsPerEntry),
+                        bitsPerEntry
                 )),
                 Map.of()
         );

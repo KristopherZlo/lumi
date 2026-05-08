@@ -141,6 +141,27 @@ class TrackedChangeBufferTest {
     }
 
     @Test
+    void rebaseBaseVersionOnlyWhenExpectedBaseMatches() {
+        Instant now = Instant.parse("2026-04-20T10:15:30Z");
+        TrackedChangeBuffer buffer = TrackedChangeBuffer.create(
+                "session",
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                now
+        );
+
+        assertFalse(buffer.rebaseBaseVersion("old-head", "v0002", now.plusSeconds(1)));
+        assertEquals("v0001", buffer.baseVersionId());
+
+        assertTrue(buffer.rebaseBaseVersion("v0001", "v0002", now.plusSeconds(2)));
+        assertEquals("v0002", buffer.baseVersionId());
+        assertEquals(now.plusSeconds(2), buffer.updatedAt());
+    }
+
+    @Test
     void entityChangesKeepFirstOldPayloadAndLastNewPayload() {
         Instant now = Instant.parse("2026-04-20T10:15:30Z");
         TrackedChangeBuffer buffer = TrackedChangeBuffer.create(

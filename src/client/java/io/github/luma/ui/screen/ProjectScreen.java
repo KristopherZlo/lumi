@@ -3,6 +3,8 @@ package io.github.luma.ui.screen;
 import io.github.luma.client.onboarding.ClientOnboardingService;
 import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
+import io.github.luma.client.onboarding.ClientOnboardingFlowCoordinator;
+import io.github.luma.client.input.LumiShortcutSuppressingScreen;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.PartialRestoreMode;
@@ -21,6 +23,7 @@ import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
+import io.github.luma.ui.onboarding.OnboardingSpotlightOverlay;
 import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.screen.section.ProjectScreenSections;
 import io.github.luma.ui.state.ProjectHomeViewState;
@@ -38,10 +41,11 @@ import java.util.Map;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.options.controls.ControlsScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
-public final class ProjectScreen extends LumaScreen {
+public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppressingScreen {
 
     private final Screen parent;
     private final String projectName;
@@ -127,6 +131,10 @@ public final class ProjectScreen extends LumaScreen {
 
         StackLayout stack = UIContainers.stack(Sizing.fill(100), Sizing.fill(100));
         root.child(stack);
+        OnboardingTour.SpotlightTarget spotlightTarget = this.onboardingTour == null
+                ? OnboardingTour.SpotlightTarget.NONE
+                : this.onboardingTour.workspaceSpotlightTarget();
+        this.sections.prepareOnboardingSpotlight(spotlightTarget);
 
         ProjectWindowLayout window = ProjectWindowLayout.forProject(
                 this.width,
@@ -150,17 +158,35 @@ public final class ProjectScreen extends LumaScreen {
         this.bodyScroll = LumaUi.screenScroll(body);
         window.content().child(this.bodyScroll);
 
-        ContextualHelpPresenter contextualHelp = new ContextualHelpPresenter(
-                this.contextualHelpService,
-                () -> this.refresh(this.statusKey)
-        );
-        contextualHelp.addHint(body, ClientContextualHelpHint.HISTORY);
-        contextualHelp.addHint(body, ClientContextualHelpHint.SHORTCUTS);
+        if (this.onboardingTour == null) {
+            ContextualHelpPresenter contextualHelp = new ContextualHelpPresenter(
+                    this.contextualHelpService,
+                    () -> this.refresh(this.statusKey)
+            );
+            boolean hintAdded = contextualHelp.addHint(body, ClientContextualHelpHint.HISTORY);
+            if (!hintAdded) {
+                hintAdded = contextualHelp.addHint(body, ClientContextualHelpHint.SHORTCUTS);
+            }
+            if (!hintAdded && this.state.pendingChanges().isEmpty()) {
+                contextualHelp.addHint(body, ClientContextualHelpHint.CLEAN_STATE);
+            } else if (!hintAdded) {
+                hintAdded = contextualHelp.addHint(body, ClientContextualHelpHint.SAVE);
+                if (!hintAdded) {
+                    contextualHelp.addHint(body, ClientContextualHelpHint.QUICK_ROLLBACK);
+                }
+            }
+        }
         body.child(this.sections.buildSection(model));
         body.child(this.sections.historySection(model));
         body.child(LumaUi.bottomSpacer());
 
-        if (this.onboardingTour != null) {
+        if (this.onboardingTour != null && spotlightTarget != OnboardingTour.SpotlightTarget.NONE) {
+            stack.child(new OnboardingSpotlightOverlay(
+                    () -> this.sections.onboardingTargetComponent(spotlightTarget),
+                    this.onboardingTour,
+                    this::handleOnboardingTransition
+            ));
+        } else if (this.onboardingTour != null) {
             stack.child(this.onboardingOverlay());
         }
     }
@@ -175,7 +201,15 @@ public final class ProjectScreen extends LumaScreen {
         if (this.onboardingTour != null && OnboardingScreen.isEscapeKey(event)) {
             return true;
         }
+        if (this.onboardingTour != null) {
+            return true;
+        }
         return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean suppressesLumiShortcuts() {
+        return this.onboardingTour != null;
     }
 
     @Override
@@ -292,7 +326,11 @@ public final class ProjectScreen extends LumaScreen {
             return false;
         }
         switch (transition) {
-            case REBUILD, OPEN_WORKSPACE -> this.refresh(this.statusKey);
+            case REBUILD -> this.refresh(this.statusKey);
+            case CLOSE_WORKSPACE -> this.closeWorkspaceForWorldTeaching();
+            case OPEN_CONTROLS -> this.openControls();
+            case OPEN_WORKSPACE, EXECUTE_UNDO, EXECUTE_REDO -> {
+            }
             case COMPLETE -> this.completeOnboarding();
             case NONE -> {
             }
@@ -300,10 +338,25 @@ public final class ProjectScreen extends LumaScreen {
         return true;
     }
 
+    private void openControls() {
+        this.client.setScreen(new ControlsScreen(this, this.client.options));
+    }
+
     private void completeOnboarding() {
         this.onboardingService.markCompleted();
         this.onboardingTour = null;
         this.refresh(this.statusKey);
+    }
+
+    private void closeWorkspaceForWorldTeaching() {
+        ClientOnboardingFlowCoordinator.getInstance().startBreakBlockStep(
+                this.projectName,
+                this.selectedVariantId,
+                this.statusKey,
+                this.onboardingService,
+                this.onboardingTour
+        );
+        this.client.setScreen(null);
     }
 
     private Component bannerText() {

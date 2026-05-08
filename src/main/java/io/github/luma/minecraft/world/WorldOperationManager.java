@@ -2,6 +2,7 @@ package io.github.luma.minecraft.world;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationProgress;
 import io.github.luma.domain.model.OperationSnapshot;
@@ -118,6 +119,7 @@ public final class WorldOperationManager {
                     operation.handle().label(),
                     projectId
             );
+            LumaLoadLog.event("world-op", "queued-background", "label=" + label + ", projectId=" + projectId);
             return operation.handle();
         }
     }
@@ -153,6 +155,7 @@ public final class WorldOperationManager {
                     operation.handle().label(),
                     projectId
             );
+            LumaLoadLog.event("world-op", "queued-prepared-apply", "label=" + label + ", projectId=" + projectId);
             return operation.handle();
         }
     }
@@ -181,7 +184,16 @@ public final class WorldOperationManager {
             if (operation.advance(budget, startedAt + budget.maxNanos())) {
                 this.complete(server, operation);
             }
-            operation.recordAdvanceCost(System.nanoTime() - startedAt, budget.maxNanos());
+            long elapsedNanos = System.nanoTime() - startedAt;
+            operation.recordAdvanceCost(elapsedNanos, budget.maxNanos());
+            LumaLoadLog.record(
+                    "world-op-tick",
+                    operation.handle().label() + ".advance",
+                    elapsedNanos,
+                    "stage=" + operation.snapshot().stage()
+                            + ", budgetMicros=" + (budget.maxNanos() / 1_000L)
+                            + ", adaptiveScale=" + operation.adaptiveScale()
+            );
         } catch (Exception exception) {
             operation.fail(exception);
             this.complete(server, operation);
@@ -200,8 +212,10 @@ public final class WorldOperationManager {
         if (active == operation) {
             this.activeOperations.remove(serverKey);
             this.lastSnapshots.put(serverKey, operation.snapshot());
-            operation.applyMetricsSummary()
-                    .ifPresent(metrics -> this.lastApplyMetrics.put(operation.handle().id(), metrics));
+            operation.applyMetricsSummary().ifPresent(metrics -> {
+                this.lastApplyMetrics.put(operation.handle().id(), metrics);
+                LumaLoadLog.operationMetrics(operation.handle(), metrics);
+            });
         }
     }
 
@@ -455,14 +469,17 @@ public final class WorldOperationManager {
         ) {
             super(level, handle, unitLabel);
             this.future = CompletableFuture.runAsync(() -> {
+                long loadStartedAt = LumaLoadLog.start();
                 try {
                     LumaDebugLog.log(this.handle(), "world-op", "Background worker thread started for {}", this.handle().label());
                     this.progressSink().update(OperationStage.PREPARING, 0, 0, "Starting");
                     work.run(this.progressSink());
                     this.complete("Completed");
                 } catch (Exception exception) {
+                    LumaLoadLog.recordSince("world-op", this.handle().label() + ".background", loadStartedAt, "failed=true");
                     throw new CompletionException(exception);
                 }
+                LumaLoadLog.recordSince("world-op", this.handle().label() + ".background", loadStartedAt);
             }, WorldOperationManager.this.executor());
         }
 
@@ -511,6 +528,8 @@ public final class WorldOperationManager {
         private final WorldLightUpdateQueue lightUpdateQueue = new WorldLightUpdateQueue();
         private final RedstoneReplayUpdateQueue redstoneUpdateQueue = new RedstoneReplayUpdateQueue();
         private final ExactReplayStateQueue exactReplayStateQueue = new ExactReplayStateQueue();
+        private boolean lightPreparationRecorded = false;
+        private boolean lightEngineFlushRequired = false;
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -522,10 +541,19 @@ public final class WorldOperationManager {
             this.profile = WorldOperationManager.this.applyOperationProfile.profileFor(handle.label());
             this.preparationStartedAtNanos = System.nanoTime();
             this.future = CompletableFuture.supplyAsync(() -> {
+                long loadStartedAt = LumaLoadLog.start();
                 try {
                     this.progressSink().update(OperationStage.PREPARING, 0, 0, "Preparing");
-                    return work.prepare(this.progressSink());
+                    PreparedApplyOperation preparedOperation = work.prepare(this.progressSink());
+                    LumaLoadLog.recordSince(
+                            "world-op",
+                            this.handle().label() + ".prepare",
+                            loadStartedAt,
+                            "workUnits=" + (preparedOperation == null ? 0 : preparedOperation.totalWorkUnits())
+                    );
+                    return preparedOperation;
                 } catch (Exception exception) {
+                    LumaLoadLog.recordSince("world-op", this.handle().label() + ".prepare", loadStartedAt, "failed=true");
                     throw new CompletionException(exception);
                 }
             }, WorldOperationManager.this.executor());
@@ -745,7 +773,18 @@ public final class WorldOperationManager {
                     tickStartFallbackSections,
                     tickStartLightChecks
             );
-            this.applyMetrics.recordApplyTick(processedWorkThisTick, System.nanoTime() - applyTickStartedAt);
+            long applyTickElapsedNanos = System.nanoTime() - applyTickStartedAt;
+            this.applyMetrics.recordApplyTick(processedWorkThisTick, applyTickElapsedNanos);
+            LumaLoadLog.record(
+                    "world-op",
+                    this.handle().label() + ".applyTick",
+                    applyTickElapsedNanos,
+                    "workUnits=" + processedWorkThisTick
+                            + ", stop=" + stopReason
+                            + ", nativeCells=" + processedNativeCellsThisTick
+                            + ", rewriteSections=" + processedRewriteSectionsThisTick
+                            + ", directSections=" + processedDirectSectionsThisTick
+            );
 
             if (this.currentBatch == null && (this.dispatcher == null || !this.dispatcher.hasPending())) {
                 if (!this.drainDeferredRedstoneUpdates(budget, deadlineNanos)) {
@@ -755,6 +794,9 @@ public final class WorldOperationManager {
                     return false;
                 }
                 if (!this.drainDeferredLightUpdates(budget, deadlineNanos)) {
+                    return false;
+                }
+                if (!this.flushLightEngine(deadlineNanos)) {
                     return false;
                 }
                 this.progressSink().update(
@@ -790,6 +832,11 @@ public final class WorldOperationManager {
                     result.alreadyLoadedChunks(),
                     elapsedNanos
             );
+            this.applyMetrics.recordPreloadPipeline(
+                    result.ticketedChunks(),
+                    result.outstandingTickets(),
+                    result.syncFallbackLoads()
+            );
             this.progressSink().update(
                     OperationStage.PRELOADING,
                     result.completedChunks(),
@@ -800,15 +847,29 @@ public final class WorldOperationManager {
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op-apply",
-                        "Preload tick chunks={}/{} newlyLoaded={} alreadyLoaded={} elapsedMicros={} complete={}",
+                        "Preload tick chunks={}/{} newlyLoaded={} alreadyLoaded={} ticketed={} outstandingTickets={} syncFallbackLoads={} elapsedMicros={} complete={}",
                         result.completedChunks(),
                         result.totalChunks(),
                         result.newlyLoadedChunks(),
                         result.alreadyLoadedChunks(),
+                        result.ticketedChunks(),
+                        result.outstandingTickets(),
+                        result.syncFallbackLoads(),
                         elapsedNanos / 1_000L,
                         result.complete()
                 );
             }
+            LumaLoadLog.record(
+                    "world-op",
+                    this.handle().label() + ".preloadTick",
+                    elapsedNanos,
+                    "chunks=" + result.completedChunks() + "/" + result.totalChunks()
+                            + ", newlyLoaded=" + result.newlyLoadedChunks()
+                            + ", alreadyLoaded=" + result.alreadyLoadedChunks()
+                            + ", ticketed=" + result.ticketedChunks()
+                            + ", outstandingTickets=" + result.outstandingTickets()
+                            + ", syncFallbackLoads=" + result.syncFallbackLoads()
+            );
             return false;
         }
 
@@ -828,20 +889,55 @@ public final class WorldOperationManager {
                 return true;
             }
 
+            if (!this.lightUpdateQueue.prepareDrainPositionsAsync(WorldOperationManager.this.executor())) {
+                this.progressSink().update(
+                        OperationStage.FINALIZING,
+                        this.appliedWorkUnits,
+                        this.prepared.totalWorkUnits(),
+                        this.applyDetail("Preparing light updates, "
+                                + this.lightUpdateQueue.pendingCount()
+                                + " checks queued")
+                );
+                return false;
+            }
+            if (!this.lightPreparationRecorded) {
+                this.applyMetrics.recordLightPrepared(
+                        this.lightUpdateQueue.preparedCheckCount(),
+                        this.lightUpdateQueue.dirtyChunkCount()
+                );
+                this.lightPreparationRecorded = true;
+            }
             int maxChecks = Math.max(128, budget.maxLightChecks());
             int pendingBefore = this.lightUpdateQueue.pendingCount();
             long startedAt = System.nanoTime();
             int appliedChecks = this.lightUpdateQueue.drain(this.level(), maxChecks, deadlineNanos);
+            int markedChunks = this.lightUpdateQueue.markTouchedChunksUnsaved(
+                    this.level(),
+                    Math.max(1, budget.maxPreloadChunks() * 4),
+                    deadlineNanos
+            );
             long elapsedNanos = System.nanoTime() - startedAt;
             this.applyMetrics.recordLightChecks(appliedChecks);
             this.applyMetrics.recordLightDrainTick(elapsedNanos);
+            if (appliedChecks > 0) {
+                this.lightEngineFlushRequired = true;
+            }
+            LumaLoadLog.record(
+                    "world-op",
+                    this.handle().label() + ".lightDrainTick",
+                    elapsedNanos,
+                    "appliedChecks=" + appliedChecks
+                            + ", markedChunks=" + markedChunks
+                            + ", pendingBefore=" + pendingBefore
+            );
             if (this.debugApplyEnabled()) {
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op-apply",
-                        "Light drain maxChecks={} applied={} pendingBefore={} pendingAfter={} elapsedMicros={}",
+                        "Light drain maxChecks={} applied={} markedChunks={} pendingBefore={} pendingAfter={} elapsedMicros={}",
                         maxChecks,
                         appliedChecks,
+                        markedChunks,
                         pendingBefore,
                         this.lightUpdateQueue.pendingCount(),
                         elapsedNanos / 1_000L
@@ -856,12 +952,53 @@ public final class WorldOperationManager {
             return !this.lightUpdateQueue.hasPending();
         }
 
+        private boolean flushLightEngine(long deadlineNanos) {
+            if (!this.lightEngineFlushRequired) {
+                return true;
+            }
+            if (System.nanoTime() >= deadlineNanos) {
+                return false;
+            }
+
+            long startedAt = System.nanoTime();
+            int updates = this.level().getLightEngine().runLightUpdates();
+            boolean hasMore = this.level().getLightEngine().hasLightWork();
+            long elapsedNanos = System.nanoTime() - startedAt;
+            this.applyMetrics.recordLightEngineFlushTick();
+            LumaLoadLog.record(
+                    "world-op",
+                    this.handle().label() + ".lightEngineFlushTick",
+                    elapsedNanos,
+                    "updates=" + updates + ", hasMore=" + hasMore
+            );
+            if (this.debugApplyEnabled()) {
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op-apply",
+                        "Light engine flush updates={} hasMore={} elapsedMicros={}",
+                        updates,
+                        hasMore,
+                        elapsedNanos / 1_000L
+                );
+            }
+            this.progressSink().update(
+                    OperationStage.FINALIZING,
+                    this.appliedWorkUnits,
+                    this.prepared.totalWorkUnits(),
+                    this.applyDetail("Flushing light engine")
+            );
+            this.lightEngineFlushRequired = hasMore;
+            return !hasMore;
+        }
+
         private boolean drainExactReplayStates(WorldApplyBudget budget, long deadlineNanos) {
             if (!this.exactReplayStateQueue.hasPending()) {
                 return true;
             }
 
             int maxBlocks = Math.max(32, budget.maxBlocks());
+            int pendingBefore = this.exactReplayStateQueue.pendingCount();
+            long startedAt = System.nanoTime();
             int reapplied;
             try (
                     WorldMutationContext.SourceFrame ignoredSource =
@@ -871,6 +1008,12 @@ public final class WorldOperationManager {
             ) {
                 reapplied = this.exactReplayStateQueue.drain(this.level(), maxBlocks, deadlineNanos, this.handle());
             }
+            LumaLoadLog.record(
+                    "world-op",
+                    this.handle().label() + ".exactReplayDrainTick",
+                    System.nanoTime() - startedAt,
+                    "reapplied=" + reapplied + ", pendingBefore=" + pendingBefore
+            );
             if (!this.exactReplayStateQueue.hasPending()) {
                 ExactReplayStateGuard.getInstance().guard(
                         this.level(),
@@ -909,6 +1052,12 @@ public final class WorldOperationManager {
             long elapsedNanos = System.nanoTime() - startedAt;
             this.applyMetrics.recordRedstoneUpdates(appliedUpdates);
             this.applyMetrics.recordRedstoneDrainTick(elapsedNanos);
+            LumaLoadLog.record(
+                    "world-op",
+                    this.handle().label() + ".redstoneDrainTick",
+                    elapsedNanos,
+                    "appliedUpdates=" + appliedUpdates + ", pendingBefore=" + pendingBefore
+            );
             if (this.debugApplyEnabled()) {
                 LumaDebugLog.log(
                         this.handle(),
@@ -1183,6 +1332,7 @@ public final class WorldOperationManager {
                 long startedAt = System.nanoTime();
                 int processed = BlockChangeApplier.applyEntityBatch(
                         this.level(),
+                        this.currentBatch.chunk(),
                         this.currentBatch.entityBatch(),
                         this.entityIndex,
                         Math.min(maxBlocks, MAX_ENTITY_OPERATIONS_PER_TICK)

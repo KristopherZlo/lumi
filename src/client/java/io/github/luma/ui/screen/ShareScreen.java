@@ -110,7 +110,9 @@ public final class ShareScreen extends LumaScreen {
         );
         root.child(window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.IMPORT_EXPORT);
-        window.content().child(LumaUi.statusBanner(this.bannerText()));
+        if (this.shouldShowStatusBanner()) {
+            window.content().child(LumaUi.statusBanner(this.bannerText()));
+        }
         if (!this.validationMessage.isBlank()) {
             window.content().child(LumaUi.danger(Component.literal(this.validationMessage)));
         }
@@ -379,6 +381,14 @@ public final class ShareScreen extends LumaScreen {
 
     private Component bannerText() {
         return ScreenOperationStateSupport.bannerText(this.state.status(), this.state.operationSnapshot(), "luma.status.share_ready");
+    }
+
+    private boolean shouldShowStatusBanner() {
+        return ScreenOperationStateSupport.shouldShowStatusBanner(
+                this.state.status(),
+                this.state.operationSnapshot(),
+                "luma.status.share_ready"
+        );
     }
 
     private FlowLayout variantButtons(String selectedVariantId, java.util.function.Consumer<String> onSelected) {

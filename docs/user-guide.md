@@ -2,356 +2,947 @@
 
 ## Scope
 
-Lumi is built first for local singleplayer saves.
+Lumi is built first for local singleplayer worlds.
 
-Project data is stored inside the save folder.
+Project data is stored inside the Minecraft save folder.
 
-Lumi's UI operations are intended for the local world owner. Dedicated servers still require operator-level permissions for mutating Lumi actions, while singleplayer integrated worlds capture builder edits for history and live undo/redo immediately.
+Normal Lumi workflows are UI-first. Use screens for saving, restoring, branching, recovery, import/export, cleanup, settings, and compare. Commands are limited to help, diagnostics, onboarding replay, and runtime tests.
+
+Lumi UI actions are intended for the local world owner. Dedicated servers still require operator-level permission for mutating Lumi actions. In singleplayer integrated worlds, builder edits are captured for history and live undo/redo immediately.
+
+## Quick Start
+
+1. Open a singleplayer world.
+2. Press `U` to open Lumi for the current dimension.
+3. Complete or close the short onboarding tour.
+4. Build normally.
+5. Use `Save build` or `Left Alt+S` to create a save.
+6. Use `See changes` to compare the saved head against the current build.
+7. Use `Left Alt+Z` and `Left Alt+Y` to undo or redo recent tracked actions.
+8. Press `Left Alt+I` if you forget Lumi's shortcuts.
+9. Press `R` to quick rollback unsaved work to the active branch head, or only the selected area when a wooden-sword selection is active.
+10. Open a save card when you need details, restore, partial restore, compare, rename, export, or branch actions.
+11. Use `Branches` for alternate build directions.
+12. Use `Import / Export` to move history packages or combine imported work.
+13. Use `More` for cleanup, manual compare, onboarding replay, deleted saves, the history graph, and raw support ids.
+14. Use `Settings` for safety, previews, HUD, storage cadence, performance, and debug logging.
+
+## Terms
+
+| Player-facing term | Meaning |
+| --- | --- |
+| Workspace | Lumi history for the current world dimension |
+| Save | A named history point for a build |
+| Branch | A separate build direction inside the same workspace |
+| Unsaved work | Tracked edits that are not saved as a save yet |
+| Restore | Apply a save back into the world and move the active branch head |
+| Partial restore | Apply only a selected region from a save, then write a new save |
+| See changes | Compare two states and show changed blocks/materials |
+| Recovery | Stored unsaved work from an interrupted previous session |
+| Quick rollback | Remove current unsaved work without moving the saved branch head |
+| Return before restore | Restore the explicit safety point saved before the last full restore |
 
 ## Open Lumi
 
-- Press `U` to open the project for the current dimension.
-- If that project does not exist yet, Lumi creates it.
-- The first Lumi workspace open on a Minecraft installation shows a short interactive safety tour. Shortcut steps show your current remapped keys as pixel icons and continue only after you hold the shown shortcut for 0.8 seconds. After the open-workspace shortcut, the tour continues over the Lumi workspace screen. Use the `X` button in the top-right of the tour if you need to leave it early. You can replay it later from `More` or with `/lumi-onboarding`.
-- The main tabs and focused workflows show small dismissible tips the first time they are useful. Use `More` -> `Show tips again` to reset those contextual hints without replaying the full tour.
-- Press the Lumi action button plus `S` to open Quick save while no screen is open. The default chord is `Left Alt+S`, and both keys are remappable in Minecraft `Controls` under `Lumi`.
-- Use the Lumi action button plus `Z` to undo the latest tracked action while no screen is open. The default action button is `Left Alt`. Lumi suppresses normal use/attack while this chord is active, so pressing undo does not also click the lever, button, or block you are looking at.
-- Use the Lumi action button plus `Y` to redo the latest undone tracked action while no screen is open. The same use/attack suppression applies to redo.
-- Press `R` to quick rollback to the active branch head. Hold the Lumi action button plus `R` for the explicit return-before-restore path written before the last full restore.
-- For WorldEdit and FAWE edits, those chords call the tools' native undo/redo commands and then update Lumi's pending draft. Captured Axiom capability edits replay through Lumi undo/redo, including tool-assisted breaks and placements. Simple Axiom place/break buffers, such as bulldozer and fast-place style hand edits, become block-scoped undo steps instead of one broad batch.
-- Diagnostics lists stable public-API capabilities separately from fallback capture. WorldEdit and compatible FAWE installs may show stable selection, clipboard, and schematic-format support; Axiom does not claim those capabilities unless a stable API exists.
-- Undo and redo restore the stored block states with side-effect-suppressed placement flags. Redstone power/source changes, such as undoing a lever or button toggle, send scoped neighbor updates after the stored state is written so nearby circuitry settles, while ordinary replay still avoids placement physics and piston event cascades. Delayed redstone and piston callbacks that were queued by the action before undo/redo, or created inside the replayed piston/observer envelope, are dropped after that action is replayed, so a repeater chain or piston clock cannot keep propagating the old signal/motion. Replay does not hold levers, buttons, pressure plates, tripwire controls, pistons, piston heads, moving pistons, or observers after the operation; a new explicit edit releases the short redstone stabilization guard.
-- Oscillating redstone state can settle into the action that created it while that bounded action context is still current, but it cannot keep adding ambient pulses after the context expires or jump ahead of later player edits in the undo order. Sticky-piston pull/retract actions keep the returned moved block in the same undo step when stabilization observes the block settling back to its original cell.
-- Undo also removes item drops caused by the tracked edit, such as player-killed mobs, TNT drops, or water-broken blocks, and redo respawns those drops.
-- Hold the Lumi action button to preview the next undo and redo targets together when compare highlight is not active. The next undo target is red; the next redo target is green. Changing the action button changes this preview hold and the undo/redo chords.
-- Ambient world-settling updates like fluid spread or crop growth do not create a project by themselves before you open Lumi or make an explicit tracked edit.
-- Those ambient or secondary effects also do not start a new pending draft by themselves while you simply load into the world.
-- Use `More` -> `Projects` when you need to switch dimensions or choose another workspace.
-- Press `Esc` to leave the current Lumi screen. Detail screens go back to their parent screen; top-level workspace screens close the Lumi UI.
+- Press `U` while no screen is open.
+- Lumi opens the workspace for the current dimension.
+- If the workspace does not exist yet, Lumi creates it.
+- If interrupted recovered work exists, Lumi opens `Recovered work` first.
+- If onboarding has not been completed for this installation, Lumi opens onboarding before the normal workspace.
+- If another Lumi world operation is active, screens show operation progress and block conflicting mutation actions.
 
-## Legacy Manual Projects
+`Esc` closes the current Lumi screen. Detail screens return to their parent. Top-level workspace screens close the Lumi UI.
 
-Manual bounded project workflows are not exposed through commands. Use the Lumi UI for supported project workflows.
+## Projects Screen
 
-## Main Screen
+The `Projects` screen is the workspace picker when a UI route exposes it.
 
-The main screen is `Build History` for the current dimension. It is designed around builder actions instead of internal history terms.
+It shows:
 
-It is meant to answer these questions in a few seconds:
+- the current dimension;
+- the current workspace for that dimension;
+- other dimension workspaces in the same world;
+- save count;
+- unsaved change count;
+- recovery badge when interrupted work exists.
 
-- where you are
-- whether anything changed
-- how to save right now
-- how to see changes
-- how to restore from a selected save
-- where branches and rare tools live
+Available actions:
 
-The top block shows:
+- `Open project`;
+- `Recovery`, when a recovery draft exists;
+- `Settings`;
+- `Refresh`;
+- `Back`.
 
-- the current dimension
-- the current branch
-- whether there are unsaved changes
-- added, removed, and changed block counts when a draft exists
+Pressing `U` is faster for normal play because it opens the current dimension workspace directly.
+
+## Legacy Bounded Project Creation
+
+Automatic dimension workspaces are the normal supported workflow.
+
+The legacy bounded project creation screen is only for UI routes or testing paths that expose it. It asks for:
+
+- project name;
+- min XYZ bounds;
+- max XYZ bounds.
+
+After creation, Lumi opens that project.
+
+There are no `/lumi` commands for manual bounded project creation. Use the UI route if it is exposed by the current build.
+
+## Onboarding And Tips
+
+The first workspace open shows a guided onboarding flow. It is intentionally not a full manual and does not use fake `Save build` or `See changes` buttons.
+
+The tour has nine cards and surfaces:
+
+- `welcome`: welcome the player and explain that Lumi keeps build history;
+- `open`: show the remapped `Open current workspace` key inline and wait for the player to hold it;
+- `save_spotlight`: open the Lumi workspace and spotlight the `Save build` button without running it;
+- `changes_spotlight`: spotlight `See changes` without running it;
+- `break_block`: close the workspace and ask the player to break or place one block in the world;
+- `undo_world`: show the Undo shortcut inline, wait for the hold, close the card, and run Undo;
+- `redo_world`: after a short pause, show the Redo shortcut inline, wait for the hold, run Redo, and keep the card visible briefly so the restored block state is readable;
+- `shortcuts`: show a compact shortcut table for opening Lumi, quick save, Undo, Redo, and Quick rollback;
+- `finish`: remind the player that `Left Alt+I` opens shortcut information, close with wiki/help guidance, and leave the player in the world.
+
+The card format is compact: `current/total Quick tour`, page name, one white teaching line, optional gray hold text with the key glyph inline, navigation buttons, and a green hold-progress line. Shortcut keys are not placed in a separate large box, and the copy does not explain the hold duration.
+
+During onboarding, Lumi controls shortcut execution explicitly. Holding `U` advances the open step and then opens the workspace for the same tour instance. Holding `Left Alt+Z` or `Left Alt+Y` during the in-world teaching steps runs the matching onboarding action once the hold completes. The top-right `X` closes the full onboarding flow and marks it complete. Other Lumi shortcut clicks are drained while a modal onboarding card is open.
+
+Advanced workflows such as wooden-sword selection, partial restore modes, import review, cleanup, diagnostics, and raw references are taught later through contextual hints, in-world teaching, and focused confirmations while the player is using the relevant tab or tool.
+
+Replay onboarding from `More` -> `Show onboarding` or with:
+
+```mcfunction
+/lumi-onboarding
+```
+
+Focused screens and tabs also show small dismissible tips next to the relevant workflow. Use `More` -> `Show tips again` to reset those tips without replaying the full onboarding tour.
+
+## Shortcuts
+
+All keybinds are remappable in Minecraft `Controls` under `Lumi`.
+
+| Default | Action |
+| --- | --- |
+| `U` | Open the current workspace |
+| `Left Alt+S` | Open Quick save |
+| `Left Alt+Z` | Undo the latest tracked action |
+| `Left Alt+Y` | Redo the latest undone tracked action |
+| Hold `Left Alt` | Preview next undo/redo targets, or compare x-ray when compare is active |
+| `R` | Quick rollback unsaved work, scoped to the active wooden-sword selection when present |
+| `H` | Hide or show the active compare overlay |
+| `Left Alt+I` | Open the Lumi hotkey information table |
+
+The Lumi action button defaults to `Left Alt`. Changing it changes quick save, undo, redo, preview, compare x-ray, and wooden-sword selection modifier behavior.
+
+While undo or redo chords are active, Lumi suppresses normal use/attack input. The shortcut will not also click the lever, button, block, or item you are looking at.
+
+## HUD And Operation Feedback
+
+The optional top-right HUD shows:
+
+- `Lumi`;
+- the current dimension;
+- the active branch id;
+- unsaved added and removed counts.
+
+Disable it in `Settings` -> `HUD` -> `Show top-right Lumi panel`.
+
+Action bar messages are separate from the HUD. Lumi uses the action bar for:
+
+- active operation stage;
+- short active-operation status text;
+- quick save/restore/undo/redo feedback;
+- wooden-sword selection feedback;
+- warnings and errors.
+
+Active world operations also show a native Minecraft bossbar. It covers save, restore, undo/redo, merge, recovery, preparation, chunk preloading, apply, and finalization progress.
+
+Large operations may show stages such as queued, preparing, preloading, writing, applying, finalizing, completed, or failed.
+
+Only one map mutation operation is expected per workspace at a time. While an operation is active, Lumi disables conflicting mutation actions instead of starting a second restore/save/merge/cleanup apply.
+Repeated `Left Alt+Z` and `Left Alt+Y` presses are the exception: Lumi queues up to 16 undo/redo shortcut intents for the current workspace and runs them in order after each active world operation completes. If the relevant stack is empty when a queued intent runs, Lumi shows the unavailable message and continues with the next queued intent.
+
+## What Lumi Tracks
+
+Lumi tracks explicit builder-driven changes in the current workspace:
+
+- player block edits;
+- non-player entity spawn, removal, position, and persistent state changes from explicit player actions;
+- supported builder-tool block and entity edits;
+- supported falling-block outcomes inside an active causal envelope;
+- TNT ignition and the resulting TNT damage;
+- explosion edits tied to a tracked action;
+- fluid fallout inside an active causal envelope;
+- fire spread and burn-out inside an active causal envelope;
+- crop, sapling, and stem growth when it belongs to active tracked fallout;
+- redstone and piston fallout after the mechanism settles.
+
+Lumi does not record its own restore/apply pass as normal history.
+
+Ambient world-settling changes do not create a workspace by themselves. Loading a world, fluid spread, crop growth, ordinary mob movement, or unrelated block updates do not start a new pending draft unless they are connected to an explicit tracked builder action. Natural `GROWTH` changes that are captured inside an active tracked area are stored as hidden history: restore can replay them, but change summaries, screenshots/previews, compare overlays, pending overlays, and recent undo/redo overlays ignore them.
+
+Whole-dimension workspaces treat the explicit edit as the root of a causal envelope. Related fallout can join the draft while it stays near the action and inside player-loaded chunks. Lumi waits a short settle window before finalizing redstone and piston chunks so saves and undo/redo target the final block state instead of transient animation states.
+
+Redstone and mechanism saves store final settled state:
+
+- lever/button `powered`;
+- redstone wire `power`;
+- lamp `lit`;
+- doors/trapdoors/openable `open`;
+- repeater/comparator properties;
+- piston base `extended`;
+- settled `minecraft:piston_head`;
+- moved blocks after piston motion settles.
+
+Short-lived `minecraft:moving_piston` animation state is normalized away. Replay can complete expected piston companions from explicit piston-base records, but it does not invent a piston base from a head-only record.
+
+Non-player entities are replayed from saved NBT payloads, including item age, pickup delay, motion, names, tags, and item data. Spawned entities are snapshotted only after Minecraft accepts them into the world.
+
+## Build History
+
+`Build History` is the main workspace screen.
+
+It answers:
+
+- where you are;
+- which branch is active;
+- whether there is unsaved work;
+- how many blocks were added, removed, or changed;
+- how to save now;
+- how to compare changes;
+- how to open recent saves;
+- where branches and less common tools live.
 
 The primary action is `Save build`.
 
-Secondary actions stay short:
+Secondary actions include:
 
-- `See changes`
-- `Branches`
+- `See changes`;
+- `Quick rollback`;
+- `Return before restore`, only when a restore return point exists;
+- `Branches`.
 
-Project maintenance and the history graph stay in the sidebar `More` route instead of the current-build card.
+Recent saves show the selected branch. Each card shows:
 
-Below that, `Recent saves` shows recent save cards for the selected branch.
+- save name;
+- author/time;
+- small isometric preview;
+- changed-block summary;
+- current-head badge when applicable;
+- `Open`;
+- `Restore this save`.
 
-Each card keeps only the essentials visible:
+Use the branch picker above recent saves to view another branch's saves without switching the active branch. Use `Show older saves` when the branch has more saves than the initial recent list.
 
-- save name
-- time
-- small isometric preview
-- simple changed-block summary
-- `Open`
-- `Restore this save`
+If a preview PNG is still being generated, the preview card shows the centered loading animation instead of the no-preview text.
 
-Import/export and settings stay in the workspace sidebar. `More` contains storage cleanup, manual compare, the colored graph, and raw references directly.
+## Save Build
 
-Lumi stores new versions as patches first.
+Use `Save build` from Build History when you want a normal named save.
 
-Checkpoint snapshots are added by policy.
+The save screen contains:
 
-Tracked history includes:
+- `Save name`;
+- `Save`;
+- `Cancel`.
 
-- player block edits
-- non-player entity spawn, removal, position, and persistent state changes from explicit player or supported builder-tool actions
-- supported falling-block outcomes inside an active causal envelope
-- supported mob edits
-- TNT ignition
-- fluid fallout inside an active causal envelope
-- fire spread and burn-out
-- crop, sapling, and stem growth
-- supported explosion edits
+The save action consumes the current unsaved draft and writes a new save on the active branch. If there are no unsaved changes, the save action is disabled and the screen explains that the build is clean.
 
-Lumi does not record its own restore apply pass as normal history.
-After a full restore or quick rollback completes, Lumi drops the old live undo/redo stack because those actions belonged to the pre-restore world state. Quick rollback then adds one fresh live undo/redo action for the rollback itself when it removed unsaved draft changes. Pressing the normal undo chord immediately after quick rollback returns to the pre-rollback block/entity state without moving the saved branch head, and redo reapplies the rollback. The explicit return-before-restore action is still available when you want the harder branch-head return path.
-When TNT is primed by a tracked builder action, Lumi keeps that action context through the fuse delay and records the resulting block damage with the same history step.
-Ambient fluid, fire, growth, block-update, and mob changes no longer bootstrap history globally just because the dimension project exists.
-Whole-dimension workspaces now treat that explicit tracked action as the root of a causal envelope. Lumi keeps a one-chunk halo around the root chunk and also accepts secondary fallout inside chunks currently loaded for a player, captures per-chunk baselines lazily as fallout reaches those chunks, then reconciles later fallout such as falling gravel, fluid spread, redstone block updates, and piston movement against the current world before the draft is flushed, saved, frozen, or used to choose a live undo/redo action.
-Secondary effects such as falling gravel, fire spread, fluid spread, redstone-driven block updates, ice melting, piston fallout, and TNT or explosion fallout only join a draft after an explicit tracked action has already started that draft, and only while they stay inside the active session region.
-Redstone and mechanism state is saved as final settled block state. Lumi records lever/button `powered`, redstone wire `power`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `minecraft:piston_head`, and moved blocks. During replay, Lumi can complete the expected piston head from an extended base, replace normalized transient air at that expected head position, or clear the old head when a known extended base retracts, but it does not create a piston base from a head-only record. Redstone neighbor updates are queued for power/source transitions and drained after replay reaches that final state. Short-lived `minecraft:moving_piston` animation state is still normalized away. Non-player entities are replayed from their saved NBT payloads, including item age, pickup delay, motion, names, tags, and item data; newly spawned entities are snapshotted only after they have been accepted into the world.
+Lumi stores saves as patch-first history. Checkpoint snapshots are added by policy so restore paths stay reliable.
 
-For automatic dimension projects, the first node is `Initial`.
+## Quick Save
 
-That node is a metadata-backed `WORLD_ROOT`.
+Use Quick save when you only need to name the current work and save without opening Build History.
 
-## Save And Amend
+- Default chord: `Left Alt+S`.
+- Both the action button and quick-save key are remappable.
+- Quick save opens a small standalone dialog.
+- It saves to the current dimension workspace.
+- It does not require entering the Build History screen first.
 
-Use Quick save when you only need a name, cancel, and save action. It opens as a standalone dialog from the remappable Lumi action button plus `Quick save key` chord and saves to the current dimension workspace.
+## Replace Latest Save
 
-Open the `Save` screen from the main action on the project home screen.
+Use `Replace latest save` only when you intentionally want to amend the active branch head instead of creating a new save.
 
-The save screen is intentionally small:
+Open it from `More` on the save screen or save details flow when available.
 
-- `Save name`
-- `Save`
-- `Cancel`
-
-If you need the advanced rewrite flow, open `More` on the save screen and use `Replace latest save`.
-
-## Restore
-
-Restore rebuilds the selected state from history data.
-
-Lumi first tries direct patch replay. For another branch, it can roll the current branch back to the shared saved ancestor and then replay the target branch forward.
-
-If that is not valid, it falls back to checkpoint snapshot plus patch chain.
-
-After restore, the active branch head moves to the selected save.
-
-If the selected save belongs to another branch, Lumi plans the restore from the
-current live branch state and switches the active branch only after the world
-apply finishes.
-
-That means restore behaves like a hard reset for the project.
-
-If you restore an older version and keep building, the next save continues from that point.
-
-If you restore `Initial`, Lumi restores only chunks that the current project has already tracked.
-
-It does not roll back unrelated game state like inventory, time, gamerules, or untouched chunks.
-
-Every restore from a save card or save details screen requires confirmation. Before an `Initial` restore starts, Lumi also shows the planned mode, branch, base save, target save, and affected chunk count in a confirmation block above the scrollable workspace panes.
-If you already have a Lumi region selected, the restore confirmation asks how to use that selection:
-
-- `Restore whole save` moves the branch head to that save and applies the full restore.
-- `Only selected area` copies only the selected area from that save into the current build and writes a new save.
-- `Everything except selection` restores the surrounding finite project/tracked area and keeps the selection unchanged.
-
-Partial restore can also target saves that do not have a direct patch replay path from the current branch. In that case Lumi reconstructs current and target state from stored snapshots, baseline chunks, and patches before applying the selected region. If required history payloads are missing or corrupt, the restore is rejected before the world changes.
-- `Everything except selection` restores the save around the selection while leaving the selected area untouched, then writes a new save.
-
-If the stored generator or datapack fingerprint no longer matches the world, automatic generator regeneration is blocked and Lumi stays on the safer history/baseline path.
-
-Runtime rules:
-
-- restore runs under the internal `RESTORE` source
-- restore block applies are not written back into normal history
-- restore replay completes paired block halves such as beds, doors, and tall
-  plants so one half is not left clipped after a branch switch or restore
-- if `Safety snapshot before restore` is on and a draft exists, Lumi saves that draft before restore starts
-
-## Recovery
-
-Lumi keeps a recovery draft while unsaved tracked changes exist.
-
-If the game stops before you save them as a version, Lumi shows the recovery screen on the next open. Normal unsaved work from the current running session stays as pending work in the project screen and does not repeatedly force the recovery screen.
-
-From that screen you can:
-
-- restore the recovered work into the world
-- delete the recovered work
-- save the recovered work as a new save
-
-Recovery is only a stored copy of unsaved changes.
-
-It does not create a hidden branch.
-
-Restore and delete actions require confirmation. More technical recovery details are still available, but they are hidden behind `More`.
-
-Auto checkpoints before large external edits are available but off by default. Enable `Auto checkpoint before large edits` in Settings if you want Lumi to save pending work before large vanilla `/fill` or `/clone` commands, before WorldEdit edit sessions, and before Axiom block-buffer edits. If there is no draft, the current branch head is already the checkpoint.
-
-## Branches
-
-Branches are separate build directions inside one project.
-
-Use the `Branches` screen to:
-
-- see the active branch
-- create a new branch from the current build or a selected save
-- switch the active branch
-- open saves for one branch
-- delete inactive branches
-- merge another local branch into the current branch
-- compare a branch against the current build from `More`
-
-Creating a branch only adds a new branch head from the selected save or the
-active branch's saved head. It does not consume, discard, or freeze unsaved
-recovery draft edits. Lumi keeps branch names as written and generates a stable
-internal id automatically when several names normalize to the same id.
-
-When you switch branches, Lumi restores that branch head into the map and keeps
-the selected branch active even if that head started from a save on another
-branch.
-The branch pointer changes at restore completion, not before the world state is
-applied.
-If a recovery draft is still pending, save or discard it before switching
-branches so Lumi does not overwrite unsaved work.
-
-Future saves continue from that head.
-
-Deleting a branch is a soft delete. It hides the branch from normal UI without deleting the saved files. `main` and the active branch cannot be deleted.
-
-`Merge into current branch` compares the selected branch against your active branch, applies the resolved result to the world, and writes a new merge save on the active branch. The source branch is unchanged.
-
-## Import / Export
-
-`Import / Export` lives under `More` and is not part of the main Build History screen.
-
-Use the `Import / Export` screen to:
-
-- open the game-root `lumi-projects` folder
-- import package zips listed in that folder
-- import a shared package as a review project
-- review imported packages without leaving the current project
-- export the build history, current branch, or selected save as a package
-- choose whether exported packages include preview PNGs
-- delete imported review packages after you are done with them
-- combine an imported branch into your current build
-
-Export comes first on the screen, then Import lists package zips found in the game-root `lumi-projects` folder. You can still paste an absolute archive path manually.
-
-After a package is imported, Lumi keeps you on `Import / Export`, selects that imported review project, and builds a combine review against the current active local branch automatically.
-That combine review runs in the background and is cached for the selected imported package and target branch, so reopening the same review does not repeat the file scan unless the imported package list changes.
-
-Same-area changes are grouped into review zones instead of one long raw block list.
-
-For each zone you can:
-
-- keep mine
-- use imported
-- skip for now
-- show that zone in world
-
-You can also show all same-area zones at once. Failed imports, incompatible packages, and rejected combines are shown on the screen as validation messages instead of only falling back to a generic failure banner.
-
-Lumi only enables `Apply combine` when every same-area zone has a decision and the result would still bring in at least one imported change.
-
-## See Changes
-
-Open `See changes` from Build History, a save details screen, or the Branches screen.
-
-You can compare:
-
-- two saves
-- two branches
-- a saved version against the current build
-
-Current See Changes output includes:
-
-- added, removed, and changed counts
-- material delta
-- sample of changed positions
-
-Manual `From` and `To` references are hidden by default. Use `More details` in See Changes or `More` in the workspace when you need raw reference fields.
-
-Running See Changes turns on the client-side world highlight for the resolved diff immediately.
-Press `H` to hide or show the current overlay without rebuilding the comparison.
-Hold the compare x-ray key to see that highlight through blocks. The default binding is `Left Alt`, and the key can be changed in Minecraft `Controls`.
-Small and moderate diff regions render as an exposed translucent shell with thicker outlines, so nearby changes stay readable instead of stacking into a solid color slab. Lumi caches those overlay meshes by section and reuses uploaded GPU buffers between frames; extremely large diff regions collapse into merged low-alpha volume blobs.
-If one side of the comparison is the `current` build, that active highlight refreshes automatically while you keep editing. Very large current-build highlights keep their initial snapshot to avoid client stalls.
-If compare highlight is not active, holding the Lumi action button shows the latest 10 undo actions instead. Holding the action button plus `Y` switches that temporary overlay to redo actions. Previews fade from the newest action to older ones and render cached translucent exposed sides with thicker outlines; extremely large previews collapse into merged low-alpha volume blobs.
-
-The overlay draws cached sections within render distance instead of rebuilding every highlighted block each frame.
+Use a new save for normal milestones. Use replace/amend for correcting the latest save message/content while staying on the same branch head.
 
 ## Save Details
 
-Open a save card to reach the save details screen.
+Open a save card with `Open`.
 
-The save details screen shows:
+Save details shows:
 
-- the save name
-- isometric preview with automatic empty-margin trimming, zoom controls, and automatic loading when the async preview render finishes
-- time
-- lightweight change summary from stored save metadata
+- save name;
+- isometric preview with automatic empty-margin trimming;
+- preview zoom controls;
+- automatic refresh when async preview generation finishes;
+- time and author;
+- lightweight change summary from stored save metadata.
 
-Primary actions stay focused:
+Primary actions:
 
-- `Restore this save`
-- `See changes`
+- `Restore this save`;
+- `See changes`;
+- `Restore selected area`.
 
-Extra actions like rename save, delete save, replace latest save, create branch from this save, export this save, and raw info stay under `More`.
-Use `See changes` for the full added/removed/changed breakdown, material delta, and changed-position sample.
+When the selected save is the current active branch head and there is no unsaved work, `See changes` compares the previous save to that latest save instead of opening an empty latest-save-to-current-build comparison.
 
-`Restore selected area` is a primary action on save details. Use it when you want a bounded restore instead of a full branch reset. You can choose `Only selected area` to copy that area from the selected save, or `Everything except selection` to restore the save around the area while keeping the selected area as it is now. Copy a Lumi selection into the form or edit Min/Max coordinates manually. Preview the region first, then apply it. Lumi writes the result as a new save on the active branch instead of moving the branch head back to the older save. The applied partial restore is also undoable with the Lumi action button + `Z`, and redoable with the Lumi action button + `Y`.
+Extra actions live under `More`:
 
-You can fill those bounds from Lumi's wooden-sword selection:
+- rename save;
+- delete save;
+- replace latest save;
+- create branch from this save;
+- export this save;
+- raw info.
 
-- Hold `minecraft:wooden_sword`.
-- The first time you hold it in a Lumi workspace, Lumi shows a short actionbar hint. Resetting tips from `More` makes that hint eligible again.
-- Look at a block in loaded chunks; it can be beyond normal interaction reach.
-- Left click sets corner A in `corners` mode.
-- Right click sets corner B in `corners` mode.
-- Lumi action button + scroll toggles `corners` and `extend`.
-- In `extend` mode, left click expands the current cuboid and right click resets the selection to the clicked block.
-- Lumi action button + right click clears the selection.
-- The selected cuboid is highlighted in-world.
-- Use `Use selected area` in the partial-restore form to copy the selection into the restore bounds.
+`See changes` loads the full added/removed/changed breakdown, material delta, and changed-position sample.
 
-Renaming a save changes only the saved message. Deleting a save is a soft delete. Root saves cannot be deleted, non-leaf saves are blocked, and deleting a safe branch-head save moves that branch head back to the parent before hiding the save.
+### Rename Save
 
-Soft-deleted saves are hidden from normal history, but their files remain on disk. Open `More` and review `Deleted saves` when you need to inspect those hidden save ids.
+Renaming a save changes only the saved message.
+
+It does not rewrite history payloads, branch structure, or stored changes.
+
+### Delete Save
+
+Deleting a save is a soft delete.
+
+Rules:
+
+- root saves cannot be deleted;
+- non-leaf saves are blocked;
+- safe branch-head deletes can move that branch head back to the parent before hiding the save;
+- deleted save files stay on disk.
+
+Review soft-deleted saves from `More` -> `Deleted saves`.
+
+## Restore
+
+Restore rebuilds the selected saved state into the world.
+
+Normal restore behavior:
+
+- full restore requires confirmation;
+- Lumi applies the selected save into the map;
+- the active branch head moves to the restored save after the world apply finishes;
+- if you keep building after restoring an older save, the next save continues from that restored point;
+- restore does not roll back inventory, time, gamerules, or untouched chunks.
+
+Restore path:
+
+- Lumi first tries direct patch replay.
+- For another branch, Lumi can plan from the current live branch through a shared saved ancestor.
+- If direct replay is not valid, Lumi falls back to checkpoint snapshot plus patch chain.
+- If required payloads are missing or corrupt, restore is rejected before the world changes.
+
+Restoring `Initial` only restores chunks the project has already tracked.
+
+Before an `Initial` restore, Lumi shows a plan summary:
+
+- planned mode;
+- branch;
+- base save;
+- target save;
+- affected chunk count.
+
+Runtime rules:
+
+- restore runs as an internal restore source;
+- restore block applies are not written back as normal history;
+- paired blocks such as beds, doors, and tall plants are completed during replay;
+- if `Safety save before restore` is enabled and a draft exists, Lumi saves that draft before restore starts.
+
+After a full restore completes, Lumi clears the old live undo/redo stack because those actions belonged to the pre-restore world state.
+
+## Return Before Restore
+
+When Lumi performs a full restore, it can keep an explicit return point for the state before that restore.
+
+Use `Return before restore` from Build History when:
+
+- the button is visible;
+- you need the harder branch-head return path;
+- normal quick rollback or undo is not the right tool.
+
+This is separate from quick rollback. It restores the saved pre-restore return point through the normal world-operation path.
+
+## Quick Rollback
+
+Quick rollback removes current unsaved work and returns the world to the active branch head.
+
+Use it when an experiment went wrong before you saved it.
+
+Rules:
+
+- default key: `R`;
+- it only targets the current dirty draft;
+- when a Lumi wooden-sword selection is active, the key restores only pending draft changes inside that selection and leaves the rest pending;
+- it does not move the saved branch head;
+- it applies the inverse draft through the fast action apply path;
+- it records one fresh live undo/redo action for the rollback itself.
+
+After quick rollback, press `Left Alt+Z` if you need to bring the rolled-back work back. Press `Left Alt+Y` to redo the rollback.
+
+Quick rollback is not the same as full restore. Full restore changes the active branch head. Quick rollback only removes unsaved work.
+
+## Undo And Redo
+
+Live undo/redo is a lightweight in-memory action stack for the current play session.
+
+Use:
+
+- `Left Alt+Z` to undo;
+- `Left Alt+Y` to redo.
+
+Repeated undo/redo shortcut presses are queued per current workspace, up to 16 pending intents. The action is chosen when the queued intent runs, so later edits or unavailable stacks are handled at execution time.
+
+Rules:
+
+- saving a version does not clear the live undo/redo stack;
+- undoing after a save creates a new pending draft on top of the saved head;
+- restarting the game keeps recovery drafts but not the step-by-step undo/redo stack;
+- redo remains available after passive fallout is folded into the active action;
+- undo/redo waits for still-settling redstone or piston chunks instead of selecting a partial lever-only action.
+
+Undo and redo restore stored block states with side-effect-suppressed placement flags.
+
+Redstone power/source changes queue scoped neighbor updates after stored blocks are written so nearby circuitry can settle. Ordinary replay still avoids placement physics and suppresses stale replay callbacks around piston/observer mechanism positions.
+
+Undo also removes item drops caused by the tracked edit, such as:
+
+- player-killed mob drops;
+- TNT drops;
+- water-broken block drops;
+- falling-block fallout drops.
+
+Redo respawns those drops for the same tracked action.
+
+## Preview Unsaved And Recent Actions
+
+When compare highlight is not active:
+
+- hold the Lumi action button to preview the next live undo and redo targets.
+
+Small and medium previews render exposed translucent sides with thicker outlines. The next undo target is highlighted red; the next redo target is highlighted green; older recent actions remain orange. If no live action preview is available, Lumi falls back to the pending unsaved changes overlay. Large dense pending previews collapse into merged low-alpha volume blobs.
+
+Previews are temporary. They do not create saves, change history, or apply blocks.
+
+## See Changes
+
+Open `See changes` from:
+
+- Build History;
+- save details;
+- Branches;
+- manual compare in `More`.
+
+You can compare:
+
+- two saves;
+- two branches;
+- a save against the current build;
+- a branch against the current build;
+- manual raw references when needed for support/debug.
+
+See Changes shows:
+
+- added count;
+- removed count;
+- changed count;
+- material delta;
+- sample changed positions.
+
+Running See Changes turns on the client-side world highlight for the resolved diff.
+
+Overlay controls:
+
+- press `H` to hide or show the current highlight without rebuilding the comparison;
+- hold the compare x-ray key to see the highlight through blocks;
+- the x-ray key defaults to the Lumi action button, `Left Alt`;
+- if one side is `current`, the highlight can refresh while you keep editing;
+- very large current-build highlights keep their initial snapshot to avoid client stalls.
+
+Small and moderate diff regions render as a translucent exposed shell with thicker outlines. Extremely large diff regions collapse into merged low-alpha volume blobs.
+
+The overlay caches section geometry and reuses GPU buffers. It does not rebuild every highlighted block every frame.
+
+Compare highlight takes priority over undo/redo preview.
+
+## Partial Restore
+
+Use partial restore when you want a bounded restore instead of a full branch reset.
+
+Open it from save details with `Restore selected area`.
+
+Modes:
+
+- `Only selected area`: copy only the selected area from the chosen save into the current build;
+- `Everything except selection`: restore the save around the selected area and leave the selected area unchanged.
+
+Bounds sources:
+
+- current Lumi wooden-sword selection;
+- manually entered min/max XYZ bounds.
+
+Recommended flow:
+
+1. Open the target save.
+2. Choose `Restore selected area`.
+3. Copy the Lumi selection or enter bounds manually.
+4. Preview the region.
+5. Apply the partial restore.
+
+Lumi writes the result as a new save on the active branch. It does not move the branch head back to the older save directly.
+
+The applied partial restore is also undoable with `Left Alt+Z` and redoable with `Left Alt+Y`.
+
+Partial restore can target saves without a direct patch replay path from the current branch. In that case Lumi reconstructs current and target state from snapshots, baseline chunks, and patches before applying the selected region.
+
+If stored generator or datapack fingerprints no longer match the world, automatic generator regeneration is blocked and Lumi stays on the safer history/baseline path.
+
+## Wooden-Sword Selection
+
+Use Lumi's wooden-sword selection to fill partial-restore bounds from the world.
+
+Steps:
+
+1. Hold `minecraft:wooden_sword`.
+2. While you hold it in a Lumi workspace, Lumi shows a compact lower-left HUD hint for left click, right click, Lumi action button + right click, and Lumi action button + scroll.
+3. Look at a block in loaded chunks. The target can be beyond normal interaction reach.
+4. Left click sets corner A in `corners` mode.
+5. Right click sets corner B in `corners` mode.
+6. Use Lumi action button + scroll to switch between `corners` and `extend`.
+7. In `extend` mode, left click expands the current cuboid.
+8. In `extend` mode, right click resets the selection to the clicked block.
+9. Use Lumi action button + right click to clear the selection.
+10. Use `Use selected area` in the partial-restore form to copy the selection into restore bounds.
+11. Press `R` with a selection active to quick rollback only the selected area.
+
+The selected cuboid is highlighted in-world.
+
+## Recovery
+
+Lumi stores a recovery draft while unsaved tracked changes exist.
+
+If the game stops before those changes are saved, Lumi shows `Recovered work` on the next workspace open.
+
+Normal unsaved work from the current running session stays as pending work in Build History. It does not repeatedly force the recovery screen.
+
+Recovery actions:
+
+- restore recovered work into the world;
+- delete recovered work;
+- save recovered work as a new save.
+
+Recovery is only a stored copy of unsaved changes. It does not restore the in-memory live undo/redo action stack.
+
+Recovery does not create a hidden branch.
+
+Restore and delete actions require confirmation. Technical recovery details stay behind `More`.
+
+## Auto Checkpoints
+
+Auto checkpoints before large external edits are available but off by default.
+
+Enable them in `Settings` -> `Safety` -> `Auto checkpoint before large edits`.
+
+When enabled, Lumi can save pending work before:
+
+- large vanilla `/fill`;
+- large vanilla `/clone`;
+- WorldEdit edit sessions;
+- Axiom block-buffer edits.
+
+If there is no draft, the current branch head is already the checkpoint and Lumi does nothing.
+
+## Branches
+
+Branches are separate build directions inside one workspace.
+
+Use `Branches` to:
+
+- see the active branch;
+- create a new branch from the current build or selected save;
+- switch the active branch;
+- open saves for one branch;
+- compare a branch against the current build;
+- merge another local branch into the current branch;
+- delete inactive branches.
+
+Creating a branch only adds a new branch head from the selected save or active branch head. It does not consume, discard, or freeze unsaved recovery draft edits.
+
+Branch names stay as written. Lumi generates stable internal ids when names normalize to the same value.
+
+Switching branches restores that branch head into the map.
+
+Rules:
+
+- the branch pointer changes after restore apply completes;
+- if recovery is pending, save or discard it before switching;
+- future saves continue from the switched branch head;
+- `main` and the active branch cannot be deleted;
+- deleting a branch is a soft delete and does not remove saved files.
+
+`Merge into current branch` compares the selected branch against the active branch, applies the resolved result to the world, and writes a new merge save on the active branch. The source branch is unchanged.
+
+## Import / Export
+
+`Import / Export` is a first-level workspace sidebar tab.
+
+Use it to:
+
+- open the game-root `lumi-projects` folder;
+- export the active history or selected branch as a package;
+- choose whether exported packages include preview PNGs;
+- list package zips in `lumi-projects`;
+- import a package zip;
+- import a shared package as a review project;
+- review imported work without leaving the current project;
+- combine an imported branch into your current build;
+- delete imported review projects after use.
+
+Export appears first. Import appears below it.
+
+The package folder is:
+
+```text
+<game root>/lumi-projects/
+```
+
+After import, Lumi keeps you on `Import / Export`, selects the imported review project, and builds a combine review against the current active local branch.
+
+Combine review:
+
+- runs in the background;
+- is cached for the selected imported package and target branch;
+- groups same-area changes into review zones;
+- avoids one long raw block list.
+
+For each same-area zone, choose:
+
+- keep mine;
+- use imported;
+- skip for now;
+- show that zone in world.
+
+You can also show all same-area zones at once.
+
+`Apply combine` is enabled only when every same-area zone has a decision and the result would import at least one change.
+
+Failed imports, incompatible packages, rejected combines, and package validation problems are shown on the screen.
 
 ## Settings
 
-The settings screen includes:
+Settings apply immediately when a checkbox changes or a numeric field is valid. There is no separate save/apply button.
 
-- safety snapshot before restore
-- auto checkpoint before large edits
-- preview generation
-- top-right HUD panel visibility
-- checkpoint frequency
-- checkpoint volume threshold
-- change session idle timeout
-- debug logging
+Sections:
 
-Settings apply and persist immediately when a checkbox or valid numeric field changes. There is no separate save/apply block.
+| Section | Setting | Effect |
+| --- | --- | --- |
+| Safety | `Safety save before restore` | Save current draft before restoring an older save |
+| Safety | `Auto checkpoint before large edits` | Save pending work before large fill/clone/WorldEdit/Axiom edits |
+| Preview | `Preview generation` | Create isometric preview images when saves are made |
+| HUD | `Show top-right Lumi panel` | Show or hide the persistent in-world Lumi panel |
+| Storage | `Full save every N saves` | Create a full storage copy after this many saves |
+| Storage | `Full-save volume threshold` | Create a full storage copy when changed volume is large enough |
+| Performance | `Idle timeout (seconds)` | Close active tracked edit sessions after this idle time |
+| Debug | `Debug logging` | Write detailed runtime logs for this workspace |
 
-Project archive controls are no longer part of normal Settings. Import/export lives in the workspace sidebar, while cleanup and history tools live under `More`. Auto-version and favorite controls are no longer exposed because those workflows are not part of the supported UI surface.
+Numeric settings must be greater than zero. Invalid values show inline validation and are not saved.
+
+Project archive controls are not part of Settings. Use `Import / Export`.
+
+Cleanup, diagnostics, manual compare, graph, deleted saves, raw references, onboarding replay, and tip reset live under `More`.
+
+Auto-version and favorite controls are not exposed in the supported UI surface.
+
+## More
+
+`More` contains tools that are useful but should not crowd the daily Build History flow.
+
+Tabs:
+
+- `Project tools`;
+- `Deleted saves`.
+
+Project tools include:
+
+- `Show onboarding`: replay the short safety tour;
+- `Show tips again`: reset contextual hints;
+- `Storage cleanup`: open Cleanup;
+- `Manual compare`: compare raw save/branch/current references;
+- `History graph`: visual graph of saves and branch heads;
+- `Raw references`: project name, active branch id, and recent save ids for support/debug.
+
+Deleted saves shows soft-deleted saves that remain on disk. It shows the save title, author/time, save kind, and raw save id.
 
 ## Cleanup
 
-Cleanup lives under `More` -> `Cleanup`. Review the dry-run candidates before applying cleanup.
+Open Cleanup from `More` -> `Storage cleanup`.
 
-Cleanup can remove orphaned previews, unreferenced snapshots, disposable cache files outside `baseline-chunks`, and stale operation drafts.
+Cleanup is conservative. Always inspect first.
+
+Flow:
+
+1. Click `Inspect unused files`.
+2. Review the dry-run result.
+3. If candidates exist, click `Clean up`.
+
+Cleanup can remove:
+
+- orphaned previews;
+- unreferenced snapshots;
+- disposable cache files outside `baseline-chunks`;
+- stale operation drafts.
+
+Cleanup reports candidate path, reason, size, warnings, total file count, and reclaimable bytes.
 
 If a Lumi world operation is still running for the project, cleanup keeps `recovery/operation-draft.bin.lz4` and reports the skip instead of deleting it.
 
+## Diagnostics
+
+Diagnostics are read-only support checks.
+
+They show:
+
+- project integrity status;
+- integrity errors;
+- integrity warnings;
+- supported integration availability;
+- integration capability labels;
+- recent recovery and operation journal entries.
+
+Use Diagnostics when:
+
+- a restore/import/cleanup workflow reports a storage problem;
+- an external tool does not appear to be captured;
+- support needs raw capability or journal information;
+- you enabled debug logging and need to understand recent Lumi operations.
+
+Diagnostics do not mutate the world or project history.
+
+## External Builder Tools
+
+Lumi supports normal Minecraft edits first, then integrates with common builder tools where safe.
+
+WorldEdit and compatible FAWE:
+
+- undo/redo chords route through the tool's native undo/redo commands;
+- Lumi suppresses its own capture during the native command;
+- Lumi updates pending work afterward;
+- stable capability reporting uses public selection, clipboard, and schematic APIs when present.
+
+Axiom:
+
+- captured capability edits replay through Lumi undo/redo;
+- tool-assisted breaks and placements use the state Lumi recorded;
+- simple Axiom place/break buffers, such as bulldozer or fast-place style hand edits, become block-scoped undo actions;
+- Axiom does not claim stable WorldEdit-style capabilities unless a stable API exists.
+
+Other supported or conservatively captured builder paths can include FAWE-style chunk placement, Axion, AutoBuild, SimpleBuilding, Effortless Building, and Litematica/Tweakeroo placement paths when they reach normal Minecraft block or entity mutation paths.
+
+External tool support is conservative. Unsupported tool internals may still be captured through normal Minecraft mutations, but Lumi does not promise tool-specific capabilities unless Diagnostics reports them.
+
+## Commands
+
+Normal project workflows stay in the UI.
+
+### Onboarding
+
+```mcfunction
+/lumi-onboarding
+```
+
+Opens the short onboarding tour for the current singleplayer workspace. If the workspace does not exist, Lumi creates it like pressing `U`.
+
+If interrupted recovered work exists, Lumi opens Recovery first so the safety prompt is not skipped.
+
+### Help
+
+```mcfunction
+/lumi
+/lumi help
+```
+
+Shows supported diagnostic commands and reminds the player to use the UI for workflows that mutate project history or the world.
+
+### Status
+
+```mcfunction
+/lumi status
+```
+
+Shows:
+
+- number of Lumi projects in the current world;
+- active branch ids;
+- active or most recent Lumi world operation;
+- operation id, label, stage, progress, and detail text when available.
+
+### Singleplayer Runtime Tests
+
+```mcfunction
+/lumi testing singleplayer
+/lumi testing structures
+```
+
+These commands are for validation, not normal play.
+
+They are singleplayer-only, require operator-level permission, refuse to start while another Lumi world operation is active, and need a small empty air volume above the player's current chunk.
+
+`/lumi testing singleplayer` exercises real in-world Lumi services:
+
+- project creation;
+- initial snapshots;
+- capture;
+- recovery draft summaries;
+- current diff;
+- material delta;
+- live undo/redo;
+- save and amend;
+- branch creation/switching;
+- branch save;
+- version compare;
+- project and branch export;
+- partial restore;
+- full restore;
+- integrity inspection;
+- cleanup inspection;
+- gameplay scenarios;
+- performance budgets;
+- large persisted history diagnostics;
+- bulk apply diagnostics;
+- structure-fixture diagnostics.
+
+`/lumi testing structures` runs only the saved structure fixture diagnostics and skips the broader save/restore/gameplay/bulk phases.
+
+Test logs are written under:
+
+```text
+<save>/lumi/test-logs/
+```
+
+### Removed Command Workflows
+
+The following workflows intentionally do not have `/lumi` commands:
+
+- project creation;
+- save/amend;
+- restore;
+- branch create/switch;
+- recovery restore/discard;
+- archive import/export;
+- cleanup apply;
+- share/merge.
+
+Keeping these workflows in the UI preserves confirmation screens, previews, operation progress, conflict review, and cancellation boundaries.
+
 ## Storage Path
 
-Lumi stores project data under:
+Lumi stores workspace data under:
 
 ```text
 <save>/lumi/projects/
 ```
 
-Each project is a folder with the suffix `.mbp`.
+Each project folder uses the suffix:
 
-Shared origin metadata is stored in:
+```text
+.mbp
+```
+
+Shared world-origin metadata is stored at:
 
 ```text
 <save>/lumi/world-origin.json
 ```
 
-The origin manifest records the world seed, selected datapacks, and per-dimension generator fingerprints.
+The origin manifest records:
+
+- world seed;
+- selected datapacks;
+- per-dimension generator fingerprints;
+- Lumi creation marker for conservative regeneration checks.
+
 Old manifests without a Lumi creation marker are treated conservatively and are not eligible for automatic generator regeneration.
 
-See [storage-format.md](storage-format.md) for the full layout.
+History packages are stored under:
+
+```text
+<game root>/lumi-projects/
+```
+
+Runtime test reports are stored under:
+
+```text
+<save>/lumi/test-logs/
+```
+
+See [storage-format.md](storage-format.md) for the full storage layout.
+
+## Limits And Guarantees
+
+Lumi does not replace full world backups.
+
+Lumi history focuses on tracked build changes in the current workspace. It does not restore:
+
+- player inventory;
+- time of day;
+- gamerules;
+- unrelated untouched chunks;
+- arbitrary mod state outside captured block/entity payloads.
+
+Lumi avoids heavy restore preparation on the server tick. Large restore, undo/redo, merge, and recovery applies prepare work off-thread, then apply bounded batches through operation progress.
+
+One map mutation operation is expected per workspace at a time.
+
+Detached old saves stay on disk for safety. Soft-deleted saves and branches are hidden from normal UI but remain on disk.
+
+## Troubleshooting
+
+If Lumi does not open:
+
+- confirm you are in a singleplayer world;
+- check whether a recovery prompt opened first;
+- confirm the `Open current workspace` key is still bound;
+- check actionbar messages for permission or project-open errors.
+
+If save is disabled:
+
+- there may be no unsaved tracked changes;
+- wait for an active operation to finish;
+- make an explicit edit in the workspace and try again.
+
+If undo/redo does nothing:
+
+- the live stack may be empty;
+- the game may have restarted since the action;
+- an operation may be active;
+- redstone or piston fallout may still be settling.
+
+If restore is blocked:
+
+- read the confirmation/status banner;
+- save or discard pending recovery first;
+- check whether required history payloads are missing or corrupt;
+- use Diagnostics for integrity errors and warnings.
+
+If import/combine is blocked:
+
+- check the validation message on `Import / Export`;
+- decide every same-area conflict zone;
+- confirm the combine would import at least one change;
+- verify the package belongs to a compatible project lineage.
+
+If overlays look missing:
+
+- press `H` to toggle compare visibility;
+- hold the Lumi action button for x-ray while compare is active;
+- make sure you are within render distance of the highlighted chunks;
+- remember compare highlight takes priority over undo/redo preview.

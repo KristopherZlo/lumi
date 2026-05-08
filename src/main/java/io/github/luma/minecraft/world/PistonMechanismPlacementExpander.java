@@ -33,8 +33,9 @@ public final class PistonMechanismPlacementExpander {
     public List<PreparedBlockPlacement> expandChanges(Collection<ChangePlacement> changes) {
         LinkedHashMap<Long, PreparedBlockPlacement> explicit = new LinkedHashMap<>();
         for (ChangePlacement change : changes == null ? List.<ChangePlacement>of() : changes) {
-            if (change != null && change.placement() != null && change.placement().pos() != null) {
-                explicit.put(packed(change.placement().pos()), change.placement());
+            PreparedBlockPlacement placement = this.stableTargetPlacement(change);
+            if (placement != null && placement.pos() != null) {
+                explicit.put(packed(placement.pos()), placement);
             }
         }
 
@@ -43,7 +44,10 @@ public final class PistonMechanismPlacementExpander {
             if (change == null || change.placement() == null) {
                 continue;
             }
-            PreparedBlockPlacement placement = change.placement();
+            PreparedBlockPlacement placement = this.stableTargetPlacement(change);
+            if (placement == null) {
+                continue;
+            }
             this.addHeadCompanion(expanded, explicit, this.targetHeadCompanion(placement));
             this.addIfAbsent(expanded, explicit, this.sourceHeadRemovalCompanion(
                     placement.pos(),
@@ -62,6 +66,21 @@ public final class PistonMechanismPlacementExpander {
 
     public boolean requiresCompanion(BlockState state) {
         return this.isExtendedBase(state);
+    }
+
+    private PreparedBlockPlacement stableTargetPlacement(ChangePlacement change) {
+        if (change == null || change.placement() == null || change.placement().pos() == null) {
+            return null;
+        }
+        PreparedBlockPlacement placement = change.placement();
+        if (!this.isMovingPiston(placement.state()) || !this.isExtendedBase(change.sourceState())) {
+            return placement;
+        }
+        return new PreparedBlockPlacement(
+                placement.pos(),
+                change.sourceState().setValue(PistonBaseBlock.EXTENDED, false),
+                null
+        );
     }
 
     private LinkedHashMap<Long, PreparedBlockPlacement> indexPlacements(Collection<PreparedBlockPlacement> placements) {
@@ -99,7 +118,8 @@ public final class PistonMechanismPlacementExpander {
         }
         long key = packed(placement.pos());
         PreparedBlockPlacement explicitPlacement = explicit.get(key);
-        if (explicitPlacement == null || this.isAir(explicitPlacement.state())) {
+        if (explicitPlacement == null || this.isAir(explicitPlacement.state())
+                || this.isMovingPiston(explicitPlacement.state())) {
             expanded.put(key, placement);
         }
     }
@@ -143,6 +163,10 @@ public final class PistonMechanismPlacementExpander {
 
     private boolean isAir(BlockState state) {
         return state == null || state.isAir();
+    }
+
+    private boolean isMovingPiston(BlockState state) {
+        return state != null && state.is(Blocks.MOVING_PISTON);
     }
 
     private static int applyPriority(PreparedBlockPlacement placement) {

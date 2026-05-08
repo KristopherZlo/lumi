@@ -1,6 +1,9 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.state.ProjectHomeViewState;
@@ -18,6 +21,7 @@ public final class DiagnosticsScreen extends LumaScreen {
     private final String projectName;
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectHomeScreenController controller = new ProjectHomeScreenController();
+    private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private ProjectHomeViewState state;
 
     public DiagnosticsScreen(Screen parent, String projectName) {
@@ -60,6 +64,8 @@ public final class DiagnosticsScreen extends LumaScreen {
             return;
         }
 
+        new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
+                .addHint(body, ClientContextualHelpHint.DIAGNOSTICS);
         body.child(this.integritySection());
         body.child(this.integrationSection());
         body.child(this.logSection());
@@ -69,6 +75,12 @@ public final class DiagnosticsScreen extends LumaScreen {
     @Override
     public void onClose() {
         this.client.setScreen(this.parent);
+    }
+
+    private void rebuild() {
+        this.uiAdapter.rootComponent.clearChildren();
+        this.build(this.uiAdapter.rootComponent);
+        this.uiAdapter.inflateAndMount();
     }
 
     private FlowLayout integritySection() {

@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchMetadata;
@@ -176,7 +177,7 @@ public final class RestoreService {
         this.requireTrustedImportedRestore(level, layout, project, versions, trustedImportedPackage);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
-                .freezeSession(level.getServer(), project.id().toString());
+                .freezeWorkingDraft(level.getServer(), project.id().toString());
         Optional<RecoveryDraft> frozenDraft = frozenSession.map(TrackedChangeBuffer::toDraft);
         RecoveryDraft pendingDraft = frozenDraft
                 .or(() -> persistedDraft)
@@ -375,7 +376,7 @@ public final class RestoreService {
         ProjectVariant activeVariant = this.activeVariant(project, variants);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
-                .freezeSession(level.getServer(), project.id().toString());
+                .freezeWorkingDraft(level.getServer(), project.id().toString());
         Optional<RecoveryDraft> frozenDraft = frozenSession.map(TrackedChangeBuffer::toDraft);
         RecoveryDraft pendingDraft = frozenDraft
                 .or(() -> persistedDraft)
@@ -418,12 +419,20 @@ public final class RestoreService {
                     if (partialDraft.draft().isEmpty()) {
                         throw new IllegalArgumentException("Partial restore has no changes inside the selected region");
                     }
-                    List<PreparedChunkBatch> batches = this.batchCollapser.collapse(this.decodeStoredChanges(
+                    List<PreparedChunkBatch> decodedBatches = this.decodeStoredChanges(
                             level,
                             partialDraft.draft().changes(),
                             partialDraft.draft().entityChanges(),
                             true
-                    ));
+                    );
+                    List<PreparedChunkBatch> batches;
+                    try (var ignored = LumaLoadLog.measure(
+                            "restore",
+                            "PreparedChunkBatchCollapser.collapse",
+                            "source=partial-restore, batches=" + decodedBatches.size()
+                    )) {
+                        batches = this.batchCollapser.collapse(decodedBatches);
+                    }
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,
                             () -> this.completePartialRestore(
@@ -878,7 +887,7 @@ public final class RestoreService {
     }
 
     private static StoredBlockChange inverse(StoredBlockChange change) {
-        return new StoredBlockChange(change.pos(), change.newValue(), change.oldValue());
+        return change.inverse();
     }
 
     private List<PreparedChunkBatch> decodeWorldRootRestore(
@@ -896,10 +905,16 @@ public final class RestoreService {
         List<PreparedChunkBatch> batches = new ArrayList<>();
         int index = 0;
         for (ChunkPoint chunk : trackedChunks) {
-            batches.addAll(this.snapshotBatchPreparer.prepare(
-                    this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
-                    level
-            ));
+            try (var ignored = LumaLoadLog.measure(
+                    "restore",
+                    "RestoreService.decodeWorldRootRestore.baselineChunk",
+                    "chunk=" + chunk.x() + ":" + chunk.z()
+            )) {
+                batches.addAll(this.snapshotBatchPreparer.prepare(
+                        this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
+                        level
+                ));
+            }
             index += 1;
             progressSink.update(
                     OperationStage.PREPARING,
@@ -909,7 +924,14 @@ public final class RestoreService {
             );
         }
 
-        List<PreparedChunkBatch> collapsed = this.batchCollapser.collapse(batches);
+        List<PreparedChunkBatch> collapsed;
+        try (var ignored = LumaLoadLog.measure(
+                "restore",
+                "PreparedChunkBatchCollapser.collapse",
+                "source=world-root, batches=" + batches.size()
+        )) {
+            collapsed = this.batchCollapser.collapse(batches);
+        }
         LumaMod.LOGGER.info(
                 "Decoded {} tracked baseline chunks for world root restore in project {}",
                 trackedChunks.size(),
@@ -1032,7 +1054,14 @@ public final class RestoreService {
             );
         }
 
-        List<PreparedChunkBatch> collapsed = this.batchCollapser.collapse(batches);
+        List<PreparedChunkBatch> collapsed;
+        try (var ignored = LumaLoadLog.measure(
+                "restore",
+                "PreparedChunkBatchCollapser.collapse",
+                "source=direct-restore, batches=" + batches.size()
+        )) {
+            collapsed = this.batchCollapser.collapse(batches);
+        }
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         LumaMod.LOGGER.info(
@@ -1317,35 +1346,60 @@ public final class RestoreService {
         List<PreparedChunkBatch> batches = new ArrayList<>();
 
         for (io.github.luma.domain.model.ChunkPoint chunk : plan.baselineGaps()) {
-            batches.addAll(this.snapshotBatchPreparer.prepare(
-                    this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
-                    level
-            ));
+            try (var ignored = LumaLoadLog.measure(
+                    "restore",
+                    "RestoreService.decodePlan.baselineChunk",
+                    "chunk=" + chunk.x() + ":" + chunk.z()
+            )) {
+                batches.addAll(this.snapshotBatchPreparer.prepare(
+                        this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
+                        level
+                ));
+            }
             completedSources += 1;
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded baseline chunk " + chunk.x() + ":" + chunk.z());
         }
 
         if (plan.anchor().snapshotId() != null && !plan.anchor().snapshotId().isBlank()) {
-            batches.addAll(this.snapshotBatchPreparer.prepare(
-                    this.snapshotReader.readFile(layout.snapshotFile(plan.anchor().snapshotId())),
-                    level
-            ));
+            try (var ignored = LumaLoadLog.measure(
+                    "restore",
+                    "RestoreService.decodePlan.anchorSnapshot",
+                    "snapshot=" + plan.anchor().snapshotId()
+            )) {
+                batches.addAll(this.snapshotBatchPreparer.prepare(
+                        this.snapshotReader.readFile(layout.snapshotFile(plan.anchor().snapshotId())),
+                        level
+                ));
+            }
             completedSources += 1;
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded anchor snapshot");
         }
 
         for (PatchMetadata patch : plan.patchChain()) {
-            batches.addAll(this.batchPreparer.prepareNewValues(
-                    level,
-                    this.patchDataRepository.loadSectionWorldChanges(layout, patch),
-                    (completed, total) -> {
-                    }
-            ));
+            try (var ignored = LumaLoadLog.measure(
+                    "restore",
+                    "RestoreService.decodePlan.patch",
+                    "patch=" + patch.id()
+            )) {
+                batches.addAll(this.batchPreparer.prepareNewValues(
+                        level,
+                        this.patchDataRepository.loadSectionWorldChanges(layout, patch),
+                        (completed, total) -> {
+                        }
+                ));
+            }
             completedSources += 1;
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded patch " + patch.id());
         }
 
-        List<PreparedChunkBatch> collapsed = this.batchCollapser.collapse(batches);
+        List<PreparedChunkBatch> collapsed;
+        try (var ignored = LumaLoadLog.measure(
+                "restore",
+                "PreparedChunkBatchCollapser.collapse",
+                "source=restore-plan, batches=" + batches.size()
+        )) {
+            collapsed = this.batchCollapser.collapse(batches);
+        }
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         if (rawPlacements != collapsedPlacements) {
@@ -1373,15 +1427,28 @@ public final class RestoreService {
     ) throws IOException {
         List<PreparedChunkBatch> batches = new ArrayList<>();
         for (String patchId : version.patchIds()) {
-            PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
-                    .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-            batches.addAll(this.batchPreparer.prepare(
-                    level,
-                    this.patchDataRepository.loadSectionWorldChanges(layout, metadata),
-                    applyNewValues,
-                    (completed, total) -> {
-                    }
-            ));
+            PatchMetadata metadata;
+            try (var ignored = LumaLoadLog.measure(
+                    "restore",
+                    "PatchMetaRepository.load",
+                    "patch=" + patchId
+            )) {
+                metadata = this.patchMetaRepository.load(layout, patchId)
+                        .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
+            }
+            try (var ignored = LumaLoadLog.measure(
+                    "restore",
+                    "WorldChangeBatchPreparer.preparePatch",
+                    "patch=" + patchId + ", applyNewValues=" + applyNewValues
+            )) {
+                batches.addAll(this.batchPreparer.prepare(
+                        level,
+                        this.patchDataRepository.loadSectionWorldChanges(layout, metadata),
+                        applyNewValues,
+                        (completed, total) -> {
+                        }
+                ));
+            }
         }
         return batches;
     }
@@ -1432,7 +1499,16 @@ public final class RestoreService {
             List<StoredEntityChange> entityChanges,
             boolean applyNewValues
     ) throws IOException {
-        List<PreparedChunkBatch> batches = this.batchPreparer.prepare(level, changes, entityChanges, applyNewValues);
+        List<PreparedChunkBatch> batches;
+        try (var ignored = LumaLoadLog.measure(
+                "restore",
+                "WorldChangeBatchPreparer.prepareStoredChanges",
+                "blocks=" + changes.size()
+                        + ", entities=" + (entityChanges == null ? 0 : entityChanges.size())
+                        + ", applyNewValues=" + applyNewValues
+        )) {
+            batches = this.batchPreparer.prepare(level, changes, entityChanges, applyNewValues);
+        }
         LumaDebugLog.log(
                 "restore",
                 "Decoded {} block and {} entity stored changes into {} grouped chunk batches using {} values",

@@ -13,26 +13,25 @@ class ActionBarMessagePresenterTest {
     private static final Instant NOW = Instant.parse("2026-04-30T10:00:00Z");
 
     @Test
-    void progressBarUsesPlainBuilderFacingAscii() {
-        String bar = ActionBarMessagePresenter.asciiProgressBar(50);
+    void actionBarDoesNotRenderTextProgressBar() {
+        String message = ActionBarMessagePresenter.operation(snapshot(OperationStage.APPLYING, 64, 128)).getString();
 
-        Assertions.assertEquals("[#####.....]", bar);
-        Assertions.assertFalse(bar.contains("="));
-        Assertions.assertFalse(bar.contains("-"));
+        Assertions.assertTrue(message.contains("%"));
+        Assertions.assertFalse(message.contains("#"));
     }
 
     @Test
-    void progressBarOnlyShowsForLargeActiveWork() {
-        Assertions.assertTrue(ActionBarMessagePresenter.shouldShowProgressBar(
+    void actionBarPercentShowsForActiveWorkWithKnownTotal() {
+        Assertions.assertTrue(ActionBarMessagePresenter.shouldShowOperationPercent(
                 snapshot(OperationStage.APPLYING, 64, 128)
         ));
-        Assertions.assertFalse(ActionBarMessagePresenter.shouldShowProgressBar(
-                snapshot(OperationStage.APPLYING, 16, 32)
+        Assertions.assertTrue(ActionBarMessagePresenter.shouldShowOperationPercent(
+                snapshot(OperationStage.PRELOADING, 16, 32)
         ));
-        Assertions.assertFalse(ActionBarMessagePresenter.shouldShowProgressBar(
-                snapshot(OperationStage.FINALIZING, 128, 128)
+        Assertions.assertFalse(ActionBarMessagePresenter.shouldShowOperationPercent(
+                snapshot(OperationStage.APPLYING, 0, 0)
         ));
-        Assertions.assertFalse(ActionBarMessagePresenter.shouldShowProgressBar(
+        Assertions.assertFalse(ActionBarMessagePresenter.shouldShowOperationPercent(
                 snapshot(OperationStage.COMPLETED, 128, 128)
         ));
     }

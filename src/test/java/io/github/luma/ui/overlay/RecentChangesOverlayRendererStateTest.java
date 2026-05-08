@@ -121,6 +121,24 @@ class RecentChangesOverlayRendererStateTest {
     }
 
     @Test
+    void hiddenRecentChangesAreNotPreviewed() {
+        UndoRedoAction action = action();
+        action.recordChange(new StoredBlockChange(
+                new BlockPoint(10, 64, 10),
+                new StatePayload(state("minecraft:air"), null),
+                new StatePayload(state("minecraft:wheat"), null),
+                true
+        ), Instant.parse("2026-04-23T08:00:01Z"));
+
+        List<BlockPoint> positions = RecentChangesOverlayRenderer.previewPositionsForTest(
+                List.of(action),
+                RecentChangesOverlayCoordinator.PreviewTarget.UNDO
+        );
+
+        assertTrue(positions.isEmpty());
+    }
+
+    @Test
     void largeRecentActionUsesExposedSurfaceMeshes() {
         UndoRedoAction action = action();
         for (StoredBlockChange change : denseCubeChanges()) {

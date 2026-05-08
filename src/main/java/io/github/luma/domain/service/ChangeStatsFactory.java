@@ -22,11 +22,15 @@ public final class ChangeStatsFactory {
         Map<String, Integer> chunkCounters = new LinkedHashMap<>();
 
         for (StoredBlockChange change : changes) {
+            if (change == null || !change.visibleInBuilderSurfaces()) {
+                continue;
+            }
             chunkCounters.merge(chunkKey(change), 1, Integer::sum);
             blockTypes.put(change.newValue().blockId(), Boolean.TRUE);
         }
 
-        return new ChangeStats(changes.size(), chunkCounters.size(), blockTypes.size());
+        int visibleChanges = chunkCounters.values().stream().mapToInt(Integer::intValue).sum();
+        return new ChangeStats(visibleChanges, chunkCounters.size(), blockTypes.size());
     }
 
     public static PatchMetadata createPatchMetadata(
@@ -57,6 +61,9 @@ public final class ChangeStatsFactory {
     public static List<ChunkDelta> chunkDeltas(List<StoredBlockChange> changes) {
         Map<String, Integer> chunkCounters = new LinkedHashMap<>();
         for (StoredBlockChange change : changes) {
+            if (change == null || !change.visibleInBuilderSurfaces()) {
+                continue;
+            }
             chunkCounters.merge(chunkKey(change), 1, Integer::sum);
         }
 
@@ -75,6 +82,9 @@ public final class ChangeStatsFactory {
         int changed = 0;
 
         for (StoredBlockChange change : changes) {
+            if (change == null || !change.visibleInBuilderSurfaces()) {
+                continue;
+            }
             boolean oldAir = isAir(change.oldValue().blockId());
             boolean newAir = isAir(change.newValue().blockId());
             if (oldAir && !newAir) {

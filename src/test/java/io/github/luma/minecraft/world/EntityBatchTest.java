@@ -33,6 +33,14 @@ class EntityBatchTest {
     }
 
     @Test
+    void replacePlacedEntitiesCountsAsEntityWorkEvenWithoutTargets() {
+        EntityBatch batch = EntityBatch.replacePlacedEntities(List.of());
+
+        assertFalse(batch.isEmpty());
+        assertEquals(1, BlockChangeApplier.entityOperationCount(batch));
+    }
+
+    @Test
     void preparedChunkBatchCarriesEntityBatchIntoChunkBatch() {
         EntityBatch entityBatch = new EntityBatch(
                 List.of(entity("minecraft:item", "00000000-0000-0000-0000-000000000003")),

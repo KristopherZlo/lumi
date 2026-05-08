@@ -8,11 +8,15 @@ public enum ClientContextualHelpHint {
     SETTINGS("settings"),
     MORE("more"),
     SAVE("save"),
+    CLEAN_STATE("clean_state"),
+    QUICK_ROLLBACK("quick_rollback"),
     RESTORE("restore"),
     COMPARE("compare"),
     PARTIAL_RESTORE("partial_restore"),
     RECOVERY("recovery"),
-    SELECTION_TOOL("selection_tool");
+    SELECTION_TOOL("selection_tool"),
+    CLEANUP("cleanup"),
+    DIAGNOSTICS("diagnostics");
 
     private final String id;
     private final String titleKey;

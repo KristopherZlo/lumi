@@ -2,7 +2,7 @@ package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
-import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,10 +26,10 @@ final class ExactReplayStateQueue {
     private final BlockPlacementUpdateDecider updateDecider = new BlockPlacementUpdateDecider();
     private final WorldApplyBlockUpdatePolicy updatePolicy = new WorldApplyBlockUpdatePolicy();
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
+    private final ExactReplayTargetPolicy targetPolicy = new ExactReplayTargetPolicy();
     private final Map<Long, PreparedBlockPlacement> pending = new LinkedHashMap<>();
     private final Map<Long, PreparedBlockPlacement> recordedPlacements = new LinkedHashMap<>();
-    private List<PreparedBlockPlacement> drainPlacements = List.of();
-    private int nextIndex = 0;
+    private Iterator<Map.Entry<Long, PreparedBlockPlacement>> drainIterator;
     private boolean drainPrepared = false;
 
     void record(ChunkBatch batch) {
@@ -37,7 +37,7 @@ final class ExactReplayStateQueue {
             return;
         }
         for (PreparedSectionApplyBatch section : batch.orderedNativeSections()) {
-            this.record(section.toPlacements());
+            this.record(section);
         }
         for (SectionBatch section : batch.orderedSections()) {
             this.record(section.placements());
@@ -48,13 +48,10 @@ final class ExactReplayStateQueue {
         if (!this.drainPrepared) {
             return !this.pending.isEmpty();
         }
-        return this.nextIndex < this.drainPlacements.size();
+        return this.drainIterator != null && this.drainIterator.hasNext();
     }
 
     int pendingCount() {
-        if (this.drainPrepared) {
-            return Math.max(0, this.drainPlacements.size() - this.nextIndex);
-        }
         return this.pending.size();
     }
 
@@ -70,8 +67,9 @@ final class ExactReplayStateQueue {
         this.prepareDrainPlacements();
         int applied = 0;
         while (this.hasPending() && applied < maxBlocks && System.nanoTime() < deadlineNanos) {
-            this.applyExact(level, this.drainPlacements.get(this.nextIndex), handle);
-            this.nextIndex += 1;
+            PreparedBlockPlacement placement = this.drainIterator.next().getValue();
+            this.applyExact(level, placement, handle);
+            this.drainIterator.remove();
             applied += 1;
         }
         this.clearIfComplete();
@@ -86,26 +84,52 @@ final class ExactReplayStateQueue {
 
     private void record(List<PreparedBlockPlacement> placements) {
         for (PreparedBlockPlacement placement : placements == null ? List.<PreparedBlockPlacement>of() : placements) {
-            if (placement == null || placement.pos() == null || placement.state() == null) {
-                continue;
+            this.record(placement);
+        }
+    }
+
+    private void record(PreparedSectionApplyBatch section) {
+        if (section == null || section.buffer() == null || section.chunk() == null) {
+            return;
+        }
+        LumiSectionBuffer buffer = section.buffer();
+        buffer.changedCells().forEachSetCell(localIndex -> {
+            BlockState state = buffer.targetStateAt(localIndex);
+            if (state == null) {
+                return;
             }
-            BlockPos immutablePos = placement.pos().immutable();
-            this.pending.put(
-                    immutablePos.asLong(),
-                    new PreparedBlockPlacement(
-                            immutablePos,
-                            placement.state(),
-                            placement.blockEntityTag() == null ? null : placement.blockEntityTag().copy()
-                    )
-            );
-            this.recordedPlacements.put(
-                    immutablePos.asLong(),
-                    new PreparedBlockPlacement(
-                            immutablePos,
-                            placement.state(),
-                            placement.blockEntityTag() == null ? null : placement.blockEntityTag().copy()
-                    )
-            );
+            CompoundTag blockEntityTag = buffer.blockEntityPlan().tagAt(localIndex);
+            boolean finalReplay = this.targetPolicy.requiresFinalReplay(state, blockEntityTag);
+            boolean postReplayGuard = this.targetPolicy.requiresPostReplayGuard(state);
+            if (!finalReplay && !postReplayGuard) {
+                long packedPos = this.packedPos(section, localIndex);
+                this.pending.remove(packedPos);
+                this.recordedPlacements.remove(packedPos);
+                return;
+            }
+            this.record(new PreparedBlockPlacement(
+                    this.blockPos(section, localIndex),
+                    state,
+                    blockEntityTag
+            ));
+        });
+    }
+
+    private void record(PreparedBlockPlacement placement) {
+        if (placement == null || placement.pos() == null || placement.state() == null) {
+            return;
+        }
+        BlockPos immutablePos = placement.pos().immutable();
+        PreparedBlockPlacement copied = this.copy(immutablePos, placement);
+        if (this.targetPolicy.requiresFinalReplay(copied)) {
+            this.pending.put(immutablePos.asLong(), copied);
+        } else {
+            this.pending.remove(immutablePos.asLong());
+        }
+        if (this.targetPolicy.requiresPostReplayGuard(copied)) {
+            this.recordedPlacements.put(immutablePos.asLong(), copied);
+        } else {
+            this.recordedPlacements.remove(immutablePos.asLong());
         }
     }
 
@@ -144,8 +168,7 @@ final class ExactReplayStateQueue {
             return;
         }
 
-        this.drainPlacements = List.copyOf(new ArrayList<>(this.pending.values()));
-        this.nextIndex = 0;
+        this.drainIterator = this.pending.entrySet().iterator();
         this.drainPrepared = true;
     }
 
@@ -153,9 +176,31 @@ final class ExactReplayStateQueue {
         if (this.hasPending()) {
             return;
         }
-        this.pending.clear();
-        this.drainPlacements = List.of();
-        this.nextIndex = 0;
+        this.drainIterator = null;
         this.drainPrepared = false;
+    }
+
+    private PreparedBlockPlacement copy(BlockPos immutablePos, PreparedBlockPlacement placement) {
+        return new PreparedBlockPlacement(
+                immutablePos,
+                placement.state(),
+                placement.blockEntityTag() == null ? null : placement.blockEntityTag().copy()
+        );
+    }
+
+    private BlockPos blockPos(PreparedSectionApplyBatch section, int localIndex) {
+        return new BlockPos(
+                (section.chunk().x() << 4) + SectionChangeMask.localX(localIndex),
+                (section.sectionY() << 4) + SectionChangeMask.localY(localIndex),
+                (section.chunk().z() << 4) + SectionChangeMask.localZ(localIndex)
+        );
+    }
+
+    private long packedPos(PreparedSectionApplyBatch section, int localIndex) {
+        return BlockPos.asLong(
+                (section.chunk().x() << 4) + SectionChangeMask.localX(localIndex),
+                (section.sectionY() << 4) + SectionChangeMask.localY(localIndex),
+                (section.chunk().z() << 4) + SectionChangeMask.localZ(localIndex)
+        );
     }
 }

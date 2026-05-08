@@ -11,6 +11,7 @@ import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import java.time.Instant;
@@ -33,24 +34,88 @@ public final class UndoRedoKeyController {
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final ExternalUndoRedoPolicy externalUndoRedoPolicy = new ExternalUndoRedoPolicy();
     private final AxiomUndoRedoBridge axiomUndoRedoBridge = new AxiomUndoRedoBridge();
+    private final UndoRedoRequestQueue requestQueue = new UndoRedoRequestQueue();
+    private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     public void undo(Minecraft client) {
-        this.start(client, true);
+        this.enqueue(client, UndoRedoRequestQueue.Intent.UNDO);
     }
 
     public void redo(Minecraft client) {
-        this.start(client, false);
+        this.enqueue(client, UndoRedoRequestQueue.Intent.REDO);
     }
 
-    private void start(Minecraft client, boolean undo) {
+    public void tick(Minecraft client) {
+        if (client == null || client.player == null || client.level == null) {
+            this.requestQueue.clear();
+            return;
+        }
+        if (!this.requestQueue.hasAnyPending()) {
+            return;
+        }
+
+        UndoRedoRequestQueue.Intent intent = null;
+        UndoRedoRequestQueue.Scope scope = null;
+        try {
+            CurrentTarget target = this.currentTarget(client);
+            scope = target.scope();
+            if (this.requestQueue.isEmpty(scope)) {
+                return;
+            }
+            if (this.worldOperationManager.hasActiveOperation(target.level().getServer())) {
+                return;
+            }
+            intent = this.requestQueue.poll(scope);
+            if (intent == null) {
+                return;
+            }
+            this.start(client, target, intent == UndoRedoRequestQueue.Intent.UNDO);
+        } catch (Exception exception) {
+            if (intent != null && scope != null && "luma.status.world_operation_busy".equals(this.statusKey(
+                    exception,
+                    intent != UndoRedoRequestQueue.Intent.REDO
+            ))) {
+                this.requestQueue.offerFirst(scope, intent);
+                return;
+            }
+            client.gui.setOverlayMessage(this.statusMessage(this.statusKey(
+                    exception,
+                    intent != UndoRedoRequestQueue.Intent.REDO
+            )), false);
+        }
+    }
+
+    private void enqueue(Minecraft client, UndoRedoRequestQueue.Intent intent) {
+        if (client == null || client.player == null || client.level == null) {
+            return;
+        }
+        try {
+            CurrentTarget target = this.currentTarget(client);
+            if (!this.requestQueue.offer(target.scope(), intent)) {
+                client.gui.setOverlayMessage(ActionBarMessagePresenter.warning("luma.status.undo_redo_queue_full"), false);
+                return;
+            }
+            client.gui.setOverlayMessage(ActionBarMessagePresenter.info(
+                    intent == UndoRedoRequestQueue.Intent.UNDO
+                            ? "luma.status.undo_queued"
+                            : "luma.status.redo_queued"
+            ), false);
+        } catch (Exception exception) {
+            client.gui.setOverlayMessage(this.statusMessage(this.statusKey(
+                    exception,
+                    intent != UndoRedoRequestQueue.Intent.REDO
+            )), false);
+        }
+    }
+
+    private void start(Minecraft client, CurrentTarget target, boolean undo) {
         if (client == null || client.player == null || client.level == null) {
             return;
         }
 
         try {
-            ServerLevel level = this.currentLevel(client);
-            var project = this.projectService.findWorldProject(level)
-                    .orElseThrow(() -> new IllegalArgumentException("No active Lumi workspace in this dimension"));
+            ServerLevel level = target.level();
+            BuildProject project = target.project();
             if (this.tryNativeExternalUndoRedo(client, level, project, undo)) {
                 client.gui.setOverlayMessage(ActionBarMessagePresenter.info(
                         undo ? "luma.status.native_undo_started" : "luma.status.native_redo_started"
@@ -66,7 +131,14 @@ public final class UndoRedoKeyController {
                     undo ? "luma.status.undo_started" : "luma.status.redo_started"
             ), false);
         } catch (Exception exception) {
-            client.gui.setOverlayMessage(this.statusMessage(this.statusKey(exception, undo)), false);
+            String statusKey = this.statusKey(exception, undo);
+            if ("luma.status.world_operation_busy".equals(statusKey)) {
+                this.requestQueue.offerFirst(target.scope(), undo
+                        ? UndoRedoRequestQueue.Intent.UNDO
+                        : UndoRedoRequestQueue.Intent.REDO);
+                return;
+            }
+            client.gui.setOverlayMessage(this.statusMessage(statusKey), false);
         }
     }
 
@@ -74,6 +146,20 @@ public final class UndoRedoKeyController {
         var server = ClientProjectAccess.requireSingleplayerServer(client);
         ServerLevel level = server.getLevel(client.level.dimension());
         return level == null ? server.overworld() : level;
+    }
+
+    private CurrentTarget currentTarget(Minecraft client) throws Exception {
+        ServerLevel level = this.currentLevel(client);
+        BuildProject project = this.projectService.findWorldProject(level)
+                .orElseThrow(() -> new IllegalArgumentException("No active Lumi workspace in this dimension"));
+        return new CurrentTarget(
+                level,
+                project,
+                new UndoRedoRequestQueue.Scope(
+                        level.dimension().identifier().toString(),
+                        project.id().toString()
+                )
+        );
     }
 
     private boolean tryNativeExternalUndoRedo(
@@ -187,7 +273,7 @@ public final class UndoRedoKeyController {
             List<StoredEntityChange> entityChanges,
             String actor
     ) throws Exception {
-        this.captureManager.applyUndoRedoAdjustments(
+        this.captureManager.applyLiveActionAdjustments(
                 level.getServer(),
                 project.id().toString(),
                 blockChanges,
@@ -218,5 +304,8 @@ public final class UndoRedoKeyController {
             return ActionBarMessagePresenter.error(key);
         }
         return ActionBarMessagePresenter.warning(key);
+    }
+
+    private record CurrentTarget(ServerLevel level, BuildProject project, UndoRedoRequestQueue.Scope scope) {
     }
 }

@@ -33,6 +33,7 @@ import net.minecraft.server.level.ServerLevel;
  */
 public final class SessionStabilizationService {
 
+    private static final int DEFERRED_SETTLE_TICKS = 4;
     private static final CompoundTag AIR_STATE = airState();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
 
@@ -57,7 +58,9 @@ public final class SessionStabilizationService {
             return ReconciliationResult.busy();
         }
 
-        List<ChunkPoint> pendingChunks = session.drainPendingReconcileChunks();
+        List<ChunkPoint> pendingChunks = requireLoadedChunks
+                ? session.drainPendingReconcileChunks()
+                : session.drainPendingReconcileChunks(level.getGameTime(), DEFERRED_SETTLE_TICKS);
         if (pendingChunks.isEmpty()) {
             session.finishReconciliation(List.of());
             return ReconciliationResult.noOp();

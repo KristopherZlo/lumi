@@ -46,7 +46,8 @@ public final class WorldMutationCapturePolicy {
         StoredBlockChange change = new StoredBlockChange(
                 BlockPoint.from(pos),
                 StatePayload.capture(oldPersistent.state(), oldPersistent.blockEntityTag()),
-                StatePayload.capture(newPersistent.state(), newPersistent.blockEntityTag())
+                StatePayload.capture(newPersistent.state(), newPersistent.blockEntityTag()),
+                this.hiddenInBuilderSurfaces(source)
         );
         if (change.isNoOp()) {
             return CaptureResult.rejected();
@@ -96,6 +97,10 @@ public final class WorldMutationCapturePolicy {
                     PISTON -> true;
             case RESTORE, SYSTEM -> false;
         };
+    }
+
+    private boolean hiddenInBuilderSurfaces(WorldMutationSource source) {
+        return source == WorldMutationSource.GROWTH;
     }
 
     public enum CaptureDecision {

@@ -108,6 +108,26 @@ class PistonMechanismPlacementExpanderTest {
     }
 
     @Test
+    void transientBaseTargetRestoresRetractedBaseWhenUndoingExtension() {
+        BlockPos base = new BlockPos(0, 64, 0);
+        BlockState extended = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                .setValue(PistonBaseBlock.EXTENDED, true);
+        BlockState retracted = extended.setValue(PistonBaseBlock.EXTENDED, false);
+
+        List<PreparedBlockPlacement> expanded = this.expander.expandChanges(List.of(
+                new PistonMechanismPlacementExpander.ChangePlacement(
+                        new PreparedBlockPlacement(base, Blocks.MOVING_PISTON.defaultBlockState(), null),
+                        extended
+                )
+        ));
+
+        assertEquals(2, expanded.size());
+        assertEquals(retracted, stateAt(expanded, base));
+        assertTrue(stateAt(expanded, base.east()).isAir());
+    }
+
+    @Test
     void generatedHeadIsAppliedBeforeBase() {
         BlockPos base = new BlockPos(0, 64, 0);
         BlockState extended = Blocks.PISTON.defaultBlockState()

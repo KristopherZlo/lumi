@@ -52,7 +52,8 @@ public final class DirectSectionMutationCaptureService {
             LevelChunkSection section,
             int localX,
             int localY,
-            int localZ
+            int localZ,
+            BlockState newState
     ) {
         if (WorldMutationCaptureGuard.suppressesDirectSectionCapture()) {
             return PendingDirectSectionMutation.skipped();
@@ -72,10 +73,19 @@ public final class DirectSectionMutationCaptureService {
         ChunkSectionOwnershipRegistry.SectionOwner sectionOwner = owner.get();
         BlockPos pos = sectionOwner.blockPos(localX, localY, localZ);
         BlockState oldState = section.getBlockState(localX, localY, localZ);
+        CompoundTag oldBlockEntity = this.blockEntityTag(sectionOwner.level(), pos, oldState);
+        if (captureCurrentSource && sectionOwner.level() != null && !oldState.equals(newState)) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(
+                    sectionOwner.level(),
+                    pos,
+                    oldState,
+                    oldBlockEntity
+            );
+        }
         return new PendingDirectSectionMutation(
                 pos,
                 oldState,
-                this.blockEntityTag(sectionOwner.level(), pos, oldState),
+                oldBlockEntity,
                 operation,
                 operation == null
         );

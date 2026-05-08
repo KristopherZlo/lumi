@@ -55,6 +55,7 @@ final class SingleplayerTestRun {
     private static final String ACTOR = "Lumi singleplayer testing";
     private static final int PREVIEW_WAIT_TIMEOUT_TICKS = 20 * 60;
     private static final int EXPLOSION_WAIT_TIMEOUT_TICKS = 20 * 10;
+    private static final int UNDO_REDO_STABILIZATION_WAIT_TIMEOUT_TICKS = 20 * 5;
 
     private final String serverKey;
     private final SingleplayerTestMode mode;
@@ -95,6 +96,7 @@ final class SingleplayerTestRun {
     private BlockPoint savedGameplayEntityPosition;
     private int previewWaitTicks;
     private int explosionWaitTicks;
+    private int undoRedoStabilizationWaitTicks;
     private boolean gameplaySaveValidated;
     private boolean gameplayEntityUpdateSaveValidated;
     private int phaseStartPasses;
@@ -458,34 +460,74 @@ final class SingleplayerTestRun {
     }
 
     private void startGameplayUndo() throws Exception {
+        if (!this.waitForUndoRedoStabilization("gameplay latest-action undo")) {
+            return;
+        }
         this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
-        this.log.info("Queued gameplay bridge undo operation " + this.pendingOperation.id());
+        this.log.info("Queued gameplay latest-action undo operation " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_GAMEPLAY_UNDO);
     }
 
     private void checkGameplayUndo() {
         if (this.gameplayReport != null) {
-            for (BlockPoint expectedBlock : this.gameplayReport.latestUndoRedoBlocks()) {
-                this.checkAir(expectedBlock.toBlockPos(), "Gameplay undo removed bridge block " + this.format(expectedBlock.toBlockPos()));
+            for (var expectedBlock : this.gameplayReport.latestReplayBlocks()) {
+                this.checkBlock(
+                        expectedBlock.pos().toBlockPos(),
+                        expectedBlock.undoBlock(),
+                        "Gameplay undo restored latest action block "
+                                + this.format(expectedBlock.pos().toBlockPos())
+                );
             }
         }
         this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_REDO);
     }
 
     private void startGameplayRedo() throws Exception {
+        if (!this.waitForUndoRedoStabilization("gameplay latest-action redo")) {
+            return;
+        }
         this.pendingOperation = this.undoRedoService.redo(this.level, this.project.name());
-        this.log.info("Queued gameplay bridge redo operation " + this.pendingOperation.id());
+        this.log.info("Queued gameplay latest-action redo operation " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_GAMEPLAY_REDO);
     }
 
     private void checkGameplayRedo() {
         if (this.gameplayReport != null) {
-            for (BlockPoint expectedBlock : this.gameplayReport.latestUndoRedoBlocks()) {
-                this.checkBlock(expectedBlock.toBlockPos(), Blocks.SPRUCE_PLANKS,
-                        "Gameplay redo restored bridge block " + this.format(expectedBlock.toBlockPos()));
+            for (var expectedBlock : this.gameplayReport.latestReplayBlocks()) {
+                this.checkBlock(
+                        expectedBlock.pos().toBlockPos(),
+                        expectedBlock.redoBlock(),
+                        "Gameplay redo restored latest action block "
+                                + this.format(expectedBlock.pos().toBlockPos())
+                );
             }
         }
         this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_SAVE);
+    }
+
+    private boolean waitForUndoRedoStabilization(String label) throws Exception {
+        if (this.project == null) {
+            return true;
+        }
+        MinecraftServer server = this.level.getServer();
+        String projectId = this.project.id().toString();
+        HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
+        captureManager.drainUndoRedoStabilization(server, projectId);
+        if (!captureManager.hasPendingUndoRedoStabilization(server, projectId)) {
+            this.undoRedoStabilizationWaitTicks = 0;
+            return true;
+        }
+
+        this.undoRedoStabilizationWaitTicks++;
+        if (this.undoRedoStabilizationWaitTicks == 1 || this.undoRedoStabilizationWaitTicks % 20 == 0) {
+            this.log.info("Waiting for deferred stabilization before " + label
+                    + " (" + this.undoRedoStabilizationWaitTicks + " ticks)");
+        }
+        if (this.undoRedoStabilizationWaitTicks > UNDO_REDO_STABILIZATION_WAIT_TIMEOUT_TICKS) {
+            this.recordFailure("Deferred stabilization did not settle before " + label);
+            this.phase = Phase.CLEANUP;
+        }
+        return false;
     }
 
     private void startGameplaySave(MinecraftServer server) throws Exception {
@@ -1014,7 +1056,12 @@ final class SingleplayerTestRun {
     }
 
     private void checkBlock(BlockPos pos, Block block, String label) {
-        this.check(this.level.getBlockState(pos).is(block), label);
+        var actual = this.level.getBlockState(pos);
+        if (actual.is(block)) {
+            this.check(true, label);
+            return;
+        }
+        this.check(false, label + ": expected=" + block + " actual=" + actual);
     }
 
     private void checkAir(BlockPos pos, String label) {
@@ -1157,10 +1204,10 @@ final class SingleplayerTestRun {
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
         CHECK_PLAYER_INTERACTIONS("Gameplay interactions", "exercise broad block, stateful block, fluid, entity, and water-bridge actions"),
-        START_GAMEPLAY_UNDO("Queue gameplay undo", "undo the latest water-bridge placement through the operation model"),
-        CHECK_GAMEPLAY_UNDO("Verify gameplay undo", "check that the latest water-bridge placement was removed"),
-        START_GAMEPLAY_REDO("Queue gameplay redo", "redo the latest water-bridge placement through the operation model"),
-        CHECK_GAMEPLAY_REDO("Verify gameplay redo", "check that the latest water-bridge placement returned"),
+        START_GAMEPLAY_UNDO("Queue gameplay undo", "undo the latest gameplay action through the operation model"),
+        CHECK_GAMEPLAY_UNDO("Verify gameplay undo", "check that the latest gameplay action was reverted"),
+        START_GAMEPLAY_REDO("Queue gameplay redo", "redo the latest gameplay action through the operation model"),
+        CHECK_GAMEPLAY_REDO("Verify gameplay redo", "check that the latest gameplay action returned"),
         START_GAMEPLAY_SAVE("Queue gameplay save", "save the player-built gameplay draft"),
         CHECK_GAMEPLAY_SAVE("Verify gameplay save", "check gameplay save output and preview fulfillment"),
         START_ENTITY_QUICK_ROLLBACK("Queue entity quick rollback", "mutate a saved entity and restore the active head"),

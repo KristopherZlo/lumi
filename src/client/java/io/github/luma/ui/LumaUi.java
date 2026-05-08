@@ -7,7 +7,7 @@ import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Color;
-import io.wispforest.owo.ui.core.Easing;
+import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
@@ -299,8 +299,7 @@ public final class LumaUi {
     public static FlowLayout revealGroup() {
         FlowLayout group = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
         group.gap(4);
-        group.margins(Insets.top(-4));
-        group.margins().animate(160, Easing.CUBIC, Insets.none()).forwards();
+        group.margins(Insets.none());
         return group;
     }
 
@@ -329,6 +328,7 @@ public final class LumaUi {
         button.renderer(ButtonComponent.Renderer.flat(fill, hover, disabled));
         button.textShadow(false);
         button.sizing(Sizing.content(5), Sizing.fixed(18));
+        button.cursorStyle(CursorStyle.HAND);
         return button;
     }
 

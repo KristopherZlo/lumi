@@ -8,6 +8,7 @@ final class WorldApplyOperationProfile {
             "restore-version",
             "partial-restore",
             "recovery",
+            "quick-rollback",
             "undo-action",
             "redo-action",
             "merge-variant"

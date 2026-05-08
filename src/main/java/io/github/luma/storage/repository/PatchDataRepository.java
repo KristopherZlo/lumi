@@ -40,8 +40,9 @@ import net.jpountz.lz4.LZ4FrameOutputStream;
 public final class PatchDataRepository {
 
     private static final int MAGIC = 0x4C504154;
-    private static final int VERSION = 7;
+    private static final int VERSION = 8;
     private static final int CHUNK_ADDRESSABLE_V6 = 6;
+    private static final int SECTION_FRAME_V7 = 7;
 
     public PatchMetadata writePayload(
             ProjectLayout layout,
@@ -316,6 +317,9 @@ public final class PatchDataRepository {
                 output.writeInt(blockEntityPaletteId(oldBlockEntityPalette, change.oldValue().blockEntityTag()));
                 output.writeInt(blockEntityPaletteId(newBlockEntityPalette, change.newValue().blockEntityTag()));
             }
+            for (long word : this.hiddenMask(sectionChanges)) {
+                output.writeLong(word);
+            }
         }
     }
 
@@ -374,14 +378,16 @@ public final class PatchDataRepository {
         try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(dataFile)))) {
             int magic = input.readInt();
             int version = input.readInt();
-            return magic == MAGIC && (version == VERSION || version == CHUNK_ADDRESSABLE_V6);
+            return magic == MAGIC
+                    && (version == VERSION || version == SECTION_FRAME_V7 || version == CHUNK_ADDRESSABLE_V6);
         }
     }
 
     private int readChunkAddressableHeader(DataInputStream input, Path dataFile) throws IOException {
         int magic = input.readInt();
         int version = input.readInt();
-        if (magic != MAGIC || (version != VERSION && version != CHUNK_ADDRESSABLE_V6)) {
+        if (magic != MAGIC
+                || (version != VERSION && version != SECTION_FRAME_V7 && version != CHUNK_ADDRESSABLE_V6)) {
             throw new IOException("Unsupported patch payload format for " + dataFile.getFileName());
         }
         return version;
@@ -455,8 +461,8 @@ public final class PatchDataRepository {
                 input.readInt(),
                 StorageLimits.MAX_PATCH_CHANGES_PER_CHUNK
         );
-        if (version == VERSION) {
-            return this.readSectionChunk(chunkX, chunkZ, input);
+        if (version >= SECTION_FRAME_V7) {
+            return this.readSectionChunk(chunkX, chunkZ, input, version);
         }
         return this.readPointChunk(chunkX, chunkZ, changeCount, input, version);
     }
@@ -518,7 +524,7 @@ public final class PatchDataRepository {
         return new PatchWorldChanges(changes, List.of());
     }
 
-    private PatchWorldChanges readSectionChunk(int chunkX, int chunkZ, DataInputStream input) throws IOException {
+    private PatchWorldChanges readSectionChunk(int chunkX, int chunkZ, DataInputStream input, int version) throws IOException {
         int sectionCount = StorageLimits.requireLength(
                 "patch section count",
                 input.readInt(),
@@ -526,7 +532,7 @@ public final class PatchDataRepository {
         );
         List<StoredBlockChange> changes = new ArrayList<>();
         for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
-            PatchSectionFrame frame = this.readSectionFrame(chunkX, chunkZ, input);
+            PatchSectionFrame frame = this.readSectionFrame(chunkX, chunkZ, input, version);
             changes.addAll(this.toStoredChanges(frame));
         }
         return new PatchWorldChanges(changes, this.readEntityChanges(input));
@@ -558,13 +564,13 @@ public final class PatchDataRepository {
             );
             List<PatchSectionFrame> frames = new ArrayList<>();
             for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
-                frames.add(this.readSectionFrame(chunkX, chunkZ, chunkInput));
+                frames.add(this.readSectionFrame(chunkX, chunkZ, chunkInput, VERSION));
             }
             return new PatchSectionWorldChanges(frames, this.readEntityChanges(chunkInput));
         }
     }
 
-    private PatchSectionFrame readSectionFrame(int chunkX, int chunkZ, DataInputStream input) throws IOException {
+    private PatchSectionFrame readSectionFrame(int chunkX, int chunkZ, DataInputStream input, int version) throws IOException {
         int sectionY = input.readInt();
         long[] mask = new long[SectionChangeMask.WORD_COUNT];
         for (int index = 0; index < mask.length; index++) {
@@ -585,6 +591,12 @@ public final class PatchDataRepository {
             oldBlockEntityIds[index] = input.readInt();
             newBlockEntityIds[index] = input.readInt();
         }
+        long[] hiddenMask = new long[SectionChangeMask.WORD_COUNT];
+        if (version >= VERSION) {
+            for (int index = 0; index < hiddenMask.length; index++) {
+                hiddenMask[index] = input.readLong();
+            }
+        }
         return new PatchSectionFrame(
                 chunkX,
                 chunkZ,
@@ -597,7 +609,8 @@ public final class PatchDataRepository {
                 oldBlockEntityPalette,
                 newBlockEntityPalette,
                 oldBlockEntityIds,
-                newBlockEntityIds
+                newBlockEntityIds,
+                hiddenMask
         );
     }
 
@@ -621,6 +634,7 @@ public final class PatchDataRepository {
         int[] newStateIds = frame.newStateIds();
         int[] oldBlockEntityIds = frame.oldBlockEntityIds();
         int[] newBlockEntityIds = frame.newBlockEntityIds();
+        long[] hiddenMask = frame.hiddenMask();
         this.requireArrayLength("old state ids", oldStateIds, localIndexes.size());
         this.requireArrayLength("new state ids", newStateIds, localIndexes.size());
         this.requireArrayLength("old block entity ids", oldBlockEntityIds, localIndexes.size());
@@ -642,7 +656,8 @@ public final class PatchDataRepository {
                     new StatePayload(
                             stateAt("new state palette", frame.newStatePalette(), newStateIds[index]).copy(),
                             blockEntityAt("new block entity palette", frame.newBlockEntityPalette(), newBlockEntityIds[index])
-                    )
+                    ),
+                    isSet(hiddenMask, localIndex)
             ));
         }
         return changes;
@@ -829,7 +844,8 @@ public final class PatchDataRepository {
                 new ArrayList<>(oldBlockEntityPalette.keySet()),
                 new ArrayList<>(newBlockEntityPalette.keySet()),
                 oldBlockEntityIds,
-                newBlockEntityIds
+                newBlockEntityIds,
+                this.hiddenMask(sectionChanges)
         );
     }
 
@@ -853,6 +869,27 @@ public final class PatchDataRepository {
             builder.set(sectionLocalIndex(change.pos()));
         }
         return builder.build().words();
+    }
+
+    private long[] hiddenMask(List<StoredBlockChange> sectionChanges) {
+        SectionChangeMask.Builder builder = SectionChangeMask.builder();
+        for (StoredBlockChange change : sectionChanges) {
+            if (change.hidden()) {
+                builder.set(sectionLocalIndex(change.pos()));
+            }
+        }
+        return builder.build().words();
+    }
+
+    private static boolean isSet(long[] mask, int localIndex) {
+        if (mask == null || localIndex < 0) {
+            return false;
+        }
+        int wordIndex = localIndex >>> 6;
+        if (wordIndex >= mask.length) {
+            return false;
+        }
+        return (mask[wordIndex] & (1L << (localIndex & 63))) != 0L;
     }
 
     private static int sectionLocalIndex(BlockPoint pos) {

@@ -53,7 +53,7 @@ Use Lumi if you want to:
 | `Variant` | Named branch-like head pointer | `variants.json` |
 | `History tombstones` | Soft-deleted save and branch ids hidden from normal history | `history-tombstones.json` |
 | `Compare` | Diff between two saved states, or between a saved state and the live game state, loaded in the background for large histories | `DiffService` |
-| `Restore` | Apply a chosen version back into the map and move the active head to it; quick rollback restores the active head directly | `RestoreService` |
+| `Restore` | Apply a chosen version back into the map and move the active head to it; quick rollback rolls unsaved draft changes back to the active head | `RestoreService`, `QuickRollbackService` |
 | `Partial restore` | Apply a bounded restore from an older save as a new save on the active branch, either inside a selection or everywhere except it | `RestoreService` |
 | `Import / Export` | Portable branch or project history packages for review and combine workflows | `HistoryShareService`, `ProjectArchiveService` |
 | `Recovery` | Crash-safe draft storage | `recovery/draft.*` |
@@ -62,16 +62,17 @@ Use Lumi if you want to:
 
 - automatic dimension projects
 - builder-first Build History UI built around `Save build`, `See changes`, recent saves, and `Branches`, with maintenance tools kept in the sidebar `More` route
-- one-time interactive onboarding wizard that explains safe save, undo/redo, quick rollback, return-before-restore, restore, branch, compare, recovery, wooden-sword selection, and import/export workflows, plus dismissible contextual hints on the main tabs and workflows; the tour shows remapped shortcuts as pixel key icons, continues over the Lumi workspace after the open shortcut, and can be replayed from `More` or `/lumi-onboarding`
+- one-time 9-step guided onboarding flow with compact cards, inline key glyphs, a close button, workspace spotlights for `Save build` and `See changes`, an in-world block edit, controlled Undo/Redo teaching, and shortcut reminders including `Left Alt+I`; advanced workflows are taught later through contextual hints in the relevant tabs, in-world teaching, and safety confirmations
 - localized UI resources for English, Russian, French, Spanish, German, and Finnish
 - lightweight save, branch, import/export, settings, storage cleanup, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots
 - remappable quick-save chord, default `Left Alt+S`, that opens a standalone save-name dialog without entering Build History
-- remappable quick rollback key, default `R`, that restores the active branch head without opening a screen; the next undo returns to the pre-restore state without moving the saved branch head, redo reapplies the rollback, and holding the Lumi action button with `R` runs an explicit hard return-before-restore
+- remappable quick rollback key, default `R`, that rolls the current unsaved draft back to the active branch head without opening a screen, or only rolls back the current wooden-sword selection when one is active; the next undo returns to the pre-rollback state without moving the saved branch head, and redo reapplies the rollback
 - dedicated save screen with optional `Replace latest save`
-- save details screen with isometric preview, restore, see-changes, rename, soft-delete, and branch actions
+- save details screen with isometric preview, restore, see-changes, rename, soft-delete, and branch actions; when the active head has no unsaved work, `See changes` compares the previous save to that latest save instead of showing an empty current-build diff
 - See Changes screen for saved states, branches, and the current build, with background-loaded diffs and manual raw-reference compare available under `More`
-- live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi action button; changing the action button changes these chords too. These actions are an in-memory stack for small pre-save edits, while the durable recovery draft separately stores the current unsaved working tree. Saving a version does not clear the live stack; undoing after a save creates a new pending draft on top of the saved head. While either chord is active, Lumi suppresses vanilla use/attack input so the shortcut does not also press levers, buttons, or other interactable blocks. WorldEdit and FAWE actions route those chords through the tools' native undo/redo commands, while captured Axiom capability actions replay through Lumi so tool-assisted breaks and placements use the state Lumi recorded. Axiom simple place/break buffers, including bulldozer and fast-place style hand edits, are split into block-scoped undo actions instead of one broad batch.
+- live undo and redo for the last tracked builder actions with default `Left Alt+Z` / `Left Alt+Y` bindings through the remappable Lumi action button; changing the action button changes these chords too. Repeated shortcut presses queue up to 16 undo/redo intents for the current workspace and run in order after each active world operation completes. These actions are an in-memory stack for small pre-save edits, while the durable recovery draft separately stores the current unsaved working tree. Saving a version does not clear the live stack; undoing after a save creates a new pending draft on top of the saved head. While either chord is active, Lumi suppresses vanilla use/attack input so the shortcut does not also press levers, buttons, or other interactable blocks. WorldEdit and FAWE actions route those chords through the tools' native undo/redo commands, while captured Axiom capability actions replay through Lumi so tool-assisted breaks and placements use the state Lumi recorded. Axiom simple place/break buffers, including bulldozer and fast-place style hand edits, are split into block-scoped undo actions instead of one broad batch.
+- hotkey information screen opened with default `Left Alt+I`, showing the current remapped Lumi bindings in a compact table
 - non-player entity edits from explicit player and supported builder-tool actions are saved with their full captured NBT position and state, including mobs, item entities, display entities, paintings, and armor stands. Player-caused deaths keep the pre-death entity payload tied to the same action as the generated drops. Spawn payloads are captured after Minecraft accepts the entity into the world, while live undo keeps the original action order.
 - short-lived secondary fallout near the latest tracked action is folded into that same undo/redo step after its dirty chunk stays unchanged for a short tick-settle window; undo/redo drains settled stabilization chunks first and waits for still-settling redstone/piston chunks instead of selecting a partial lever-only action. Poured fluid, contact-created source blocks, falling-block deltas, redstone block updates, and piston fallout can join before the action is selected, and this passive fallout does not discard an available redo. Fluid-driven neighbor callbacks stay attributed as fluid fallout instead of being promoted to unactioned block updates, so undo can restore blocks broken by water. If repeated mechanism actions dirty the same pending chunk before that settle window expires, the latest causal action owns the chunk reconciliation, so undoing a piston toggle does not replay only the lever while leaving piston fallout behind. Sticky-piston movement also records pulled cells that settle back to the session baseline, so undoing a retraction restores the block the piston had returned. Moving piston block entities keep the originating action id across piston-carrier chains without consuming the redstone/block-event propagation budget. Redstone and piston fallout must keep a causal action id to enter stabilization, so self-sustaining clocks do not keep appending ambient pulses to history after the originating action has expired
 - item drops produced by player-caused entity deaths, explosions, fluid, falling blocks, or nearby block-update fallout are captured only for the matching undo/redo action; undo removes those dropped item entities and redo respawns them without storing secondary-only drops in recovery drafts or saved versions
@@ -79,7 +80,7 @@ Use Lumi if you want to:
 - redstone and mechanism state is saved and replayed as final settled block state, including lever `powered`, button `powered`, wire `power`, lamp `lit`, openable `open`, repeater/comparator state, piston base `extended`, settled `piston_head`, and moved blocks. Stabilization waits a short tick window after the last causal redstone/piston mutation before snapshotting dirty chunks, so transient `moving_piston` animation is not captured as the final state. Apply preparation completes missing settled piston head/removal companions from an explicit piston base, recovers a retracted base when undo targets a transient moving-piston base, overwrites normalized transient air at the expected head position when needed, but never creates a piston base from a head-only record. Only short-lived `moving_piston` animation state is normalized away
 - hard restore that moves the active branch head
 - region-scoped partial restore from save details as a primary save action, written back as a new `PARTIAL_RESTORE` save, with `Only selected area` and `Everything except selection` modes using optional wooden-sword selected bounds or manual XYZ bounds. The applied partial restore is also recorded as a live undo/redo action.
-- runtime-only wooden-sword region selection with a one-time in-world teaching hint, `corners` and `extend` modes, long loaded-chunk targeting, Lumi action button + scroll mode switching, Lumi action button + right click deselect, and an in-world highlighted cuboid overlay
+- runtime-only wooden-sword region selection with a persistent lower-left tool hint while held, `corners` and `extend` modes, long loaded-chunk targeting, Lumi action button + scroll mode switching, Lumi action button + right click deselect, selected-area quick rollback with `R`, and an in-world highlighted cuboid overlay
 - history editing: rename saves, soft-delete safe saves, soft-delete inactive branches, and merge another local branch into the current branch as a new `MERGE` save
 - soft-deleted save files remain accessible from the More screen's deleted saves section
 - recovery drafts with WAL compaction, restore return points, and a direct recovery screen prompt only when a project opens with interrupted persisted draft work from a previous session
@@ -152,7 +153,8 @@ Use Lumi if you want to:
 - Auto checkpoints save any existing pending draft before large external edits; if no draft exists, the current branch head is already the checkpoint and Lumi does nothing.
 - Restore apply uses adaptive tick budgets, safe dense section rewrites, native or direct section writes with vanilla fallback, batched section packets, capped block-entity/entity tail work per tick, and progress for entity-only batches.
 - One map operation is expected at a time per save.
-- Progress is exposed through operation state. The in-world action bar uses short status text and only shows a compact ASCII progress bar for larger active operations.
+- Progress is exposed through operation state. Active world operations now publish their progress through Minecraft's native bossbar, including prepare, chunk preload, apply, and finalize stages; the action bar stays as short status text only.
+- Natural growth changes such as crop, plant, stem, or amethyst growth are still stored in drafts and patch payloads, but are hidden from change summaries, compare/recent/pending overlays, and preview framing so unrelated ambient ticks do not break screenshots or builder-facing diffs.
 - Lumi screens do not pause the game.
 - Detached old versions stay on disk for safety and remain visible in Build History after a reset-style restore; tombstoned saves and branches stay on disk but are hidden from normal UI and lineage.
 
@@ -249,12 +251,21 @@ Run test client:
 ```
 
 The default test-client profile installs a small Fabric `1.21.11` builder-tool stack for local validation: Fabric API, WorldEdit, and a pinned `Axiom-5.4.1-for-MC1.21.11.jar` Modrinth file. The broader performance-mod stack is available with `.\scripts\run-test-client.ps1 -FullStack`. See [docs/test-client.md](docs/test-client.md) for the complete mod list.
+The test-client profile starts with Lumi debug, startup profiling, and load logging enabled.
 
 Run tests:
 
 ```powershell
 .\gradlew.bat test
 ```
+
+Enable the separate runtime load log when profiling save, restore, undo/redo, and apply cost:
+
+```text
+-Dlumi.loadLog=true
+```
+
+It writes `logs/lumi-load.log` in the game run directory. Start with `type="summary"` rows to find the most expensive Lumi areas, then use `type="span"` and `type="operation-metrics"` rows for the slow call and apply-counter details.
 
 Run the local in-world regression suite from a singleplayer save with cheats enabled:
 
@@ -276,11 +287,11 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 6. Use the Lumi action button plus `Z` / `Y` to undo or redo the latest tracked action while no screen is open. The default action button is `Left Alt`, and changing it changes these chords too. Lumi suppresses vanilla use/attack while these chords are active, so the same input does not also interact with levers or blocks in front of the player. WorldEdit/FAWE actions use native tool undo/redo; captured Axiom capability actions replay through Lumi, and simple Axiom place/break buffers are split into block-scoped undo steps.
 7. Hold the Lumi action button to preview the next live undo and redo targets when the compare overlay is not active. The undo target is red, the redo target is green, and the pending unsaved overlay remains the fallback when no live action preview is available. Pending overlays above the detailed cap collapse into bounded tiled orange volume blobs so the client does not build unbounded overlay geometry.
    Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
-8. Press `R` for quick rollback to the active branch head, or hold the Lumi action button plus `R` to return before the last full restore.
+8. Press `R` for quick rollback of unsaved work to the active branch head. Use Lumi action plus `Z` afterward if you need to bring the rolled-back work back.
 9. Press the Lumi action button plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.
 10. Use `Save build` when you want the full save screen with manual naming or replace-latest tools.
 11. Open a save when you want details, restore, see changes, or create a branch from it.
-12. Hold a wooden sword in a Lumi workspace to select partial-restore bounds. Lumi shows a one-time actionbar hint; left/right click set corners, Lumi action button + scroll switches selection mode, and Lumi action button + right click clears the selection.
+12. Hold a wooden sword in a Lumi workspace to select partial-restore bounds. Lumi shows a lower-left hint while the tool is held; left/right click set corners, Lumi action button + scroll switches selection mode, Lumi action button + right click clears the selection, and `R` quick-rolls back only the selected area.
 13. Use `Branches` for alternate build directions, the sidebar for Import / Export and Settings, and `More` for storage cleanup, manual compare, the history graph, raw references, or the Deleted saves tab.
 
 ## Scope

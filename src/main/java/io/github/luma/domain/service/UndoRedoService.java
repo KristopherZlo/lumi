@@ -37,6 +37,7 @@ public final class UndoRedoService {
     public OperationHandle undo(ServerLevel level, String projectName) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
+        this.ensureStabilizationReady(level, project);
         UndoRedoActionStack.Selection selection = this.historyManager.selectUndo(project.id().toString());
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to undo");
@@ -47,11 +48,18 @@ public final class UndoRedoService {
     public OperationHandle redo(ServerLevel level, String projectName) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
+        this.ensureStabilizationReady(level, project);
         UndoRedoActionStack.Selection selection = this.historyManager.selectRedo(project.id().toString());
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to redo");
         }
         return this.startOperation(level, project, selection, Direction.REDO);
+    }
+
+    private void ensureStabilizationReady(ServerLevel level, BuildProject project) throws IOException {
+        if (this.captureManager.hasPendingUndoRedoStabilization(level.getServer(), project.id().toString())) {
+            throw new IllegalStateException("Redstone or piston fallout is still settling; try undo/redo again in a moment");
+        }
     }
 
     private OperationHandle startOperation(
@@ -114,7 +122,7 @@ public final class UndoRedoService {
                                 } else {
                                     this.historyManager.completeRedo(project.id().toString(), selection);
                                 }
-                                this.captureManager.applyUndoRedoAdjustments(
+                                this.captureManager.applyLiveActionAdjustments(
                                         level.getServer(),
                                         project.id().toString(),
                                         pendingAdjustments,

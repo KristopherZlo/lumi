@@ -57,6 +57,48 @@ class MutationSourcePolicyTest {
     }
 
     @Test
+    void deferredPreMutationBaselineRequiresActiveSessionRegion() {
+        BuildProject wholeDimension = BuildProject.createWorldWorkspace(
+                "World",
+                "minecraft:overworld",
+                Instant.parse("2026-04-28T10:00:00Z")
+        );
+        BuildProject bounded = BuildProject.create(
+                "Area",
+                "minecraft:overworld",
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(15, 80, 15)),
+                new BlockPoint(0, 64, 0),
+                Instant.parse("2026-04-28T10:00:00Z")
+        );
+
+        assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(
+                wholeDimension,
+                WorldMutationSource.PISTON,
+                false
+        ));
+        assertTrue(this.policy.canCaptureDeferredPreMutationBaseline(
+                wholeDimension,
+                WorldMutationSource.PISTON,
+                true
+        ));
+        assertTrue(this.policy.canCaptureDeferredPreMutationBaseline(
+                wholeDimension,
+                WorldMutationSource.FLUID,
+                true
+        ));
+        assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(
+                bounded,
+                WorldMutationSource.FLUID,
+                true
+        ));
+        assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(
+                wholeDimension,
+                WorldMutationSource.PLAYER,
+                true
+        ));
+    }
+
+    @Test
     void activeSessionRegionCanExpandTrackedChunksForSecondarySources() {
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FLUID, false));
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH, false));

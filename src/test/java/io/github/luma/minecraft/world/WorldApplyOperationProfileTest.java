@@ -13,6 +13,7 @@ class WorldApplyOperationProfileTest {
         assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("restore-version"));
         assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("partial-restore"));
         assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("recovery"));
+        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("quick-rollback"));
         assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("undo-action"));
         assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("redo-action"));
         assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("merge-variant"));

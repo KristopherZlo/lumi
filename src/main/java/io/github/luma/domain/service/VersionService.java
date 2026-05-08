@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.Bounds3i;
@@ -10,6 +11,7 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
+import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
@@ -44,7 +46,7 @@ import net.minecraft.server.level.ServerLevel;
 /**
  * Saves tracked edits as durable project versions.
  *
- * <p>The service consumes the live tracked buffer, writes the patch-first v3
+ * <p>The service consumes the durable working draft, writes the patch-first v3
  * history payloads, applies snapshot policy, finalizes version manifests, and
  * queues optional preview capture requests outside the critical durability path.
  */
@@ -76,7 +78,7 @@ public final class VersionService {
         }
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
-                .consumeSession(level.getServer(), project.id().toString());
+                .consumeWorkingDraft(level.getServer(), project.id().toString());
         Optional<RecoveryDraft> liveDraft = liveSession.map(TrackedChangeBuffer::toDraft);
         RecoveryDraft draft = liveDraft
                 .or(() -> persistedDraft)
@@ -141,6 +143,7 @@ public final class VersionService {
                                 VersionKind.MANUAL,
                                 true,
                                 headVersion.parentVersionId(),
+                                headVersion.id(),
                                 progressSink
                         );
                         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
@@ -163,7 +166,7 @@ public final class VersionService {
      *
      * <p>The durable version manifest is only written after the background
      * operation completes successfully. Until then, the current draft is kept in
-     * isolated operation storage so new edits start a separate live draft.
+     * isolated operation storage so new edits start a separate working draft.
      */
     public OperationHandle startSaveVersion(
             ServerLevel level,
@@ -180,7 +183,7 @@ public final class VersionService {
         }
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
-                .consumeSession(level.getServer(), project.id().toString());
+                .consumeWorkingDraft(level.getServer(), project.id().toString());
         Optional<RecoveryDraft> liveDraft = liveSession.map(TrackedChangeBuffer::toDraft);
         RecoveryDraft draft = liveDraft
                 .or(() -> persistedDraft)
@@ -226,6 +229,7 @@ public final class VersionService {
                             versionKind,
                             true,
                             "",
+                            draft.baseVersionId(),
                             progressSink
                     )
             );
@@ -311,7 +315,14 @@ public final class VersionService {
         Instant now = Instant.now();
         String versionId = ProjectService.versionId(nextIndex);
         String patchId = ProjectService.patchId(nextIndex);
-        ChangeStats stats = ChangeStatsFactory.summarize(draft.changes());
+        ChangeStats stats;
+        try (var ignored = LumaLoadLog.measure(
+                "save",
+                "VersionService.summarizeChanges",
+                "project=" + project.name() + ", changes=" + draft.changes().size()
+        )) {
+            stats = ChangeStatsFactory.summarize(draft.changes());
+        }
         LumaMod.LOGGER.info(
                 "Preparing version {} for project {}: {} blocks and {} entities across {} chunks",
                 versionId,
@@ -322,20 +333,35 @@ public final class VersionService {
         );
 
         progressSink.update(OperationStage.PREPARING, 0, draft.totalChangeCount(), "Preparing version payload");
-        var patchMetadata = this.patchDataRepository.writePayload(
-                layout,
-                patchId,
-                project.id().toString(),
-                versionId,
-                draft.changes(),
-                draft.entityChanges()
-        );
+        PatchMetadata patchMetadata;
+        try (var ignored = LumaLoadLog.measure(
+                "save",
+                "PatchDataRepository.writePayload",
+                "project=" + project.name()
+                        + ", version=" + versionId
+                        + ", blocks=" + draft.changes().size()
+                        + ", entities=" + draft.entityChanges().size()
+        )) {
+            patchMetadata = this.patchDataRepository.writePayload(
+                    layout,
+                    patchId,
+                    project.id().toString(),
+                    versionId,
+                    draft.changes(),
+                    draft.entityChanges()
+            );
+        }
         progressSink.update(OperationStage.WRITING, draft.totalChangeCount(), draft.totalChangeCount(), "Writing patch index");
-        this.patchMetaRepository.save(layout, patchMetadata);
+        try (var ignored = LumaLoadLog.measure("save", "PatchMetaRepository.save", "patch=" + patchMetadata.id())) {
+            this.patchMetaRepository.save(layout, patchMetadata);
+        }
 
         String snapshotId = "";
-        boolean createSnapshot = (parentVersionId == null || parentVersionId.isBlank())
-                || this.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind);
+        boolean createSnapshot;
+        try (var ignored = LumaLoadLog.measure("save", "VersionService.snapshotPolicy", "project=" + project.name())) {
+            createSnapshot = (parentVersionId == null || parentVersionId.isBlank())
+                    || this.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind);
+        }
         LumaMod.LOGGER.info(
                 "Snapshot policy for version {} in project {} resolved to {}",
                 versionId,
@@ -345,7 +371,10 @@ public final class VersionService {
         if (createSnapshot) {
             snapshotId = ProjectService.snapshotId(nextIndex);
             progressSink.update(OperationStage.WRITING, draft.changes().size(), draft.changes().size(), "Capturing snapshot");
-            List<ChunkPoint> snapshotChunks = this.collectSnapshotChunks(layout, project, versions, draft);
+            List<ChunkPoint> snapshotChunks;
+            try (var ignored = LumaLoadLog.measure("save", "VersionService.collectSnapshotChunks", "project=" + project.name())) {
+                snapshotChunks = this.collectSnapshotChunks(layout, project, versions, draft);
+            }
             LumaDebugLog.log(
                     project,
                     "save",
@@ -354,14 +383,20 @@ public final class VersionService {
                     versionId,
                     snapshotChunks.size()
             );
-            this.snapshotCaptureService.capture(
-                    layout,
-                    project.id().toString(),
-                    snapshotId,
-                    snapshotChunks,
-                    level,
-                    now
-            );
+            try (var ignored = LumaLoadLog.measure(
+                    "save",
+                    "SnapshotCaptureService.capture",
+                    "project=" + project.name() + ", chunks=" + snapshotChunks.size()
+            )) {
+                this.snapshotCaptureService.capture(
+                        layout,
+                        project.id().toString(),
+                        snapshotId,
+                        snapshotChunks,
+                        level,
+                        now
+                );
+            }
         }
 
         ProjectVersion version = new ProjectVersion(
@@ -381,23 +416,25 @@ public final class VersionService {
         );
 
         progressSink.update(OperationStage.FINALIZING, draft.changes().size(), draft.changes().size(), "Finalizing version");
-        this.versionRepository.save(layout, version);
-        this.variantRepository.save(layout, this.replaceVariant(variants, new ProjectVariant(
-                activeVariant.id(),
-                activeVariant.name(),
-                activeVariant.baseVersionId(),
-                version.id(),
-                activeVariant.main(),
-                activeVariant.createdAt()
-        )));
-        this.projectRepository.save(layout, project.withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION).withUpdatedAt(now));
-        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                now,
-                "version-saved",
-                this.resolveJournalMessage(version.versionKind()),
-                version.id(),
-                activeVariant.id()
-        ));
+        try (var ignored = LumaLoadLog.measure("save", "VersionService.writeVersionManifests", "version=" + version.id())) {
+            this.versionRepository.save(layout, version);
+            this.variantRepository.save(layout, this.replaceVariant(variants, new ProjectVariant(
+                    activeVariant.id(),
+                    activeVariant.name(),
+                    activeVariant.baseVersionId(),
+                    version.id(),
+                    activeVariant.main(),
+                    activeVariant.createdAt()
+            )));
+            this.projectRepository.save(layout, project.withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION).withUpdatedAt(now));
+            this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                    now,
+                    "version-saved",
+                    this.resolveJournalMessage(version.versionKind()),
+                    version.id(),
+                    activeVariant.id()
+            ));
+        }
         HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
         LumaMod.LOGGER.info(
                 "Committed version {} for project {} with snapshot={} and patch={}",
@@ -408,8 +445,13 @@ public final class VersionService {
         );
 
         if (schedulePreview && project.settings().previewGenerationEnabled()) {
-            Bounds3i bounds = this.previewBoundsResolver.resolve(layout, project, versions, version, draft, level);
-            this.previewCaptureRequestService.queue(layout, version.id(), project.dimensionId(), bounds);
+            Bounds3i bounds;
+            try (var ignored = LumaLoadLog.measure("save", "PreviewBoundsResolver.resolve", "version=" + version.id())) {
+                bounds = this.previewBoundsResolver.resolve(layout, project, versions, version, draft, level);
+            }
+            try (var ignored = LumaLoadLog.measure("save", "PreviewCaptureRequestService.queue", "version=" + version.id())) {
+                this.previewCaptureRequestService.queue(layout, version.id(), project.dimensionId(), bounds);
+            }
             LumaDebugLog.log(project, "preview", "Queued preview capture request for version {} with bounds {}", version.id(), bounds);
         }
 
@@ -426,6 +468,7 @@ public final class VersionService {
             VersionKind versionKind,
             boolean schedulePreview,
             String parentVersionIdOverride,
+            String rebaseFromVersionId,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         try {
@@ -441,11 +484,36 @@ public final class VersionService {
                     parentVersionIdOverride,
                     progressSink
             );
+            this.rebaseConsumedWorkingDraft(level, project, rebaseFromVersionId, version.id());
             this.recoveryRepository.deleteOperationDraft(layout);
             return version;
         } catch (IOException | RuntimeException exception) {
             this.restoreOperationDraftIfNoLiveDraft(layout, project);
             throw exception;
+        }
+    }
+
+    private void rebaseConsumedWorkingDraft(
+            ServerLevel level,
+            BuildProject project,
+            String previousHeadVersionId,
+            String newHeadVersionId
+    ) {
+        try {
+            HistoryCaptureManager.getInstance().rebaseWorkingDraftBase(
+                    level.getServer(),
+                    project.id().toString(),
+                    previousHeadVersionId,
+                    newHeadVersionId
+            );
+        } catch (IOException exception) {
+            LumaMod.LOGGER.warn(
+                    "Saved version {} for project {}, but failed to rebase the active working draft from {}",
+                    newHeadVersionId,
+                    project.name(),
+                    previousHeadVersionId,
+                    exception
+            );
         }
     }
 
@@ -690,7 +758,7 @@ public final class VersionService {
         }
 
         if (draft == null || draft.isEmpty()) {
-            LumaDebugLog.log(project, "save", "Collected {} snapshot chunks for project {} without live draft", chunks.size(), project.name());
+            LumaDebugLog.log(project, "save", "Collected {} snapshot chunks for project {} without working draft", chunks.size(), project.name());
             return List.copyOf(chunks);
         }
 

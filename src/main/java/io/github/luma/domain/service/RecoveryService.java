@@ -82,7 +82,7 @@ public final class RecoveryService {
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
-                .freezeSession(level.getServer(), project.id().toString());
+                .freezeWorkingDraft(level.getServer(), project.id().toString());
         Optional<RecoveryDraft> frozenDraft = frozenSession.map(TrackedChangeBuffer::toDraft);
         RecoveryDraft draft = frozenDraft
                 .or(() -> persistedDraft)

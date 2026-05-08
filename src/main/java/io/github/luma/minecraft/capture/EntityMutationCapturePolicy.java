@@ -47,6 +47,7 @@ public final class EntityMutationCapturePolicy {
             WorldMutationSource.FALLING_BLOCK,
             WorldMutationSource.BLOCK_UPDATE
     );
+    private final PlacedEntityHistoryPolicy placedEntityHistoryPolicy = new PlacedEntityHistoryPolicy();
 
     public Optional<StoredEntityChange> capture(
             WorldMutationSource source,
@@ -115,7 +116,8 @@ public final class EntityMutationCapturePolicy {
     }
 
     boolean shouldInspectExternalToolFallback(String entityType) {
-        return FALLBACK_INSPECTED_ENTITY_TYPES.contains(entityType);
+        return FALLBACK_INSPECTED_ENTITY_TYPES.contains(entityType)
+                || this.placedEntityHistoryPolicy.shouldPersist(entityType);
     }
 
     boolean shouldInspectUndoOnlyMutation(WorldMutationSource source, String entityType) {

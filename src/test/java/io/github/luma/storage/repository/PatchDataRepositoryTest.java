@@ -68,6 +68,23 @@ class PatchDataRepositoryTest {
     }
 
     @Test
+    void roundTripsHiddenBlockChangeVisibility() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        List<StoredBlockChange> changes = List.of(new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:air", null),
+                payload("minecraft:wheat", null),
+                true
+        ));
+
+        PatchMetadata metadata = this.repository.writePayload(layout, "patch-hidden", "project", "v-hidden", changes);
+        List<StoredBlockChange> restored = this.repository.loadChanges(layout, metadata);
+
+        assertEquals(1, restored.size());
+        assertTrue(restored.getFirst().hidden());
+    }
+
+    @Test
     void loadsSelectedChunksFromChunkAddressablePayload() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         List<StoredBlockChange> changes = List.of(
@@ -96,7 +113,7 @@ class PatchDataRepositoryTest {
     }
 
     @Test
-    void exposesSectionFramesForV7Payloads() throws Exception {
+    void exposesSectionFramesForCurrentPayloads() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         List<StoredBlockChange> changes = List.of(
                 new StoredBlockChange(

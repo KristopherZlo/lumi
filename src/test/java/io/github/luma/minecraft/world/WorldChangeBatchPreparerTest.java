@@ -272,6 +272,31 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void undoRedoRestoresRetractedPistonBaseFromTransientMovingBaseTarget() throws Exception {
+        BlockPos base = new BlockPos(0, 64, 0);
+        BlockState retracted = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                .setValue(PistonBaseBlock.EXTENDED, false);
+        BlockState extended = retracted.setValue(PistonBaseBlock.EXTENDED, true);
+
+        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+                null,
+                List.of(new StoredBlockChange(
+                        BlockPoint.from(base),
+                        payload(Blocks.MOVING_PISTON.defaultBlockState()),
+                        payload(extended)
+                )),
+                List.of(),
+                false,
+                null
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(retracted, stateAt(batches.getFirst(), base));
+        assertEquals(Blocks.AIR.defaultBlockState(), stateAt(batches.getFirst(), base.east()));
+    }
+
+    @Test
     void sectionFramesReplaceNormalizedMovingPistonAirWithSettledHeadCompanion() throws Exception {
         BlockState retracted = Blocks.PISTON.defaultBlockState()
                 .setValue(PistonBaseBlock.FACING, Direction.EAST);
@@ -304,6 +329,40 @@ class WorldChangeBatchPreparerTest {
         BlockState head = stateAt(batches.getFirst(), new BlockPos(1, 64, 0));
         assertEquals(Blocks.PISTON_HEAD, head.getBlock());
         assertEquals(Direction.EAST, head.getValue(PistonHeadBlock.FACING));
+    }
+
+    @Test
+    void sectionFramesRestoreRetractedBaseFromTransientMovingPistonTarget() throws Exception {
+        BlockState retracted = Blocks.PISTON.defaultBlockState()
+                .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                .setValue(PistonBaseBlock.EXTENDED, false);
+        BlockState extended = retracted.setValue(PistonBaseBlock.EXTENDED, true);
+        int[] blockEntityIds = {-1};
+
+        PatchSectionFrame frame = new PatchSectionFrame(
+                0,
+                0,
+                4,
+                mask(1),
+                List.of(stateTag(Blocks.MOVING_PISTON.defaultBlockState())),
+                List.of(stateTag(extended)),
+                new int[] {0},
+                new int[] {0},
+                List.of(),
+                List.of(),
+                blockEntityIds,
+                blockEntityIds
+        );
+
+        List<PreparedChunkBatch> batches = this.preparer.prepare(
+                null,
+                new PatchSectionWorldChanges(List.of(frame), List.of()),
+                false,
+                null
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(retracted, stateAt(batches.getFirst(), new BlockPos(0, 64, 0)));
     }
 
     @Test

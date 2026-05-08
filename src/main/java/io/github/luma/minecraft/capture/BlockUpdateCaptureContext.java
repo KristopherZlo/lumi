@@ -40,6 +40,7 @@ public final class BlockUpdateCaptureContext {
         WorldMutationSource currentSource = WorldMutationContext.currentSource();
         if (WorldMutationContext.captureSuppressed()
                 || currentSource == WorldMutationSource.RESTORE
+                || currentSource == WorldMutationSource.FLUID
                 || currentSource == WorldMutationSource.PISTON
                 || currentSource == WorldMutationSource.BLOCK_UPDATE) {
             return null;

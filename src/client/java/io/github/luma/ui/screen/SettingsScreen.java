@@ -97,7 +97,9 @@ public final class SettingsScreen extends LumaScreen {
         );
         root.child(window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.SETTINGS);
-        window.content().child(LumaUi.statusBanner(Component.translatable(this.status)));
+        if (!"luma.status.settings_ready".equals(this.status)) {
+            window.content().child(LumaUi.statusBanner(Component.translatable(this.status)));
+        }
 
         FlowLayout body = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(body);

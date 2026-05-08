@@ -10,9 +10,11 @@ import io.github.luma.client.command.LumaClientCommands;
 import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.client.input.LumiShortcutInteractionGate;
+import io.github.luma.client.input.LumiShortcutSuppressingScreen;
 import io.github.luma.client.input.QuickRollbackKeyController;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
+import io.github.luma.client.onboarding.ClientOnboardingFlowCoordinator;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.client.selection.LumiRegionSelectionTeachingController;
@@ -30,6 +32,7 @@ import io.github.luma.ui.overlay.RecentChangesOverlayRenderer;
 import io.github.luma.ui.overlay.LumiRegionSelectionRenderer;
 import io.github.luma.ui.overlay.OverlayDiagnostics;
 import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
+import io.github.luma.ui.screen.HotkeyInfoScreen;
 import io.github.luma.ui.screen.QuickSaveScreen;
 import org.lwjgl.glfw.GLFW;
 
@@ -46,6 +49,7 @@ public final class LumaClient implements ClientModInitializer {
     private static final String TOGGLE_COMPARE_OVERLAY_KEY = "key.lumi.toggle_compare_overlay";
     private static final String QUICK_ROLLBACK_KEY = "key.lumi.quick_rollback";
     private static final String COMPARE_OVERLAY_XRAY_KEY = "key.lumi.compare_overlay_xray";
+    private static final String HOTKEY_INFO_KEY = "key.lumi.hotkey_info";
 
     private KeyMapping openDashboardKey;
     private KeyMapping quickSaveKey;
@@ -54,6 +58,7 @@ public final class LumaClient implements ClientModInitializer {
     private KeyMapping toggleCompareOverlayKey;
     private KeyMapping quickRollbackKey;
     private KeyMapping lumiActionButtonKey;
+    private KeyMapping hotkeyInfoKey;
     private final KeyBindingState keyBindingState = new KeyBindingState();
     private final UndoRedoKeyChordTracker undoRedoKeyChordTracker = new UndoRedoKeyChordTracker();
     private final UndoRedoKeyController undoRedoKeyController = new UndoRedoKeyController();
@@ -111,6 +116,12 @@ public final class LumaClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_LEFT_ALT,
                 KEY_CATEGORY
         ));
+        this.hotkeyInfoKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                HOTKEY_INFO_KEY,
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_I,
+                KEY_CATEGORY
+        ));
         LumiClientKeyBindings.configure(
                 this.openDashboardKey,
                 this.quickSaveKey,
@@ -118,7 +129,8 @@ public final class LumaClient implements ClientModInitializer {
                 this.redoKey,
                 this.toggleCompareOverlayKey,
                 this.quickRollbackKey,
-                this.lumiActionButtonKey
+                this.lumiActionButtonKey,
+                this.hotkeyInfoKey
         );
         LumiShortcutInteractionGate.getInstance().configure(
                 this.lumiActionButtonKey,
@@ -141,19 +153,48 @@ public final class LumaClient implements ClientModInitializer {
         StartupProfiler.logElapsed("client.fabric-events", eventRegistrationStartedAt);
         long hudStartedAt = StartupProfiler.start();
         WorkspaceHudCoordinator.getInstance().registerHud();
+        this.selectionTeachingController.registerHud();
+        ClientOnboardingFlowCoordinator.getInstance().registerHud();
         StartupProfiler.logElapsed("client.hud-registration", hudStartedAt);
         StartupProfiler.logElapsed("client.onInitializeClient", startedAt);
     }
 
     private void onEndTick(Minecraft client) {
-        boolean overlayHold = this.keyBindingState.isDown(client, this.lumiActionButtonKey);
+        boolean shortcutsSuppressed = this.lumiShortcutsSuppressed(client);
+        boolean overlayHold = !shortcutsSuppressed && this.keyBindingState.isDown(client, this.lumiActionButtonKey);
         boolean shortcutInputActive = client != null
+                && !shortcutsSuppressed
                 && client.screen == null
                 && client.player != null
                 && client.level != null;
         WorkspaceHudCoordinator.getInstance().tick(client);
+        ClientOnboardingFlowCoordinator.getInstance().tick(client);
         PreviewCaptureCoordinator.getInstance().tick(client);
         this.selectionTeachingController.tick(client);
+        if (shortcutsSuppressed) {
+            this.drainLumiShortcutClicks();
+            UndoRedoKeyChordTracker.TickResult idleKeys = this.undoRedoKeyChordTracker.tick(
+                    client,
+                    false,
+                    false,
+                    null,
+                    null
+            );
+            LumiShortcutInteractionGate.getInstance().tick(false, idleKeys);
+            CompareOverlayRenderer.setXrayEnabled(false);
+            PendingChangesOverlayCoordinator.getInstance().tick(client, false);
+            RecentChangesOverlayCoordinator.getInstance().tick(client, false, idleKeys.previewTarget());
+            OverlayDiagnostics.getInstance().clientTick(
+                    client,
+                    false,
+                    false,
+                    idleKeys.previewTarget(),
+                    false,
+                    false,
+                    this.lumiActionButtonKey
+            );
+            return;
+        }
         UndoRedoKeyChordTracker.TickResult undoRedoKeys = this.undoRedoKeyChordTracker.tick(
                 client,
                 shortcutInputActive,
@@ -194,17 +235,14 @@ public final class LumaClient implements ClientModInitializer {
         if (undoRedoKeys.redoPressed()) {
             this.undoRedoKeyController.redo(client);
         }
+        this.undoRedoKeyController.tick(client);
 
         boolean quickRollbackClicked = false;
         while (this.quickRollbackKey.consumeClick()) {
             quickRollbackClicked = true;
         }
-        if (shortcutInputActive && quickRollbackClicked) {
-            if (overlayHold) {
-                this.quickRollbackKeyController.returnBeforeRestore(client);
-            } else {
-                this.quickRollbackKeyController.quickRollback(client);
-            }
+        if (shortcutInputActive && quickRollbackClicked && !overlayHold) {
+            this.quickRollbackKeyController.quickRollback(client);
         }
 
         boolean quickSaveClicked = false;
@@ -215,12 +253,48 @@ public final class LumaClient implements ClientModInitializer {
             client.setScreen(new QuickSaveScreen());
         }
 
+        boolean hotkeyInfoClicked = false;
+        while (this.hotkeyInfoKey.consumeClick()) {
+            hotkeyInfoClicked = true;
+        }
+        if (shortcutInputActive && overlayHold && hotkeyInfoClicked) {
+            client.setScreen(new HotkeyInfoScreen(null));
+            return;
+        }
+
         boolean openDashboardClicked = false;
         while (this.openDashboardKey.consumeClick()) {
             openDashboardClicked = true;
         }
         if (shortcutInputActive && openDashboardClicked) {
             this.workspaceOpenService.openCurrentWorkspace(client, client.screen);
+        }
+    }
+
+    private boolean lumiShortcutsSuppressed(Minecraft client) {
+        return client != null
+                && client.screen instanceof LumiShortcutSuppressingScreen suppressingScreen
+                && suppressingScreen.suppressesLumiShortcuts();
+    }
+
+    private void drainLumiShortcutClicks() {
+        this.drainClicks(this.openDashboardKey);
+        this.drainClicks(this.quickSaveKey);
+        this.drainClicks(this.undoKey);
+        this.drainClicks(this.redoKey);
+        this.drainClicks(this.toggleCompareOverlayKey);
+        this.drainClicks(this.quickRollbackKey);
+        this.drainClicks(this.lumiActionButtonKey);
+        this.drainClicks(this.hotkeyInfoKey);
+    }
+
+    private void drainClicks(KeyMapping key) {
+        if (key == null) {
+            return;
+        }
+        while (key.consumeClick()) {
+            // Drain queued key presses so onboarding can observe held keys
+            // without executing their normal in-world shortcut action.
         }
     }
 }

@@ -16,7 +16,6 @@ import io.github.luma.ui.screen.SettingsScreen;
 import io.github.luma.ui.screen.ShareScreen;
 import io.github.luma.ui.screen.VariantsScreen;
 import io.github.luma.ui.controller.ProjectScreenController;
-import io.github.luma.ui.onboarding.OnboardingTour;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 
@@ -68,24 +67,6 @@ public final class ScreenRouter {
 
     public void openProjectSkippingOnboarding(Screen parent, String projectName, String variantId, String statusKey) {
         this.client.setScreen(new ProjectScreen(parent, projectName, variantId, statusKey));
-    }
-
-    public void openProjectWithOnboarding(
-            Screen parent,
-            String projectName,
-            String variantId,
-            String statusKey,
-            ClientOnboardingService onboardingService,
-            OnboardingTour tour
-    ) {
-        this.client.setScreen(new ProjectScreen(
-                parent,
-                projectName,
-                variantId,
-                statusKey,
-                onboardingService,
-                tour
-        ));
     }
 
     public void openOnboarding(Screen parent, String projectName) {

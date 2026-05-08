@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
+import io.github.luma.minecraft.capture.PistonMovementBaselineCaptureService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
@@ -26,6 +27,9 @@ abstract class PistonBaseBlockMixin {
             WorldReplayTickSuppression.getInstance();
     @Unique
     private static final HistoryDebugLog LUMA_HISTORY_DEBUG_LOG = new HistoryDebugLog();
+    @Unique
+    private static final PistonMovementBaselineCaptureService LUMA_PISTON_BASELINE_CAPTURE =
+            PistonMovementBaselineCaptureService.getInstance();
 
     @WrapMethod(method = "triggerEvent")
     private boolean luma$wrapPistonEvent(
@@ -75,6 +79,9 @@ abstract class PistonBaseBlockMixin {
         }
 
         try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.PISTON)) {
+            if (level instanceof ServerLevel serverLevel) {
+                LUMA_PISTON_BASELINE_CAPTURE.captureBeforePistonEvent(serverLevel, pos, state, type);
+            }
             return original.call(state, level, pos, type, data);
         }
     }

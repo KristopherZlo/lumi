@@ -104,6 +104,31 @@ class RecoveryRepositoryTest {
     }
 
     @Test
+    void roundTripsHiddenDraftBlockChange() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.GROWTH,
+                Instant.parse("2026-04-20T10:00:00Z"),
+                Instant.parse("2026-04-20T10:00:30Z"),
+                List.of(new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:air"),
+                        payload("minecraft:wheat"),
+                        true
+                ))
+        );
+
+        this.repository.saveDraft(layout, draft);
+
+        RecoveryDraft restored = this.repository.loadDraft(layout).orElseThrow();
+        assertTrue(restored.changes().getFirst().hidden());
+    }
+
+    @Test
     void roundTripsEntityChangesInRecoveryDraft() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         String entityId = "00000000-0000-0000-0000-000000000020";

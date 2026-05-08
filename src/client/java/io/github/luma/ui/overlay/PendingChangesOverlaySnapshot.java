@@ -27,7 +27,9 @@ public record PendingChangesOverlaySnapshot(
         return new PendingChangesOverlaySnapshot(
                 projectId,
                 revision(projectId, draft),
-                draft.changes(),
+                draft.changes().stream()
+                        .filter(change -> change != null && change.visibleInBuilderSurfaces())
+                        .toList(),
                 draft.entityChanges().size()
         );
     }

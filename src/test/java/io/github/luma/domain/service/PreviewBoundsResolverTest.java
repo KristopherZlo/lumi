@@ -9,6 +9,7 @@ import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class PreviewBoundsResolverTest {
 
@@ -39,6 +40,23 @@ class PreviewBoundsResolverTest {
 
         assertEquals(new BlockPoint(16, 62, 16), bounds.min());
         assertEquals(new BlockPoint(19, 66, 19), bounds.max());
+    }
+
+    @Test
+    void changedBlockBoundsIgnoreHiddenChanges() {
+        Bounds3i bounds = PreviewBoundsResolver.changedBlockBounds(
+                List.of(new StoredBlockChange(
+                        new BlockPoint(100, 64, 100),
+                        payload("minecraft:air"),
+                        payload("minecraft:wheat"),
+                        true
+                )),
+                null,
+                -64,
+                319
+        );
+
+        assertNull(bounds);
     }
 
     private static StoredBlockChange change(int x, int y, int z) {

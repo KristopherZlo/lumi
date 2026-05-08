@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
@@ -36,9 +37,11 @@ public final class ChunkSnapshotCaptureService {
 
     private static final Strategy<BlockState> BLOCK_STATE_STRATEGY = Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY);
     private static final String AIR_BLOCK_ID = "minecraft:air";
+    private static final double PLACED_ENTITY_SEARCH_MARGIN = 16.0D;
 
     private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
     private final EntitySnapshotService entitySnapshotService = new EntitySnapshotService();
+    private final PlacedEntityHistoryPolicy placedEntityHistoryPolicy = new PlacedEntityHistoryPolicy();
 
     public Optional<ChunkSnapshotPayload> captureLoadedChunk(ServerLevel level, ChunkPoint chunk) {
         return this.captureLoadedChunk(level, chunk, null, null, null);
@@ -212,33 +215,73 @@ public final class ChunkSnapshotCaptureService {
     ) {
         int chunkX = chunk.getPos().x;
         int chunkZ = chunk.getPos().z;
-        AABB bounds = new AABB(
-                chunkX << 4,
-                level.getMinY(),
-                chunkZ << 4,
-                (chunkX << 4) + 16,
-                level.getMaxY() + 1,
-                (chunkZ << 4) + 16
+        LinkedHashMap<String, EntityPayload> snapshots = new LinkedHashMap<>();
+        this.captureEntitiesInBounds(
+                level,
+                this.chunkBounds(level, chunkX, chunkZ, 0.0D),
+                entity -> !this.isRemoved(entity),
+                chunkX,
+                chunkZ,
+                snapshots
         );
-
-        List<EntityPayload> snapshots = new ArrayList<>();
-        for (Entity entity : level.getEntities((Entity) null, bounds, entity -> this.isInChunk(entity, chunkX, chunkZ))) {
-            EntityPayload payload = this.entitySnapshotService.capture(level, entity);
-            if (payload != null) {
-                snapshots.add(payload);
-            }
-        }
+        this.captureEntitiesInBounds(
+                level,
+                this.chunkBounds(level, chunkX, chunkZ, PLACED_ENTITY_SEARCH_MARGIN),
+                entity -> !this.isRemoved(entity) && this.placedEntityHistoryPolicy.shouldPersist(entity),
+                chunkX,
+                chunkZ,
+                snapshots
+        );
         return (entityOverride == null ? EntitySnapshotOverride.none() : entityOverride).applyTo(
-                snapshots,
+                new ArrayList<>(snapshots.values()),
                 new ChunkPoint(chunkX, chunkZ)
         );
     }
 
-    private boolean isInChunk(Entity entity, int chunkX, int chunkZ) {
+    private void captureEntitiesInBounds(
+            ServerLevel level,
+            AABB bounds,
+            Predicate<Entity> predicate,
+            int chunkX,
+            int chunkZ,
+            Map<String, EntityPayload> snapshots
+    ) {
+        for (Entity entity : level.getEntities((Entity) null, bounds, predicate)) {
+            EntityPayload payload = this.entitySnapshotService.capture(level, entity);
+            if (payload != null && this.isInChunk(entity, payload, chunkX, chunkZ)) {
+                snapshots.putIfAbsent(this.snapshotKey(entity, payload), payload);
+            }
+        }
+    }
+
+    private AABB chunkBounds(ServerLevel level, int chunkX, int chunkZ, double margin) {
+        return new AABB(
+                (chunkX << 4) - margin,
+                level.getMinY(),
+                (chunkZ << 4) - margin,
+                (chunkX << 4) + 16 + margin,
+                level.getMaxY() + 1,
+                (chunkZ << 4) + 16 + margin
+        );
+    }
+
+    private String snapshotKey(Entity entity, EntityPayload payload) {
+        String entityId = payload.entityId();
+        return entityId == null || entityId.isBlank() ? entity.getUUID().toString() : entityId;
+    }
+
+    private boolean isInChunk(Entity entity, EntityPayload payload, int chunkX, int chunkZ) {
         if (entity == null || entity.isRemoved()) {
             return false;
         }
+        if (this.placedEntityHistoryPolicy.shouldPersist(payload)) {
+            return this.placedEntityHistoryPolicy.belongsToChunk(payload, chunkX, chunkZ);
+        }
         BlockPos pos = entity.blockPosition();
         return (pos.getX() >> 4) == chunkX && (pos.getZ() >> 4) == chunkZ;
+    }
+
+    private boolean isRemoved(Entity entity) {
+        return entity == null || entity.isRemoved();
     }
 }

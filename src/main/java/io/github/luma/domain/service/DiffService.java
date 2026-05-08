@@ -93,7 +93,7 @@ public final class DiffService {
             Set<Long> changedChunks = new HashSet<>();
             PatchWorldChanges worldChanges = this.loadPatchWorldChanges(layout, version.patchIds());
             for (StoredBlockChange change : worldChanges.blockChanges()) {
-                if (this.statesEqual(change.oldValue(), change.newValue())) {
+                if (!this.visible(change) || this.statesEqual(change.oldValue(), change.newValue())) {
                     continue;
                 }
                 changedBlocks.add(this.diffEntry(change.pos(), change.oldValue(), change.newValue()));
@@ -174,6 +174,9 @@ public final class DiffService {
         Map<BlockPoint, StateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
             for (StoredBlockChange change : this.loadPatchWorldChanges(layout, version.patchIds()).blockChanges()) {
+                if (!this.visible(change)) {
+                    continue;
+                }
                 states.compute(change.pos(), (pos, current) -> current == null
                         ? new StateAccumulator(change.oldValue(), change.newValue())
                         : current.withFinalState(change.newValue()));
@@ -280,6 +283,9 @@ public final class DiffService {
         }
 
         for (StoredBlockChange change : changes) {
+            if (!this.visible(change)) {
+                continue;
+            }
             String oldState = this.toStateString(change.oldValue());
             String newState = this.toStateString(change.newValue());
             DiffBlockEntry existing = changed.get(change.pos());
@@ -370,6 +376,10 @@ public final class DiffService {
                 .filter(change -> !change.isNoOp())
                 .sorted(java.util.Comparator.comparing(StoredEntityChange::entityId))
                 .toList();
+    }
+
+    private boolean visible(StoredBlockChange change) {
+        return change != null && change.visibleInBuilderSurfaces();
     }
 
     private record StateAccumulator(StatePayload initialState, StatePayload finalState) {

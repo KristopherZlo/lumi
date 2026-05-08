@@ -7,9 +7,12 @@ import java.util.Set;
 
 final class WorldApplyChunkPreloader {
 
+    private static final int MAX_SYNC_FALLBACK_LOADS_PER_TICK = 2;
+
     private final List<ChunkPoint> chunks;
     private final Set<ChunkPoint> ticketedChunks = new LinkedHashSet<>();
     private int nextIndex;
+    private int ticketIndex;
     private boolean released;
 
     private WorldApplyChunkPreloader(List<ChunkPoint> chunks) {
@@ -25,33 +28,67 @@ final class WorldApplyChunkPreloader {
 
     PreloadTickResult advance(ChunkPreloadAccess access, WorldApplyBudget budget, long deadlineNanos) {
         if (access == null || budget == null || this.complete()) {
-            return new PreloadTickResult(0, 0, this.nextIndex, this.chunks.size(), this.complete());
+            return new PreloadTickResult(0, 0, this.nextIndex, this.chunks.size(), this.complete(), 0, this.ticketedChunks.size(), 0);
         }
 
         int maxChunks = Math.max(0, budget.maxPreloadChunks());
         if (maxChunks <= 0) {
-            return new PreloadTickResult(0, 0, this.nextIndex, this.chunks.size(), false);
+            return new PreloadTickResult(0, 0, this.nextIndex, this.chunks.size(), false, 0, this.ticketedChunks.size(), 0);
         }
 
         int newlyLoaded = 0;
         int alreadyLoaded = 0;
-        int processed = 0;
-        while (this.nextIndex < this.chunks.size()
-                && processed < maxChunks
+        int ticketed = 0;
+        int syncFallbackLoads = 0;
+        int processedLoads = 0;
+        while (this.ticketIndex < this.chunks.size()
+                && ticketed < maxChunks
                 && System.nanoTime() < deadlineNanos) {
-            ChunkPoint chunk = this.chunks.get(this.nextIndex);
-            boolean wasLoaded = access.isLoaded(chunk);
+            ChunkPoint chunk = this.chunks.get(this.ticketIndex);
             access.acquireTicket(chunk);
             this.ticketedChunks.add(chunk);
-            if (wasLoaded) {
-                alreadyLoaded += 1;
-            } else if (access.load(chunk)) {
-                newlyLoaded += 1;
-            }
-            this.nextIndex += 1;
-            processed += 1;
+            this.ticketIndex += 1;
+            ticketed += 1;
         }
-        return new PreloadTickResult(newlyLoaded, alreadyLoaded, this.nextIndex, this.chunks.size(), this.complete());
+
+        while (this.nextIndex < this.chunks.size()
+                && processedLoads < maxChunks
+                && System.nanoTime() < deadlineNanos) {
+            ChunkPoint chunk = this.chunks.get(this.nextIndex);
+            if (!this.ticketedChunks.contains(chunk)) {
+                access.acquireTicket(chunk);
+                this.ticketedChunks.add(chunk);
+                this.ticketIndex = Math.max(this.ticketIndex, this.nextIndex + 1);
+                ticketed += 1;
+            }
+            if (access.isLoaded(chunk)) {
+                alreadyLoaded += 1;
+                this.nextIndex += 1;
+                processedLoads += 1;
+                continue;
+            }
+            if (syncFallbackLoads >= MAX_SYNC_FALLBACK_LOADS_PER_TICK) {
+                break;
+            }
+            syncFallbackLoads += 1;
+            if (access.load(chunk)) {
+                newlyLoaded += 1;
+                this.nextIndex += 1;
+                processedLoads += 1;
+                continue;
+            }
+            break;
+        }
+        return new PreloadTickResult(
+                newlyLoaded,
+                alreadyLoaded,
+                this.nextIndex,
+                this.chunks.size(),
+                this.complete(),
+                ticketed,
+                this.ticketedChunks.size(),
+                syncFallbackLoads
+        );
     }
 
     void release(ChunkPreloadAccess access) {
@@ -86,7 +123,10 @@ final class WorldApplyChunkPreloader {
             int alreadyLoadedChunks,
             int completedChunks,
             int totalChunks,
-            boolean complete
+            boolean complete,
+            int ticketedChunks,
+            int outstandingTickets,
+            int syncFallbackLoads
     ) {
     }
 }

@@ -17,6 +17,7 @@ import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -385,7 +386,7 @@ public final class WorldChangeBatchPreparer {
         for (PreparedBlockPlacement placement : secondary == null ? List.<PreparedBlockPlacement>of() : secondary) {
             long key = packed(placement);
             PreparedBlockPlacement existing = merged.get(key);
-            if (existing == null || shouldOverrideExplicitAir(existing, placement)) {
+            if (existing == null || shouldOverrideTransientExplicit(existing, placement)) {
                 merged.put(key, placement);
             }
         }
@@ -442,7 +443,7 @@ public final class WorldChangeBatchPreparer {
         for (PreparedBlockPlacement placement : expanded == null ? List.<PreparedBlockPlacement>of() : expanded) {
             long key = packed(placement);
             PreparedBlockPlacement explicitPlacement = explicit.get(key);
-            if (explicitPlacement == null || shouldOverrideExplicitAir(explicitPlacement, placement)) {
+            if (explicitPlacement == null || shouldOverrideTransientExplicit(explicitPlacement, placement)) {
                 companions.put(key, placement);
             }
         }
@@ -554,14 +555,14 @@ public final class WorldChangeBatchPreparer {
         return builder.build();
     }
 
-    private static boolean shouldOverrideExplicitAir(
+    private static boolean shouldOverrideTransientExplicit(
             PreparedBlockPlacement existing,
             PreparedBlockPlacement replacement
     ) {
         return existing != null
                 && replacement != null
                 && existing.state() != null
-                && existing.state().isAir()
+                && (existing.state().isAir() || existing.state().is(Blocks.MOVING_PISTON))
                 && replacement.state() != null
                 && !replacement.state().isAir();
     }

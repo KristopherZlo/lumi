@@ -3,6 +3,7 @@ package io.github.luma.domain.service;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
@@ -33,6 +34,7 @@ public final class VariantService {
     private final VersionRepository versionRepository = new VersionRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final RestoreService restoreService = new RestoreService();
+    private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final CaptureSessionLifecycle captureSessionLifecycle;
 
     public VariantService() {
@@ -137,6 +139,7 @@ public final class VariantService {
         }
 
         this.projectRepository.save(layout, project.withActiveVariantId(targetVariant.id(), Instant.now()).withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION));
+        this.undoRedoHistoryManager.clearProject(project.id().toString());
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
                 "variant-switched",

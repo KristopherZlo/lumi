@@ -64,7 +64,7 @@ public final class UndoRedoAction {
         StoredBlockChange current = this.changes.get(key);
         StoredBlockChange merged = current == null
                 ? change
-                : current.withLatestState(change.newValue());
+                : current.withLatestChange(change);
         if (merged.isNoOp()) {
             this.changes.remove(key);
         } else {
@@ -189,7 +189,7 @@ public final class UndoRedoAction {
     public List<StoredBlockChange> inverseChanges() {
         List<StoredBlockChange> inverse = new ArrayList<>();
         for (StoredBlockChange change : this.undoChanges()) {
-            inverse.add(new StoredBlockChange(change.pos(), change.newValue(), change.oldValue()));
+            inverse.add(change.inverse());
         }
         return List.copyOf(inverse);
     }

@@ -385,9 +385,18 @@ public final class RecentChangesOverlayRenderer {
             RecentChangesOverlayCoordinator.PreviewTarget previewTarget
     ) {
         if (previewTarget == RecentChangesOverlayCoordinator.PreviewTarget.REDO) {
-            return action.redoChanges();
+            return visibleChanges(action.redoChanges());
         }
-        return action.undoChanges();
+        return visibleChanges(action.undoChanges());
+    }
+
+    private static List<StoredBlockChange> visibleChanges(List<StoredBlockChange> changes) {
+        if (changes == null || changes.isEmpty()) {
+            return List.of();
+        }
+        return changes.stream()
+                .filter(change -> change != null && change.visibleInBuilderSurfaces())
+                .toList();
     }
 
     private static int outlineArgb(

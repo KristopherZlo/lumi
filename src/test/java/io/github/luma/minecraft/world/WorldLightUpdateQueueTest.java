@@ -58,4 +58,26 @@ class WorldLightUpdateQueueTest {
 
         Assertions.assertEquals(32, queue.pendingCount());
     }
+
+    @Test
+    void asyncPrepareKeepsSurfaceSelectionOffDrainPath() {
+        SectionLightUpdateBatch batch = new SectionLightUpdateBatch();
+        for (int x = 0; x < 3; x++) {
+            for (int y = 48; y < 51; y++) {
+                for (int z = 0; z < 3; z++) {
+                    batch.addSurfaceCandidate(new BlockPos(x, y, z));
+                }
+            }
+        }
+        WorldLightUpdateQueue queue = new WorldLightUpdateQueue();
+
+        queue.add(batch);
+
+        Assertions.assertFalse(queue.prepareDrainPositionsAsync(Runnable::run));
+        Assertions.assertTrue(queue.prepareDrainPositionsAsync(Runnable::run));
+
+        Assertions.assertEquals(26, queue.pendingCount());
+        Assertions.assertEquals(26, queue.preparedCheckCount());
+        Assertions.assertEquals(1, queue.dirtyChunkCount());
+    }
 }

@@ -94,6 +94,16 @@ final class MutationSourcePolicy {
                 && (source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK));
     }
 
+    boolean canCaptureDeferredPreMutationBaseline(
+            BuildProject project,
+            WorldMutationSource source,
+            boolean activeSessionRegion
+    ) {
+        return activeSessionRegion
+                && this.requiresActiveRegionMembership(source)
+                && this.usesDeferredStabilization(project, source);
+    }
+
     boolean requiresCausalActionForDeferredStabilization(WorldMutationSource source) {
         return source == WorldMutationSource.BLOCK_UPDATE || source == WorldMutationSource.PISTON;
     }

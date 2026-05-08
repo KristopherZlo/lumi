@@ -80,9 +80,9 @@ final class SingleplayerPerformanceMonitor {
                 "total=" + this.millis(this.totalSyncNanos) + " ms across " + this.syncSliceCount + " slices"
         ));
         checks.add(new PerformanceCheck(
-                "Undo and redo remained action-scoped instead of broad world work",
-                this.maxOperationUnits("undo-action", "redo-action") <= MAX_ACTION_APPLY_BLOCKS,
-                "maxActionUnits=" + this.maxOperationUnits("undo-action", "redo-action")
+                "Undo, redo, and quick rollback remained action-scoped instead of broad world work",
+                this.maxOperationUnits("undo-action", "redo-action", "quick-rollback") <= MAX_ACTION_APPLY_BLOCKS,
+                "maxActionUnits=" + this.maxOperationUnits("undo-action", "redo-action", "quick-rollback")
         ));
         checks.add(new PerformanceCheck(
                 "Partial restore stayed region-scoped",

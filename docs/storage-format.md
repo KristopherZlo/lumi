@@ -22,6 +22,12 @@ Runtime test logs are stored at:
 <world>/lumi/test-logs/
 ```
 
+The optional runtime load log is stored at:
+
+```text
+<game>/logs/lumi-load.log
+```
+
 Project history archives and share packages exported from the UI are stored at:
 
 ```text
@@ -99,12 +105,24 @@ Each log includes:
 
 These logs are diagnostic artifacts only. They are not referenced by project history, cleanup policies, import/export packages, or restore workflows.
 
+### `<game>/logs/lumi-load.log`
+
+Stores opt-in runtime load diagnostics when the JVM flag `-Dlumi.loadLog=true` is set.
+
+Each log uses key-value rows and may include:
+
+- `type="span"` rows for individual calls that exceeded `lumi.loadLog.slowMs`
+- `type="summary"` rows with the highest cumulative `area`/`name` costs, counts, average time, and max time
+- `type="operation-metrics"` rows with completed prepared-apply counters such as prepare, preload, apply, light/redstone finalize duration, work ticks, max apply tick time, and fallback reasons
+
+The log is an operational artifact only. It is not stored in project folders, exported in history packages, or consumed by restore/cleanup workflows.
+
 ### `config/lumi-client.json`
 
 Stores installation-level client UI state that is not part of any project and is not exported with history packages.
 
 - `schemaVersion`
-- `completedOnboardingVersion`
+- `completedOnboardingVersion` (current tour version: `4`)
 - `dismissedContextualHintIds`
 
 Schema v2 adds the dismissed contextual hint id set. v1 files are normalized to v2 with the completed onboarding version preserved and no dismissed hints. Missing or malformed files are treated as incomplete onboarding and do not block project loading.
@@ -203,25 +221,26 @@ Metadata reads must not require deserializing the full payload.
 
 ### `patches/<patchId>.bin.lz4`
 
-Patch payloads are the primary history format for tracked saves. New payloads use binary schema v7. The filename suffix remains `.bin.lz4`, but v7 is not one monolithic LZ4 frame. It is a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames. The chunk offsets and lengths in `PatchChunkSlice` are physical file offsets for those frames, so readers can seek directly to selected chunks.
+Patch payloads are the primary history format for tracked saves. New payloads use binary schema v8. The filename suffix remains `.bin.lz4`, but v7+ is not one monolithic LZ4 frame. It is a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames. The chunk offsets and lengths in `PatchChunkSlice` are physical file offsets for those frames, so readers can seek directly to selected chunks.
 
 Current payload characteristics:
 
-- chunk-addressable per-chunk LZ4 frames for schema v7
+- chunk-addressable per-chunk LZ4 frames for schema v7 and v8
 - chunk-sorted records
 - chunk -> section frames with a 4096-cell changed mask
 - section-local old/new palettes for block states
 - section-local old/new palettes for block entity payloads
 - mask-order state and block-entity ids so restore can build `LumiSectionBuffer` batches without first materializing a flat per-block list
+- schema v8 writes a section-local hidden-change mask after the state/entity id arrays. Hidden changes are durable and replayable, but builder-facing stats, diffs, overlays, and preview bounds ignore them. Older v7 section frames and v6 point frames load with all block changes visible.
 - per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload for non-player entity spawn/remove/update, including position and the saved entity NBT as captured by Minecraft; tick fields such as item age, motion, and pickup delay are not stripped before storage
 - block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
 - schema v3-v5 legacy payloads still load from the older single LZ4 stream format
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
-- settled redstone and mechanism state is stored with the normal block-state NBT already present in patch palettes. Lever/button `powered`, wire `power`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `piston_head`, and moved blocks are schema-compatible state deltas; no schema bump is needed because these properties already fit the existing block-state tag payload. Apply preparation may synthesize missing settled piston head/removal companions from a recorded piston base for replay safety, and may replace normalized transient air at the expected head position when an extended base requires it, but storage still contains ordinary per-position old/new state tags. Runtime replay queues vanilla neighbor updates from redstone power/source transitions after stored blocks have been applied; it does not add storage records for pulses or update events. Only short-lived `moving_piston` animation state is normalized to air before new patch payloads are written
+- settled redstone and mechanism state is stored with the normal block-state NBT already present in patch palettes. Lever/button `powered`, wire `power`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `piston_head`, and moved blocks are schema-compatible state deltas; no schema bump is needed because these properties already fit the existing block-state tag payload. Stabilization waits a short tick window after the last causal redstone or piston mutation before writing dirty-chunk deltas, so the storage layer receives settled cells instead of the in-flight piston animation. Apply preparation may synthesize missing settled piston head/removal companions from a recorded piston base for replay safety, may recover a retracted base when a raw undo target still references a transient moving-piston base, and may replace normalized transient air at the expected head position when an extended base requires it, but storage still contains ordinary per-position old/new state tags. Runtime replay queues vanilla neighbor updates from redstone power/source transitions after stored blocks have been applied; it does not add storage records for pulses or update events. Only short-lived `moving_piston` animation state is normalized to air before new patch payloads are written
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
-Direct partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Schema v6 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk index is available. Non-direct partial restore reconstructs finite current and target states from `snapshots/`, `cache/baseline-chunks/`, and patch payloads before writing a normal `PARTIAL_RESTORE` patch; missing required payload files are treated as an invalid restore plan.
+Direct partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Schema v6/v7 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk index is available. Non-direct partial restore reconstructs finite current and target states from `snapshots/`, `cache/baseline-chunks/`, and patch payloads before writing a normal `PARTIAL_RESTORE` patch; missing required payload files are treated as an invalid restore plan.
 Patch readers bound NBT lengths, compressed/uncompressed frame lengths, palette counts, entity counts, and selected chunk slices before allocating buffers. A selected chunk slice whose stored frame coordinates or entity coordinates do not match the requested chunk is treated as corrupt storage.
 
 ### `snapshots/<snapshotId>.bin.lz4`
@@ -254,7 +273,7 @@ Whole-dimension projects do not create volume-triggered snapshots. They rely on 
 
 Preview images are textured isometric PNG files generated on the client per version when preview generation is enabled.
 
-Preview coverage is resolved from the actual changed block positions first, with a small context padding around that span. If precise change positions are unavailable, Lumi falls back to the touched chunk span for that save.
+Preview coverage is resolved from the visible changed block positions first, with a small context padding around that span. Hidden natural-growth changes are ignored so ambient crop/plant/amethyst updates do not move or invalidate screenshots. If precise visible change positions are unavailable, Lumi falls back to the touched visible chunk span for that save.
 
 Preview generation failure does not block version save.
 
@@ -275,13 +294,13 @@ These files let server-side save and refresh workflows queue preview work withou
 
 ### `recovery/draft.bin.lz4`
 
-Stores the current compacted recovery base snapshot in schema v4 binary format. Schema v3 drafts still load as block-only/entity-empty drafts.
+Stores the current compacted recovery base snapshot in schema v5 binary format. Schema v3 drafts still load as block-only/entity-empty drafts, and schema v4 drafts load with every block change visible.
 
 ### `recovery/draft.wal.lz4`
 
 Stores append-only recovery draft updates as an LZ4-compressed write-ahead log.
 
-The active in-memory `TrackedChangeBuffer` is periodically snapshotted into an immutable `RecoveryDraft` and queued to the low-priority capture-maintenance executor instead of rewriting one large JSON file for every change on the server tick. Recovery drafts now carry block changes and entity spawn/remove/update diffs. Once the WAL reaches the compaction threshold, the latest entry is rewritten into `draft.bin.lz4` and the WAL is removed.
+The active in-memory `TrackedChangeBuffer` is periodically snapshotted into an immutable `RecoveryDraft` and queued to the low-priority capture-maintenance executor instead of rewriting one large JSON file for every change on the server tick. Recovery drafts now carry block changes, hidden block-change visibility bits, and entity spawn/remove/update diffs. They store only the durable working draft, not the in-memory live undo/redo action stack. Once the WAL reaches the compaction threshold, the latest entry is rewritten into `draft.bin.lz4` and the WAL is removed.
 
 Recovery load reads the compacted base and WAL independently. If the WAL has a corrupt entry or truncated tail, Lumi quarantines the WAL and returns the base or the last valid WAL entry. When a last valid WAL entry exists, it is compacted back into `draft.bin.lz4` so the next load no longer depends on the damaged WAL.
 
@@ -289,7 +308,7 @@ Recovery load reads the compacted base and WAL independently. If the WAL has a c
 
 Stores the draft currently being saved or amended.
 
-This file is separate from `draft.bin.lz4` and `draft.wal.lz4`. Live capture never resumes it. If the player edits blocks while a save is still running, those edits start a new recovery draft and are not merged into the in-progress version.
+This file is separate from `draft.bin.lz4` and `draft.wal.lz4`. Live capture never resumes it. If the player edits blocks while a save is still running, those edits start a new recovery draft and are not merged into the in-progress version. After the save commits, that new draft is rebased from the consumed head id to the newly saved version id without changing the draft payload schema.
 
 Maintenance cleanup may delete this file only when no Lumi world operation is active for the project.
 

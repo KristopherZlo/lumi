@@ -1,10 +1,13 @@
 .gradle/
+.gradle-user/
+.gradle-codex/
 build/
 run/
 out/
 logs/
 bin/
 site/
+structures/
 
 *.log
 *.tmp

@@ -29,7 +29,8 @@ abstract class LevelChunkSectionSetBlockStateMixin {
                         (LevelChunkSection) (Object) this,
                         localX,
                         localY,
-                        localZ
+                        localZ,
+                        newState
                 );
         BlockState previous = original.call(localX, localY, localZ, newState, lock);
         LUMA_DIRECT_SECTION_CAPTURE.captureAfter(

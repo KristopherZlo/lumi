@@ -7,11 +7,14 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionDiff;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.controller.ProjectScreenController;
+import io.github.luma.ui.preview.LoadingAnimationComponent;
 import io.github.luma.ui.preview.ProjectPreviewTextureCache;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -157,17 +160,17 @@ public final class ProjectUiSupport {
                 || version.preview().fileName().isBlank()
                 || previewWidth <= 0
                 || previewHeight <= 0) {
-            return previewPlaceholder(width, height);
+            return previewPlaceholder(width, height, version != null && controller.previewLoading(projectName, version.id()));
         }
 
         String previewPath = controller.resolvePreviewPath(projectName, version.id());
         if (previewPath == null || previewPath.isBlank()) {
-            return previewPlaceholder(width, height);
+            return previewPlaceholder(width, height, controller.previewLoading(projectName, version.id()));
         }
 
         Path path = Path.of(previewPath);
         if (!Files.exists(path)) {
-            return previewPlaceholder(width, height);
+            return previewPlaceholder(width, height, controller.previewLoading(projectName, version.id()));
         }
 
         try {
@@ -183,13 +186,19 @@ public final class ProjectUiSupport {
             texture.sizing(Sizing.fixed(width), Sizing.fixed(height));
             return texture;
         } catch (Exception exception) {
-            return previewPlaceholder(width, height);
+            return previewPlaceholder(width, height, false);
         }
     }
 
-    private static FlowLayout previewPlaceholder(int width, int height) {
+    private static FlowLayout previewPlaceholder(int width, int height, boolean loading) {
         FlowLayout placeholder = LumaUi.insetPanel(Sizing.fixed(width), Sizing.fixed(height));
-        placeholder.child(LumaUi.caption(Component.translatable("luma.history.no_preview")));
+        placeholder.horizontalAlignment(HorizontalAlignment.CENTER);
+        placeholder.verticalAlignment(VerticalAlignment.CENTER);
+        if (loading) {
+            placeholder.child(new LoadingAnimationComponent(Math.min(32, Math.max(16, height / 3))));
+        } else {
+            placeholder.child(LumaUi.caption(Component.translatable("luma.history.no_preview")));
+        }
         return placeholder;
     }
 }

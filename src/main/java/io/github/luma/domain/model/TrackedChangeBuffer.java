@@ -22,7 +22,7 @@ public final class TrackedChangeBuffer {
     private final String id;
     private final String projectId;
     private final String variantId;
-    private final String baseVersionId;
+    private String baseVersionId;
     private final String actor;
     private final WorldMutationSource mutationSource;
     private final Instant startedAt;
@@ -105,7 +105,7 @@ public final class TrackedChangeBuffer {
         StoredBlockChange current = this.changes.get(key);
         StoredBlockChange merged = current == null
                 ? change
-                : current.withLatestState(change.newValue());
+                : current.withLatestChange(change);
         if (merged.isNoOp()) {
             this.changes.remove(key);
         } else {
@@ -151,6 +151,18 @@ public final class TrackedChangeBuffer {
             }
         }
         this.updatedAt = now;
+    }
+
+    public boolean rebaseBaseVersion(String expectedBaseVersionId, String newBaseVersionId, Instant now) {
+        String expected = expectedBaseVersionId == null ? "" : expectedBaseVersionId;
+        String next = newBaseVersionId == null ? "" : newBaseVersionId;
+        String current = this.baseVersionId == null ? "" : this.baseVersionId;
+        if (!current.equals(expected) || current.equals(next)) {
+            return false;
+        }
+        this.baseVersionId = next;
+        this.updatedAt = now == null ? this.updatedAt : now;
+        return true;
     }
 
     public boolean touchesChunk(ChunkPoint chunk) {
@@ -279,7 +291,9 @@ public final class TrackedChangeBuffer {
     public List<BlockChangeRecord> asDisplayChanges() {
         List<BlockChangeRecord> display = new ArrayList<>();
         for (StoredBlockChange change : this.changes.values()) {
-            display.add(change.toRecord());
+            if (change.visibleInBuilderSurfaces()) {
+                display.add(change.toRecord());
+            }
         }
         return display;
     }

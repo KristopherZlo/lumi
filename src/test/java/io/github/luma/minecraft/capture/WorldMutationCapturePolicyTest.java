@@ -105,6 +105,21 @@ class WorldMutationCapturePolicyTest {
     }
 
     @Test
+    void capturesGrowthAsHiddenBuilderSurfaceChange() {
+        Optional<WorldMutationCapturePolicy.CapturedMutation> mutation = this.policy.capture(
+                WorldMutationSource.GROWTH,
+                POS,
+                Blocks.AIR.defaultBlockState(),
+                Blocks.AMETHYST_CLUSTER.defaultBlockState(),
+                null,
+                null
+        );
+
+        assertTrue(mutation.isPresent());
+        assertTrue(mutation.get().change().hidden());
+    }
+
+    @Test
     void defersBlockUpdateMutationsToStabilization() {
         assertEquals(
                 WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION,

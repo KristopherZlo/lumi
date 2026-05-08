@@ -15,7 +15,6 @@ import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
-import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
@@ -279,13 +278,22 @@ public final class SaveDetailsScreen extends LumaScreen {
         restoreButton.active(!operationActive);
         actions.child(restoreButton);
 
-        actions.child(LumaUi.button(Component.translatable("luma.action.see_changes"), button -> this.router.openCompare(
-                this,
-                this.projectName,
-                version.id(),
-                CompareScreenController.CURRENT_WORLD_REFERENCE,
-                version.id()
-        )));
+        actions.child(LumaUi.button(Component.translatable("luma.action.see_changes"), button -> {
+            SaveDetailsCompareTarget.Target target = SaveDetailsCompareTarget.seeChangesTarget(
+                    this.state.project(),
+                    this.state.versions(),
+                    this.state.variants(),
+                    version,
+                    this.state.recoveryDraft()
+            );
+            this.router.openCompare(
+                    this,
+                    this.projectName,
+                    target.leftReference(),
+                    target.rightReference(),
+                    target.contextVersionId()
+            );
+        }));
 
         ButtonComponent comparePrevious = LumaUi.button(Component.translatable("luma.action.see_previous_changes"), button -> this.router.openCompare(
                 this,

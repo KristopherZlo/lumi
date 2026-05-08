@@ -22,6 +22,7 @@ class SingleplayerPerformanceMonitorTest {
         monitor.recordSyncSlice("Verify save", Duration.ofMillis(30).toNanos());
         monitor.recordOperationSnapshot(snapshot("undo-action", 3));
         monitor.recordOperationSnapshot(snapshot("redo-action", 3));
+        monitor.recordOperationSnapshot(snapshot("quick-rollback", 3));
         monitor.recordOperationSnapshot(snapshot("partial-restore", 1));
         monitor.recordOperationSnapshot(snapshot("restore-version", 4));
 

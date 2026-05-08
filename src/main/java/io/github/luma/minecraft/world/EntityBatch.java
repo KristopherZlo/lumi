@@ -12,7 +12,8 @@ import net.minecraft.nbt.CompoundTag;
 public record EntityBatch(
         List<CompoundTag> entitiesToSpawn,
         List<String> entityIdsToRemove,
-        List<CompoundTag> entitiesToUpdate
+        List<CompoundTag> entitiesToUpdate,
+        boolean replacePlacedEntities
 ) {
 
     public EntityBatch {
@@ -22,17 +23,30 @@ public record EntityBatch(
     }
 
     public EntityBatch(List<CompoundTag> entitiesToSpawn, List<String> entityIdsToRemove) {
-        this(entitiesToSpawn, entityIdsToRemove, List.of());
+        this(entitiesToSpawn, entityIdsToRemove, List.of(), false);
+    }
+
+    public EntityBatch(
+            List<CompoundTag> entitiesToSpawn,
+            List<String> entityIdsToRemove,
+            List<CompoundTag> entitiesToUpdate
+    ) {
+        this(entitiesToSpawn, entityIdsToRemove, entitiesToUpdate, false);
     }
 
     public static EntityBatch empty() {
-        return new EntityBatch(List.of(), List.of(), List.of());
+        return new EntityBatch(List.of(), List.of(), List.of(), false);
+    }
+
+    public static EntityBatch replacePlacedEntities(List<CompoundTag> entitiesToUpdate) {
+        return new EntityBatch(List.of(), List.of(), entitiesToUpdate, true);
     }
 
     public boolean isEmpty() {
         return this.entitiesToSpawn.isEmpty()
                 && this.entityIdsToRemove.isEmpty()
-                && this.entitiesToUpdate.isEmpty();
+                && this.entitiesToUpdate.isEmpty()
+                && !this.replacePlacedEntities;
     }
 
     private static List<CompoundTag> copyTags(List<CompoundTag> tags) {

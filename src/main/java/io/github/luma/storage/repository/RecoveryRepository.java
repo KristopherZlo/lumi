@@ -36,7 +36,9 @@ import net.jpountz.lz4.LZ4FrameOutputStream;
 public final class RecoveryRepository {
 
     private static final int DRAFT_MAGIC = 0x4C445246;
-    private static final int DRAFT_VERSION = 4;
+    private static final int DRAFT_VERSION = 5;
+    private static final int ENTITY_CHANGE_DRAFT_VERSION = 4;
+    private static final int HIDDEN_BLOCK_CHANGE_DRAFT_VERSION = 5;
     private static final long WAL_COMPACT_THRESHOLD_BYTES = 512 * 1024;
     private static final Type JOURNAL_TYPE = new TypeToken<List<RecoveryJournalEntry>>() { }.getType();
 
@@ -292,6 +294,7 @@ public final class RecoveryRepository {
                 StorageIo.writeNullableCompound(output, oldValue.blockEntityTag());
                 StorageIo.writeCompound(output, newValue.stateTag());
                 StorageIo.writeNullableCompound(output, newValue.blockEntityTag());
+                output.writeBoolean(change.hidden());
             }
             output.writeInt(draft.entityChanges().size());
             for (StoredEntityChange change : draft.entityChanges()) {
@@ -308,7 +311,10 @@ public final class RecoveryRepository {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != DRAFT_MAGIC || (version != 3 && version != DRAFT_VERSION)) {
+            if (magic != DRAFT_MAGIC
+                    || (version != 3
+                    && version != ENTITY_CHANGE_DRAFT_VERSION
+                    && version != DRAFT_VERSION)) {
                 throw new IOException("Unsupported recovery draft format");
             }
 
@@ -325,14 +331,18 @@ public final class RecoveryRepository {
                 int x = input.readInt();
                 int y = input.readInt();
                 int z = input.readInt();
+                StatePayload oldValue = new StatePayload(StorageIo.readCompound(input), StorageIo.readNullableCompound(input));
+                StatePayload newValue = new StatePayload(StorageIo.readCompound(input), StorageIo.readNullableCompound(input));
+                boolean hidden = version >= HIDDEN_BLOCK_CHANGE_DRAFT_VERSION && input.readBoolean();
                 changes.add(new StoredBlockChange(
                         new io.github.luma.domain.model.BlockPoint(x, y, z),
-                        new StatePayload(StorageIo.readCompound(input), StorageIo.readNullableCompound(input)),
-                        new StatePayload(StorageIo.readCompound(input), StorageIo.readNullableCompound(input))
+                        oldValue,
+                        newValue,
+                        hidden
                 ));
             }
             List<StoredEntityChange> entityChanges = new ArrayList<>();
-            if (version >= 4) {
+            if (version >= ENTITY_CHANGE_DRAFT_VERSION) {
                 int entityChangeCount = input.readInt();
                 for (int index = 0; index < entityChangeCount; index++) {
                     String entityId = input.readUTF();

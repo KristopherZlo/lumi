@@ -42,6 +42,9 @@ class WorldApplyChunkPreloaderTest {
         Assertions.assertEquals(2, first.completedChunks());
         Assertions.assertEquals(1, first.alreadyLoadedChunks());
         Assertions.assertEquals(1, first.newlyLoadedChunks());
+        Assertions.assertEquals(2, first.ticketedChunks());
+        Assertions.assertEquals(2, first.outstandingTickets());
+        Assertions.assertEquals(1, first.syncFallbackLoads());
         Assertions.assertFalse(first.complete());
         Assertions.assertEquals(Set.of(new ChunkPoint(1, 2), new ChunkPoint(3, 4)), access.acquired);
 

@@ -20,6 +20,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.DoorBlock;
@@ -53,7 +54,8 @@ final class SingleplayerGameplayRegressionSuite {
             new OpenableScenario(),
             new ItemEntityScenario(),
             new EntitySpawnScenario(),
-            new WaterBridgeScenario()
+            new WaterBridgeScenario(),
+            new MechanismAndWaterUndoRedoScenario()
     );
 
     GameplayRegressionReport run(
@@ -87,6 +89,7 @@ final class SingleplayerGameplayRegressionSuite {
             Set<BlockPoint> unexpectedDraftBlocks,
             Map<BlockPoint, Map<String, String>> expectedDraftProperties,
             Set<BlockPoint> latestUndoRedoBlocks,
+            List<ReplayBlockExpectation> latestReplayBlocks,
             int expectedEntityChanges,
             Set<String> expectedEntityIds,
             Map<String, BlockPoint> expectedEntityPositions,
@@ -103,6 +106,9 @@ final class SingleplayerGameplayRegressionSuite {
                 }
             });
         }
+    }
+
+    record ReplayBlockExpectation(BlockPoint pos, Block undoBlock, Block redoBlock) {
     }
 
     record GameplayCheck(String label, boolean passed) {
@@ -140,6 +146,7 @@ final class SingleplayerGameplayRegressionSuite {
         private final Set<BlockPoint> unexpectedDraftBlocks = new LinkedHashSet<>();
         private final Map<BlockPoint, Map<String, String>> expectedDraftProperties = new LinkedHashMap<>();
         private final Set<BlockPoint> latestUndoRedoBlocks = new LinkedHashSet<>();
+        private final List<ReplayBlockExpectation> latestReplayBlocks = new ArrayList<>();
         private final Set<String> expectedEntityIds = new LinkedHashSet<>();
         private final Map<String, BlockPoint> expectedEntityPositions = new LinkedHashMap<>();
         private final List<Entity> spawnedEntities = new ArrayList<>();
@@ -186,8 +193,25 @@ final class SingleplayerGameplayRegressionSuite {
         }
 
         private void expectLatestUndoRedoBlock(BlockPos pos) {
-            this.latestUndoRedoBlocks.add(BlockPoint.from(pos));
-            this.expectDraftBlock(pos);
+            this.expectLatestReplayBlock(pos, Blocks.AIR, this.level.getBlockState(pos).getBlock());
+        }
+
+        private void beginLatestUndoRedoAction() {
+            this.latestUndoRedoBlocks.clear();
+            this.latestReplayBlocks.clear();
+        }
+
+        private void expectLatestReplayBlock(BlockPos pos, Block undoBlock, Block redoBlock) {
+            this.expectLatestReplayBlock(pos, undoBlock, redoBlock, true);
+        }
+
+        private void expectLatestReplayBlock(BlockPos pos, Block undoBlock, Block redoBlock, boolean expectDraft) {
+            BlockPoint point = BlockPoint.from(pos);
+            this.latestUndoRedoBlocks.add(point);
+            this.latestReplayBlocks.add(new ReplayBlockExpectation(point, undoBlock, redoBlock));
+            if (expectDraft) {
+                this.expectDraftBlock(pos);
+            }
         }
 
         private void expectEntityChange(Entity entity) {
@@ -214,6 +238,7 @@ final class SingleplayerGameplayRegressionSuite {
                     Set.copyOf(this.unexpectedDraftBlocks),
                     this.expectedDraftProperties(),
                     Set.copyOf(this.latestUndoRedoBlocks),
+                    List.copyOf(this.latestReplayBlocks),
                     this.expectedEntityChanges,
                     Set.copyOf(this.expectedEntityIds),
                     Map.copyOf(this.expectedEntityPositions),
@@ -527,6 +552,7 @@ final class SingleplayerGameplayRegressionSuite {
         public void run(GameplayScenarioContext context) {
             BlockPos anchor = context.volume.min().offset(1, 2, 8);
             List<BlockPos> bridge = new ArrayList<>();
+            context.beginLatestUndoRedoAction();
             WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
                 context.level.setBlock(anchor, Blocks.STONE.defaultBlockState(), 3);
                 for (int index = 1; index <= BRIDGE_LENGTH; index++) {
@@ -555,6 +581,82 @@ final class SingleplayerGameplayRegressionSuite {
                     "gameplay water bridge verified " + verified + "/" + BRIDGE_LENGTH + " planks above source water");
             bridge.forEach(context::expectDraftBlock);
             context.expectLatestUndoRedoBlock(bridge.getLast());
+        }
+    }
+
+    private static final class MechanismAndWaterUndoRedoScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos piston = context.volume.min().offset(7, 1, 8);
+            BlockPos home = piston.east();
+            BlockPos moved = home.east();
+            BlockPos water = piston.west();
+            BlockPos power = piston.below();
+            BlockPos torch = moved.east();
+            BlockPos torchSupport = torch.below();
+
+            this.loadFixture(context, piston, home, water, power, torchSupport, torch);
+            context.beginLatestUndoRedoAction();
+            context.trackedPlayerAction(() -> {
+                context.level.setBlock(water, Blocks.WATER.defaultBlockState(), 3);
+                context.level.setBlock(power, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+                WorldMutationContext.runWithSource(WorldMutationSource.PISTON, () -> {
+                    context.level.setBlock(piston, Blocks.STICKY_PISTON.defaultBlockState()
+                            .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                            .setValue(PistonBaseBlock.EXTENDED, true), 3);
+                    context.level.setBlock(home, Blocks.PISTON_HEAD.defaultBlockState()
+                            .setValue(PistonHeadBlock.FACING, Direction.EAST)
+                            .setValue(PistonHeadBlock.TYPE, PistonType.STICKY), 3);
+                    context.level.setBlock(moved, Blocks.OAK_PLANKS.defaultBlockState(), 3);
+                });
+                WorldMutationContext.runWithSource(WorldMutationSource.FLUID, () ->
+                        context.level.setBlock(torch, Blocks.AIR.defaultBlockState(), 3));
+            });
+
+            context.checks.check(context.level.getBlockState(piston).getValue(PistonBaseBlock.EXTENDED),
+                    "gameplay latest sticky piston extended");
+            context.checks.check(context.level.getBlockState(home).is(Blocks.PISTON_HEAD),
+                    "gameplay latest sticky piston kept settled head");
+            context.checks.check(context.level.getBlockState(moved).is(Blocks.OAK_PLANKS),
+                    "gameplay latest sticky piston moved block");
+            context.checks.check(context.level.getBlockState(torch).isAir(),
+                    "gameplay latest water fallout broke redstone torch");
+            context.expectLatestReplayBlock(water, Blocks.AIR, Blocks.WATER);
+            context.expectLatestReplayBlock(power, Blocks.AIR, Blocks.REDSTONE_BLOCK);
+            context.expectLatestReplayBlock(piston, Blocks.STICKY_PISTON, Blocks.STICKY_PISTON);
+            context.expectLatestReplayBlock(home, Blocks.OAK_PLANKS, Blocks.PISTON_HEAD);
+            context.expectLatestReplayBlock(moved, Blocks.AIR, Blocks.OAK_PLANKS);
+            context.expectLatestReplayBlock(torch, Blocks.REDSTONE_TORCH, Blocks.AIR, false);
+            context.expectDraftProperty(piston, "extended", "true");
+        }
+
+        private void loadFixture(
+                GameplayScenarioContext context,
+                BlockPos piston,
+                BlockPos home,
+                BlockPos water,
+                BlockPos power,
+                BlockPos torchSupport,
+                BlockPos torch
+        ) {
+            List<BlockPos> waterContainment = List.of(water.below(), water.west(), water.north(), water.south());
+            context.trackedPlayerAction(() -> {
+                for (BlockPos containment : waterContainment) {
+                    context.level.setBlock(containment, Blocks.STONE.defaultBlockState(), 3);
+                }
+                context.level.setBlock(piston, Blocks.STICKY_PISTON.defaultBlockState()
+                        .setValue(PistonBaseBlock.FACING, Direction.EAST)
+                        .setValue(PistonBaseBlock.EXTENDED, false), 3);
+                context.level.setBlock(home, Blocks.OAK_PLANKS.defaultBlockState(), 3);
+                context.level.setBlock(power, Blocks.AIR.defaultBlockState(), 3);
+                context.level.setBlock(torchSupport, Blocks.STONE.defaultBlockState(), 3);
+                context.level.setBlock(torch, Blocks.REDSTONE_TORCH.defaultBlockState(), 3);
+            });
+            context.expectDraftBlock(piston);
+            context.expectDraftBlock(home);
+            context.expectDraftBlock(torchSupport);
+            waterContainment.forEach(context::expectDraftBlock);
         }
     }
 }

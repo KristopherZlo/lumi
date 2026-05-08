@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.ObserverBlock;
+import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -33,12 +34,31 @@ class ExactReplayStateQueueTest {
         BlockPos pos = new BlockPos(1, 64, 1);
 
         queue.record(batch(new PreparedBlockPlacement(pos, Blocks.REDSTONE_WIRE.defaultBlockState(), null)));
-        queue.record(batch(new PreparedBlockPlacement(pos, Blocks.STONE.defaultBlockState(), null)));
+        queue.record(batch(new PreparedBlockPlacement(
+                pos,
+                Blocks.REDSTONE_WIRE.defaultBlockState().setValue(RedStoneWireBlock.POWER, 3),
+                null
+        )));
 
         assertEquals(1, queue.pendingCount());
         List<PreparedBlockPlacement> recorded = queue.takeRecordedPlacements();
         assertEquals(1, recorded.size());
-        assertEquals(Blocks.STONE.defaultBlockState(), recorded.getFirst().state());
+        assertEquals(
+                Blocks.REDSTONE_WIRE.defaultBlockState().setValue(RedStoneWireBlock.POWER, 3),
+                recorded.getFirst().state()
+        );
+    }
+
+    @Test
+    void ordinaryPlacementsDoNotEnterFinalExactReplay() {
+        ExactReplayStateQueue queue = new ExactReplayStateQueue();
+        BlockPos pos = new BlockPos(1, 64, 1);
+
+        queue.record(batch(new PreparedBlockPlacement(pos, Blocks.REDSTONE_WIRE.defaultBlockState(), null)));
+        queue.record(batch(new PreparedBlockPlacement(pos, Blocks.STONE.defaultBlockState(), null)));
+
+        assertEquals(0, queue.pendingCount());
+        assertTrue(queue.takeRecordedPlacements().isEmpty());
     }
 
     @Test

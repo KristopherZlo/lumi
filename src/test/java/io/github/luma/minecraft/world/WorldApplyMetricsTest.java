@@ -17,8 +17,11 @@ class WorldApplyMetricsTest {
         metrics.record(BlockCommitResult.blockEntityPackets(2));
         metrics.recordPreparationDuration(3_000_000L);
         metrics.recordPreloadTick(2, 1, 4_000_000L);
+        metrics.recordPreloadPipeline(3, 2, 1);
         metrics.recordApplyTick(18, 5_000_000L);
         metrics.recordApplyTick(0);
+        metrics.recordLightPrepared(9, 2);
+        metrics.recordLightEngineFlushTick();
         metrics.recordLightDrainTick(2_500_000L);
         metrics.recordTotalDuration(12_000_000L);
 
@@ -30,6 +33,9 @@ class WorldApplyMetricsTest {
         Assertions.assertTrue(summary.contains("preloadTicks=1"));
         Assertions.assertTrue(summary.contains("preloadedChunks=2"));
         Assertions.assertTrue(summary.contains("loadedBeforeApply=1"));
+        Assertions.assertTrue(summary.contains("preloadTicketedChunks=3"));
+        Assertions.assertTrue(summary.contains("preloadOutstandingTickets=2"));
+        Assertions.assertTrue(summary.contains("preloadSyncFallbackLoads=1"));
         Assertions.assertTrue(summary.contains("missedAtApply=1"));
         Assertions.assertTrue(summary.contains("applyDurationMs=5"));
         Assertions.assertTrue(summary.contains("lightFinalizeDurationMs=2"));
@@ -49,6 +55,9 @@ class WorldApplyMetricsTest {
         Assertions.assertTrue(summary.contains("sectionPackets=3"));
         Assertions.assertTrue(summary.contains("blockEntityPackets=3"));
         Assertions.assertTrue(summary.contains("lightChecks=12"));
+        Assertions.assertTrue(summary.contains("lightPrepared=9"));
+        Assertions.assertTrue(summary.contains("lightDirtyChunks=2"));
+        Assertions.assertTrue(summary.contains("lightEngineFlushTicks=1"));
         Assertions.assertTrue(summary.contains("applyTicks=2"));
         Assertions.assertTrue(summary.contains("workTicks=1"));
         Assertions.assertTrue(summary.contains("avgWorkPerTick=34"));

@@ -20,6 +20,9 @@ final class WorldApplyMetrics {
     private int sectionPackets;
     private int blockEntityPackets;
     private int lightChecks;
+    private int lightPrepared;
+    private int lightDirtyChunks;
+    private int lightEngineFlushTicks;
     private int redstoneUpdates;
     private int applyTicks;
     private int workTicks;
@@ -37,6 +40,9 @@ final class WorldApplyMetrics {
     private int preloadTicks;
     private int preloadedChunks;
     private int loadedBeforeApply;
+    private int preloadTicketedChunks;
+    private int preloadOutstandingTickets;
+    private int preloadSyncFallbackLoads;
     private int missedAtApply;
     private final Map<String, Integer> fallbackReasons = new LinkedHashMap<>();
 
@@ -76,6 +82,15 @@ final class WorldApplyMetrics {
 
     void recordLightChecks(int lightChecks) {
         this.lightChecks += Math.max(0, lightChecks);
+    }
+
+    void recordLightPrepared(int preparedChecks, int dirtyChunks) {
+        this.lightPrepared += Math.max(0, preparedChecks);
+        this.lightDirtyChunks += Math.max(0, dirtyChunks);
+    }
+
+    void recordLightEngineFlushTick() {
+        this.lightEngineFlushTicks += 1;
     }
 
     void recordRedstoneUpdates(int redstoneUpdates) {
@@ -121,6 +136,12 @@ final class WorldApplyMetrics {
         this.loadedBeforeApply += Math.max(0, alreadyLoadedChunks);
     }
 
+    void recordPreloadPipeline(int ticketedChunks, int outstandingTickets, int syncFallbackLoads) {
+        this.preloadTicketedChunks += Math.max(0, ticketedChunks);
+        this.preloadOutstandingTickets = Math.max(this.preloadOutstandingTickets, Math.max(0, outstandingTickets));
+        this.preloadSyncFallbackLoads += Math.max(0, syncFallbackLoads);
+    }
+
     void recordTotalDuration(long elapsedNanos) {
         this.totalNanos = Math.max(this.totalNanos, Math.max(0L, elapsedNanos));
     }
@@ -152,6 +173,9 @@ final class WorldApplyMetrics {
                 + ", preloadTicks=" + this.preloadTicks
                 + ", preloadedChunks=" + this.preloadedChunks
                 + ", loadedBeforeApply=" + this.loadedBeforeApply
+                + ", preloadTicketedChunks=" + this.preloadTicketedChunks
+                + ", preloadOutstandingTickets=" + this.preloadOutstandingTickets
+                + ", preloadSyncFallbackLoads=" + this.preloadSyncFallbackLoads
                 + ", missedAtApply=" + this.missedAtApply
                 + ", applyDurationMs=" + this.millis(this.applyNanos)
                 + ", redstoneFinalizeDurationMs=" + this.redstoneDrainDurationMillis()
@@ -172,6 +196,9 @@ final class WorldApplyMetrics {
                 + ", sectionPackets=" + this.sectionPackets
                 + ", blockEntityPackets=" + this.blockEntityPackets
                 + ", lightChecks=" + this.lightChecks
+                + ", lightPrepared=" + this.lightPrepared
+                + ", lightDirtyChunks=" + this.lightDirtyChunks
+                + ", lightEngineFlushTicks=" + this.lightEngineFlushTicks
                 + ", redstoneUpdates=" + this.redstoneUpdates
                 + ", applyTicks=" + this.applyTicks
                 + ", workTicks=" + this.workTicks
