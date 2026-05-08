@@ -1,13 +1,19 @@
 package io.github.luma.ui.overlay;
 
+import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RecentChangesPreviewSessionTest {
 
@@ -101,8 +107,8 @@ class RecentChangesPreviewSessionTest {
                 RecentChangesOverlayCoordinator.PreviewTarget.BOTH,
                 () -> new RecentChangesPreviewSession.ActionSnapshot(
                         120L,
-                        List.of(action("undo")),
-                        List.of(action("redo"))
+                        List.of(blockAction("undo")),
+                        List.of(blockAction("redo"))
                 )
         );
 
@@ -110,6 +116,24 @@ class RecentChangesPreviewSessionTest {
         assertEquals(RecentChangesOverlayCoordinator.PreviewTarget.BOTH, preview.key().previewTarget());
         assertEquals("undo", preview.undoActions().get(0).id());
         assertEquals("redo", preview.redoActions().get(0).id());
+        assertTrue(preview.hasBlockPreview());
+    }
+
+    @Test
+    void emptyHeldActionButtonPreviewDoesNotClaimOverlay() {
+        RecentChangesPreviewSession session = new RecentChangesPreviewSession();
+
+        RecentChangesPreviewSession.PinnedPreview preview = session.request(
+                "project",
+                RecentChangesOverlayCoordinator.PreviewTarget.BOTH,
+                () -> new RecentChangesPreviewSession.ActionSnapshot(
+                        120L,
+                        List.of(action("undo")),
+                        List.of(action("redo"))
+                )
+        );
+
+        assertFalse(preview.hasBlockPreview());
     }
 
     private static RecentChangesPreviewSession.ActionSnapshot snapshot(long revision, UndoRedoAction action) {
@@ -138,5 +162,21 @@ class RecentChangesPreviewSessionTest {
                 Instant.parse("2026-04-23T08:00:00Z"),
                 Instant.parse("2026-04-23T08:00:00Z")
         );
+    }
+
+    private static UndoRedoAction blockAction(String id) {
+        UndoRedoAction action = action(id);
+        action.recordChange(new StoredBlockChange(
+                new BlockPoint(10, 64, 10),
+                new StatePayload(state("minecraft:stone"), null),
+                new StatePayload(state("minecraft:glass"), null)
+        ), Instant.parse("2026-04-23T08:00:01Z"));
+        return action;
+    }
+
+    private static CompoundTag state(String blockId) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", blockId);
+        return tag;
     }
 }

@@ -80,5 +80,31 @@ final class RecentChangesPreviewSession {
             undoActions = undoActions == null ? List.of() : List.copyOf(undoActions);
             redoActions = redoActions == null ? List.of() : List.copyOf(redoActions);
         }
+
+        boolean hasBlockPreview() {
+            return switch (this.key.previewTarget()) {
+                case REDO -> hasRedoBlockPreview(this.redoActions);
+                case BOTH -> hasUndoBlockPreview(this.undoActions) || hasRedoBlockPreview(this.redoActions);
+                case UNDO -> hasUndoBlockPreview(this.undoActions);
+            };
+        }
+
+        private static boolean hasUndoBlockPreview(List<UndoRedoAction> actions) {
+            for (UndoRedoAction action : actions) {
+                if (action != null && !action.undoChanges().isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static boolean hasRedoBlockPreview(List<UndoRedoAction> actions) {
+            for (UndoRedoAction action : actions) {
+                if (action != null && !action.redoChanges().isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 }

@@ -36,35 +36,35 @@ public final class RecentChangesOverlayCoordinator {
         return INSTANCE;
     }
 
-    public void tick(Minecraft client, boolean altHeld) {
-        this.tick(client, altHeld, PreviewTarget.UNDO);
+    public boolean tick(Minecraft client, boolean altHeld) {
+        return this.tick(client, altHeld, PreviewTarget.UNDO);
     }
 
-    public void tick(Minecraft client, boolean altHeld, PreviewTarget previewTarget) {
+    public boolean tick(Minecraft client, boolean altHeld, PreviewTarget previewTarget) {
         if (client == null) {
             this.logSkip("no-client", previewTarget);
             this.clearPreview();
-            return;
+            return false;
         }
         if (client.player == null) {
             this.logSkip("no-player", previewTarget);
             this.clearPreview();
-            return;
+            return false;
         }
         if (client.level == null) {
             this.logSkip("no-level", previewTarget);
             this.clearPreview();
-            return;
+            return false;
         }
         if (!altHeld) {
             this.logSkip("overlay-key-not-held", previewTarget);
             this.clearPreview();
-            return;
+            return false;
         }
         if (CompareOverlayRenderer.visible()) {
             this.logSkip("compare-overlay-visible", previewTarget);
             this.clearPreview();
-            return;
+            return false;
         }
 
         try {
@@ -72,7 +72,7 @@ public final class RecentChangesOverlayCoordinator {
             if (project.isEmpty()) {
                 this.logSkip("no-project", previewTarget);
                 this.clearPreview();
-                return;
+                return false;
             }
 
             String projectId = project.get().id().toString();
@@ -81,22 +81,27 @@ public final class RecentChangesOverlayCoordinator {
                     previewTarget,
                     () -> this.recentActionsSnapshot(projectId, previewTarget)
             );
+            if (!pinnedPreview.hasBlockPreview()) {
+                this.clearPreview();
+                return false;
+            }
             RecentChangesPreviewSession.PreviewKey previewKey = pinnedPreview.key();
             this.requestedPreview = previewKey;
             if (RecentChangesOverlayRenderer.visibleFor(projectId, previewKey.revision(), previewTarget)) {
                 this.preparedPreview = previewKey;
-                return;
+                return true;
             }
             if (previewKey.equals(this.preparedPreview)) {
-                return;
+                return true;
             }
             if (previewKey.equals(this.pendingPreview)) {
-                return;
+                return true;
             }
 
             RecentChangesOverlayRenderer.clear();
             boolean debugEnabled = LumaDebugLog.enabled(project.get());
             this.preparePreview(pinnedPreview, debugEnabled);
+            return true;
         } catch (Exception exception) {
             OverlayDiagnostics.getInstance().log(
                     false,
@@ -107,6 +112,7 @@ public final class RecentChangesOverlayCoordinator {
                     exception.getMessage()
             );
             this.clearPreview();
+            return false;
         }
     }
 
