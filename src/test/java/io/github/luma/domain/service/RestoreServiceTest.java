@@ -10,22 +10,35 @@ import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.SnapshotChunkData;
+import io.github.luma.domain.model.SnapshotData;
+import io.github.luma.domain.model.SnapshotSectionData;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.PatchDataRepository;
+import io.github.luma.storage.repository.PatchMetaRepository;
+import io.github.luma.storage.repository.SnapshotWriter;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -34,6 +47,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class RestoreServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-04-28T00:00:00Z");
+    private final SnapshotWriter snapshotWriter = new SnapshotWriter();
+    private final PatchDataRepository patchDataRepository = new PatchDataRepository();
+    private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
 
     @BeforeAll
     static void bootstrapMinecraft() {
@@ -200,6 +216,39 @@ class RestoreServiceTest {
         assertEquals("minecraft:stone", action.changes().getFirst().newValue().blockId());
     }
 
+    @Test
+    void authoritativeEntityReplacementKeepsEmptyTargetChunkAuthoritative(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        String entityId = "00000000-0000-0000-0000-000000000060";
+        EntityPayload entity = entity(entityId, 1.0D);
+        this.snapshotWriter.writeFile(layout.snapshotFile("snapshot-0001"), snapshot(List.of(entity)));
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(),
+                List.of(new StoredEntityChange(entityId, "minecraft:block_display", entity, null))
+        ));
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", "snapshot-0001", List.of()),
+                version("v0002", "main", "v0001", "", List.of("patch-0002"))
+        );
+
+        List<PreparedChunkBatch> batches = service.authoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                "v0002",
+                List.of(new ChunkPoint(0, 0))
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(new ChunkPoint(0, 0), batches.getFirst().chunk());
+        assertEquals(true, batches.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(0, batches.getFirst().entityBatch().entitiesToUpdate().size());
+    }
+
     private static BuildProject project(String activeVariantId) {
         return BuildProject.create(
                         "project",
@@ -212,13 +261,23 @@ class RestoreServiceTest {
     }
 
     private static ProjectVersion version(String id, String variantId, String parentVersionId) {
+        return version(id, variantId, parentVersionId, "", List.of());
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String variantId,
+            String parentVersionId,
+            String snapshotId,
+            List<String> patchIds
+    ) {
         return new ProjectVersion(
                 id,
                 "project",
                 variantId,
                 parentVersionId,
-                "",
-                List.of(),
+                snapshotId,
+                patchIds,
                 VersionKind.MANUAL,
                 "tester",
                 id,
@@ -241,5 +300,34 @@ class RestoreServiceTest {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", blockId);
         return tag;
+    }
+
+    private static SnapshotData snapshot(List<EntityPayload> entities) {
+        short[] indexes = new short[4096];
+        return new SnapshotData(
+                "project",
+                NOW,
+                64,
+                64,
+                List.of(new SnapshotChunkData(
+                        0,
+                        0,
+                        List.of(new SnapshotSectionData(4, List.of(state("minecraft:air")), indexes)),
+                        java.util.Map.of(),
+                        entities
+                ))
+        );
+    }
+
+    private static EntityPayload entity(String entityId, double x) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", "minecraft:block_display");
+        tag.putString("UUID", entityId);
+        ListTag pos = new ListTag();
+        pos.add(DoubleTag.valueOf(x));
+        pos.add(DoubleTag.valueOf(64.0D));
+        pos.add(DoubleTag.valueOf(0.0D));
+        tag.put("Pos", pos);
+        return new EntityPayload(tag);
     }
 }

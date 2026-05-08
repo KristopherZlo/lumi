@@ -412,6 +412,7 @@ public final class BlockChangeApplier {
         if (entity == null || entity instanceof ServerPlayer) {
             return;
         }
+        EntityPayload.readUuid(entityTag).map(UUID::toString).ifPresent(entityId -> removeEntity(level, entityId));
         level.tryAddFreshEntityWithPassengers(entity);
     }
 

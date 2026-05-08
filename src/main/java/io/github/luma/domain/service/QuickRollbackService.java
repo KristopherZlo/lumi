@@ -21,6 +21,7 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.VariantRepository;
+import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
@@ -36,6 +37,7 @@ public final class QuickRollbackService {
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
+    private final VersionRepository versionRepository = new VersionRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final RestoreService restoreService = new RestoreService();
     private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
@@ -123,9 +125,18 @@ public final class QuickRollbackService {
                                     "Decoded quick rollback"
                             )
                     );
+                    if (selectedBounds == null) {
+                        batches = this.restoreService.withAuthoritativeEntityReplacementBatches(
+                                layout,
+                                this.versionRepository.loadAll(layout),
+                                activeVariant.headVersionId(),
+                                batches
+                        );
+                    }
+                    List<PreparedChunkBatch> finalBatches = batches;
                     return new WorldOperationManager.PreparedApplyOperation(
-                            batches,
-                            () -> this.completeQuickRollback(level, layout, project, activeVariant, plan, batches.size())
+                            finalBatches,
+                            () -> this.completeQuickRollback(level, layout, project, activeVariant, plan, finalBatches.size())
                     );
                 }
         );

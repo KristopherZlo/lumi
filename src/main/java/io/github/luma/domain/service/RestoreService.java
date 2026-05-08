@@ -26,6 +26,7 @@ import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
+import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.minecraft.world.SnapshotBatchPreparer;
@@ -53,6 +54,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -282,8 +284,10 @@ public final class RestoreService {
                             throw new RuntimeException(exception);
                         }
                     });
+                    List<PreparedChunkBatch> finalBatches =
+                            this.withAuthoritativeEntityReplacementBatches(layout, versions, version.id(), batches);
                     return new WorldOperationManager.PreparedApplyOperation(
-                            batches,
+                            finalBatches,
                             () -> this.completeRestore(
                                     level,
                                     layout,
@@ -291,7 +295,7 @@ public final class RestoreService {
                                     variants,
                                     targetVariant,
                                     version,
-                                    batches.size(),
+                                    finalBatches.size(),
                                     restoreUndoAction
                             )
                     );
@@ -1158,6 +1162,145 @@ public final class RestoreService {
         return states;
     }
 
+    List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatches(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            String targetVersionId,
+            List<PreparedChunkBatch> batches
+    ) throws IOException {
+        List<ChunkPoint> chunks = this.batchChunks(batches);
+        if (chunks.isEmpty()) {
+            return batches == null ? List.of() : batches;
+        }
+        List<PreparedChunkBatch> replacementBatches = this.authoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                targetVersionId,
+                chunks
+        );
+        if (replacementBatches.isEmpty()) {
+            return batches == null ? List.of() : batches;
+        }
+        List<PreparedChunkBatch> combined = new ArrayList<>(batches == null ? List.of() : batches);
+        combined.addAll(replacementBatches);
+        return this.batchCollapser.collapse(combined);
+    }
+
+    List<PreparedChunkBatch> authoritativeEntityReplacementBatches(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            String targetVersionId,
+            List<ChunkPoint> chunks
+    ) throws IOException {
+        if (targetVersionId == null || targetVersionId.isBlank() || chunks == null || chunks.isEmpty()) {
+            return List.of();
+        }
+        ProjectVersion targetVersion = versions.stream()
+                .filter(version -> version.id().equals(targetVersionId))
+                .findFirst()
+                .orElse(null);
+        if (targetVersion == null) {
+            return List.of();
+        }
+
+        Map<String, ChunkPoint> selectedChunks = new LinkedHashMap<>();
+        for (ChunkPoint chunk : chunks) {
+            if (chunk != null) {
+                selectedChunks.put(chunkKey(chunk), chunk);
+            }
+        }
+        if (selectedChunks.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, EntityPayload> targetStates;
+        try {
+            targetStates = this.targetEntityStatesForChunks(
+                    layout,
+                    versions,
+                    targetVersion,
+                    selectedChunks.keySet()
+            );
+        } catch (IllegalArgumentException exception) {
+            return List.of();
+        }
+        Map<String, List<CompoundTag>> entitiesByChunk = new LinkedHashMap<>();
+        for (ChunkPoint chunk : selectedChunks.values()) {
+            entitiesByChunk.put(chunkKey(chunk), new ArrayList<>());
+        }
+        for (EntityPayload payload : targetStates.values()) {
+            if (payload == null || payload.chunk() == null) {
+                continue;
+            }
+            String chunkKey = chunkKey(payload.chunk());
+            List<CompoundTag> entities = entitiesByChunk.get(chunkKey);
+            if (entities != null) {
+                entities.add(payload.copyTag());
+            }
+        }
+
+        List<PreparedChunkBatch> batches = new ArrayList<>();
+        for (ChunkPoint chunk : selectedChunks.values()) {
+            batches.add(new PreparedChunkBatch(
+                    chunk,
+                    List.of(),
+                    EntityBatch.replacePlacedEntities(entitiesByChunk.getOrDefault(chunkKey(chunk), List.of()))
+            ));
+        }
+        return batches;
+    }
+
+    private Map<String, EntityPayload> targetEntityStatesForChunks(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            ProjectVersion targetVersion,
+            Set<String> selectedChunkKeys
+    ) throws IOException {
+        if (targetVersion == null || selectedChunkKeys == null || selectedChunkKeys.isEmpty()) {
+            return Map.of();
+        }
+
+        RestoreChain chain = this.resolveChain(versions, targetVersion);
+        Map<String, EntityPayload> states = new LinkedHashMap<>();
+        if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
+            for (var chunk : this.snapshotReader.readFile(layout.snapshotFile(chain.anchor().snapshotId())).chunks()) {
+                if (!selectedChunkKeys.contains(chunk.chunkX() + ":" + chunk.chunkZ())) {
+                    continue;
+                }
+                for (EntityPayload entity : chunk.entitySnapshots()) {
+                    states.put(entity.entityId(), entity);
+                }
+            }
+        }
+        for (ProjectVersion version : chain.patchVersions()) {
+            for (StoredEntityChange change : this.loadVersionWorldChanges(layout, List.of(version)).entityChanges()) {
+                if (!this.touchesAnyChunk(change, selectedChunkKeys)) {
+                    continue;
+                }
+                if (change.newValue() == null) {
+                    states.remove(change.entityId());
+                } else {
+                    states.put(change.entityId(), change.newValue());
+                }
+            }
+        }
+        return states;
+    }
+
+    private boolean touchesAnyChunk(StoredEntityChange change, Set<String> selectedChunkKeys) {
+        if (change == null || selectedChunkKeys == null || selectedChunkKeys.isEmpty()) {
+            return false;
+        }
+        return this.payloadTouchesChunk(change.oldValue(), selectedChunkKeys)
+                || this.payloadTouchesChunk(change.newValue(), selectedChunkKeys);
+    }
+
+    private boolean payloadTouchesChunk(EntityPayload payload, Set<String> selectedChunkKeys) {
+        return payload != null
+                && payload.chunk() != null
+                && selectedChunkKeys.contains(chunkKey(payload.chunk()));
+    }
+
     private boolean shouldAppendInitialSnapshot(ProjectVersion targetVersion, RecoveryDraft pendingDraft) {
         return pendingDraft != null
                 && !pendingDraft.isEmpty()
@@ -1548,6 +1691,20 @@ public final class RestoreService {
             chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
         }
         return List.copyOf(chunks.values());
+    }
+
+    private List<ChunkPoint> batchChunks(List<PreparedChunkBatch> batches) {
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
+            if (batch != null && batch.chunk() != null) {
+                chunks.putIfAbsent(chunkKey(batch.chunk()), batch.chunk());
+            }
+        }
+        return List.copyOf(chunks.values());
+    }
+
+    private static String chunkKey(ChunkPoint chunk) {
+        return chunk.x() + ":" + chunk.z();
     }
 
     private List<ChunkPoint> initialSnapshotChunksForPendingRestore(
