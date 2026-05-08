@@ -26,7 +26,7 @@ The test-client Gradle profile always starts with Lumi diagnostics enabled:
 - `-Dlumi.startupProfile=true`
 - `-Dlumi.loadLog=true`
 
-The load log is written under `run/test-client/logs/lumi-load.log` by default.
+The load log is written under `run/test-client/logs/lumi-load.log` by default. Restore, undo/redo, and quick rollback runs can now emit an automatic `light-refresh` follow-up operation after the block/entity action; runtime checks should treat it as part of the operation window and verify it completes without `runLightUpdates()` thread exceptions.
 
 If you want to force a specific JDK:
 
