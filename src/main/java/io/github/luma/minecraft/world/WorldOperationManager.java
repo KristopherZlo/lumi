@@ -26,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -1774,7 +1775,9 @@ public final class WorldOperationManager {
         private final WorldApplyMetrics applyMetrics = new WorldApplyMetrics();
         private final long startedAtNanos = System.nanoTime();
         private List<ChunkPoint> dirtyChunks = List.of();
+        private List<SectionPos> dirtySections = List.of();
         private WorldApplyChunkPreloader lightChunkPreloader;
+        private ChunkSkylightRefreshQueue skylightRefreshQueue;
         private CompletableFuture<?> lightBarrierFuture;
         private int publishTicksRemaining = -1;
         private boolean lightPreparationRecorded = false;
@@ -1792,6 +1795,11 @@ public final class WorldOperationManager {
         private int finalMissingDirtyChunks = 0;
         private int preparedChecks = 0;
         private int preparedDirtyChunkCount = 0;
+        private int preparedDirtySectionCount = 0;
+        private int totalSkylightSectionUpdates = 0;
+        private int totalMissingSkylightSections = 0;
+        private int totalSkylightChunkRefreshes = 0;
+        private int totalMissingSkylightChunks = 0;
 
         private LightRefreshActiveOperation(
                 ServerLevel level,
@@ -1838,6 +1846,11 @@ public final class WorldOperationManager {
                             + ", finalMissingDirtyChunks=" + this.finalMissingDirtyChunks
                             + ", preparedChecks=" + this.preparedChecks
                             + ", dirtyChunks=" + this.dirtyChunks.size()
+                            + ", dirtySections=" + this.dirtySections.size()
+                            + ", skylightSectionUpdates=" + this.totalSkylightSectionUpdates
+                            + ", missingSkylightSections=" + this.totalMissingSkylightSections
+                            + ", skylightChunkRefreshes=" + this.totalSkylightChunkRefreshes
+                            + ", missingSkylightChunks=" + this.totalMissingSkylightChunks
                             + ", lightPreloadComplete=" + (this.lightChunkPreloader == null || this.lightChunkPreloader.complete())
                             + ", dirtyChunkSummary=" + this.dirtyChunkSummary()
             );
@@ -1902,9 +1915,12 @@ public final class WorldOperationManager {
             }
             if (!this.lightPreparationRecorded) {
                 this.dirtyChunks = this.lightUpdateQueue.preparedDirtyChunks();
+                this.dirtySections = this.lightUpdateQueue.preparedDirtySections();
                 this.preparedChecks = this.lightUpdateQueue.preparedCheckCount();
                 this.preparedDirtyChunkCount = this.lightUpdateQueue.dirtyChunkCount();
+                this.preparedDirtySectionCount = this.lightUpdateQueue.dirtySectionCount();
                 this.lightChunkPreloader = WorldApplyChunkPreloader.forChunks(this.dirtyChunks);
+                this.skylightRefreshQueue = new ChunkSkylightRefreshQueue(this.dirtyChunks, this.dirtySections);
                 this.applyMetrics.recordPreparationDuration(System.nanoTime() - this.startedAtNanos);
                 this.applyMetrics.recordLightPrepared(
                         this.lightUpdateQueue.preparedCheckCount(),
@@ -1917,11 +1933,15 @@ public final class WorldOperationManager {
                                 + ", operationId=" + this.handle().id()
                                 + ", preparedChecks=" + this.preparedChecks
                                 + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                + ", dirtySections=" + this.preparedDirtySectionCount
                                 + ", dirtyChunkSummary=" + this.dirtyChunkSummary()
                 );
             }
 
             if (!this.advanceLightChunkPreload(budget, deadlineNanos)) {
+                return false;
+            }
+            if (!this.refreshChunkSkylightState(budget, deadlineNanos)) {
                 return false;
             }
 
@@ -2068,6 +2088,70 @@ public final class WorldOperationManager {
             return result.complete();
         }
 
+        private boolean refreshChunkSkylightState(WorldApplyBudget budget, long deadlineNanos) {
+            if (this.skylightRefreshQueue == null
+                    || !this.skylightRefreshQueue.required()
+                    || this.skylightRefreshQueue.complete()) {
+                return true;
+            }
+
+            int maxSections = Math.max(1, budget.maxRewriteSections() + budget.maxNativeSections());
+            int maxChunks = Math.max(1, budget.maxPreloadChunks() / 4);
+            long startedAt = System.nanoTime();
+            ChunkSkylightRefreshQueue.RefreshTickResult result = this.skylightRefreshQueue.drain(
+                    new ServerChunkSkylightRefreshAccess(this.level()),
+                    maxSections,
+                    maxChunks,
+                    deadlineNanos
+            );
+            long elapsedNanos = System.nanoTime() - startedAt;
+            this.totalSkylightSectionUpdates += result.sectionUpdates();
+            this.totalMissingSkylightSections += result.missingSections();
+            this.totalSkylightChunkRefreshes += result.refreshedChunks();
+            this.totalMissingSkylightChunks += result.missingChunks();
+            this.progressSink().update(
+                    OperationStage.FINALIZING,
+                    this.preparedDirtySectionCount - result.remainingSections(),
+                    Math.max(1, this.preparedDirtySectionCount + this.preparedDirtyChunkCount),
+                    "Refreshing skylight sources"
+            );
+            LumaLoadLog.record(
+                    "world-op",
+                    this.handle().label() + ".skylightSourceRefreshTick",
+                    elapsedNanos,
+                    "sectionUpdates=" + result.sectionUpdates()
+                            + ", missingSections=" + result.missingSections()
+                            + ", attemptedSections=" + result.attemptedSections()
+                            + ", refreshedChunks=" + result.refreshedChunks()
+                            + ", missingChunks=" + result.missingChunks()
+                            + ", attemptedChunks=" + result.attemptedChunks()
+                            + ", remainingSections=" + result.remainingSections()
+                            + ", remainingChunks=" + result.remainingChunks()
+            );
+            LumaDiagnosticsLog.lightSpan(
+                    "skylight-source-refresh-tick",
+                    elapsedNanos,
+                    "label=" + this.handle().label()
+                            + ", operationId=" + this.handle().id()
+                            + ", maxSections=" + maxSections
+                            + ", maxChunks=" + maxChunks
+                            + ", sectionUpdates=" + result.sectionUpdates()
+                            + ", missingSections=" + result.missingSections()
+                            + ", attemptedSections=" + result.attemptedSections()
+                            + ", refreshedChunks=" + result.refreshedChunks()
+                            + ", missingChunks=" + result.missingChunks()
+                            + ", attemptedChunks=" + result.attemptedChunks()
+                            + ", remainingSections=" + result.remainingSections()
+                            + ", remainingChunks=" + result.remainingChunks()
+                            + ", totalSectionUpdates=" + this.totalSkylightSectionUpdates
+                            + ", totalMissingSections=" + this.totalMissingSkylightSections
+                            + ", totalChunkRefreshes=" + this.totalSkylightChunkRefreshes
+                            + ", totalMissingChunks=" + this.totalMissingSkylightChunks
+                            + ", complete=" + result.complete()
+            );
+            return result.complete();
+        }
+
         private boolean awaitLightEngineBarrier() {
             ThreadedLevelLightEngine lightEngine = this.level().getChunkSource().getLightEngine();
             lightEngine.tryScheduleUpdate();
@@ -2085,6 +2169,9 @@ public final class WorldOperationManager {
                                 + ", operationId=" + this.handle().id()
                                 + ", preparedChecks=" + this.preparedChecks
                                 + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                + ", dirtySections=" + this.preparedDirtySectionCount
+                                + ", skylightSectionUpdates=" + this.totalSkylightSectionUpdates
+                                + ", skylightChunkRefreshes=" + this.totalSkylightChunkRefreshes
                                 + ", dirtyChunkSummary=" + this.dirtyChunkSummary()
                 );
             }
@@ -2101,6 +2188,7 @@ public final class WorldOperationManager {
                                 + ", hasLightWork=" + hasLightWork
                                 + ", flushTicks=" + this.applyMetrics.lightEngineFlushTicks()
                                 + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                + ", dirtySections=" + this.preparedDirtySectionCount
                                 + ", preparedChecks=" + this.preparedChecks
                 );
                 this.progressSink().update(
@@ -2121,6 +2209,7 @@ public final class WorldOperationManager {
                                 + ", checkedLightWork=" + this.checkedLightWork
                                 + ", flushTicks=" + this.applyMetrics.lightEngineFlushTicks()
                                 + ", dirtyChunks=" + this.preparedDirtyChunkCount
+                                + ", dirtySections=" + this.preparedDirtySectionCount
                                 + ", preparedChecks=" + this.preparedChecks
                 );
             }
