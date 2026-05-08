@@ -92,7 +92,7 @@ Use Lumi if you want to:
 - optional WorldEdit edit-session capture when WorldEdit is present, without a hard runtime dependency
 - conservative external builder-tool capture for WorldEdit, FAWE-style chunk placement, Axiom block buffers, Axion, AutoBuild, SimpleBuilding, Effortless Building, Litematica/Tweakeroo placement paths, and known tool stacks that reach Minecraft block or entity mutation paths
 - stable external capability reporting: WorldEdit session selection/clipboard/schematic support uses public `LocalSession`/clipboard format APIs, FAWE inherits those claims only when the same compatible APIs are present, and Axiom remains limited to its custom region API plus fallback capture
-- conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
+- conservative cleanup for orphaned snapshots, previews, cache files, and operation drafts that cannot hide recoverable edits
 - capture of player edits plus non-player entity spawn/remove/update with full persistent NBT position/state payloads, and supported explosion edits including TNT damage tied back to the action that primed it
 - temporary action-button preview for the latest undo and redo actions while the Lumi action button is held, with the next undo target highlighted red, the next redo target highlighted green, and translucent exposed sides for small edits or merged volume blobs for dense edits when compare highlight is not active
 

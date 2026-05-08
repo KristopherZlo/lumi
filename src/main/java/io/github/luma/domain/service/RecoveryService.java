@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -41,11 +42,13 @@ public final class RecoveryService {
     private final VariantRepository variantRepository = new VariantRepository();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
 
     public Optional<RecoveryDraft> loadDraft(MinecraftServer server, String projectName) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        this.restoreInterruptedOperationDraftIfIdle(server, layout, project);
         return HistoryCaptureManager.getInstance().snapshotDraft(server, project.id().toString());
     }
 
@@ -61,6 +64,7 @@ public final class RecoveryService {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        this.restoreInterruptedOperationDraftIfIdle(server, layout, project);
         Optional<RecoveryDraft> draft = HistoryCaptureManager.getInstance().snapshotDraft(server, project.id().toString());
         if (draft.isEmpty()) {
             return Optional.empty();
@@ -80,6 +84,7 @@ public final class RecoveryService {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        this.restoreInterruptedOperationDraftIfIdle(level.getServer(), layout, project);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
                 .freezeWorkingDraft(level.getServer(), project.id().toString());
@@ -169,7 +174,21 @@ public final class RecoveryService {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        this.restoreInterruptedOperationDraftIfIdle(server, layout, project);
         return HistoryCaptureManager.getInstance().hasInterruptedDraft(server, project.id().toString());
+    }
+
+    private void restoreInterruptedOperationDraftIfIdle(
+            MinecraftServer server,
+            ProjectLayout layout,
+            BuildProject project
+    ) throws IOException {
+        boolean activeOperation = this.worldOperationManager.snapshot(server, project.id().toString())
+                .filter(snapshot -> !snapshot.terminal())
+                .isPresent();
+        if (!activeOperation) {
+            this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
+        }
     }
 
     private List<PreparedChunkBatch> decodeDraft(

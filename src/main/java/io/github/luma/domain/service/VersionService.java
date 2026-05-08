@@ -60,6 +60,7 @@ public final class VersionService {
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final PreviewBoundsResolver previewBoundsResolver = new PreviewBoundsResolver();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
@@ -76,6 +77,7 @@ public final class VersionService {
         if (this.worldOperationManager.hasActiveOperation(level.getServer())) {
             throw new IllegalStateException("Another world operation is already running");
         }
+        this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
                 .consumeWorkingDraft(level.getServer(), project.id().toString());
@@ -181,6 +183,7 @@ public final class VersionService {
         if (this.worldOperationManager.hasActiveOperation(level.getServer())) {
             throw new IllegalStateException("Another world operation is already running");
         }
+        this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
                 .consumeWorkingDraft(level.getServer(), project.id().toString());
@@ -519,24 +522,13 @@ public final class VersionService {
 
     private void restoreOperationDraftIfNoLiveDraft(ProjectLayout layout, BuildProject project) {
         try {
-            if (this.recoveryRepository.loadDraft(layout).isPresent()) {
-                return;
-            }
-            Optional<RecoveryDraft> operationDraft = this.recoveryRepository.loadOperationDraft(layout);
-            if (operationDraft.isEmpty()) {
-                return;
-            }
-            this.recoveryRepository.saveDraft(layout, operationDraft.get());
-            LumaMod.LOGGER.warn(
-                    "Restored operation draft for project {} after save/amend failure",
-                    project.name()
-            );
-            LumaDebugLog.log(
-                    project,
-                    "save",
-                    "Restored operation draft for project {} after save/amend failure",
-                    project.name()
-            );
+            this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project)
+                    .ifPresent(draft -> LumaDebugLog.log(
+                            project,
+                            "save",
+                            "Restored operation draft for project {} after save/amend failure",
+                            project.name()
+                    ));
         } catch (IOException recoveryException) {
             LumaMod.LOGGER.warn(
                     "Failed to restore operation draft for project {} after save/amend failure",

@@ -11,6 +11,7 @@ import io.github.luma.storage.repository.ProjectCleanupRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -23,6 +24,7 @@ public final class ProjectCleanupService {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final ProjectCleanupRepository projectCleanupRepository = new ProjectCleanupRepository();
+    private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
 
     public ProjectCleanupReport inspect(MinecraftServer server, String projectName) throws IOException {
         CleanupContext context = this.context(server, projectName);
@@ -47,14 +49,19 @@ public final class ProjectCleanupService {
                 .snapshot(server, project.id().toString())
                 .filter(snapshot -> !snapshot.terminal())
                 .isPresent();
+        if (!activeOperation) {
+            this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
+        }
+        boolean unresolvedOperationDraft = !activeOperation && Files.exists(layout.recoveryOperationDraftFile());
         return new CleanupContext(
                 layout,
                 new ProjectCleanupPolicy(
                         referencedSnapshotFiles(versions),
                         referencedPreviewFiles(versions),
-                        !activeOperation
+                        !activeOperation && !unresolvedOperationDraft
                 ),
-                activeOperation
+                activeOperation,
+                unresolvedOperationDraft
         );
     }
 
@@ -62,6 +69,9 @@ public final class ProjectCleanupService {
         List<String> warnings = new ArrayList<>();
         if (context.activeOperation()) {
             warnings.add("Skipped operation-draft cleanup because the project has an active world operation");
+        }
+        if (context.unresolvedOperationDraft()) {
+            warnings.add("Skipped operation-draft cleanup because an interrupted save/amend draft still needs manual recovery");
         }
         return List.copyOf(warnings);
     }
@@ -97,7 +107,8 @@ public final class ProjectCleanupService {
     private record CleanupContext(
             ProjectLayout layout,
             ProjectCleanupPolicy policy,
-            boolean activeOperation
+            boolean activeOperation,
+            boolean unresolvedOperationDraft
     ) {
     }
 }

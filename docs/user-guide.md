@@ -699,11 +699,11 @@ Cleanup can remove:
 - orphaned previews;
 - unreferenced snapshots;
 - disposable cache files outside `baseline-chunks`;
-- stale operation drafts.
+- operation drafts that cannot hide recoverable edits.
 
 Cleanup reports candidate path, reason, size, warnings, total file count, and reclaimable bytes.
 
-If a Lumi world operation is still running for the project, cleanup keeps `recovery/operation-draft.bin.lz4` and reports the skip instead of deleting it.
+If a Lumi world operation is still running for the project, cleanup keeps `recovery/operation-draft.bin.lz4` and reports the skip instead of deleting it. If no operation is running, Lumi first restores or merges an interrupted save/amend draft into normal recovery. Cleanup keeps unresolved operation drafts and reports a warning instead of deleting potentially recoverable edits.
 
 ## Diagnostics
 

@@ -49,6 +49,7 @@ public final class ProjectService {
     private final HistoryTombstoneRepository historyTombstoneRepository = new HistoryTombstoneRepository();
     private final SnapshotCaptureService snapshotCaptureService = new SnapshotCaptureService();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
 
@@ -120,10 +121,12 @@ public final class ProjectService {
     public void bootstrapWorld(MinecraftServer server) throws IOException {
         this.ensureWorldOrigin(server);
         for (BuildProject project : this.listProjects(server)) {
+            ProjectLayout layout = this.resolveLayout(server, project.name());
+            this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
             if (!project.tracksWholeDimension()) {
                 continue;
             }
-            this.ensureWorldRootVersion(this.resolveLayout(server, project.name()), project, "Lumi", Instant.now());
+            this.ensureWorldRootVersion(layout, project, "Lumi", Instant.now());
         }
     }
 

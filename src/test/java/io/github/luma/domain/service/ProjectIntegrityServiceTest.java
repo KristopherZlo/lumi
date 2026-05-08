@@ -1,5 +1,6 @@
 package io.github.luma.domain.service;
 
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ExternalSourceInfo;
@@ -7,8 +8,12 @@ import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectIntegrityReport;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.PatchDataRepository;
+import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
@@ -20,6 +25,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import net.jpountz.lz4.LZ4FrameOutputStream;
+import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -34,6 +40,31 @@ class ProjectIntegrityServiceTest {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
+    private final PatchDataRepository patchDataRepository = new PatchDataRepository();
+    private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
+
+    @Test
+    void acceptsCurrentPatchPayloadSchema() throws Exception {
+        ProjectLayout layout = this.layout();
+        this.writeProjectMetadata(layout);
+        var patchMetadata = this.patchDataRepository.writePayload(
+                layout,
+                "patch-current",
+                "project",
+                "v0001",
+                List.of(new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:stone"),
+                        payload("minecraft:gold_block")
+                ))
+        );
+        this.patchMetaRepository.save(layout, patchMetadata);
+        this.versionRepository.save(layout, version("v0001", "", List.of("patch-current")));
+
+        ProjectIntegrityReport report = this.service.inspect(layout);
+
+        assertTrue(report.valid());
+    }
 
     @Test
     void reportsCorruptPatchAndSnapshotHeadersWithoutFullRestore() throws Exception {
@@ -116,5 +147,11 @@ class ProjectIntegrityServiceTest {
                 ExternalSourceInfo.manual(),
                 Instant.parse("2026-04-28T08:00:00Z")
         );
+    }
+
+    private static StatePayload payload(String blockId) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", blockId);
+        return new StatePayload(tag, null);
     }
 }

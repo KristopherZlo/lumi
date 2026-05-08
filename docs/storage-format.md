@@ -331,7 +331,7 @@ Stores the draft currently being saved or amended.
 
 This file is separate from `draft.bin.lz4` and `draft.wal.lz4`. Live capture never resumes it. If the player edits blocks while a save is still running, those edits start a new recovery draft and are not merged into the in-progress version. After the save commits, that new draft is rebased from the consumed head id to the newly saved version id without changing the draft payload schema.
 
-Maintenance cleanup may delete this file only when no Lumi world operation is active for the project.
+When no Lumi world operation is active, project bootstrap, recovery loading, save/amend startup, and cleanup first treat this file as an interrupted operation. If no live draft exists, Lumi promotes it back to the visible recovery draft. If a compatible live draft exists, Lumi merges the operation draft first and the live draft second so later captured edits win while first-old/latest-new semantics are preserved. If the operation draft is incompatible with the live draft or belongs to another project id, Lumi keeps it in place and cleanup reports a warning instead of deleting it automatically.
 
 ### `recovery/journal.json`
 
@@ -403,7 +403,7 @@ Runtime Lumi region selections are intentionally excluded from storage. They are
 Current cleanup is conservative and UI-driven:
 
 - dry-run first
-- delete only unreferenced snapshot payloads, orphaned preview PNGs, disposable cache files outside `baseline-chunks`, and stale `operation-draft`
+- delete only unreferenced snapshot payloads, orphaned preview PNGs, disposable cache files outside `baseline-chunks`, and operation drafts that have already been recovered or safely classified by the domain cleanup flow
 - never delete baseline chunks or files still referenced by version manifests
 - resolve deletion candidates back through the project root and skip symlink directories while pruning empty folders
 - tombstoned history remains soft-deleted only; physical cleanup of tombstoned version, patch, snapshot, and preview files is not part of the current cleanup policy
