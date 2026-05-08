@@ -25,9 +25,11 @@ The test-client Gradle profile always starts with Lumi diagnostics enabled:
 - `-Dlumi.debug=true`
 - `-Dlumi.startupProfile=true`
 - `-Dlumi.loadLog=true`
+- `-Dlumi.lightLog=true`
+- `-Dlumi.blockApplyLog=true`
 
 The load log is written under `run/test-client/logs/lumi-load.log` by default. Restore, undo/redo, and quick rollback runs can now emit an automatic `light-refresh` follow-up operation after the block/entity action; runtime checks should treat it as part of the operation window and verify it completes without `runLightUpdates()` thread exceptions.
-Because `lumi.loadLog` enables the focused diagnostic sinks too, test-client launches also write `run/test-client/logs/lumi-light.log` and `run/test-client/logs/lumi-block-apply.log`. Use the light log for rejoin-only shadow investigations and the block-apply log for restore/rollback bottleneck breakdowns by preload, chunk, section path, block entities, and entity operations.
+Test-client launches also write `run/test-client/logs/lumi-light.log` and `run/test-client/logs/lumi-block-apply.log`. Use the light log for rejoin-only shadow investigations and the block-apply log for restore/rollback bottleneck breakdowns by preload, chunk, section path, block entities, and entity operations.
 
 If you want to force a specific JDK:
 

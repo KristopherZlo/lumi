@@ -57,6 +57,8 @@ loom {
             vmArg '-Dlumi.debug=true'
             vmArg '-Dlumi.startupProfile=true'
             vmArg '-Dlumi.loadLog=true'
+            vmArg '-Dlumi.lightLog=true'
+            vmArg '-Dlumi.blockApplyLog=true'
         }
 
         baselineClientGameTest {
