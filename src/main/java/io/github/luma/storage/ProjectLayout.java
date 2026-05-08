@@ -58,6 +58,10 @@ public record ProjectLayout(Path root) {
         return this.root.resolve("cache");
     }
 
+    public Path contentCacheDir() {
+        return this.cacheDir().resolve("content");
+    }
+
     public Path locksDir() {
         return this.root.resolve("locks");
     }
@@ -104,6 +108,10 @@ public record ProjectLayout(Path root) {
 
     public Path snapshotFile(String snapshotId) {
         return StoragePathPolicy.resolveStorageFile(this.snapshotsDir(), snapshotId, ".bin.lz4", "snapshot id");
+    }
+
+    public Path contentFile(String sha256) {
+        return StoragePathPolicy.resolveStorageFile(this.contentCacheDir(), sha256, ".bin.lz4", "content hash");
     }
 
     public Path recoveryBaseFile() {
