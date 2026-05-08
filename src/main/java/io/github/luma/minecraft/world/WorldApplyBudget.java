@@ -10,7 +10,10 @@ record WorldApplyBudget(
         int maxLightChecks,
         int maxRedstoneUpdates,
         int sparseStepCap,
-        int maxPreloadChunks
+        int maxPreloadChunks,
+        int maxSyncChunkLoads,
+        int maxBlockEntities,
+        int maxEntityOperations
 ) {
 
     String summary() {
@@ -23,6 +26,9 @@ record WorldApplyBudget(
                 + ", maxLightChecks=" + this.maxLightChecks
                 + ", maxRedstoneUpdates=" + this.maxRedstoneUpdates
                 + ", sparseStepCap=" + this.sparseStepCap
-                + ", maxPreloadChunks=" + this.maxPreloadChunks;
+                + ", maxPreloadChunks=" + this.maxPreloadChunks
+                + ", maxSyncChunkLoads=" + this.maxSyncChunkLoads
+                + ", maxBlockEntities=" + this.maxBlockEntities
+                + ", maxEntityOperations=" + this.maxEntityOperations;
     }
 }

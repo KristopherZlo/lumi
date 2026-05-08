@@ -42,8 +42,6 @@ import net.minecraft.world.level.storage.LevelResource;
  */
 public final class WorldOperationManager {
 
-    private static final int MAX_BLOCK_ENTITIES_PER_TICK = 64;
-    private static final int MAX_ENTITY_OPERATIONS_PER_TICK = 32;
     private static final int EXACT_REPLAY_GUARD_TICKS = 40;
     private static final int LIGHT_PUBLISH_TICKS = 2;
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
@@ -398,13 +396,21 @@ public final class WorldOperationManager {
             if (budgetNanos <= 0L || elapsedNanos <= 0L) {
                 return;
             }
-            if (elapsedNanos > budgetNanos && this.adaptiveScale > MIN_ADAPTIVE_SCALE) {
-                this.adaptiveScale = Math.max(MIN_ADAPTIVE_SCALE, this.adaptiveScale * 0.75D);
+            if (elapsedNanos > budgetNanos && this.adaptiveScale > this.minimumAdaptiveScale()) {
+                this.adaptiveScale = Math.max(this.minimumAdaptiveScale(), this.adaptiveScale * 0.75D);
                 return;
             }
-            if (elapsedNanos < budgetNanos / 2L && this.adaptiveScale < MAX_ADAPTIVE_SCALE) {
-                this.adaptiveScale = Math.min(MAX_ADAPTIVE_SCALE, this.adaptiveScale * 1.08D);
+            if (elapsedNanos < budgetNanos / 2L && this.adaptiveScale < this.maximumAdaptiveScale()) {
+                this.adaptiveScale = Math.min(this.maximumAdaptiveScale(), this.adaptiveScale * 1.08D);
             }
+        }
+
+        protected double minimumAdaptiveScale() {
+            return MIN_ADAPTIVE_SCALE;
+        }
+
+        protected double maximumAdaptiveScale() {
+            return MAX_ADAPTIVE_SCALE;
         }
 
         protected ProgressSink progressSink() {
@@ -758,7 +764,12 @@ public final class WorldOperationManager {
                     int maxBlocks = this.maxWorkForCurrentStep(budget, processedWorkThisTick, processedNativeCellsThisTick);
                     int maxDirectSections = Math.max(0, budget.maxDirectSections() - processedDirectSectionsThisTick);
                     try {
-                        processed = this.applyCurrentChunk(maxBlocks, maxDirectSections);
+                        processed = this.applyCurrentChunk(
+                                maxBlocks,
+                                maxDirectSections,
+                                budget.maxBlockEntities(),
+                                budget.maxEntityOperations()
+                        );
                     } finally {
                         if (allowSynchronousChunkLoad) {
                             WorldApplyChunkLoadContext.pop();
@@ -1260,6 +1271,11 @@ public final class WorldOperationManager {
                     && this.chunkPreloader.complete();
         }
 
+        @Override
+        protected double minimumAdaptiveScale() {
+            return this.profile == WorldApplyProfile.MAXIMUM ? 1.0D : super.minimumAdaptiveScale();
+        }
+
         private boolean advanceCompletion() throws Exception {
             if (this.completionFuture == null) {
                 this.progressSink().update(
@@ -1293,7 +1309,12 @@ public final class WorldOperationManager {
             }
         }
 
-        private AppliedWork applyCurrentChunk(int maxBlocks, int maxDirectSections) {
+        private AppliedWork applyCurrentChunk(
+                int maxBlocks,
+                int maxDirectSections,
+                int maxBlockEntities,
+                int maxEntityOperations
+        ) {
             if (this.currentBatch == null) {
                 return AppliedWork.none();
             }
@@ -1433,7 +1454,7 @@ public final class WorldOperationManager {
                             this.level(),
                             this.currentBlockEntities,
                             this.blockEntityIndex,
-                            Math.min(maxBlocks, MAX_BLOCK_ENTITIES_PER_TICK),
+                            Math.min(maxBlocks, maxBlockEntities),
                             this.applyMetrics
                     );
                     this.blockEntityIndex += processed;
@@ -1448,7 +1469,7 @@ public final class WorldOperationManager {
                                 "Block-entity step chunk={}:{} max={} processed={} nextIndex={} total={} completed={} elapsedMicros={}",
                                 this.currentBatch.chunk().x(),
                                 this.currentBatch.chunk().z(),
-                                Math.min(maxBlocks, MAX_BLOCK_ENTITIES_PER_TICK),
+                                Math.min(maxBlocks, maxBlockEntities),
                                 processed,
                                 this.blockEntityIndex,
                                 this.currentBlockEntities.size(),
@@ -1463,7 +1484,7 @@ public final class WorldOperationManager {
                                 "label=" + this.handle().label()
                                         + ", operationId=" + this.handle().id()
                                         + ", chunk=" + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
-                                        + ", max=" + Math.min(maxBlocks, MAX_BLOCK_ENTITIES_PER_TICK)
+                                        + ", max=" + Math.min(maxBlocks, maxBlockEntities)
                                         + ", processed=" + processed
                                         + ", nextIndex=" + this.blockEntityIndex
                                         + ", total=" + this.currentBlockEntities.size()
@@ -1486,7 +1507,7 @@ public final class WorldOperationManager {
                         this.currentBatch.chunk(),
                         this.currentBatch.entityBatch(),
                         this.entityIndex,
-                        Math.min(maxBlocks, MAX_ENTITY_OPERATIONS_PER_TICK)
+                        Math.min(maxBlocks, maxEntityOperations)
                 );
                 this.entityIndex += processed;
                 if (this.entityIndex >= entityOperationCount) {
@@ -1500,7 +1521,7 @@ public final class WorldOperationManager {
                             "Entity step chunk={}:{} max={} processed={} nextIndex={} total={} completed={} elapsedMicros={}",
                             this.currentBatch.chunk().x(),
                             this.currentBatch.chunk().z(),
-                            Math.min(maxBlocks, MAX_ENTITY_OPERATIONS_PER_TICK),
+                            Math.min(maxBlocks, maxEntityOperations),
                             processed,
                             this.entityIndex,
                             entityOperationCount,
@@ -1515,7 +1536,7 @@ public final class WorldOperationManager {
                             "label=" + this.handle().label()
                                     + ", operationId=" + this.handle().id()
                                     + ", chunk=" + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
-                                    + ", max=" + Math.min(maxBlocks, MAX_ENTITY_OPERATIONS_PER_TICK)
+                                    + ", max=" + Math.min(maxBlocks, maxEntityOperations)
                                     + ", processed=" + processed
                                     + ", nextIndex=" + this.entityIndex
                                     + ", total=" + entityOperationCount

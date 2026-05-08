@@ -20,7 +20,7 @@ final class WorldApplyOperationProfile {
             return WorldApplyProfile.DIAGNOSTIC_TURBO;
         }
         if (label != null && HIGH_THROUGHPUT_LABELS.contains(label)) {
-            return WorldApplyProfile.HISTORY_FAST;
+            return WorldApplyProfile.MAXIMUM;
         }
         return WorldApplyProfile.NORMAL;
     }

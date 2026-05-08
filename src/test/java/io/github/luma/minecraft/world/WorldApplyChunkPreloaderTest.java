@@ -35,7 +35,21 @@ class WorldApplyChunkPreloaderTest {
         WorldApplyChunkPreloader preloader = WorldApplyChunkPreloader.create(queue, WorldApplyProfile.HISTORY_FAST);
         FakeChunkPreloadAccess access = new FakeChunkPreloadAccess();
         access.loaded.add(new ChunkPoint(1, 2));
-        WorldApplyBudget budget = new WorldApplyBudget(512, 1_000_000L, 1, 512, 1, 1, 512, 128, 128, 2);
+        WorldApplyBudget budget = new WorldApplyBudget(
+                512,
+                1_000_000L,
+                1,
+                512,
+                1,
+                1,
+                512,
+                128,
+                128,
+                2,
+                2,
+                64,
+                32
+        );
 
         WorldApplyChunkPreloader.PreloadTickResult first = preloader.advance(access, budget, Long.MAX_VALUE);
 
@@ -52,6 +66,40 @@ class WorldApplyChunkPreloaderTest {
         preloader.release(access);
 
         Assertions.assertEquals(Set.of(new ChunkPoint(1, 2), new ChunkPoint(3, 4)), access.released);
+    }
+
+    @Test
+    void syncFallbackLoadsUseBudgetCap() {
+        LocalQueue queue = LocalQueue.completed(List.of(
+                batch(1, 2),
+                batch(3, 4),
+                batch(5, 6)
+        ));
+        WorldApplyChunkPreloader preloader = WorldApplyChunkPreloader.create(queue, WorldApplyProfile.MAXIMUM);
+        FakeChunkPreloadAccess access = new FakeChunkPreloadAccess();
+        WorldApplyBudget budget = new WorldApplyBudget(
+                512,
+                1_000_000L,
+                1,
+                512,
+                1,
+                1,
+                512,
+                128,
+                128,
+                3,
+                1,
+                64,
+                32
+        );
+
+        WorldApplyChunkPreloader.PreloadTickResult result = preloader.advance(access, budget, Long.MAX_VALUE);
+
+        Assertions.assertEquals(1, result.completedChunks());
+        Assertions.assertEquals(1, result.newlyLoadedChunks());
+        Assertions.assertEquals(1, result.syncFallbackLoads());
+        Assertions.assertEquals(3, result.ticketedChunks());
+        Assertions.assertFalse(result.complete());
     }
 
     private static ChunkBatch batch(int x, int z) {

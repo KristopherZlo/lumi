@@ -7,8 +7,6 @@ import java.util.Set;
 
 final class WorldApplyChunkPreloader {
 
-    private static final int MAX_SYNC_FALLBACK_LOADS_PER_TICK = 32;
-
     private final List<ChunkPoint> chunks;
     private final Set<ChunkPoint> ticketedChunks = new LinkedHashSet<>();
     private int nextIndex;
@@ -45,6 +43,7 @@ final class WorldApplyChunkPreloader {
         int ticketed = 0;
         int syncFallbackLoads = 0;
         int processedLoads = 0;
+        int maxSyncLoads = Math.max(0, budget.maxSyncChunkLoads());
         while (this.ticketIndex < this.chunks.size()
                 && ticketed < maxChunks
                 && System.nanoTime() < deadlineNanos) {
@@ -71,7 +70,7 @@ final class WorldApplyChunkPreloader {
                 processedLoads += 1;
                 continue;
             }
-            if (syncFallbackLoads >= MAX_SYNC_FALLBACK_LOADS_PER_TICK) {
+            if (syncFallbackLoads >= maxSyncLoads) {
                 break;
             }
             syncFallbackLoads += 1;

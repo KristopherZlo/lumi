@@ -20,6 +20,9 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(highThroughput.maxDirectSections() > normal.maxDirectSections());
         assertTrue(highThroughput.maxLightChecks() > normal.maxLightChecks());
         assertTrue(highThroughput.maxPreloadChunks() > normal.maxPreloadChunks());
+        assertTrue(highThroughput.maxSyncChunkLoads() > normal.maxSyncChunkLoads());
+        assertTrue(highThroughput.maxBlockEntities() > normal.maxBlockEntities());
+        assertTrue(highThroughput.maxEntityOperations() > normal.maxEntityOperations());
         assertEquals(highThroughput.maxBlocks(), highThroughput.maxNativeCells());
         assertEquals(1, normal.maxRewriteSections());
         assertEquals(128, highThroughput.maxRewriteSections());
@@ -52,6 +55,25 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(turbo.maxLightChecks() > historyFast.maxLightChecks());
         assertTrue(turbo.sparseStepCap() > historyFast.sparseStepCap());
         assertTrue(turbo.maxPreloadChunks() > historyFast.maxPreloadChunks());
+        assertTrue(turbo.maxSyncChunkLoads() > historyFast.maxSyncChunkLoads());
+    }
+
+    @Test
+    void maximumProfileUsesForegroundRestoreBudgets() {
+        WorldApplyBudget turbo = this.planner.plan(1.0D, 1.0D, WorldApplyProfile.DIAGNOSTIC_TURBO);
+        WorldApplyBudget maximum = this.planner.plan(1.0D, 1.0D, WorldApplyProfile.MAXIMUM);
+
+        assertTrue(maximum.maxBlocks() > turbo.maxBlocks());
+        assertTrue(maximum.maxNanos() > turbo.maxNanos());
+        assertTrue(maximum.maxNativeSections() > turbo.maxNativeSections());
+        assertTrue(maximum.maxRewriteSections() > turbo.maxRewriteSections());
+        assertTrue(maximum.maxDirectSections() > turbo.maxDirectSections());
+        assertTrue(maximum.maxLightChecks() > turbo.maxLightChecks());
+        assertTrue(maximum.maxRedstoneUpdates() > turbo.maxRedstoneUpdates());
+        assertTrue(maximum.maxPreloadChunks() > turbo.maxPreloadChunks());
+        assertTrue(maximum.maxSyncChunkLoads() > turbo.maxSyncChunkLoads());
+        assertTrue(maximum.maxBlockEntities() > turbo.maxBlockEntities());
+        assertTrue(maximum.maxEntityOperations() > turbo.maxEntityOperations());
     }
 
     @Test
@@ -59,6 +81,7 @@ class WorldApplyBudgetPlannerTest {
         WorldApplyBudget normal = this.planner.plan(0.0D, 0.25D, WorldApplyProfile.NORMAL);
         WorldApplyBudget historyFast = this.planner.plan(0.0D, 0.25D, WorldApplyProfile.HISTORY_FAST);
         WorldApplyBudget turbo = this.planner.plan(0.0D, 0.25D, WorldApplyProfile.DIAGNOSTIC_TURBO);
+        WorldApplyBudget maximum = this.planner.plan(0.0D, 0.25D, WorldApplyProfile.MAXIMUM);
 
         assertEquals(1, normal.maxDirectSections());
         assertEquals(250_000L, normal.maxNanos());
@@ -66,6 +89,8 @@ class WorldApplyBudgetPlannerTest {
         assertEquals(16_000_000L, historyFast.maxNanos());
         assertEquals(128, turbo.maxDirectSections());
         assertEquals(32_000_000L, turbo.maxNanos());
+        assertEquals(512, maximum.maxDirectSections());
+        assertEquals(80_000_000L, maximum.maxNanos());
     }
 
     @Test
