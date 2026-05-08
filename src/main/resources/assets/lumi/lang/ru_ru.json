@@ -461,6 +461,7 @@
   "luma.status.undo_queued": "Отмена добавлена в очередь.",
   "luma.status.redo_queued": "Повтор добавлен в очередь.",
   "luma.status.undo_redo_queue_full": "Очередь отмены/повтора заполнена.",
+  "luma.status.undo_redo_settling": "Отмена/повтор ждёт стабилизации блоков.",
   "luma.status.native_undo_started": "Отправлена undo-команда WorldEdit/FAWE.",
   "luma.status.native_redo_started": "Отправлена redo-команда WorldEdit/FAWE.",
   "luma.status.axiom_undo_ignored": "Действие Axiom отменяется через Lumi.",

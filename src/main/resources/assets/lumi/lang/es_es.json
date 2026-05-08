@@ -412,6 +412,7 @@
   "luma.status.undo_queued": "Undo queued.",
   "luma.status.redo_queued": "Redo queued.",
   "luma.status.undo_redo_queue_full": "Undo/redo queue is full.",
+  "luma.status.undo_redo_settling": "Deshacer/rehacer espera a que se estabilicen las actualizaciones de bloques.",
   "luma.status.native_undo_started": "Native undo command sent for the latest WorldEdit/FAWE action.",
   "luma.status.native_redo_started": "Native redo command sent for the latest WorldEdit/FAWE action.",
   "luma.status.axiom_undo_ignored": "Axiom actions replay through Lumi undo/redo.",

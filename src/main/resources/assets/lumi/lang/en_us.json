@@ -435,6 +435,7 @@
   "luma.status.undo_queued": "Undo queued.",
   "luma.status.redo_queued": "Redo queued.",
   "luma.status.undo_redo_queue_full": "Undo/redo queue is full.",
+  "luma.status.undo_redo_settling": "Undo/redo is waiting for block updates to settle.",
   "luma.status.native_undo_started": "WorldEdit/FAWE undo sent.",
   "luma.status.native_redo_started": "WorldEdit/FAWE redo sent.",
   "luma.status.axiom_undo_ignored": "Axiom actions replay through Lumi undo/redo.",

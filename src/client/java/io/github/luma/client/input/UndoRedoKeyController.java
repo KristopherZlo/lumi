@@ -18,7 +18,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletionException;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -35,6 +34,7 @@ public final class UndoRedoKeyController {
     private final ExternalUndoRedoPolicy externalUndoRedoPolicy = new ExternalUndoRedoPolicy();
     private final AxiomUndoRedoBridge axiomUndoRedoBridge = new AxiomUndoRedoBridge();
     private final UndoRedoRequestQueue requestQueue = new UndoRedoRequestQueue();
+    private final UndoRedoFailurePolicy failurePolicy = new UndoRedoFailurePolicy();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     public void undo(Minecraft client) {
@@ -71,17 +71,12 @@ public final class UndoRedoKeyController {
             }
             this.start(client, target, intent == UndoRedoRequestQueue.Intent.UNDO);
         } catch (Exception exception) {
-            if (intent != null && scope != null && "luma.status.world_operation_busy".equals(this.statusKey(
-                    exception,
-                    intent != UndoRedoRequestQueue.Intent.REDO
-            ))) {
+            String statusKey = this.failurePolicy.statusKey(exception, intent != UndoRedoRequestQueue.Intent.REDO);
+            if (intent != null && scope != null && this.failurePolicy.shouldRetry(statusKey)) {
                 this.requestQueue.offerFirst(scope, intent);
                 return;
             }
-            client.gui.setOverlayMessage(this.statusMessage(this.statusKey(
-                    exception,
-                    intent != UndoRedoRequestQueue.Intent.REDO
-            )), false);
+            client.gui.setOverlayMessage(this.failurePolicy.statusMessage(statusKey), false);
         }
     }
 
@@ -101,7 +96,7 @@ public final class UndoRedoKeyController {
                             : "luma.status.redo_queued"
             ), false);
         } catch (Exception exception) {
-            client.gui.setOverlayMessage(this.statusMessage(this.statusKey(
+            client.gui.setOverlayMessage(this.failurePolicy.statusMessage(this.failurePolicy.statusKey(
                     exception,
                     intent != UndoRedoRequestQueue.Intent.REDO
             )), false);
@@ -131,14 +126,14 @@ public final class UndoRedoKeyController {
                     undo ? "luma.status.undo_started" : "luma.status.redo_started"
             ), false);
         } catch (Exception exception) {
-            String statusKey = this.statusKey(exception, undo);
-            if ("luma.status.world_operation_busy".equals(statusKey)) {
+            String statusKey = this.failurePolicy.statusKey(exception, undo);
+            if (this.failurePolicy.shouldRetry(statusKey)) {
                 this.requestQueue.offerFirst(target.scope(), undo
                         ? UndoRedoRequestQueue.Intent.UNDO
                         : UndoRedoRequestQueue.Intent.REDO);
                 return;
             }
-            client.gui.setOverlayMessage(this.statusMessage(statusKey), false);
+            client.gui.setOverlayMessage(this.failurePolicy.statusMessage(statusKey), false);
         }
     }
 
@@ -281,29 +276,6 @@ public final class UndoRedoKeyController {
                 actor,
                 Instant.now()
         );
-    }
-
-    private String statusKey(Exception exception, boolean undo) {
-        String message = exception.getMessage() == null ? "" : exception.getMessage();
-        if (message.contains("admin permissions") || message.contains("cheats enabled")) {
-            return "luma.status.admin_required";
-        }
-        if (message.contains("Another world operation is already running")) {
-            return "luma.status.world_operation_busy";
-        }
-        if (message.contains("No Lumi action") || message.contains("No active Lumi workspace")) {
-            return undo ? "luma.status.undo_unavailable" : "luma.status.redo_unavailable";
-        }
-        return "luma.status.operation_failed";
-    }
-
-    private Component statusMessage(String key) {
-        if ("luma.status.operation_failed".equals(key)
-                || "luma.status.world_operation_busy".equals(key)
-                || "luma.status.admin_required".equals(key)) {
-            return ActionBarMessagePresenter.error(key);
-        }
-        return ActionBarMessagePresenter.warning(key);
     }
 
     private record CurrentTarget(ServerLevel level, BuildProject project, UndoRedoRequestQueue.Scope scope) {
