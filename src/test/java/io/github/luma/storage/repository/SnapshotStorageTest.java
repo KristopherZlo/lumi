@@ -154,6 +154,74 @@ class SnapshotStorageTest {
     }
 
     @Test
+    void readsOnlySelectedChunksFromAddressableSnapshot() throws Exception {
+        short[] indexes = new short[4096];
+        SnapshotData snapshot = new SnapshotData(
+                "project",
+                Instant.parse("2026-04-20T10:00:00Z"),
+                0,
+                15,
+                List.of(
+                        new SnapshotChunkData(
+                                2,
+                                3,
+                                List.of(new SnapshotSectionData(0, List.of(state("minecraft:stone")), indexes)),
+                                Map.of()
+                        ),
+                        new SnapshotChunkData(
+                                -1,
+                                4,
+                                List.of(new SnapshotSectionData(0, List.of(state("minecraft:gold_block")), indexes)),
+                                Map.of()
+                        )
+                )
+        );
+
+        Path file = this.tempDir.resolve("selected-chunk.bin.lz4");
+        this.writer.writeFile(file, snapshot);
+        SnapshotData selected = this.reader.readFile(
+                file,
+                List.of(new io.github.luma.domain.model.ChunkPoint(-1, 4))
+        );
+
+        assertEquals(1, selected.chunks().size());
+        assertEquals(-1, selected.chunks().getFirst().chunkX());
+        assertEquals(4, selected.chunks().getFirst().chunkZ());
+    }
+
+    @Test
+    void exposesAddressableSnapshotSectionIndex() throws Exception {
+        short[] indexes = new short[4096];
+        SnapshotData snapshot = new SnapshotData(
+                "project",
+                Instant.parse("2026-04-20T10:00:00Z"),
+                0,
+                31,
+                List.of(new SnapshotChunkData(
+                        2,
+                        3,
+                        List.of(
+                                new SnapshotSectionData(0, List.of(state("minecraft:stone")), indexes),
+                                new SnapshotSectionData(1, List.of(state("minecraft:gold_block")), indexes)
+                        ),
+                        Map.of(),
+                        List.of(entity("minecraft:item", "00000000-0000-0000-0000-000000000004"))
+                ))
+        );
+
+        Path file = this.tempDir.resolve("section-index.bin.lz4");
+        this.writer.writeFile(file, snapshot);
+        var metadata = this.reader.loadSectionIndex(file);
+
+        assertEquals("project", metadata.projectId());
+        assertEquals(1, metadata.chunks().size());
+        assertEquals(2, metadata.sectionCount());
+        assertEquals(1, metadata.entityCount());
+        assertEquals(2, metadata.chunks().getFirst().sectionFingerprints().size());
+        assertEquals(64, metadata.chunks().getFirst().sectionFingerprints().getFirst().sha256().length());
+    }
+
+    @Test
     void readsVersionFourSnapshotsAsBlockOnly() throws Exception {
         Path file = this.tempDir.resolve("legacy-v4.bin.lz4");
         try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(

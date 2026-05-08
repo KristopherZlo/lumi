@@ -177,7 +177,12 @@ final class PartialRestoreTargetStatePlanner {
         VersionState state = new VersionState();
         LinkedHashSet<ChunkPoint> seededChunks = new LinkedHashSet<>();
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
-            this.materializeSnapshot(this.snapshotReader.readFile(layout.snapshotFile(chain.anchor().snapshotId())), scope, state, seededChunks);
+            this.materializeSnapshot(
+                    this.snapshotReader.readFile(layout.snapshotFile(chain.anchor().snapshotId()), scope.chunks()),
+                    scope,
+                    state,
+                    seededChunks
+            );
         }
         if (project.tracksWholeDimension()) {
             this.materializeBaselineGaps(layout, scope, state, seededChunks);
@@ -330,7 +335,7 @@ final class PartialRestoreTargetStatePlanner {
             for (String patchId : version.patchIds()) {
                 var metadata = this.patchMetaRepository.load(layout, patchId)
                         .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-                var changes = this.patchDataRepository.loadWorldChanges(layout, metadata);
+                var changes = this.patchDataRepository.loadWorldChanges(layout, metadata, scope.chunks());
                 for (StoredBlockChange change : changes.blockChanges()) {
                     if (scope.includesBlock(change.pos())) {
                         state.blocks.put(change.pos(), change.newValue());

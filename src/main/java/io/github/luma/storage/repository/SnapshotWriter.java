@@ -3,6 +3,7 @@ package io.github.luma.storage.repository;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotRef;
@@ -25,7 +26,7 @@ import net.jpountz.lz4.LZ4FrameOutputStream;
 public final class SnapshotWriter {
 
     private static final int MAGIC = 0x4C534E50;
-    private static final int VERSION = 5;
+    private static final int VERSION = 6;
 
     public void writeFile(Path snapshotFile, SnapshotData snapshot) throws IOException {
         StorageIo.writeAtomically(snapshotFile, output -> this.writeCompressed(output, snapshot));
@@ -70,7 +71,7 @@ public final class SnapshotWriter {
     }
 
     private void writeCompressed(OutputStream output, SnapshotData snapshot) throws IOException {
-        try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(new BufferedOutputStream(output)))) {
+        try (DataOutputStream data = new DataOutputStream(new BufferedOutputStream(output))) {
             data.writeInt(MAGIC);
             data.writeInt(VERSION);
             data.writeUTF(snapshot.projectId());
@@ -80,34 +81,84 @@ public final class SnapshotWriter {
             data.writeInt(snapshot.chunks().size());
 
             for (SnapshotChunkData chunk : snapshot.chunks()) {
+                byte[] chunkBytes = this.chunkBytes(chunk);
+                byte[] compressedBytes = this.compressFrame(chunkBytes);
                 data.writeInt(chunk.chunkX());
                 data.writeInt(chunk.chunkZ());
-                data.writeInt(chunk.sections().size());
-                data.writeInt(chunk.blockEntities().size());
-
-                for (SnapshotSectionData section : chunk.sections()) {
-                    data.writeInt(section.sectionY());
-                    data.writeInt(section.palette().size());
-                    for (var tag : section.palette()) {
-                        StorageIo.writeCompound(data, tag);
-                    }
-                    data.writeInt(section.paletteIndexes().length);
-                    for (short paletteIndex : section.paletteIndexes()) {
-                        data.writeShort(paletteIndex);
-                    }
-                }
-
-                for (Map.Entry<Integer, net.minecraft.nbt.CompoundTag> entry : chunk.blockEntities().entrySet()) {
-                    data.writeInt(entry.getKey());
-                    StorageIo.writeCompound(data, entry.getValue());
-                }
-
+                this.writeSectionFingerprints(data, chunk);
                 data.writeInt(chunk.entitySnapshots().size());
-                for (EntityPayload entitySnapshot : chunk.entitySnapshots()) {
-                    StorageIo.writeCompound(data, entitySnapshot.copyTag());
-                }
+                data.writeInt(chunkBytes.length);
+                data.writeInt(compressedBytes.length);
+                data.write(compressedBytes);
             }
         }
+    }
+
+    private byte[] chunkBytes(SnapshotChunkData chunk) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream data = new DataOutputStream(bytes)) {
+            data.writeInt(chunk.chunkX());
+            data.writeInt(chunk.chunkZ());
+            data.writeInt(chunk.sections().size());
+            data.writeInt(chunk.blockEntities().size());
+            for (SnapshotSectionData section : chunk.sections()) {
+                this.writeSection(data, section);
+            }
+            for (Map.Entry<Integer, net.minecraft.nbt.CompoundTag> entry : chunk.blockEntities().entrySet()) {
+                data.writeInt(entry.getKey());
+                StorageIo.writeCompound(data, entry.getValue());
+            }
+            data.writeInt(chunk.entitySnapshots().size());
+            for (EntityPayload entitySnapshot : chunk.entitySnapshots()) {
+                StorageIo.writeCompound(data, entitySnapshot.copyTag());
+            }
+        }
+        return bytes.toByteArray();
+    }
+
+    private void writeSectionFingerprints(DataOutputStream data, SnapshotChunkData chunk) throws IOException {
+        data.writeInt(chunk.sections().size());
+        for (SnapshotSectionData section : chunk.sections()) {
+            SectionFingerprint fingerprint = SectionFingerprint.fromBytes(
+                    chunk.chunkX(),
+                    chunk.chunkZ(),
+                    section.sectionY(),
+                    section.paletteIndexes().length,
+                    this.sectionBytes(section)
+            );
+            data.writeInt(fingerprint.sectionY());
+            data.writeInt(fingerprint.changedCount());
+            data.writeLong(fingerprint.xxHash64());
+            data.writeUTF(fingerprint.sha256());
+        }
+    }
+
+    private byte[] sectionBytes(SnapshotSectionData section) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream data = new DataOutputStream(bytes)) {
+            this.writeSection(data, section);
+        }
+        return bytes.toByteArray();
+    }
+
+    private void writeSection(DataOutputStream data, SnapshotSectionData section) throws IOException {
+        data.writeInt(section.sectionY());
+        data.writeInt(section.palette().size());
+        for (var tag : section.palette()) {
+            StorageIo.writeCompound(data, tag);
+        }
+        data.writeInt(section.paletteIndexes().length);
+        for (short paletteIndex : section.paletteIndexes()) {
+            data.writeShort(paletteIndex);
+        }
+    }
+
+    private byte[] compressFrame(byte[] bytes) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (LZ4FrameOutputStream compressed = new LZ4FrameOutputStream(output)) {
+            compressed.write(bytes);
+        }
+        return output.toByteArray();
     }
 
     private SnapshotData materializePreparedSnapshot(

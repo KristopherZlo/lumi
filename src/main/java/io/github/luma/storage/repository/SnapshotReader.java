@@ -1,41 +1,252 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.LumaMod;
+import io.github.luma.domain.model.ChunkPayloadSlice;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
+import io.github.luma.domain.model.SnapshotMetadata;
 import io.github.luma.domain.model.SnapshotRef;
 import io.github.luma.domain.model.SnapshotSectionData;
 import io.github.luma.storage.ProjectLayout;
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.jpountz.lz4.LZ4FrameInputStream;
 
 public final class SnapshotReader {
 
     private static final int MAGIC = 0x4C534E50;
-    private static final int VERSION = 5;
+    private static final int VERSION = 6;
+    private static final int LEGACY_ENTITY_SNAPSHOT_VERSION = 5;
 
     public SnapshotData load(ProjectLayout layout, SnapshotRef snapshot) throws IOException {
         return this.readFile(layout.snapshotFile(snapshot.id()));
     }
 
     public SnapshotData readFile(Path snapshotFile) throws IOException {
+        if (this.isAddressableSnapshot(snapshotFile)) {
+            return this.readAddressableFile(snapshotFile, null);
+        }
+        return this.readLegacyFile(snapshotFile);
+    }
+
+    public SnapshotData readFile(Path snapshotFile, Collection<ChunkPoint> chunks) throws IOException {
+        if (this.isAddressableSnapshot(snapshotFile)) {
+            return this.readAddressableFile(snapshotFile, chunks);
+        }
+        if (chunks == null || chunks.isEmpty()) {
+            return new SnapshotData("", Instant.EPOCH, 0, 0, List.of());
+        }
+        Set<ChunkPoint> requested = new HashSet<>(chunks);
+        SnapshotData legacy = this.readLegacyFile(snapshotFile);
+        return new SnapshotData(
+                legacy.projectId(),
+                legacy.createdAt(),
+                legacy.minBuildHeight(),
+                legacy.maxBuildHeight(),
+                legacy.chunks().stream()
+                        .filter(chunk -> requested.contains(chunk.chunk()))
+                        .toList()
+        );
+    }
+
+    public List<ChunkPoint> loadChunks(ProjectLayout layout, SnapshotRef snapshot) throws IOException {
+        return this.loadChunks(layout.snapshotFile(snapshot.id()));
+    }
+
+    public List<ChunkPoint> loadChunks(Path snapshotFile) throws IOException {
+        if (this.isAddressableSnapshot(snapshotFile)) {
+            return this.loadAddressableMetadata(snapshotFile).chunks().stream()
+                    .map(ChunkPayloadSlice::chunk)
+                    .toList();
+        }
+        return this.loadLegacyChunks(snapshotFile);
+    }
+
+    public SnapshotMetadata loadSectionIndex(Path snapshotFile) throws IOException {
+        if (this.isAddressableSnapshot(snapshotFile)) {
+            return this.loadAddressableMetadata(snapshotFile);
+        }
+        List<ChunkPayloadSlice> chunks = this.loadLegacyChunks(snapshotFile).stream()
+                .map(chunk -> new ChunkPayloadSlice(chunk.x(), chunk.z(), 0L, 0))
+                .toList();
+        return new SnapshotMetadata(
+                snapshotId(snapshotFile),
+                "",
+                snapshotFile.getFileName().toString(),
+                chunks,
+                0,
+                0,
+                Files.size(snapshotFile)
+        );
+    }
+
+    private SnapshotData readAddressableFile(Path snapshotFile, Collection<ChunkPoint> chunks) throws IOException {
+        Set<ChunkPoint> requested = chunks == null ? null : new HashSet<>(chunks);
+        try (RandomAccessFile input = new RandomAccessFile(snapshotFile.toFile(), "r")) {
+            AddressableHeader header = this.readAddressableHeader(input, snapshotFile);
+            List<SnapshotChunkData> chunkData = new ArrayList<>();
+            for (int chunkIndex = 0; chunkIndex < header.chunkCount(); chunkIndex++) {
+                long frameOffset = input.getFilePointer();
+                AddressableChunkFrame frame = this.readAddressableChunkFrame(input, frameOffset);
+                if (requested == null || requested.contains(frame.chunk())) {
+                    byte[] compressedBytes = StorageIo.readFullyBounded(
+                            input,
+                            frame.compressedLength(),
+                            StorageLimits.MAX_SNAPSHOT_FRAME_COMPRESSED_BYTES,
+                            "snapshot chunk frame"
+                    );
+                    chunkData.add(this.readDecompressedChunkFrame(frame, compressedBytes));
+                } else {
+                    input.seek(input.getFilePointer() + frame.compressedLength());
+                }
+                BackgroundThrottle.pauseEvery(chunkIndex + 1, 8, 250_000L);
+            }
+            LumaMod.LOGGER.info("Loaded snapshot {} with {} chunks", snapshotFile.getFileName(), chunkData.size());
+            return new SnapshotData(
+                    header.projectId(),
+                    header.createdAt(),
+                    header.minY(),
+                    header.maxY(),
+                    chunkData
+            );
+        }
+    }
+
+    private SnapshotMetadata loadAddressableMetadata(Path snapshotFile) throws IOException {
+        try (RandomAccessFile input = new RandomAccessFile(snapshotFile.toFile(), "r")) {
+            AddressableHeader header = this.readAddressableHeader(input, snapshotFile);
+            List<ChunkPayloadSlice> chunks = new ArrayList<>();
+            int sectionCount = 0;
+            int entityCount = 0;
+            for (int chunkIndex = 0; chunkIndex < header.chunkCount(); chunkIndex++) {
+                long frameOffset = input.getFilePointer();
+                AddressableChunkFrame frame = this.readAddressableChunkFrame(input, frameOffset);
+                chunks.add(new ChunkPayloadSlice(
+                        frame.chunkX(),
+                        frame.chunkZ(),
+                        frameOffset,
+                        frame.frameLength(),
+                        frame.sectionFingerprints(),
+                        frame.entityCount()
+                ));
+                sectionCount += frame.sectionFingerprints().size();
+                entityCount += frame.entityCount();
+                input.seek(input.getFilePointer() + frame.compressedLength());
+            }
+            return new SnapshotMetadata(
+                    snapshotId(snapshotFile),
+                    header.projectId(),
+                    snapshotFile.getFileName().toString(),
+                    chunks,
+                    sectionCount,
+                    entityCount,
+                    Files.size(snapshotFile)
+            );
+        }
+    }
+
+    private AddressableHeader readAddressableHeader(RandomAccessFile input, Path snapshotFile) throws IOException {
+        int magic = input.readInt();
+        int version = input.readInt();
+        if (magic != MAGIC || version != VERSION) {
+            throw new IOException("Unsupported snapshot format: " + snapshotFile.getFileName());
+        }
+        String projectId = input.readUTF();
+        Instant createdAt = Instant.ofEpochMilli(input.readLong());
+        int minY = input.readInt();
+        int maxY = input.readInt();
+        int chunkCount = StorageLimits.requireLength(
+                "snapshot chunk count",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_CHUNKS
+        );
+        return new AddressableHeader(projectId, createdAt, minY, maxY, chunkCount);
+    }
+
+    private AddressableChunkFrame readAddressableChunkFrame(RandomAccessFile input, long frameOffset) throws IOException {
+        int chunkX = input.readInt();
+        int chunkZ = input.readInt();
+        int fingerprintCount = StorageLimits.requireLength(
+                "snapshot section fingerprint count",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_SECTIONS_PER_CHUNK
+        );
+        List<SectionFingerprint> fingerprints = new ArrayList<>(fingerprintCount);
+        for (int index = 0; index < fingerprintCount; index++) {
+            fingerprints.add(new SectionFingerprint(
+                    chunkX,
+                    chunkZ,
+                    input.readInt(),
+                    input.readInt(),
+                    input.readLong(),
+                    input.readUTF()
+            ));
+        }
+        int entityCount = StorageLimits.requireLength(
+                "snapshot entity count",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_ENTITY_SNAPSHOTS_PER_CHUNK
+        );
+        int uncompressedLength = StorageLimits.requireLength(
+                "snapshot chunk frame uncompressed",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_FRAME_UNCOMPRESSED_BYTES
+        );
+        int compressedLength = StorageLimits.requireLength(
+                "snapshot chunk frame compressed",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_FRAME_COMPRESSED_BYTES
+        );
+        long headerLength = input.getFilePointer() - frameOffset;
+        long frameLength = headerLength + compressedLength;
+        if (frameLength > Integer.MAX_VALUE) {
+            throw new IOException("Snapshot chunk frame length out of bounds: " + frameLength);
+        }
+        return new AddressableChunkFrame(
+                chunkX,
+                chunkZ,
+                List.copyOf(fingerprints),
+                entityCount,
+                uncompressedLength,
+                compressedLength,
+                (int) frameLength
+        );
+    }
+
+    private SnapshotChunkData readDecompressedChunkFrame(AddressableChunkFrame frame, byte[] compressedBytes) throws IOException {
+        byte[] chunkBytes = this.decompressFrame(compressedBytes, frame.uncompressedLength());
+        try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(chunkBytes))) {
+            SnapshotChunkData chunk = this.readChunk(input, VERSION);
+            if (chunk.chunkX() != frame.chunkX() || chunk.chunkZ() != frame.chunkZ()) {
+                throw new IOException("Snapshot chunk frame coordinate mismatch");
+            }
+            return chunk;
+        }
+    }
+
+    private SnapshotData readLegacyFile(Path snapshotFile) throws IOException {
         try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
                 new BufferedInputStream(Files.newInputStream(snapshotFile))
         ))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != MAGIC || !isSupportedVersion(version)) {
+            if (magic != MAGIC || !isSupportedLegacyVersion(version)) {
                 throw new IOException("Unsupported snapshot format: " + snapshotFile.getFileName());
             }
 
@@ -51,53 +262,7 @@ public final class SnapshotReader {
 
             List<SnapshotChunkData> chunks = new ArrayList<>();
             for (int chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
-                int chunkX = input.readInt();
-                int chunkZ = input.readInt();
-                int sectionCount = StorageLimits.requireLength(
-                        "snapshot section count",
-                        input.readInt(),
-                        StorageLimits.MAX_SNAPSHOT_SECTIONS_PER_CHUNK
-                );
-                int blockEntityCount = StorageLimits.requireLength(
-                        "snapshot block entity count",
-                        input.readInt(),
-                        StorageLimits.MAX_SNAPSHOT_BLOCK_ENTITIES_PER_CHUNK
-                );
-
-                List<SnapshotSectionData> sections = new ArrayList<>();
-                for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
-                    int sectionY = input.readInt();
-                    int paletteSize = StorageLimits.requireLength(
-                            "snapshot palette count",
-                            input.readInt(),
-                            StorageLimits.MAX_PALETTE_ENTRIES
-                    );
-                    List<net.minecraft.nbt.CompoundTag> palette = new ArrayList<>();
-                    for (int paletteIndex = 0; paletteIndex < paletteSize; paletteIndex++) {
-                        palette.add(StorageIo.readCompound(input));
-                    }
-                    int paletteIndexCount = StorageLimits.requireLength(
-                            "snapshot palette index count",
-                            input.readInt(),
-                            StorageLimits.MAX_SNAPSHOT_PALETTE_INDEXES
-                    );
-                    short[] indexes = new short[paletteIndexCount];
-                    for (int paletteIndex = 0; paletteIndex < paletteIndexCount; paletteIndex++) {
-                        indexes[paletteIndex] = input.readShort();
-                        if (indexes[paletteIndex] < 0 || indexes[paletteIndex] >= paletteSize) {
-                            throw new IOException("Snapshot palette index outside palette");
-                        }
-                    }
-                    sections.add(new SnapshotSectionData(sectionY, palette, indexes));
-                }
-
-                Map<Integer, net.minecraft.nbt.CompoundTag> blockEntities = new LinkedHashMap<>();
-                for (int blockEntityIndex = 0; blockEntityIndex < blockEntityCount; blockEntityIndex++) {
-                    blockEntities.put(input.readInt(), StorageIo.readCompound(input));
-                }
-                List<EntityPayload> entitySnapshots = this.readEntitySnapshots(input, version);
-
-                chunks.add(new SnapshotChunkData(chunkX, chunkZ, sections, blockEntities, entitySnapshots));
+                chunks.add(this.readChunk(input, version));
                 BackgroundThrottle.pauseEvery(chunkIndex + 1, 4, 300_000L);
             }
 
@@ -106,18 +271,66 @@ public final class SnapshotReader {
         }
     }
 
-    public List<ChunkPoint> loadChunks(ProjectLayout layout, SnapshotRef snapshot) throws IOException {
-        return this.loadChunks(layout.snapshotFile(snapshot.id()));
+    private SnapshotChunkData readChunk(DataInputStream input, int version) throws IOException {
+        int chunkX = input.readInt();
+        int chunkZ = input.readInt();
+        int sectionCount = StorageLimits.requireLength(
+                "snapshot section count",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_SECTIONS_PER_CHUNK
+        );
+        int blockEntityCount = StorageLimits.requireLength(
+                "snapshot block entity count",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_BLOCK_ENTITIES_PER_CHUNK
+        );
+
+        List<SnapshotSectionData> sections = new ArrayList<>();
+        for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
+            sections.add(this.readSection(input));
+        }
+
+        Map<Integer, net.minecraft.nbt.CompoundTag> blockEntities = new LinkedHashMap<>();
+        for (int blockEntityIndex = 0; blockEntityIndex < blockEntityCount; blockEntityIndex++) {
+            blockEntities.put(input.readInt(), StorageIo.readCompound(input));
+        }
+        return new SnapshotChunkData(chunkX, chunkZ, sections, blockEntities, this.readEntitySnapshots(input, version));
     }
 
-    public List<ChunkPoint> loadChunks(Path snapshotFile) throws IOException {
+    private SnapshotSectionData readSection(DataInputStream input) throws IOException {
+        int sectionY = input.readInt();
+        int paletteSize = StorageLimits.requireLength(
+                "snapshot palette count",
+                input.readInt(),
+                StorageLimits.MAX_PALETTE_ENTRIES
+        );
+        List<net.minecraft.nbt.CompoundTag> palette = new ArrayList<>();
+        for (int paletteIndex = 0; paletteIndex < paletteSize; paletteIndex++) {
+            palette.add(StorageIo.readCompound(input));
+        }
+        int paletteIndexCount = StorageLimits.requireLength(
+                "snapshot palette index count",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_PALETTE_INDEXES
+        );
+        short[] indexes = new short[paletteIndexCount];
+        for (int paletteIndex = 0; paletteIndex < paletteIndexCount; paletteIndex++) {
+            indexes[paletteIndex] = input.readShort();
+            if (indexes[paletteIndex] < 0 || indexes[paletteIndex] >= paletteSize) {
+                throw new IOException("Snapshot palette index outside palette");
+            }
+        }
+        return new SnapshotSectionData(sectionY, palette, indexes);
+    }
+
+    private List<ChunkPoint> loadLegacyChunks(Path snapshotFile) throws IOException {
         List<ChunkPoint> chunks = new ArrayList<>();
         try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
                 new BufferedInputStream(Files.newInputStream(snapshotFile))
         ))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != MAGIC || !isSupportedVersion(version)) {
+            if (magic != MAGIC || !isSupportedLegacyVersion(version)) {
                 throw new IOException("Unsupported snapshot format: " + snapshotFile.getFileName());
             }
 
@@ -201,14 +414,44 @@ public final class SnapshotReader {
             return List.of();
         }
 
-        List<EntityPayload> entitySnapshots = new ArrayList<>(version >= VERSION ? entityCount : 0);
+        List<EntityPayload> entitySnapshots = new ArrayList<>(version >= LEGACY_ENTITY_SNAPSHOT_VERSION ? entityCount : 0);
         for (int entityIndex = 0; entityIndex < entityCount; entityIndex++) {
             net.minecraft.nbt.CompoundTag tag = StorageIo.readCompound(input);
-            if (version >= VERSION) {
+            if (version >= LEGACY_ENTITY_SNAPSHOT_VERSION) {
                 entitySnapshots.add(new EntityPayload(tag));
             }
         }
         return entitySnapshots;
+    }
+
+    private byte[] decompressFrame(byte[] bytes, int expectedLength) throws IOException {
+        StorageLimits.requireLength(
+                "snapshot chunk frame uncompressed",
+                expectedLength,
+                StorageLimits.MAX_SNAPSHOT_FRAME_UNCOMPRESSED_BYTES
+        );
+        try (LZ4FrameInputStream input = new LZ4FrameInputStream(new ByteArrayInputStream(bytes))) {
+            byte[] decompressed = StorageIo.readAllBytesBounded(
+                    input,
+                    StorageLimits.MAX_SNAPSHOT_FRAME_UNCOMPRESSED_BYTES,
+                    "decompressed snapshot frame"
+            );
+            if (decompressed.length != expectedLength) {
+                throw new IOException("Snapshot chunk frame length mismatch");
+            }
+            return decompressed;
+        } catch (IOException exception) {
+            throw new IOException("Snapshot chunk frame length mismatch", exception);
+        }
+    }
+
+    private boolean isAddressableSnapshot(Path snapshotFile) throws IOException {
+        if (!Files.exists(snapshotFile) || Files.size(snapshotFile) < 8L) {
+            return false;
+        }
+        try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(snapshotFile)))) {
+            return input.readInt() == MAGIC && input.readInt() == VERSION;
+        }
     }
 
     private static void skipCompound(DataInputStream input) throws IOException {
@@ -216,8 +459,36 @@ public final class SnapshotReader {
         input.skipNBytes(length);
     }
 
-    private static boolean isSupportedVersion(int version) {
-        return version == 3 || version == 4 || version == VERSION;
+    private static boolean isSupportedLegacyVersion(int version) {
+        return version == 3 || version == 4 || version == LEGACY_ENTITY_SNAPSHOT_VERSION;
     }
 
+    private static String snapshotId(Path snapshotFile) {
+        String fileName = snapshotFile.getFileName().toString();
+        return fileName.endsWith(".bin.lz4")
+                ? fileName.substring(0, fileName.length() - ".bin.lz4".length())
+                : fileName;
+    }
+
+    private record AddressableHeader(String projectId, Instant createdAt, int minY, int maxY, int chunkCount) {
+    }
+
+    private record AddressableChunkFrame(
+            int chunkX,
+            int chunkZ,
+            List<SectionFingerprint> sectionFingerprints,
+            int entityCount,
+            int uncompressedLength,
+            int compressedLength,
+            int frameLength
+    ) {
+
+        private AddressableChunkFrame {
+            sectionFingerprints = sectionFingerprints == null ? List.of() : List.copyOf(sectionFingerprints);
+        }
+
+        private ChunkPoint chunk() {
+            return new ChunkPoint(this.chunkX, this.chunkZ);
+        }
+    }
 }
