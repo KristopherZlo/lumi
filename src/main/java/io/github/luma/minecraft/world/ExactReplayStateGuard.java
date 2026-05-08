@@ -201,7 +201,8 @@ public final class ExactReplayStateGuard {
         return new PreparedBlockPlacement(
                 placement.pos().immutable(),
                 placement.state(),
-                placement.blockEntityTag() == null ? null : placement.blockEntityTag().copy()
+                placement.blockEntityTag() == null ? null : placement.blockEntityTag().copy(),
+                placement.replayHint()
         );
     }
 

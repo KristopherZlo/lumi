@@ -50,6 +50,7 @@ class WorldChangeBatchPreparerTest {
         assertEquals(1, batches.size());
         assertEquals(1, batches.getFirst().entityBatch().entitiesToSpawn().size());
         assertEquals(2, batches.getFirst().chunk().x());
+        assertEquals(false, batches.getFirst().entityBatch().replacePlacedEntities());
     }
 
     @Test
@@ -65,6 +66,23 @@ class WorldChangeBatchPreparerTest {
 
         assertEquals(1, batches.size());
         assertEquals(List.of(entityId), batches.getFirst().entityBatch().entityIdsToRemove());
+    }
+
+    @Test
+    void replaceEntityApplyModeMarksChunkBatchAuthoritative() throws Exception {
+        String entityId = "00000000-0000-0000-0000-000000000022";
+
+        List<PreparedChunkBatch> batches = this.preparer.prepare(
+                null,
+                List.of(),
+                List.of(new StoredEntityChange(entityId, "minecraft:block_display", null, entity(entityId, 32.0D))),
+                true,
+                WorldChangeBatchPreparer.ProgressListener.NO_OP,
+                EntityApplyMode.REPLACE_PLACED_IN_CHUNK
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(true, batches.getFirst().entityBatch().replacePlacedEntities());
     }
 
     @Test

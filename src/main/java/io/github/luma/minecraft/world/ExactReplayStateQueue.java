@@ -110,7 +110,8 @@ final class ExactReplayStateQueue {
             this.record(new PreparedBlockPlacement(
                     this.blockPos(section, localIndex),
                     state,
-                    blockEntityTag
+                    blockEntityTag,
+                    buffer.replayHintAt(localIndex)
             ));
         });
     }
@@ -184,7 +185,8 @@ final class ExactReplayStateQueue {
         return new PreparedBlockPlacement(
                 immutablePos,
                 placement.state(),
-                placement.blockEntityTag() == null ? null : placement.blockEntityTag().copy()
+                placement.blockEntityTag() == null ? null : placement.blockEntityTag().copy(),
+                placement.replayHint()
         );
     }
 

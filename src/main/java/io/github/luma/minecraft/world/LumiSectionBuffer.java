@@ -15,17 +15,20 @@ public final class LumiSectionBuffer {
     private final SectionChangeMask changedCells;
     private final BlockState[] targetStates;
     private final SectionBlockEntityPlan blockEntityPlan;
+    private final PreparedBlockPlacement.ReplayHint[] replayHints;
 
     private LumiSectionBuffer(
             int sectionY,
             SectionChangeMask changedCells,
             BlockState[] targetStates,
-            SectionBlockEntityPlan blockEntityPlan
+            SectionBlockEntityPlan blockEntityPlan,
+            PreparedBlockPlacement.ReplayHint[] replayHints
     ) {
         this.sectionY = sectionY;
         this.changedCells = changedCells == null ? SectionChangeMask.empty() : changedCells;
         this.targetStates = copyTargetStates(targetStates);
         this.blockEntityPlan = blockEntityPlan == null ? SectionBlockEntityPlan.empty() : blockEntityPlan;
+        this.replayHints = copyReplayHints(replayHints);
         this.validateChangedTargets();
     }
 
@@ -60,6 +63,13 @@ public final class LumiSectionBuffer {
         return this.blockEntityPlan;
     }
 
+    public PreparedBlockPlacement.ReplayHint replayHintAt(int localIndex) {
+        if (localIndex < 0 || localIndex >= SectionChangeMask.ENTRY_COUNT) {
+            return PreparedBlockPlacement.ReplayHint.NONE;
+        }
+        return this.replayHints[localIndex];
+    }
+
     public boolean hasBlockEntities() {
         return !this.blockEntityPlan.isEmpty();
     }
@@ -78,7 +88,8 @@ public final class LumiSectionBuffer {
             placements.add(new PreparedBlockPlacement(
                     new BlockPos((chunk.x() << 4) + localX, (this.sectionY << 4) + localY, (chunk.z() << 4) + localZ),
                     state,
-                    blockEntityTag
+                    blockEntityTag,
+                    this.replayHintAt(localIndex)
             ));
         });
         return placements;
@@ -100,23 +111,52 @@ public final class LumiSectionBuffer {
         return copied;
     }
 
+    private static PreparedBlockPlacement.ReplayHint[] copyReplayHints(PreparedBlockPlacement.ReplayHint[] replayHints) {
+        PreparedBlockPlacement.ReplayHint[] copied =
+                new PreparedBlockPlacement.ReplayHint[SectionChangeMask.ENTRY_COUNT];
+        java.util.Arrays.fill(copied, PreparedBlockPlacement.ReplayHint.NONE);
+        if (replayHints != null) {
+            System.arraycopy(replayHints, 0, copied, 0, Math.min(replayHints.length, copied.length));
+            for (int index = 0; index < copied.length; index++) {
+                if (copied[index] == null) {
+                    copied[index] = PreparedBlockPlacement.ReplayHint.NONE;
+                }
+            }
+        }
+        return copied;
+    }
+
     public static final class Builder {
 
         private final int sectionY;
         private final SectionChangeMask.Builder maskBuilder = SectionChangeMask.builder();
         private final BlockState[] targetStates = new BlockState[SectionChangeMask.ENTRY_COUNT];
         private final Map<Integer, CompoundTag> blockEntities = new LinkedHashMap<>();
+        private final PreparedBlockPlacement.ReplayHint[] replayHints =
+                new PreparedBlockPlacement.ReplayHint[SectionChangeMask.ENTRY_COUNT];
 
         private Builder(int sectionY) {
             this.sectionY = sectionY;
         }
 
         public Builder set(int localIndex, BlockState state, CompoundTag blockEntityTag) {
+            return this.set(localIndex, state, blockEntityTag, PreparedBlockPlacement.ReplayHint.NONE);
+        }
+
+        public Builder set(
+                int localIndex,
+                BlockState state,
+                CompoundTag blockEntityTag,
+                PreparedBlockPlacement.ReplayHint replayHint
+        ) {
             if (state == null) {
                 throw new IllegalArgumentException("state is required for section cell " + localIndex);
             }
             this.maskBuilder.set(localIndex);
             this.targetStates[localIndex] = state;
+            this.replayHints[localIndex] = replayHint == null
+                    ? PreparedBlockPlacement.ReplayHint.NONE
+                    : replayHint;
             if (blockEntityTag != null) {
                 this.blockEntities.put(localIndex, blockEntityTag.copy());
             }
@@ -127,12 +167,24 @@ public final class LumiSectionBuffer {
             return this.set(SectionChangeMask.localIndex(localX, localY, localZ), state, blockEntityTag);
         }
 
+        public Builder set(
+                int localX,
+                int localY,
+                int localZ,
+                BlockState state,
+                CompoundTag blockEntityTag,
+                PreparedBlockPlacement.ReplayHint replayHint
+        ) {
+            return this.set(SectionChangeMask.localIndex(localX, localY, localZ), state, blockEntityTag, replayHint);
+        }
+
         public LumiSectionBuffer build() {
             return new LumiSectionBuffer(
                     this.sectionY,
                     this.maskBuilder.build(),
                     this.targetStates,
-                    new SectionBlockEntityPlan(this.blockEntities)
+                    new SectionBlockEntityPlan(this.blockEntities),
+                    this.replayHints
             );
         }
     }

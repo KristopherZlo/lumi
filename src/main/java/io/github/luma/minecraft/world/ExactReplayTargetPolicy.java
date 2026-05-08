@@ -17,6 +17,9 @@ final class ExactReplayTargetPolicy {
         if (placement == null || placement.pos() == null || placement.state() == null) {
             return false;
         }
+        if (placement.replayHint().forcesFinalReplay()) {
+            return true;
+        }
         return this.requiresFinalReplay(placement.state(), placement.blockEntityTag());
     }
 

@@ -61,6 +61,10 @@ class PistonMechanismPlacementExpanderTest {
 
         assertEquals(2, expanded.size());
         assertTrue(stateAt(expanded, base.east()).isAir());
+        assertEquals(
+                PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY,
+                placementAt(expanded, base.east()).replayHint()
+        );
     }
 
     @Test
@@ -143,11 +147,15 @@ class PistonMechanismPlacementExpanderTest {
     }
 
     private static BlockState stateAt(List<PreparedBlockPlacement> placements, BlockPos pos) {
+        return placementAt(placements, pos).state();
+    }
+
+    private static PreparedBlockPlacement placementAt(List<PreparedBlockPlacement> placements, BlockPos pos) {
         for (PreparedBlockPlacement placement : placements) {
             if (placement.pos().equals(pos)) {
-                return placement.state();
+                return placement;
             }
         }
-        return Blocks.AIR.defaultBlockState();
+        return new PreparedBlockPlacement(pos, Blocks.AIR.defaultBlockState(), null);
     }
 }

@@ -75,6 +75,7 @@ public final class PreparedChunkBatchCollapser {
                 localIndex,
                 nativeSection.buffer().targetStateAt(localIndex),
                 nativeSection.buffer().blockEntityPlan().tagAt(localIndex),
+                nativeSection.buffer().replayHintAt(localIndex),
                 !nativeSection.fullSection()
         ));
     }
@@ -97,6 +98,7 @@ public final class PreparedChunkBatchCollapser {
                 SectionChangeMask.localIndex(placement.pos().getX(), placement.pos().getY(), placement.pos().getZ()),
                 placement.state(),
                 placement.blockEntityTag(),
+                placement.replayHint(),
                 expandConnected
         );
     }
@@ -204,6 +206,8 @@ public final class PreparedChunkBatchCollapser {
         private final boolean[] changedCells = new boolean[SectionChangeMask.ENTRY_COUNT];
         private final BlockState[] states = new BlockState[SectionChangeMask.ENTRY_COUNT];
         private final CompoundTag[] blockEntityTags = new CompoundTag[SectionChangeMask.ENTRY_COUNT];
+        private final PreparedBlockPlacement.ReplayHint[] replayHints =
+                new PreparedBlockPlacement.ReplayHint[SectionChangeMask.ENTRY_COUNT];
         private final boolean[] connectedExpansionCandidates = new boolean[SectionChangeMask.ENTRY_COUNT];
 
         private SectionAccumulator(ChunkPoint chunk, int sectionY) {
@@ -219,13 +223,22 @@ public final class PreparedChunkBatchCollapser {
             return this.sectionY;
         }
 
-        private void put(int localIndex, BlockState state, CompoundTag blockEntityTag, boolean connectedExpansionCandidate) {
+        private void put(
+                int localIndex,
+                BlockState state,
+                CompoundTag blockEntityTag,
+                PreparedBlockPlacement.ReplayHint replayHint,
+                boolean connectedExpansionCandidate
+        ) {
             if (localIndex < 0 || localIndex >= SectionChangeMask.ENTRY_COUNT) {
                 return;
             }
             this.changedCells[localIndex] = true;
             this.states[localIndex] = state == null ? Blocks.AIR.defaultBlockState() : state;
             this.blockEntityTags[localIndex] = blockEntityTag == null ? null : blockEntityTag.copy();
+            this.replayHints[localIndex] = replayHint == null
+                    ? PreparedBlockPlacement.ReplayHint.NONE
+                    : replayHint;
             this.connectedExpansionCandidates[localIndex] = connectedExpansionCandidate;
         }
 
@@ -273,7 +286,12 @@ public final class PreparedChunkBatchCollapser {
                 if (!this.changedCells[localIndex]) {
                     continue;
                 }
-                builder.set(localIndex, this.states[localIndex], this.blockEntityTags[localIndex]);
+                builder.set(
+                        localIndex,
+                        this.states[localIndex],
+                        this.blockEntityTags[localIndex],
+                        this.replayHints[localIndex]
+                );
             }
             return builder.build();
         }
@@ -286,7 +304,8 @@ public final class PreparedChunkBatchCollapser {
                             (this.chunk.z() << 4) + SectionChangeMask.localZ(localIndex)
                     ),
                     this.states[localIndex],
-                    this.blockEntityTags[localIndex]
+                    this.blockEntityTags[localIndex],
+                    this.replayHints[localIndex]
             );
         }
     }

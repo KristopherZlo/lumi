@@ -48,6 +48,21 @@ public final class WorldChangeBatchPreparer {
 
     public List<PreparedChunkBatch> prepareNewValues(
             ServerLevel level,
+            PatchWorldChanges changes,
+            EntityApplyMode entityApplyMode
+    ) throws IOException {
+        return this.prepare(
+                level,
+                changes.blockChanges(),
+                changes.entityChanges(),
+                true,
+                ProgressListener.NO_OP,
+                entityApplyMode
+        );
+    }
+
+    public List<PreparedChunkBatch> prepareNewValues(
+            ServerLevel level,
             PatchSectionWorldChanges changes,
             ProgressListener progressListener
     ) throws IOException {
@@ -78,6 +93,17 @@ public final class WorldChangeBatchPreparer {
             List<StoredEntityChange> entityChanges,
             boolean applyNewValues,
             ProgressListener progressListener
+    ) throws IOException {
+        return this.prepare(level, changes, entityChanges, applyNewValues, progressListener, EntityApplyMode.DELTA);
+    }
+
+    public List<PreparedChunkBatch> prepare(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            ProgressListener progressListener,
+            EntityApplyMode entityApplyMode
     ) throws IOException {
         changes = changes == null ? List.of() : changes;
         entityChanges = entityChanges == null ? List.of() : entityChanges;
@@ -120,7 +146,7 @@ public final class WorldChangeBatchPreparer {
             batches.add(this.prepareDecodedChunk(
                     chunk,
                     grouped.getOrDefault(chunk, List.of()),
-                    this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues)
+                    this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues, entityApplyMode)
             ));
         }
         return batches;
@@ -133,9 +159,27 @@ public final class WorldChangeBatchPreparer {
             boolean applyNewValues,
             ProgressListener progressListener
     ) throws IOException {
+        return this.prepareUndoRedo(
+                level,
+                changes,
+                entityChanges,
+                applyNewValues,
+                progressListener,
+                EntityApplyMode.DELTA
+        );
+    }
+
+    public List<PreparedChunkBatch> prepareUndoRedo(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            ProgressListener progressListener,
+            EntityApplyMode entityApplyMode
+    ) throws IOException {
         changes = changes == null ? List.of() : changes;
         if (changes.size() < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD) {
-            return this.prepare(level, changes, entityChanges, applyNewValues, progressListener);
+            return this.prepare(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode);
         }
 
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
@@ -145,10 +189,11 @@ public final class WorldChangeBatchPreparer {
                 entityChanges,
                 applyNewValues,
                 progressListener == null ? ProgressListener.NO_OP : progressListener,
-                blockStateDecoder
+                blockStateDecoder,
+                entityApplyMode
         );
         return batches == null
-                ? this.prepare(level, changes, entityChanges, applyNewValues, progressListener)
+                ? this.prepare(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode)
                 : batches;
     }
 
@@ -158,8 +203,25 @@ public final class WorldChangeBatchPreparer {
             boolean applyNewValues,
             ProgressListener progressListener
     ) throws IOException {
+        return this.prepare(level, changes, applyNewValues, progressListener, EntityApplyMode.DELTA);
+    }
+
+    public List<PreparedChunkBatch> prepare(
+            ServerLevel level,
+            PatchSectionWorldChanges changes,
+            boolean applyNewValues,
+            ProgressListener progressListener,
+            EntityApplyMode entityApplyMode
+    ) throws IOException {
         if (changes == null || changes.sectionFrames().isEmpty()) {
-            return this.prepare(level, List.of(), changes == null ? List.of() : changes.entityChanges(), applyNewValues, progressListener);
+            return this.prepare(
+                    level,
+                    List.of(),
+                    changes == null ? List.of() : changes.entityChanges(),
+                    applyNewValues,
+                    progressListener,
+                    entityApplyMode
+            );
         }
         progressListener = progressListener == null ? ProgressListener.NO_OP : progressListener;
         int total = changes.sectionFrames().stream()
@@ -221,7 +283,7 @@ public final class WorldChangeBatchPreparer {
                     chunk,
                     split.sparsePlacements(),
                     combinedNativeSections,
-                    this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues)
+                    this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues, entityApplyMode)
             ));
         }
         return batches;
@@ -465,7 +527,8 @@ public final class WorldChangeBatchPreparer {
             List<StoredEntityChange> entityChanges,
             boolean applyNewValues,
             ProgressListener progressListener,
-            BlockStateDecoder blockStateDecoder
+            BlockStateDecoder blockStateDecoder,
+            EntityApplyMode entityApplyMode
     ) throws IOException {
         entityChanges = entityChanges == null ? List.of() : entityChanges;
         int total = changes.size() + entityChanges.size();
@@ -534,7 +597,7 @@ public final class WorldChangeBatchPreparer {
                     chunk,
                     sparsePlacements.getOrDefault(chunk, List.of()),
                     nativeSections.getOrDefault(chunk, List.of()),
-                    this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues)
+                    this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues, entityApplyMode)
             ));
         }
         return batches;
@@ -549,7 +612,8 @@ public final class WorldChangeBatchPreparer {
                     pos.getY() & 15,
                     pos.getZ() & 15,
                     placement.state(),
-                    placement.blockEntityTag()
+                    placement.blockEntityTag(),
+                    placement.replayHint()
             );
         }
         return builder.build();
@@ -576,6 +640,14 @@ public final class WorldChangeBatchPreparer {
     }
 
     EntityBatch toEntityBatch(List<StoredEntityChange> changes, boolean applyNewValues) {
+        return this.toEntityBatch(changes, applyNewValues, EntityApplyMode.DELTA);
+    }
+
+    EntityBatch toEntityBatch(
+            List<StoredEntityChange> changes,
+            boolean applyNewValues,
+            EntityApplyMode entityApplyMode
+    ) {
         List<CompoundTag> spawns = new ArrayList<>();
         List<String> removals = new ArrayList<>();
         List<CompoundTag> updates = new ArrayList<>();
@@ -589,7 +661,12 @@ public final class WorldChangeBatchPreparer {
                 updates.add(target.newValue().copyTag());
             }
         }
-        return new EntityBatch(spawns, removals, updates);
+        return new EntityBatch(
+                spawns,
+                removals,
+                updates,
+                entityApplyMode == EntityApplyMode.REPLACE_PLACED_IN_CHUNK
+        );
     }
 
     @FunctionalInterface

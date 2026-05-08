@@ -143,7 +143,8 @@ public final class PistonMechanismPlacementExpander {
         return new PreparedBlockPlacement(
                 pos.relative(sourceState.getValue(PistonBaseBlock.FACING)),
                 Blocks.AIR.defaultBlockState(),
-                null
+                null,
+                PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY
         );
     }
 
