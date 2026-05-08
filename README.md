@@ -93,7 +93,7 @@ Use Lumi if you want to:
 - stable external capability reporting: WorldEdit session selection/clipboard/schematic support uses public `LocalSession`/clipboard format APIs, FAWE inherits those claims only when the same compatible APIs are present, and Axiom remains limited to its custom region API plus fallback capture
 - conservative cleanup for orphaned snapshots, previews, cache files, and stale operation drafts
 - capture of player edits plus non-player entity spawn/remove/update with full persistent NBT position/state payloads, and supported explosion edits including TNT damage tied back to the action that primed it
-- temporary action-button preview for the latest 10 undo actions, or redo actions while the Lumi action button plus redo is held, with translucent exposed sides for small edits and merged volume blobs for dense edits when compare highlight is not active
+- temporary action-button preview for the latest undo and redo actions while the Lumi action button is held, with the next undo target highlighted red, the next redo target highlighted green, and translucent exposed sides for small edits or merged volume blobs for dense edits when compare highlight is not active
 
 ## How It Works
 
@@ -274,7 +274,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 4. Lumi opens the current Build History directly when the dimension project is available.
 5. Build in the tracked area.
 6. Use the Lumi action button plus `Z` / `Y` to undo or redo the latest tracked action while no screen is open. The default action button is `Left Alt`, and changing it changes these chords too. Lumi suppresses vanilla use/attack while these chords are active, so the same input does not also interact with levers or blocks in front of the player. WorldEdit/FAWE actions use native tool undo/redo; captured Axiom capability actions replay through Lumi, and simple Axiom place/break buffers are split into block-scoped undo steps.
-7. Hold the Lumi action button to show all pending unsaved changes since the active head, or hold it plus `Z`/`Y` to preview undo/redo actions when the compare overlay is not active. Pending overlays above the detailed cap collapse into bounded tiled orange volume blobs so the client does not build unbounded overlay geometry.
+7. Hold the Lumi action button to preview the next live undo and redo targets when the compare overlay is not active. The undo target is red, the redo target is green, and the pending unsaved overlay remains the fallback when no live action preview is available. Pending overlays above the detailed cap collapse into bounded tiled orange volume blobs so the client does not build unbounded overlay geometry.
    Opening See Changes for a resolved diff enables the world highlight immediately; comparisons against `Current build` refresh automatically while you keep editing.
 8. Press `R` for quick rollback to the active branch head, or hold the Lumi action button plus `R` to return before the last full restore.
 9. Press the Lumi action button plus `S` to open Quick save when you only need to name and save the current build. The default chord is `Left Alt+S`; both keys are listed under Minecraft `Controls` -> `Lumi`.

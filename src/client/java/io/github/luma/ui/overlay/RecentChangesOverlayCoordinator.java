@@ -1,7 +1,6 @@
 package io.github.luma.ui.overlay;
 
 import io.github.luma.debug.LumaDebugLog;
-import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.ui.controller.ClientProjectAccess;
@@ -146,14 +145,13 @@ public final class RecentChangesOverlayCoordinator {
             boolean debugEnabled
     ) {
         RecentChangesPreviewSession.PreviewKey previewKey = pinnedPreview.key();
-        List<UndoRedoAction> actions = pinnedPreview.actions();
-        return RecentChangesOverlayRenderer.prepare(
+        RecentChangesOverlaySnapshot snapshot = new RecentChangesOverlaySnapshot(
                 previewKey.projectId(),
-                actions,
-                debugEnabled,
-                previewKey.previewTarget(),
-                previewKey.revision()
+                previewKey.revision(),
+                pinnedPreview.undoActions(),
+                pinnedPreview.redoActions()
         );
+        return RecentChangesOverlayRenderer.prepare(snapshot, debugEnabled, previewKey.previewTarget());
     }
 
     private void clearPreview() {
@@ -180,17 +178,36 @@ public final class RecentChangesOverlayCoordinator {
             PreviewTarget previewTarget
     ) {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        if (previewTarget == PreviewTarget.BOTH) {
+            UndoRedoHistoryManager.UndoRedoActionsSnapshot snapshot =
+                    historyManager.recentUndoRedoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
+            return new RecentChangesPreviewSession.ActionSnapshot(
+                    snapshot.revision(),
+                    snapshot.undoActions(),
+                    snapshot.redoActions()
+            );
+        }
         UndoRedoHistoryManager.RecentActionsSnapshot snapshot;
         if (previewTarget == PreviewTarget.REDO) {
             snapshot = historyManager.recentRedoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
+            return new RecentChangesPreviewSession.ActionSnapshot(
+                    snapshot.revision(),
+                    List.of(),
+                    snapshot.actions()
+            );
         } else {
             snapshot = historyManager.recentUndoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
+            return new RecentChangesPreviewSession.ActionSnapshot(
+                    snapshot.revision(),
+                    snapshot.actions(),
+                    List.of()
+            );
         }
-        return new RecentChangesPreviewSession.ActionSnapshot(snapshot.revision(), snapshot.actions());
     }
 
     public enum PreviewTarget {
         UNDO,
-        REDO
+        REDO,
+        BOTH
     }
 }

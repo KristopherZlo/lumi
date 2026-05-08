@@ -3,6 +3,7 @@ package io.github.luma.ui.overlay;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -24,6 +25,9 @@ public final class RecentChangesOverlayRenderer {
     private static final int MIN_FILL_ALPHA = 24;
     private static final float OUTLINE_WIDTH = 2.75F;
     private static final float FACE_OUTSET = 0.003F;
+    static final int RECENT_ACTION_OUTLINE = 0xFFFF9C3A;
+    static final int UNDO_TARGET_OUTLINE = 0xFFFF5A5A;
+    static final int REDO_TARGET_OUTLINE = 0xFF4ADE80;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
 
@@ -40,7 +44,11 @@ public final class RecentChangesOverlayRenderer {
             boolean debugEnabled,
             RecentChangesOverlayCoordinator.PreviewTarget previewTarget
     ) {
-        activate(prepare(projectId, actions, debugEnabled, previewTarget, -1L));
+        activate(prepare(
+                RecentChangesOverlaySnapshot.forTarget(projectId, -1L, actions, previewTarget),
+                debugEnabled,
+                previewTarget
+        ));
     }
 
     static PreparedOverlay prepare(
@@ -50,13 +58,28 @@ public final class RecentChangesOverlayRenderer {
             RecentChangesOverlayCoordinator.PreviewTarget previewTarget,
             long revision
     ) {
-        List<RecentChangeEntry> entries = flatten(actions);
+        return prepare(
+                RecentChangesOverlaySnapshot.forTarget(projectId, revision, actions, previewTarget),
+                debugEnabled,
+                previewTarget
+        );
+    }
+
+    static PreparedOverlay prepare(
+            RecentChangesOverlaySnapshot snapshot,
+            boolean debugEnabled,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
+        RecentChangesOverlaySnapshot resolved = snapshot == null
+                ? new RecentChangesOverlaySnapshot("", -1L, List.of(), List.of())
+                : snapshot;
+        List<RecentChangeEntry> entries = flatten(resolved, previewTarget);
         if (entries.isEmpty()) {
             return new PreparedOverlay(
-                    projectId,
-                    revision,
+                    resolved.projectId(),
+                    resolved.revision(),
                     previewTarget,
-                    actionCount(actions),
+                    resolved.actionCount(),
                     0,
                     0,
                     0,
@@ -65,12 +88,18 @@ public final class RecentChangesOverlayRenderer {
             );
         }
 
-        OverlayState state = new OverlayState(projectId, revision, previewTarget, entries, debugEnabled);
-        return new PreparedOverlay(
-                projectId,
-                revision,
+        OverlayState state = new OverlayState(
+                resolved.projectId(),
+                resolved.revision(),
                 previewTarget,
-                actionCount(actions),
+                entries,
+                debugEnabled
+        );
+        return new PreparedOverlay(
+                resolved.projectId(),
+                resolved.revision(),
+                previewTarget,
+                resolved.actionCount(),
                 entries.size(),
                 state.surfaceEntryCount(),
                 state.volumeBoxCount(),
@@ -254,35 +283,142 @@ public final class RecentChangesOverlayRenderer {
         return client == null || client.options == null ? 8 : client.options.getEffectiveRenderDistance();
     }
 
-    private static List<RecentChangeEntry> flatten(List<UndoRedoAction> actions) {
-        if (actions == null || actions.isEmpty()) {
+    static List<Integer> outlineColorsForTest(
+            List<UndoRedoAction> actions,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
+        return flatten(RecentChangesOverlaySnapshot.forTarget("", -1L, actions, previewTarget), previewTarget).stream()
+                .map(RecentChangeEntry::outlineArgb)
+                .toList();
+    }
+
+    static List<Integer> outlineColorsForTest(
+            List<UndoRedoAction> undoActions,
+            List<UndoRedoAction> redoActions,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
+        return flatten(new RecentChangesOverlaySnapshot("", -1L, undoActions, redoActions), previewTarget).stream()
+                .map(RecentChangeEntry::outlineArgb)
+                .toList();
+    }
+
+    static List<BlockPoint> previewPositionsForTest(
+            List<UndoRedoAction> actions,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
+        return flatten(RecentChangesOverlaySnapshot.forTarget("", -1L, actions, previewTarget), previewTarget).stream()
+                .map(RecentChangeEntry::pos)
+                .toList();
+    }
+
+    static List<BlockPoint> previewPositionsForTest(
+            List<UndoRedoAction> undoActions,
+            List<UndoRedoAction> redoActions,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
+        return flatten(new RecentChangesOverlaySnapshot("", -1L, undoActions, redoActions), previewTarget).stream()
+                .map(RecentChangeEntry::pos)
+                .toList();
+    }
+
+    private static List<RecentChangeEntry> flatten(
+            RecentChangesOverlaySnapshot snapshot,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
+        if (snapshot == null) {
             return List.of();
         }
 
         LinkedHashMap<Long, RecentChangeEntry> flattened = new LinkedHashMap<>();
+        if (previewTarget == RecentChangesOverlayCoordinator.PreviewTarget.REDO) {
+            flattenActions(flattened, snapshot.redoActions(), RecentChangesOverlayCoordinator.PreviewTarget.REDO);
+        } else if (previewTarget == RecentChangesOverlayCoordinator.PreviewTarget.BOTH) {
+            flattenActions(flattened, snapshot.undoActions(), RecentChangesOverlayCoordinator.PreviewTarget.UNDO);
+            flattenActions(flattened, snapshot.redoActions(), RecentChangesOverlayCoordinator.PreviewTarget.REDO);
+        } else {
+            flattenActions(flattened, snapshot.undoActions(), RecentChangesOverlayCoordinator.PreviewTarget.UNDO);
+        }
+        return List.copyOf(flattened.values());
+    }
+
+    private static void flattenActions(
+            LinkedHashMap<Long, RecentChangeEntry> flattened,
+            List<UndoRedoAction> actions,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
+        if (actions == null || actions.isEmpty()) {
+            return;
+        }
+
         int actionIndex = 0;
         for (UndoRedoAction action : actions) {
             if (action == null || action.isEmpty()) {
                 continue;
             }
             int alpha = Math.max(ALPHA_STEP, BASE_ALPHA - (actionIndex * ALPHA_STEP));
-            for (var change : action.redoChanges()) {
+            int outlineArgb = outlineArgb(actionIndex, previewTarget);
+            int red = (outlineArgb >> 16) & 0xFF;
+            int green = (outlineArgb >> 8) & 0xFF;
+            int blue = outlineArgb & 0xFF;
+            for (var change : previewChanges(action, previewTarget)) {
                 long key = net.minecraft.core.BlockPos.asLong(change.pos().x(), change.pos().y(), change.pos().z());
-                flattened.putIfAbsent(key, new RecentChangeEntry(change.pos(), alpha));
+                RecentChangeEntry entry = new RecentChangeEntry(
+                        change.pos(),
+                        alpha,
+                        red,
+                        green,
+                        blue,
+                        outlineArgb,
+                        entryPriority(actionIndex)
+                );
+                flattened.merge(key, entry, RecentChangesOverlayRenderer::selectVisibleEntry);
             }
             actionIndex += 1;
             if (actionIndex >= MAX_ACTIONS) {
                 break;
             }
         }
-        return List.copyOf(flattened.values());
     }
 
-    private static int actionCount(List<UndoRedoAction> actions) {
-        return actions == null ? 0 : actions.size();
+    private static List<StoredBlockChange> previewChanges(
+            UndoRedoAction action,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
+        if (previewTarget == RecentChangesOverlayCoordinator.PreviewTarget.REDO) {
+            return action.redoChanges();
+        }
+        return action.undoChanges();
     }
 
-    private record RecentChangeEntry(BlockPoint pos, int alpha) {
+    private static int outlineArgb(
+            int actionIndex,
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
+    ) {
+        if (actionIndex != 0) {
+            return RECENT_ACTION_OUTLINE;
+        }
+        return previewTarget == RecentChangesOverlayCoordinator.PreviewTarget.REDO
+                ? REDO_TARGET_OUTLINE
+                : UNDO_TARGET_OUTLINE;
+    }
+
+    private static int entryPriority(int actionIndex) {
+        return actionIndex == 0 ? 2 : 1;
+    }
+
+    private static RecentChangeEntry selectVisibleEntry(RecentChangeEntry current, RecentChangeEntry candidate) {
+        return candidate.priority() > current.priority() ? candidate : current;
+    }
+
+    private record RecentChangeEntry(
+            BlockPoint pos,
+            int alpha,
+            int red,
+            int green,
+            int blue,
+            int outlineArgb,
+            int priority
+    ) {
     }
 
     private record SurfaceEntry(
@@ -398,11 +534,11 @@ public final class RecentChangesOverlayRenderer {
                 int fillAlpha = Math.max(MIN_FILL_ALPHA, Math.round(surfaceEntry.entry().alpha() * FILL_ALPHA_SCALE));
                 builder.addSurfaceBlock(
                         surfaceEntry.surfaceBlock(),
-                        0xFF,
-                        0x9C,
-                        0x3A,
+                        surfaceEntry.entry().red(),
+                        surfaceEntry.entry().green(),
+                        surfaceEntry.entry().blue(),
                         fillAlpha,
-                        0xFFFF9C3A,
+                        surfaceEntry.entry().outlineArgb(),
                         OUTLINE_WIDTH,
                         FACE_OUTSET
                 );

@@ -46,6 +46,81 @@ class RecentChangesOverlayRendererStateTest {
     }
 
     @Test
+    void topUndoAndRedoPreviewActionsUseDirectionalColors() {
+        UndoRedoAction first = action("first", 10);
+        UndoRedoAction second = action("second", 11);
+
+        List<Integer> undoColors = RecentChangesOverlayRenderer.outlineColorsForTest(
+                List.of(first, second),
+                RecentChangesOverlayCoordinator.PreviewTarget.UNDO
+        );
+        List<Integer> redoColors = RecentChangesOverlayRenderer.outlineColorsForTest(
+                List.of(first, second),
+                RecentChangesOverlayCoordinator.PreviewTarget.REDO
+        );
+
+        assertEquals(RecentChangesOverlayRenderer.UNDO_TARGET_OUTLINE, undoColors.getFirst());
+        assertEquals(RecentChangesOverlayRenderer.RECENT_ACTION_OUTLINE, undoColors.get(1));
+        assertEquals(RecentChangesOverlayRenderer.REDO_TARGET_OUTLINE, redoColors.getFirst());
+        assertEquals(RecentChangesOverlayRenderer.RECENT_ACTION_OUTLINE, redoColors.get(1));
+    }
+
+    @Test
+    void heldActionButtonPreviewShowsUndoAndRedoTargetsTogether() {
+        UndoRedoAction undoFirst = action("undo-first", 10);
+        UndoRedoAction undoSecond = action("undo-second", 11);
+        UndoRedoAction redoFirst = action("redo-first", 20);
+        UndoRedoAction redoSecond = action("redo-second", 21);
+
+        List<Integer> colors = RecentChangesOverlayRenderer.outlineColorsForTest(
+                List.of(undoFirst, undoSecond),
+                List.of(redoFirst, redoSecond),
+                RecentChangesOverlayCoordinator.PreviewTarget.BOTH
+        );
+        List<BlockPoint> positions = RecentChangesOverlayRenderer.previewPositionsForTest(
+                List.of(undoFirst, undoSecond),
+                List.of(redoFirst, redoSecond),
+                RecentChangesOverlayCoordinator.PreviewTarget.BOTH
+        );
+
+        assertEquals(new BlockPoint(10, 64, 10), positions.get(0));
+        assertEquals(RecentChangesOverlayRenderer.UNDO_TARGET_OUTLINE, colors.get(0));
+        assertEquals(new BlockPoint(11, 64, 10), positions.get(1));
+        assertEquals(RecentChangesOverlayRenderer.RECENT_ACTION_OUTLINE, colors.get(1));
+        assertEquals(new BlockPoint(20, 64, 10), positions.get(2));
+        assertEquals(RecentChangesOverlayRenderer.REDO_TARGET_OUTLINE, colors.get(2));
+        assertEquals(new BlockPoint(21, 64, 10), positions.get(3));
+        assertEquals(RecentChangesOverlayRenderer.RECENT_ACTION_OUTLINE, colors.get(3));
+    }
+
+    @Test
+    void previewEntriesFollowUndoOrRedoApplyDirection() {
+        UndoRedoAction action = action();
+        action.recordChange(new StoredBlockChange(
+                new BlockPoint(10, 64, 10),
+                new StatePayload(state("minecraft:stone"), null),
+                new StatePayload(state("minecraft:glass"), null)
+        ), Instant.parse("2026-04-23T08:00:01Z"));
+        action.recordChange(new StoredBlockChange(
+                new BlockPoint(11, 64, 10),
+                new StatePayload(state("minecraft:dirt"), null),
+                new StatePayload(state("minecraft:gold_block"), null)
+        ), Instant.parse("2026-04-23T08:00:02Z"));
+
+        List<BlockPoint> undoPositions = RecentChangesOverlayRenderer.previewPositionsForTest(
+                List.of(action),
+                RecentChangesOverlayCoordinator.PreviewTarget.UNDO
+        );
+        List<BlockPoint> redoPositions = RecentChangesOverlayRenderer.previewPositionsForTest(
+                List.of(action),
+                RecentChangesOverlayCoordinator.PreviewTarget.REDO
+        );
+
+        assertEquals(new BlockPoint(11, 64, 10), undoPositions.getFirst());
+        assertEquals(new BlockPoint(10, 64, 10), redoPositions.getFirst());
+    }
+
+    @Test
     void largeRecentActionUsesExposedSurfaceMeshes() {
         UndoRedoAction action = action();
         for (StoredBlockChange change : denseCubeChanges()) {
@@ -117,6 +192,23 @@ class RecentChangesOverlayRendererStateTest {
                 Instant.parse("2026-04-23T08:00:00Z"),
                 Instant.parse("2026-04-23T08:00:00Z")
         );
+    }
+
+    private static UndoRedoAction action(String id, int x) {
+        UndoRedoAction action = new UndoRedoAction(
+                id,
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                Instant.parse("2026-04-23T08:00:00Z"),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        action.recordChange(new StoredBlockChange(
+                new BlockPoint(x, 64, 10),
+                new StatePayload(state("minecraft:stone"), null),
+                new StatePayload(state("minecraft:glass"), null)
+        ), Instant.parse("2026-04-23T08:00:01Z"));
+        return action;
     }
 
     private static List<StoredBlockChange> denseCubeChanges() {

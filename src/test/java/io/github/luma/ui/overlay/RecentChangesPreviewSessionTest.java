@@ -30,7 +30,7 @@ class RecentChangesPreviewSessionTest {
         assertSame(first, afterLiveEdits);
         assertEquals(1, snapshotReads.get());
         assertEquals(50L, afterLiveEdits.key().revision());
-        assertEquals("large", afterLiveEdits.actions().get(0).id());
+        assertEquals("large", afterLiveEdits.undoActions().get(0).id());
     }
 
     @Test
@@ -50,7 +50,7 @@ class RecentChangesPreviewSessionTest {
         );
 
         assertEquals(90L, afterRelease.key().revision());
-        assertEquals("tiny", afterRelease.actions().get(0).id());
+        assertEquals("tiny", afterRelease.undoActions().get(0).id());
     }
 
     @Test
@@ -65,12 +65,12 @@ class RecentChangesPreviewSessionTest {
         RecentChangesPreviewSession.PinnedPreview redo = session.request(
                 "project",
                 RecentChangesOverlayCoordinator.PreviewTarget.REDO,
-                () -> snapshot(90L, action("redo"))
+                () -> redoSnapshot(90L, action("redo"))
         );
 
         assertEquals(90L, redo.key().revision());
         assertEquals(RecentChangesOverlayCoordinator.PreviewTarget.REDO, redo.key().previewTarget());
-        assertEquals("redo", redo.actions().get(0).id());
+        assertEquals("redo", redo.redoActions().get(0).id());
     }
 
     @Test
@@ -92,8 +92,32 @@ class RecentChangesPreviewSessionTest {
         assertEquals(90L, nextProject.key().revision());
     }
 
+    @Test
+    void pinsUndoAndRedoSnapshotsTogetherForHeldActionButtonPreview() {
+        RecentChangesPreviewSession session = new RecentChangesPreviewSession();
+
+        RecentChangesPreviewSession.PinnedPreview preview = session.request(
+                "project",
+                RecentChangesOverlayCoordinator.PreviewTarget.BOTH,
+                () -> new RecentChangesPreviewSession.ActionSnapshot(
+                        120L,
+                        List.of(action("undo")),
+                        List.of(action("redo"))
+                )
+        );
+
+        assertEquals(120L, preview.key().revision());
+        assertEquals(RecentChangesOverlayCoordinator.PreviewTarget.BOTH, preview.key().previewTarget());
+        assertEquals("undo", preview.undoActions().get(0).id());
+        assertEquals("redo", preview.redoActions().get(0).id());
+    }
+
     private static RecentChangesPreviewSession.ActionSnapshot snapshot(long revision, UndoRedoAction action) {
-        return new RecentChangesPreviewSession.ActionSnapshot(revision, List.of(action));
+        return new RecentChangesPreviewSession.ActionSnapshot(revision, List.of(action), List.of());
+    }
+
+    private static RecentChangesPreviewSession.ActionSnapshot redoSnapshot(long revision, UndoRedoAction action) {
+        return new RecentChangesPreviewSession.ActionSnapshot(revision, List.of(), List.of(action));
     }
 
     private static RecentChangesPreviewSession.ActionSnapshot snapshot(

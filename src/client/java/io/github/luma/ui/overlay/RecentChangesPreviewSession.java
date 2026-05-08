@@ -25,7 +25,8 @@ final class RecentChangesPreviewSession {
             ActionSnapshot snapshot = snapshotSupplier.get();
             this.pinnedPreview = new PinnedPreview(
                     new PreviewKey(projectId, snapshot.revision(), normalizedTarget),
-                    snapshot.actions()
+                    snapshot.undoActions(),
+                    snapshot.redoActions()
             );
         }
         return this.pinnedPreview;
@@ -57,17 +58,27 @@ final class RecentChangesPreviewSession {
         }
     }
 
-    record ActionSnapshot(long revision, List<UndoRedoAction> actions) {
+    record ActionSnapshot(
+            long revision,
+            List<UndoRedoAction> undoActions,
+            List<UndoRedoAction> redoActions
+    ) {
 
         ActionSnapshot {
-            actions = actions == null ? List.of() : List.copyOf(actions);
+            undoActions = undoActions == null ? List.of() : List.copyOf(undoActions);
+            redoActions = redoActions == null ? List.of() : List.copyOf(redoActions);
         }
     }
 
-    record PinnedPreview(PreviewKey key, List<UndoRedoAction> actions) {
+    record PinnedPreview(
+            PreviewKey key,
+            List<UndoRedoAction> undoActions,
+            List<UndoRedoAction> redoActions
+    ) {
 
         PinnedPreview {
-            actions = actions == null ? List.of() : List.copyOf(actions);
+            undoActions = undoActions == null ? List.of() : List.copyOf(undoActions);
+            redoActions = redoActions == null ? List.of() : List.copyOf(redoActions);
         }
     }
 }

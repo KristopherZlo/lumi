@@ -794,7 +794,7 @@
   "luma.onboarding.compare_help": "Toggle the in-world highlight while reviewing what changed.",
   "luma.onboarding.topic_preview": "Preview before undo",
   "luma.onboarding.preview_title": "Preview undo targets",
-  "luma.onboarding.preview_help": "Hold the Lumi action button to preview pending changes; hold it with redo to preview redo targets.",
+  "luma.onboarding.preview_help": "Hold the Lumi action button to preview undo targets in red and redo targets in green.",
   "luma.onboarding.topic_quick_rollback": "Quick rollback",
   "luma.onboarding.quick_rollback_title": "Return to the latest saved branch head",
   "luma.onboarding.quick_rollback_help": "Use this when an experiment went wrong and you want the current branch back at its latest saved state.",
