@@ -57,6 +57,7 @@ public final class WorldOperationManager {
     private ExecutorService backgroundExecutor = createExecutor();
     private final Map<String, ActiveOperation> activeOperations = new HashMap<>();
     private final Map<String, OperationSnapshot> lastSnapshots = new HashMap<>();
+    private final Map<String, OperationSnapshot> lastSnapshotsByOperationId = new HashMap<>();
     private final Map<String, String> lastApplyMetrics = new HashMap<>();
 
     private WorldOperationManager() {
@@ -83,6 +84,23 @@ public final class WorldOperationManager {
         return this.snapshot(server)
                 .filter(snapshot -> snapshot.handle() != null)
                 .filter(snapshot -> projectId == null || projectId.equals(snapshot.handle().projectId()));
+    }
+
+    public synchronized Optional<OperationSnapshot> snapshot(MinecraftServer server, OperationHandle handle) {
+        if (handle == null || handle.id() == null || handle.id().isBlank()) {
+            return Optional.empty();
+        }
+        String serverKey = this.serverKey(server);
+        ActiveOperation active = this.activeOperations.get(serverKey);
+        if (active != null
+                && active.handle() != null
+                && handle.id().equals(active.handle().id())) {
+            return Optional.of(active.snapshot());
+        }
+        return Optional.ofNullable(this.lastSnapshotsByOperationId.get(handle.id()))
+                .filter(snapshot -> snapshot.handle() != null)
+                .filter(snapshot -> handle.projectId() == null
+                        || handle.projectId().equals(snapshot.handle().projectId()));
     }
 
     public synchronized Optional<String> applyMetrics(OperationHandle handle) {
@@ -218,6 +236,7 @@ public final class WorldOperationManager {
         if (active == operation) {
             this.activeOperations.remove(serverKey);
             this.lastSnapshots.put(serverKey, operation.snapshot());
+            this.lastSnapshotsByOperationId.put(operation.handle().id(), operation.snapshot());
             operation.applyMetricsSummary().ifPresent(metrics -> {
                 this.lastApplyMetrics.put(operation.handle().id(), metrics);
                 LumaLoadLog.operationMetrics(operation.handle(), metrics);

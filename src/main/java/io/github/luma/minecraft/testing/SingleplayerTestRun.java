@@ -875,9 +875,7 @@ final class SingleplayerTestRun {
         if (this.pendingOperation == null) {
             return false;
         }
-        var snapshot = this.worldOperationManager.snapshot(server, this.pendingOperation.projectId())
-                .filter(candidate -> candidate.handle() != null)
-                .filter(candidate -> this.pendingOperation.id().equals(candidate.handle().id()));
+        var snapshot = this.worldOperationManager.snapshot(server, this.pendingOperation);
         if (snapshot.isEmpty()) {
             if (this.worldOperationManager.hasActiveOperation(server)) {
                 return true;
@@ -891,6 +889,13 @@ final class SingleplayerTestRun {
         this.performanceMonitor.recordOperationSnapshot(operation);
         if (!operation.terminal()) {
             this.reportOperationProgress(server, operation);
+            return true;
+        }
+        if (this.worldOperationManager.hasActiveOperation(server)) {
+            this.worldOperationManager.snapshot(server, this.pendingOperation.projectId())
+                    .filter(active -> active.handle() != null)
+                    .filter(active -> !this.pendingOperation.id().equals(active.handle().id()))
+                    .ifPresent(active -> this.reportOperationProgress(server, active));
             return true;
         }
         if (operation.failed()) {
