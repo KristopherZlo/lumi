@@ -118,13 +118,13 @@ The marker is intentionally separate from `world-origin.json` because it must ex
 
 ### `pre-mod-backup/alpha-backup-warning-acknowledged.txt`
 
-Records that the player accepted the one-time alpha backup warning before opening an existing pre-Lumi world without a completed Lumi backup.
+Records that the player accepted the alpha backup gate before opening an existing pre-Lumi world without a completed Lumi backup.
 
-This file is not a backup manifest and does not imply that the backup scan completed. It only prevents the same warning from repeating for that world.
+This file is not a backup manifest and does not imply that the backup scan completed. Lumi no longer treats it as sufficient to enter a pre-Lumi world; the gate repeats until `manifest.json` exists for the current seed.
 
 ### `pre-mod-backup/manifest.json`
 
-Stores the one-time backup scan created after Lumi first opens an existing pre-Lumi world.
+Stores the one-time backup scan created before Lumi first opens an existing pre-Lumi world.
 
 The manifest records:
 

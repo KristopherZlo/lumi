@@ -878,15 +878,15 @@ The origin manifest records:
 
 Old manifests without a Lumi creation marker are treated conservatively and are not eligible for automatic generator regeneration.
 
-Before opening an existing pre-Lumi world without a completed Lumi backup, the client shows a one-time alpha warning. Pressing `OK` records the acknowledgement for that world and continues opening it. Fresh worlds created through Lumi are marked as Lumi-created and do not show this warning.
+Before opening an existing pre-Lumi world without a completed Lumi backup, the client shows an alpha backup gate. Pressing `Got it!` starts the compressed backup, shows a loading label and an experience-bar-style progress bar, records the acknowledgement when the backup succeeds, and opens the world only after the manifest is complete. Fresh worlds created through Lumi are marked as Lumi-created and do not show this gate.
 
-After the world opens, Lumi writes a one-time pre-mod backup under:
+Lumi writes the one-time pre-mod backup under:
 
 ```text
 <save>/lumi/pre-mod-backup/
 ```
 
-The backup scan runs after join on Lumi's low-priority bootstrap thread. It records the world seed, scans generated region chunks, skips pristine and visited-only chunks, and stores chunks with persistent payloads such as block entities, entities, or pending ticks as maximum-compression raw NBT. The default compressed payload budget is 128 MiB and can be changed with the `lumi.preModBackup.maxMiB` JVM property.
+The backup scan runs before world entry on Lumi's low-priority client backup thread. It records the world seed, scans generated region chunks, skips pristine and visited-only chunks, and stores chunks with persistent payloads such as block entities, entities, or pending ticks as maximum-compression raw NBT. The server bootstrap later verifies the completed manifest instead of repeating the backup. The default compressed payload budget is 128 MiB and can be changed with the `lumi.preModBackup.maxMiB` JVM property.
 
 History packages are stored under:
 

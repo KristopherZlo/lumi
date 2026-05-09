@@ -41,7 +41,7 @@ public final class WorldInitialBackupWarningService {
         if (this.backupRepository.hasCompletedBackup(worldRoot)) {
             return false;
         }
-        return !this.installationRepository.backupWarningAcknowledged(worldRoot);
+        return true;
     }
 
     public void acknowledgeWarning(Path worldRoot) throws IOException {

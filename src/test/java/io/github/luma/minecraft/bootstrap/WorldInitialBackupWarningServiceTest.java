@@ -30,14 +30,14 @@ class WorldInitialBackupWarningServiceTest {
     );
 
     @Test
-    void warnsForExistingPreLumiWorldWithoutBackupOnce() throws Exception {
+    void warnsForExistingPreLumiWorldUntilBackupCompletes() throws Exception {
         this.createLevelDat();
 
         assertTrue(this.warningService.shouldWarnBeforeOpen(this.tempDir));
 
         this.warningService.acknowledgeWarning(this.tempDir);
 
-        assertFalse(this.warningService.shouldWarnBeforeOpen(this.tempDir));
+        assertTrue(this.warningService.shouldWarnBeforeOpen(this.tempDir));
     }
 
     @Test

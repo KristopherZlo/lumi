@@ -123,7 +123,7 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 - `HistoryTombstoneRepository`: `history-tombstones.json` soft-delete visibility metadata.
 - `VersionRepository`, `VersionIndexRepository`: `versions/*.json` manifests and disposable `versions/index.json` cache.
 - `WorldOriginRepository`: shared `world-origin.json` manifest and corruption quarantine behavior.
-- `WorldInstallationRepository`: world-level Lumi installation markers such as fresh-world creation and alpha backup warning acknowledgement.
+- `WorldInstallationRepository`: world-level Lumi installation markers such as fresh-world creation and alpha backup gate acknowledgement.
 - `WorldInitialBackupRepository`: one-time pre-mod raw chunk backup manifest and size-budgeted compressed chunk NBT payloads.
 - `PatchRepository`: patch metadata/data facade.
 - `PatchMetaRepository`: `patches/*.meta.json` chunk index and lightweight patch metadata.
@@ -192,8 +192,11 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 ### Other Minecraft Modules
 
 - `minecraft/access/LumaAccessControl.java`: permission gate for commands, UI entry points, and dedicated-server mutation workflows.
-- `minecraft/bootstrap/WorldBootstrapService.java`: low-priority startup bootstrap for world-origin, space-bounded pre-mod backup, migration, and root-version metadata.
-- `minecraft/bootstrap/WorldInitialBackupWarningService.java`: pre-open decision logic for the one-time alpha backup warning on existing pre-Lumi worlds.
+- `minecraft/bootstrap/WorldBootstrapService.java`: low-priority startup bootstrap for world-origin, completed pre-mod backup verification, migration, and root-version metadata.
+- `minecraft/bootstrap/WorldInitialBackupService.java`: one-time pre-mod raw chunk backup creation for server bootstrap verification and client pre-open backup progress.
+- `minecraft/bootstrap/WorldInitialBackupIdentityReader.java`: client-side world identity lookup from Lumi origin metadata or `level.dat` before server entry.
+- `minecraft/bootstrap/WorldInitialBackupProgress.java`: immutable progress snapshot for pre-open backup UI.
+- `minecraft/bootstrap/WorldInitialBackupWarningService.java`: pre-open decision logic for the alpha backup gate on existing pre-Lumi worlds.
 - `minecraft/command/LumaCommands.java`: diagnostics/help and singleplayer smoke/full/structure runtime test command entries.
 - `minecraft/testing/*`: integrated singleplayer regression service, performance monitor, test volume/run/log helpers.
 
@@ -223,7 +226,8 @@ Use `src/main/java/io/github/luma/integration` for external builder tool detecti
 
 Use `src/client/java/io/github/luma` for client-only UI, key input, previews, overlays, and screens. Controllers call services; screens render and own transient route state; view-state records are immutable.
 
-- `client/world/WorldEntryWarningController.java`: client-only world-open gate for the pre-Lumi alpha backup warning and fresh-world marker.
+- `client/world/WorldEntryWarningController.java`: client-only world-open gate for the pre-Lumi alpha backup flow and fresh-world marker.
+- `client/world/WorldEntryBackupScreen.java`: pre-open alpha backup screen with blue warning text, `Got it!` acceptance, loading label, and experience-style backup progress bar.
 
 ### Navigation And Shared UI
 
