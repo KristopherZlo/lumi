@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,27 +51,63 @@ public final class WorldInitialBackupService {
             return;
         }
         Path worldRoot = server.getWorldPath(LevelResource.ROOT);
-        if (this.repository.completedForSeed(worldRoot, origin.seed())) {
+        this.backupPlansIfNeeded(
+                worldRoot,
+                origin.levelName(),
+                origin.seed(),
+                this.serverDimensionPlans(worldRoot, server),
+                ProgressListener.NO_OP
+        );
+    }
+
+    public void backupWorldRootIfNeeded(
+            Path worldRoot,
+            String levelName,
+            long seed,
+            ProgressListener progressListener
+    ) throws IOException {
+        if (worldRoot == null) {
             return;
         }
+        this.backupPlansIfNeeded(
+                worldRoot,
+                levelName,
+                seed,
+                this.discoveredDimensionPlans(worldRoot),
+                progressListener
+        );
+    }
 
+    private void backupPlansIfNeeded(
+            Path worldRoot,
+            String levelName,
+            long seed,
+            List<DimensionRegionPlan> plans,
+            ProgressListener progressListener
+    ) throws IOException {
+        if (worldRoot == null || this.repository.completedForSeed(worldRoot, seed)) {
+            return;
+        }
+        progressListener = progressListener == null ? ProgressListener.NO_OP : progressListener;
         Instant startedAt = Instant.now();
         Map<String, WorldInitialBackupManifest.DimensionBackupSummary> dimensions = new LinkedHashMap<>();
-        for (ServerLevel level : server.getAllLevels()) {
-            String dimensionId = level.dimension().identifier().toString();
-            dimensions.put(dimensionId, this.backupDimension(worldRoot, dimensionId));
+        ProgressState progress = new ProgressState(this.totalChunkCount(plans), progressListener);
+        progress.publish("");
+        for (DimensionRegionPlan plan : plans) {
+            dimensions.put(plan.dimensionId(), this.backupDimension(worldRoot, plan, progress));
         }
 
         this.repository.save(worldRoot, new WorldInitialBackupManifest(
                 WorldInitialBackupManifest.CURRENT_SCHEMA_VERSION,
-                origin.levelName(),
-                origin.seed(),
+                levelName,
+                seed,
                 WorldChunkActivityClassifier.NAME,
                 this.storagePolicy.maxCompressedBytes(),
                 dimensions,
                 startedAt,
                 Instant.now()
         ));
+        progress.complete();
         LumaMod.LOGGER.info(
                 "Completed pre-mod world backup scan for {} dimensions at {}",
                 dimensions.size(),
@@ -80,19 +117,17 @@ public final class WorldInitialBackupService {
 
     private WorldInitialBackupManifest.DimensionBackupSummary backupDimension(
             Path worldRoot,
-            String dimensionId
+            DimensionRegionPlan plan,
+            ProgressState progress
     ) throws IOException {
-        Path regionDir = this.regionDir(worldRoot, dimensionId);
-        if (!Files.isDirectory(regionDir)) {
-            return new WorldInitialBackupManifest.DimensionBackupSummary(dimensionId, 0, 0, 0, 0L);
-        }
-
-        List<Path> regionFiles;
-        try (var stream = Files.list(regionDir)) {
-            regionFiles = stream
-                    .filter(path -> path.getFileName().toString().endsWith(".mca"))
-                    .sorted()
-                    .toList();
+        if (plan == null || plan.regionFiles().isEmpty()) {
+            return new WorldInitialBackupManifest.DimensionBackupSummary(
+                    plan == null ? "" : plan.dimensionId(),
+                    0,
+                    0,
+                    0,
+                    0L
+            );
         }
 
         int scanned = 0;
@@ -101,7 +136,7 @@ public final class WorldInitialBackupService {
         int skippedVisitedOnly = 0;
         int skippedByBudget = 0;
         long bytes = 0L;
-        for (Path regionFile : regionFiles) {
+        for (Path regionFile : plan.regionFiles()) {
             List<RegionChunkScanner.RegionChunkRecord> chunks;
             try {
                 chunks = this.regionScanner.scan(regionFile);
@@ -112,10 +147,12 @@ public final class WorldInitialBackupService {
             for (RegionChunkScanner.RegionChunkRecord chunk : chunks) {
                 scanned += 1;
                 WorldChunkActivityClassifier.ChunkBackupDecision decision = this.activityClassifier.classify(chunk.tag());
+                boolean written = false;
+                long writtenBytes = 0L;
                 if (decision == WorldChunkActivityClassifier.ChunkBackupDecision.BACKUP) {
                     WorldInitialBackupRepository.ChunkWriteResult result = this.repository.writeChunk(
                             worldRoot,
-                            dimensionId,
+                            plan.dimensionId(),
                             chunk.chunk(),
                             chunk.nbtBytes(),
                             this.storagePolicy.remainingBytes(bytes)
@@ -123,6 +160,8 @@ public final class WorldInitialBackupService {
                     if (result.written()) {
                         bytes += result.compressedBytes();
                         backedUp += 1;
+                        written = true;
+                        writtenBytes = result.compressedBytes();
                     } else {
                         skippedByBudget += 1;
                     }
@@ -131,13 +170,14 @@ public final class WorldInitialBackupService {
                 } else {
                     skippedPristine += 1;
                 }
+                progress.advance(plan.dimensionId(), written, writtenBytes);
                 if ((scanned % 64) == 0) {
                     LockSupport.parkNanos(BACKGROUND_PAUSE_NANOS);
                 }
             }
         }
         return new WorldInitialBackupManifest.DimensionBackupSummary(
-                dimensionId,
+                plan.dimensionId(),
                 scanned,
                 backedUp,
                 skippedPristine,
@@ -146,6 +186,64 @@ public final class WorldInitialBackupService {
                 bytes,
                 skippedByBudget > 0
         );
+    }
+
+    private List<DimensionRegionPlan> serverDimensionPlans(Path worldRoot, MinecraftServer server) throws IOException {
+        List<DimensionRegionPlan> plans = new ArrayList<>();
+        for (ServerLevel level : server.getAllLevels()) {
+            String dimensionId = level.dimension().identifier().toString();
+            plans.add(new DimensionRegionPlan(dimensionId, this.regionFiles(this.regionDir(worldRoot, dimensionId))));
+        }
+        return List.copyOf(plans);
+    }
+
+    private List<DimensionRegionPlan> discoveredDimensionPlans(Path worldRoot) throws IOException {
+        List<DimensionRegionPlan> plans = new ArrayList<>();
+        plans.add(new DimensionRegionPlan("minecraft:overworld", this.regionFiles(this.regionDir(worldRoot, "minecraft:overworld"))));
+        plans.add(new DimensionRegionPlan("minecraft:the_nether", this.regionFiles(this.regionDir(worldRoot, "minecraft:the_nether"))));
+        plans.add(new DimensionRegionPlan("minecraft:the_end", this.regionFiles(this.regionDir(worldRoot, "minecraft:the_end"))));
+
+        Path dimensionsRoot = worldRoot == null ? null : worldRoot.resolve("dimensions");
+        if (dimensionsRoot != null && Files.isDirectory(dimensionsRoot)) {
+            try (var namespaces = Files.list(dimensionsRoot)) {
+                for (Path namespace : namespaces.filter(Files::isDirectory).sorted().toList()) {
+                    try (var dimensionDirs = Files.list(namespace)) {
+                        for (Path dimensionDir : dimensionDirs.filter(Files::isDirectory).sorted().toList()) {
+                            Path regionDir = dimensionDir.resolve("region");
+                            if (Files.isDirectory(regionDir)) {
+                                plans.add(new DimensionRegionPlan(
+                                        namespace.getFileName() + ":" + dimensionDir.getFileName(),
+                                        this.regionFiles(regionDir)
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return List.copyOf(plans);
+    }
+
+    private List<Path> regionFiles(Path regionDir) throws IOException {
+        if (!Files.isDirectory(regionDir)) {
+            return List.of();
+        }
+        try (var stream = Files.list(regionDir)) {
+            return stream
+                    .filter(path -> path.getFileName().toString().endsWith(".mca"))
+                    .sorted()
+                    .toList();
+        }
+    }
+
+    private int totalChunkCount(List<DimensionRegionPlan> plans) throws IOException {
+        int total = 0;
+        for (DimensionRegionPlan plan : plans == null ? List.<DimensionRegionPlan>of() : plans) {
+            for (Path regionFile : plan.regionFiles()) {
+                total += this.regionScanner.countChunks(regionFile);
+            }
+        }
+        return Math.max(1, total);
     }
 
     private Path regionDir(Path worldRoot, String dimensionId) {
@@ -160,5 +258,59 @@ public final class WorldInitialBackupService {
                 yield worldRoot.resolve("dimensions").resolve(namespace).resolve(path).resolve("region");
             }
         };
+    }
+
+    public interface ProgressListener {
+
+        ProgressListener NO_OP = progress -> {
+        };
+
+        void onProgress(WorldInitialBackupProgress progress);
+    }
+
+    private record DimensionRegionPlan(String dimensionId, List<Path> regionFiles) {
+
+        private DimensionRegionPlan {
+            dimensionId = dimensionId == null ? "" : dimensionId;
+            regionFiles = regionFiles == null ? List.of() : List.copyOf(regionFiles);
+        }
+    }
+
+    private static final class ProgressState {
+
+        private final int totalChunks;
+        private final ProgressListener listener;
+        private int completedChunks;
+        private int backedUpChunks;
+        private long compressedBytes;
+
+        private ProgressState(int totalChunks, ProgressListener listener) {
+            this.totalChunks = Math.max(1, totalChunks);
+            this.listener = listener == null ? ProgressListener.NO_OP : listener;
+        }
+
+        private void advance(String dimensionId, boolean backedUp, long compressedBytes) {
+            this.completedChunks += 1;
+            if (backedUp) {
+                this.backedUpChunks += 1;
+                this.compressedBytes += Math.max(0L, compressedBytes);
+            }
+            this.publish(dimensionId);
+        }
+
+        private void complete() {
+            this.completedChunks = this.totalChunks;
+            this.publish("");
+        }
+
+        private void publish(String dimensionId) {
+            this.listener.onProgress(new WorldInitialBackupProgress(
+                    Math.min(this.completedChunks, this.totalChunks),
+                    this.totalChunks,
+                    this.backedUpChunks,
+                    this.compressedBytes,
+                    dimensionId
+            ));
+        }
     }
 }

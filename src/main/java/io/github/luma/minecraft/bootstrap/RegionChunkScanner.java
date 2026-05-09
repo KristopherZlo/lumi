@@ -50,6 +50,27 @@ final class RegionChunkScanner {
         return List.copyOf(chunks);
     }
 
+    int countChunks(Path regionFile) throws IOException {
+        RegionCoordinate region = RegionCoordinate.parse(regionFile);
+        if (region == null || !Files.isRegularFile(regionFile) || Files.size(regionFile) < HEADER_BYTES) {
+            return 0;
+        }
+
+        int chunks = 0;
+        try (RandomAccessFile file = new RandomAccessFile(regionFile.toFile(), "r")) {
+            for (int index = 0; index < CHUNK_COUNT; index++) {
+                file.seek((long) index * Integer.BYTES);
+                int location = file.readInt();
+                int sector = (location >>> 8) & 0xFFFFFF;
+                int sectorCount = location & 0xFF;
+                if (sector >= 2 && sectorCount > 0) {
+                    chunks += 1;
+                }
+            }
+        }
+        return chunks;
+    }
+
     private RegionChunkRecord readChunk(
             Path regionFile,
             RandomAccessFile file,
