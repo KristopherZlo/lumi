@@ -10,6 +10,7 @@ import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRequest;
+import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -67,6 +68,9 @@ import net.minecraft.server.level.ServerLevel;
  * application.
  */
 public final class RestoreService {
+
+    private static final int MAX_COLLAPSE_PLACEMENTS = 1_000_000;
+    private static final int MAX_COLLAPSE_NATIVE_SECTIONS = 2_048;
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -925,14 +929,7 @@ public final class RestoreService {
             );
         }
 
-        List<PreparedChunkBatch> collapsed;
-        try (var ignored = LumaLoadLog.measure(
-                "restore",
-                "PreparedChunkBatchCollapser.collapse",
-                "source=world-root, batches=" + batches.size()
-        )) {
-            collapsed = this.batchCollapser.collapse(batches);
-        }
+        List<PreparedChunkBatch> collapsed = this.collapsePreparedRestoreBatches("world-root", batches);
         LumaMod.LOGGER.info(
                 "Decoded {} tracked baseline chunks for world root restore in project {}",
                 trackedChunks.size(),
@@ -1002,45 +999,8 @@ public final class RestoreService {
                 + exactRootStatePlan.sourceCount(targetVersion);
         int completedSources = 0;
         List<PreparedChunkBatch> batches = new ArrayList<>();
-
-        if (pendingDraft != null && !pendingDraft.isEmpty()) {
-            RecoveryDraft rollbackDraft = this.alignPendingEntityRollbackWithTarget(
-                    layout,
-                    versions,
-                    targetVersion,
-                    pendingDraft
-            );
-            batches.addAll(this.decodeStoredChanges(level, rollbackDraft.changes(), rollbackDraft.entityChanges(), false));
-            completedSources += 1;
-            progressSink.update(
-                    OperationStage.PREPARING,
-                    completedSources,
-                    Math.max(1, totalSources),
-                    "Decoded pending draft rollback"
-            );
-        }
-
-        for (ProjectVersion version : directPlan.reverseVersions()) {
-            batches.addAll(this.decodeVersionChanges(layout, level, version, false));
-            completedSources += 1;
-            progressSink.update(
-                    OperationStage.PREPARING,
-                    completedSources,
-                    Math.max(1, totalSources),
-                    "Decoded reverse patch " + version.id()
-            );
-        }
-
-        for (ProjectVersion version : directPlan.forwardVersions()) {
-            batches.addAll(this.decodeVersionChanges(layout, level, version, true));
-            completedSources += 1;
-            progressSink.update(
-                    OperationStage.PREPARING,
-                    completedSources,
-                    Math.max(1, totalSources),
-                    "Decoded forward patch " + version.id()
-            );
-        }
+        List<PreparedChunkBatch> exactRootBatches = List.of();
+        Set<String> exactRootChunkKeys = Set.of();
 
         if (exactRootStatePlan.append()) {
             DecodedExactRootState decodedRootState = this.decodeExactRootStateRestore(
@@ -1053,18 +1013,82 @@ public final class RestoreService {
                     Math.max(1, totalSources),
                     progressSink
             );
-            batches.addAll(decodedRootState.batches());
+            exactRootBatches = decodedRootState.batches();
+            exactRootChunkKeys = this.chunkKeys(exactRootBatches);
             completedSources = decodedRootState.completedSources();
         }
 
-        List<PreparedChunkBatch> collapsed;
-        try (var ignored = LumaLoadLog.measure(
-                "restore",
-                "PreparedChunkBatchCollapser.collapse",
-                "source=direct-restore, batches=" + batches.size()
-        )) {
-            collapsed = this.batchCollapser.collapse(batches);
+        if (pendingDraft != null && !pendingDraft.isEmpty()) {
+            RecoveryDraft rollbackDraft = this.alignPendingEntityRollbackWithTarget(
+                    layout,
+                    versions,
+                    targetVersion,
+                    pendingDraft
+            );
+            List<StoredBlockChange> rollbackChanges = this.excludeBlockChangesInChunks(
+                    rollbackDraft.changes(),
+                    exactRootChunkKeys
+            );
+            List<StoredEntityChange> rollbackEntityChanges = this.excludeEntityChangesInChunks(
+                    rollbackDraft.entityChanges(),
+                    exactRootChunkKeys
+            );
+            if (!rollbackChanges.isEmpty() || !rollbackEntityChanges.isEmpty()) {
+                batches.addAll(this.decodeStoredChanges(level, rollbackChanges, rollbackEntityChanges, false));
+            }
+            completedSources += 1;
+            progressSink.update(
+                    OperationStage.PREPARING,
+                    completedSources,
+                    Math.max(1, totalSources),
+                    rollbackChanges.isEmpty() && rollbackEntityChanges.isEmpty()
+                            ? "Skipped pending draft rollback covered by exact root state"
+                            : "Decoded pending draft rollback"
+            );
         }
+
+        for (ProjectVersion version : directPlan.reverseVersions()) {
+            int before = batches.size();
+            batches.addAll(this.decodeVersionChanges(layout, level, version, false, exactRootChunkKeys));
+            completedSources += 1;
+            progressSink.update(
+                    OperationStage.PREPARING,
+                    completedSources,
+                    Math.max(1, totalSources),
+                    before == batches.size()
+                            ? "Skipped reverse patch " + version.id() + " covered by exact root state"
+                            : "Decoded reverse patch " + version.id()
+            );
+        }
+
+        for (ProjectVersion version : directPlan.forwardVersions()) {
+            int before = batches.size();
+            batches.addAll(this.decodeVersionChanges(layout, level, version, true, exactRootChunkKeys));
+            completedSources += 1;
+            progressSink.update(
+                    OperationStage.PREPARING,
+                    completedSources,
+                    Math.max(1, totalSources),
+                    before == batches.size()
+                            ? "Skipped forward patch " + version.id() + " covered by exact root state"
+                            : "Decoded forward patch " + version.id()
+            );
+        }
+
+        if (!exactRootBatches.isEmpty()) {
+            batches.addAll(exactRootBatches);
+            if (targetVersion.versionKind() == VersionKind.INITIAL) {
+                progressSink.update(
+                        OperationStage.PREPARING,
+                        completedSources,
+                        Math.max(1, totalSources),
+                        "Decoded exact initial snapshot " + targetVersion.snapshotId()
+                );
+            }
+        }
+
+        List<PreparedChunkBatch> collapsed;
+        collapsed = this.collapsePreparedRestoreBatches("direct-restore", batches);
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         LumaMod.LOGGER.info(
@@ -1596,14 +1620,7 @@ public final class RestoreService {
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded patch " + patch.id());
         }
 
-        List<PreparedChunkBatch> collapsed;
-        try (var ignored = LumaLoadLog.measure(
-                "restore",
-                "PreparedChunkBatchCollapser.collapse",
-                "source=restore-plan, batches=" + batches.size()
-        )) {
-            collapsed = this.batchCollapser.collapse(batches);
-        }
+        List<PreparedChunkBatch> collapsed = this.collapsePreparedRestoreBatches("restore-plan", batches);
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         if (rawPlacements != collapsedPlacements) {
@@ -1629,6 +1646,16 @@ public final class RestoreService {
             ProjectVersion version,
             boolean applyNewValues
     ) throws IOException {
+        return this.decodeVersionChanges(layout, level, version, applyNewValues, Set.of());
+    }
+
+    private List<PreparedChunkBatch> decodeVersionChanges(
+            ProjectLayout layout,
+            ServerLevel level,
+            ProjectVersion version,
+            boolean applyNewValues,
+            Set<String> excludedChunkKeys
+    ) throws IOException {
         List<PreparedChunkBatch> batches = new ArrayList<>();
         for (String patchId : version.patchIds()) {
             PatchMetadata metadata;
@@ -1645,9 +1672,16 @@ public final class RestoreService {
                     "WorldChangeBatchPreparer.preparePatch",
                     "patch=" + patchId + ", applyNewValues=" + applyNewValues
             )) {
+                PatchSectionWorldChanges changes = this.excludeSectionChangesInChunks(
+                        this.patchDataRepository.loadSectionWorldChanges(layout, metadata),
+                        excludedChunkKeys
+                );
+                if (changes.sectionFrames().isEmpty() && changes.entityChanges().isEmpty()) {
+                    continue;
+                }
                 batches.addAll(this.batchPreparer.prepare(
                         level,
-                        this.patchDataRepository.loadSectionWorldChanges(layout, metadata),
+                        changes,
                         applyNewValues,
                         (completed, total) -> {
                         }
@@ -1655,6 +1689,82 @@ public final class RestoreService {
             }
         }
         return batches;
+    }
+
+    private List<PreparedChunkBatch> collapsePreparedRestoreBatches(String source, List<PreparedChunkBatch> batches) {
+        long placements = totalPlacementsLong(batches);
+        int nativeSections = totalNativeSections(batches);
+        if (placements > MAX_COLLAPSE_PLACEMENTS || nativeSections > MAX_COLLAPSE_NATIVE_SECTIONS) {
+            LumaMod.LOGGER.info(
+                    "Skipping restore batch collapse for {} because prepared work is already large: batches={}, nativeSections={}, placements={}",
+                    source,
+                    batches.size(),
+                    nativeSections,
+                    placements
+            );
+            LumaDebugLog.log(
+                    "restore",
+                    "Skipped restore batch collapse for {} with {} batches, {} native sections, and {} placements",
+                    source,
+                    batches.size(),
+                    nativeSections,
+                    placements
+            );
+            return List.copyOf(batches);
+        }
+
+        try (var ignored = LumaLoadLog.measure(
+                "restore",
+                "PreparedChunkBatchCollapser.collapse",
+                "source=" + source + ", batches=" + batches.size()
+        )) {
+            return this.batchCollapser.collapse(batches);
+        }
+    }
+
+    private PatchSectionWorldChanges excludeSectionChangesInChunks(
+            PatchSectionWorldChanges changes,
+            Set<String> excludedChunkKeys
+    ) {
+        if (changes == null || excludedChunkKeys == null || excludedChunkKeys.isEmpty()) {
+            return changes;
+        }
+        return new PatchSectionWorldChanges(
+                changes.sectionFrames().stream()
+                        .filter(frame -> !excludedChunkKeys.contains(chunkKey(new ChunkPoint(frame.chunkX(), frame.chunkZ()))))
+                        .toList(),
+                this.excludeEntityChangesInChunks(changes.entityChanges(), excludedChunkKeys)
+        );
+    }
+
+    private List<StoredBlockChange> excludeBlockChangesInChunks(
+            List<StoredBlockChange> changes,
+            Set<String> excludedChunkKeys
+    ) {
+        if (changes == null || changes.isEmpty()) {
+            return List.of();
+        }
+        if (excludedChunkKeys == null || excludedChunkKeys.isEmpty()) {
+            return changes;
+        }
+        return changes.stream()
+                .filter(change -> !excludedChunkKeys.contains(chunkKey(ChunkPoint.from(change.pos()))))
+                .toList();
+    }
+
+    private List<StoredEntityChange> excludeEntityChangesInChunks(
+            List<StoredEntityChange> changes,
+            Set<String> excludedChunkKeys
+    ) {
+        if (changes == null || changes.isEmpty()) {
+            return List.of();
+        }
+        if (excludedChunkKeys == null || excludedChunkKeys.isEmpty()) {
+            return changes;
+        }
+        return changes.stream()
+                .filter(change -> change.chunk() == null || !excludedChunkKeys.contains(chunkKey(change.chunk())))
+                .toList();
     }
 
     ProjectVariant restoreTargetVariant(List<ProjectVariant> variants, ProjectVersion version, String targetVariantId) {
@@ -1762,6 +1872,16 @@ public final class RestoreService {
             }
         }
         return List.copyOf(chunks.values());
+    }
+
+    private Set<String> chunkKeys(List<PreparedChunkBatch> batches) {
+        Set<String> chunks = new HashSet<>();
+        for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
+            if (batch != null && batch.chunk() != null) {
+                chunks.add(chunkKey(batch.chunk()));
+            }
+        }
+        return chunks;
     }
 
     private static String chunkKey(ChunkPoint chunk) {
@@ -1954,9 +2074,30 @@ public final class RestoreService {
     }
 
     private static int totalPlacements(List<PreparedChunkBatch> batches) {
-        int total = 0;
-        for (PreparedChunkBatch batch : batches) {
+        long total = totalPlacementsLong(batches);
+        return total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total;
+    }
+
+    private static long totalPlacementsLong(List<PreparedChunkBatch> batches) {
+        long total = 0L;
+        for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
+            if (batch == null) {
+                continue;
+            }
             total += batch.placements().size();
+            for (var section : batch.nativeSections()) {
+                total += section.changedCellCount();
+            }
+        }
+        return total;
+    }
+
+    private static int totalNativeSections(List<PreparedChunkBatch> batches) {
+        int total = 0;
+        for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
+            if (batch != null) {
+                total += batch.nativeSections().size();
+            }
         }
         return total;
     }
