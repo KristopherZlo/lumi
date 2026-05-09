@@ -8,6 +8,7 @@ import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
@@ -22,6 +23,7 @@ import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,10 @@ public final class DiffService {
 
     public VersionDiff compareVersions(MinecraftServer server, String projectName, String leftVersionId, String rightVersionId) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
+        return this.compareVersions(layout, leftVersionId, rightVersionId);
+    }
+
+    VersionDiff compareVersions(ProjectLayout layout, String leftVersionId, String rightVersionId) throws IOException {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
 
@@ -48,10 +54,17 @@ public final class DiffService {
         ProjectVersion right = this.resolveVersion(layout, versions, rightVersionId);
         ProjectVersion ancestor = this.lineageService.commonAncestor(versionMap, left, right);
 
-        Map<BlockPoint, StateAccumulator> leftStates = this.collectVersionStates(layout, versionMap, ancestor, left);
-        Map<BlockPoint, StateAccumulator> rightStates = this.collectVersionStates(layout, versionMap, ancestor, right);
-        Map<String, EntityStateAccumulator> leftEntityStates = this.collectEntityVersionStates(layout, versionMap, ancestor, left);
-        Map<String, EntityStateAccumulator> rightEntityStates = this.collectEntityVersionStates(layout, versionMap, ancestor, right);
+        List<ProjectVersion> leftPath = this.lineageService.pathFromAncestor(versionMap, ancestor, left);
+        List<ProjectVersion> rightPath = this.lineageService.pathFromAncestor(versionMap, ancestor, right);
+        SectionComparisonScope blockScope = this.sectionComparisonScope(
+                this.indexPatchPath(layout, leftPath),
+                this.indexPatchPath(layout, rightPath)
+        );
+
+        Map<BlockPoint, StateAccumulator> leftStates = this.collectVersionStates(layout, leftPath, blockScope);
+        Map<BlockPoint, StateAccumulator> rightStates = this.collectVersionStates(layout, rightPath, blockScope);
+        Map<String, EntityStateAccumulator> leftEntityStates = this.collectEntityVersionStates(layout, leftPath);
+        Map<String, EntityStateAccumulator> rightEntityStates = this.collectEntityVersionStates(layout, rightPath);
 
         Set<BlockPoint> allPositions = new HashSet<>();
         allPositions.addAll(leftStates.keySet());
@@ -170,10 +183,24 @@ public final class DiffService {
             ProjectVersion ancestor,
             ProjectVersion target
     ) throws IOException {
-        List<ProjectVersion> path = this.lineageService.pathFromAncestor(versionMap, ancestor, target);
+        return this.collectVersionStates(
+                layout,
+                this.lineageService.pathFromAncestor(versionMap, ancestor, target),
+                SectionComparisonScope.full()
+        );
+    }
+
+    private Map<BlockPoint, StateAccumulator> collectVersionStates(
+            ProjectLayout layout,
+            List<ProjectVersion> path,
+            SectionComparisonScope sectionScope
+    ) throws IOException {
         Map<BlockPoint, StateAccumulator> states = new LinkedHashMap<>();
+        if (sectionScope != null && sectionScope.isIndexed() && sectionScope.sections().isEmpty()) {
+            return states;
+        }
         for (ProjectVersion version : path) {
-            for (StoredBlockChange change : this.loadPatchWorldChanges(layout, version.patchIds()).blockChanges()) {
+            for (StoredBlockChange change : this.loadBlockChanges(layout, version.patchIds(), sectionScope)) {
                 if (!this.visible(change)) {
                     continue;
                 }
@@ -191,10 +218,19 @@ public final class DiffService {
             ProjectVersion ancestor,
             ProjectVersion target
     ) throws IOException {
-        List<ProjectVersion> path = this.lineageService.pathFromAncestor(versionMap, ancestor, target);
+        return this.collectEntityVersionStates(
+                layout,
+                this.lineageService.pathFromAncestor(versionMap, ancestor, target)
+        );
+    }
+
+    private Map<String, EntityStateAccumulator> collectEntityVersionStates(
+            ProjectLayout layout,
+            List<ProjectVersion> path
+    ) throws IOException {
         Map<String, EntityStateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
-            for (StoredEntityChange change : this.loadPatchWorldChanges(layout, version.patchIds()).entityChanges()) {
+            for (StoredEntityChange change : this.loadEntityChanges(layout, version.patchIds())) {
                 states.compute(change.entityId(), (entityId, current) -> current == null
                         ? new EntityStateAccumulator(change.oldValue(), change.newValue(), change.entityType())
                         : current.withFinalState(change.newValue(), change.entityType()));
@@ -335,6 +371,116 @@ public final class DiffService {
         return new PatchWorldChanges(changes, entityChanges);
     }
 
+    private List<StoredBlockChange> loadBlockChanges(
+            ProjectLayout layout,
+            List<String> patchIds,
+            SectionComparisonScope sectionScope
+    ) throws IOException {
+        if (patchIds == null || patchIds.isEmpty()) {
+            return List.of();
+        }
+        List<StoredBlockChange> changes = new ArrayList<>();
+        for (String patchId : patchIds) {
+            PatchMetadataHolder metadata = this.loadPatchMetadata(layout, patchId);
+            if (sectionScope == null || !sectionScope.isIndexed()) {
+                changes.addAll(this.patchDataRepository.loadWorldChanges(layout, metadata.metadata()).blockChanges());
+                continue;
+            }
+            List<SectionFingerprint> selected = this.selectedPatchSections(metadata.metadata(), sectionScope.sections());
+            if (selected.isEmpty()) {
+                continue;
+            }
+            changes.addAll(this.patchDataRepository
+                    .loadWorldChangesForSections(layout, metadata.metadata(), selected)
+                    .blockChanges());
+        }
+        return List.copyOf(changes);
+    }
+
+    private List<StoredEntityChange> loadEntityChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
+        if (patchIds == null || patchIds.isEmpty()) {
+            return List.of();
+        }
+        List<StoredEntityChange> entityChanges = new ArrayList<>();
+        for (String patchId : patchIds) {
+            PatchMetadataHolder metadata = this.loadPatchMetadata(layout, patchId);
+            if (metadata.metadata().chunks() == null || metadata.metadata().chunks().isEmpty()) {
+                entityChanges.addAll(this.patchDataRepository.loadWorldChanges(layout, metadata.metadata()).entityChanges());
+                continue;
+            }
+            List<io.github.luma.domain.model.ChunkPoint> entityChunks = metadata.metadata().chunks().stream()
+                    .filter(slice -> slice.entityCount() > 0)
+                    .map(io.github.luma.domain.model.PatchChunkSlice::chunk)
+                    .toList();
+            if (entityChunks.isEmpty()) {
+                continue;
+            }
+            PatchWorldChanges worldChanges = this.patchDataRepository.loadWorldChanges(layout, metadata.metadata(), entityChunks);
+            entityChanges.addAll(worldChanges.entityChanges());
+        }
+        return List.copyOf(entityChanges);
+    }
+
+    private List<SectionFingerprint> selectedPatchSections(
+            io.github.luma.domain.model.PatchMetadata metadata,
+            Set<SectionKey> sections
+    ) {
+        if (metadata == null || metadata.chunks() == null || metadata.chunks().isEmpty()) {
+            return List.of();
+        }
+        List<SectionFingerprint> selected = new ArrayList<>();
+        for (io.github.luma.domain.model.PatchChunkSlice chunk : metadata.chunks()) {
+            for (SectionFingerprint fingerprint : chunk.sectionFingerprints()) {
+                if (sections.contains(SectionKey.from(fingerprint))) {
+                    selected.add(fingerprint);
+                }
+            }
+        }
+        return selected;
+    }
+
+    private PatchPathSectionIndex indexPatchPath(ProjectLayout layout, List<ProjectVersion> path) throws IOException {
+        Map<SectionKey, StringBuilder> signatures = new LinkedHashMap<>();
+        boolean fullReadRequired = false;
+        for (ProjectVersion version : path) {
+            for (String patchId : version.patchIds() == null ? List.<String>of() : version.patchIds()) {
+                io.github.luma.domain.model.PatchMetadata metadata = this.loadPatchMetadata(layout, patchId).metadata();
+                if (metadata.chunks() == null || metadata.chunks().isEmpty()) {
+                    fullReadRequired = true;
+                    continue;
+                }
+                for (io.github.luma.domain.model.PatchChunkSlice chunk : metadata.chunks()) {
+                    if (chunk.changeCount() > 0 && chunk.sectionFingerprints().isEmpty()) {
+                        fullReadRequired = true;
+                    }
+                    for (SectionFingerprint fingerprint : chunk.sectionFingerprints()) {
+                        signatures.computeIfAbsent(SectionKey.from(fingerprint), ignored -> new StringBuilder())
+                                .append(fingerprint.changedCount())
+                                .append(':')
+                                .append(fingerprint.xxHash64())
+                                .append(':')
+                                .append(fingerprint.sha256())
+                                .append(';');
+                    }
+                }
+            }
+        }
+        Map<SectionKey, String> frozen = new LinkedHashMap<>();
+        signatures.forEach((key, value) -> frozen.put(key, value.toString()));
+        return new PatchPathSectionIndex(Map.copyOf(frozen), fullReadRequired);
+    }
+
+    private SectionComparisonScope sectionComparisonScope(PatchPathSectionIndex left, PatchPathSectionIndex right) {
+        if (left.fullReadRequired() || right.fullReadRequired()) {
+            return SectionComparisonScope.full();
+        }
+        LinkedHashSet<SectionKey> sections = new LinkedHashSet<>();
+        sections.addAll(left.signatures().keySet());
+        sections.addAll(right.signatures().keySet());
+        sections.removeIf(section -> Objects.equals(left.signatures().get(section), right.signatures().get(section)));
+        return SectionComparisonScope.indexed(sections);
+    }
+
     private PatchMetadataHolder loadPatchMetadata(ProjectLayout layout, String patchId) throws IOException {
         return new PatchMetadataHolder(
                 this.patchMetaRepository.load(layout, patchId)
@@ -401,5 +547,34 @@ public final class DiffService {
     }
 
     private record PatchMetadataHolder(io.github.luma.domain.model.PatchMetadata metadata) {
+    }
+
+    private record PatchPathSectionIndex(Map<SectionKey, String> signatures, boolean fullReadRequired) {
+    }
+
+    private record SectionComparisonScope(boolean indexed, Set<SectionKey> sections) {
+
+        private SectionComparisonScope {
+            sections = sections == null ? Set.of() : Set.copyOf(sections);
+        }
+
+        private static SectionComparisonScope full() {
+            return new SectionComparisonScope(false, Set.of());
+        }
+
+        private static SectionComparisonScope indexed(Set<SectionKey> sections) {
+            return new SectionComparisonScope(true, sections);
+        }
+
+        private boolean isIndexed() {
+            return this.indexed;
+        }
+    }
+
+    private record SectionKey(int chunkX, int chunkZ, int sectionY) {
+
+        private static SectionKey from(SectionFingerprint fingerprint) {
+            return new SectionKey(fingerprint.chunkX(), fingerprint.chunkZ(), fingerprint.sectionY());
+        }
     }
 }

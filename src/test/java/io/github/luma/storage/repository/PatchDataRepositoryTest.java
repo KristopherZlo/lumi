@@ -195,6 +195,14 @@ class PatchDataRepositoryTest {
 
         assertEquals(1, sectionChanges.sectionFrames().size());
         assertEquals(5, sectionChanges.sectionFrames().getFirst().sectionY());
+
+        PatchWorldChanges selectedWorldChanges = this.repository.loadWorldChangesForSections(
+                layout,
+                metadata,
+                List.of(requested)
+        );
+        assertEquals(1, selectedWorldChanges.blockChanges().size());
+        assertEquals(80, selectedWorldChanges.blockChanges().getFirst().pos().y());
     }
 
     @Test

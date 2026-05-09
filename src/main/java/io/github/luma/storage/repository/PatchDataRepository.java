@@ -229,6 +229,19 @@ public final class PatchDataRepository {
         );
     }
 
+    public PatchWorldChanges loadWorldChangesForSections(
+            ProjectLayout layout,
+            PatchMetadata metadata,
+            Collection<SectionFingerprint> sections
+    ) throws IOException {
+        PatchSectionWorldChanges sectionChanges = this.loadSectionWorldChanges(layout, metadata, sections);
+        List<StoredBlockChange> changes = new ArrayList<>();
+        for (PatchSectionFrame frame : sectionChanges.sectionFrames()) {
+            changes.addAll(this.toStoredChanges(frame));
+        }
+        return new PatchWorldChanges(changes, sectionChanges.entityChanges());
+    }
+
     private PatchWorldChanges loadLegacyWorldChanges(Path dataFile, PatchMetadata metadata) throws IOException {
         try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
                 new BufferedInputStream(Files.newInputStream(dataFile))

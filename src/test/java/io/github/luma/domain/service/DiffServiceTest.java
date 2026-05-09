@@ -1,15 +1,30 @@
 package io.github.luma.domain.service;
 
+import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.ExternalSourceInfo;
+import io.github.luma.domain.model.PreviewInfo;
+import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.VersionDiff;
+import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.PatchDataRepository;
+import io.github.luma.storage.repository.PatchMetaRepository;
+import io.github.luma.storage.repository.VersionRepository;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -76,6 +91,47 @@ class DiffServiceTest {
         assertEquals(3.0D, x(currentDiff.changedEntities().getFirst().newValue()));
     }
 
+    @Test
+    void compareVersionsSkipsEqualIndexedPatchSectionsWithoutReadingFrames(@TempDir Path tempDir) throws Exception {
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("skip.mbp"));
+        Instant now = Instant.parse("2026-04-20T10:00:00Z");
+        PatchDataRepository patchDataRepository = new PatchDataRepository();
+        PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
+        VersionRepository versionRepository = new VersionRepository();
+        StoredBlockChange change = new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:stone"),
+                payload("minecraft:gold_block")
+        );
+
+        var leftMetadata = patchDataRepository.writePayload(
+                layout,
+                "patch-left",
+                "project",
+                "v0002",
+                List.of(change)
+        );
+        var rightMetadata = patchDataRepository.writePayload(
+                layout,
+                "patch-right",
+                "project",
+                "v0003",
+                List.of(change)
+        );
+        patchMetaRepository.save(layout, leftMetadata);
+        patchMetaRepository.save(layout, rightMetadata);
+        Files.write(layout.patchDataFile("patch-right"), new byte[] {1, 2, 3});
+
+        versionRepository.save(layout, version("v0001", "", List.of(), VersionKind.WORLD_ROOT, now));
+        versionRepository.save(layout, version("v0002", "v0001", List.of("patch-left"), VersionKind.MANUAL, now));
+        versionRepository.save(layout, version("v0003", "v0001", List.of("patch-right"), VersionKind.MANUAL, now));
+
+        VersionDiff diff = this.diffService.compareVersions(layout, "v0002", "v0003");
+
+        assertEquals(0, diff.changedBlockCount());
+        assertEquals(0, diff.changedEntityCount());
+    }
+
     private static StatePayload payload(String blockId) {
         CompoundTag stateTag = new CompoundTag();
         stateTag.putString("Name", blockId);
@@ -88,6 +144,30 @@ class DiffServiceTest {
                 "minecraft:block_display",
                 entity(entityId, oldX),
                 entity(entityId, newX)
+        );
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String parentId,
+            List<String> patchIds,
+            VersionKind kind,
+            Instant now
+    ) {
+        return new ProjectVersion(
+                id,
+                "project",
+                "main",
+                parentId,
+                "",
+                patchIds,
+                kind,
+                "tester",
+                "Save",
+                ChangeStats.empty(),
+                PreviewInfo.none(),
+                ExternalSourceInfo.manual(),
+                now
         );
     }
 
