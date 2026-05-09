@@ -45,7 +45,7 @@ final class WorldEntryBackupScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        this.renderStaticBackground(graphics);
         int centerX = this.width / 2;
         int contentWidth = Math.min(420, this.width - 40);
         int y = Math.max(34, this.height / 2 - 96);
@@ -165,6 +165,10 @@ final class WorldEntryBackupScreen extends Screen {
             y += 11;
         }
         return y;
+    }
+
+    private void renderStaticBackground(GuiGraphics graphics) {
+        graphics.fill(0, 0, this.width, this.height, 0xE0101010);
     }
 
     private void renderExperienceProgress(GuiGraphics graphics, int x, int y, double fraction) {
