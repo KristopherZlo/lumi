@@ -86,6 +86,31 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void undoRedoEntityMovementPreparesDeltaUpdateWithoutRemoval() throws Exception {
+        String entityId = "00000000-0000-0000-0000-000000000023";
+
+        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+                null,
+                List.of(),
+                List.of(new StoredEntityChange(
+                        entityId,
+                        "minecraft:minecart",
+                        entity(entityId, 1.0D),
+                        entity(entityId, 2.0D)
+                )),
+                false,
+                null
+        );
+
+        EntityBatch entityBatch = batches.getFirst().entityBatch();
+        assertEquals(0, entityBatch.entityIdsToRemove().size());
+        assertEquals(0, entityBatch.entitiesToSpawn().size());
+        assertEquals(1, entityBatch.entitiesToUpdate().size());
+        assertEquals(1.0D, entityBatch.entitiesToUpdate().getFirst()
+                .getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
+    }
+
+    @Test
     void decodedDenseSectionsUseNativeSectionBatches() {
         List<PreparedBlockPlacement> placements = java.util.stream.IntStream
                 .range(0, SectionApplySafetyClassifier.NATIVE_DENSE_THRESHOLD)

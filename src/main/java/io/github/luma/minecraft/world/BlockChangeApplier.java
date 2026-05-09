@@ -284,7 +284,6 @@ public final class BlockChangeApplier {
             int updateIndex = entityIndex - removalCount;
             if (updateIndex < updateCount) {
                 CompoundTag entityTag = entityBatch.entitiesToUpdate().get(updateIndex);
-                removeEntity(level, EntityPayload.readUuid(entityTag).map(UUID::toString).orElse(""));
                 spawnEntity(level, entityTag);
                 continue;
             }
@@ -419,7 +418,7 @@ public final class BlockChangeApplier {
             if (existing instanceof ServerPlayer) {
                 return;
             }
-            if (existing != null) {
+            if (existing != null && !existing.isRemoved()) {
                 if (existing.getType() == entity.getType()) {
                     existing.restoreFrom(entity);
                     return;

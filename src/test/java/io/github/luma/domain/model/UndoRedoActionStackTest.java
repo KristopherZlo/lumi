@@ -267,7 +267,9 @@ class UndoRedoActionStackTest {
                 NOW.plusMillis(50)
         );
 
-        UndoRedoAction action = stack.selectUndo().action();
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
+        assertNotNull(selection);
+        UndoRedoAction action = selection.action();
         StoredEntityChange undo = action.undoEntityChanges().getFirst();
         assertTrue(undo.isSpawn());
         assertTrue(action.inverseEntityChanges().getFirst().isRemove());
@@ -391,6 +393,37 @@ class UndoRedoActionStackTest {
         assertNotNull(selection);
         assertEquals(2, selection.action().size());
         assertEquals(entityId, selection.action().undoEntityChanges().getFirst().entityId());
+    }
+
+    @Test
+    void relatedMinecartMovementJoinsLatestNearbyAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String entityId = "00000000-0000-0000-0000-000000000018";
+        stack.recordChange("rail-toggle", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:air", "minecraft:lever"), NOW);
+
+        stack.recordRelatedEntityChange(
+                "minecraft:overworld",
+                new StoredEntityChange(
+                        entityId,
+                        "minecraft:minecart",
+                        entity("minecraft:minecart", entityId, 1.0D),
+                        entity("minecraft:minecart", entityId, 2.0D)
+                ),
+                NOW.plusSeconds(2),
+                java.time.Duration.ofSeconds(10),
+                2
+        );
+
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
+        assertNotNull(selection);
+        UndoRedoAction action = selection.action();
+        StoredEntityChange undo = action.undoEntityChanges().getFirst();
+        assertEquals(entityId, undo.entityId());
+        assertEquals(1.0D, action.inverseEntityChanges().getFirst().newValue()
+                .entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
+        assertEquals(2.0D, action.redoEntityChanges().getFirst().newValue()
+                .entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
     }
 
     @Test
