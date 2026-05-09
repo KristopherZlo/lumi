@@ -1936,7 +1936,7 @@ public final class RestoreService {
         return grouped;
     }
 
-    private List<BlockPoint> blockPositions(List<PreparedChunkBatch> batches) {
+    List<BlockPoint> blockPositions(List<PreparedChunkBatch> batches) {
         Map<Long, BlockPoint> positions = new LinkedHashMap<>();
         for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
             if (batch == null) {
@@ -1949,13 +1949,16 @@ public final class RestoreService {
                 }
             }
             for (var section : batch.nativeSections()) {
+                if (section == null || section.chunk() == null || section.buffer() == null) {
+                    continue;
+                }
                 section.buffer().changedCells().forEachSetCell(localIndex -> {
                     BlockPoint point = new BlockPoint(
                             (section.chunk().x() << 4) + SectionChangeMask.localX(localIndex),
                             (section.sectionY() << 4) + SectionChangeMask.localY(localIndex),
                             (section.chunk().z() << 4) + SectionChangeMask.localZ(localIndex)
                     );
-                    positions.putIfAbsent(point.toBlockPos().asLong(), point);
+                    positions.putIfAbsent(BlockPos.asLong(point.x(), point.y(), point.z()), point);
                 });
             }
         }

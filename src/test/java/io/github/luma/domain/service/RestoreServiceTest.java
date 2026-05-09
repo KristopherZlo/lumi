@@ -23,8 +23,13 @@ import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.world.EntityBatch;
+import io.github.luma.minecraft.world.LumiSectionBuffer;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.PreparedSectionApplyBatch;
+import io.github.luma.minecraft.world.SectionApplyPath;
+import io.github.luma.minecraft.world.SectionApplySafetyProfile;
+import io.github.luma.minecraft.world.SectionChangeMask;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
@@ -259,6 +264,38 @@ class RestoreServiceTest {
 
         assertTrue(plan.append());
         assertEquals(List.of(new ChunkPoint(0, 0), new ChunkPoint(7, 2)), plan.chunks());
+    }
+
+    @Test
+    void exactRootPositionCollectionIncludesNativeSectionCells() {
+        RestoreService service = new RestoreService();
+        LumiSectionBuffer buffer = LumiSectionBuffer.builder(4)
+                .set(SectionChangeMask.localIndex(1, 2, 3), Blocks.STONE.defaultBlockState(), null)
+                .set(SectionChangeMask.localIndex(2, 2, 3), Blocks.GOLD_BLOCK.defaultBlockState(), null)
+                .build();
+        PreparedSectionApplyBatch nativeSection = new PreparedSectionApplyBatch(
+                new ChunkPoint(2, -1),
+                4,
+                buffer,
+                new SectionApplySafetyProfile(SectionApplyPath.SECTION_NATIVE, "test"),
+                false
+        );
+        PreparedChunkBatch batch = new PreparedChunkBatch(
+                new ChunkPoint(2, -1),
+                List.of(new PreparedBlockPlacement(
+                        new BlockPos(33, 66, -13),
+                        Blocks.DIRT.defaultBlockState(),
+                        null
+                )),
+                List.of(nativeSection),
+                EntityBatch.empty()
+        );
+
+        List<BlockPoint> positions = service.blockPositions(List.of(batch));
+
+        assertEquals(2, positions.size());
+        assertEquals(new BlockPoint(33, 66, -13), positions.getFirst());
+        assertTrue(positions.contains(new BlockPoint(34, 66, -13)));
     }
 
     @Test
