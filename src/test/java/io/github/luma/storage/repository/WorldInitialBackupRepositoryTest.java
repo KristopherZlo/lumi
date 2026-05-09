@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class WorldInitialBackupRepositoryTest {
 
@@ -39,5 +40,22 @@ class WorldInitialBackupRepositoryTest {
                 .resolve("chunks")
                 .resolve("minecraft_overworld")
                 .resolve("chunk_1_-2.nbt.gz")));
+    }
+
+    @Test
+    void refusesChunkPayloadsThatWouldExceedBudget() throws Exception {
+        WorldInitialBackupRepository.ChunkWriteResult result = this.repository.writeChunk(
+                this.tempDir,
+                "minecraft:overworld",
+                new ChunkPoint(8, 8),
+                new byte[] {1, 2, 3},
+                1L
+        );
+
+        assertFalse(result.written());
+        assertFalse(Files.exists(this.repository.backupRoot(this.tempDir)
+                .resolve("chunks")
+                .resolve("minecraft_overworld")
+                .resolve("chunk_8_8.nbt.gz")));
     }
 }

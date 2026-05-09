@@ -113,13 +113,15 @@ The manifest records:
 - level name
 - world seed
 - classifier name
+- maximum compressed payload budget
 - per-dimension scanned, backed-up, and skipped chunk counts
+- visited-only and storage-budget skip counts
 - compressed backup bytes
 - start and completion timestamps
 
 Chunk payloads live under `pre-mod-backup/chunks/<dimension>/chunk_<x>_<z>.nbt.gz`.
 This backup is a cold startup artifact, so it uses maximum-level gzip compression instead of the LZ4 frames used by hot history payloads.
-They contain raw chunk NBT compressed with gzip. The scan is conservative: chunks with persisted player-activity markers such as non-zero `InhabitedTime`, block entities, entities, or pending ticks are kept; chunks without those markers are treated as generated-pristine and skipped. Ambiguous chunks are backed up rather than discarded.
+They contain raw chunk NBT compressed with gzip. The scan is storage-first: chunks whose only activity marker is non-zero `InhabitedTime` are treated as visited-only and skipped, because visited terrain can cover very large explored worlds without containing builder edits. Chunks with persistent payloads such as block entities, entities, or pending ticks are kept until the compressed backup budget is reached. The default budget is 128 MiB and can be changed with the `lumi.preModBackup.maxMiB` JVM property; values less than or equal to zero keep only the manifest and skip chunk payload writes.
 
 ### `test-logs/singleplayer-<timestamp>.log`
 

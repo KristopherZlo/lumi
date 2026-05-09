@@ -47,10 +47,26 @@ public final class WorldInitialBackupRepository {
     }
 
     public long writeChunk(Path worldRoot, String dimensionId, ChunkPoint chunk, byte[] nbtBytes) throws IOException {
+        return this.writeChunk(worldRoot, dimensionId, chunk, nbtBytes, Long.MAX_VALUE).compressedBytes();
+    }
+
+    public ChunkWriteResult writeChunk(
+            Path worldRoot,
+            String dimensionId,
+            ChunkPoint chunk,
+            byte[] nbtBytes,
+            long maxCompressedBytes
+    ) throws IOException {
+        if (maxCompressedBytes <= 0L) {
+            return new ChunkWriteResult(false, 0L);
+        }
         byte[] compressed = this.compress(nbtBytes == null ? new byte[0] : nbtBytes);
+        if (compressed.length > maxCompressedBytes) {
+            return new ChunkWriteResult(false, compressed.length);
+        }
         Path file = this.chunkFile(worldRoot, dimensionId, chunk);
         StorageIo.writeAtomically(file, output -> output.write(compressed));
-        return compressed.length;
+        return new ChunkWriteResult(true, compressed.length);
     }
 
     public Path backupRoot(Path worldRoot) {
@@ -83,5 +99,8 @@ public final class WorldInitialBackupRepository {
             super(output);
             this.def.setLevel(Deflater.BEST_COMPRESSION);
         }
+    }
+
+    public record ChunkWriteResult(boolean written, long compressedBytes) {
     }
 }

@@ -22,19 +22,27 @@ public final class WorldInitialBackupService {
     private final WorldInitialBackupRepository repository;
     private final RegionChunkScanner regionScanner;
     private final WorldChunkActivityClassifier activityClassifier;
+    private final WorldInitialBackupStoragePolicy storagePolicy;
 
     public WorldInitialBackupService() {
-        this(new WorldInitialBackupRepository(), new RegionChunkScanner(), new WorldChunkActivityClassifier());
+        this(
+                new WorldInitialBackupRepository(),
+                new RegionChunkScanner(),
+                new WorldChunkActivityClassifier(),
+                new WorldInitialBackupStoragePolicy()
+        );
     }
 
     WorldInitialBackupService(
             WorldInitialBackupRepository repository,
             RegionChunkScanner regionScanner,
-            WorldChunkActivityClassifier activityClassifier
+            WorldChunkActivityClassifier activityClassifier,
+            WorldInitialBackupStoragePolicy storagePolicy
     ) {
         this.repository = repository;
         this.regionScanner = regionScanner;
         this.activityClassifier = activityClassifier;
+        this.storagePolicy = storagePolicy;
     }
 
     public void backupIfNeeded(MinecraftServer server, WorldOriginInfo origin) throws IOException {
@@ -58,6 +66,7 @@ public final class WorldInitialBackupService {
                 origin.levelName(),
                 origin.seed(),
                 WorldChunkActivityClassifier.NAME,
+                this.storagePolicy.maxCompressedBytes(),
                 dimensions,
                 startedAt,
                 Instant.now()
@@ -88,7 +97,9 @@ public final class WorldInitialBackupService {
 
         int scanned = 0;
         int backedUp = 0;
-        int skipped = 0;
+        int skippedPristine = 0;
+        int skippedVisitedOnly = 0;
+        int skippedByBudget = 0;
         long bytes = 0L;
         for (Path regionFile : regionFiles) {
             List<RegionChunkScanner.RegionChunkRecord> chunks;
@@ -100,18 +111,41 @@ public final class WorldInitialBackupService {
             }
             for (RegionChunkScanner.RegionChunkRecord chunk : chunks) {
                 scanned += 1;
-                if (this.activityClassifier.shouldBackup(chunk.tag())) {
-                    bytes += this.repository.writeChunk(worldRoot, dimensionId, chunk.chunk(), chunk.nbtBytes());
-                    backedUp += 1;
+                WorldChunkActivityClassifier.ChunkBackupDecision decision = this.activityClassifier.classify(chunk.tag());
+                if (decision == WorldChunkActivityClassifier.ChunkBackupDecision.BACKUP) {
+                    WorldInitialBackupRepository.ChunkWriteResult result = this.repository.writeChunk(
+                            worldRoot,
+                            dimensionId,
+                            chunk.chunk(),
+                            chunk.nbtBytes(),
+                            this.storagePolicy.remainingBytes(bytes)
+                    );
+                    if (result.written()) {
+                        bytes += result.compressedBytes();
+                        backedUp += 1;
+                    } else {
+                        skippedByBudget += 1;
+                    }
+                } else if (decision == WorldChunkActivityClassifier.ChunkBackupDecision.SKIP_VISITED_ONLY) {
+                    skippedVisitedOnly += 1;
                 } else {
-                    skipped += 1;
+                    skippedPristine += 1;
                 }
                 if ((scanned % 64) == 0) {
                     LockSupport.parkNanos(BACKGROUND_PAUSE_NANOS);
                 }
             }
         }
-        return new WorldInitialBackupManifest.DimensionBackupSummary(dimensionId, scanned, backedUp, skipped, bytes);
+        return new WorldInitialBackupManifest.DimensionBackupSummary(
+                dimensionId,
+                scanned,
+                backedUp,
+                skippedPristine,
+                skippedVisitedOnly,
+                skippedByBudget,
+                bytes,
+                skippedByBudget > 0
+        );
     }
 
     private Path regionDir(Path worldRoot, String dimensionId) {

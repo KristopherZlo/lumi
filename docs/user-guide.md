@@ -879,7 +879,7 @@ The first time Lumi enters an existing world, it also writes a one-time pre-mod 
 <save>/lumi/pre-mod-backup/
 ```
 
-The backup scan runs after join on Lumi's low-priority bootstrap thread. It records the world seed, scans generated region chunks, skips chunks that only have pristine generation markers, and stores chunks with persisted player-activity markers as maximum-compression raw NBT.
+The backup scan runs after join on Lumi's low-priority bootstrap thread. It records the world seed, scans generated region chunks, skips pristine and visited-only chunks, and stores chunks with persistent payloads such as block entities, entities, or pending ticks as maximum-compression raw NBT. The default compressed payload budget is 128 MiB and can be changed with the `lumi.preModBackup.maxMiB` JVM property.
 
 History packages are stored under:
 
