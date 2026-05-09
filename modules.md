@@ -206,7 +206,7 @@ Use `src/main/java/io/github/luma/mixin` only for Minecraft hook entrypoints. Mi
 - Player/input/server hooks: `ServerPlayerGameModeMixin`, `ServerGamePacketListenerMixin`.
 - Explosion/TNT/falling hooks: `TntBlockMixin`, `ServerLevelExplosionMixin`, `LevelExplosionMixin`, `FallingBlockMixin`, `FallingBlockEntityMixin`.
 - Growth/fluid/fire/redstone/piston hooks: `SaplingBlockMixin`, `StemBlockMixin`, `CropBlockMixin`, `FlowingFluidMixin`, `FireBlockMixin`, `BlockUpdateCaptureMixin`, `BlockEventDataContextMixin`, `ScheduledTickContextMixin`, `LevelTicksContextMixin`, `ServerLevelBlockEventContextMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityContextMixin`, and `MovingPistonBlockTickerMixin` for delayed mechanism context propagation, piston capture scoping, and internal replay piston-physics suppression.
-- Client interaction hooks: `MouseHandlerMixin`, `MinecraftInteractionMixin`. These must only establish input suppression/selection context and delegate to client services such as `LumiShortcutInteractionGate`.
+- Client interaction hooks: `MouseHandlerMixin`, `MinecraftInteractionMixin`, `WorldOpenFlowsMixin`. These must only establish input suppression/selection context or world-open gating and delegate to client services such as `LumiShortcutInteractionGate` and `WorldEntryWarningController`.
 - Section ownership and Axiom fallback: `ChunkAccessSectionOwnershipMixin`, `AxiomSetBufferPacketMixin`.
 
 ## Optional Integrations
@@ -222,6 +222,8 @@ Use `src/main/java/io/github/luma/integration` for external builder tool detecti
 ## Client Layer
 
 Use `src/client/java/io/github/luma` for client-only UI, key input, previews, overlays, and screens. Controllers call services; screens render and own transient route state; view-state records are immutable.
+
+- `client/world/WorldEntryWarningController.java`: client-only world-open gate for the pre-Lumi alpha backup warning and fresh-world marker.
 
 ### Navigation And Shared UI
 

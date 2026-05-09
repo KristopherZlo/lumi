@@ -151,6 +151,8 @@
   "luma.screen.hotkeys.title": "Горячие клавиши Lumi",
   "luma.screen.cleanup.title": "Очистка",
   "luma.screen.diagnostics.title": "Диагностика",
+  "luma.alpha_warning.title": "Lumi в альфа-версии",
+  "luma.alpha_warning.message": "Lumi сейчас находится в альфа-версии. Теоретически мод может вызвать повреждение мира. Чтобы снизить этот риск, Lumi создаст автоматический сжатый бекап этого существующего до Lumi мира после входа. Это сообщение появляется один раз для миров, где ещё нет бекапа Lumi.",
 
   "luma.dashboard.empty_title": "Workspace не найден",
   "luma.dashboard.empty": "Lumi не смогла найти рабочее пространство для этого мира.",

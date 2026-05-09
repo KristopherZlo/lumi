@@ -134,6 +134,8 @@
   "luma.screen.hotkeys.title": "Lumi hotkeys",
   "luma.screen.cleanup.title": "Cleanup",
   "luma.screen.diagnostics.title": "Diagnostics",
+  "luma.alpha_warning.title": "Lumi alpha warning",
+  "luma.alpha_warning.message": "Lumi is currently in alpha. In theory, it can cause world corruption. To reduce that risk, Lumi will create an automatic compressed backup for this existing pre-Lumi world after it opens. This message appears once for worlds that do not have a Lumi backup yet.",
 
   "luma.dashboard.empty_title": "No workspace available",
   "luma.dashboard.empty": "Lumi could not find a workspace for this world yet.",

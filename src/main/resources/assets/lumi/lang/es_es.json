@@ -130,6 +130,8 @@
   "luma.screen.hotkeys.title": "Lumi hotkeys",
   "luma.screen.cleanup.title": "Limpieza",
   "luma.screen.diagnostics.title": "Diagnóstico",
+  "luma.alpha_warning.title": "Lumi alpha warning",
+  "luma.alpha_warning.message": "Lumi is currently in alpha. In theory, it can cause world corruption. To reduce that risk, Lumi will create an automatic compressed backup for this existing pre-Lumi world after it opens. This message appears once for worlds that do not have a Lumi backup yet.",
   "luma.dashboard.empty_title": "No hay espacio de trabajo disponible",
   "luma.dashboard.empty": "Lumi aún no pudo encontrar un espacio de trabajo para este mundo.",
   "luma.dashboard.summary": "%s visible de los proyectos %s",

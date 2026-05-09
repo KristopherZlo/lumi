@@ -178,6 +178,7 @@ Hard runtime rule: JSON parsing, LZ4 decompression, and block-state decoding mus
 - Save/amend operation drafts are isolated from new live edits.
 - Recovery WAL corruption or truncation quarantines the damaged WAL and salvages the latest valid draft when possible.
 - Malformed `world-origin.json` is quarantined and regenerated from the current world instead of blocking the UI.
+- Existing pre-Lumi worlds without a completed Lumi backup show a one-time alpha backup warning before opening. Fresh worlds created through Lumi are marked and skip that warning.
 - Archive import validates paths, ids, sizes, and payload digests before promotion.
 - Cleanup is conservative and does not delete referenced history or baseline chunks.
 - Logs are part of the support surface for capture, save, restore, recovery, apply, light, and load diagnostics.

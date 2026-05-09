@@ -878,7 +878,9 @@ The origin manifest records:
 
 Old manifests without a Lumi creation marker are treated conservatively and are not eligible for automatic generator regeneration.
 
-The first time Lumi enters an existing world, it also writes a one-time pre-mod backup under:
+Before opening an existing pre-Lumi world without a completed Lumi backup, the client shows a one-time alpha warning. Pressing `OK` records the acknowledgement for that world and continues opening it. Fresh worlds created through Lumi are marked as Lumi-created and do not show this warning.
+
+After the world opens, Lumi writes a one-time pre-mod backup under:
 
 ```text
 <save>/lumi/pre-mod-backup/

@@ -36,7 +36,8 @@
   ],
   "client": [
     "client.MinecraftInteractionMixin",
-    "client.MouseHandlerMixin"
+    "client.MouseHandlerMixin",
+    "client.WorldOpenFlowsMixin"
   ],
   "injectors": {
     "defaultRequire": 1
