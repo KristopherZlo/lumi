@@ -267,6 +267,39 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void baselineCorrectionDropsPistonDoorRoundTripFromPollutedChunkBaseline() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint source = new BlockPoint(1, 64, 1);
+        BlockPoint destination = new BlockPoint(2, 64, 1);
+        StatePayload air = payload("minecraft:air");
+        StatePayload movedBlock = payload("minecraft:oak_planks");
+        List<StoredBlockChange> openDoorChanges = List.of(
+                new StoredBlockChange(source, movedBlock, air),
+                new StoredBlockChange(destination, air, movedBlock)
+        );
+        ChunkSnapshotPayload pollutedBaseline = uniformChunk("minecraft:air");
+        ChunkSnapshotPayload liveClosed = chunkWithStates(
+                stateTag("minecraft:air"),
+                Map.of(source, stateTag("minecraft:oak_planks"))
+        );
+
+        List<StoredBlockChange> settledDeltas = service.diffChunk(
+                pollutedBaseline,
+                liveClosed,
+                null,
+                Map.of(source, movedBlock)
+        );
+
+        assertTrue(settledDeltas.isEmpty());
+        assertTrue(service.composeStabilizedChanges(
+                List.of(),
+                openDoorChanges,
+                settledDeltas,
+                Map.of(new ChunkPoint(0, 0), liveClosed)
+        ).isEmpty());
+    }
+
+    @Test
     void stabilizationCompositionRemovesCurrentChangesThatSettledBackToBaseline() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange placedThenMovedBlock = new StoredBlockChange(
@@ -336,6 +369,41 @@ class SessionStabilizationServiceTest {
         assertEquals(pos, related.getFirst().pos());
         assertEquals(movedObserver, related.getFirst().oldValue());
         assertEquals(air, related.getFirst().newValue());
+    }
+
+    @Test
+    void reconciliationActionChangesRecordDraftTransitionBackToBaseline() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint pos = new BlockPoint(2, 64, 1);
+        StatePayload air = payload("minecraft:air");
+        StatePayload movedBlock = payload("minecraft:gray_concrete");
+        StoredBlockChange openDoorState = new StoredBlockChange(pos, air, movedBlock);
+
+        List<StoredBlockChange> actionChanges = service.reconciliationActionChanges(
+                List.of(openDoorState),
+                List.of()
+        );
+
+        assertEquals(1, actionChanges.size());
+        assertEquals(pos, actionChanges.getFirst().pos());
+        assertEquals(movedBlock, actionChanges.getFirst().oldValue());
+        assertEquals(air, actionChanges.getFirst().newValue());
+    }
+
+    @Test
+    void reconciliationActionChangesRecordDraftTransitionToSettledMechanismState() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint pos = new BlockPoint(2, 64, 1);
+        StatePayload air = payload("minecraft:air");
+        StatePayload movedBlock = payload("minecraft:gray_concrete");
+        StoredBlockChange settledDoorState = new StoredBlockChange(pos, air, movedBlock);
+
+        List<StoredBlockChange> actionChanges = service.reconciliationActionChanges(
+                List.of(),
+                List.of(settledDoorState)
+        );
+
+        assertEquals(List.of(settledDoorState), actionChanges);
     }
 
     @Test

@@ -73,11 +73,19 @@ public final class SessionStabilizationService {
                         "Dirty chunks are not loaded for stabilization: " + capturedChunks.missingChunks()
                 );
             }
+            if (requireLoadedChunks && !capturedChunks.transientChunks().isEmpty()) {
+                throw new IllegalStateException(
+                        "Dirty chunks are still settling piston movement: " + capturedChunks.transientChunks()
+                );
+            }
             List<ChunkPoint> processedChunks = capturedChunks.captured().keySet().stream().toList();
             if (processedChunks.isEmpty()) {
                 session.finishReconciliation(List.of());
                 if (!capturedChunks.missingChunks().isEmpty()) {
                     session.requeuePendingChunks(capturedChunks.missingChunks());
+                }
+                if (!capturedChunks.transientChunks().isEmpty()) {
+                    session.requeuePendingChunks(capturedChunks.transientChunks());
                 }
                 return ReconciliationResult.noOp();
             }
@@ -92,17 +100,13 @@ public final class SessionStabilizationService {
             List<StoredBlockChange> startingChanges = session.startingChunkChanges(processedChunks);
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
             List<StoredBlockChange> persistentDeltaChanges = this.persistentDeltaChanges(currentChanges, deltaChanges);
-            List<StoredBlockChange> relatedDeltaChanges = this.relatedActionChanges(
-                    currentChanges,
-                    persistentDeltaChanges,
-                    capturedChunks.captured()
-            );
             List<StoredBlockChange> composedChanges = this.composeStabilizedChanges(
                     startingChanges,
                     currentChanges,
                     persistentDeltaChanges,
                     capturedChunks.captured()
             );
+            List<StoredBlockChange> actionChanges = this.reconciliationActionChanges(currentChanges, composedChanges);
             int bufferBefore = session.buffer().size();
             boolean bufferChanged = !currentChanges.equals(composedChanges);
             if (bufferChanged) {
@@ -115,6 +119,9 @@ public final class SessionStabilizationService {
             if (!capturedChunks.missingChunks().isEmpty()) {
                 session.requeuePendingChunks(capturedChunks.missingChunks());
             }
+            if (!capturedChunks.transientChunks().isEmpty()) {
+                session.requeuePendingChunks(capturedChunks.transientChunks());
+            }
             return new ReconciliationResult(
                     processedChunks.size(),
                     processedChunks,
@@ -125,7 +132,7 @@ public final class SessionStabilizationService {
                     false,
                     bufferChanged,
                     deferredActionContexts,
-                    relatedDeltaChanges
+                    actionChanges
             );
         } catch (RuntimeException exception) {
             session.requeuePendingChunks(pendingChunks);
@@ -409,6 +416,58 @@ public final class SessionStabilizationService {
         return this.relatedActionChanges(currentChanges, persistentDeltaChanges, Map.of());
     }
 
+    List<StoredBlockChange> reconciliationActionChanges(
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> composedChanges
+    ) {
+        Map<BlockPoint, StoredBlockChange> currentByPos = new LinkedHashMap<>();
+        for (StoredBlockChange currentChange : currentChanges == null ? List.<StoredBlockChange>of() : currentChanges) {
+            currentByPos.put(currentChange.pos(), currentChange);
+        }
+        Map<BlockPoint, StoredBlockChange> composedByPos = new LinkedHashMap<>();
+        for (StoredBlockChange composedChange : composedChanges == null ? List.<StoredBlockChange>of() : composedChanges) {
+            composedByPos.put(composedChange.pos(), composedChange);
+        }
+
+        List<StoredBlockChange> changes = new ArrayList<>();
+        LinkedHashSet<BlockPoint> positions = new LinkedHashSet<>();
+        positions.addAll(currentByPos.keySet());
+        positions.addAll(composedByPos.keySet());
+        for (BlockPoint pos : positions) {
+            StoredBlockChange currentChange = currentByPos.get(pos);
+            StoredBlockChange composedChange = composedByPos.get(pos);
+            StoredBlockChange actionChange = this.reconciliationActionChange(pos, currentChange, composedChange);
+            if (actionChange != null && !actionChange.isNoOp()) {
+                changes.add(actionChange);
+            }
+        }
+        return List.copyOf(changes);
+    }
+
+    private StoredBlockChange reconciliationActionChange(
+            BlockPoint pos,
+            StoredBlockChange currentChange,
+            StoredBlockChange composedChange
+    ) {
+        if (composedChange == null) {
+            return currentChange == null ? null : new StoredBlockChange(
+                    pos,
+                    currentChange.newValue(),
+                    currentChange.oldValue(),
+                    currentChange.hidden()
+            );
+        }
+        if (currentChange == null) {
+            return composedChange;
+        }
+        return new StoredBlockChange(
+                pos,
+                currentChange.newValue(),
+                composedChange.newValue(),
+                currentChange.hidden() && composedChange.hidden()
+        );
+    }
+
     List<StoredBlockChange> relatedActionChanges(
             List<StoredBlockChange> currentChanges,
             List<StoredBlockChange> persistentDeltaChanges,
@@ -506,14 +565,19 @@ public final class SessionStabilizationService {
     private CapturedChunks captureLiveChunks(ServerLevel level, List<ChunkPoint> chunks) {
         LinkedHashMap<ChunkPoint, ChunkSnapshotPayload> captured = new LinkedHashMap<>();
         List<ChunkPoint> missingChunks = new ArrayList<>();
+        List<ChunkPoint> transientChunks = new ArrayList<>();
         for (ChunkPoint chunk : chunks) {
+            if (this.chunkSnapshotCaptureService.containsTransientBlockState(level, chunk)) {
+                transientChunks.add(chunk);
+                continue;
+            }
             this.chunkSnapshotCaptureService.captureLoadedChunk(level, chunk)
                     .ifPresentOrElse(
                             snapshot -> captured.put(chunk, snapshot),
                             () -> missingChunks.add(chunk)
                     );
         }
-        return new CapturedChunks(captured, List.copyOf(missingChunks));
+        return new CapturedChunks(captured, List.copyOf(missingChunks), List.copyOf(transientChunks));
     }
 
     private static Map<Integer, ChunkSectionSnapshotPayload> indexSections(ChunkSnapshotPayload chunk) {
@@ -612,7 +676,8 @@ public final class SessionStabilizationService {
 
     private record CapturedChunks(
             Map<ChunkPoint, ChunkSnapshotPayload> captured,
-            List<ChunkPoint> missingChunks
+            List<ChunkPoint> missingChunks,
+            List<ChunkPoint> transientChunks
     ) {
     }
 }

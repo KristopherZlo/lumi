@@ -47,6 +47,14 @@ public final class ChunkSnapshotCaptureService {
         return this.captureLoadedChunk(level, chunk, null, null, null);
     }
 
+    boolean containsTransientBlockState(ServerLevel level, ChunkPoint chunk) {
+        if (level == null || chunk == null) {
+            return false;
+        }
+        LevelChunk levelChunk = level.getChunkSource().getChunkNow(chunk.x(), chunk.z());
+        return levelChunk != null && this.containsTransientBlockState(levelChunk);
+    }
+
     public Optional<ChunkSnapshotPayload> captureChunk(ServerLevel level, ChunkPoint chunk) {
         if (level == null || chunk == null) {
             return Optional.empty();
@@ -82,6 +90,31 @@ public final class ChunkSnapshotCaptureService {
                 overrideBlockEntity,
                 new EntitySnapshotOverride(oldEntityPayload, newEntityPayload)
         );
+    }
+
+    boolean containsTransientBlockState(LevelChunk chunk) {
+        if (chunk == null) {
+            return false;
+        }
+        for (LevelChunkSection section : chunk.getSections()) {
+            if (this.containsTransientBlockState(section)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    boolean containsTransientBlockState(LevelChunkSection section) {
+        if (section == null) {
+            return false;
+        }
+        PalettedContainerRO.PackedData<BlockState> packedData = section.getStates().pack(BLOCK_STATE_STRATEGY);
+        for (BlockState blockState : packedData.paletteEntries()) {
+            if (this.blockStatePolicy.isTransientPistonState(blockState)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Optional<ChunkSnapshotPayload> captureLoadedChunk(
