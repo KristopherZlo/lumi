@@ -41,8 +41,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RestoreServiceTest {
 
@@ -174,6 +176,34 @@ class RestoreServiceTest {
     }
 
     @Test
+    void exactInitialStateIsAppendedForDirectRollbackToInitial() {
+        RestoreService service = new RestoreService();
+        ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
+        ProjectVersion head = version("v0002", "main", "v0001");
+        RestoreService.DirectRestorePatchPlan plan = new RestoreService.DirectRestorePatchPlan(List.of(head), List.of());
+
+        assertTrue(service.shouldAppendExactRootState(initial, null, plan));
+    }
+
+    @Test
+    void exactWorldRootStateIsAppendedForDirectRollbackToWorldRoot() {
+        RestoreService service = new RestoreService();
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion head = version("v0002", "main", "v0001");
+        RestoreService.DirectRestorePatchPlan plan = new RestoreService.DirectRestorePatchPlan(List.of(head), List.of());
+
+        assertTrue(service.shouldAppendExactRootState(root, null, plan));
+    }
+
+    @Test
+    void exactRootStateIsSkippedForCleanNoOpInitialRestore() {
+        RestoreService service = new RestoreService();
+        ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
+
+        assertFalse(service.shouldAppendExactRootState(initial, null, new RestoreService.DirectRestorePatchPlan(List.of(), List.of())));
+    }
+
+    @Test
     void restoreTargetCanUseExplicitBranchWhenHeadVersionBelongsToMain() {
         RestoreService service = new RestoreService();
         ProjectVersion baseVersion = version("v0001", "main", "");
@@ -271,6 +301,17 @@ class RestoreServiceTest {
             String snapshotId,
             List<String> patchIds
     ) {
+        return version(id, variantId, parentVersionId, snapshotId, patchIds, VersionKind.MANUAL);
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String variantId,
+            String parentVersionId,
+            String snapshotId,
+            List<String> patchIds,
+            VersionKind versionKind
+    ) {
         return new ProjectVersion(
                 id,
                 "project",
@@ -278,7 +319,7 @@ class RestoreServiceTest {
                 parentVersionId,
                 snapshotId,
                 patchIds,
-                VersionKind.MANUAL,
+                versionKind,
                 "tester",
                 id,
                 ChangeStats.empty(),

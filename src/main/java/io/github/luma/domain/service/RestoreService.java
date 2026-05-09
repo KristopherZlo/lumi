@@ -997,11 +997,12 @@ public final class RestoreService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
         String headVersionId = activeVariant.headVersionId();
-        boolean appendInitialSnapshot = this.shouldAppendInitialSnapshot(targetVersion, pendingDraft);
+        ExactRootStateRestorePlan exactRootStatePlan =
+                this.exactRootStateRestorePlan(layout, targetVersion, pendingDraft, directPlan);
 
         int totalSources = directPlan.stepCount()
                 + (pendingDraft != null && !pendingDraft.isEmpty() ? 1 : 0)
-                + (appendInitialSnapshot ? 1 : 0);
+                + exactRootStatePlan.sourceCount(targetVersion);
         int completedSources = 0;
         List<PreparedChunkBatch> batches = new ArrayList<>();
 
@@ -1044,18 +1045,19 @@ public final class RestoreService {
             );
         }
 
-        if (appendInitialSnapshot) {
-            batches.addAll(this.snapshotBatchPreparer.prepare(
-                    this.snapshotReader.readFile(layout.snapshotFile(targetVersion.snapshotId())),
-                    level
-            ));
-            completedSources += 1;
-            progressSink.update(
-                    OperationStage.PREPARING,
+        if (exactRootStatePlan.append()) {
+            DecodedExactRootState decodedRootState = this.decodeExactRootStateRestore(
+                    layout,
+                    project,
+                    level,
+                    targetVersion,
+                    exactRootStatePlan,
                     completedSources,
                     Math.max(1, totalSources),
-                    "Decoded initial snapshot " + targetVersion.snapshotId()
+                    progressSink
             );
+            batches.addAll(decodedRootState.batches());
+            completedSources = decodedRootState.completedSources();
         }
 
         List<PreparedChunkBatch> collapsed;
@@ -1069,7 +1071,7 @@ public final class RestoreService {
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         LumaMod.LOGGER.info(
-                "Using direct {} restore for project {} from head {} to target {} with reverseSteps={}, forwardSteps={}, draftRollback={}, placements {} -> {}",
+                "Using direct {} restore for project {} from head {} to target {} with reverseSteps={}, forwardSteps={}, draftRollback={}, exactRootSources={}, placements {} -> {}",
                 directPlan.modeLabel(),
                 project.name(),
                 headVersionId,
@@ -1077,6 +1079,7 @@ public final class RestoreService {
                 directPlan.reverseVersions().size(),
                 directPlan.forwardVersions().size(),
                 pendingDraft != null && !pendingDraft.isEmpty(),
+                exactRootStatePlan.sourceCount(targetVersion),
                 rawPlacements,
                 collapsedPlacements
         );
@@ -1301,10 +1304,38 @@ public final class RestoreService {
                 && selectedChunkKeys.contains(chunkKey(payload.chunk()));
     }
 
-    private boolean shouldAppendInitialSnapshot(ProjectVersion targetVersion, RecoveryDraft pendingDraft) {
-        return pendingDraft != null
-                && !pendingDraft.isEmpty()
-                && targetVersion.versionKind() == VersionKind.INITIAL
+    private ExactRootStateRestorePlan exactRootStateRestorePlan(
+            ProjectLayout layout,
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft,
+            DirectRestorePatchPlan directPlan
+    ) throws IOException {
+        if (!this.shouldAppendExactRootState(targetVersion, pendingDraft, directPlan)) {
+            return ExactRootStateRestorePlan.none();
+        }
+        if (targetVersion.versionKind() == VersionKind.WORLD_ROOT) {
+            return ExactRootStateRestorePlan.worldRoot(this.baselineChunkRepository.listChunks(layout));
+        }
+        return ExactRootStateRestorePlan.initialSnapshot();
+    }
+
+    boolean shouldAppendExactRootState(
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft,
+            DirectRestorePatchPlan directPlan
+    ) {
+        if (targetVersion == null) {
+            return false;
+        }
+        boolean hasPendingDraft = pendingDraft != null && !pendingDraft.isEmpty();
+        boolean hasPatchReplay = directPlan != null && directPlan.stepCount() > 0;
+        if (!hasPendingDraft && !hasPatchReplay) {
+            return false;
+        }
+        if (targetVersion.versionKind() == VersionKind.WORLD_ROOT) {
+            return true;
+        }
+        return targetVersion.versionKind() == VersionKind.INITIAL
                 && targetVersion.snapshotId() != null
                 && !targetVersion.snapshotId().isBlank();
     }
@@ -1722,6 +1753,63 @@ public final class RestoreService {
         return this.snapshotReader.loadChunks(layout.snapshotFile(targetVersion.snapshotId()));
     }
 
+    private DecodedExactRootState decodeExactRootStateRestore(
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            ServerLevel level,
+            ProjectVersion targetVersion,
+            ExactRootStateRestorePlan plan,
+            int completedSources,
+            int totalSources,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
+        List<PreparedChunkBatch> batches = new ArrayList<>();
+        if (targetVersion.versionKind() == VersionKind.INITIAL) {
+            batches.addAll(this.snapshotBatchPreparer.prepare(
+                    this.snapshotReader.readFile(layout.snapshotFile(targetVersion.snapshotId())),
+                    level
+            ));
+            completedSources += 1;
+            progressSink.update(
+                    OperationStage.PREPARING,
+                    completedSources,
+                    totalSources,
+                    "Decoded exact initial snapshot " + targetVersion.snapshotId()
+            );
+            return new DecodedExactRootState(batches, completedSources);
+        }
+
+        if (targetVersion.versionKind() != VersionKind.WORLD_ROOT) {
+            return new DecodedExactRootState(batches, completedSources);
+        }
+
+        if (plan.baselineChunks().isEmpty()) {
+            LumaMod.LOGGER.info("Exact world root restore for project {} has no tracked baseline chunks yet", project.name());
+            return new DecodedExactRootState(batches, completedSources);
+        }
+
+        for (ChunkPoint chunk : plan.baselineChunks()) {
+            try (var ignored = LumaLoadLog.measure(
+                    "restore",
+                    "RestoreService.decodeExactRootStateRestore.baselineChunk",
+                    "chunk=" + chunk.x() + ":" + chunk.z()
+            )) {
+                batches.addAll(this.snapshotBatchPreparer.prepare(
+                        this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
+                        level
+                ));
+            }
+            completedSources += 1;
+            progressSink.update(
+                    OperationStage.PREPARING,
+                    completedSources,
+                    totalSources,
+                    "Decoded exact root baseline chunk " + chunk.x() + ":" + chunk.z()
+            );
+        }
+        return new DecodedExactRootState(batches, completedSources);
+    }
+
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {
         Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
         for (ChunkPoint chunk : plan.baselineGaps()) {
@@ -1895,6 +1983,42 @@ public final class RestoreService {
                 return "reverse";
             }
             return "divergent";
+        }
+    }
+
+    private record ExactRootStateRestorePlan(boolean append, List<ChunkPoint> baselineChunks) {
+
+        private static ExactRootStateRestorePlan none() {
+            return new ExactRootStateRestorePlan(false, List.of());
+        }
+
+        private static ExactRootStateRestorePlan initialSnapshot() {
+            return new ExactRootStateRestorePlan(true, List.of());
+        }
+
+        private static ExactRootStateRestorePlan worldRoot(List<ChunkPoint> baselineChunks) {
+            return new ExactRootStateRestorePlan(true, baselineChunks);
+        }
+
+        private int sourceCount(ProjectVersion targetVersion) {
+            if (!this.append || targetVersion == null) {
+                return 0;
+            }
+            if (targetVersion.versionKind() == VersionKind.WORLD_ROOT) {
+                return this.baselineChunks.size();
+            }
+            return 1;
+        }
+
+        ExactRootStateRestorePlan {
+            baselineChunks = baselineChunks == null ? List.of() : List.copyOf(baselineChunks);
+        }
+    }
+
+    private record DecodedExactRootState(List<PreparedChunkBatch> batches, int completedSources) {
+
+        DecodedExactRootState {
+            batches = batches == null ? List.of() : List.copyOf(batches);
         }
     }
 
