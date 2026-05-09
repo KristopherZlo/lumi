@@ -24,6 +24,12 @@ public final class WorldInitialBackupRepository {
                 .orElse(false);
     }
 
+    public boolean hasCompletedBackup(Path worldRoot) throws IOException {
+        return this.load(worldRoot)
+                .map(manifest -> manifest.completedAt() != null)
+                .orElse(false);
+    }
+
     public Optional<WorldInitialBackupManifest> load(Path worldRoot) throws IOException {
         Path manifest = this.manifestFile(worldRoot);
         if (!Files.exists(manifest)) {

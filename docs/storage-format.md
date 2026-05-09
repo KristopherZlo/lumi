@@ -16,6 +16,13 @@ Shared world-level metadata is stored at:
 <world>/lumi/world-origin.json
 ```
 
+World-level installation markers are stored at:
+
+```text
+<world>/lumi/created-with-lumi.marker
+<world>/lumi/pre-mod-backup/alpha-backup-warning-acknowledged.txt
+```
+
 The first-entry pre-mod backup is stored at:
 
 ```text
@@ -103,9 +110,21 @@ Legacy manifests without `createdWithLumi` are treated as `createdWithLumi = fal
 Once written, origin fingerprints are preserved as the original restore-safety baseline. Later datapack or generator changes are compared against these stored values instead of overwriting them during startup.
 If this manifest is malformed, Lumi moves it aside as `world-origin.json.corrupt-<timestamp>` and regenerates the manifest from the current world instead of blocking the workspace UI.
 
+### `created-with-lumi.marker`
+
+Marks a save folder that was created through Minecraft's world creation flow while Lumi was installed.
+
+The marker is intentionally separate from `world-origin.json` because it must exist before server-side world-origin bootstrap runs. Fresh Lumi-created worlds use it to skip the pre-Lumi alpha backup warning. Existing worlds without this marker are treated conservatively unless their origin manifest already has `createdWithLumi = true` or their pre-mod backup is complete.
+
+### `pre-mod-backup/alpha-backup-warning-acknowledged.txt`
+
+Records that the player accepted the one-time alpha backup warning before opening an existing pre-Lumi world without a completed Lumi backup.
+
+This file is not a backup manifest and does not imply that the backup scan completed. It only prevents the same warning from repeating for that world.
+
 ### `pre-mod-backup/manifest.json`
 
-Stores the one-time backup scan created after Lumi first opens an existing world.
+Stores the one-time backup scan created after Lumi first opens an existing pre-Lumi world.
 
 The manifest records:
 

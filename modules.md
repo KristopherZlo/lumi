@@ -123,6 +123,7 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 - `HistoryTombstoneRepository`: `history-tombstones.json` soft-delete visibility metadata.
 - `VersionRepository`, `VersionIndexRepository`: `versions/*.json` manifests and disposable `versions/index.json` cache.
 - `WorldOriginRepository`: shared `world-origin.json` manifest and corruption quarantine behavior.
+- `WorldInstallationRepository`: world-level Lumi installation markers such as fresh-world creation and alpha backup warning acknowledgement.
 - `WorldInitialBackupRepository`: one-time pre-mod raw chunk backup manifest and size-budgeted compressed chunk NBT payloads.
 - `PatchRepository`: patch metadata/data facade.
 - `PatchMetaRepository`: `patches/*.meta.json` chunk index and lightweight patch metadata.
@@ -192,6 +193,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 
 - `minecraft/access/LumaAccessControl.java`: permission gate for commands, UI entry points, and dedicated-server mutation workflows.
 - `minecraft/bootstrap/WorldBootstrapService.java`: low-priority startup bootstrap for world-origin, space-bounded pre-mod backup, migration, and root-version metadata.
+- `minecraft/bootstrap/WorldInitialBackupWarningService.java`: pre-open decision logic for the one-time alpha backup warning on existing pre-Lumi worlds.
 - `minecraft/command/LumaCommands.java`: diagnostics/help and singleplayer smoke/full/structure runtime test command entries.
 - `minecraft/testing/*`: integrated singleplayer regression service, performance monitor, test volume/run/log helpers.
 

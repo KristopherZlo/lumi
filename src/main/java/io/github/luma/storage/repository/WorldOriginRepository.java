@@ -30,9 +30,14 @@ import net.minecraft.world.level.storage.LevelResource;
 public final class WorldOriginRepository {
 
     private static final int CURRENT_SCHEMA_VERSION = 2;
+    private final WorldInstallationRepository installationRepository = new WorldInstallationRepository();
 
     public Optional<WorldOriginInfo> load(MinecraftServer server) throws IOException {
         return this.loadFile(this.file(server));
+    }
+
+    public Optional<WorldOriginInfo> load(Path worldRoot) throws IOException {
+        return this.loadFile(this.file(worldRoot));
     }
 
     Optional<WorldOriginInfo> loadFile(Path file) throws IOException {
@@ -68,7 +73,7 @@ public final class WorldOriginRepository {
                 currentVersion.name(),
                 currentVersion.dataVersion().version(),
                 options.seed(),
-                existing != null && existing.createdWithLumi(),
+                this.createdWithLumi(server, existing),
                 this.nonBlank(existing == null ? "" : existing.datapackFingerprint())
                         ? existing.datapackFingerprint()
                         : this.fingerprintDataPacks(server.getWorldData().getDataConfiguration().dataPacks()),
@@ -108,6 +113,11 @@ public final class WorldOriginRepository {
         StorageIo.writeAtomically(this.file(server), output -> output.write(
                 GsonProvider.gson().toJson(info).getBytes(StandardCharsets.UTF_8)
         ));
+    }
+
+    private boolean createdWithLumi(MinecraftServer server, WorldOriginInfo existing) {
+        return (existing != null && existing.createdWithLumi())
+                || this.installationRepository.createdWithLumi(this.worldRoot(server));
     }
 
     private WorldOriginInfo.DimensionOrigin describeDimension(ServerLevel level, long seed) {
@@ -162,10 +172,18 @@ public final class WorldOriginRepository {
     }
 
     private Path root(MinecraftServer server) {
-        return server.getWorldPath(LevelResource.ROOT).resolve("lumi");
+        return this.worldRoot(server).resolve("lumi");
     }
 
     private Path file(MinecraftServer server) {
         return this.root(server).resolve("world-origin.json");
+    }
+
+    private Path file(Path worldRoot) {
+        return worldRoot.resolve("lumi").resolve("world-origin.json");
+    }
+
+    private Path worldRoot(MinecraftServer server) {
+        return server.getWorldPath(LevelResource.ROOT);
     }
 }
