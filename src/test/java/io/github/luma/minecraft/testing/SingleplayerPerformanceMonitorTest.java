@@ -52,9 +52,28 @@ class SingleplayerPerformanceMonitorTest {
                 "restore-version",
                 2,
                 OperationStage.PREPARING,
-                "Decoded initial snapshot snapshot-0001"
+                "Decoded exact initial snapshot snapshot-0001"
         ));
         monitor.recordOperationSnapshot(snapshot("restore-version", 98_304));
+
+        SingleplayerPerformanceMonitor.PerformanceCheck restoreCheck = monitor.checks().stream()
+                .filter(check -> check.label().contains("Lineage full restore"))
+                .findFirst()
+                .orElseThrow();
+
+        assertTrue(restoreCheck.passed());
+    }
+
+    @Test
+    void acceptsLegacyInitialSnapshotMarker() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordSyncSlice("Project setup", Duration.ofMillis(20).toNanos());
+        monitor.recordOperationSnapshot(snapshot(
+                "restore-version",
+                98_304,
+                OperationStage.PREPARING,
+                "Decoded initial snapshot snapshot-0001"
+        ));
 
         SingleplayerPerformanceMonitor.PerformanceCheck restoreCheck = monitor.checks().stream()
                 .filter(check -> check.label().contains("Lineage full restore"))

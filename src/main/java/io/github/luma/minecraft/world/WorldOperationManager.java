@@ -1207,7 +1207,9 @@ public final class WorldOperationManager {
         }
 
         private String preservedPreparationMarker(String detail) {
-            if (detail == null || !detail.startsWith("Decoded initial snapshot")) {
+            if (detail == null
+                    || (!detail.startsWith("Decoded initial snapshot")
+                    && !detail.startsWith("Decoded exact initial snapshot"))) {
                 return "";
             }
             return detail;

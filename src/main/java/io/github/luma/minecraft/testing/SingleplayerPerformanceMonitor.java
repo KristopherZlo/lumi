@@ -149,7 +149,13 @@ final class SingleplayerPerformanceMonitor {
             this.terminal = this.terminal || snapshot.terminal();
             this.failed = this.failed || snapshot.failed();
             this.decodedInitialSnapshot = this.decodedInitialSnapshot
-                    || (snapshot.detail() != null && snapshot.detail().startsWith("Decoded initial snapshot"));
+                    || decodedInitialSnapshot(snapshot.detail());
+        }
+
+        private boolean decodedInitialSnapshot(String detail) {
+            return detail != null
+                    && (detail.startsWith("Decoded initial snapshot")
+                    || detail.startsWith("Decoded exact initial snapshot"));
         }
 
         private long durationMillis() {

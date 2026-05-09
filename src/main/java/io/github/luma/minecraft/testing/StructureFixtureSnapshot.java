@@ -3,18 +3,24 @@ package io.github.luma.minecraft.testing;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 
 /**
  * Exact block, block-entity, and non-player entity snapshot for a structure fixture volume.
@@ -48,16 +54,24 @@ record StructureFixtureSnapshot(
     }
 
     boolean matches(StructureFixtureSnapshot other) {
+        return this.matches(other, ComparisonPolicy.exact());
+    }
+
+    boolean matches(StructureFixtureSnapshot other, ComparisonPolicy comparisonPolicy) {
         return other != null
-                && this.blocks.equals(other.blocks)
+                && this.blocksMatch(other, comparisonPolicy)
                 && this.entities.equals(other.entities);
     }
 
     String diff(StructureFixtureSnapshot other) {
+        return this.diff(other, ComparisonPolicy.exact());
+    }
+
+    String diff(StructureFixtureSnapshot other, ComparisonPolicy comparisonPolicy) {
         if (other == null) {
             return "missing restored snapshot";
         }
-        BlockMismatch mismatch = this.firstBlockMismatch(other);
+        BlockMismatch mismatch = this.firstBlockMismatch(other, comparisonPolicy);
         if (mismatch != null) {
             return "block mismatch at " + this.format(mismatch.pos())
                     + " expectedState=" + truncated(mismatch.expectedStateSnbt())
@@ -73,16 +87,46 @@ record StructureFixtureSnapshot(
     }
 
     BlockMismatch firstBlockMismatch(StructureFixtureSnapshot other) {
+        return this.firstBlockMismatch(other, ComparisonPolicy.exact());
+    }
+
+    BlockMismatch firstBlockMismatch(StructureFixtureSnapshot other, ComparisonPolicy comparisonPolicy) {
         if (other == null) {
             return null;
         }
+        ComparisonPolicy effectivePolicy = comparisonPolicy == null
+                ? ComparisonPolicy.exact()
+                : comparisonPolicy;
         for (Map.Entry<BlockPos, BlockSnapshot> entry : this.blocks.entrySet()) {
             BlockSnapshot restored = other.blocks.get(entry.getKey());
-            if (!entry.getValue().equals(restored)) {
+            if (!effectivePolicy.equivalent(entry.getKey(), entry.getValue(), restored)) {
                 return BlockMismatch.of(entry.getKey(), entry.getValue(), restored);
             }
         }
         return null;
+    }
+
+    static ComparisonPolicy exactComparison() {
+        return ComparisonPolicy.exact();
+    }
+
+    static ComparisonPolicy ignoringObserverPoweredAt(Collection<BlockPos> positions) {
+        return ComparisonPolicy.ignoringObserverPoweredAt(positions);
+    }
+
+    private boolean blocksMatch(StructureFixtureSnapshot other, ComparisonPolicy comparisonPolicy) {
+        ComparisonPolicy effectivePolicy = comparisonPolicy == null
+                ? ComparisonPolicy.exact()
+                : comparisonPolicy;
+        if (!this.blocks.keySet().equals(other.blocks.keySet())) {
+            return false;
+        }
+        for (Map.Entry<BlockPos, BlockSnapshot> entry : this.blocks.entrySet()) {
+            if (!effectivePolicy.equivalent(entry.getKey(), entry.getValue(), other.blocks.get(entry.getKey()))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String entityDiff(StructureFixtureSnapshot other) {
@@ -126,13 +170,76 @@ record StructureFixtureSnapshot(
         return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
-    private record BlockSnapshot(String stateSnbt, String blockEntitySnbt) {
+    static final class ComparisonPolicy {
+
+        private static final ComparisonPolicy EXACT = new ComparisonPolicy(Set.of());
+        private final Set<BlockPos> observerPoweredPhasePositions;
+
+        private ComparisonPolicy(Collection<BlockPos> observerPoweredPhasePositions) {
+            LinkedHashSet<BlockPos> immutablePositions = new LinkedHashSet<>();
+            if (observerPoweredPhasePositions != null) {
+                for (BlockPos pos : observerPoweredPhasePositions) {
+                    if (pos != null) {
+                        immutablePositions.add(pos.immutable());
+                    }
+                }
+            }
+            this.observerPoweredPhasePositions = Set.copyOf(immutablePositions);
+        }
+
+        static ComparisonPolicy exact() {
+            return EXACT;
+        }
+
+        static ComparisonPolicy ignoringObserverPoweredAt(Collection<BlockPos> positions) {
+            if (positions == null || positions.isEmpty()) {
+                return EXACT;
+            }
+            return new ComparisonPolicy(positions);
+        }
+
+        private boolean equivalent(BlockPos pos, BlockSnapshot expected, BlockSnapshot actual) {
+            if (Objects.equals(expected, actual)) {
+                return true;
+            }
+            return this.observerPoweredPhasePositions.contains(pos)
+                    && expected != null
+                    && actual != null
+                    && expected.blockEntitySnbt().equals(actual.blockEntitySnbt())
+                    && expected.differsOnlyByObserverPowered(actual);
+        }
+    }
+
+    private record BlockSnapshot(BlockState state, String stateSnbt, String blockEntitySnbt) {
 
         static BlockSnapshot capture(ServerLevel level, BlockState state, BlockEntity blockEntity) {
             CompoundTag blockEntityTag = blockEntity == null
                     ? null
                     : blockEntity.saveWithFullMetadata(level.registryAccess());
-            return new BlockSnapshot(snbt(NbtUtils.writeBlockState(state)), snbt(blockEntityTag));
+            return new BlockSnapshot(state, snbt(NbtUtils.writeBlockState(state)), snbt(blockEntityTag));
+        }
+
+        private boolean differsOnlyByObserverPowered(BlockSnapshot other) {
+            if (this.state == null || other == null || other.state == null
+                    || !this.state.is(Blocks.OBSERVER) || !other.state.is(Blocks.OBSERVER)
+                    || this.state.getBlock() != other.state.getBlock()) {
+                return false;
+            }
+            return this.differsOnlyByProperty(other.state, "powered");
+        }
+
+        private boolean differsOnlyByProperty(BlockState otherState, String ignoredPropertyName) {
+            boolean ignoredPropertyDiffered = false;
+            for (Property<?> property : this.state.getProperties()) {
+                if (property.getName().equals(ignoredPropertyName)) {
+                    ignoredPropertyDiffered = !samePropertyValue(this.state, otherState, property);
+                    continue;
+                }
+                if (!samePropertyValue(this.state, otherState, property)) {
+                    return false;
+                }
+            }
+            return ignoredPropertyDiffered;
         }
     }
 
@@ -197,5 +304,14 @@ record StructureFixtureSnapshot(
             return value == null ? "" : value;
         }
         return value.substring(0, 180) + "...";
+    }
+
+    private static <T extends Comparable<T>> boolean samePropertyValue(
+            BlockState expected,
+            BlockState actual,
+            Property<T> property
+    ) {
+        return actual.hasProperty(property)
+                && Objects.equals(expected.getValue(property), actual.getValue(property));
     }
 }

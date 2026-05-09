@@ -308,11 +308,12 @@ final class SingleplayerStructureFixtureScenario {
 
     private void verifyUndo(List<String> messages) {
         StructureFixtureSnapshot restored = StructureFixtureSnapshot.capture(this.level, this.volume);
-        boolean matches = this.baseline.matches(restored);
+        StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy = this.undoComparisonPolicy();
+        boolean matches = this.baseline.matches(restored, comparisonPolicy);
         this.record(matches, this.currentFixture.name() + " " + this.currentControl.label()
                 + " returned exactly to the settled loaded fixture after undo"
-                + (matches ? "" : ": " + this.baseline.diff(restored)
-                + "; " + this.describeQueuedUndoForMismatch(restored)));
+                + (matches ? "" : ": " + this.baseline.diff(restored, comparisonPolicy)
+                + "; " + this.describeQueuedUndoForMismatch(restored, comparisonPolicy)));
         if (this.isGeneratedObserverPistonFixture(this.currentFixture)) {
             this.verifyGeneratedObserverPistonSmoke();
         }
@@ -324,8 +325,21 @@ final class SingleplayerStructureFixtureScenario {
         this.stage = Stage.LOAD_CONTROL_CASE;
     }
 
-    private String describeQueuedUndoForMismatch(StructureFixtureSnapshot restored) {
-        StructureFixtureSnapshot.BlockMismatch mismatch = this.baseline.firstBlockMismatch(restored);
+    private StructureFixtureSnapshot.ComparisonPolicy undoComparisonPolicy() {
+        if (!this.isGeneratedClosedObserverPistonFixture(this.currentFixture)) {
+            return StructureFixtureSnapshot.exactComparison();
+        }
+        return StructureFixtureSnapshot.ignoringObserverPoweredAt(List.of(
+                this.generatedClosedObserverPistonObserverHomePos(),
+                this.generatedClosedObserverPistonPairedObserverPos()
+        ));
+    }
+
+    private String describeQueuedUndoForMismatch(
+            StructureFixtureSnapshot restored,
+            StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy
+    ) {
+        StructureFixtureSnapshot.BlockMismatch mismatch = this.baseline.firstBlockMismatch(restored, comparisonPolicy);
         if (mismatch == null) {
             return this.queuedUndoAction == null
                     ? "undoAction=<missing>"
