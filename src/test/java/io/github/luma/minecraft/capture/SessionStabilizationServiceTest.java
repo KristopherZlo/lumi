@@ -9,6 +9,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
@@ -237,6 +238,38 @@ class SessionStabilizationServiceTest {
                 stateTag("minecraft:air"),
                 stateTag("minecraft:piston_head")
         ).size());
+    }
+
+    @Test
+    void diffChunkNarrowsWorkToKnownDirtySections() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        ChunkSnapshotPayload baseline = new ChunkSnapshotPayload(
+                0,
+                0,
+                64,
+                95,
+                List.of(
+                        new ChunkSectionSnapshotPayload(4, List.of(stateTag("minecraft:stone")), new long[0], 0),
+                        new ChunkSectionSnapshotPayload(5, List.of(stateTag("minecraft:dirt")), new long[0], 0)
+                ),
+                Map.of()
+        );
+        ChunkSnapshotPayload live = new ChunkSnapshotPayload(
+                0,
+                0,
+                64,
+                95,
+                List.of(
+                        new ChunkSectionSnapshotPayload(4, List.of(stateTag("minecraft:gold_block")), new long[0], 0),
+                        new ChunkSectionSnapshotPayload(5, List.of(stateTag("minecraft:diamond_block")), new long[0], 0)
+                ),
+                Map.of()
+        );
+
+        List<StoredBlockChange> changes = service.diffChunk(baseline, live, null, Map.of(), Set.of(5));
+
+        assertEquals(4096, changes.size());
+        assertTrue(changes.stream().allMatch(change -> change.pos().y() >= 80 && change.pos().y() <= 95));
     }
 
     @Test

@@ -2,6 +2,8 @@ package io.github.luma.domain.model;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -141,6 +143,23 @@ class CaptureSessionStateTest {
         assertEquals(List.of(chunk), state.drainPendingReconcileChunks(104L, 4));
         state.finishReconciliation(List.of(chunk));
         assertFalse(state.hasPendingReconciliation());
+    }
+
+    @Test
+    void dirtySectionsTrackKnownSectionMutationsUntilChunkFallsBackToFullDirty() {
+        CaptureSessionState state = CaptureSessionState.create(buffer());
+        ChunkPoint chunk = new ChunkPoint(0, 0);
+        CaptureSessionState.DeferredActionContext action =
+                new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
+
+        assertTrue(state.markDirtySection(new ChunkSectionPoint(chunk, 4), action, 100L));
+        assertTrue(state.markDirtySection(new ChunkSectionPoint(chunk, 5), action, 101L));
+
+        assertEquals(Map.of(chunk, Set.of(4, 5)), state.dirtySections(List.of(chunk)));
+        state.markDirtyChunk(chunk, action, 102L);
+        assertTrue(state.dirtySections(List.of(chunk)).isEmpty());
+        state.finishReconciliation(List.of(chunk));
+        assertTrue(state.dirtyChunks().isEmpty());
     }
 
     private static TrackedChangeBuffer buffer() {

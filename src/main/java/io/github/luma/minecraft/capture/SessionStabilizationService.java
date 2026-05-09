@@ -91,11 +91,13 @@ public final class SessionStabilizationService {
             }
 
             Map<BlockPoint, StatePayload> baselineCorrections = session.baselineCorrections(processedChunks);
+            Map<ChunkPoint, Set<Integer>> dirtySections = session.dirtySections(processedChunks);
             List<StoredBlockChange> deltaChanges = this.deltaChanges(
                     project,
                     session,
                     capturedChunks.captured(),
-                    baselineCorrections
+                    baselineCorrections,
+                    dirtySections
             );
             List<StoredBlockChange> startingChanges = session.startingChunkChanges(processedChunks);
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
@@ -168,7 +170,8 @@ public final class SessionStabilizationService {
             BuildProject project,
             CaptureSessionState session,
             Map<ChunkPoint, ChunkSnapshotPayload> liveChunks,
-            Map<BlockPoint, StatePayload> baselineCorrections
+            Map<BlockPoint, StatePayload> baselineCorrections,
+            Map<ChunkPoint, Set<Integer>> dirtySections
     ) {
         List<StoredBlockChange> changes = new ArrayList<>();
         for (Map.Entry<ChunkPoint, ChunkSnapshotPayload> entry : liveChunks.entrySet()) {
@@ -180,7 +183,8 @@ public final class SessionStabilizationService {
                     baseline,
                     entry.getValue(),
                     project == null ? null : project.bounds(),
-                    baselineCorrections
+                    baselineCorrections,
+                    dirtySections == null ? null : dirtySections.get(entry.getKey())
             ));
         }
         return List.copyOf(changes);
@@ -199,6 +203,16 @@ public final class SessionStabilizationService {
             ChunkSnapshotPayload live,
             Bounds3i bounds,
             Map<BlockPoint, StatePayload> baselineCorrections
+    ) {
+        return this.diffChunk(baseline, live, bounds, baselineCorrections, null);
+    }
+
+    List<StoredBlockChange> diffChunk(
+            ChunkSnapshotPayload baseline,
+            ChunkSnapshotPayload live,
+            Bounds3i bounds,
+            Map<BlockPoint, StatePayload> baselineCorrections,
+            Set<Integer> candidateSections
     ) {
         List<StoredBlockChange> changes = new ArrayList<>();
         int minX = baseline.chunkX() << 4;
@@ -226,9 +240,13 @@ public final class SessionStabilizationService {
         for (int sectionY = minSectionY; sectionY <= maxSectionY; sectionY++) {
             ChunkSectionSnapshotPayload baselineSection = baselineSections.get(sectionY);
             ChunkSectionSnapshotPayload liveSection = liveSections.get(sectionY);
+            boolean hasBaselineCorrection = this.hasBaselineCorrectionInSection(baselineCorrections, sectionY, bounds);
+            if (candidateSections != null && !candidateSections.contains(sectionY) && !hasBaselineCorrection) {
+                continue;
+            }
             if (this.sectionsEqual(baselineSection, liveSection)
                     && this.blockEntitiesEqualInSection(baseline, live, sectionY)
-                    && !this.hasBaselineCorrectionInSection(baselineCorrections, sectionY, bounds)) {
+                    && !hasBaselineCorrection) {
                 continue;
             }
 

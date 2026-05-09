@@ -6,6 +6,7 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -332,8 +333,8 @@ public final class HistoryCaptureManager {
                         continue;
                     }
                     this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
-                    session.markDirtyChunk(
-                            chunk,
+                    session.markDirtySection(
+                            new ChunkSectionPoint(chunk, Math.floorDiv(pos.getY(), 16)),
                             this.deferredActionContext(session, chunk, source),
                             level.getGameTime()
                     );
@@ -1291,7 +1292,11 @@ public final class HistoryCaptureManager {
         }
         this.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
         this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
-        session.markDirtyChunk(chunk, deferredActionContext, level.getGameTime());
+        session.markDirtySection(
+                new ChunkSectionPoint(chunk, Math.floorDiv(pos.getY(), 16)),
+                deferredActionContext,
+                level.getGameTime()
+        );
         this.workingDrafts.markDirty(projectId);
         CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
         diagnostics.record(
