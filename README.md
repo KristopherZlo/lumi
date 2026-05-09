@@ -136,7 +136,7 @@ Restore planning prefers the cheapest valid path:
 - same-lineage rollback uses reverse patch replay
 - forward restore uses forward patch replay
 - divergent branch restore replays back to a common ancestor and forward to the target
-- whole-dimension root fallback uses tracked baseline chunks; direct root rollback replays only touched baseline chunks
+- whole-dimension root fallback uses tracked baseline chunks; direct root rollback reads exact baseline state only for replayed block positions
 - snapshot fallback reconstructs from a checkpoint snapshot plus patch chain
 - partial restore can read only selected chunk frames when a direct patch path exists
 - non-direct partial restore reconstructs finite current and target states from snapshots, baseline chunks, and patches
@@ -156,6 +156,7 @@ Lumi's important performance work is mostly structural:
 
 - Chunk and section addressing keeps selection, storage, diff, restore, and overlay work bounded.
 - Section change masks avoid expanding sparse edits into full 4096-cell loops.
+- Direct restores to `Initial` and `WORLD_ROOT` replay sparse exact-root positions instead of expanding touched chunks into full snapshot sections.
 - Patch metadata enables seek-based selected-chunk reads.
 - Section fingerprints let diff skip equal patch sections before loading full state.
 - Block-state palette decode caches avoid parsing identical NBT states repeatedly.

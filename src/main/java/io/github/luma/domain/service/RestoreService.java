@@ -3,33 +3,35 @@ package io.github.luma.domain.service;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.debug.LumaLoadLog;
+import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchMetadata;
+import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRequest;
-import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
-import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.RestorePlanSummary;
-import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
-import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
+import io.github.luma.minecraft.world.SectionChangeMask;
 import io.github.luma.minecraft.world.SnapshotBatchPreparer;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -996,27 +998,9 @@ public final class RestoreService {
 
         int totalSources = directPlan.stepCount()
                 + (pendingDraft != null && !pendingDraft.isEmpty() ? 1 : 0)
-                + exactRootStatePlan.sourceCount(targetVersion);
+                + exactRootStatePlan.sourceCount();
         int completedSources = 0;
         List<PreparedChunkBatch> batches = new ArrayList<>();
-        List<PreparedChunkBatch> exactRootBatches = List.of();
-        Set<String> exactRootChunkKeys = Set.of();
-
-        if (exactRootStatePlan.append()) {
-            DecodedExactRootState decodedRootState = this.decodeExactRootStateRestore(
-                    layout,
-                    project,
-                    level,
-                    targetVersion,
-                    exactRootStatePlan,
-                    completedSources,
-                    Math.max(1, totalSources),
-                    progressSink
-            );
-            exactRootBatches = decodedRootState.batches();
-            exactRootChunkKeys = this.chunkKeys(exactRootBatches);
-            completedSources = decodedRootState.completedSources();
-        }
 
         if (pendingDraft != null && !pendingDraft.isEmpty()) {
             RecoveryDraft rollbackDraft = this.alignPendingEntityRollbackWithTarget(
@@ -1025,14 +1009,8 @@ public final class RestoreService {
                     targetVersion,
                     pendingDraft
             );
-            List<StoredBlockChange> rollbackChanges = this.excludeBlockChangesInChunks(
-                    rollbackDraft.changes(),
-                    exactRootChunkKeys
-            );
-            List<StoredEntityChange> rollbackEntityChanges = this.excludeEntityChangesInChunks(
-                    rollbackDraft.entityChanges(),
-                    exactRootChunkKeys
-            );
+            List<StoredBlockChange> rollbackChanges = rollbackDraft.changes();
+            List<StoredEntityChange> rollbackEntityChanges = rollbackDraft.entityChanges();
             if (!rollbackChanges.isEmpty() || !rollbackEntityChanges.isEmpty()) {
                 batches.addAll(this.decodeStoredChanges(level, rollbackChanges, rollbackEntityChanges, false));
             }
@@ -1042,49 +1020,51 @@ public final class RestoreService {
                     completedSources,
                     Math.max(1, totalSources),
                     rollbackChanges.isEmpty() && rollbackEntityChanges.isEmpty()
-                            ? "Skipped pending draft rollback covered by exact root state"
+                            ? "Skipped empty pending draft rollback"
                             : "Decoded pending draft rollback"
             );
         }
 
         for (ProjectVersion version : directPlan.reverseVersions()) {
             int before = batches.size();
-            batches.addAll(this.decodeVersionChanges(layout, level, version, false, exactRootChunkKeys));
+            batches.addAll(this.decodeVersionChanges(layout, level, version, false));
             completedSources += 1;
             progressSink.update(
                     OperationStage.PREPARING,
                     completedSources,
                     Math.max(1, totalSources),
                     before == batches.size()
-                            ? "Skipped reverse patch " + version.id() + " covered by exact root state"
+                            ? "Skipped empty reverse patch " + version.id()
                             : "Decoded reverse patch " + version.id()
             );
         }
 
         for (ProjectVersion version : directPlan.forwardVersions()) {
             int before = batches.size();
-            batches.addAll(this.decodeVersionChanges(layout, level, version, true, exactRootChunkKeys));
+            batches.addAll(this.decodeVersionChanges(layout, level, version, true));
             completedSources += 1;
             progressSink.update(
                     OperationStage.PREPARING,
                     completedSources,
                     Math.max(1, totalSources),
                     before == batches.size()
-                            ? "Skipped forward patch " + version.id() + " covered by exact root state"
+                            ? "Skipped empty forward patch " + version.id()
                             : "Decoded forward patch " + version.id()
             );
         }
 
+        List<PreparedChunkBatch> exactRootBatches = this.decodeExactRootStateRestore(
+                layout,
+                level,
+                targetVersion,
+                exactRootStatePlan,
+                this.blockPositions(batches),
+                completedSources,
+                Math.max(1, totalSources),
+                progressSink
+        ).batches();
         if (!exactRootBatches.isEmpty()) {
             batches.addAll(exactRootBatches);
-            if (targetVersion.versionKind() == VersionKind.INITIAL) {
-                progressSink.update(
-                        OperationStage.PREPARING,
-                        completedSources,
-                        Math.max(1, totalSources),
-                        "Decoded exact initial snapshot " + targetVersion.snapshotId()
-                );
-            }
         }
 
         List<PreparedChunkBatch> collapsed;
@@ -1100,7 +1080,7 @@ public final class RestoreService {
                 directPlan.reverseVersions().size(),
                 directPlan.forwardVersions().size(),
                 pendingDraft != null && !pendingDraft.isEmpty(),
-                exactRootStatePlan.sourceCount(targetVersion),
+                exactRootStatePlan.sourceCount(),
                 rawPlacements,
                 collapsedPlacements
         );
@@ -1646,16 +1626,6 @@ public final class RestoreService {
             ProjectVersion version,
             boolean applyNewValues
     ) throws IOException {
-        return this.decodeVersionChanges(layout, level, version, applyNewValues, Set.of());
-    }
-
-    private List<PreparedChunkBatch> decodeVersionChanges(
-            ProjectLayout layout,
-            ServerLevel level,
-            ProjectVersion version,
-            boolean applyNewValues,
-            Set<String> excludedChunkKeys
-    ) throws IOException {
         List<PreparedChunkBatch> batches = new ArrayList<>();
         for (String patchId : version.patchIds()) {
             PatchMetadata metadata;
@@ -1672,10 +1642,7 @@ public final class RestoreService {
                     "WorldChangeBatchPreparer.preparePatch",
                     "patch=" + patchId + ", applyNewValues=" + applyNewValues
             )) {
-                PatchSectionWorldChanges changes = this.excludeSectionChangesInChunks(
-                        this.patchDataRepository.loadSectionWorldChanges(layout, metadata),
-                        excludedChunkKeys
-                );
+                PatchSectionWorldChanges changes = this.patchDataRepository.loadSectionWorldChanges(layout, metadata);
                 if (changes.sectionFrames().isEmpty() && changes.entityChanges().isEmpty()) {
                     continue;
                 }
@@ -1720,51 +1687,6 @@ public final class RestoreService {
         )) {
             return this.batchCollapser.collapse(batches);
         }
-    }
-
-    private PatchSectionWorldChanges excludeSectionChangesInChunks(
-            PatchSectionWorldChanges changes,
-            Set<String> excludedChunkKeys
-    ) {
-        if (changes == null || excludedChunkKeys == null || excludedChunkKeys.isEmpty()) {
-            return changes;
-        }
-        return new PatchSectionWorldChanges(
-                changes.sectionFrames().stream()
-                        .filter(frame -> !excludedChunkKeys.contains(chunkKey(new ChunkPoint(frame.chunkX(), frame.chunkZ()))))
-                        .toList(),
-                this.excludeEntityChangesInChunks(changes.entityChanges(), excludedChunkKeys)
-        );
-    }
-
-    private List<StoredBlockChange> excludeBlockChangesInChunks(
-            List<StoredBlockChange> changes,
-            Set<String> excludedChunkKeys
-    ) {
-        if (changes == null || changes.isEmpty()) {
-            return List.of();
-        }
-        if (excludedChunkKeys == null || excludedChunkKeys.isEmpty()) {
-            return changes;
-        }
-        return changes.stream()
-                .filter(change -> !excludedChunkKeys.contains(chunkKey(ChunkPoint.from(change.pos()))))
-                .toList();
-    }
-
-    private List<StoredEntityChange> excludeEntityChangesInChunks(
-            List<StoredEntityChange> changes,
-            Set<String> excludedChunkKeys
-    ) {
-        if (changes == null || changes.isEmpty()) {
-            return List.of();
-        }
-        if (excludedChunkKeys == null || excludedChunkKeys.isEmpty()) {
-            return changes;
-        }
-        return changes.stream()
-                .filter(change -> change.chunk() == null || !excludedChunkKeys.contains(chunkKey(change.chunk())))
-                .toList();
     }
 
     ProjectVariant restoreTargetVariant(List<ProjectVariant> variants, ProjectVersion version, String targetVariantId) {
@@ -1874,35 +1796,49 @@ public final class RestoreService {
         return List.copyOf(chunks.values());
     }
 
-    private Set<String> chunkKeys(List<PreparedChunkBatch> batches) {
-        Set<String> chunks = new HashSet<>();
-        for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
-            if (batch != null && batch.chunk() != null) {
-                chunks.add(chunkKey(batch.chunk()));
-            }
-        }
-        return chunks;
-    }
-
     private static String chunkKey(ChunkPoint chunk) {
         return chunk.x() + ":" + chunk.z();
     }
 
     private DecodedExactRootState decodeExactRootStateRestore(
             ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
             ServerLevel level,
             ProjectVersion targetVersion,
             ExactRootStateRestorePlan plan,
+            List<BlockPoint> positions,
             int completedSources,
             int totalSources,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         List<PreparedChunkBatch> batches = new ArrayList<>();
+        if (!plan.append()) {
+            return new DecodedExactRootState(batches, completedSources);
+        }
+        if (positions == null || positions.isEmpty()) {
+            return this.skipExactRootStateRestore(
+                    batches,
+                    completedSources,
+                    totalSources,
+                    progressSink,
+                    "Skipped exact root state; no changed block positions"
+            );
+        }
+        List<BlockPoint> selectedPositions = this.filterExactRootPositions(layout, targetVersion, positions);
+        if (selectedPositions.isEmpty()) {
+            return this.skipExactRootStateRestore(
+                    batches,
+                    completedSources,
+                    totalSources,
+                    progressSink,
+                    "Skipped exact root state; no tracked baseline positions"
+            );
+        }
+
         if (targetVersion.versionKind() == VersionKind.INITIAL) {
-            batches.addAll(this.snapshotBatchPreparer.prepare(
-                    this.snapshotReader.readFile(layout.snapshotFile(targetVersion.snapshotId()), plan.chunks()),
-                    level
+            batches.addAll(this.snapshotBatchPreparer.preparePositions(
+                    this.snapshotReader.readFile(layout.snapshotFile(targetVersion.snapshotId()), this.chunksForPositions(selectedPositions)),
+                    level,
+                    selectedPositions
             ));
             completedSources += 1;
             progressSink.update(
@@ -1910,39 +1846,120 @@ public final class RestoreService {
                     completedSources,
                     totalSources,
                     "Decoded exact initial snapshot " + targetVersion.snapshotId()
+                            + " for " + selectedPositions.size() + " changed positions"
             );
             return new DecodedExactRootState(batches, completedSources);
         }
 
         if (targetVersion.versionKind() != VersionKind.WORLD_ROOT) {
-            return new DecodedExactRootState(batches, completedSources);
+            return this.skipExactRootStateRestore(
+                    batches,
+                    completedSources,
+                    totalSources,
+                    progressSink,
+                    "Skipped exact root state for unsupported target kind"
+            );
         }
 
-        if (plan.chunks().isEmpty()) {
-            LumaMod.LOGGER.info("Exact world root restore for project {} has no tracked baseline chunks yet", project.name());
-            return new DecodedExactRootState(batches, completedSources);
-        }
-
-        for (ChunkPoint chunk : plan.chunks()) {
+        List<PreparedChunkBatch> prepared = new ArrayList<>();
+        for (Map.Entry<ChunkPoint, List<BlockPoint>> entry : this.positionsByChunk(selectedPositions).entrySet()) {
+            ChunkPoint chunk = entry.getKey();
             try (var ignored = LumaLoadLog.measure(
                     "restore",
                     "RestoreService.decodeExactRootStateRestore.baselineChunk",
-                    "chunk=" + chunk.x() + ":" + chunk.z()
+                    "chunk=" + chunk.x() + ":" + chunk.z() + ", positions=" + entry.getValue().size()
             )) {
-                batches.addAll(this.snapshotBatchPreparer.prepare(
+                prepared.addAll(this.snapshotBatchPreparer.preparePositions(
                         this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
-                        level
+                        level,
+                        entry.getValue()
                 ));
             }
-            completedSources += 1;
-            progressSink.update(
-                    OperationStage.PREPARING,
-                    completedSources,
-                    totalSources,
-                    "Decoded exact root baseline chunk " + chunk.x() + ":" + chunk.z()
-            );
         }
+        batches.addAll(prepared);
+        completedSources += 1;
+        progressSink.update(
+                OperationStage.PREPARING,
+                completedSources,
+                totalSources,
+                "Decoded exact root baseline for " + selectedPositions.size() + " changed positions"
+        );
         return new DecodedExactRootState(batches, completedSources);
+    }
+
+    private DecodedExactRootState skipExactRootStateRestore(
+            List<PreparedChunkBatch> batches,
+            int completedSources,
+            int totalSources,
+            WorldOperationManager.ProgressSink progressSink,
+            String detail
+    ) {
+        completedSources += 1;
+        progressSink.update(OperationStage.PREPARING, completedSources, totalSources, detail);
+        return new DecodedExactRootState(batches, completedSources);
+    }
+
+    private List<BlockPoint> filterExactRootPositions(
+            ProjectLayout layout,
+            ProjectVersion targetVersion,
+            List<BlockPoint> positions
+    ) {
+        if (targetVersion.versionKind() != VersionKind.WORLD_ROOT) {
+            return positions;
+        }
+        return positions.stream()
+                .filter(position -> this.baselineChunkRepository.contains(layout, ChunkPoint.from(position)))
+                .toList();
+    }
+
+    private List<ChunkPoint> chunksForPositions(List<BlockPoint> positions) {
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        for (BlockPoint position : positions == null ? List.<BlockPoint>of() : positions) {
+            if (position == null) {
+                continue;
+            }
+            ChunkPoint chunk = ChunkPoint.from(position);
+            chunks.putIfAbsent(chunkKey(chunk), chunk);
+        }
+        return List.copyOf(chunks.values());
+    }
+
+    private Map<ChunkPoint, List<BlockPoint>> positionsByChunk(List<BlockPoint> positions) {
+        Map<ChunkPoint, List<BlockPoint>> grouped = new LinkedHashMap<>();
+        for (BlockPoint position : positions == null ? List.<BlockPoint>of() : positions) {
+            if (position == null) {
+                continue;
+            }
+            grouped.computeIfAbsent(ChunkPoint.from(position), ignored -> new ArrayList<>())
+                    .add(position);
+        }
+        return grouped;
+    }
+
+    private List<BlockPoint> blockPositions(List<PreparedChunkBatch> batches) {
+        Map<Long, BlockPoint> positions = new LinkedHashMap<>();
+        for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
+            if (batch == null) {
+                continue;
+            }
+            for (var placement : batch.placements()) {
+                if (placement != null && placement.pos() != null) {
+                    BlockPoint point = BlockPoint.from(placement.pos());
+                    positions.putIfAbsent(placement.pos().asLong(), point);
+                }
+            }
+            for (var section : batch.nativeSections()) {
+                section.buffer().changedCells().forEachSetCell(localIndex -> {
+                    BlockPoint point = new BlockPoint(
+                            (section.chunk().x() << 4) + SectionChangeMask.localX(localIndex),
+                            (section.sectionY() << 4) + SectionChangeMask.localY(localIndex),
+                            (section.chunk().z() << 4) + SectionChangeMask.localZ(localIndex)
+                    );
+                    positions.putIfAbsent(point.toBlockPos().asLong(), point);
+                });
+            }
+        }
+        return List.copyOf(positions.values());
     }
 
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {
@@ -2156,14 +2173,8 @@ public final class RestoreService {
             return new ExactRootStateRestorePlan(true, chunks);
         }
 
-        private int sourceCount(ProjectVersion targetVersion) {
-            if (!this.append || targetVersion == null) {
-                return 0;
-            }
-            if (targetVersion.versionKind() == VersionKind.WORLD_ROOT) {
-                return this.chunks.size();
-            }
-            return this.chunks.isEmpty() ? 0 : 1;
+        private int sourceCount() {
+            return this.append && !this.chunks.isEmpty() ? 1 : 0;
         }
 
         ExactRootStateRestorePlan {
