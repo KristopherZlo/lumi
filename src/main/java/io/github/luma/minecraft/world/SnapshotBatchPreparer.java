@@ -72,6 +72,23 @@ public final class SnapshotBatchPreparer {
                 continue;
             }
 
+            if (minY == sectionBaseY && maxY == sectionBaseY + 15) {
+                PreparedSectionApplyBatch uniformBatch = this.tryPrepareUniformFullSection(
+                        chunk,
+                        chunkPoint,
+                        section,
+                        snapshot.minBuildHeight(),
+                        sectionY,
+                        level,
+                        blockStateDecoder,
+                        airState
+                );
+                if (uniformBatch != null) {
+                    nativeSections.add(uniformBatch);
+                    continue;
+                }
+            }
+
             LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(sectionY);
             BlockState[] decodedPalette = section == null
                     ? null
@@ -108,6 +125,72 @@ public final class SnapshotBatchPreparer {
                 nativeSections,
                 this.prepareEntitySnapshots(chunk.entitySnapshots())
         );
+    }
+
+    private PreparedSectionApplyBatch tryPrepareUniformFullSection(
+            SnapshotChunkData chunk,
+            ChunkPoint chunkPoint,
+            SnapshotSectionData section,
+            int minBuildHeight,
+            int sectionY,
+            ServerLevel level,
+            BlockStateDecoder blockStateDecoder,
+            BlockState airState
+    ) throws IOException {
+        BlockState state;
+        if (section == null) {
+            state = airState;
+        } else {
+            int uniformPaletteIndex = this.uniformPaletteIndex(section);
+            if (uniformPaletteIndex < 0 || this.hasBlockEntityInSection(chunk, minBuildHeight, sectionY)) {
+                return null;
+            }
+            state = blockStateDecoder.decode(level, section.palette().get(uniformPaletteIndex));
+        }
+        LumiSectionBuffer buffer = LumiSectionBuffer.fullSection(sectionY, state);
+        return new PreparedSectionApplyBatch(
+                chunkPoint,
+                sectionY,
+                buffer,
+                this.sectionApplySafetyClassifier.classify(buffer, true),
+                true
+        );
+    }
+
+    private int uniformPaletteIndex(SnapshotSectionData section) {
+        if (section == null
+                || section.palette() == null
+                || section.palette().isEmpty()
+                || section.paletteIndexes() == null
+                || section.paletteIndexes().length != SectionChangeMask.ENTRY_COUNT) {
+            return -1;
+        }
+        int first = section.paletteIndexes()[0];
+        if (first < 0 || first >= section.palette().size()) {
+            return -1;
+        }
+        for (short index : section.paletteIndexes()) {
+            if (index != first) {
+                return -1;
+            }
+        }
+        return first;
+    }
+
+    private boolean hasBlockEntityInSection(SnapshotChunkData chunk, int minBuildHeight, int sectionY) {
+        if (chunk.blockEntities().isEmpty()) {
+            return false;
+        }
+        for (Integer packedIndex : chunk.blockEntities().keySet()) {
+            if (packedIndex == null) {
+                continue;
+            }
+            int relativeY = packedIndex >>> 8;
+            if (Math.floorDiv(minBuildHeight + relativeY, 16) == sectionY) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private BlockState[] decodePalette(

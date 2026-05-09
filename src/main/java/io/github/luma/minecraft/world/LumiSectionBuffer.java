@@ -14,6 +14,7 @@ public final class LumiSectionBuffer {
     private final int sectionY;
     private final SectionChangeMask changedCells;
     private final BlockState[] targetStates;
+    private final BlockState uniformTargetState;
     private final SectionBlockEntityPlan blockEntityPlan;
     private final PreparedBlockPlacement.ReplayHint[] replayHints;
 
@@ -21,19 +22,35 @@ public final class LumiSectionBuffer {
             int sectionY,
             SectionChangeMask changedCells,
             BlockState[] targetStates,
+            BlockState uniformTargetState,
             SectionBlockEntityPlan blockEntityPlan,
             PreparedBlockPlacement.ReplayHint[] replayHints
     ) {
         this.sectionY = sectionY;
         this.changedCells = changedCells == null ? SectionChangeMask.empty() : changedCells;
-        this.targetStates = copyTargetStates(targetStates);
+        this.uniformTargetState = uniformTargetState;
+        this.targetStates = uniformTargetState == null ? copyTargetStates(targetStates) : null;
         this.blockEntityPlan = blockEntityPlan == null ? SectionBlockEntityPlan.empty() : blockEntityPlan;
-        this.replayHints = copyReplayHints(replayHints);
+        this.replayHints = replayHints == null && uniformTargetState != null ? null : copyReplayHints(replayHints);
         this.validateChangedTargets();
     }
 
     public static Builder builder(int sectionY) {
         return new Builder(sectionY);
+    }
+
+    public static LumiSectionBuffer fullSection(int sectionY, BlockState state) {
+        if (state == null) {
+            throw new IllegalArgumentException("state is required for full section");
+        }
+        return new LumiSectionBuffer(
+                sectionY,
+                SectionChangeMask.full(),
+                null,
+                state,
+                SectionBlockEntityPlan.empty(),
+                null
+        );
     }
 
     public int sectionY() {
@@ -52,6 +69,9 @@ public final class LumiSectionBuffer {
         if (localIndex < 0 || localIndex >= SectionChangeMask.ENTRY_COUNT) {
             return null;
         }
+        if (this.uniformTargetState != null) {
+            return this.changedCells.contains(localIndex) ? this.uniformTargetState : null;
+        }
         return this.targetStates[localIndex];
     }
 
@@ -65,6 +85,9 @@ public final class LumiSectionBuffer {
 
     public PreparedBlockPlacement.ReplayHint replayHintAt(int localIndex) {
         if (localIndex < 0 || localIndex >= SectionChangeMask.ENTRY_COUNT) {
+            return PreparedBlockPlacement.ReplayHint.NONE;
+        }
+        if (this.replayHints == null) {
             return PreparedBlockPlacement.ReplayHint.NONE;
         }
         return this.replayHints[localIndex];
@@ -96,11 +119,25 @@ public final class LumiSectionBuffer {
     }
 
     private void validateChangedTargets() {
+        if (this.uniformTargetState != null) {
+            return;
+        }
         this.changedCells.forEachSetCell(localIndex -> {
             if (this.targetStates[localIndex] == null) {
                 throw new IllegalArgumentException("Missing target state for changed section cell " + localIndex);
             }
         });
+    }
+
+    boolean storesUniformTargetState() {
+        return this.uniformTargetState != null;
+    }
+
+    boolean isFullUniformAirSection() {
+        return this.uniformTargetState != null
+                && this.changedCellCount() == SectionChangeMask.ENTRY_COUNT
+                && this.uniformTargetState.isAir()
+                && this.blockEntityPlan.isEmpty();
     }
 
     private static BlockState[] copyTargetStates(BlockState[] targetStates) {
@@ -183,6 +220,7 @@ public final class LumiSectionBuffer {
                     this.sectionY,
                     this.maskBuilder.build(),
                     this.targetStates,
+                    null,
                     new SectionBlockEntityPlan(this.blockEntities),
                     this.replayHints
             );

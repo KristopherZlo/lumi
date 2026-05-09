@@ -81,6 +81,9 @@ final class WorldApplyNoOpPruner {
             nativeSections.put(section.sectionY(), section);
             return;
         }
+        if (section.buffer().isFullUniformAirSection() && liveSection.hasOnlyAir()) {
+            return;
+        }
 
         LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(section.sectionY());
         int[] keptCells = {0};

@@ -20,6 +20,12 @@ public final class SectionChangeMask {
         return new SectionChangeMask(new long[WORD_COUNT]);
     }
 
+    public static SectionChangeMask full() {
+        long[] words = new long[WORD_COUNT];
+        java.util.Arrays.fill(words, -1L);
+        return new SectionChangeMask(words);
+    }
+
     public static Builder builder() {
         return new Builder();
     }
