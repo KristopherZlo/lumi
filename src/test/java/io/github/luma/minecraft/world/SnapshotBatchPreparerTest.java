@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
@@ -130,6 +131,48 @@ class SnapshotBatchPreparerTest {
                 .getFirst()
                 .getString("id")
                 .orElse(""));
+    }
+
+    @Test
+    void selectedSnapshotPositionsStaySparseAndUseAirForMissingSections() throws Exception {
+        CountingBlockStateDecoder decoder = new CountingBlockStateDecoder();
+        SnapshotBatchPreparer preparer = new SnapshotBatchPreparer(decoder);
+        short[] indexes = new short[SectionChangeMask.ENTRY_COUNT];
+        indexes[SectionChangeMask.localIndex(1, 2, 3)] = 1;
+        indexes[SectionChangeMask.localIndex(2, 2, 3)] = 1;
+        SnapshotSectionData section = new SnapshotSectionData(
+                0,
+                List.of(stateTag("minecraft:stone"), stateTag("minecraft:gold_block")),
+                indexes
+        );
+        SnapshotData snapshot = new SnapshotData(
+                "project",
+                Instant.EPOCH,
+                0,
+                31,
+                List.of(new SnapshotChunkData(
+                        0,
+                        0,
+                        List.of(section),
+                        null
+                ))
+        );
+
+        List<PreparedChunkBatch> batches = preparer.preparePositions(
+                snapshot,
+                null,
+                List.of(new BlockPoint(1, 2, 3), new BlockPoint(2, 2, 3), new BlockPoint(1, 20, 3))
+        );
+
+        assertEquals(1, decoder.callsFor("minecraft:air"));
+        assertEquals(1, decoder.callsFor("minecraft:gold_block"));
+        assertEquals(1, batches.size());
+        assertEquals(3, batches.getFirst().placements().size());
+        assertEquals(0, batches.getFirst().nativeSections().size());
+        assertEquals(false, batches.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(true, batches.getFirst().placements().get(0).state().is(Blocks.GOLD_BLOCK));
+        assertEquals(true, batches.getFirst().placements().get(1).state().is(Blocks.GOLD_BLOCK));
+        assertEquals(true, batches.getFirst().placements().get(2).state().is(Blocks.AIR));
     }
 
     private static CompoundTag stateTag(String name) {

@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SnapshotChunkData;
@@ -43,6 +44,49 @@ public final class SnapshotBatchPreparer {
         BlockState airState = blockStateDecoder.decode(level, AIR_TAG);
         for (SnapshotChunkData chunk : snapshot.chunks()) {
             batches.add(this.prepareChunk(snapshot, chunk, level, blockStateDecoder, airState));
+        }
+        return batches;
+    }
+
+    public List<PreparedChunkBatch> preparePositions(
+            SnapshotData snapshot,
+            ServerLevel level,
+            List<BlockPoint> positions
+    ) throws IOException {
+        if (snapshot == null || positions == null || positions.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, SnapshotChunkData> chunks = new LinkedHashMap<>();
+        for (SnapshotChunkData chunk : snapshot.chunks()) {
+            chunks.put(chunkKey(chunk.chunkX(), chunk.chunkZ()), chunk);
+        }
+
+        Map<ChunkPoint, List<PreparedBlockPlacement>> placementsByChunk = new LinkedHashMap<>();
+        BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
+        Map<CompoundTag, BlockState> stateCache = new LinkedHashMap<>();
+        BlockState airState = this.decodeCached(level, AIR_TAG, blockStateDecoder, stateCache);
+        for (BlockPoint point : positions) {
+            if (point == null) {
+                continue;
+            }
+            ChunkPoint chunkPoint = ChunkPoint.from(point);
+            BlockTarget target = this.readBlockTarget(
+                    snapshot,
+                    chunks.get(chunkKey(chunkPoint.x(), chunkPoint.z())),
+                    point,
+                    level,
+                    blockStateDecoder,
+                    airState,
+                    stateCache
+            );
+            placementsByChunk.computeIfAbsent(chunkPoint, ignored -> new ArrayList<>())
+                    .add(new PreparedBlockPlacement(point.toBlockPos(), target.state(), target.blockEntityTag()));
+        }
+
+        List<PreparedChunkBatch> batches = new ArrayList<>();
+        for (Map.Entry<ChunkPoint, List<PreparedBlockPlacement>> entry : placementsByChunk.entrySet()) {
+            batches.add(new PreparedChunkBatch(entry.getKey(), entry.getValue()));
         }
         return batches;
     }
@@ -215,6 +259,65 @@ public final class SnapshotBatchPreparer {
         return decoded;
     }
 
+    private BlockTarget readBlockTarget(
+            SnapshotData snapshot,
+            SnapshotChunkData chunk,
+            BlockPoint point,
+            ServerLevel level,
+            BlockStateDecoder blockStateDecoder,
+            BlockState airState,
+            Map<CompoundTag, BlockState> stateCache
+    ) throws IOException {
+        if (chunk == null || point.y() < snapshot.minBuildHeight() || point.y() > snapshot.maxBuildHeight()) {
+            return new BlockTarget(airState, null);
+        }
+        SnapshotSectionData section = this.sectionAt(chunk, Math.floorDiv(point.y(), 16));
+        if (section == null) {
+            return new BlockTarget(
+                    airState,
+                    this.readBlockEntity(chunk, snapshot.minBuildHeight(), point.y(), point.x() & 15, point.z() & 15)
+            );
+        }
+        int localIndex = SectionChangeMask.localIndex(point.x(), point.y(), point.z());
+        short[] indexes = section.paletteIndexes();
+        if (indexes == null || indexes.length != SectionChangeMask.ENTRY_COUNT) {
+            throw new IOException("Malformed snapshot section palette index table");
+        }
+        int paletteIndex = indexes[localIndex];
+        if (paletteIndex < 0 || section.palette() == null || paletteIndex >= section.palette().size()) {
+            throw new IOException("Snapshot section palette index out of range");
+        }
+        return new BlockTarget(
+                this.decodeCached(level, section.palette().get(paletteIndex), blockStateDecoder, stateCache),
+                this.readBlockEntity(chunk, snapshot.minBuildHeight(), point.y(), point.x() & 15, point.z() & 15)
+        );
+    }
+
+    private BlockState decodeCached(
+            ServerLevel level,
+            CompoundTag tag,
+            BlockStateDecoder blockStateDecoder,
+            Map<CompoundTag, BlockState> stateCache
+    ) throws IOException {
+        CompoundTag key = tag == null ? new CompoundTag() : tag.copy();
+        BlockState cached = stateCache.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        BlockState decoded = blockStateDecoder.decode(level, tag);
+        stateCache.put(key, decoded);
+        return decoded;
+    }
+
+    private SnapshotSectionData sectionAt(SnapshotChunkData chunk, int sectionY) {
+        for (SnapshotSectionData section : chunk.sections()) {
+            if (section.sectionY() == sectionY) {
+                return section;
+            }
+        }
+        return null;
+    }
+
     private CompoundTag readBlockEntity(SnapshotChunkData chunk, int minBuildHeight, int y, int localX, int localZ) {
         CompoundTag tag = chunk.blockEntities().get(
                 packVerticalIndex(y - minBuildHeight, localX, localZ)
@@ -224,6 +327,10 @@ public final class SnapshotBatchPreparer {
 
     private static int packVerticalIndex(int relativeY, int localX, int localZ) {
         return (relativeY << 8) | (localZ << 4) | localX;
+    }
+
+    private static String chunkKey(int chunkX, int chunkZ) {
+        return chunkX + ":" + chunkZ;
     }
 
     private EntityBatch prepareEntitySnapshots(List<EntityPayload> entitySnapshots) {
@@ -241,5 +348,12 @@ public final class SnapshotBatchPreparer {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", "minecraft:air");
         return tag;
+    }
+
+    private record BlockTarget(BlockState state, CompoundTag blockEntityTag) {
+
+        private BlockTarget {
+            blockEntityTag = blockEntityTag == null ? null : blockEntityTag.copy();
+        }
     }
 }
