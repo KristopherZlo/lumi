@@ -136,7 +136,7 @@ Restore planning prefers the cheapest valid path:
 - same-lineage rollback uses reverse patch replay
 - forward restore uses forward patch replay
 - divergent branch restore replays back to a common ancestor and forward to the target
-- whole-dimension root restore uses tracked baseline chunks
+- whole-dimension root fallback uses tracked baseline chunks; direct root rollback replays only touched baseline chunks
 - snapshot fallback reconstructs from a checkpoint snapshot plus patch chain
 - partial restore can read only selected chunk frames when a direct patch path exists
 - non-direct partial restore reconstructs finite current and target states from snapshots, baseline chunks, and patches

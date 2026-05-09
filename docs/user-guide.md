@@ -338,7 +338,7 @@ Restore path:
 
 - Lumi first tries direct patch replay.
 - For another branch, Lumi can plan from the current live branch through a shared saved ancestor.
-- Direct restores to `Initial` or `WORLD_ROOT` finish by replaying the saved root state for tracked chunks, so branch switches back to a root save do not rely only on reverse patches.
+- Direct restores to `Initial` or `WORLD_ROOT` finish by replaying the saved root state for chunks touched by the rollback, so branch switches back to a root save do not rely only on reverse patches.
 - If direct replay is not valid, Lumi falls back to checkpoint snapshot plus patch chain.
 - If required payloads are missing or corrupt, restore is rejected before the world changes.
 

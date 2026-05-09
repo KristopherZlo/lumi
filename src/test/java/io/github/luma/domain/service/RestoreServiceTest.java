@@ -11,6 +11,9 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.PatchChunkSlice;
+import io.github.luma.domain.model.PatchMetadata;
+import io.github.luma.domain.model.PatchStats;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
@@ -26,6 +29,7 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.SnapshotWriter;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -204,6 +208,60 @@ class RestoreServiceTest {
     }
 
     @Test
+    void exactInitialStatePlanUsesOnlyReplayAndPendingChunks(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
+        ProjectVersion head = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        this.savePatchMetadata(
+                layout,
+                "patch-0002",
+                "v0002",
+                List.of(new ChunkPoint(0, 0), new ChunkPoint(3, 1))
+        );
+
+        RestoreService.ExactRootStateRestorePlan plan = service.exactRootStateRestorePlan(
+                layout,
+                initial,
+                draftInChunks(List.of(new ChunkPoint(7, 2))),
+                new RestoreService.DirectRestorePatchPlan(List.of(head), List.of())
+        );
+
+        assertTrue(plan.append());
+        assertEquals(
+                List.of(new ChunkPoint(0, 0), new ChunkPoint(3, 1), new ChunkPoint(7, 2)),
+                plan.chunks()
+        );
+    }
+
+    @Test
+    void exactWorldRootStatePlanUsesOnlyAffectedBaselineChunks(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion head = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        this.savePatchMetadata(
+                layout,
+                "patch-0002",
+                "v0002",
+                List.of(new ChunkPoint(0, 0), new ChunkPoint(3, 1))
+        );
+        createBaselineFile(layout, new ChunkPoint(0, 0));
+        createBaselineFile(layout, new ChunkPoint(7, 2));
+        createBaselineFile(layout, new ChunkPoint(9, 9));
+
+        RestoreService.ExactRootStateRestorePlan plan = service.exactRootStateRestorePlan(
+                layout,
+                root,
+                draftInChunks(List.of(new ChunkPoint(7, 2))),
+                new RestoreService.DirectRestorePatchPlan(List.of(head), List.of())
+        );
+
+        assertTrue(plan.append());
+        assertEquals(List.of(new ChunkPoint(0, 0), new ChunkPoint(7, 2)), plan.chunks());
+    }
+
+    @Test
     void restoreTargetCanUseExplicitBranchWhenHeadVersionBelongsToMain() {
         RestoreService service = new RestoreService();
         ProjectVersion baseVersion = version("v0001", "main", "");
@@ -358,6 +416,58 @@ class RestoreServiceTest {
                         entities
                 ))
         );
+    }
+
+    private void savePatchMetadata(
+            ProjectLayout layout,
+            String patchId,
+            String versionId,
+            List<ChunkPoint> chunks
+    ) throws Exception {
+        this.patchMetaRepository.save(layout, new PatchMetadata(
+                patchId,
+                "project",
+                versionId,
+                patchId + ".bin.lz4",
+                chunks.stream()
+                        .map(chunk -> new PatchChunkSlice(
+                                chunk.x(),
+                                chunk.z(),
+                                1,
+                                0L,
+                                0,
+                                List.of(),
+                                0
+                        ))
+                        .toList(),
+                new PatchStats(chunks.size(), chunks.size())
+        ));
+    }
+
+    private static RecoveryDraft draftInChunks(List<ChunkPoint> chunks) {
+        List<StoredBlockChange> changes = chunks.stream()
+                .map(chunk -> new StoredBlockChange(
+                        new BlockPoint(chunk.x() << 4, 64, chunk.z() << 4),
+                        StatePayload.air(),
+                        new StatePayload(state("minecraft:stone"), null)
+                ))
+                .toList();
+        return new RecoveryDraft(
+                "project",
+                "main",
+                "v0002",
+                "tester",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                changes
+        );
+    }
+
+    private static void createBaselineFile(ProjectLayout layout, ChunkPoint chunk) throws Exception {
+        Path directory = layout.cacheDir().resolve("baseline-chunks");
+        Files.createDirectories(directory);
+        Files.writeString(directory.resolve("chunk_" + chunk.x() + "_" + chunk.z() + ".bin.lz4"), "");
     }
 
     private static EntityPayload entity(String entityId, double x) {
