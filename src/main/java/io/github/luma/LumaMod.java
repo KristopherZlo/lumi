@@ -83,7 +83,7 @@ public final class LumaMod implements ModInitializer {
                 this.worldBootstrapService.close();
                 this.operationBossBars.clear();
                 HistoryCaptureManager.getInstance().flushAll(server);
-                WorldOperationManager.getInstance().shutdown();
+                WorldOperationManager.getInstance().shutdown(server);
             } finally {
                 LumaDiagnosticsLog.close();
                 LumaLoadLog.close();

@@ -105,6 +105,7 @@ public final class ActionBarMessagePresenter {
             case "undo-action" -> "luma.actionbar.operation.undo";
             case "redo-action" -> "luma.actionbar.operation.redo";
             case "merge-variant" -> "luma.actionbar.operation.merge";
+            case "light-refresh" -> "luma.actionbar.operation.light_refresh";
             default -> null;
         };
     }

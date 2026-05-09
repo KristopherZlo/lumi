@@ -46,6 +46,8 @@ public final class WorldOperationManager {
 
     private static final int EXACT_REPLAY_GUARD_TICKS = 40;
     private static final int LIGHT_PUBLISH_TICKS = 2;
+    private static final Duration SERVER_STOP_LIGHT_REFRESH_GRACE = Duration.ofSeconds(2);
+    private static final long SERVER_STOP_LIGHT_REFRESH_PAUSE_MILLIS = 10L;
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
     private static final double MAX_ADAPTIVE_SCALE = 1.25D;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
@@ -230,6 +232,13 @@ public final class WorldOperationManager {
         this.backgroundExecutor.shutdownNow();
     }
 
+    public void shutdown(MinecraftServer server) {
+        if (server != null) {
+            this.finishServerOperationBeforeShutdown(server);
+        }
+        this.shutdown();
+    }
+
     private synchronized void complete(MinecraftServer server, ActiveOperation operation) {
         String serverKey = this.serverKey(server);
         ActiveOperation active = this.activeOperations.get(serverKey);
@@ -264,6 +273,108 @@ public final class WorldOperationManager {
                                 + ", projectId=" + followUp.handle().projectId()
                 );
             }
+        }
+    }
+
+    private void finishServerOperationBeforeShutdown(MinecraftServer server) {
+        String serverKey = this.serverKey(server);
+        ActiveOperation operation;
+        synchronized (this) {
+            operation = this.activeOperations.get(serverKey);
+        }
+        if (operation == null) {
+            return;
+        }
+
+        if (operation instanceof LightRefreshActiveOperation) {
+            this.tryCompleteLightRefreshBeforeShutdown(server, operation);
+        }
+
+        synchronized (this) {
+            ActiveOperation active = this.activeOperations.remove(serverKey);
+            if (active == null) {
+                return;
+            }
+            if (!active.snapshot().terminal()) {
+                active.fail(new IllegalStateException("Server stopped before world operation completed"));
+            }
+            this.lastSnapshots.put(serverKey, active.snapshot());
+            this.lastSnapshotsByOperationId.put(active.handle().id(), active.snapshot());
+            active.applyMetricsSummary().ifPresent(metrics -> {
+                this.lastApplyMetrics.put(active.handle().id(), metrics);
+                LumaLoadLog.operationMetrics(active.handle(), metrics);
+            });
+            LumaMod.LOGGER.warn(
+                    "Cancelled active world operation {} for project {} during server shutdown",
+                    active.handle().label(),
+                    active.handle().projectId()
+            );
+            LumaLoadLog.event(
+                    "world-op",
+                    "cancelled-server-stop",
+                    "label=" + active.handle().label()
+                            + ", projectId=" + active.handle().projectId()
+                            + ", stage=" + active.snapshot().stage()
+            );
+        }
+    }
+
+    private void tryCompleteLightRefreshBeforeShutdown(MinecraftServer server, ActiveOperation operation) {
+        long deadlineNanos = System.nanoTime() + SERVER_STOP_LIGHT_REFRESH_GRACE.toNanos();
+        WorldApplyBudget budget = this.budgetPlanner.plan(1.0D, MAX_ADAPTIVE_SCALE, WorldApplyProfile.MAXIMUM);
+        LumaDiagnosticsLog.lightEvent(
+                "server-stop-drain-start",
+                "label=" + operation.handle().label()
+                        + ", operationId=" + operation.handle().id()
+                        + ", projectId=" + operation.handle().projectId()
+        );
+        while (System.nanoTime() < deadlineNanos) {
+            synchronized (this) {
+                if (this.activeOperations.get(this.serverKey(server)) != operation) {
+                    return;
+                }
+            }
+            try {
+                if (operation.advance(budget, deadlineNanos)) {
+                    this.complete(server, operation);
+                    LumaDiagnosticsLog.lightEvent(
+                            "server-stop-drain-complete",
+                            "label=" + operation.handle().label()
+                                    + ", operationId=" + operation.handle().id()
+                                    + ", projectId=" + operation.handle().projectId()
+                    );
+                    return;
+                }
+            } catch (Exception exception) {
+                operation.fail(exception);
+                this.complete(server, operation);
+                LumaMod.LOGGER.warn(
+                        "Light refresh operation {} failed during server shutdown drain",
+                        operation.handle().id(),
+                        exception
+                );
+                return;
+            }
+            if (!this.pauseServerStopLightDrain()) {
+                break;
+            }
+        }
+        LumaDiagnosticsLog.lightEvent(
+                "server-stop-drain-timeout",
+                "label=" + operation.handle().label()
+                        + ", operationId=" + operation.handle().id()
+                        + ", projectId=" + operation.handle().projectId()
+                        + ", stage=" + operation.snapshot().stage()
+        );
+    }
+
+    private boolean pauseServerStopLightDrain() {
+        try {
+            Thread.sleep(SERVER_STOP_LIGHT_REFRESH_PAUSE_MILLIS);
+            return true;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 
@@ -355,6 +466,7 @@ public final class WorldOperationManager {
         private volatile OperationStage lastLoggedStage;
         private volatile int lastLoggedPercent = -1;
         private volatile double adaptiveScale = 1.0D;
+        private final OperationLoadPolicy loadPolicy = new OperationLoadPolicy();
 
         private ActiveOperation(ServerLevel level, OperationHandle handle, String unitLabel) {
             this.level = level;
@@ -395,16 +507,13 @@ public final class WorldOperationManager {
         }
 
         protected void recordAdvanceCost(long elapsedNanos, long budgetNanos) {
-            if (budgetNanos <= 0L || elapsedNanos <= 0L) {
-                return;
-            }
-            if (elapsedNanos > budgetNanos && this.adaptiveScale > this.minimumAdaptiveScale()) {
-                this.adaptiveScale = Math.max(this.minimumAdaptiveScale(), this.adaptiveScale * 0.75D);
-                return;
-            }
-            if (elapsedNanos < budgetNanos / 2L && this.adaptiveScale < this.maximumAdaptiveScale()) {
-                this.adaptiveScale = Math.min(this.maximumAdaptiveScale(), this.adaptiveScale * 1.08D);
-            }
+            this.adaptiveScale = this.loadPolicy.nextAdaptiveScale(
+                    this.adaptiveScale,
+                    this.minimumAdaptiveScale(),
+                    this.maximumAdaptiveScale(),
+                    elapsedNanos,
+                    budgetNanos
+            );
         }
 
         protected double minimumAdaptiveScale() {
