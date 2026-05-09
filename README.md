@@ -62,7 +62,7 @@ Use Lumi if you want to:
 
 - automatic dimension projects
 - builder-first Build History UI built around `Save build`, `See changes`, recent saves, and `Branches`, with maintenance tools kept in the sidebar `More` route
-- one-time 9-step guided onboarding flow with compact cards, inline key glyphs, a close button, workspace spotlights for `Save build` and `See changes`, an in-world block edit, controlled Undo/Redo teaching with a one-second world confirmation preview, and shortcut reminders including `Left Alt+I`; advanced workflows are taught later through contextual hints in the relevant tabs, in-world teaching, and safety confirmations
+- one-time 9-step guided onboarding flow with compact cards, inline key glyphs, a close button, workspace spotlights for `Save build` and `See changes`, an in-world block edit, controlled Undo/Redo teaching that waits for the action to finish before showing a three-second world confirmation preview, and shortcut reminders including `Left Alt+I`; advanced workflows are taught later through contextual hints in the relevant tabs, in-world teaching, and safety confirmations
 - localized UI resources for English, Russian, French, Spanish, German, and Finnish
 - lightweight save, branch, import/export, settings, storage cleanup, and advanced navigation with a persistent left workspace menu and live background-operation refresh while screens stay open
 - patch-first history with checkpoint snapshots

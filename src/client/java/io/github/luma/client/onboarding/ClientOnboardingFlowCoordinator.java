@@ -26,12 +26,12 @@ public final class ClientOnboardingFlowCoordinator {
             "onboarding_world_prompt"
     );
     private static final int REFRESH_INTERVAL_TICKS = 10;
-    private static final int WORLD_PREVIEW_TICKS = 20;
     private static final int PANEL_WIDTH = 330;
     private static final ClientOnboardingFlowCoordinator INSTANCE = new ClientOnboardingFlowCoordinator();
 
     private final ProjectHomeScreenController stateController = new ProjectHomeScreenController();
     private final OnboardingWorldPreviewShortcutController worldPreviewShortcuts;
+    private final OnboardingWorldPreviewDelay worldPreviewDelay = new OnboardingWorldPreviewDelay();
     private String projectName = "";
     private String variantId = "";
     private String statusKey = "luma.status.project_ready";
@@ -39,7 +39,6 @@ public final class ClientOnboardingFlowCoordinator {
     private OnboardingTour tour;
     private int baselinePendingBlocks = -1;
     private int refreshCooldown;
-    private int worldPreviewTicks;
     private OnboardingTour.Transition worldPreviewTransition = OnboardingTour.Transition.NONE;
 
     private ClientOnboardingFlowCoordinator() {
@@ -76,9 +75,9 @@ public final class ClientOnboardingFlowCoordinator {
         this.tour = tour;
         this.baselinePendingBlocks = -1;
         this.refreshCooldown = 0;
-        this.worldPreviewTicks = 0;
         this.worldPreviewTransition = OnboardingTour.Transition.NONE;
         this.worldPreviewShortcuts.clear();
+        this.worldPreviewDelay.clear();
     }
 
     public void startWorldPreviewStep(
@@ -96,9 +95,9 @@ public final class ClientOnboardingFlowCoordinator {
         this.tour = tour;
         this.baselinePendingBlocks = -1;
         this.refreshCooldown = 0;
-        this.worldPreviewTicks = WORLD_PREVIEW_TICKS;
         this.worldPreviewTransition = transition == null ? OnboardingTour.Transition.NONE : transition;
         this.worldPreviewShortcuts.start(this.worldPreviewTransition);
+        this.worldPreviewDelay.start();
     }
 
     public boolean suppressesLumiShortcuts() {
@@ -159,9 +158,8 @@ public final class ClientOnboardingFlowCoordinator {
         if (client.screen != null) {
             return;
         }
-        this.worldPreviewShortcuts.tick(client);
-        this.worldPreviewTicks -= 1;
-        if (this.worldPreviewTicks > 0) {
+        boolean actionFinished = this.worldPreviewShortcuts.tick(client);
+        if (!this.worldPreviewDelay.tick(actionFinished)) {
             return;
         }
 
@@ -239,9 +237,8 @@ public final class ClientOnboardingFlowCoordinator {
     }
 
     private boolean worldPreviewActive() {
-        return this.worldPreviewTicks > 0
-                && (this.worldPreviewTransition == OnboardingTour.Transition.EXECUTE_UNDO
-                || this.worldPreviewTransition == OnboardingTour.Transition.EXECUTE_REDO);
+        return this.worldPreviewTransition == OnboardingTour.Transition.EXECUTE_UNDO
+                || this.worldPreviewTransition == OnboardingTour.Transition.EXECUTE_REDO;
     }
 
     private String worldPreviewTitleKey() {
@@ -274,8 +271,8 @@ public final class ClientOnboardingFlowCoordinator {
         this.tour = null;
         this.baselinePendingBlocks = -1;
         this.refreshCooldown = 0;
-        this.worldPreviewTicks = 0;
         this.worldPreviewTransition = OnboardingTour.Transition.NONE;
         this.worldPreviewShortcuts.clear();
+        this.worldPreviewDelay.clear();
     }
 }

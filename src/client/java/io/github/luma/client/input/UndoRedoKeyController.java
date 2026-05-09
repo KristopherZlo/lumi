@@ -2,6 +2,7 @@ package io.github.luma.client.input;
 
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
@@ -45,13 +46,13 @@ public final class UndoRedoKeyController {
         this.enqueue(client, UndoRedoRequestQueue.Intent.REDO);
     }
 
-    public void tick(Minecraft client) {
+    public TickResult tick(Minecraft client) {
         if (client == null || client.player == null || client.level == null) {
             this.requestQueue.clear();
-            return;
+            return TickResult.idle();
         }
         if (!this.requestQueue.hasAnyPending()) {
-            return;
+            return TickResult.idle();
         }
 
         UndoRedoRequestQueue.Intent intent = null;
@@ -60,23 +61,24 @@ public final class UndoRedoKeyController {
             CurrentTarget target = this.currentTarget(client);
             scope = target.scope();
             if (this.requestQueue.isEmpty(scope)) {
-                return;
+                return TickResult.idle();
             }
             if (this.worldOperationManager.hasActiveOperation(target.level().getServer())) {
-                return;
+                return TickResult.idle();
             }
             intent = this.requestQueue.poll(scope);
             if (intent == null) {
-                return;
+                return TickResult.idle();
             }
-            this.start(client, target, intent == UndoRedoRequestQueue.Intent.UNDO);
+            return this.start(client, target, intent == UndoRedoRequestQueue.Intent.UNDO);
         } catch (Exception exception) {
             String statusKey = this.failurePolicy.statusKey(exception, intent != UndoRedoRequestQueue.Intent.REDO);
             if (intent != null && scope != null && this.failurePolicy.shouldRetry(statusKey)) {
                 this.requestQueue.offerFirst(scope, intent);
-                return;
+                return TickResult.idle();
             }
             client.gui.setOverlayMessage(this.failurePolicy.statusMessage(statusKey), false);
+            return TickResult.terminalNoOperation();
         }
     }
 
@@ -103,9 +105,9 @@ public final class UndoRedoKeyController {
         }
     }
 
-    private void start(Minecraft client, CurrentTarget target, boolean undo) {
+    private TickResult start(Minecraft client, CurrentTarget target, boolean undo) {
         if (client == null || client.player == null || client.level == null) {
-            return;
+            return TickResult.idle();
         }
 
         try {
@@ -115,25 +117,28 @@ public final class UndoRedoKeyController {
                 client.gui.setOverlayMessage(ActionBarMessagePresenter.info(
                         undo ? "luma.status.native_undo_started" : "luma.status.native_redo_started"
                 ), false);
-                return;
+                return TickResult.terminalNoOperation();
             }
+            OperationHandle handle;
             if (undo) {
-                this.undoRedoService.undo(level, project.name());
+                handle = this.undoRedoService.undo(level, project.name());
             } else {
-                this.undoRedoService.redo(level, project.name());
+                handle = this.undoRedoService.redo(level, project.name());
             }
             client.gui.setOverlayMessage(ActionBarMessagePresenter.info(
                     undo ? "luma.status.undo_started" : "luma.status.redo_started"
             ), false);
+            return TickResult.started(handle);
         } catch (Exception exception) {
             String statusKey = this.failurePolicy.statusKey(exception, undo);
             if (this.failurePolicy.shouldRetry(statusKey)) {
                 this.requestQueue.offerFirst(target.scope(), undo
                         ? UndoRedoRequestQueue.Intent.UNDO
                         : UndoRedoRequestQueue.Intent.REDO);
-                return;
+                return TickResult.idle();
             }
             client.gui.setOverlayMessage(this.failurePolicy.statusMessage(statusKey), false);
+            return TickResult.terminalNoOperation();
         }
     }
 
@@ -279,5 +284,20 @@ public final class UndoRedoKeyController {
     }
 
     private record CurrentTarget(ServerLevel level, BuildProject project, UndoRedoRequestQueue.Scope scope) {
+    }
+
+    public record TickResult(OperationHandle operationHandle, boolean terminalWithoutOperation) {
+
+        public static TickResult idle() {
+            return new TickResult(null, false);
+        }
+
+        public static TickResult started(OperationHandle operationHandle) {
+            return new TickResult(operationHandle, false);
+        }
+
+        public static TickResult terminalNoOperation() {
+            return new TickResult(null, true);
+        }
     }
 }

@@ -101,14 +101,14 @@ The tour has nine cards and surfaces:
 - `save_spotlight`: open the Lumi workspace and spotlight the `Save build` button without running it;
 - `changes_spotlight`: spotlight `See changes` without running it;
 - `break_block`: close the workspace and ask the player to break or place one block in the world;
-- `undo_world`: show the Undo shortcut inline, wait for the hold, run Undo, and close all screens for one second so the undone world interaction is visible;
-- `redo_world`: show the Redo shortcut inline, wait for the hold, run Redo, and close all screens for one second so the restored world interaction is visible;
+- `undo_world`: show the Undo shortcut inline, wait for the hold, run Undo, wait for that operation to finish, and close all screens for one more second so the undone world interaction is visible;
+- `redo_world`: show the Redo shortcut inline, wait for the hold, run Redo, wait for that operation to finish, and close all screens for one more second so the restored world interaction is visible;
 - `shortcuts`: show a compact shortcut table for opening Lumi, quick save, Undo, Redo, and Quick rollback;
 - `finish`: remind the player that `Left Alt+I` opens shortcut information, close with wiki/help guidance, and leave the player in the world.
 
 The card format is compact: `current/total Quick tour`, page name, one white teaching line, optional gray hold text with the key glyph inline, navigation buttons, and a green hold-progress line. Shortcut keys are not placed in a separate large box, and the copy does not explain the hold duration.
 
-During onboarding, Lumi controls shortcut execution explicitly. Holding `U` advances the open step and then opens the workspace for the same tour instance. Holding `Left Alt+Z` or `Left Alt+Y` during the in-world teaching steps runs the matching onboarding action once the hold completes, hides all screens for about one second with a small HUD confirmation, then reopens the tour. The top-right `X` closes the full onboarding flow and marks it complete. Other Lumi shortcut clicks are drained while a modal onboarding card or onboarding world-preview step is active.
+During onboarding, Lumi controls shortcut execution explicitly. Holding `U` advances the open step and then opens the workspace for the same tour instance. Holding `Left Alt+Z` or `Left Alt+Y` during the in-world teaching steps runs the matching onboarding action once the hold completes, keeps all screens hidden until that action reaches its terminal operation state, then waits about one more second with a small HUD confirmation before reopening the tour. The top-right `X` closes the full onboarding flow and marks it complete. Other Lumi shortcut clicks are drained while a modal onboarding card or onboarding world-preview step is active.
 
 Advanced workflows such as wooden-sword selection, partial restore modes, import review, cleanup, diagnostics, and raw references are taught later through contextual hints, in-world teaching, and focused confirmations while the player is using the relevant tab or tool.
 
