@@ -6,6 +6,7 @@ import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import net.jpountz.lz4.LZ4FrameInputStream;
@@ -17,7 +18,9 @@ public final class ProjectIntegrityService {
     private static final int PATCH_CHUNK_ADDRESSABLE_V6 = 6;
     private static final int PATCH_SECTION_FRAME_V7 = 7;
     private static final int PATCH_HIDDEN_MASK_V8 = 8;
+    private static final int PATCH_SECTION_FINGERPRINT_V9 = 9;
     private static final int SNAPSHOT_MAGIC = 0x4C534E50;
+    private static final int SNAPSHOT_ADDRESSABLE_V6 = 6;
 
     private final ProjectService projectService = new ProjectService();
     private final io.github.luma.storage.repository.VersionRepository versionRepository = new io.github.luma.storage.repository.VersionRepository();
@@ -93,7 +96,8 @@ public final class ProjectIntegrityService {
                 if (magic == PATCH_MAGIC) {
                     return version == PATCH_CHUNK_ADDRESSABLE_V6
                             || version == PATCH_SECTION_FRAME_V7
-                            || version == PATCH_HIDDEN_MASK_V8;
+                            || version == PATCH_HIDDEN_MASK_V8
+                            || version == PATCH_SECTION_FINGERPRINT_V9;
                 }
             }
             try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
@@ -109,8 +113,23 @@ public final class ProjectIntegrityService {
     }
 
     private boolean hasReadableSnapshotHeader(ProjectLayout layout, String snapshotId) {
+        Path snapshotFile = layout.snapshotFile(snapshotId);
+        try {
+            if (Files.size(snapshotFile) < Integer.BYTES * 2L) {
+                return false;
+            }
+            try (DataInputStream input = new DataInputStream(new BufferedInputStream(Files.newInputStream(snapshotFile)))) {
+                int magic = input.readInt();
+                int version = input.readInt();
+                if (magic == SNAPSHOT_MAGIC) {
+                    return version == SNAPSHOT_ADDRESSABLE_V6;
+                }
+            }
+        } catch (IOException exception) {
+            return false;
+        }
         try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
-                new BufferedInputStream(Files.newInputStream(layout.snapshotFile(snapshotId)))
+                new BufferedInputStream(Files.newInputStream(snapshotFile))
         ))) {
             int magic = input.readInt();
             int version = input.readInt();

@@ -8,6 +8,7 @@ import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectIntegrityReport;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.VersionKind;
@@ -15,6 +16,7 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.ProjectRepository;
+import io.github.luma.storage.repository.SnapshotWriter;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.io.BufferedOutputStream;
@@ -42,6 +44,7 @@ class ProjectIntegrityServiceTest {
     private final VersionRepository versionRepository = new VersionRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
+    private final SnapshotWriter snapshotWriter = new SnapshotWriter();
 
     @Test
     void acceptsCurrentPatchPayloadSchema() throws Exception {
@@ -60,6 +63,21 @@ class ProjectIntegrityServiceTest {
         );
         this.patchMetaRepository.save(layout, patchMetadata);
         this.versionRepository.save(layout, version("v0001", "", List.of("patch-current")));
+
+        ProjectIntegrityReport report = this.service.inspect(layout);
+
+        assertTrue(report.valid());
+    }
+
+    @Test
+    void acceptsCurrentSnapshotPayloadSchema() throws Exception {
+        ProjectLayout layout = this.layout();
+        this.writeProjectMetadata(layout);
+        this.snapshotWriter.writeFile(
+                layout.snapshotFile("snapshot-current"),
+                new SnapshotData("project", Instant.parse("2026-04-28T08:00:00Z"), 0, 0, List.of())
+        );
+        this.versionRepository.save(layout, version("v0001", "snapshot-current", List.of()));
 
         ProjectIntegrityReport report = this.service.inspect(layout);
 
