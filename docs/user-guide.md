@@ -873,6 +873,14 @@ The origin manifest records:
 
 Old manifests without a Lumi creation marker are treated conservatively and are not eligible for automatic generator regeneration.
 
+The first time Lumi enters an existing world, it also writes a one-time pre-mod backup under:
+
+```text
+<save>/lumi/pre-mod-backup/
+```
+
+The backup scan runs after join on Lumi's low-priority bootstrap thread. It records the world seed, scans generated region chunks, skips chunks that only have pristine generation markers, and stores chunks with persisted player-activity markers as maximum-compression raw NBT.
+
 History packages are stored under:
 
 ```text

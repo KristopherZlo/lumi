@@ -22,7 +22,7 @@ public record BuildProject(
         boolean archived
 ) {
 
-    public static final int CURRENT_SCHEMA_VERSION = 3;
+    public static final int CURRENT_SCHEMA_VERSION = 4;
 
     public static BuildProject create(String name, String dimensionId, Bounds3i bounds, BlockPoint origin, Instant now) {
         return new BuildProject(

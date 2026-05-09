@@ -69,8 +69,8 @@ Lumi is organized around project history for builders: project, version, branch,
 
 Use `src/main/java/io/github/luma/domain/model` for value objects, persisted records, summaries, and focused mutable runtime state. Do not add Minecraft APIs, file I/O, UI state, or broad orchestration here.
 
-- Project identity/settings: `BuildProject`, `ProjectSettings`, `ProjectVariant`, `ProjectVersion`, `VersionKind`, `WorldOriginInfo`.
-- Coordinates/bounds/chunks: `BlockPoint`, `Bounds3i`, `ChunkPoint`, `ChunkDelta`.
+- Project identity/settings: `BuildProject`, `ProjectSettings`, `ProjectVariant`, `ProjectVersion`, `VersionKind`, `WorldOriginInfo`, `WorldInitialBackupManifest`.
+- Coordinates/bounds/chunks: `BlockPoint`, `Bounds3i`, `ChunkPoint`, `ChunkSectionPoint`, `ChunkDelta`.
 - Stored changes and payloads: `StoredBlockChange`, `StoredEntityChange`, `StoredChangeAccumulator`, `StatePayload`, `EntityPayload`, `BlockPatch`, `PatchWorldChanges`, `PatchMetadata`, `PatchStats`, `PatchChunkSlice`, `SectionFingerprint`, `ChunkPayloadSlice`, `ContentRef`.
 - Snapshots: `SnapshotRef`, `SnapshotMetadata`, `SnapshotData`, `SnapshotChunkData`, `SnapshotSectionData`, `ChunkSnapshotPayload`, `ChunkSectionSnapshotPayload`.
 - Recovery: `RecoveryDraft`, `RecoveryDraftSummary`, `RecoveryJournalEntry`, `RestoreReturnPoint`.
@@ -123,10 +123,11 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 - `HistoryTombstoneRepository`: `history-tombstones.json` soft-delete visibility metadata.
 - `VersionRepository`, `VersionIndexRepository`: `versions/*.json` manifests and disposable `versions/index.json` cache.
 - `WorldOriginRepository`: shared `world-origin.json` manifest and corruption quarantine behavior.
+- `WorldInitialBackupRepository`: one-time pre-mod raw chunk backup manifest and compressed chunk NBT payloads.
 - `PatchRepository`: patch metadata/data facade.
 - `PatchMetaRepository`: `patches/*.meta.json` chunk index and lightweight patch metadata.
 - `PatchDataRepository`: `patches/*.bin.lz4` schema reads/writes, section fingerprint metadata, and selective chunk/section-frame reads.
-- `SnapshotRepository`, `SnapshotReader`, `SnapshotWriter`: checkpoint snapshot payload boundary.
+- `SnapshotRepository`, `SnapshotReader`, `SnapshotWriter`: checkpoint snapshot payload boundary, including chunk-addressable frame indexes and snapshot section content refs.
 - `PayloadContentRepository`: content-addressed immutable payload blobs under `cache/content`.
 - `RecoveryRepository`: recovery draft, WAL, operation draft, journal, restore return point persistence.
 - `BaselineChunkRepository`: whole-dimension baseline chunks under `cache/baseline-chunks`.
@@ -190,7 +191,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 ### Other Minecraft Modules
 
 - `minecraft/access/LumaAccessControl.java`: permission gate for commands, UI entry points, and dedicated-server mutation workflows.
-- `minecraft/bootstrap/WorldBootstrapService.java`: low-priority startup bootstrap for world-origin and root-version metadata.
+- `minecraft/bootstrap/WorldBootstrapService.java`: low-priority startup bootstrap for world-origin, pre-mod backup, migration, and root-version metadata.
 - `minecraft/command/LumaCommands.java`: diagnostics/help and singleplayer runtime test command entry.
 - `minecraft/testing/*`: integrated singleplayer regression service, performance monitor, test volume/run/log helpers.
 

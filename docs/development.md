@@ -241,7 +241,7 @@ Current runtime history behavior:
 - `VariantService` keeps one head pointer per variant.
 - `VersionLineageService` owns reachable-version filtering, common ancestor lookup, ancestor checks, shared imported ancestor validation, and ancestor-to-head path resolution for restore, diff, and merge workflows.
 - `VariantMergeService` turns imported review projects and local branches back into local history by finding a shared saved ancestor, grouping overlapping conflicts into chunk-connected review zones, carrying non-conflicting entity changes, rejecting unresolved entity conflicts explicitly, and delegating merged version persistence to `VersionService` with `VersionKind.MERGE`.
-- `DiffService` reconstructs version-to-version block and entity changes from patch history through the shared lineage path helpers.
+- `DiffService` reconstructs version-to-version block and entity changes from patch history through the shared lineage path helpers. It first compares section fingerprint sequences from patch metadata and reads only sections whose indexed patch sequence differs; missing or legacy indexes fall back to full patch reads.
 
 The current history pipeline is intentionally split into:
 

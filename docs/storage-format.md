@@ -16,6 +16,12 @@ Shared world-level metadata is stored at:
 <world>/lumi/world-origin.json
 ```
 
+The first-entry pre-mod backup is stored at:
+
+```text
+<world>/lumi/pre-mod-backup/
+```
+
 Runtime test logs are stored at:
 
 ```text
@@ -96,6 +102,24 @@ Automatic dimension workspaces use this manifest to define the meaning of the `W
 Legacy manifests without `createdWithLumi` are treated as `createdWithLumi = false`, so automatic generator-based restore strategies stay disabled unless the world was positively marked by Lumi.
 Once written, origin fingerprints are preserved as the original restore-safety baseline. Later datapack or generator changes are compared against these stored values instead of overwriting them during startup.
 If this manifest is malformed, Lumi moves it aside as `world-origin.json.corrupt-<timestamp>` and regenerates the manifest from the current world instead of blocking the workspace UI.
+
+### `pre-mod-backup/manifest.json`
+
+Stores the one-time backup scan created after Lumi first opens an existing world.
+
+The manifest records:
+
+- schema version
+- level name
+- world seed
+- classifier name
+- per-dimension scanned, backed-up, and skipped chunk counts
+- compressed backup bytes
+- start and completion timestamps
+
+Chunk payloads live under `pre-mod-backup/chunks/<dimension>/chunk_<x>_<z>.nbt.gz`.
+This backup is a cold startup artifact, so it uses maximum-level gzip compression instead of the LZ4 frames used by hot history payloads.
+They contain raw chunk NBT compressed with gzip. The scan is conservative: chunks with persisted player-activity markers such as non-zero `InhabitedTime`, block entities, entities, or pending ticks are kept; chunks without those markers are treated as generated-pristine and skipped. Ambiguous chunks are backed up rather than discarded.
 
 ### `test-logs/singleplayer-<timestamp>.log`
 
@@ -272,8 +296,9 @@ Checkpoint snapshots store a full project-area block state for reconstruction an
 
 Current snapshot characteristics:
 
-- schema v6 uses a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames
-- each v6 chunk frame header includes section fingerprints, entity count, compressed length, and uncompressed length so selected reads can skip unrelated chunks without decompression
+- schema v7 uses a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames; schema v6 keeps the same chunk-addressable layout without section content references and remains readable
+- each v7 chunk frame header includes section fingerprints, optional section `ContentRef` entries, entity count, compressed length, and uncompressed length so selected reads can skip unrelated chunks without decompression
+- prepared snapshot and baseline writes store immutable section payloads in `cache/content/<sha>.bin.lz4` and wire those refs into the frame index; the chunk frame still embeds the section payload so older v6-era read paths can be migrated safely
 - chunk -> section -> palette structure
 - only non-empty sections are stored
 - block entities are kept in a sparse side table keyed by local block index

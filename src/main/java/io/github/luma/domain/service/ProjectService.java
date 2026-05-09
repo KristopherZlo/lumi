@@ -14,6 +14,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
+import io.github.luma.minecraft.bootstrap.WorldInitialBackupService;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.HistoryTombstoneRepository;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -50,8 +51,10 @@ public final class ProjectService {
     private final SnapshotCaptureService snapshotCaptureService = new SnapshotCaptureService();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
+    private final HistoryMigrationService historyMigrationService = new HistoryMigrationService();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
+    private final WorldInitialBackupService worldInitialBackupService = new WorldInitialBackupService();
 
     public List<BuildProject> listProjects(MinecraftServer server) throws IOException {
         return this.projectRepository.loadAll(this.projectsRoot(server));
@@ -119,9 +122,11 @@ public final class ProjectService {
     }
 
     public void bootstrapWorld(MinecraftServer server) throws IOException {
-        this.ensureWorldOrigin(server);
+        WorldOriginInfo origin = this.ensureWorldOrigin(server);
+        this.worldInitialBackupService.backupIfNeeded(server, origin);
         for (BuildProject project : this.listProjects(server)) {
             ProjectLayout layout = this.resolveLayout(server, project.name());
+            this.historyMigrationService.migrate(layout, project);
             this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
             if (!project.tracksWholeDimension()) {
                 continue;
