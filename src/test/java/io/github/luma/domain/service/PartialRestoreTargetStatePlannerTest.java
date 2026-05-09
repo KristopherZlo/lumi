@@ -57,14 +57,19 @@ class PartialRestoreTargetStatePlannerTest {
         BuildProject project = boundedProject();
         writeSnapshot(layout, "current-root", Map.of(point(1), "minecraft:stone"), List.of());
         writeSnapshot(layout, "target-root", Map.of(point(1), "minecraft:stone"), List.of());
-        writePatch(layout, "current-patch", "current-head", List.of(change(point(1), "minecraft:stone", "minecraft:gold_block")), List.of());
-        writePatch(layout, "target-patch", "target-head", List.of(change(point(1), "minecraft:stone", "minecraft:diamond_block")), List.of());
+        writePatch(layout, "current-patch", "current-head",
+                List.of(change(point(1), "minecraft:stone", "minecraft:gold_block")), List.of());
+        writePatch(layout, "target-patch", "target-head",
+                List.of(change(point(1), "minecraft:stone", "minecraft:diamond_block")), List.of());
         ProjectVersion currentRoot = version("current-root", "", "current-root", List.of(), VersionKind.INITIAL);
-        ProjectVersion currentHead = version("current-head", "current-root", "", List.of("current-patch"), VersionKind.MANUAL);
+        ProjectVersion currentHead = version("current-head", "current-root", "", List.of("current-patch"),
+                VersionKind.MANUAL);
         ProjectVersion targetRoot = version("target-root", "", "target-root", List.of(), VersionKind.INITIAL);
-        ProjectVersion targetHead = version("target-head", "target-root", "", List.of("target-patch"), VersionKind.MANUAL);
+        ProjectVersion targetHead = version("target-head", "target-root", "", List.of("target-patch"),
+                VersionKind.MANUAL);
 
-        PartialRestoreTargetStatePlanner.Plan plan = this.plan(layout, project, List.of(currentRoot, currentHead, targetRoot, targetHead), currentHead, targetHead);
+        PartialRestoreTargetStatePlanner.Plan plan = this.plan(layout, project,
+                List.of(currentRoot, currentHead, targetRoot, targetHead), currentHead, targetHead);
 
         assertEquals(1, plan.blockChanges().size());
         assertEquals("minecraft:gold_block", plan.blockChanges().getFirst().oldValue().blockId());
@@ -75,8 +80,10 @@ class PartialRestoreTargetStatePlannerTest {
     void outsideSelectionPreservesSelectedBlocks() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         BuildProject project = boundedProject();
-        writeSnapshot(layout, "current", Map.of(point(1), "minecraft:gold_block", point(2), "minecraft:gold_block"), List.of());
-        writeSnapshot(layout, "target", Map.of(point(1), "minecraft:diamond_block", point(2), "minecraft:diamond_block"), List.of());
+        writeSnapshot(layout, "current", Map.of(point(1), "minecraft:gold_block", point(2), "minecraft:gold_block"),
+                List.of());
+        writeSnapshot(layout, "target",
+                Map.of(point(1), "minecraft:diamond_block", point(2), "minecraft:diamond_block"), List.of());
         ProjectVersion current = version("current", "", "current", List.of(), VersionKind.INITIAL);
         ProjectVersion target = version("target", "", "target", List.of(), VersionKind.INITIAL);
 
@@ -91,8 +98,7 @@ class PartialRestoreTargetStatePlannerTest {
                 PartialRestoreMode.OUTSIDE_SELECTED_AREA,
                 64,
                 64,
-                noop()
-        );
+                noop());
 
         assertEquals(List.of(point(2)), plan.blockChanges().stream().map(StoredBlockChange::pos).toList());
     }
@@ -103,9 +109,9 @@ class PartialRestoreTargetStatePlannerTest {
         BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW);
         this.snapshotWriter.writeFile(
                 this.baselineChunkRepository.filePath(layout, new ChunkPoint(0, 0)),
-                snapshot(Map.of(point(1), "minecraft:stone"), List.of())
-        );
-        writePatch(layout, "target-patch", "target", List.of(change(point(1), "minecraft:stone", "minecraft:diamond_block")), List.of());
+                snapshot(Map.of(point(1), "minecraft:stone"), List.of()));
+        writePatch(layout, "target-patch", "target",
+                List.of(change(point(1), "minecraft:stone", "minecraft:diamond_block")), List.of());
         ProjectVersion root = version("root", "", "", List.of(), VersionKind.WORLD_ROOT);
         ProjectVersion target = version("target", "root", "", List.of("target-patch"), VersionKind.MANUAL);
 
@@ -133,8 +139,7 @@ class PartialRestoreTargetStatePlannerTest {
                 NOW,
                 NOW,
                 List.of(change(point(1), "minecraft:stone", "minecraft:gold_block")),
-                List.of()
-        );
+                List.of());
 
         PartialRestoreTargetStatePlanner.Plan plan = this.planner.plan(
                 layout,
@@ -147,8 +152,7 @@ class PartialRestoreTargetStatePlannerTest {
                 PartialRestoreMode.SELECTED_AREA,
                 64,
                 64,
-                noop()
-        );
+                noop());
 
         assertEquals("minecraft:gold_block", plan.blockChanges().getFirst().oldValue().blockId());
         assertEquals("minecraft:diamond_block", plan.blockChanges().getFirst().newValue().blockId());
@@ -169,16 +173,15 @@ class PartialRestoreTargetStatePlannerTest {
         ProjectVersion current = version("current", "", "current", List.of(), VersionKind.INITIAL);
         ProjectVersion target = version("target", "", "target", List.of(), VersionKind.INITIAL);
 
-        PartialRestoreTargetStatePlanner.Plan plan = this.plan(layout, project, List.of(current, target), current, target);
+        PartialRestoreTargetStatePlanner.Plan plan = this.plan(layout, project, List.of(current, target), current,
+                target);
 
         assertEquals(
                 List.of(
                         "00000000-0000-0000-0000-000000000001",
                         "00000000-0000-0000-0000-000000000002",
-                        "00000000-0000-0000-0000-000000000003"
-                ),
-                plan.entityChanges().stream().map(StoredEntityChange::entityId).toList()
-        );
+                        "00000000-0000-0000-0000-000000000003"),
+                plan.entityChanges().stream().map(StoredEntityChange::entityId).toList());
     }
 
     @Test
@@ -195,8 +198,7 @@ class PartialRestoreTargetStatePlannerTest {
             BuildProject project,
             List<ProjectVersion> versions,
             ProjectVersion current,
-            ProjectVersion target
-    ) throws Exception {
+            ProjectVersion target) throws Exception {
         return this.planner.plan(
                 layout,
                 project,
@@ -208,27 +210,25 @@ class PartialRestoreTargetStatePlannerTest {
                 PartialRestoreMode.SELECTED_AREA,
                 64,
                 64,
-                noop()
-        );
+                noop());
     }
 
     private void writeSnapshot(
             ProjectLayout layout,
             String snapshotId,
             Map<BlockPoint, String> blocks,
-            List<EntityPayload> entities
-    ) throws Exception {
+            List<EntityPayload> entities) throws Exception {
         this.snapshotWriter.writeFile(layout.snapshotFile(snapshotId), snapshot(blocks, entities));
     }
 
     private static SnapshotData snapshot(Map<BlockPoint, String> blocks, List<EntityPayload> entities) {
-        List<CompoundTag> palette = List.of(state("minecraft:air"), state("minecraft:stone"), state("minecraft:gold_block"), state("minecraft:diamond_block"));
+        List<CompoundTag> palette = List.of(state("minecraft:air"), state("minecraft:stone"),
+                state("minecraft:gold_block"), state("minecraft:diamond_block"));
         Map<String, Short> paletteIds = Map.of(
                 "minecraft:air", (short) 0,
                 "minecraft:stone", (short) 1,
                 "minecraft:gold_block", (short) 2,
-                "minecraft:diamond_block", (short) 3
-        );
+                "minecraft:diamond_block", (short) 3);
         short[] indexes = new short[4096];
         Map<Integer, CompoundTag> blockEntities = new HashMap<>();
         for (Map.Entry<BlockPoint, String> entry : blocks.entrySet()) {
@@ -245,9 +245,7 @@ class PartialRestoreTargetStatePlannerTest {
                         0,
                         List.of(new SnapshotSectionData(4, palette, indexes)),
                         blockEntities,
-                        entities
-                ))
-        );
+                        entities)));
     }
 
     private void writePatch(
@@ -255,16 +253,15 @@ class PartialRestoreTargetStatePlannerTest {
             String patchId,
             String versionId,
             List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges
-    ) throws Exception {
+            List<StoredEntityChange> entityChanges) throws Exception {
         this.patchMetaRepository.save(
                 layout,
-                this.patchDataRepository.writePayload(layout, patchId, "project", versionId, changes, entityChanges)
-        );
+                this.patchDataRepository.writePayload(layout, patchId, "project", versionId, changes, entityChanges));
     }
 
     private static StoredBlockChange change(BlockPoint pos, String oldBlock, String newBlock) {
-        return new StoredBlockChange(pos, new StatePayload(state(oldBlock), null), new StatePayload(state(newBlock), null));
+        return new StoredBlockChange(pos, new StatePayload(state(oldBlock), null),
+                new StatePayload(state(newBlock), null));
     }
 
     private static BuildProject boundedProject() {
@@ -273,8 +270,7 @@ class PartialRestoreTargetStatePlannerTest {
                 "minecraft:overworld",
                 new Bounds3i(point(0), point(15)),
                 point(0),
-                NOW
-        );
+                NOW);
     }
 
     private static ProjectVersion version(
@@ -282,8 +278,7 @@ class PartialRestoreTargetStatePlannerTest {
             String parentVersionId,
             String snapshotId,
             List<String> patchIds,
-            VersionKind kind
-    ) {
+            VersionKind kind) {
         return new ProjectVersion(
                 id,
                 "project",
@@ -297,8 +292,7 @@ class PartialRestoreTargetStatePlannerTest {
                 ChangeStats.empty(),
                 PreviewInfo.none(),
                 ExternalSourceInfo.manual(),
-                NOW
-        );
+                NOW);
     }
 
     private static BlockPoint point(int x) {
