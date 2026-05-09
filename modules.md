@@ -71,8 +71,8 @@ Use `src/main/java/io/github/luma/domain/model` for value objects, persisted rec
 
 - Project identity/settings: `BuildProject`, `ProjectSettings`, `ProjectVariant`, `ProjectVersion`, `VersionKind`, `WorldOriginInfo`.
 - Coordinates/bounds/chunks: `BlockPoint`, `Bounds3i`, `ChunkPoint`, `ChunkDelta`.
-- Stored changes and payloads: `StoredBlockChange`, `StoredEntityChange`, `StoredChangeAccumulator`, `StatePayload`, `EntityPayload`, `BlockPatch`, `PatchWorldChanges`, `PatchMetadata`, `PatchStats`, `PatchChunkSlice`.
-- Snapshots: `SnapshotRef`, `SnapshotData`, `SnapshotChunkData`, `SnapshotSectionData`, `ChunkSnapshotPayload`, `ChunkSectionSnapshotPayload`.
+- Stored changes and payloads: `StoredBlockChange`, `StoredEntityChange`, `StoredChangeAccumulator`, `StatePayload`, `EntityPayload`, `BlockPatch`, `PatchWorldChanges`, `PatchMetadata`, `PatchStats`, `PatchChunkSlice`, `SectionFingerprint`, `ChunkPayloadSlice`, `ContentRef`.
+- Snapshots: `SnapshotRef`, `SnapshotMetadata`, `SnapshotData`, `SnapshotChunkData`, `SnapshotSectionData`, `ChunkSnapshotPayload`, `ChunkSectionSnapshotPayload`.
 - Recovery: `RecoveryDraft`, `RecoveryDraftSummary`, `RecoveryJournalEntry`, `RestoreReturnPoint`.
 - Operations/progress/HUD: `OperationHandle`, `OperationProgress`, `OperationSnapshot`, `OperationStage`, `WorkspaceHudSnapshot`; native in-world progress is adapted by `WorldOperationBossBarManager`.
 - Diff/compare/material summaries: `VersionDiff`, `DiffBlockEntry`, `ChangeStats`, `PendingChangeSummary`, `MaterialDeltaEntry`.
@@ -125,8 +125,9 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 - `WorldOriginRepository`: shared `world-origin.json` manifest and corruption quarantine behavior.
 - `PatchRepository`: patch metadata/data facade.
 - `PatchMetaRepository`: `patches/*.meta.json` chunk index and lightweight patch metadata.
-- `PatchDataRepository`: `patches/*.bin.lz4` schema reads/writes and selective chunk-frame reads.
+- `PatchDataRepository`: `patches/*.bin.lz4` schema reads/writes, section fingerprint metadata, and selective chunk/section-frame reads.
 - `SnapshotRepository`, `SnapshotReader`, `SnapshotWriter`: checkpoint snapshot payload boundary.
+- `PayloadContentRepository`: content-addressed immutable payload blobs under `cache/content`.
 - `RecoveryRepository`: recovery draft, WAL, operation draft, journal, restore return point persistence.
 - `BaselineChunkRepository`: whole-dimension baseline chunks under `cache/baseline-chunks`.
 - `PreviewCaptureRequestRepository`: `preview-requests/*.json` queue.
@@ -143,7 +144,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `HistoryCaptureManager`: mixin-facing capture facade.
 - `CaptureSessionRegistry`: active buffers, dirty flags, session states, flush fingerprints.
 - `WorkingDraftSessionManager`: durable working draft session ownership, recovery draft persistence, freeze/consume/snapshot/discard, idle flushes, and post-save working-draft base rebasing.
-- `ActiveSessionRegionPolicy`: active causal-envelope and player-loaded chunk membership for secondary capture.
+- `ActiveSessionRegionPolicy`: active causal-envelope and player-loaded chunk membership for action-scoped secondary capture.
 - `CaptureDiagnosticsRegistry`, `CaptureSessionDiagnostics`: accepted mutation traces and capture summaries.
 - `TrackedProjectCatalog`, `ProjectCatalogCache`: active project metadata cache for capture matching, refreshed only by explicit invalidation.
 - `TrackedProject`, `ProjectTrackingIndex`: dimension/chunk membership for tracked workspaces.
@@ -154,9 +155,9 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `DeferredWorldMutationContext`, `DeferredWorldMutationContexts`: action/source/access propagation for delayed vanilla block events, scheduled ticks, and moving piston block entities so their settled fallout can join the originating live undo/redo action. Block events and scheduled ticks consume bounded mechanism depth so self-sustaining redstone clocks cannot regenerate the same action indefinitely; moving piston block entities preserve the existing piston action id without increasing that depth so chained piston carriers still reconcile their moved blocks. Dirty chunks reconcile only after a short tick-settle window unless a final save/freeze drain explicitly requires immediate loaded-chunk reconciliation; live undo/redo force-loads pending stabilization chunks before its pre-selection drain.
 - `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntityCausalContextRegistry`, `EntitySpawnCaptureQueue`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling, including player-caused death context and post-world-acceptance spawn snapshots that preserve the original live undo action order.
 - `AutoCheckpointService`, `AutoCheckpointCommandClassifier`: pending-draft auto checkpoints before large vanilla commands and external WorldEdit/Axiom edits.
-- `MutationSourcePolicy`: mutation source classification.
+- `MutationSourcePolicy`: mutation source classification, including causal-action gates for ambient growth, pending dirty-chunk redstone/piston fallback, and deferred physics fallout.
 - `ExplosiveEntityContextRegistry`: TNT/explosion causal context.
-- `SessionStabilizationService`: dirty chunk reconciliation before save/freeze/undo/redo; pending dirty chunks keep the latest causal action context so repeated mechanism toggles in one chunk reconcile into the selected live undo/redo action, even when the player is no longer close enough to keep those chunks loaded.
+- `SessionStabilizationService`: dirty chunk reconciliation before save/freeze/undo/redo; pending dirty chunks keep the latest causal action context so repeated mechanism toggles in one chunk reconcile into the selected live undo/redo action, even when the player is no longer close enough to keep those chunks loaded. Chunks that still contain transient `moving_piston` stay pending instead of being snapshotted as settled air.
 - `CapturePersistenceCoordinator`: separate async draft-flush and baseline-write queues for recovery and baseline persistence.
 - `ChunkSnapshotCaptureService`, `SnapshotCaptureService`: server-thread chunk/snapshot capture into immutable payloads.
 - `ChunkSectionOwnershipRegistry`, `ChunkSectionOwnerLookup`, `DirectSectionMutationCaptureService`: lower-level section owner fallback capture.

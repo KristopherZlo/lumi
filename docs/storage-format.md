@@ -70,6 +70,7 @@ Current project layout:
   preview-requests/
   recovery/
   cache/
+    content/
   locks/
 ```
 
@@ -242,22 +243,23 @@ Metadata reads must not require deserializing the full payload.
 
 ### `patches/<patchId>.bin.lz4`
 
-Patch payloads are the primary history format for tracked saves. New payloads use binary schema v8. The filename suffix remains `.bin.lz4`, but v7+ is not one monolithic LZ4 frame. It is a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames. The chunk offsets and lengths in `PatchChunkSlice` are physical file offsets for those frames, so readers can seek directly to selected chunks.
+Patch payloads are the primary history format for tracked saves. New payloads use binary schema v9. The filename suffix remains `.bin.lz4`, but v7+ is not one monolithic LZ4 frame. It is a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames. The chunk offsets and lengths in `PatchChunkSlice` are physical file offsets for those frames, so readers can seek directly to selected chunks.
 
 Current payload characteristics:
 
-- chunk-addressable per-chunk LZ4 frames for schema v7 and v8
+- chunk-addressable per-chunk LZ4 frames for schema v7, v8, and v9
 - chunk-sorted records
 - chunk -> section frames with a 4096-cell changed mask
+- schema v9 chunk metadata carries per-section fingerprints with `xxHash64` for fast comparisons and `SHA-256` for durable content identity
 - section-local old/new palettes for block states
 - section-local old/new palettes for block entity payloads
 - mask-order state and block-entity ids so restore can build `LumiSectionBuffer` batches without first materializing a flat per-block list
-- schema v8 writes a section-local hidden-change mask after the state/entity id arrays. Hidden changes are durable and replayable, but builder-facing stats, diffs, overlays, and preview bounds ignore them. Older v7 section frames and v6 point frames load with all block changes visible.
+- schema v8+ writes a section-local hidden-change mask after the state/entity id arrays. Hidden changes are durable and replayable, but builder-facing stats, diffs, overlays, and preview bounds ignore them. Older v7 section frames and v6 point frames load with all block changes visible.
 - per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload for non-player entity spawn/remove/update, including position and the saved entity NBT as captured by Minecraft; tick fields such as item age, motion, and pickup delay are not stripped before storage
 - block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
 - schema v3-v5 legacy payloads still load from the older single LZ4 stream format
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
-- settled redstone and mechanism state is stored with the normal block-state NBT already present in patch palettes. Lever/button `powered`, wire `power`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `piston_head`, and moved blocks are schema-compatible state deltas; no schema bump is needed because these properties already fit the existing block-state tag payload. Stabilization waits a short tick window after the last causal redstone or piston mutation before writing dirty-chunk deltas, so the storage layer receives settled cells instead of the in-flight piston animation. Apply preparation may synthesize missing settled piston head/removal companions from a recorded piston base for replay safety, may recover a retracted base when a raw undo target still references a transient moving-piston base, and may replace normalized transient air at the expected head position when an extended base requires it, but storage still contains ordinary per-position old/new state tags. Runtime replay queues vanilla neighbor updates from redstone power/source transitions after stored blocks have been applied; it does not add storage records for pulses or update events. Only short-lived `moving_piston` animation state is normalized to air before new patch payloads are written
+- settled redstone and mechanism state is stored with the normal block-state NBT already present in patch palettes. Lever/button `powered`, wire `power`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `piston_head`, and moved blocks are schema-compatible state deltas; no schema bump is needed because these properties already fit the existing block-state tag payload. Stabilization waits a short tick window after the last causal redstone or piston mutation and requeues dirty chunks that still contain `moving_piston` before writing dirty-chunk deltas, so the storage layer receives settled cells instead of the in-flight piston animation. Apply preparation may synthesize missing settled piston head/removal companions from a recorded piston base for replay safety, may recover a retracted base when a raw undo target still references a transient moving-piston base, and may replace normalized transient air at the expected head position when an extended base requires it, but storage still contains ordinary per-position old/new state tags. Runtime replay queues vanilla neighbor updates from redstone power/source transitions after stored blocks have been applied; it does not add storage records for pulses or update events. Only short-lived `moving_piston` animation state is normalized to air before new patch payloads are written
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
@@ -270,13 +272,15 @@ Checkpoint snapshots store a full project-area block state for reconstruction an
 
 Current snapshot characteristics:
 
-- LZ4 frame compressed binary stream
+- schema v6 uses a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames
+- each v6 chunk frame header includes section fingerprints, entity count, compressed length, and uncompressed length so selected reads can skip unrelated chunks without decompression
 - chunk -> section -> palette structure
 - only non-empty sections are stored
 - block entities are kept in a sparse side table keyed by local block index
 - schema v5 writes per-chunk non-player entity snapshots with position and persistent state; schema v3/v4 snapshots still load as block-only snapshots
-- `moving_piston` states are normalized to air during new snapshot capture; settled `piston_head` states and piston bases, including `extended=true`, are stored as normal block states. Snapshot restore applies the stored section state directly; it does not replay piston events or derive piston bases from head-only states, and replay completion is still derived from explicit piston bases instead of schema-specific storage records
-- restore planning can list snapshot chunks by scanning the length-prefixed structure and skipping NBT payload bytes, without materializing `SnapshotData` or deserializing block/entity tags
+- `moving_piston` states are normalized to air during new snapshot capture, but dirty redstone/piston stabilization first checks live chunks for `moving_piston` and delays reconciliation while that transient state is present. Settled `piston_head` states and piston bases, including `extended=true`, are stored as normal block states. Snapshot restore applies the stored section state directly; it does not replay piston events or derive piston bases from head-only states, and replay completion is still derived from explicit piston bases instead of schema-specific storage records
+- restore planning can list v6 snapshot chunks by scanning frame headers without materializing `SnapshotData` or deserializing block/entity tags
+- selected snapshot reads can materialize only requested chunk frames; legacy v3-v5 snapshots still require stream filtering after decompression
 - live chunk capture is performed on the Minecraft server thread into immutable compact payloads; snapshot storage only serializes and reads those prepared payloads
 - snapshot readers return persisted payloads, while Minecraft-layer preparers convert them into apply batches off the tick-thread path
 - snapshot readers bound chunk, section, palette, palette-index, block-entity, entity, and NBT lengths before allocating arrays; impossible palette indexes are rejected as corrupt storage
@@ -294,7 +298,7 @@ Whole-dimension projects do not create volume-triggered snapshots. They rely on 
 
 Preview images are textured isometric PNG files generated on the client per version when preview generation is enabled.
 
-Preview coverage is resolved from the visible changed block positions first, with a small context padding around that span. Hidden natural-growth changes are ignored so ambient crop/plant/amethyst updates do not move or invalidate screenshots. If precise visible change positions are unavailable, Lumi falls back to the touched visible chunk span for that save.
+Preview coverage is resolved from the visible changed block positions first, with a small context padding around that span. Hidden action-scoped growth changes are ignored so bonemeal crop/plant/amethyst updates do not move or invalidate screenshots, while unrelated ambient random ticks are skipped before storage. If precise visible change positions are unavailable, Lumi falls back to the touched visible chunk span for that save.
 
 Preview generation failure does not block version save.
 
@@ -348,6 +352,8 @@ If a full restore starts with unsaved draft changes, Lumi first writes a `RESTOR
 Reserved for future cache artifacts and rebuildable derived data.
 
 The `cache/baseline-chunks/` subtree is not rebuildable without touching the live world. It is part of archive export/import and must not be treated as disposable cache data by maintenance workflows. Each baseline file is written from a prepared compact chunk snapshot payload captured on the server thread, then compressed and persisted later by the capture-maintenance executor.
+
+`cache/content/` stores content-addressed immutable payload blobs keyed by SHA-256. These files are rebuildable from referenced history payloads or can be compacted by future idle maintenance, but compaction must never run on the server tick path.
 Other cache files are treated as disposable cleanup candidates.
 
 ### `locks/`
