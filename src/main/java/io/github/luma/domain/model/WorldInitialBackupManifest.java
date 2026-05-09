@@ -14,7 +14,7 @@ public record WorldInitialBackupManifest(
         Instant completedAt
 ) {
 
-    public static final int CURRENT_SCHEMA_VERSION = 1;
+    public static final int CURRENT_SCHEMA_VERSION = 2;
 
     public WorldInitialBackupManifest {
         levelName = levelName == null ? "" : levelName;

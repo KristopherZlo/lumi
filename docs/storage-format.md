@@ -109,7 +109,7 @@ Stores the one-time backup scan created after Lumi first opens an existing world
 
 The manifest records:
 
-- schema version
+- schema version, currently `2`
 - level name
 - world seed
 - classifier name

@@ -40,10 +40,13 @@ Shows:
 
 ```mcfunction
 /lumi testing singleplayer
+/lumi testing smoke
 /lumi testing structures
 ```
 
 Runs an integrated-server regression suite against the real in-world Lumi services. The command is singleplayer-only, refuses to start while another Lumi world operation is active, and needs a small empty air volume above the player's current chunk.
+
+`/lumi testing smoke` runs the shorter project smoke path. It creates a temporary bounded project, verifies world bootstrap storage, the pre-mod backup manifest and budget, snapshot section content refs, section-indexed patch reads, capture, pending diff, undo/redo, save, amend, branching, export, partial restore, full restore, integrity, and cleanup. It stops before gameplay, large-history, bulk-apply, and structure-fixture diagnostics.
 
 `/lumi testing structures` runs only the saved structure fixture diagnostics. It creates the same temporary bounded project, then skips the broader save, restore, gameplay, bulk apply, and performance phases.
 

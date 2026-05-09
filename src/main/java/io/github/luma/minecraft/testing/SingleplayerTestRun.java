@@ -10,7 +10,11 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestorePlanMode;
+import io.github.luma.domain.model.SectionFingerprint;
+import io.github.luma.domain.model.SnapshotMetadata;
 import io.github.luma.domain.model.VersionDiff;
+import io.github.luma.domain.model.WorldInitialBackupManifest;
+import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.domain.service.DiffService;
 import io.github.luma.domain.service.HistoryShareService;
@@ -29,6 +33,12 @@ import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
+import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.PatchDataRepository;
+import io.github.luma.storage.repository.PatchMetaRepository;
+import io.github.luma.storage.repository.SnapshotReader;
+import io.github.luma.storage.repository.WorldInitialBackupRepository;
+import io.github.luma.storage.repository.WorldOriginRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -76,6 +86,11 @@ final class SingleplayerTestRun {
     private final ProjectArchiveService archiveService = new ProjectArchiveService();
     private final HistoryShareService shareService = new HistoryShareService();
     private final MaterialDeltaService materialDeltaService = new MaterialDeltaService();
+    private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
+    private final WorldInitialBackupRepository worldInitialBackupRepository = new WorldInitialBackupRepository();
+    private final SnapshotReader snapshotReader = new SnapshotReader();
+    private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
+    private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final SingleplayerPerformanceMonitor performanceMonitor = new SingleplayerPerformanceMonitor();
 
@@ -159,6 +174,7 @@ final class SingleplayerTestRun {
             this.announcePhase(server);
             switch (this.phase) {
                 case CREATE_PROJECT -> this.createProject(server);
+                case CHECK_BOOTSTRAP_STORAGE -> this.checkBootstrapStorage(server);
                 case CAPTURE_DRAFT -> this.captureDraft(server);
                 case START_UNDO -> this.startUndo();
                 case CHECK_UNDO -> this.checkUndo();
@@ -223,7 +239,43 @@ final class SingleplayerTestRun {
         this.check("Fresh project integrity report is valid", () -> this.integrityService.inspect(server, projectName).valid());
         this.completePhase(server, this.mode == SingleplayerTestMode.STRUCTURE_FIXTURES
                 ? Phase.START_STRUCTURE_FIXTURE_TESTS
-                : Phase.CAPTURE_DRAFT);
+                : Phase.CHECK_BOOTSTRAP_STORAGE);
+    }
+
+    private void checkBootstrapStorage(MinecraftServer server) throws Exception {
+        this.projectService.bootstrapWorld(server);
+        Path worldRoot = server.getWorldPath(LevelResource.ROOT);
+        WorldOriginInfo origin = this.value("World-origin manifest can be loaded after bootstrap", () ->
+                this.worldOriginRepository.load(server).orElse(null));
+        WorldInitialBackupManifest backup = this.value("Pre-mod backup manifest can be loaded after bootstrap", () ->
+                this.worldInitialBackupRepository.load(worldRoot).orElse(null));
+
+        if (origin != null && backup != null) {
+            this.check(backup.completedForSeed(origin.seed()), "Pre-mod backup manifest completed for the current seed");
+            this.check(backup.maxCompressedBytes() >= 0L, "Pre-mod backup manifest records a storage budget");
+            long compressedBytes = backup.dimensions().values().stream()
+                    .mapToLong(WorldInitialBackupManifest.DimensionBackupSummary::compressedBytes)
+                    .sum();
+            this.check(backup.maxCompressedBytes() <= 0L || compressedBytes <= backup.maxCompressedBytes(),
+                    "Pre-mod backup compressed bytes stayed within budget");
+            this.check(backup.dimensions().values().stream()
+                            .allMatch(summary -> summary.backedUpChunks() <= summary.scannedChunks()),
+                    "Pre-mod backup never wrote more chunks than it scanned");
+        }
+
+        ProjectLayout layout = this.projectService.resolveLayout(server, this.project.name());
+        SnapshotMetadata initialSnapshot = this.value("Initial snapshot section index can be loaded", () ->
+                this.snapshotReader.loadSectionIndex(layout.snapshotFile(ProjectService.snapshotId(1))));
+        if (initialSnapshot != null) {
+            this.check(!initialSnapshot.chunks().isEmpty(), "Initial snapshot records chunk-addressable metadata");
+            if (initialSnapshot.sectionCount() > 0) {
+                this.check(initialSnapshot.chunks().stream()
+                                .filter(chunk -> !chunk.sectionFingerprints().isEmpty())
+                                .allMatch(chunk -> !chunk.contentRefs().isEmpty()),
+                        "Initial snapshot section metadata includes content refs");
+            }
+        }
+        this.completePhase(server, Phase.CAPTURE_DRAFT);
     }
 
     private void captureDraft(MinecraftServer server) throws Exception {
@@ -288,6 +340,31 @@ final class SingleplayerTestRun {
                 this.diffService.compareVersionToParent(server, this.project.name(), ProjectService.versionId(2)));
         if (diff != null) {
             this.check(diff.changedBlockCount() >= 3, "Saved version patch includes captured blocks");
+        }
+        ProjectVersion savedVersion = this.versionById(server, ProjectService.versionId(2));
+        if (savedVersion != null && !savedVersion.patchIds().isEmpty()) {
+            ProjectLayout layout = this.projectService.resolveLayout(server, this.project.name());
+            var metadata = this.value("Saved patch metadata can be loaded", () ->
+                    this.patchMetaRepository.load(layout, savedVersion.patchIds().getFirst()).orElse(null));
+            if (metadata != null) {
+                SectionFingerprint selectedSection = metadata.chunks().stream()
+                        .flatMap(chunk -> chunk.sectionFingerprints().stream())
+                        .findFirst()
+                        .orElse(null);
+                this.check(selectedSection != null, "Saved patch metadata includes section fingerprints");
+                if (selectedSection != null) {
+                    var selectedChanges = this.value("Saved patch selected-section payload can be read", () ->
+                            this.patchDataRepository.loadWorldChangesForSections(
+                                    layout,
+                                    metadata,
+                                    java.util.List.of(selectedSection)
+                            ));
+                    if (selectedChanges != null) {
+                        this.check(!selectedChanges.blockChanges().isEmpty(),
+                                "Selected-section patch read materializes block changes");
+                    }
+                }
+            }
         }
         this.check("Save consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
         this.check("Cleanup inspection runs as dry-run", () -> this.cleanupService.inspect(server, this.project.name()).dryRun());
@@ -392,7 +469,9 @@ final class SingleplayerTestRun {
     private void checkRestoreInitial(MinecraftServer server) throws Exception {
         this.check(this.volume.isAir(this.level), "Full restore returned the test volume to initial air");
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
-        this.completePhase(server, Phase.CHECK_PLAYER_INTERACTIONS);
+        this.completePhase(server, this.mode == SingleplayerTestMode.SMOKE
+                ? Phase.CLEANUP
+                : Phase.CHECK_PLAYER_INTERACTIONS);
     }
 
     private void checkPlayerInteractions(MinecraftServer server) throws Exception {
@@ -1193,6 +1272,10 @@ final class SingleplayerTestRun {
 
     private enum Phase {
         CREATE_PROJECT("Project setup", "create the temporary project and initial snapshot"),
+        CHECK_BOOTSTRAP_STORAGE(
+                "Bootstrap storage smoke",
+                "verify world-origin, pre-mod backup, snapshot refs, and storage migration bootstrap"
+        ),
         CAPTURE_DRAFT("Capture and pending diff", "record builder edits and inspect pending history"),
         START_UNDO("Queue live undo", "start undo through the operation model"),
         CHECK_UNDO("Verify live undo", "check the world after undo completes"),
@@ -1283,7 +1366,7 @@ final class SingleplayerTestRun {
                 return CLEANUP;
             }
             return switch (this) {
-                case CREATE_PROJECT, CAPTURE_DRAFT -> CLEANUP;
+                case CREATE_PROJECT, CHECK_BOOTSTRAP_STORAGE, CAPTURE_DRAFT -> CLEANUP;
                 case START_UNDO, CHECK_UNDO, START_REDO, CHECK_REDO -> START_SAVE;
                 case START_SAVE, CHECK_SAVE -> CLEANUP;
                 case START_AMEND, CHECK_AMEND -> START_BRANCH_SAVE;

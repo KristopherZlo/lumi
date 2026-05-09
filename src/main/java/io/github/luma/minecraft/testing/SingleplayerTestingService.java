@@ -35,6 +35,16 @@ public final class SingleplayerTestingService {
         return this.start(server, level, player, SingleplayerTestMode.FULL);
     }
 
+    public synchronized int startSmoke(CommandSourceStack source) throws Exception {
+        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
+                SingleplayerTestMode.SMOKE);
+    }
+
+    public synchronized int startSmoke(MinecraftServer server, ServerLevel level, ServerPlayer player)
+            throws Exception {
+        return this.start(server, level, player, SingleplayerTestMode.SMOKE);
+    }
+
     public synchronized int startStructureFixtures(CommandSourceStack source) throws Exception {
         return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
                 SingleplayerTestMode.STRUCTURE_FIXTURES);

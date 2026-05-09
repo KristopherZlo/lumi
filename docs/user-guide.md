@@ -790,6 +790,7 @@ Shows:
 
 ```mcfunction
 /lumi testing singleplayer
+/lumi testing smoke
 /lumi testing structures
 ```
 
@@ -800,7 +801,9 @@ They are singleplayer-only, require operator-level permission, refuse to start w
 `/lumi testing singleplayer` exercises real in-world Lumi services:
 
 - project creation;
+- world bootstrap storage;
 - initial snapshots;
+- snapshot section content refs;
 - capture;
 - recovery draft summaries;
 - current diff;
@@ -820,6 +823,8 @@ They are singleplayer-only, require operator-level permission, refuse to start w
 - large persisted history diagnostics;
 - bulk apply diagnostics;
 - structure-fixture diagnostics.
+
+`/lumi testing smoke` runs the shorter project smoke path. It covers world bootstrap, the pre-mod backup manifest and budget, snapshot content refs, section-indexed patch reads, capture, pending diff, undo/redo, save/amend, branch save/export, partial restore, full restore, integrity, cleanup, and then stops before gameplay, large-history, bulk-apply, and structure-fixture diagnostics.
 
 `/lumi testing structures` runs only the saved structure fixture diagnostics and skips the broader save/restore/gameplay/bulk phases.
 

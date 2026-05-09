@@ -271,10 +271,11 @@ It writes `logs/lumi-load.log` in the game run directory. Start with `type="summ
 Run the local in-world regression suite from a singleplayer save with cheats enabled:
 
 ```mcfunction
+/lumi testing smoke
 /lumi testing singleplayer
 ```
 
-This creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk. The run reports phase progress in chat, keeps a pass/fail report instead of stopping on the first failed check, verifies broad gameplay edits including a closed redstone loop, non-player entity position/state capture, quick rollback of a saved entity update, a `gameMode`-driven water bridge, and controlled TNT interaction can be undone/redone or restored back to the initial save, checks preview fulfillment after a gameplay save, checks a lightweight performance budget for scoped operations and synchronous tick work, and writes a detailed log under `<save>/lumi/test-logs/`.
+Use `/lumi testing smoke` for the shorter project smoke path. It creates and later archives a temporary bounded test project in an empty air volume above the player's current chunk, verifies bootstrap storage, the pre-mod backup manifest and budget, snapshot content refs, section-indexed patch reads, capture, save/amend, branch/export, partial restore, full restore, integrity, and cleanup. The full `/lumi testing singleplayer` run adds broad gameplay edits including a closed redstone loop, non-player entity position/state capture, quick rollback of a saved entity update, a `gameMode`-driven water bridge, controlled TNT undo/redo, performance budgets, large-history diagnostics, bulk apply diagnostics, and structure fixtures. Both commands report phase progress in chat, keep a pass/fail report instead of stopping on the first failed check, and write a detailed log under `<save>/lumi/test-logs/`.
 
 Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` artifacts so the folder only keeps the current `lumi-*` outputs.
 
@@ -300,7 +301,7 @@ Artifacts go to `build/libs/`. Packaging tasks also prune stale legacy `luma-*` 
 Current scope:
 
 - singleplayer / integrated-server first
-- menu flow first, with commands limited to diagnostics/help and the explicit `/lumi testing singleplayer` runtime test suite
+- menu flow first, with commands limited to diagnostics/help and the explicit `/lumi testing smoke` and `/lumi testing singleplayer` runtime test suites
 - combine currently works through imported review projects for the same project lineage, with background review, block-level same-area detection, and validation messages before Lumi writes a combined save
 - partial restore is available from save details with manual bounds or a wooden-sword Lumi selection, including inside-selection and everything-except-selection modes
 - compare overlay marks changed positions, not a full 3D preview; large compare diffs and large world-highlight preparation run asynchronously, cache exposed changed-block meshes by section, and reuse uploaded GPU buffers between frames, while extremely large comparisons collapse into bounded tiled volume blobs so the client does not build unbounded overlay geometry
