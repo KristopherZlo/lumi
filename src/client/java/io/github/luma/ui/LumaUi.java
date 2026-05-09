@@ -41,6 +41,7 @@ public final class LumaUi {
     private static final int PRIMARY_BUTTON_HOVER = 0xFF936D29;
     private static final int STATUS_FILL = 0xFF211F18;
     private static final int STATUS_BORDER = 0xFF5A4724;
+    private static final int BUTTON_WRAP_BOTTOM_MARGIN = 4;
     private static final int VALUE_WRAP_WIDTH = 420;
     private static final int BODY_WRAP_WIDTH = 360;
 
@@ -292,6 +293,7 @@ public final class LumaUi {
                 selected ? STATUS_FILL : BUTTON_DISABLED
         );
         button.sizing(Sizing.fill(100), Sizing.fixed(20));
+        button.margins(Insets.none());
         button.active(true);
         return button;
     }
@@ -328,6 +330,7 @@ public final class LumaUi {
         button.renderer(ButtonComponent.Renderer.flat(fill, hover, disabled));
         button.textShadow(false);
         button.sizing(Sizing.content(5), Sizing.fixed(18));
+        button.margins(Insets.bottom(BUTTON_WRAP_BOTTOM_MARGIN));
         button.cursorStyle(CursorStyle.HAND);
         return button;
     }

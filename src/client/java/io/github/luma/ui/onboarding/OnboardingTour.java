@@ -27,7 +27,6 @@ public final class OnboardingTour {
 
     private static final int MIN_DIALOG_WIDTH = 300;
     private static final int MAX_DIALOG_WIDTH = 320;
-    private static final int WORLD_CHANGE_DELAY_TICKS = 20;
     private static final List<Page> PAGES = List.of(
             Page.info("welcome"),
             Page.hold(
@@ -61,8 +60,6 @@ public final class OnboardingTour {
     private final OnboardingHoldGate holdGate = new OnboardingHoldGate();
     private OnboardingFlowState flow = OnboardingFlowState.first(PAGES.size());
     private long lastHoldSampleMillis;
-    private int hiddenTicks;
-    private int visibleAdvanceTicks;
 
     public static int pageCount() {
         return PAGES.size();
@@ -73,21 +70,6 @@ public final class OnboardingTour {
     }
 
     public Transition tick() {
-        if (this.visibleAdvanceTicks > 0) {
-            this.visibleAdvanceTicks -= 1;
-            if (this.visibleAdvanceTicks == 0) {
-                this.flow = this.flow.next();
-                this.resetHoldGate();
-                return Transition.REBUILD;
-            }
-            return Transition.NONE;
-        }
-
-        if (this.hiddenTicks > 0) {
-            this.hiddenTicks -= 1;
-            return this.hiddenTicks == 0 ? Transition.REBUILD : Transition.NONE;
-        }
-
         Page page = this.currentPage();
         ShortcutCheck check = page.shortcutCheck();
         if (check == null || this.shortcutUnbound(check.shortcut())) {
@@ -167,7 +149,7 @@ public final class OnboardingTour {
     }
 
     public boolean hidden() {
-        return this.hiddenTicks > 0;
+        return false;
     }
 
     public String currentPageId() {
@@ -375,14 +357,8 @@ public final class OnboardingTour {
         if (this.flow.lastPage()) {
             return Transition.COMPLETE;
         }
-        if (page.onHold() == Transition.EXECUTE_REDO) {
-            this.visibleAdvanceTicks = WORLD_CHANGE_DELAY_TICKS;
-            return page.onHold();
-        }
         this.flow = this.flow.next();
-        if (page.onHold() == Transition.EXECUTE_UNDO) {
-            this.hiddenTicks = WORLD_CHANGE_DELAY_TICKS;
-        }
+        this.resetHoldGate();
         return page.onHold();
     }
 

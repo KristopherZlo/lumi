@@ -2,6 +2,7 @@ package io.github.luma.ui.screen;
 
 import io.github.luma.client.input.LumiShortcutSuppressingScreen;
 import io.github.luma.client.input.UndoRedoKeyController;
+import io.github.luma.client.onboarding.ClientOnboardingFlowCoordinator;
 import io.github.luma.client.onboarding.ClientOnboardingService;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.navigation.ScreenRouter;
@@ -123,14 +124,7 @@ public final class OnboardingScreen extends LumaScreen implements LumiShortcutSu
             case OPEN_WORKSPACE -> this.openWorkspaceWithOnboarding();
             case CLOSE_WORKSPACE -> this.closeWorkspaceForWorldStep();
             case OPEN_CONTROLS -> this.openControls();
-            case EXECUTE_UNDO -> {
-                this.executeUndo();
-                this.rebuild();
-            }
-            case EXECUTE_REDO -> {
-                this.executeRedo();
-                this.rebuild();
-            }
+            case EXECUTE_UNDO, EXECUTE_REDO -> this.executeWorldPreview(transition);
             case COMPLETE -> this.completeAndOpenWorkspace();
             case NONE -> {
             }
@@ -163,6 +157,23 @@ public final class OnboardingScreen extends LumaScreen implements LumiShortcutSu
     }
 
     private void closeWorkspaceForWorldStep() {
+        Minecraft.getInstance().setScreen(null);
+    }
+
+    private void executeWorldPreview(OnboardingTour.Transition transition) {
+        if (transition == OnboardingTour.Transition.EXECUTE_UNDO) {
+            this.executeUndo();
+        } else if (transition == OnboardingTour.Transition.EXECUTE_REDO) {
+            this.executeRedo();
+        }
+        ClientOnboardingFlowCoordinator.getInstance().startWorldPreviewStep(
+                this.projectName,
+                this.variantId,
+                this.statusKey,
+                this.onboardingService,
+                this.tour,
+                transition
+        );
         Minecraft.getInstance().setScreen(null);
     }
 

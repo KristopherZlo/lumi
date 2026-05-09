@@ -271,8 +271,13 @@ public final class LumaClient implements ClientModInitializer {
     }
 
     private boolean lumiShortcutsSuppressed(Minecraft client) {
-        return client != null
-                && client.screen instanceof LumiShortcutSuppressingScreen suppressingScreen
+        if (client == null) {
+            return false;
+        }
+        if (ClientOnboardingFlowCoordinator.getInstance().suppressesLumiShortcuts()) {
+            return true;
+        }
+        return client.screen instanceof LumiShortcutSuppressingScreen suppressingScreen
                 && suppressingScreen.suppressesLumiShortcuts();
     }
 
