@@ -2,6 +2,7 @@ package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.ContentRef;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.SnapshotChunkData;
@@ -26,10 +27,16 @@ import net.jpountz.lz4.LZ4FrameOutputStream;
 public final class SnapshotWriter {
 
     private static final int MAGIC = 0x4C534E50;
-    private static final int VERSION = 6;
+    private static final int VERSION = 7;
+    private static final String SNAPSHOT_SECTION_CONTENT = "snapshot-section";
+    private final PayloadContentRepository contentRepository = new PayloadContentRepository();
 
     public void writeFile(Path snapshotFile, SnapshotData snapshot) throws IOException {
         StorageIo.writeAtomically(snapshotFile, output -> this.writeCompressed(output, snapshot));
+    }
+
+    public void writeFile(ProjectLayout layout, Path snapshotFile, SnapshotData snapshot) throws IOException {
+        this.writeFile(snapshotFile, this.withContentRefs(layout, snapshot));
     }
 
     public void writePreparedChunkFile(
@@ -50,6 +57,27 @@ public final class SnapshotWriter {
         this.writeFile(snapshotFile, this.materializePreparedSnapshot(projectId, chunks, now));
     }
 
+    public void writePreparedChunkFile(
+            ProjectLayout layout,
+            Path snapshotFile,
+            String projectId,
+            ChunkSnapshotPayload chunk,
+            Instant now
+    ) throws IOException {
+        this.writePreparedChunkFile(layout, snapshotFile, projectId, List.of(chunk), now);
+    }
+
+    public void writePreparedChunkFile(
+            ProjectLayout layout,
+            Path snapshotFile,
+            String projectId,
+            Collection<ChunkSnapshotPayload> chunks,
+            Instant now
+    ) throws IOException {
+        SnapshotData snapshot = this.withContentRefs(layout, this.materializePreparedSnapshot(projectId, chunks, now));
+        this.writeFile(snapshotFile, snapshot);
+    }
+
     public SnapshotRef writePreparedSnapshot(
             ProjectLayout layout,
             String projectId,
@@ -57,7 +85,7 @@ public final class SnapshotWriter {
             Collection<ChunkSnapshotPayload> chunks,
             Instant now
     ) throws IOException {
-        SnapshotData snapshot = this.materializePreparedSnapshot(projectId, chunks, now);
+        SnapshotData snapshot = this.withContentRefs(layout, this.materializePreparedSnapshot(projectId, chunks, now));
         Path snapshotFile = layout.snapshotFile(snapshotId);
         this.writeFile(snapshotFile, snapshot);
         return new SnapshotRef(
@@ -130,7 +158,20 @@ public final class SnapshotWriter {
             data.writeInt(fingerprint.changedCount());
             data.writeLong(fingerprint.xxHash64());
             data.writeUTF(fingerprint.sha256());
+            this.writeContentRef(data, section.contentRef());
         }
+    }
+
+    private void writeContentRef(DataOutputStream data, ContentRef contentRef) throws IOException {
+        boolean present = contentRef != null && !contentRef.sha256().isBlank();
+        data.writeBoolean(present);
+        if (!present) {
+            return;
+        }
+        data.writeUTF(contentRef.sha256());
+        data.writeUTF(contentRef.logicalKind());
+        data.writeLong(contentRef.uncompressedBytes());
+        data.writeLong(contentRef.compressedBytes());
     }
 
     private byte[] sectionBytes(SnapshotSectionData section) throws IOException {
@@ -176,6 +217,40 @@ public final class SnapshotWriter {
             chunkData.add(this.materializePreparedChunk(chunk));
         }
         return new SnapshotData(projectId, now, minBuildHeight, maxBuildHeight, chunkData);
+    }
+
+    private SnapshotData withContentRefs(ProjectLayout layout, SnapshotData snapshot) throws IOException {
+        if (layout == null || snapshot == null || snapshot.chunks().isEmpty()) {
+            return snapshot;
+        }
+        List<SnapshotChunkData> chunks = new ArrayList<>(snapshot.chunks().size());
+        for (SnapshotChunkData chunk : snapshot.chunks()) {
+            List<SnapshotSectionData> sections = new ArrayList<>(chunk.sections().size());
+            for (SnapshotSectionData section : chunk.sections()) {
+                byte[] bytes = this.sectionBytes(section);
+                ContentRef contentRef = this.contentRepository.writeContent(layout, SNAPSHOT_SECTION_CONTENT, bytes);
+                sections.add(new SnapshotSectionData(
+                        section.sectionY(),
+                        section.palette(),
+                        section.paletteIndexes(),
+                        contentRef
+                ));
+            }
+            chunks.add(new SnapshotChunkData(
+                    chunk.chunkX(),
+                    chunk.chunkZ(),
+                    sections,
+                    chunk.blockEntities(),
+                    chunk.entitySnapshots()
+            ));
+        }
+        return new SnapshotData(
+                snapshot.projectId(),
+                snapshot.createdAt(),
+                snapshot.minBuildHeight(),
+                snapshot.maxBuildHeight(),
+                chunks
+        );
     }
 
     private SnapshotChunkData materializePreparedChunk(ChunkSnapshotPayload chunk) {

@@ -29,6 +29,7 @@ public final class BaselineChunkRepository {
         }
 
         this.snapshotWriter.writePreparedChunkFile(
+                layout,
                 baselineFile,
                 projectId,
                 chunkSnapshot,

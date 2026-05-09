@@ -21,6 +21,7 @@ public final class ProjectIntegrityService {
     private static final int PATCH_SECTION_FINGERPRINT_V9 = 9;
     private static final int SNAPSHOT_MAGIC = 0x4C534E50;
     private static final int SNAPSHOT_ADDRESSABLE_V6 = 6;
+    private static final int SNAPSHOT_CONTENT_REF_V7 = 7;
 
     private final ProjectService projectService = new ProjectService();
     private final io.github.luma.storage.repository.VersionRepository versionRepository = new io.github.luma.storage.repository.VersionRepository();
@@ -122,7 +123,8 @@ public final class ProjectIntegrityService {
                 int magic = input.readInt();
                 int version = input.readInt();
                 if (magic == SNAPSHOT_MAGIC) {
-                    return version == SNAPSHOT_ADDRESSABLE_V6;
+                    return version == SNAPSHOT_ADDRESSABLE_V6
+                            || version == SNAPSHOT_CONTENT_REF_V7;
                 }
             }
         } catch (IOException exception) {

@@ -6,6 +6,7 @@ import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
+import io.github.luma.storage.ProjectLayout;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.nio.file.Path;
@@ -219,6 +220,44 @@ class SnapshotStorageTest {
         assertEquals(1, metadata.entityCount());
         assertEquals(2, metadata.chunks().getFirst().sectionFingerprints().size());
         assertEquals(64, metadata.chunks().getFirst().sectionFingerprints().getFirst().sha256().length());
+    }
+
+    @Test
+    void preparedSnapshotsWireSectionContentRefsIntoFrameIndex() throws Exception {
+        short[] indexes = new short[4096];
+        indexes[0] = 1;
+        ChunkSectionSnapshotPayload section = new ChunkSectionSnapshotPayload(
+                0,
+                List.of(state("minecraft:air"), state("minecraft:stone")),
+                packIndexes(indexes, 1),
+                1
+        );
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("content-ref-project.mbp"));
+
+        this.writer.writePreparedSnapshot(
+                layout,
+                "project",
+                "snapshot-content-ref",
+                List.of(
+                        new ChunkSnapshotPayload(0, 0, 0, 15, List.of(section), Map.of(), List.of()),
+                        new ChunkSnapshotPayload(1, 0, 0, 15, List.of(section), Map.of(), List.of())
+                ),
+                Instant.parse("2026-04-20T10:00:00Z")
+        );
+
+        var metadata = this.reader.loadSectionIndex(layout.snapshotFile("snapshot-content-ref"));
+        assertEquals(2, metadata.sectionCount());
+        assertEquals(1, Files.list(layout.contentCacheDir()).count());
+        assertEquals(
+                metadata.chunks().getFirst().contentRefs().getFirst().sha256(),
+                metadata.chunks().get(1).contentRefs().getFirst().sha256()
+        );
+
+        SnapshotData restored = this.reader.readFile(layout.snapshotFile("snapshot-content-ref"));
+        assertEquals(
+                metadata.chunks().getFirst().contentRefs().getFirst().sha256(),
+                restored.chunks().getFirst().sections().getFirst().contentRef().sha256()
+        );
     }
 
     @Test

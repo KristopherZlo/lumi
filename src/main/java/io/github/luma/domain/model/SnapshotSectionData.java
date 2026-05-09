@@ -6,6 +6,11 @@ import net.minecraft.nbt.CompoundTag;
 public record SnapshotSectionData(
         int sectionY,
         List<CompoundTag> palette,
-        short[] paletteIndexes
+        short[] paletteIndexes,
+        ContentRef contentRef
 ) {
+
+    public SnapshotSectionData(int sectionY, List<CompoundTag> palette, short[] paletteIndexes) {
+        this(sectionY, palette, paletteIndexes, null);
+    }
 }
