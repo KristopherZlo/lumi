@@ -6,6 +6,7 @@ import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.state.ProjectHomeViewState;
+import java.util.Objects;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Minecraft;
@@ -30,6 +31,7 @@ public final class ClientOnboardingFlowCoordinator {
     private static final ClientOnboardingFlowCoordinator INSTANCE = new ClientOnboardingFlowCoordinator();
 
     private final ProjectHomeScreenController stateController = new ProjectHomeScreenController();
+    private final OnboardingWorldPreviewShortcutController worldPreviewShortcuts;
     private String projectName = "";
     private String variantId = "";
     private String statusKey = "luma.status.project_ready";
@@ -41,6 +43,11 @@ public final class ClientOnboardingFlowCoordinator {
     private OnboardingTour.Transition worldPreviewTransition = OnboardingTour.Transition.NONE;
 
     private ClientOnboardingFlowCoordinator() {
+        this(new OnboardingWorldPreviewShortcutController());
+    }
+
+    ClientOnboardingFlowCoordinator(OnboardingWorldPreviewShortcutController worldPreviewShortcuts) {
+        this.worldPreviewShortcuts = Objects.requireNonNull(worldPreviewShortcuts, "worldPreviewShortcuts");
     }
 
     public static ClientOnboardingFlowCoordinator getInstance() {
@@ -71,6 +78,7 @@ public final class ClientOnboardingFlowCoordinator {
         this.refreshCooldown = 0;
         this.worldPreviewTicks = 0;
         this.worldPreviewTransition = OnboardingTour.Transition.NONE;
+        this.worldPreviewShortcuts.clear();
     }
 
     public void startWorldPreviewStep(
@@ -90,6 +98,7 @@ public final class ClientOnboardingFlowCoordinator {
         this.refreshCooldown = 0;
         this.worldPreviewTicks = WORLD_PREVIEW_TICKS;
         this.worldPreviewTransition = transition == null ? OnboardingTour.Transition.NONE : transition;
+        this.worldPreviewShortcuts.start(this.worldPreviewTransition);
     }
 
     public boolean suppressesLumiShortcuts() {
@@ -150,6 +159,7 @@ public final class ClientOnboardingFlowCoordinator {
         if (client.screen != null) {
             return;
         }
+        this.worldPreviewShortcuts.tick(client);
         this.worldPreviewTicks -= 1;
         if (this.worldPreviewTicks > 0) {
             return;
@@ -266,5 +276,6 @@ public final class ClientOnboardingFlowCoordinator {
         this.refreshCooldown = 0;
         this.worldPreviewTicks = 0;
         this.worldPreviewTransition = OnboardingTour.Transition.NONE;
+        this.worldPreviewShortcuts.clear();
     }
 }
