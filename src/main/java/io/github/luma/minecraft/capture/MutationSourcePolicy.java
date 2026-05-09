@@ -97,20 +97,38 @@ final class MutationSourcePolicy {
     boolean canCaptureDeferredPreMutationBaseline(
             BuildProject project,
             WorldMutationSource source,
-            boolean activeSessionRegion
+            boolean activeSessionRegion,
+            String actionId
     ) {
         return activeSessionRegion
                 && this.requiresActiveRegionMembership(source)
-                && this.usesDeferredStabilization(project, source);
+                && this.usesDeferredStabilization(project, source)
+                && this.canUseDeferredStabilization(source, actionId);
     }
 
     boolean requiresCausalActionForDeferredStabilization(WorldMutationSource source) {
-        return source == WorldMutationSource.BLOCK_UPDATE || source == WorldMutationSource.PISTON;
+        return source == WorldMutationSource.BLOCK_UPDATE
+                || source == WorldMutationSource.PISTON
+                || source == WorldMutationSource.FLUID
+                || source == WorldMutationSource.FALLING_BLOCK;
     }
 
     boolean canUseDeferredStabilization(WorldMutationSource source, String actionId) {
         return !this.requiresCausalActionForDeferredStabilization(source)
-                || (actionId != null && !actionId.isBlank());
+                || this.hasCausalAction(actionId);
+    }
+
+    boolean requiresCausalActionForDirectCapture(WorldMutationSource source) {
+        return source == WorldMutationSource.GROWTH;
+    }
+
+    boolean canUseDirectCapture(WorldMutationSource source, String actionId) {
+        return !this.requiresCausalActionForDirectCapture(source)
+                || this.hasCausalAction(actionId);
+    }
+
+    private boolean hasCausalAction(String actionId) {
+        return actionId != null && !actionId.isBlank();
     }
 
     String defaultActor(WorldMutationSource source) {

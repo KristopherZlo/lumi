@@ -35,7 +35,7 @@ abstract class StemBlockMixin {
             BlockState state,
             Operation<Void> original
     ) {
-        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.GROWTH)) {
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushCausalSource(WorldMutationSource.GROWTH)) {
             original.call(level, random, pos, state);
         }
     }

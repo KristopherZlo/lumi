@@ -68,9 +68,23 @@ public final class HistoryDebugLog {
 
     public void logDeferredBlock(BuildProject project, WorldMutationSource source, BlockPos pos, BlockState oldState,
             BlockState liveState, int pendingSize) {
+        this.logDeferredBlock(
+                project,
+                source,
+                pos,
+                oldState,
+                liveState,
+                pendingSize,
+                WorldMutationContext.currentActionId(),
+                WorldMutationContext.currentActor()
+        );
+    }
+
+    public void logDeferredBlock(BuildProject project, WorldMutationSource source, BlockPos pos, BlockState oldState,
+            BlockState liveState, int pendingSize, String actionId, String actor) {
         if (LumaDebugLog.enabled(project)) {
             LumaDebugLog.log(project, "capture-block", "Deferred route=stabilization source={} action={} actor={} pos={} old={} live={} pending={}",
-                    source, blank(WorldMutationContext.currentActionId()), WorldMutationContext.currentActor(),
+                    source, blank(actionId), actor == null || actor.isBlank() ? "world" : actor,
                     this.format(pos), this.describe(oldState), this.describe(liveState), pendingSize);
         }
     }

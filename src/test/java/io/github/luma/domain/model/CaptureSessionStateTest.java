@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CaptureSessionStateTest {
@@ -99,6 +100,8 @@ class CaptureSessionStateTest {
                 state.deferredActionContexts(List.of(new ChunkPoint(0, 0), new ChunkPoint(1, 0)))
                         .get(new ChunkPoint(0, 0))
         );
+        assertEquals(deferredAction, state.deferredActionContext(new ChunkPoint(0, 0)));
+        assertNull(state.deferredActionContext(new ChunkPoint(1, 0)));
 
         state.finishReconciliation(drained);
         assertFalse(state.reconciliationInFlight());

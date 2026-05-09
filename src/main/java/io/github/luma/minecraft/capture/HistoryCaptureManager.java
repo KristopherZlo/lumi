@@ -13,8 +13,9 @@ import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
-import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.minecraft.debug.HistoryDebugLog;
+import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.VariantRepository;
@@ -71,6 +72,7 @@ public final class HistoryCaptureManager {
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final ActiveSessionRegionPolicy activeSessionRegionPolicy = new ActiveSessionRegionPolicy();
+    private final PersistentBlockStatePolicy persistentBlockStatePolicy = new PersistentBlockStatePolicy();
     private long idleFlushTicker;
 
     private HistoryCaptureManager() {
@@ -95,8 +97,7 @@ public final class HistoryCaptureManager {
         if (level == null
                 || pos == null
                 || !shouldCaptureMutation(source)
-                || !this.canUseMutationSource(level.getServer(), source)
-                || (!explicitRootSource && !this.canUseDeferredStabilization(source))) {
+                || !this.canUseMutationSource(level.getServer(), source)) {
             return;
         }
 
@@ -117,12 +118,15 @@ public final class HistoryCaptureManager {
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
                 boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
+                CaptureSessionState.DeferredActionContext deferredActionContext =
+                        this.deferredActionContext(existingSession, chunk, source);
                 if (!explicitRootSource
                         && (existingSession == null
                         || !SOURCE_POLICY.canCaptureDeferredPreMutationBaseline(
                                 trackedProject.project(),
                                 source,
-                                activeSessionRegion
+                                activeSessionRegion,
+                                actionId(deferredActionContext)
                         ))) {
                     continue;
                 }
@@ -146,6 +150,9 @@ public final class HistoryCaptureManager {
                 }
 
                 this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
+                if (!explicitRootSource) {
+                    this.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
+                }
                 if (explicitRootSource) {
                     session.addRootChunk(chunk);
                 }
@@ -228,8 +235,13 @@ public final class HistoryCaptureManager {
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
+                String projectId = trackedProject.project().id().toString();
+                CaptureSessionState existingSession = this.workingDrafts.session(projectId);
+                ChunkPoint chunk = ChunkPoint.from(pos);
+                CaptureSessionState.DeferredActionContext deferredActionContext =
+                        this.deferredActionContext(existingSession, chunk, source);
                 if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION
-                        && !this.canUseDeferredStabilization(source)) {
+                        && !this.canUseDeferredStabilization(source, deferredActionContext)) {
                     LumaDebugLog.log(
                             trackedProject.project(),
                             "capture",
@@ -264,9 +276,6 @@ public final class HistoryCaptureManager {
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
-                String projectId = trackedProject.project().id().toString();
-                CaptureSessionState existingSession = this.workingDrafts.session(projectId);
-                ChunkPoint chunk = ChunkPoint.from(pos);
                 boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
                 if (!this.ensureTrackedChunk(
                         trackedProject,
@@ -289,7 +298,8 @@ public final class HistoryCaptureManager {
                             chunk,
                             oldState,
                             oldBlockEntity,
-                            now
+                            now,
+                            deferredActionContext
                     );
                     continue;
                 }
@@ -322,7 +332,11 @@ public final class HistoryCaptureManager {
                         continue;
                     }
                     this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
-                    session.markDirtyChunk(chunk, this.deferredActionContext(), level.getGameTime());
+                    session.markDirtyChunk(
+                            chunk,
+                            this.deferredActionContext(session, chunk, source),
+                            level.getGameTime()
+                    );
                     this.workingDrafts.markDirty(projectId);
                     LumaDebugLog.log(
                         trackedProject.project(),
@@ -1187,6 +1201,17 @@ public final class HistoryCaptureManager {
     ) {
         String projectId = trackedProject.project().id().toString();
         if (this.workingDrafts.hasBuffer(projectId)) {
+            if (!SOURCE_POLICY.canUseDirectCapture(source, WorldMutationContext.currentActionId())) {
+                LumaDebugLog.log(
+                        trackedProject.project(),
+                        "capture",
+                        "Skipped {} mutation at {} for project {} because no causal action is active",
+                        source,
+                        pos,
+                        trackedProject.project().name()
+                );
+                return false;
+            }
             if (!requiresActiveRegionMembership(source)) {
                 return true;
             }
@@ -1237,8 +1262,11 @@ public final class HistoryCaptureManager {
         return SOURCE_POLICY.usesDeferredStabilization(project, source);
     }
 
-    private boolean canUseDeferredStabilization(io.github.luma.domain.model.WorldMutationSource source) {
-        return SOURCE_POLICY.canUseDeferredStabilization(source, WorldMutationContext.currentActionId());
+    private boolean canUseDeferredStabilization(
+            io.github.luma.domain.model.WorldMutationSource source,
+            CaptureSessionState.DeferredActionContext deferredActionContext
+    ) {
+        return SOURCE_POLICY.canUseDeferredStabilization(source, actionId(deferredActionContext));
     }
 
     private void recordDeferredBlockMutation(
@@ -1249,7 +1277,8 @@ public final class HistoryCaptureManager {
             ChunkPoint chunk,
             BlockState oldState,
             CompoundTag oldBlockEntity,
-            Instant now
+            Instant now,
+            CaptureSessionState.DeferredActionContext deferredActionContext
     ) throws IOException {
         String projectId = trackedProject.project().id().toString();
         TrackedChangeBuffer buffer = this.getOrCreateWorkingDraft(trackedProject, source, now);
@@ -1260,11 +1289,9 @@ public final class HistoryCaptureManager {
         if (this.isExplicitRootSource(source)) {
             session.addRootChunk(chunk);
         }
-        if (!session.isRootChunk(chunk)) {
-            session.recordBaselineCorrection(BlockPoint.from(pos), StatePayload.capture(oldState, oldBlockEntity));
-        }
+        this.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
         this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
-        session.markDirtyChunk(chunk, this.deferredActionContext(), level.getGameTime());
+        session.markDirtyChunk(chunk, deferredActionContext, level.getGameTime());
         this.workingDrafts.markDirty(projectId);
         CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
         diagnostics.record(
@@ -1292,7 +1319,9 @@ public final class HistoryCaptureManager {
                 pos,
                 oldState,
                 level.getBlockState(pos),
-                buffer.size()
+                buffer.size(),
+                actionId(deferredActionContext),
+                actor(deferredActionContext)
         );
     }
 
@@ -1318,6 +1347,23 @@ public final class HistoryCaptureManager {
                         oldState,
                         oldBlockEntity
                 )
+        );
+    }
+
+    private void recordBaselineCorrection(
+            CaptureSessionState session,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity
+    ) {
+        if (session == null || pos == null) {
+            return;
+        }
+        PersistentBlockStatePolicy.PersistentBlockState persistentState =
+                this.persistentBlockStatePolicy.normalize(oldState, oldBlockEntity);
+        session.recordBaselineCorrection(
+                BlockPoint.from(pos),
+                StatePayload.capture(persistentState.state(), persistentState.blockEntityTag())
         );
     }
 
@@ -1389,7 +1435,22 @@ public final class HistoryCaptureManager {
         }
     }
 
-    private CaptureSessionState.DeferredActionContext deferredActionContext() {
+    private CaptureSessionState.DeferredActionContext deferredActionContext(
+            CaptureSessionState session,
+            ChunkPoint chunk,
+            io.github.luma.domain.model.WorldMutationSource source
+    ) {
+        CaptureSessionState.DeferredActionContext currentContext = this.currentDeferredActionContext();
+        if (currentContext != null) {
+            return currentContext;
+        }
+        if (!canReusePendingMechanismAction(source) || session == null) {
+            return null;
+        }
+        return session.deferredActionContext(chunk);
+    }
+
+    private CaptureSessionState.DeferredActionContext currentDeferredActionContext() {
         String actionId = WorldMutationContext.currentActionId();
         if (actionId == null || actionId.isBlank()) {
             return null;
@@ -1399,6 +1460,19 @@ public final class HistoryCaptureManager {
                 WorldMutationContext.currentActor(),
                 WorldMutationContext.currentAccessAllowed()
         );
+    }
+
+    private static boolean canReusePendingMechanismAction(io.github.luma.domain.model.WorldMutationSource source) {
+        return source == io.github.luma.domain.model.WorldMutationSource.BLOCK_UPDATE
+                || source == io.github.luma.domain.model.WorldMutationSource.PISTON;
+    }
+
+    private static String actionId(CaptureSessionState.DeferredActionContext context) {
+        return context == null ? "" : context.actionId();
+    }
+
+    private static String actor(CaptureSessionState.DeferredActionContext context) {
+        return context == null ? "" : context.actor();
     }
 
     private ServerLevel resolveProjectLevel(MinecraftServer server, BuildProject project) {

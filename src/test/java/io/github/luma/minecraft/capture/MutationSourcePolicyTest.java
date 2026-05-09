@@ -51,13 +51,27 @@ class MutationSourcePolicyTest {
     }
 
     @Test
-    void nonMechanismDeferredSourcesCanStillUseAmbientStabilization() {
-        assertTrue(this.policy.canUseDeferredStabilization(WorldMutationSource.FLUID, ""));
-        assertTrue(this.policy.canUseDeferredStabilization(WorldMutationSource.FALLING_BLOCK, null));
+    void deferredPhysicsStabilizationRequiresCausalAction() {
+        assertFalse(this.policy.canUseDeferredStabilization(WorldMutationSource.FLUID, ""));
+        assertFalse(this.policy.canUseDeferredStabilization(WorldMutationSource.FALLING_BLOCK, null));
+
+        assertTrue(this.policy.canUseDeferredStabilization(WorldMutationSource.FLUID, "action-1"));
+        assertTrue(this.policy.canUseDeferredStabilization(WorldMutationSource.FALLING_BLOCK, "action-1"));
     }
 
     @Test
-    void deferredPreMutationBaselineRequiresActiveSessionRegion() {
+    void ambientGrowthDirectCaptureRequiresCausalAction() {
+        assertTrue(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.GROWTH));
+        assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.GROWTH, ""));
+        assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.GROWTH, null));
+
+        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.GROWTH, "action-1"));
+        assertFalse(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.FIRE));
+        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.FIRE, ""));
+    }
+
+    @Test
+    void deferredPreMutationBaselineRequiresActiveSessionRegionAndCausalAction() {
         BuildProject wholeDimension = BuildProject.createWorldWorkspace(
                 "World",
                 "minecraft:overworld",
@@ -74,27 +88,38 @@ class MutationSourcePolicyTest {
         assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(
                 wholeDimension,
                 WorldMutationSource.PISTON,
-                false
+                false,
+                "action-1"
         ));
         assertTrue(this.policy.canCaptureDeferredPreMutationBaseline(
                 wholeDimension,
                 WorldMutationSource.PISTON,
-                true
+                true,
+                "action-1"
         ));
         assertTrue(this.policy.canCaptureDeferredPreMutationBaseline(
                 wholeDimension,
                 WorldMutationSource.FLUID,
-                true
+                true,
+                "action-1"
+        ));
+        assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(
+                wholeDimension,
+                WorldMutationSource.FLUID,
+                true,
+                ""
         ));
         assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(
                 bounded,
                 WorldMutationSource.FLUID,
-                true
+                true,
+                "action-1"
         ));
         assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(
                 wholeDimension,
                 WorldMutationSource.PLAYER,
-                true
+                true,
+                "action-1"
         ));
     }
 

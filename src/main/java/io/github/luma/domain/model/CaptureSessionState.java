@@ -275,6 +275,14 @@ public final class CaptureSessionState {
         return Map.copyOf(contexts);
     }
 
+    public DeferredActionContext deferredActionContext(ChunkPoint chunk) {
+        if (chunk == null) {
+            return null;
+        }
+        DeferredActionContext context = this.deferredActionContexts.get(chunk);
+        return context != null && context.hasAction() ? context : null;
+    }
+
     public boolean trackFallingEntity(UUID entityId) {
         return entityId != null && this.trackedFallingEntities.add(entityId);
     }

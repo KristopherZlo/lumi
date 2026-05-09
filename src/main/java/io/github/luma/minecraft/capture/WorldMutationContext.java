@@ -63,6 +63,32 @@ public final class WorldMutationContext {
         return new SourceFrame();
     }
 
+    /**
+     * Opens a secondary source that belongs to the currently active action,
+     * such as bonemeal-triggered growth inside a player use action.
+     */
+    public static SourceFrame pushCausalSource(WorldMutationSource source) {
+        WorldMutationSource resolvedSource = source == null ? WorldMutationSource.SYSTEM : source;
+        Frame parent = currentFrame();
+        if (parent.hasAction()) {
+            SOURCE_STACK.get().push(new Frame(
+                    resolvedSource,
+                    parent.actor(),
+                    parent.actionId(),
+                    parent.accessAllowed()
+            ));
+            return new SourceFrame();
+        }
+
+        SOURCE_STACK.get().push(new Frame(
+                resolvedSource,
+                defaultActor(resolvedSource),
+                "",
+                false
+        ));
+        return new SourceFrame();
+    }
+
     public static SourceFrame pushSource(
             WorldMutationSource source,
             String actor,
@@ -197,6 +223,10 @@ public final class WorldMutationContext {
 
         private static Frame system() {
             return new Frame(WorldMutationSource.SYSTEM, "world", "", false);
+        }
+
+        private boolean hasAction() {
+            return this.actionId != null && !this.actionId.isBlank();
         }
     }
 
