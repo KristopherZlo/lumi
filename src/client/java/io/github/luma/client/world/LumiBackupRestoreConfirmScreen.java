@@ -20,8 +20,8 @@ import net.minecraft.world.level.storage.LevelStorageSource.LevelStorageAccess;
 
 public final class LumiBackupRestoreConfirmScreen extends Screen {
 
-    private static final int ERROR_COLOR = 0xFF5555;
-    private static final int TEXT_COLOR = 0xE8EEF8;
+    private static final int ERROR_COLOR = 0xFFFF5555;
+    private static final int TEXT_COLOR = 0xFFE8EEF8;
     private static final int MUTED_COLOR = 0xFFA0A7B2;
 
     private final Screen parent;
