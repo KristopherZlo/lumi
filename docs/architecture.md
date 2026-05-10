@@ -14,7 +14,7 @@ The architecture is intentionally optimized around three requirements:
 
 ### Bootstrap layer
 
-`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, schedules shared world-origin metadata bootstrap on a low-priority background thread after the first player has entered the world and a short idle delay has elapsed, advances world operations once per server tick, updates native bossbar progress for active operations, drains delayed entity spawn capture after Minecraft accepts spawned entities into a level, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown. Startup bootstrap also performs one-time storage migration and verifies the space-bounded pre-mod region backup off the tick thread. On the client, world opening is gated by an alpha backup screen for existing pre-Lumi worlds that do not yet have a completed Lumi backup; accepting the screen creates the backup with visible progress before entering the world. Newly created worlds are marked before server bootstrap so they skip that gate, and the vanilla Edit World menu can restore completed pre-mod backup chunks while preserving Lumi project history.
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, schedules shared world-origin metadata bootstrap on a low-priority background thread after the first player has entered the world and a short idle delay has elapsed, advances world operations once per server tick, updates native bossbar progress for active operations, drains delayed entity spawn capture after Minecraft accepts spawned entities into a level, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown. Startup bootstrap also performs one-time storage migration and verifies the space-bounded pre-mod region backup off the tick thread. On the client, world opening is gated by an alpha backup screen for existing pre-Lumi worlds that do not yet have a completed Lumi backup; accepting the screen creates the backup with visible progress before entering the world. The pre-mod backup writes chunk payloads into staging storage and promotes them before the completed manifest is published, so interrupted attempts retry instead of exposing a partial backup. Newly created worlds are marked before server bootstrap so they skip that gate, and the vanilla Edit World menu can restore completed pre-mod backup chunks while preserving Lumi project history.
 
 ### Domain model layer
 
@@ -313,7 +313,7 @@ Main files:
 - `exports/*.zip`: UI-driven project history archives and share packages
 - `versions/*.json`: version manifests
 - `versions/index.json`: optional disposable version-list cache
-- `pre-mod-backup/manifest.json` and `pre-mod-backup/chunks/*`: one-time pre-Lumi raw chunk backup used by the world-entry gate and the vanilla Edit World restore action
+- `pre-mod-backup/manifest.json` and `pre-mod-backup/chunks/*`: one-time pre-Lumi raw chunk backup used by the world-entry gate and the vanilla Edit World restore action; `pre-mod-backup/staging/*` is incomplete attempt state and is not restore-visible
 - `patches/<patchId>.meta.json`: patch metadata, chunk index, visible section index, and entity old/new chunk index
 - `patches/<patchId>.bin.lz4`: patch payload
 - `snapshots/<snapshotId>.bin.lz4`: checkpoint snapshot payload

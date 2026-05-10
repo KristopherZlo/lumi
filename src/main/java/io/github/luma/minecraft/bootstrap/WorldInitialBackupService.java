@@ -93,21 +93,30 @@ public final class WorldInitialBackupService {
         Instant startedAt = Instant.now();
         Map<String, WorldInitialBackupManifest.DimensionBackupSummary> dimensions = new LinkedHashMap<>();
         ProgressState progress = new ProgressState(this.totalChunkCount(plans), progressListener);
+        WorldInitialBackupRepository.BackupAttempt attempt = this.repository.beginBackupAttempt(worldRoot);
+        boolean committed = false;
         progress.publish("");
-        for (DimensionRegionPlan plan : plans) {
-            dimensions.put(plan.dimensionId(), this.backupDimension(worldRoot, plan, progress));
-        }
+        try {
+            for (DimensionRegionPlan plan : plans) {
+                dimensions.put(plan.dimensionId(), this.backupDimension(attempt, plan, progress));
+            }
 
-        this.repository.save(worldRoot, new WorldInitialBackupManifest(
-                WorldInitialBackupManifest.CURRENT_SCHEMA_VERSION,
-                levelName,
-                seed,
-                WorldChunkActivityClassifier.NAME,
-                this.storagePolicy.maxCompressedBytes(),
-                dimensions,
-                startedAt,
-                Instant.now()
-        ));
+            this.repository.commitBackupAttempt(worldRoot, attempt, new WorldInitialBackupManifest(
+                    WorldInitialBackupManifest.CURRENT_SCHEMA_VERSION,
+                    levelName,
+                    seed,
+                    WorldChunkActivityClassifier.NAME,
+                    this.storagePolicy.maxCompressedBytes(),
+                    dimensions,
+                    startedAt,
+                    Instant.now()
+            ));
+            committed = true;
+        } finally {
+            if (!committed) {
+                this.repository.abortBackupAttempt(attempt);
+            }
+        }
         progress.complete();
         LumaMod.LOGGER.info(
                 "Completed pre-mod world backup scan for {} dimensions at {}",
@@ -117,7 +126,7 @@ public final class WorldInitialBackupService {
     }
 
     private WorldInitialBackupManifest.DimensionBackupSummary backupDimension(
-            Path worldRoot,
+            WorldInitialBackupRepository.BackupAttempt attempt,
             DimensionRegionPlan plan,
             ProgressState progress
     ) throws IOException {
@@ -152,7 +161,7 @@ public final class WorldInitialBackupService {
                 long writtenBytes = 0L;
                 if (decision == WorldChunkActivityClassifier.ChunkBackupDecision.BACKUP) {
                     WorldInitialBackupRepository.ChunkWriteResult result = this.repository.writeChunk(
-                            worldRoot,
+                            attempt,
                             plan.dimensionId(),
                             chunk.chunk(),
                             chunk.nbtBytes(),
