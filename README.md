@@ -243,6 +243,14 @@ The default test-client profile installs a small Fabric `1.21.11` builder-tool s
 .\scripts\run-test-client.ps1 -FullStack
 ```
 
+Run the alpha release gate wrapper:
+
+```powershell
+.\scripts\run-alpha-release-check.ps1
+```
+
+The wrapper runs the unit coverage ratchet, server/client GameTests, focused structure/external-tool/crash-safety runtime modes, runtime load comparison, and crash harness. For local iteration, `-SkipRuntimeLoad` and `-SkipCrashHarness` can shorten the run.
+
 ## Runtime Testing
 
 From a singleplayer world with cheats enabled:
@@ -250,11 +258,23 @@ From a singleplayer world with cheats enabled:
 ```mcfunction
 /lumi testing smoke
 /lumi testing singleplayer
+/lumi testing crash-safety
+/lumi testing external-tools
 ```
 
 `/lumi testing smoke` runs the shorter project smoke path. It validates bootstrap storage, pre-mod backup metadata, snapshot content refs, section-indexed patch reads, capture, save/amend, branch/export, partial restore, full restore, integrity, and cleanup.
 
 `/lumi testing singleplayer` runs the broad runtime suite. It covers real save/restore/undo/redo paths, branch/share/archive flows, partial restore, entity history, water/TNT/redstone/piston fixtures, preview fulfillment, integrity, cleanup, and prepared-apply diagnostics.
+
+`/lumi testing crash-safety` runs the restart-focused smoke path used by the crash harness, and `/lumi testing external-tools` adds focused WorldEdit/Axiom-source capture checks.
+
+Coverage is ratcheted with JaCoCo through:
+
+```powershell
+.\gradlew.bat verifyCoverageRatchet
+```
+
+The checked-in baseline lives at `config/coverage-baseline.properties` and should only move upward or be intentionally refreshed after reviewing the report.
 
 Runtime reports are written under:
 

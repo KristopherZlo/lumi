@@ -7,6 +7,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.storage.repository.RecoveryRepository;
 import java.io.IOException;
 import java.time.Duration;
@@ -238,6 +239,7 @@ final class WorkingDraftSessionManager {
     }
 
     Optional<TrackedChangeBuffer> freezeAfterReconciliation(String projectId, TrackedProject trackedProject) throws IOException {
+        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_DRAFT_FREEZE);
         if (trackedProject != null) {
             this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
         }
@@ -277,6 +279,7 @@ final class WorkingDraftSessionManager {
                     session.size()
             );
             this.recoveryRepository.saveDraft(trackedProject.layout(), session.toDraft());
+            LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
             this.sessionRegistry.markCurrentRunDraft(projectId);
             LumaMod.LOGGER.info(
                     "Persisted active working draft for project {} with {} pending changes",

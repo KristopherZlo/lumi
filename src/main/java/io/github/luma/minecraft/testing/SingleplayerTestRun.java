@@ -190,6 +190,8 @@ final class SingleplayerTestRun {
                 case CHECK_PARTIAL_RESTORE -> this.checkPartialRestore(server);
                 case START_RESTORE_INITIAL -> this.startRestoreInitial();
                 case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
+                case START_EXTERNAL_TOOL_STRESS -> this.startExternalToolStress(server);
+                case CHECK_EXTERNAL_TOOL_STRESS -> this.checkExternalToolStress(server);
                 case CHECK_PLAYER_INTERACTIONS -> this.checkPlayerInteractions(server);
                 case START_GAMEPLAY_UNDO -> this.startGameplayUndo();
                 case CHECK_GAMEPLAY_UNDO -> this.checkGameplayUndo();
@@ -469,9 +471,60 @@ final class SingleplayerTestRun {
     private void checkRestoreInitial(MinecraftServer server) throws Exception {
         this.check(this.volume.isAir(this.level), "Full restore returned the test volume to initial air");
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
-        this.completePhase(server, this.mode == SingleplayerTestMode.SMOKE
-                ? Phase.CLEANUP
-                : Phase.CHECK_PLAYER_INTERACTIONS);
+        Phase next = switch (this.mode) {
+            case SMOKE, CRASH_SAFETY -> Phase.CLEANUP;
+            case EXTERNAL_TOOLS -> Phase.START_EXTERNAL_TOOL_STRESS;
+            default -> Phase.CHECK_PLAYER_INTERACTIONS;
+        };
+        this.completePhase(server, next);
+    }
+
+    private void startExternalToolStress(MinecraftServer server) throws Exception {
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                WorldMutationSource.WORLDEDIT,
+                "worldedit:singleplayer-test",
+                "worldedit-fill",
+                true
+        )) {
+            for (BlockPos pos : BlockPos.betweenClosed(this.volume.min(), this.volume.max())) {
+                this.level.setBlock(pos, Blocks.DEEPSLATE.defaultBlockState(), 3);
+            }
+        }
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                WorldMutationSource.AXIOM,
+                "axiom:singleplayer-test",
+                "axiom-buffer",
+                true
+        )) {
+            this.level.setBlock(this.volume.markerA(), Blocks.EMERALD_BLOCK.defaultBlockState(), 3);
+            this.level.setBlock(this.volume.markerB(), Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+        }
+
+        RecoveryDraft draft = this.value("External-tool recovery draft can be loaded", () ->
+                this.recoveryService.loadDraft(server, this.project.name()).orElse(null));
+        if (draft != null) {
+            this.check(draft.totalChangeCount() >= 3, "External-tool draft captured WorldEdit and Axiom-source edits");
+        }
+        this.pendingOperation = this.versionService.startSaveVersion(
+                this.level,
+                this.project.name(),
+                "Singleplayer external tool save",
+                ACTOR
+        );
+        this.log.info("Queued external-tool save operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_EXTERNAL_TOOL_STRESS);
+    }
+
+    private void checkExternalToolStress(MinecraftServer server) throws Exception {
+        ProjectVersion savedVersion = this.projectService.loadVersions(server, this.project.name()).getLast();
+        VersionDiff diff = this.value("External-tool saved version diff can be built", () ->
+                this.diffService.compareVersionToParent(server, this.project.name(), savedVersion.id()));
+        if (diff != null) {
+            this.check(diff.changedBlockCount() >= 3, "External-tool save persisted captured edits");
+        }
+        this.check("External-tool project integrity report is valid", () ->
+                this.integrityService.inspect(server, this.project.name()).valid());
+        this.completePhase(server, Phase.CLEANUP);
     }
 
     private void checkPlayerInteractions(MinecraftServer server) throws Exception {
@@ -1291,6 +1344,14 @@ final class SingleplayerTestRun {
         CHECK_PARTIAL_RESTORE("Verify partial restore", "check selected-area restore output"),
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
+        START_EXTERNAL_TOOL_STRESS(
+                "External-tool source diagnostics",
+                "record WorldEdit and Axiom-sourced edits through the external capture path"
+        ),
+        CHECK_EXTERNAL_TOOL_STRESS(
+                "Verify external-tool source diagnostics",
+                "save and inspect the external-tool captured edits"
+        ),
         CHECK_PLAYER_INTERACTIONS("Gameplay interactions", "exercise broad block, stateful block, fluid, entity, and water-bridge actions"),
         START_GAMEPLAY_UNDO("Queue gameplay undo", "undo the latest gameplay action through the operation model"),
         CHECK_GAMEPLAY_UNDO("Verify gameplay undo", "check that the latest gameplay action was reverted"),
@@ -1373,7 +1434,9 @@ final class SingleplayerTestRun {
                 case START_BRANCH_SAVE -> START_RESTORE_INITIAL;
                 case CHECK_BRANCH_SAVE -> START_PARTIAL_RESTORE;
                 case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
-                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL, CHECK_PLAYER_INTERACTIONS,
+                case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL,
+                     START_EXTERNAL_TOOL_STRESS, CHECK_EXTERNAL_TOOL_STRESS,
+                     CHECK_PLAYER_INTERACTIONS,
                      START_GAMEPLAY_UNDO, CHECK_GAMEPLAY_UNDO, START_GAMEPLAY_REDO, CHECK_GAMEPLAY_REDO,
                      START_GAMEPLAY_SAVE, CHECK_GAMEPLAY_SAVE,
                      START_ENTITY_QUICK_ROLLBACK, CHECK_ENTITY_QUICK_ROLLBACK,

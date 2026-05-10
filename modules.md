@@ -50,7 +50,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Cleanup and integrity | `ProjectCleanupService`, `ProjectIntegrityService` | `ProjectCleanupRepository`, `CleanupScreenController`, `ProjectRepository` | `ProjectCleanupRepositoryTest`, `ProjectArchiveRepositoryTest` |
 | Storage format or path changes | `ProjectLayout`, exact repository class | `StorageIo`, `GsonProvider`, matching domain model record | `ProjectLayoutTest`, repository tests, `docs/storage-format.md` |
 | Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditSessionBridge`, `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
-| Commands and runtime tests | `LumaCommands`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, `SingleplayerBulkApplyDiagnostics`, scripts under `scripts/` | `/lumi testing smoke`, `docs/commands.md`, `docs/test-client.md` |
+| Commands and runtime tests | `LumaCommands`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, `SingleplayerBulkApplyDiagnostics`, `LumiTestFailpoints`, scripts under `scripts/` | `/lumi testing smoke`, `/lumi testing crash-safety`, `/lumi testing external-tools`, `docs/commands.md`, `docs/test-client.md` |
 | Client navigation and screen behavior | `ScreenRouter`, the route screen, route controller, route view state | `LumaScreen`, `ProjectWindowLayout`, `ProjectSidebarNavigation`, section builders | UI controller tests, `docs/development.md` |
 
 ## Bootstrap And Global Entry Points
@@ -199,8 +199,9 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `minecraft/bootstrap/WorldInitialBackupIdentityReader.java`: client-side world identity lookup from Lumi origin metadata or `level.dat` before server entry.
 - `minecraft/bootstrap/WorldInitialBackupProgress.java`: immutable progress snapshot for pre-open backup UI.
 - `minecraft/bootstrap/WorldInitialBackupWarningService.java`: pre-open decision logic for the alpha backup gate on existing pre-Lumi worlds.
-- `minecraft/command/LumaCommands.java`: diagnostics/help and singleplayer smoke/full/structure runtime test command entries.
+- `minecraft/command/LumaCommands.java`: diagnostics/help and singleplayer smoke/full/structure/crash-safety/external-tool runtime test command entries.
 - `minecraft/testing/*`: integrated singleplayer regression service, performance monitor, test volume/run/log helpers.
+- `debug/LumiTestFailpoints.java`: explicit opt-in crash-harness failpoints shared by storage, domain, and world-apply tests.
 
 ## Mixins
 

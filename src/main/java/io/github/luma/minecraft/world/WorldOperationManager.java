@@ -12,6 +12,7 @@ import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
+import io.github.luma.debug.LumiTestFailpoints;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -875,6 +876,7 @@ public final class WorldOperationManager {
                     int maxBlocks = this.maxWorkForCurrentStep(budget, processedWorkThisTick, processedNativeCellsThisTick);
                     int maxDirectSections = Math.max(0, budget.maxDirectSections() - processedDirectSectionsThisTick);
                     try {
+                        LumiTestFailpoints.hit(LumiTestFailpoints.MID_WORLD_OPERATION_APPLY);
                         processed = this.applyCurrentChunk(
                                 maxBlocks,
                                 maxDirectSections,
@@ -2006,6 +2008,7 @@ public final class WorldOperationManager {
         }
 
         private boolean drainDeferredLightUpdates(WorldApplyBudget budget, long deadlineNanos) {
+            LumiTestFailpoints.hit(LumiTestFailpoints.LIGHT_REFRESH_DRAIN_START);
             if (!this.lightUpdateQueue.prepareDrainPositionsAsync(WorldOperationManager.this.executor())) {
                 if (!this.prepareWaitLogged) {
                     this.prepareWaitLogged = true;

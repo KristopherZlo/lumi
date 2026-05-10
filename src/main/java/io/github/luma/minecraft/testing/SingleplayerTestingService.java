@@ -55,6 +55,26 @@ public final class SingleplayerTestingService {
         return this.start(server, level, player, SingleplayerTestMode.STRUCTURE_FIXTURES);
     }
 
+    public synchronized int startCrashSafety(CommandSourceStack source) throws Exception {
+        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
+                SingleplayerTestMode.CRASH_SAFETY);
+    }
+
+    public synchronized int startCrashSafety(MinecraftServer server, ServerLevel level, ServerPlayer player)
+            throws Exception {
+        return this.start(server, level, player, SingleplayerTestMode.CRASH_SAFETY);
+    }
+
+    public synchronized int startExternalTools(CommandSourceStack source) throws Exception {
+        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
+                SingleplayerTestMode.EXTERNAL_TOOLS);
+    }
+
+    public synchronized int startExternalTools(MinecraftServer server, ServerLevel level, ServerPlayer player)
+            throws Exception {
+        return this.start(server, level, player, SingleplayerTestMode.EXTERNAL_TOOLS);
+    }
+
     private int start(
             MinecraftServer server,
             ServerLevel level,

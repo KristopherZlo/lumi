@@ -38,7 +38,13 @@ public final class LumaCommands {
                         .executes(context -> this.execute(context.getSource(), this.singleplayerTestingService::startSmoke)))
                 .then(Commands.literal("structures")
                         .executes(context -> this.execute(context.getSource(),
-                                this.singleplayerTestingService::startStructureFixtures))));
+                                this.singleplayerTestingService::startStructureFixtures)))
+                .then(Commands.literal("crash-safety")
+                        .executes(context -> this.execute(context.getSource(),
+                                this.singleplayerTestingService::startCrashSafety)))
+                .then(Commands.literal("external-tools")
+                        .executes(context -> this.execute(context.getSource(),
+                                this.singleplayerTestingService::startExternalTools))));
 
         dispatcher.register(root);
     }
@@ -50,6 +56,8 @@ public final class LumaCommands {
         source.sendSuccess(() -> Component.literal("/lumi testing singleplayer - run the integrated-world Lumi regression suite"), false);
         source.sendSuccess(() -> Component.literal("/lumi testing smoke - run a shorter in-world project smoke suite"), false);
         source.sendSuccess(() -> Component.literal("/lumi testing structures - run only saved structure fixture diagnostics"), false);
+        source.sendSuccess(() -> Component.literal("/lumi testing crash-safety - run the restart-focused safety smoke suite"), false);
+        source.sendSuccess(() -> Component.literal("/lumi testing external-tools - run focused external-tool source diagnostics"), false);
         source.sendSuccess(() -> Component.literal("Use the Lumi UI for project creation, save, restore, variants, recovery, share, merge, import/export, and cleanup."), false);
         return 1;
     }

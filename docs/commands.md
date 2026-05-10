@@ -42,6 +42,8 @@ Shows:
 /lumi testing singleplayer
 /lumi testing smoke
 /lumi testing structures
+/lumi testing crash-safety
+/lumi testing external-tools
 ```
 
 Runs an integrated-server regression suite against the real in-world Lumi services. The command is singleplayer-only, refuses to start while another Lumi world operation is active, and needs a small empty air volume above the player's current chunk.
@@ -49,6 +51,10 @@ Runs an integrated-server regression suite against the real in-world Lumi servic
 `/lumi testing smoke` runs the shorter project smoke path. It creates a temporary bounded project, verifies world bootstrap storage, the pre-mod backup manifest and budget, snapshot section content refs, section-indexed patch reads, capture, pending diff, undo/redo, save, amend, branching, export, partial restore, full restore, integrity, and cleanup. It stops before gameplay, large-history, bulk-apply, and structure-fixture diagnostics.
 
 `/lumi testing structures` runs only the saved structure fixture diagnostics. It creates the same temporary bounded project, then skips the broader save, restore, gameplay, bulk apply, and performance phases.
+
+`/lumi testing crash-safety` runs the restart-focused project smoke path used by the crash harness. It covers project creation, capture, undo/redo, save, amend, branch save, partial restore, full restore, recovery-draft cleanup, and integrity checks without continuing into the long gameplay and bulk diagnostics.
+
+`/lumi testing external-tools` runs the normal project smoke path and then records focused WorldEdit- and Axiom-sourced edits through the external capture context before saving and inspecting that patch. Large persisted and bulk-apply stress still live in the full `singleplayer` suite.
 
 The suite shows phase progress in chat, records every check as pass/fail, and keeps running after failed checks when the next workflow can still be exercised. Hard workflow errors are logged, then the runner skips to the next safe phase or cleanup.
 

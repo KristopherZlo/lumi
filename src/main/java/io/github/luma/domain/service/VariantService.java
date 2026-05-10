@@ -4,6 +4,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
+import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
@@ -98,6 +99,7 @@ public final class VariantService {
         ProjectVariant variant = new ProjectVariant(variantId, displayName, baseVersionId, baseVersionId, false, Instant.now());
         List<ProjectVariant> nextVariants = new ArrayList<>(variants);
         nextVariants.add(variant);
+        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
         this.variantRepository.save(layout, nextVariants);
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
@@ -138,6 +140,7 @@ public final class VariantService {
             return targetVariant;
         }
 
+        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
         this.projectRepository.save(layout, project.withActiveVariantId(targetVariant.id(), Instant.now()).withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION));
         this.undoRedoHistoryManager.clearProject(project.id().toString());
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(

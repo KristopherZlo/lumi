@@ -25,6 +25,7 @@ import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
+import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
@@ -100,6 +101,7 @@ public final class VersionService {
 
         // Keep the draft being amended isolated from new edits captured during the async operation.
         this.recoveryRepository.saveOperationDraft(layout, draft);
+        LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_OPERATION_DRAFT_WRITE);
         this.recoveryRepository.deleteDraft(layout);
 
         try {
@@ -214,6 +216,7 @@ public final class VersionService {
 
         // Keep a durable fallback until the async save fully commits, without exposing it to live capture.
         this.recoveryRepository.saveOperationDraft(layout, draft);
+        LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_OPERATION_DRAFT_WRITE);
         this.recoveryRepository.deleteDraft(layout);
 
         try {
@@ -354,6 +357,7 @@ public final class VersionService {
                     draft.changes(),
                     draft.entityChanges()
             );
+            LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_PATCH_DATA_WRITE);
         }
         progressSink.update(OperationStage.WRITING, draft.totalChangeCount(), draft.totalChangeCount(), "Writing patch index");
         try (var ignored = LumaLoadLog.measure("save", "PatchMetaRepository.save", "patch=" + patchMetadata.id())) {
@@ -421,7 +425,9 @@ public final class VersionService {
 
         progressSink.update(OperationStage.FINALIZING, draft.changes().size(), draft.changes().size(), "Finalizing version");
         try (var ignored = LumaLoadLog.measure("save", "VersionService.writeVersionManifests", "version=" + version.id())) {
+            LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VERSION_MANIFEST_WRITE);
             this.versionRepository.save(layout, version);
+            LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
             this.variantRepository.save(layout, this.replaceVariant(variants, new ProjectVariant(
                     activeVariant.id(),
                     activeVariant.name(),

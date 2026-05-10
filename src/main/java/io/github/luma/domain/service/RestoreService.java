@@ -28,6 +28,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
+import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
@@ -855,6 +856,7 @@ public final class RestoreService {
     ) throws IOException {
         Instant now = Instant.now();
         List<ProjectVariant> latestVariants = this.variantRepository.loadAll(layout);
+        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_RESTORE_METADATA_WRITE);
         this.variantRepository.save(layout, this.replaceVariantHead(
                 latestVariants.isEmpty() ? variants : latestVariants,
                 targetVariant.id(),

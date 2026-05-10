@@ -1,5 +1,6 @@
 plugins {
     id 'fabric-loom' version "${loom_version}"
+    id 'jacoco'
     id 'maven-publish'
 }
 
@@ -36,6 +37,8 @@ sourceSets.create('baselineIdleGametest')
 def lumiStartupProfileEnabled = providers.gradleProperty('lumi.startupProfile')
         .map { it.toBoolean() }
         .orElse(false)
+
+def coverageBaselineFile = layout.projectDirectory.file('config/coverage-baseline.properties')
 
 loom {
     splitEnvironmentSourceSets()
@@ -420,6 +423,129 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+}
+
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+tasks.named('jacocoTestReport', JacocoReport).configure {
+    dependsOn(tasks.named('test'))
+
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+
+    sourceDirectories.setFrom(files(
+            sourceSets.main.allSource.srcDirs,
+            sourceSets.client.allSource.srcDirs
+    ))
+    classDirectories.setFrom(files(
+            sourceSets.main.output.classesDirs,
+            sourceSets.client.output.classesDirs
+    ).asFileTree.matching {
+        exclude '**/mixin/**'
+    })
+}
+
+def readCoverageRatios = { File reportFile ->
+    if (!reportFile.exists()) {
+        throw new GradleException("Missing JaCoCo XML report: ${reportFile}")
+    }
+
+    String report = reportFile.getText('UTF-8')
+    def ratios = [:]
+    ['LINE', 'BRANCH'].each { type ->
+        def matcher = report =~ /<counter type="${type}" missed="([0-9]+)" covered="([0-9]+)"\/>/
+        def selected = null
+        matcher.each { match ->
+            selected = match
+        }
+        if (selected == null) {
+            ratios[type.toLowerCase(Locale.ROOT)] = 1.0d
+            return
+        }
+
+        double missed = selected[1].toDouble()
+        double covered = selected[2].toDouble()
+        double total = missed + covered
+        ratios[type.toLowerCase(Locale.ROOT)] = total == 0.0d ? 1.0d : covered / total
+    }
+    return ratios
+}
+
+tasks.register('verifyCoverageRatchet') {
+    group = 'verification'
+    description = 'Fails when unit-test line or branch coverage drops below the checked-in baseline.'
+    dependsOn(tasks.named('jacocoTestReport'))
+
+    def reportFile = layout.buildDirectory.file('reports/jacoco/test/jacocoTestReport.xml')
+    inputs.file(coverageBaselineFile)
+    inputs.file(reportFile)
+
+    doLast {
+        File baseline = coverageBaselineFile.asFile
+        if (!baseline.exists()) {
+            throw new GradleException("Missing coverage baseline ${baseline}. Run updateCoverageBaseline after reviewing the report.")
+        }
+
+        Properties properties = new Properties()
+        baseline.withInputStream { properties.load(it) }
+        def ratios = readCoverageRatios(reportFile.get().asFile)
+        ['line', 'branch'].each { metric ->
+            String baselineValue = properties.getProperty(metric)
+            if (baselineValue == null || baselineValue.isBlank()) {
+                throw new GradleException("Coverage baseline is missing '${metric}' in ${baseline}")
+            }
+            double expected = baselineValue.toDouble()
+            double actual = ratios[metric]
+            if (actual + 0.000001d < expected) {
+                throw new GradleException(String.format(
+                        Locale.ROOT,
+                        "%s coverage dropped below baseline: actual=%.4f baseline=%.4f",
+                        metric,
+                        actual,
+                        expected
+                ))
+            }
+            logger.lifecycle(String.format(
+                    Locale.ROOT,
+                    "%s coverage %.4f >= baseline %.4f",
+                    metric,
+                    actual,
+                    expected
+            ))
+        }
+    }
+}
+
+tasks.register('updateCoverageBaseline') {
+    group = 'verification'
+    description = 'Writes the current JaCoCo line and branch coverage as the ratchet baseline.'
+    dependsOn(tasks.named('jacocoTestReport'))
+
+    def reportFile = layout.buildDirectory.file('reports/jacoco/test/jacocoTestReport.xml')
+    inputs.file(reportFile)
+    outputs.file(coverageBaselineFile)
+
+    doLast {
+        def ratios = readCoverageRatios(reportFile.get().asFile)
+        File baseline = coverageBaselineFile.asFile
+        baseline.parentFile.mkdirs()
+        baseline.text = String.format(
+                Locale.ROOT,
+                "# Lumi unit coverage ratchet. Update only after reviewing coverage changes.%nline=%.6f%nbranch=%.6f%n",
+                ratios.line,
+                ratios.branch
+        )
+        logger.lifecycle("Wrote coverage baseline to ${baseline}")
+    }
+}
+
+tasks.named('check').configure {
+    dependsOn(tasks.named('verifyCoverageRatchet'))
 }
 
 processResources {

@@ -2,7 +2,7 @@
 
 This repository ships a dedicated Fabric development profile for a local singleplayer test client.
 
-The automated `runClientGameTest` profile runs a dedicated client overlay smoke GameTest and invokes `/lumi testing singleplayer`, including the real storage-backed large save, branch, restore, generated observer/sticky-piston rollback fixtures, and saved-structure fixture diagnostics described in `docs/commands.md`. Use `/lumi testing smoke` manually when you only need the shorter project storage/save/restore smoke path. Set `LUMI_SINGLEPLAYER_TEST_MODE=structure-fixtures` before `runClientGameTest` to run only the generated and saved-structure fixture diagnostics. Structure fixture comparisons are exact except for the transient `observer.powered` phase on the generated closed observer pair; the structural piston/observer rollback assertions still remain strict. Overlay smoke covers small compare/recent overlays through the live renderer, large cached tiled-volume overlay meshes in client context, and pending-draft overlays for cumulative unsaved changes. The pinned recent-preview contract for live edits while the action button preview is held is covered by the focused preview-session regression tests.
+The automated `runClientGameTest` profile runs a dedicated client overlay smoke GameTest and invokes `/lumi testing singleplayer`, including the real storage-backed large save, branch, restore, generated observer/sticky-piston rollback fixtures, and saved-structure fixture diagnostics described in `docs/commands.md`. Use `/lumi testing smoke` manually when you only need the shorter project storage/save/restore smoke path. Set `LUMI_SINGLEPLAYER_TEST_MODE=structure-fixtures`, `external-tools`, or `crash-safety` before `runClientGameTest` to run that focused runtime mode. Structure fixture comparisons are exact except for the transient `observer.powered` phase on the generated closed observer pair; the structural piston/observer rollback assertions still remain strict. Overlay smoke covers small compare/recent overlays through the live renderer, large cached tiled-volume overlay meshes in client context, and pending-draft overlays for cumulative unsaved changes. The pinned recent-preview contract for live edits while the action button preview is held is covered by the focused preview-session regression tests.
 
 ## Launch
 
@@ -44,6 +44,14 @@ If you only want to verify the Gradle profile without starting Minecraft:
 ```powershell
 .\scripts\run-test-client.ps1 -GradleTasks @("tasks", "--all")
 ```
+
+Run the alpha release gate wrapper:
+
+```powershell
+.\scripts\run-alpha-release-check.ps1
+```
+
+The wrapper chains the coverage ratchet, GameTests, focused runtime modes, runtime load comparison, and crash harness. Use `-SkipRuntimeLoad` or `-SkipCrashHarness` only for local iteration, not for release sign-off.
 
 If you want to launch the broader performance-mod profile:
 

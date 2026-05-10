@@ -41,6 +41,14 @@ Run the automated test suite:
 .\gradlew.bat test
 ```
 
+Run the unit coverage ratchet:
+
+```powershell
+.\gradlew.bat verifyCoverageRatchet
+```
+
+`verifyCoverageRatchet` generates the JaCoCo XML/HTML report and fails when line or branch coverage drops below `config/coverage-baseline.properties`. Refresh the baseline with `.\gradlew.bat updateCoverageBaseline` only after reviewing the coverage report.
+
 This now includes regression checks for:
 
 - undo-only item drops attached to live undo/redo without persisting into recovery drafts or saved versions
@@ -79,6 +87,14 @@ Run client GameTests:
 .\scripts\run-test-client.ps1 -GradleTasks runClientGameTest
 ```
 
+Run the alpha release gate wrapper:
+
+```powershell
+.\scripts\run-alpha-release-check.ps1
+```
+
+The wrapper runs the unit coverage ratchet, server and client GameTests, structure-fixture mode, external-tool mode, crash-safety mode, runtime load comparison, and the crash harness unless explicitly skipped with script switches.
+
 Run the idle startup-only client GameTests:
 
 ```powershell
@@ -97,6 +113,8 @@ Run the integrated-world runtime regression suite from a local singleplayer save
 ```mcfunction
 /lumi testing smoke
 /lumi testing singleplayer
+/lumi testing crash-safety
+/lumi testing external-tools
 ```
 
 The smoke command creates an archived temporary bounded project in an empty air volume above the player's chunk and drives the real bootstrap storage, pre-mod backup manifest, snapshot content refs, section-indexed patch reads, save, undo/redo, amend, branch, compare, export, partial-restore, full-restore, integrity, and cleanup services through the server tick loop. The full command continues into gameplay interaction, performance, large-history, bulk-apply, and structure-fixture diagnostics. Its gameplay phase covers adjacent block fallout, bulk block placement, block entities, deferred redstone and piston fallout, a closed redstone loop smoke mechanism, fluid placement, multi-block doors, oriented block states, crop/farmland states, openable blocks, item entities, non-player entity spawn and state/position updates, quick rollback of a saved entity update, a saved entity update followed by full restore, a water bridge placed through `ServerPlayer.gameMode.useItemOn`, preview fulfillment after saving that bridge, and a controlled TNT interaction with undo/redo. It then verifies that restoring the initial save rolls pending gameplay actions back to air while removing spawned entities. After the normal workflow budget checks, it runs a storage-backed large-history diagnostic that captures about 262k changed cells into a real main-branch save, captures a divergent 65k-cell branch save, restores the main save, restores the branch head, and verifies both restored block sets and active branch metadata. It then runs bulk apply diagnostics for dense rewrite-friendly 250k-cell batches, same-sized block-entity fallback batches, and a sparse direct-section sample with about 250k changed cells. The diagnostics preflight high-altitude target cells for air, skip unsafe scenarios instead of overwriting existing blocks, and write save/restore/apply durations plus fast-apply counters into the same test log. The structure-fixture phase includes generated observer/sticky-piston rollback fixtures, including a closed observer pair on a vertical sticky piston, and asserts that undo pulls observers home without duplicates, stray piston heads, or moving-piston placeholders. Both commands report phase progress in chat, record pass/fail checks without stopping at the first failed assertion, and write a detailed log under `<world>/lumi/test-logs/`. The undo/redo action-scope performance budget includes the one structural block produced by the piston fallout regression while still failing broad replay.
