@@ -77,6 +77,8 @@ public final class LumiBackupRestoreConfirmScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
+
         int centerX = this.width / 2;
         int contentWidth = Math.min(420, this.width - 40);
         int y = Math.max(28, this.height / 2 - 118);
@@ -104,8 +106,6 @@ public final class LumiBackupRestoreConfirmScreen extends Screen {
         } else if (!this.failureMessage.getString().isBlank()) {
             this.drawWrappedCentered(graphics, this.failureMessage, centerX, y, contentWidth, ERROR_COLOR);
         }
-
-        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override

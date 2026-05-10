@@ -52,6 +52,8 @@ final class WorldEntryBackupScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderStaticBackground(graphics);
+        super.render(graphics, mouseX, mouseY, partialTick);
+
         int centerX = this.width / 2;
         int contentWidth = Math.min(420, this.width - 40);
         int y = Math.max(34, this.height / 2 - 96);
@@ -97,8 +99,6 @@ final class WorldEntryBackupScreen extends Screen {
                     MESSAGE_COLOR
             );
         }
-
-        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override
