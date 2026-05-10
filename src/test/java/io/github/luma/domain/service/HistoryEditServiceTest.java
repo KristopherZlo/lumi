@@ -46,6 +46,18 @@ class HistoryEditServiceTest {
     }
 
     @Test
+    void renameVersionRejectsBlankMessage() {
+        HistoryEditService service = new HistoryEditService();
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.renameVersion(null, "Tower", "v0002", "  ")
+        );
+
+        assertEquals("Save name is required", exception.getMessage());
+    }
+
+    @Test
     void deleteHeadVersionMovesBranchToParentAndTombstonesVersion() throws Exception {
         ProjectLayout layout = this.seedProject();
         HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
@@ -62,12 +74,45 @@ class HistoryEditServiceTest {
     }
 
     @Test
+    void deleteVersionRejectsRootSaves() throws Exception {
+        ProjectLayout layout = this.seedProject();
+        HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
+        });
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.deleteVersion(null, "Tower", "v0001")
+        );
+
+        assertEquals("Root saves cannot be deleted", exception.getMessage());
+    }
+
+    @Test
     void deleteVersionRejectsNonLeafSaves() throws Exception {
         ProjectLayout layout = this.seedProject();
         HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
         });
 
         assertThrows(IllegalArgumentException.class, () -> service.deleteVersion(null, "Tower", "v0002"));
+    }
+
+    @Test
+    void deleteVersionRejectsSavesThatHeadMultipleBranches() throws Exception {
+        ProjectLayout layout = this.seedProject();
+        new VariantRepository().save(layout, List.of(
+                new ProjectVariant("main", "main", "v0001", "v0002", true, NOW),
+                new ProjectVariant("feature", "Feature", "v0002", "v0003", false, NOW),
+                new ProjectVariant("review", "Review", "v0002", "v0003", false, NOW)
+        ));
+        HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
+        });
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.deleteVersion(null, "Tower", "v0003")
+        );
+
+        assertEquals("Save is the head of multiple branches", exception.getMessage());
     }
 
     @Test
@@ -88,6 +133,23 @@ class HistoryEditServiceTest {
         });
 
         assertThrows(IllegalArgumentException.class, () -> service.deleteVariant(null, "Tower", "main"));
+    }
+
+    @Test
+    void deleteVariantRejectsActiveBranch() throws Exception {
+        ProjectLayout layout = this.seedProject();
+        ProjectRepository projects = new ProjectRepository();
+        BuildProject project = projects.load(layout).orElseThrow();
+        projects.save(layout, project.withActiveVariantId("feature", NOW));
+        HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
+        });
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.deleteVariant(null, "Tower", "feature")
+        );
+
+        assertEquals("Active branch cannot be deleted", exception.getMessage());
     }
 
     private ProjectLayout seedProject() throws Exception {
