@@ -19,8 +19,8 @@ import net.minecraft.world.level.storage.LevelStorageSource.LevelStorageAccess;
 
 public final class LumiBackupRestoreConfirmScreen extends Screen {
 
-    private static final int ERROR_TEXT_COLOR = 0xFF5555;
-    private static final int MUTED_TEXT_COLOR = 0xA0A7B2;
+    private static final int TITLE_TEXT_COLOR = 0xFF5555;
+    private static final int BODY_TEXT_COLOR = 0xFFFFFF;
 
     private final Screen parent;
     private final LevelStorageAccess levelAccess;
@@ -48,14 +48,14 @@ public final class LumiBackupRestoreConfirmScreen extends Screen {
         int centerX = this.width / 2;
         int y = Math.max(28, this.height / 2 - 118);
 
-        StringWidget titleText = new StringWidget(this.title, this.font);
+        StringWidget titleText = new StringWidget(this.title.copy().withColor(TITLE_TEXT_COLOR), this.font);
         titleText.setX(centerX - titleText.getWidth() / 2);
         titleText.setY(y);
         this.addRenderableWidget(titleText);
 
         y += 26;
         MultiLineTextWidget warningText = new MultiLineTextWidget(
-                Component.translatable("luma.backup_restore.warning").withColor(ERROR_TEXT_COLOR),
+                Component.translatable("luma.backup_restore.warning").withColor(BODY_TEXT_COLOR),
                 this.font
         ).setMaxWidth(contentWidth).setCentered(true);
         warningText.setX(centerX - warningText.getWidth() / 2);
@@ -154,10 +154,10 @@ public final class LumiBackupRestoreConfirmScreen extends Screen {
         }
         if (this.statusText != null) {
             if (this.running) {
-                this.statusText.setMessage(Component.translatable("luma.backup_restore.running").withColor(MUTED_TEXT_COLOR));
+                this.statusText.setMessage(Component.translatable("luma.backup_restore.running").withColor(BODY_TEXT_COLOR));
                 this.statusText.visible = true;
             } else if (!this.failureMessage.getString().isBlank()) {
-                this.statusText.setMessage(this.failureMessage.copy().withColor(ERROR_TEXT_COLOR));
+                this.statusText.setMessage(this.failureMessage.copy().withColor(BODY_TEXT_COLOR));
                 this.statusText.visible = true;
             } else {
                 this.statusText.setMessage(Component.empty());

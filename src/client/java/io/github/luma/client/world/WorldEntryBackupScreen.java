@@ -12,9 +12,8 @@ import net.minecraft.resources.Identifier;
 
 final class WorldEntryBackupScreen extends Screen {
 
-    private static final int MESSAGE_TEXT_COLOR = 0x55D6FF;
-    private static final int ERROR_TEXT_COLOR = 0xFF5555;
-    private static final int BODY_TEXT_COLOR = 0xE8EEF8;
+    private static final int TITLE_TEXT_COLOR = 0x55D6FF;
+    private static final int BODY_TEXT_COLOR = 0xFFFFFF;
     private static final int XP_BAR_WIDTH = 182;
     private static final int XP_BAR_HEIGHT = 5;
     private static final Identifier XP_BAR_BACKGROUND =
@@ -52,7 +51,7 @@ final class WorldEntryBackupScreen extends Screen {
         int centerX = this.width / 2;
         int y = Math.max(34, this.height / 2 - 96);
 
-        this.titleText = new StringWidget(this.title, this.font);
+        this.titleText = new StringWidget(this.title.copy().withColor(TITLE_TEXT_COLOR), this.font);
         this.titleText.setX(centerX - this.titleText.getWidth() / 2);
         this.titleText.setY(y);
         this.addRenderableWidget(this.titleText);
@@ -173,7 +172,7 @@ final class WorldEntryBackupScreen extends Screen {
         this.progressVisible = false;
 
         if (this.failed) {
-            this.statusText.setMessage(this.failureMessage.copy().withColor(ERROR_TEXT_COLOR));
+            this.statusText.setMessage(this.failureMessage.copy().withColor(BODY_TEXT_COLOR));
             this.statusText.visible = true;
             this.layoutMultilineText(this.statusText, centerX, y, contentWidth);
             return;
@@ -201,7 +200,7 @@ final class WorldEntryBackupScreen extends Screen {
             return;
         }
 
-        this.messageText.setMessage(Component.translatable("luma.alpha_warning.message").withColor(MESSAGE_TEXT_COLOR));
+        this.messageText.setMessage(Component.translatable("luma.alpha_warning.message").withColor(BODY_TEXT_COLOR));
         this.messageText.visible = true;
         this.layoutMultilineText(this.messageText, centerX, y, contentWidth);
     }
