@@ -4,31 +4,30 @@ import io.github.luma.LumaMod;
 import io.github.luma.minecraft.bootstrap.WorldInitialBackupRestoreService;
 import it.unimi.dsi.fastutil.booleans.BooleanConsumer;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
+import net.minecraft.client.gui.components.MultiLineTextWidget;
+import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.LevelStorageSource.LevelStorageAccess;
 
 public final class LumiBackupRestoreConfirmScreen extends Screen {
 
-    private static final int ERROR_COLOR = 0xFFFF5555;
-    private static final int TEXT_COLOR = 0xFFE8EEF8;
-    private static final int MUTED_COLOR = 0xFFA0A7B2;
+    private static final int ERROR_TEXT_COLOR = 0xFF5555;
+    private static final int MUTED_TEXT_COLOR = 0xA0A7B2;
 
     private final Screen parent;
     private final LevelStorageAccess levelAccess;
     private final BooleanConsumer callback;
     private final WorldInitialBackupRestoreService restoreService = new WorldInitialBackupRestoreService();
 
+    private MultiLineTextWidget statusText;
     private Button restoreButton;
     private Button cancelButton;
     private Checkbox agreement;
@@ -47,7 +46,31 @@ public final class LumiBackupRestoreConfirmScreen extends Screen {
     protected void init() {
         int contentWidth = Math.min(420, this.width - 40);
         int centerX = this.width / 2;
-        int y = Math.max(46, this.height / 2 + 16);
+        int y = Math.max(28, this.height / 2 - 118);
+
+        StringWidget titleText = new StringWidget(this.title, this.font);
+        titleText.setX(centerX - titleText.getWidth() / 2);
+        titleText.setY(y);
+        this.addRenderableWidget(titleText);
+
+        y += 26;
+        MultiLineTextWidget warningText = new MultiLineTextWidget(
+                Component.translatable("luma.backup_restore.warning").withColor(ERROR_TEXT_COLOR),
+                this.font
+        ).setMaxWidth(contentWidth).setCentered(true);
+        warningText.setX(centerX - warningText.getWidth() / 2);
+        warningText.setY(y);
+        this.addRenderableWidget(warningText);
+
+        y += warningText.getHeight() + 10;
+        this.statusText = new MultiLineTextWidget(Component.empty(), this.font)
+                .setMaxWidth(contentWidth)
+                .setCentered(true);
+        this.statusText.visible = false;
+        this.statusText.setY(y);
+        this.addRenderableWidget(this.statusText);
+
+        y = Math.max(46, this.height / 2 + 16);
 
         this.agreement = Checkbox.builder(Component.translatable("luma.backup_restore.agreement"), this.font)
                 .pos(centerX - contentWidth / 2, y)
@@ -72,39 +95,6 @@ public final class LumiBackupRestoreConfirmScreen extends Screen {
         this.addRenderableWidget(this.restoreButton);
         this.addRenderableWidget(this.cancelButton);
         this.updateButtonState();
-    }
-
-    @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
-
-        int centerX = this.width / 2;
-        int contentWidth = Math.min(420, this.width - 40);
-        int y = Math.max(28, this.height / 2 - 118);
-
-        graphics.drawCenteredString(this.font, this.title, centerX, y, TEXT_COLOR);
-        y += 26;
-        y = this.drawWrappedCentered(
-                graphics,
-                Component.translatable("luma.backup_restore.warning"),
-                centerX,
-                y,
-                contentWidth,
-                ERROR_COLOR
-        );
-        y += 10;
-        if (this.running) {
-            this.drawWrappedCentered(
-                    graphics,
-                    Component.translatable("luma.backup_restore.running"),
-                    centerX,
-                    y,
-                    contentWidth,
-                    MUTED_COLOR
-            );
-        } else if (!this.failureMessage.getString().isBlank()) {
-            this.drawWrappedCentered(graphics, this.failureMessage, centerX, y, contentWidth, ERROR_COLOR);
-        }
     }
 
     @Override
@@ -162,21 +152,18 @@ public final class LumiBackupRestoreConfirmScreen extends Screen {
         if (this.agreement != null) {
             this.agreement.active = !this.running;
         }
-    }
-
-    private int drawWrappedCentered(
-            GuiGraphics graphics,
-            Component text,
-            int centerX,
-            int y,
-            int width,
-            int color
-    ) {
-        List<FormattedCharSequence> lines = this.font.split(text, width);
-        for (FormattedCharSequence line : lines) {
-            graphics.drawString(this.font, line, centerX - this.font.width(line) / 2, y, color);
-            y += 11;
+        if (this.statusText != null) {
+            if (this.running) {
+                this.statusText.setMessage(Component.translatable("luma.backup_restore.running").withColor(MUTED_TEXT_COLOR));
+                this.statusText.visible = true;
+            } else if (!this.failureMessage.getString().isBlank()) {
+                this.statusText.setMessage(this.failureMessage.copy().withColor(ERROR_TEXT_COLOR));
+                this.statusText.visible = true;
+            } else {
+                this.statusText.setMessage(Component.empty());
+                this.statusText.visible = false;
+            }
+            this.statusText.setX(this.width / 2 - this.statusText.getWidth() / 2);
         }
-        return y;
     }
 }
