@@ -1,10 +1,11 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.WorldMutationSource;
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
-import java.util.WeakHashMap;
+import java.util.UUID;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.PrimedTnt;
 
@@ -15,7 +16,7 @@ public final class ExplosiveEntityContextRegistry {
 
     private static final ExplosiveEntityContextRegistry INSTANCE = new ExplosiveEntityContextRegistry();
 
-    private final Map<Entity, ExplosiveContext> contexts = Collections.synchronizedMap(new WeakHashMap<>());
+    private final Map<UUID, ExplosiveContext> contexts = new HashMap<>();
 
     private ExplosiveEntityContextRegistry() {
     }
@@ -32,8 +33,9 @@ public final class ExplosiveEntityContextRegistry {
         if (!(entity instanceof PrimedTnt)) {
             return Optional.empty();
         }
+        this.pruneExpiredContexts();
         synchronized (this.contexts) {
-            return Optional.ofNullable(this.contexts.get(entity));
+            return Optional.ofNullable(this.contexts.get(entity.getUUID()));
         }
     }
 
@@ -51,7 +53,7 @@ public final class ExplosiveEntityContextRegistry {
             return;
         }
         synchronized (this.contexts) {
-            this.contexts.remove(entity);
+            this.contexts.remove(entity.getUUID());
         }
     }
 
@@ -60,7 +62,18 @@ public final class ExplosiveEntityContextRegistry {
             return;
         }
         synchronized (this.contexts) {
-            this.contexts.put(entity, context);
+            this.contexts.put(entity.getUUID(), context);
+        }
+    }
+
+    private void pruneExpiredContexts() {
+        synchronized (this.contexts) {
+            Iterator<Map.Entry<UUID, ExplosiveContext>> iterator = this.contexts.entrySet().iterator();
+            while (iterator.hasNext()) {
+                if (iterator.next().getValue().expired()) {
+                    iterator.remove();
+                }
+            }
         }
     }
 
@@ -68,7 +81,8 @@ public final class ExplosiveEntityContextRegistry {
             WorldMutationSource source,
             String actor,
             String actionId,
-            boolean accessAllowed
+            boolean accessAllowed,
+            long createdAtMillis
     ) {
 
         static Optional<ExplosiveContext> captureCurrent() {
@@ -84,12 +98,17 @@ public final class ExplosiveEntityContextRegistry {
                     WorldMutationSource.EXPLOSIVE,
                     WorldMutationContext.currentActor(),
                     actionId,
-                    WorldMutationContext.currentAccessAllowed()
+                    WorldMutationContext.currentAccessAllowed(),
+                    System.currentTimeMillis()
             ));
         }
 
         void push() {
             WorldMutationContext.pushSource(this.source, this.actor, this.actionId, this.accessAllowed);
+        }
+
+        boolean expired() {
+            return System.currentTimeMillis() - this.createdAtMillis > 120_000L;
         }
     }
 }

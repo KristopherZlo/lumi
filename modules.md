@@ -51,7 +51,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Storage format or path changes | `ProjectLayout`, exact repository class | `StorageIo`, `GsonProvider`, matching domain model record | `ProjectLayoutTest`, repository tests, `docs/storage-format.md` |
 | Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditSessionBridge`, `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
 | Commands and runtime tests | `LumaCommands`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, `SingleplayerBulkApplyDiagnostics`, `LumiTestFailpoints`, scripts under `scripts/` | `/lumi testing smoke`, `/lumi testing crash-safety`, `/lumi testing external-tools`, `docs/commands.md`, `docs/test-client.md` |
-| Client navigation and screen behavior | `ScreenRouter`, the route screen, route controller, route view state | `LumaScreen`, `ProjectWindowLayout`, `ProjectSidebarNavigation`, section builders | UI controller tests, `docs/development.md` |
+| Client navigation and screen behavior | `ScreenRouter`, the route screen, route controller, route view state | `LumaScreen`, `ProjectWindowLayout`, `ProjectSidebarNavigation`, section builders | UI controller tests, `LumiScreenClientGameTests`, `docs/development.md` |
 
 ## Bootstrap And Global Entry Points
 
@@ -270,5 +270,5 @@ Use tests to find the expected behavior before broad code reading.
 - Optional integrations: `src/test/java/io/github/luma/integration`.
 - Client UI controllers/overlays/previews/graphs: `src/test/java/io/github/luma/ui` and `src/test/java/io/github/luma/client`.
 - Resource and localization checks: `src/test/java/io/github/luma/resources`.
-- Fabric runtime suites: `src/gametest`, `src/idleGametest`, `src/baselineGametest`, `src/baselineIdleGametest`.
+- Fabric runtime suites: `src/gametest`, including `LumiScreenClientGameTests` for live screen render/button smoke coverage, plus `src/idleGametest`, `src/baselineGametest`, `src/baselineIdleGametest`.
 - Launch and comparison scripts: `scripts/*.ps1`.

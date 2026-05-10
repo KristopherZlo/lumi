@@ -712,10 +712,11 @@ final class SingleplayerTestRun {
                 : this.gameplayReport.expectedEntityPositions()
                         .getOrDefault(this.savedGameplayEntityId, BlockPoint.from(entity.blockPosition()));
         BlockPos moved = this.volume.min().offset(9, 1, 9);
-        WorldMutationContext.runWithSource(WorldMutationSource.PLAYER, () -> {
+        try (WorldMutationContext.SourceFrame ignored =
+                     WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true)) {
             entity.snapTo(moved.getX() + 0.5D, moved.getY(), moved.getZ() + 0.5D, 180.0F, 0.0F);
             entity.setCustomName(Component.literal("lumi-quickrollback-mutated"));
-        });
+        }
         this.check(entity.blockPosition().equals(moved), "Gameplay entity pending update moved before quick rollback");
         this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
         this.log.info("Queued entity quick rollback operation " + this.pendingOperation.id());
@@ -745,10 +746,11 @@ final class SingleplayerTestRun {
         }
 
         BlockPos moved = this.volume.min().offset(9, 1, 8);
-        WorldMutationContext.runWithSource(WorldMutationSource.PLAYER, () -> {
+        try (WorldMutationContext.SourceFrame ignored =
+                     WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true)) {
             entity.snapTo(moved.getX() + 0.5D, moved.getY(), moved.getZ() + 0.5D, 270.0F, 0.0F);
             entity.setCustomName(Component.literal("lumi-saved-entity-update"));
-        });
+        }
         this.check(entity.blockPosition().equals(moved), "Gameplay entity saved update moved before save");
         this.gameplayEntityUpdateSaveVersionId = ProjectService.versionId(this.projectService.loadVersions(server, this.project.name()).size() + 1);
         this.gameplayEntityUpdateSaveValidated = false;
@@ -940,7 +942,7 @@ final class SingleplayerTestRun {
         for (SingleplayerBulkApplyDiagnostics.DiagnosticCheck check : this.bulkApplyDiagnostics.checks()) {
             this.check(check.passed(), check.label() + " (" + check.detail() + ")");
         }
-        this.completePhase(server, Phase.START_STRUCTURE_FIXTURE_TESTS);
+        this.completePhase(server, Phase.CLEANUP);
     }
 
     private void startStructureFixtureTests(MinecraftServer server) {

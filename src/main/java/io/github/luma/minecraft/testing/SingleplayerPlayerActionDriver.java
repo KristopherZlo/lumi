@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.testing;
 
+import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -43,12 +45,24 @@ final class SingleplayerPlayerActionDriver {
         this.moveNear(clickedPos);
         this.player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         BlockHitResult hitResult = new BlockHitResult(this.hitLocation(clickedPos, face), face, clickedPos, false);
-        return this.player.gameMode.useItemOn(this.player, this.level, stack, InteractionHand.MAIN_HAND, hitResult);
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushPlayerSource(
+                WorldMutationSource.PLAYER,
+                this.player.getName().getString(),
+                true
+        )) {
+            return this.player.gameMode.useItemOn(this.player, this.level, stack, InteractionHand.MAIN_HAND, hitResult);
+        }
     }
 
     boolean destroyBlock(BlockPos pos) {
         this.moveNear(pos);
-        return this.player.gameMode.destroyBlock(pos);
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushPlayerSource(
+                WorldMutationSource.PLAYER,
+                this.player.getName().getString(),
+                true
+        )) {
+            return this.player.gameMode.destroyBlock(pos);
+        }
     }
 
     private void moveNear(BlockPos pos) {

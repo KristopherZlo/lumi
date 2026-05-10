@@ -33,14 +33,16 @@ public final class LumiClientGameTests implements FabricClientGameTest {
                 throw new IllegalStateException("No singleplayer test player is available");
             }
             ServerPlayer player = players.get(0);
-            if (this.modeIs("structure-fixtures", "structures")) {
+            if (this.modeIs("full", "singleplayer")) {
+                SingleplayerTestingService.getInstance().start(server, server.overworld(), player);
+            } else if (this.modeIs("structure-fixtures", "structures")) {
                 SingleplayerTestingService.getInstance().startStructureFixtures(server, server.overworld(), player);
             } else if (this.modeIs("crash-safety", "crash")) {
                 SingleplayerTestingService.getInstance().startCrashSafety(server, server.overworld(), player);
             } else if (this.modeIs("external-tools", "tools")) {
                 SingleplayerTestingService.getInstance().startExternalTools(server, server.overworld(), player);
             } else {
-                SingleplayerTestingService.getInstance().start(server, server.overworld(), player);
+                SingleplayerTestingService.getInstance().startSmoke(server, server.overworld(), player);
             }
         });
     }

@@ -271,8 +271,8 @@ final class SingleplayerGameplayRegressionSuite {
             context.checks.check(destroyed, "gameplay block break destroys support");
             context.checks.check(context.level.getBlockState(support).isAir(), "gameplay support block became air");
             context.checks.check(context.level.getBlockState(flower).isAir(), "gameplay adjacent flower became air");
-            context.expectDraftBlock(support);
-            context.expectDraftBlock(flower);
+            context.expectNoDraftBlock(support);
+            context.expectNoDraftBlock(flower);
         }
     }
 
