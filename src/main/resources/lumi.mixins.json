@@ -35,6 +35,7 @@
     "TntBlockMixin"
   ],
   "client": [
+    "client.EditWorldScreenMixin",
     "client.MinecraftInteractionMixin",
     "client.MouseHandlerMixin",
     "client.WorldOpenFlowsMixin"

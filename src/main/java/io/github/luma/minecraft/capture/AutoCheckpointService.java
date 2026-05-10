@@ -51,7 +51,7 @@ public final class AutoCheckpointService {
         if (player == null || !(player.level() instanceof ServerLevel level)) {
             return;
         }
-        if (level.getServer().isDedicatedServer() && !LumaAccessControl.getInstance().canUse(player)) {
+        if (!LumaAccessControl.getInstance().canUse(player)) {
             return;
         }
         if (!this.commandClassifier.shouldCheckpoint(command, player.blockPosition())) {
@@ -66,8 +66,7 @@ public final class AutoCheckpointService {
             String actor,
             String actionId
     ) {
-        boolean accessAllowed = level != null && !level.getServer().isDedicatedServer();
-        this.checkpointBeforeExternalOperation(level, source, actor, actionId, accessAllowed);
+        this.checkpointBeforeExternalOperation(level, source, actor, actionId, false);
     }
 
     public void checkpointBeforeExternalOperation(
@@ -80,7 +79,7 @@ public final class AutoCheckpointService {
         if (level == null || source == null) {
             return;
         }
-        if (level.getServer().isDedicatedServer() && !accessAllowed) {
+        if (!accessAllowed) {
             return;
         }
         this.checkpoint(level, source.name().toLowerCase(java.util.Locale.ROOT) + ":" + actionId, actor, source.name());

@@ -5,7 +5,9 @@ import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 
 final class WorldEntryBackupScreen extends Screen {
@@ -15,6 +17,10 @@ final class WorldEntryBackupScreen extends Screen {
     private static final int TEXT_COLOR = 0xE8EEF8;
     private static final int XP_BAR_WIDTH = 182;
     private static final int XP_BAR_HEIGHT = 5;
+    private static final Identifier XP_BAR_BACKGROUND =
+            Identifier.withDefaultNamespace("hud/experience_bar_background");
+    private static final Identifier XP_BAR_PROGRESS =
+            Identifier.withDefaultNamespace("hud/experience_bar_progress");
 
     private final Runnable onAccepted;
     private final Runnable onFailedBack;
@@ -173,14 +179,20 @@ final class WorldEntryBackupScreen extends Screen {
 
     private void renderExperienceProgress(GuiGraphics graphics, int x, int y, double fraction) {
         int filled = Math.max(0, Math.min(XP_BAR_WIDTH, (int) Math.round(XP_BAR_WIDTH * fraction)));
-        graphics.fill(x - 1, y - 1, x + XP_BAR_WIDTH + 1, y + XP_BAR_HEIGHT + 1, 0xFF000000);
-        graphics.fill(x, y, x + XP_BAR_WIDTH, y + XP_BAR_HEIGHT, 0xFF3B270F);
-        for (int segment = 0; segment < XP_BAR_WIDTH; segment += 6) {
-            graphics.fill(x + segment, y, Math.min(x + segment + 1, x + XP_BAR_WIDTH), y + XP_BAR_HEIGHT, 0xFF1D1308);
-        }
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, XP_BAR_BACKGROUND, x, y, XP_BAR_WIDTH, XP_BAR_HEIGHT);
         if (filled > 0) {
-            graphics.fill(x, y, x + filled, y + 2, 0xFFB6FF4A);
-            graphics.fill(x, y + 2, x + filled, y + XP_BAR_HEIGHT, 0xFF55B92B);
+            graphics.blitSprite(
+                    RenderPipelines.GUI_TEXTURED,
+                    XP_BAR_PROGRESS,
+                    XP_BAR_WIDTH,
+                    XP_BAR_HEIGHT,
+                    0,
+                    0,
+                    x,
+                    y,
+                    filled,
+                    XP_BAR_HEIGHT
+            );
         }
     }
 }

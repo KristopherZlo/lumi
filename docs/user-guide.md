@@ -8,14 +8,14 @@ Project data is stored inside the Minecraft save folder.
 
 Normal Lumi workflows are UI-first. Use screens for saving, restoring, branching, recovery, import/export, cleanup, settings, and compare. Commands are limited to help, diagnostics, onboarding replay, and runtime tests.
 
-Lumi UI actions are intended for the local world owner. Dedicated servers still require operator-level permission for mutating Lumi actions. In singleplayer integrated worlds, builder edits are captured for history and live undo/redo immediately.
+Lumi UI actions are intended for the local world owner. Capture and mutating Lumi actions activate only when the current player has the required admin/operator-level permission. In singleplayer, this follows the world's command permission state; on dedicated servers, the server operator permission gate applies.
 
 ## Quick Start
 
 1. Open a singleplayer world.
 2. Press `U` to open Lumi for the current dimension.
-3. Complete or close the short onboarding tour.
 4. Build normally.
+3. Complete or close the short onboarding tour.
 5. Use `Save build` or `Left Alt+S` to create a save.
 6. Use `See changes` to compare the saved head against the current build.
 7. Use `Left Alt+Z` and `Left Alt+Y` to undo or redo recent tracked actions.
@@ -878,7 +878,7 @@ The origin manifest records:
 
 Old manifests without a Lumi creation marker are treated conservatively and are not eligible for automatic generator regeneration.
 
-Before opening an existing pre-Lumi world without a completed Lumi backup, the client shows an alpha backup gate. Pressing `Got it!` starts the compressed backup, shows a loading label and an experience-bar-style progress bar, records the acknowledgement when the backup succeeds, and opens the world only after the manifest is complete. Fresh worlds created through Lumi are marked as Lumi-created and do not show this gate.
+Before opening an existing pre-Lumi world without a completed Lumi backup, the client shows an alpha backup gate. Pressing `Got it!` starts the compressed backup, shows a loading label and a Minecraft experience-bar-style progress bar, records the acknowledgement when the backup succeeds, and opens the world only after the manifest is complete. Fresh worlds created through Lumi are marked as Lumi-created and do not show this gate.
 
 Lumi writes the one-time pre-mod backup under:
 
@@ -887,6 +887,8 @@ Lumi writes the one-time pre-mod backup under:
 ```
 
 The backup scan runs before world entry on Lumi's low-priority client backup thread. It records the world seed, scans generated region chunks, skips pristine and visited-only chunks, and stores chunks with persistent payloads such as block entities, entities, or pending ticks as maximum-compression raw NBT. The server bootstrap later verifies the completed manifest instead of repeating the backup. The default compressed payload budget is 128 MiB and can be changed with the `lumi.preModBackup.maxMiB` JVM property.
+
+The vanilla Edit World screen shows `RESTORE FROM LUMI BACKUP` when a completed Lumi pre-mod backup has restorable chunk payloads. Pressing it opens a red confirmation screen: the restore button remains disabled until the player checks the acknowledgement box, and Cancel returns without changing the save. Confirming restores the backed-up raw chunks to their pre-Lumi state while keeping Lumi project history and commits on disk.
 
 History packages are stored under:
 

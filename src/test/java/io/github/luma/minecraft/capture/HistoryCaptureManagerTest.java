@@ -132,10 +132,11 @@ class HistoryCaptureManagerTest {
     }
 
     @Test
-    void shouldAllowSingleplayerExplicitActionsWithoutPermissionFrame() {
-        assertTrue(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.PLAYER));
-        assertTrue(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.WORLDEDIT));
-        assertTrue(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.FAWE));
+    void shouldRequirePermissionForExplicitActions() {
+        assertFalse(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.PLAYER));
+        assertFalse(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.WORLDEDIT));
+        assertFalse(HistoryCaptureManager.canUseMutationSource(false, false, WorldMutationSource.FAWE));
+        assertTrue(HistoryCaptureManager.canUseMutationSource(false, true, WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.canUseMutationSource(true, true, WorldMutationSource.PLAYER));
         assertFalse(HistoryCaptureManager.canUseMutationSource(true, false, WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.canUseMutationSource(true, true, WorldMutationSource.WORLDEDIT));

@@ -81,7 +81,7 @@ final class MutationSourcePolicy {
     }
 
     boolean canUse(boolean dedicatedServer, boolean accessAllowed, WorldMutationSource source) {
-        return !this.isExplicitRootSource(source) || accessAllowed || !dedicatedServer;
+        return !this.isExplicitRootSource(source) || accessAllowed;
     }
 
     boolean usesDeferredStabilization(BuildProject project, WorldMutationSource source) {
