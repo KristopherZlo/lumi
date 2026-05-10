@@ -17,6 +17,7 @@ import java.util.zip.GZIPOutputStream;
 public final class WorldInitialBackupRepository {
 
     private static final String BACKUP_DIR = "pre-mod-backup";
+    private static final int BACKUP_COMPRESSION_LEVEL = Deflater.DEFAULT_COMPRESSION;
 
     public boolean completedForSeed(Path worldRoot, long seed) throws IOException {
         return this.load(worldRoot)
@@ -93,17 +94,17 @@ public final class WorldInitialBackupRepository {
 
     private byte[] compress(byte[] bytes) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        try (GZIPOutputStream compressed = new BestCompressionGzipOutputStream(output)) {
+        try (GZIPOutputStream compressed = new BackupGzipOutputStream(output)) {
             compressed.write(bytes);
         }
         return output.toByteArray();
     }
 
-    private static final class BestCompressionGzipOutputStream extends GZIPOutputStream {
+    private static final class BackupGzipOutputStream extends GZIPOutputStream {
 
-        private BestCompressionGzipOutputStream(ByteArrayOutputStream output) throws IOException {
+        private BackupGzipOutputStream(ByteArrayOutputStream output) throws IOException {
             super(output);
-            this.def.setLevel(Deflater.BEST_COMPRESSION);
+            this.def.setLevel(BACKUP_COMPRESSION_LEVEL);
         }
     }
 
