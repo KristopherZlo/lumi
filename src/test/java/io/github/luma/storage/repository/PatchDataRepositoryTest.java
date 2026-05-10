@@ -167,6 +167,34 @@ class PatchDataRepositoryTest {
     }
 
     @Test
+    void writesVisibleSectionIndexForPreviewBounds() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        List<StoredBlockChange> changes = List.of(
+                new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:gold_block", null)
+                ),
+                new StoredBlockChange(
+                        new BlockPoint(1, 80, 1),
+                        payload("minecraft:stone", null),
+                        payload("minecraft:wheat", null),
+                        true
+                )
+        );
+
+        PatchMetadata metadata = this.repository.writePayload(layout, "patch-visible-index", "project", "v-visible", changes);
+        PatchChunkSlice slice = metadata.chunks().getFirst();
+
+        assertTrue(slice.visibleSectionIndexAvailable());
+        assertEquals(2, slice.changeCount());
+        assertEquals(1, slice.visibleChangeCount());
+        assertEquals(2, slice.sectionFingerprints().size());
+        assertEquals(1, slice.visibleSectionFingerprints().size());
+        assertEquals(4, slice.visibleSectionFingerprints().getFirst().sectionY());
+    }
+
+    @Test
     void filtersCurrentSectionFramesByFingerprintIndex() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         List<StoredBlockChange> changes = List.of(
@@ -231,6 +259,42 @@ class PatchDataRepositoryTest {
         assertEquals(entityId, restored.entityChanges().getFirst().entityId());
         assertEquals(2.0D, restored.entityChanges().getFirst().newValue()
                 .entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
+    }
+
+    @Test
+    void indexesEntityChangesByOldAndNewChunkForSelectiveReads() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        String entityId = "00000000-0000-0000-0000-000000000032";
+        StoredEntityChange movedOut = new StoredEntityChange(
+                entityId,
+                "minecraft:block_display",
+                entity("minecraft:block_display", entityId, 1.0D),
+                entity("minecraft:block_display", entityId, 32.0D)
+        );
+
+        PatchMetadata metadata = this.repository.writePayload(
+                layout,
+                "patch-entity-index",
+                "project",
+                "v0007",
+                List.of(),
+                List.of(movedOut)
+        );
+
+        assertEquals(1, metadata.entityChunkIndex().size());
+        assertEquals(new ChunkPoint(2, 0), metadata.entityChunkIndex().getFirst().frameChunk());
+        assertEquals(new ChunkPoint(0, 0), metadata.entityChunkIndex().getFirst().oldChunk());
+        assertEquals(new ChunkPoint(2, 0), metadata.entityChunkIndex().getFirst().newChunk());
+        assertEquals(List.of(movedOut), this.repository.loadEntityChangesForChunks(
+                layout,
+                metadata,
+                List.of(new ChunkPoint(0, 0))
+        ));
+        assertEquals(List.of(movedOut), this.repository.loadEntityChanges(
+                layout,
+                metadata,
+                List.of(entityId)
+        ));
     }
 
     @Test

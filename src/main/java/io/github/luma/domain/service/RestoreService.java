@@ -48,6 +48,7 @@ import io.github.luma.storage.repository.WorldOriginRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -803,6 +804,40 @@ public final class RestoreService {
         return new PatchWorldChanges(changes, entityChanges);
     }
 
+    private List<StoredEntityChange> loadVersionEntityChanges(
+            ProjectLayout layout,
+            ProjectVersion version,
+            Set<String> entityIds
+    ) throws IOException {
+        if (version == null || entityIds == null || entityIds.isEmpty()) {
+            return List.of();
+        }
+        List<StoredEntityChange> entityChanges = new ArrayList<>();
+        for (String patchId : version.patchIds()) {
+            PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
+                    .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
+            entityChanges.addAll(this.patchDataRepository.loadEntityChanges(layout, metadata, entityIds));
+        }
+        return entityChanges;
+    }
+
+    private List<StoredEntityChange> loadVersionEntityChangesForChunks(
+            ProjectLayout layout,
+            ProjectVersion version,
+            Collection<ChunkPoint> chunks
+    ) throws IOException {
+        if (version == null || chunks == null || chunks.isEmpty()) {
+            return List.of();
+        }
+        List<StoredEntityChange> entityChanges = new ArrayList<>();
+        for (String patchId : version.patchIds()) {
+            PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
+                    .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
+            entityChanges.addAll(this.patchDataRepository.loadEntityChangesForChunks(layout, metadata, chunks));
+        }
+        return entityChanges;
+    }
+
     private static WorldOperationManager.ProgressSink progressSinkNoOp() {
         return (stage, completedUnits, totalUnits, detail) -> {
         };
@@ -1107,7 +1142,13 @@ public final class RestoreService {
             return pendingDraft;
         }
 
-        Map<String, EntityPayload> targetStates = this.targetEntityStates(layout, versions, targetVersion, entityIds);
+        Map<String, EntityPayload> targetStates = this.targetEntityStates(
+                layout,
+                versions,
+                targetVersion,
+                entityIds,
+                this.entityTargetCandidateChunks(pendingDraft.entityChanges())
+        );
         List<StoredEntityChange> alignedEntities = pendingDraft.entityChanges().stream()
                 .map(change -> new StoredEntityChange(
                         change.entityId(),
@@ -1134,7 +1175,8 @@ public final class RestoreService {
             ProjectLayout layout,
             List<ProjectVersion> versions,
             ProjectVersion targetVersion,
-            Set<String> entityIds
+            Set<String> entityIds,
+            List<ChunkPoint> candidateChunks
     ) throws IOException {
         if (targetVersion == null || entityIds == null || entityIds.isEmpty()) {
             return Map.of();
@@ -1143,7 +1185,10 @@ public final class RestoreService {
         RestoreChain chain = this.resolveChain(versions, targetVersion);
         Map<String, EntityPayload> states = new LinkedHashMap<>();
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
-            for (var chunk : this.snapshotReader.readFile(layout.snapshotFile(chain.anchor().snapshotId())).chunks()) {
+            var snapshot = candidateChunks == null || candidateChunks.isEmpty()
+                    ? this.snapshotReader.readFile(layout.snapshotFile(chain.anchor().snapshotId()))
+                    : this.snapshotReader.readFile(layout.snapshotFile(chain.anchor().snapshotId()), candidateChunks);
+            for (var chunk : snapshot.chunks()) {
                 for (EntityPayload entity : chunk.entitySnapshots()) {
                     if (entityIds.contains(entity.entityId())) {
                         states.put(entity.entityId(), entity);
@@ -1152,10 +1197,7 @@ public final class RestoreService {
             }
         }
         for (ProjectVersion version : chain.patchVersions()) {
-            for (StoredEntityChange change : this.loadVersionWorldChanges(layout, List.of(version)).entityChanges()) {
-                if (!entityIds.contains(change.entityId())) {
-                    continue;
-                }
+            for (StoredEntityChange change : this.loadVersionEntityChanges(layout, version, entityIds)) {
                 if (change.newValue() == null) {
                     states.remove(change.entityId());
                 } else {
@@ -1164,6 +1206,23 @@ public final class RestoreService {
             }
         }
         return states;
+    }
+
+    private List<ChunkPoint> entityTargetCandidateChunks(List<StoredEntityChange> changes) {
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        for (StoredEntityChange change : changes == null ? List.<StoredEntityChange>of() : changes) {
+            this.addPayloadChunk(chunks, change.oldValue());
+            this.addPayloadChunk(chunks, change.newValue());
+        }
+        return List.copyOf(chunks.values());
+    }
+
+    private void addPayloadChunk(Map<String, ChunkPoint> chunks, EntityPayload payload) {
+        if (payload == null || payload.chunk() == null) {
+            return;
+        }
+        ChunkPoint chunk = payload.chunk();
+        chunks.putIfAbsent(chunkKey(chunk), chunk);
     }
 
     List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatches(
@@ -1223,7 +1282,7 @@ public final class RestoreService {
                     layout,
                     versions,
                     targetVersion,
-                    selectedChunks.keySet()
+                    selectedChunks.values()
             );
         } catch (IllegalArgumentException exception) {
             return List.of();
@@ -1258,16 +1317,30 @@ public final class RestoreService {
             ProjectLayout layout,
             List<ProjectVersion> versions,
             ProjectVersion targetVersion,
-            Set<String> selectedChunkKeys
+            Iterable<ChunkPoint> selectedChunks
     ) throws IOException {
-        if (targetVersion == null || selectedChunkKeys == null || selectedChunkKeys.isEmpty()) {
+        if (targetVersion == null || selectedChunks == null) {
             return Map.of();
         }
+
+        Map<String, ChunkPoint> selected = new LinkedHashMap<>();
+        for (ChunkPoint chunk : selectedChunks) {
+            if (chunk != null) {
+                selected.put(chunkKey(chunk), chunk);
+            }
+        }
+        if (selected.isEmpty()) {
+            return Map.of();
+        }
+        Set<String> selectedChunkKeys = selected.keySet();
 
         RestoreChain chain = this.resolveChain(versions, targetVersion);
         Map<String, EntityPayload> states = new LinkedHashMap<>();
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
-            for (var chunk : this.snapshotReader.readFile(layout.snapshotFile(chain.anchor().snapshotId())).chunks()) {
+            for (var chunk : this.snapshotReader.readFile(
+                    layout.snapshotFile(chain.anchor().snapshotId()),
+                    selected.values()
+            ).chunks()) {
                 if (!selectedChunkKeys.contains(chunk.chunkX() + ":" + chunk.chunkZ())) {
                     continue;
                 }
@@ -1277,10 +1350,7 @@ public final class RestoreService {
             }
         }
         for (ProjectVersion version : chain.patchVersions()) {
-            for (StoredEntityChange change : this.loadVersionWorldChanges(layout, List.of(version)).entityChanges()) {
-                if (!this.touchesAnyChunk(change, selectedChunkKeys)) {
-                    continue;
-                }
+            for (StoredEntityChange change : this.loadVersionEntityChangesForChunks(layout, version, selected.values())) {
                 if (change.newValue() == null) {
                     states.remove(change.entityId());
                 } else {

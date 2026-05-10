@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -736,7 +737,8 @@ public final class VersionService {
             return ChunkSelectionFactory.fromBounds(project.bounds());
         }
 
-        List<ChunkPoint> chunks = new ArrayList<>(this.baselineChunkRepository.listChunks(layout));
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        this.addChunks(chunks, this.baselineChunkRepository.listChunks(layout));
         for (ProjectVersion version : versions) {
             for (String patchId : version.patchIds()) {
                 Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
@@ -744,17 +746,18 @@ public final class VersionService {
                     continue;
                 }
                 for (var chunk : metadata.get().chunks()) {
-                    chunks = ChunkSelectionFactory.merge(chunks, List.of(chunk.chunk()));
+                    this.addChunk(chunks, chunk.chunk());
                 }
             }
         }
 
         if (draft == null || draft.isEmpty()) {
             LumaDebugLog.log(project, "save", "Collected {} snapshot chunks for project {} without working draft", chunks.size(), project.name());
-            return List.copyOf(chunks);
+            return List.copyOf(chunks.values());
         }
 
-        List<ChunkPoint> merged = ChunkSelectionFactory.merge(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
+        this.addChunks(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
+        List<ChunkPoint> merged = List.copyOf(chunks.values());
         LumaDebugLog.log(
                 project,
                 "save",
@@ -764,6 +767,18 @@ public final class VersionService {
                 draft.changes().size()
         );
         return merged;
+    }
+
+    private void addChunks(Map<String, ChunkPoint> chunks, List<ChunkPoint> source) {
+        for (ChunkPoint chunk : source == null ? List.<ChunkPoint>of() : source) {
+            this.addChunk(chunks, chunk);
+        }
+    }
+
+    private void addChunk(Map<String, ChunkPoint> chunks, ChunkPoint chunk) {
+        if (chunk != null) {
+            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+        }
     }
 
     private List<ProjectVariant> replaceVariant(List<ProjectVariant> variants, ProjectVariant updatedVariant) {

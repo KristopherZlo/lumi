@@ -142,6 +142,8 @@ Chunk payloads live under `pre-mod-backup/chunks/<dimension>/chunk_<x>_<z>.nbt.g
 This backup is a cold startup artifact, so it uses maximum-level gzip compression instead of the LZ4 frames used by hot history payloads.
 They contain raw chunk NBT compressed with gzip. The scan is storage-first: chunks whose only activity marker is non-zero `InhabitedTime` are treated as visited-only and skipped, because visited terrain can cover very large explored worlds without containing builder edits. Chunks with persistent payloads such as block entities, entities, or pending ticks are kept until the compressed backup budget is reached. The default budget is 128 MiB and can be changed with the `lumi.preModBackup.maxMiB` JVM property; values less than or equal to zero keep only the manifest and skip chunk payload writes.
 
+The vanilla Edit World restore action uses the completed manifest and the stored chunk payload files as the only source of truth. It writes each backed-up raw chunk NBT payload back into the matching region file and leaves `<world>/lumi/projects/` untouched, so Lumi commits and history packages remain available for diagnostics or future tooling. Chunks that were skipped by the backup policy are not regenerated or deleted during this restore.
+
 ### `test-logs/singleplayer-<timestamp>.log`
 
 Stores the detailed report for `/lumi testing singleplayer`.
@@ -282,9 +284,11 @@ Important fields:
 - version id
 - payload filename
 - `PatchChunkSlice` entries with chunk coordinates, record count, byte offset, and byte length
+- visible section fingerprints and visible change counts for preview bounds that ignore hidden builder-surface changes
+- `entityChunkIndex` entries with entity id, stored frame chunk, old chunk, and new chunk membership
 - aggregated patch stats
 
-Metadata reads must not require deserializing the full payload.
+Metadata reads must not require deserializing the full payload. The chunk index lets selected block reads seek to matching frames. The visible section index lets preview scheduling resolve bounds without decoding payloads when the metadata is new enough. The entity chunk index lets restore and partial restore select entity frames by either old or new chunk membership, so move-out and move-in records stay visible without scanning the whole patch payload.
 
 ### `patches/<patchId>.bin.lz4`
 
@@ -308,7 +312,7 @@ Current payload characteristics:
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
-Direct partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Schema v6/v7 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk index is available. Non-direct partial restore reconstructs finite current and target states from `snapshots/`, `cache/baseline-chunks/`, and patch payloads before writing a normal `PARTIAL_RESTORE` patch; missing required payload files are treated as an invalid restore plan.
+Direct partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Entity reads use the old/new chunk index when present so moves across the selection boundary are included from their stored frame chunk. Schema v6/v7 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk or entity index is available. Non-direct partial restore reconstructs finite current and target states from `snapshots/`, `cache/baseline-chunks/`, and patch payloads before writing a normal `PARTIAL_RESTORE` patch; missing required payload files are treated as an invalid restore plan.
 Patch readers bound NBT lengths, compressed/uncompressed frame lengths, palette counts, entity counts, and selected chunk slices before allocating buffers. A selected chunk slice whose stored frame coordinates or entity coordinates do not match the requested chunk is treated as corrupt storage.
 
 ### `snapshots/<snapshotId>.bin.lz4`
@@ -344,7 +348,7 @@ Whole-dimension projects do not create volume-triggered snapshots. They rely on 
 
 Preview images are textured isometric PNG files generated on the client per version when preview generation is enabled.
 
-Preview coverage is resolved from the visible changed block positions first, with a small context padding around that span. Hidden action-scoped growth changes are ignored so bonemeal crop/plant/amethyst updates do not move or invalidate screenshots, while unrelated ambient random ticks are skipped before storage. If precise visible change positions are unavailable, Lumi falls back to the touched visible chunk span for that save.
+Preview coverage is resolved from the visible changed block positions first, with a small context padding around that span. Hidden action-scoped growth changes are ignored so bonemeal crop/plant/amethyst updates do not move or invalidate screenshots, while unrelated ambient random ticks are skipped before storage. For saved patch versions, Lumi resolves bounds from section fingerprints and chunk metadata before considering coarser touched-chunk fallback, so preview scheduling does not need to decode the patch payload only to find bounds.
 
 Preview generation failure does not block version save.
 

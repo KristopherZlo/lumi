@@ -3,6 +3,7 @@ package io.github.luma.storage.repository;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.PatchChunkSlice;
+import io.github.luma.domain.model.PatchEntityChunkIndex;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchSectionFrame;
 import io.github.luma.domain.model.PatchSectionWorldChanges;
@@ -33,6 +34,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -107,6 +109,8 @@ public final class PatchDataRepository {
                     chunkBytes.length,
                     this.compressFrame(chunkBytes),
                     this.sectionFingerprints(chunkX, chunkZ, chunkChanges),
+                    (int) chunkChanges.stream().filter(StoredBlockChange::visibleInBuilderSurfaces).count(),
+                    this.sectionFingerprints(chunkX, chunkZ, visibleChanges(chunkChanges)),
                     chunkEntityChanges.size()
             ));
             chunkIndex += 1;
@@ -115,13 +119,15 @@ public final class PatchDataRepository {
 
         List<PatchChunkSlice> slices = new ArrayList<>();
         StorageIo.writeAtomically(layout.patchDataFile(patchId), output -> this.writeChunkAddressablePayload(output, frames, slices));
+        List<PatchEntityChunkIndex> entityChunkIndex = this.entityChunkIndex(entityChanges);
         return new PatchMetadata(
                 patchId,
                 projectId,
                 versionId,
                 layout.patchDataFile(patchId).getFileName().toString(),
                 List.copyOf(slices),
-                new PatchStats(changes.size(), slices.size())
+                new PatchStats(changes.size(), slices.size()),
+                entityChunkIndex
         );
     }
 
@@ -240,6 +246,53 @@ public final class PatchDataRepository {
             changes.addAll(this.toStoredChanges(frame));
         }
         return new PatchWorldChanges(changes, sectionChanges.entityChanges());
+    }
+
+    public List<StoredEntityChange> loadEntityChanges(
+            ProjectLayout layout,
+            PatchMetadata metadata,
+            Collection<String> entityIds
+    ) throws IOException {
+        Set<String> requestedIds = new HashSet<>();
+        for (String entityId : entityIds == null ? List.<String>of() : entityIds) {
+            if (entityId != null && !entityId.isBlank()) {
+                requestedIds.add(entityId);
+            }
+        }
+        if (metadata == null || requestedIds.isEmpty()) {
+            return List.of();
+        }
+        Set<ChunkPoint> frameChunks = this.frameChunksForEntityIds(metadata, requestedIds);
+        if (!metadata.entityChunkIndex().isEmpty() && frameChunks.isEmpty()) {
+            return List.of();
+        }
+        List<StoredEntityChange> entityChanges = frameChunks.isEmpty()
+                ? this.loadWorldChanges(layout, metadata).entityChanges()
+                : this.loadWorldChanges(layout, metadata, frameChunks).entityChanges();
+        return entityChanges.stream()
+                .filter(change -> requestedIds.contains(change.entityId()))
+                .toList();
+    }
+
+    public List<StoredEntityChange> loadEntityChangesForChunks(
+            ProjectLayout layout,
+            PatchMetadata metadata,
+            Collection<ChunkPoint> chunks
+    ) throws IOException {
+        Set<ChunkPoint> requestedChunks = new HashSet<>(chunks == null ? List.<ChunkPoint>of() : chunks);
+        if (metadata == null || requestedChunks.isEmpty()) {
+            return List.of();
+        }
+        Set<ChunkPoint> frameChunks = this.frameChunksForEntityChunks(metadata, requestedChunks);
+        if (!metadata.entityChunkIndex().isEmpty() && frameChunks.isEmpty()) {
+            return List.of();
+        }
+        List<StoredEntityChange> entityChanges = frameChunks.isEmpty()
+                ? this.loadWorldChanges(layout, metadata).entityChanges()
+                : this.loadWorldChanges(layout, metadata, frameChunks).entityChanges();
+        return entityChanges.stream()
+                .filter(change -> this.touchesAnyChunk(change, requestedChunks))
+                .toList();
     }
 
     private PatchWorldChanges loadLegacyWorldChanges(Path dataFile, PatchMetadata metadata) throws IOException {
@@ -417,6 +470,9 @@ public final class PatchDataRepository {
                         offset,
                         frameHeader.length + frame.compressedBytes().length,
                         frame.sectionFingerprints(),
+                        frame.visibleChangeCount(),
+                        frame.visibleSectionFingerprints(),
+                        true,
                         frame.entityCount()
                 ));
                 data.write(frameHeader);
@@ -963,6 +1019,73 @@ public final class PatchDataRepository {
         return chunk.x() + ":" + chunk.z();
     }
 
+    private List<PatchEntityChunkIndex> entityChunkIndex(List<StoredEntityChange> entityChanges) {
+        if (entityChanges == null || entityChanges.isEmpty()) {
+            return List.of();
+        }
+        List<PatchEntityChunkIndex> index = new ArrayList<>(entityChanges.size());
+        for (StoredEntityChange change : entityChanges) {
+            ChunkPoint frameChunk = change.chunk();
+            ChunkPoint oldChunk = change.oldValue() == null ? null : change.oldValue().chunk();
+            ChunkPoint newChunk = change.newValue() == null ? null : change.newValue().chunk();
+            index.add(new PatchEntityChunkIndex(
+                    change.entityId(),
+                    frameChunk.x(),
+                    frameChunk.z(),
+                    oldChunk == null ? null : oldChunk.x(),
+                    oldChunk == null ? null : oldChunk.z(),
+                    newChunk == null ? null : newChunk.x(),
+                    newChunk == null ? null : newChunk.z()
+            ));
+        }
+        return List.copyOf(index);
+    }
+
+    private Set<ChunkPoint> frameChunksForEntityIds(PatchMetadata metadata, Set<String> entityIds) {
+        if (metadata.entityChunkIndex().isEmpty() || entityIds == null || entityIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
+        for (PatchEntityChunkIndex entry : metadata.entityChunkIndex()) {
+            if (entry != null && entityIds.contains(entry.entityId())) {
+                chunks.add(entry.frameChunk());
+            }
+        }
+        return chunks;
+    }
+
+    private Set<ChunkPoint> frameChunksForEntityChunks(PatchMetadata metadata, Set<ChunkPoint> chunks) {
+        if (metadata.entityChunkIndex().isEmpty() || chunks == null || chunks.isEmpty()) {
+            return Set.of();
+        }
+        Set<ChunkPoint> frameChunks = new LinkedHashSet<>();
+        for (PatchEntityChunkIndex entry : metadata.entityChunkIndex()) {
+            if (entry == null) {
+                continue;
+            }
+            for (ChunkPoint chunk : chunks) {
+                if (entry.touches(chunk)) {
+                    frameChunks.add(entry.frameChunk());
+                    break;
+                }
+            }
+        }
+        return frameChunks;
+    }
+
+    private boolean touchesAnyChunk(StoredEntityChange change, Set<ChunkPoint> chunks) {
+        if (change == null || chunks == null || chunks.isEmpty()) {
+            return false;
+        }
+        if (change.oldValue() != null && chunks.contains(change.oldValue().chunk())) {
+            return true;
+        }
+        if (change.newValue() != null && chunks.contains(change.newValue().chunk())) {
+            return true;
+        }
+        return chunks.contains(change.chunk());
+    }
+
     private static int packLocalPosition(BlockPoint pos) {
         int normalizedY = pos.y() - Short.MIN_VALUE;
         return (normalizedY << 8) | ((pos.z() & 15) << 4) | (pos.x() & 15);
@@ -1012,6 +1135,14 @@ public final class PatchDataRepository {
             ));
         }
         return List.copyOf(fingerprints);
+    }
+
+    private static List<StoredBlockChange> visibleChanges(List<StoredBlockChange> changes) {
+        return changes == null
+                ? List.of()
+                : changes.stream()
+                        .filter(StoredBlockChange::visibleInBuilderSurfaces)
+                        .toList();
     }
 
     private byte[] fingerprintBytes(List<StoredBlockChange> sectionChanges) throws IOException {
@@ -1070,11 +1201,16 @@ public final class PatchDataRepository {
             int uncompressedLength,
             byte[] compressedBytes,
             List<SectionFingerprint> sectionFingerprints,
+            int visibleChangeCount,
+            List<SectionFingerprint> visibleSectionFingerprints,
             int entityCount
     ) {
 
         private ChunkFrame {
             sectionFingerprints = sectionFingerprints == null ? List.of() : List.copyOf(sectionFingerprints);
+            visibleSectionFingerprints = visibleSectionFingerprints == null
+                    ? List.of()
+                    : List.copyOf(visibleSectionFingerprints);
         }
     }
 }

@@ -4,8 +4,10 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
@@ -14,7 +16,7 @@ import io.github.luma.storage.repository.PatchMetaRepository;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,6 +49,16 @@ public final class PreviewBoundsResolver {
         if (changedBounds != null) {
             return changedBounds;
         }
+        Bounds3i metadataBounds = this.resolvePatchBoundsFromMetadata(
+                layout,
+                project,
+                version,
+                level.dimensionType().minY(),
+                level.dimensionType().minY() + level.dimensionType().height() - 1
+        );
+        if (metadataBounds != null) {
+            return metadataBounds;
+        }
 
         List<ChunkPoint> chunks = this.resolvePreviewChunks(layout, project, versions, version, draft);
         if (chunks.isEmpty()) {
@@ -74,11 +86,11 @@ public final class PreviewBoundsResolver {
             return visibleChanges(draft.changes());
         }
 
-        if (version != null && version.patchIds() != null && !version.patchIds().isEmpty()) {
-            List<StoredBlockChange> changes = visibleChanges(this.loadPatchChanges(layout, version.patchIds()));
-            if (!changes.isEmpty()) {
-                return changes;
-            }
+        if (version != null
+                && version.patchIds() != null
+                && !version.patchIds().isEmpty()
+                && !this.hasCompleteVisibleSectionIndex(layout, version.patchIds())) {
+            return visibleChanges(this.loadPatchChanges(layout, version.patchIds()));
         }
 
         if (!project.tracksWholeDimension()) {
@@ -100,28 +112,16 @@ public final class PreviewBoundsResolver {
         }
 
         if (version != null && version.patchIds() != null && !version.patchIds().isEmpty()) {
-            List<StoredBlockChange> changes = visibleChanges(this.loadPatchChanges(layout, version.patchIds()));
-            if (!changes.isEmpty()) {
-                return ChunkSelectionFactory.fromStoredChanges(changes);
-            }
-            if (this.hasHiddenOnlyPatchChanges(layout, version.patchIds())) {
-                return List.of();
-            }
-
-            Map<String, ChunkPoint> chunks = new HashMap<>();
-            for (String patchId : version.patchIds()) {
-                Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
-                if (metadata.isEmpty()) {
-                    continue;
+            if (!this.hasCompleteVisibleSectionIndex(layout, version.patchIds())) {
+                List<StoredBlockChange> changes = visibleChanges(this.loadPatchChanges(layout, version.patchIds()));
+                if (!changes.isEmpty()) {
+                    return ChunkSelectionFactory.fromStoredChanges(changes);
                 }
-                for (var chunk : metadata.get().chunks()) {
-                    ChunkPoint chunkPoint = chunk.chunk();
-                    chunks.putIfAbsent(chunkPoint.x() + ":" + chunkPoint.z(), chunkPoint);
+                if (this.hasHiddenOnlyPatchChanges(layout, version.patchIds())) {
+                    return List.of();
                 }
             }
-            if (!chunks.isEmpty()) {
-                return List.copyOf(chunks.values());
-            }
+            return this.patchChunksFromMetadata(layout, version.patchIds());
         }
 
         if (!project.tracksWholeDimension()) {
@@ -209,16 +209,103 @@ public final class PreviewBoundsResolver {
         );
     }
 
+    private Bounds3i resolvePatchBoundsFromMetadata(
+            ProjectLayout layout,
+            BuildProject project,
+            ProjectVersion version,
+            int minY,
+            int maxY
+    ) throws IOException {
+        if (version == null || version.patchIds() == null || version.patchIds().isEmpty()) {
+            return null;
+        }
+
+        List<SectionFingerprint> sections = new ArrayList<>();
+        List<ChunkPoint> chunks = new ArrayList<>();
+        for (String patchId : version.patchIds()) {
+            Optional<PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
+            if (metadata.isEmpty()) {
+                continue;
+            }
+            for (var chunk : metadata.get().chunks()) {
+                if (!chunk.visibleSectionIndexAvailable()) {
+                    return null;
+                }
+                if (chunk.visibleSectionFingerprints().isEmpty()) {
+                    if (chunk.visibleChangeCount() > 0) {
+                        chunks.add(chunk.chunk());
+                    }
+                    continue;
+                }
+                sections.addAll(chunk.visibleSectionFingerprints());
+            }
+        }
+        if (!sections.isEmpty()) {
+            return sectionBounds(
+                    sections,
+                    project.tracksWholeDimension() ? null : project.bounds(),
+                    minY,
+                    maxY
+            );
+        }
+        if (!chunks.isEmpty()) {
+            return chunkBounds(
+                    ChunkSelectionFactory.merge(List.of(), chunks),
+                    project.tracksWholeDimension() ? minY : Math.max(minY, project.bounds().min().y()),
+                    project.tracksWholeDimension() ? maxY : Math.min(maxY, project.bounds().max().y())
+            );
+        }
+        return null;
+    }
+
+    private List<ChunkPoint> patchChunksFromMetadata(ProjectLayout layout, List<String> patchIds) throws IOException {
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        for (String patchId : patchIds) {
+            Optional<PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
+            if (metadata.isEmpty()) {
+                continue;
+            }
+            for (var chunk : metadata.get().chunks()) {
+                if (!chunk.visibleSectionIndexAvailable()
+                        || chunk.visibleChangeCount() > 0
+                        || chunk.entityCount() > 0) {
+                    addChunk(chunks, chunk.chunk());
+                }
+            }
+        }
+        return List.copyOf(chunks.values());
+    }
+
+    private boolean hasCompleteVisibleSectionIndex(ProjectLayout layout, List<String> patchIds) throws IOException {
+        for (String patchId : patchIds == null ? List.<String>of() : patchIds) {
+            Optional<PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
+            if (metadata.isEmpty()) {
+                return false;
+            }
+            for (var chunk : metadata.get().chunks()) {
+                if (!chunk.visibleSectionIndexAvailable()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private List<StoredBlockChange> loadPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
         List<StoredBlockChange> changes = new ArrayList<>();
         for (String patchId : patchIds) {
-            Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
+            Optional<PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
             if (metadata.isEmpty()) {
                 continue;
             }
             changes.addAll(this.patchDataRepository.loadChanges(layout, metadata.get()));
         }
         return changes;
+    }
+
+    private boolean hasHiddenOnlyPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
+        List<StoredBlockChange> changes = this.loadPatchChanges(layout, patchIds);
+        return !changes.isEmpty() && visibleChanges(changes).isEmpty();
     }
 
     private List<ChunkPoint> collectSnapshotChunks(
@@ -231,29 +318,26 @@ public final class PreviewBoundsResolver {
             return ChunkSelectionFactory.fromBounds(project.bounds());
         }
 
-        List<ChunkPoint> chunks = new ArrayList<>(this.baselineChunkRepository.listChunks(layout));
+        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        addChunks(chunks, this.baselineChunkRepository.listChunks(layout));
         for (ProjectVersion version : versions) {
             for (String patchId : version.patchIds()) {
-                Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
+                Optional<PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
                 if (metadata.isEmpty()) {
                     continue;
                 }
                 for (var chunk : metadata.get().chunks()) {
-                    chunks = ChunkSelectionFactory.merge(chunks, List.of(chunk.chunk()));
+                    addChunk(chunks, chunk.chunk());
                 }
             }
         }
 
         if (draft == null || draft.isEmpty()) {
-            return List.copyOf(chunks);
+            return List.copyOf(chunks.values());
         }
 
-        return List.copyOf(ChunkSelectionFactory.merge(chunks, ChunkSelectionFactory.fromStoredChanges(visibleChanges(draft.changes()))));
-    }
-
-    private boolean hasHiddenOnlyPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
-        List<StoredBlockChange> changes = this.loadPatchChanges(layout, patchIds);
-        return !changes.isEmpty() && visibleChanges(changes).isEmpty();
+        addChunks(chunks, ChunkSelectionFactory.fromStoredChanges(visibleChanges(draft.changes())));
+        return List.copyOf(chunks.values());
     }
 
     private static List<StoredBlockChange> visibleChanges(Collection<StoredBlockChange> changes) {
@@ -263,5 +347,66 @@ public final class PreviewBoundsResolver {
         return changes.stream()
                 .filter(change -> change != null && change.visibleInBuilderSurfaces())
                 .toList();
+    }
+
+    private static void addChunks(Map<String, ChunkPoint> chunks, List<ChunkPoint> source) {
+        for (ChunkPoint chunk : source == null ? List.<ChunkPoint>of() : source) {
+            addChunk(chunks, chunk);
+        }
+    }
+
+    private static void addChunk(Map<String, ChunkPoint> chunks, ChunkPoint chunk) {
+        if (chunk != null) {
+            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+        }
+    }
+
+    private static Bounds3i sectionBounds(
+            List<SectionFingerprint> sections,
+            Bounds3i projectBounds,
+            int minY,
+            int maxY
+    ) {
+        int minX = Integer.MAX_VALUE;
+        int minSectionY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxSectionY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (SectionFingerprint section : sections) {
+            minX = Math.min(minX, section.chunkX() << 4);
+            minSectionY = Math.min(minSectionY, section.sectionY() << 4);
+            minZ = Math.min(minZ, section.chunkZ() << 4);
+            maxX = Math.max(maxX, (section.chunkX() << 4) + 15);
+            maxSectionY = Math.max(maxSectionY, (section.sectionY() << 4) + 15);
+            maxZ = Math.max(maxZ, (section.chunkZ() << 4) + 15);
+        }
+        if (minX == Integer.MAX_VALUE) {
+            return null;
+        }
+
+        int clampedMinY = projectBounds == null
+                ? minY
+                : Math.max(minY, projectBounds.min().y());
+        int clampedMaxY = projectBounds == null
+                ? maxY
+                : Math.min(maxY, projectBounds.max().y());
+        int clampedMinX = projectBounds == null ? Integer.MIN_VALUE : projectBounds.min().x();
+        int clampedMaxX = projectBounds == null ? Integer.MAX_VALUE : projectBounds.max().x();
+        int clampedMinZ = projectBounds == null ? Integer.MIN_VALUE : projectBounds.min().z();
+        int clampedMaxZ = projectBounds == null ? Integer.MAX_VALUE : projectBounds.max().z();
+
+        return new Bounds3i(
+                new BlockPoint(
+                        Math.max(clampedMinX, minX - HORIZONTAL_PADDING),
+                        Math.max(clampedMinY, minSectionY - VERTICAL_PADDING),
+                        Math.max(clampedMinZ, minZ - HORIZONTAL_PADDING)
+                ),
+                new BlockPoint(
+                        Math.min(clampedMaxX, maxX + HORIZONTAL_PADDING),
+                        Math.min(clampedMaxY, maxSectionY + VERTICAL_PADDING),
+                        Math.min(clampedMaxZ, maxZ + HORIZONTAL_PADDING)
+                )
+        );
     }
 }

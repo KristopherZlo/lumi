@@ -14,7 +14,7 @@ The architecture is intentionally optimized around three requirements:
 
 ### Bootstrap layer
 
-`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, schedules shared world-origin metadata bootstrap on a low-priority background thread after the first player has entered the world and a short idle delay has elapsed, advances world operations once per server tick, updates native bossbar progress for active operations, drains delayed entity spawn capture after Minecraft accepts spawned entities into a level, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown. Startup bootstrap also performs one-time storage migration and verifies the space-bounded pre-mod region backup off the tick thread. On the client, world opening is gated by an alpha backup screen for existing pre-Lumi worlds that do not yet have a completed Lumi backup; accepting the screen creates the backup with visible progress before entering the world. Newly created worlds are marked before server bootstrap so they skip that gate.
+`io.github.luma.LumaMod` wires the mod into Fabric events. It registers diagnostic and local testing commands, schedules shared world-origin metadata bootstrap on a low-priority background thread after the first player has entered the world and a short idle delay has elapsed, advances world operations once per server tick, updates native bossbar progress for active operations, drains delayed entity spawn capture after Minecraft accepts spawned entities into a level, advances the singleplayer runtime test runner, flushes idle capture sessions, and persists active sessions on server shutdown. Startup bootstrap also performs one-time storage migration and verifies the space-bounded pre-mod region backup off the tick thread. On the client, world opening is gated by an alpha backup screen for existing pre-Lumi worlds that do not yet have a completed Lumi backup; accepting the screen creates the backup with visible progress before entering the world. Newly created worlds are marked before server bootstrap so they skip that gate, and the vanilla Edit World menu can restore completed pre-mod backup chunks while preserving Lumi project history.
 
 ### Domain model layer
 
@@ -176,7 +176,7 @@ Responsibilities are split as follows:
 10. Idle or dirty sessions are flushed into recovery storage only when the live buffer fingerprint changed since the last queued draft flush, but pending dirty chunks are still reconciled on every eligible server tick before the recovery flush throttle is considered.
 11. Item drops created by explosions, fluid, falling blocks, and nearby block-update fallout are captured into the in-memory undo/redo action only. They are removed on undo and respawned on redo, but they do not enter recovery drafts or saved version payloads.
 12. Authorized player-root actions append into the in-memory undo/redo stack, and nearby short-lived secondary fallout plus deferred fluid, falling-block, redstone, and piston deltas can join that same action without clearing an available redo. Delayed block events, scheduled ticks, and moving piston block entities use their copied action id instead of relying only on time/radius heuristics, and late redstone/piston callbacks in an already-pending dirty mechanism chunk can reuse that chunk's latest causal action context. Lumi records the reconciled action payload as the draft transition from the previous chunk state to the newly composed settled chunk state, so a mechanism close that returns blocks to baseline still contributes the moved-block undo/redo payload. Lumi can replay the practical builder step backward or forward without using version storage. Causal fallout is allowed to amend only the current top action with the same id; it cannot create or promote an older action after the builder has made a newer edit, which keeps oscillating redstone clocks from becoming the next undo target.
-13. In integrated singleplayer worlds, explicit builder actions are allowed into capture and undo/redo immediately even if the permission frame is not operator-shaped yet; dedicated servers keep the operator gate.
+13. Explicit builder actions enter capture and undo/redo only when the current player has Lumi's required admin/operator permission. Integrated singleplayer worlds and dedicated servers use the same permission gate, so non-admin worlds do not activate Lumi mutation capture.
 
 Important invariants:
 
@@ -313,7 +313,8 @@ Main files:
 - `exports/*.zip`: UI-driven project history archives and share packages
 - `versions/*.json`: version manifests
 - `versions/index.json`: optional disposable version-list cache
-- `patches/<patchId>.meta.json`: patch metadata and chunk index
+- `pre-mod-backup/manifest.json` and `pre-mod-backup/chunks/*`: one-time pre-Lumi raw chunk backup used by the world-entry gate and the vanilla Edit World restore action
+- `patches/<patchId>.meta.json`: patch metadata, chunk index, visible section index, and entity old/new chunk index
 - `patches/<patchId>.bin.lz4`: patch payload
 - `snapshots/<snapshotId>.bin.lz4`: checkpoint snapshot payload
 - `preview-requests/<versionId>.json`: queued client-side preview capture jobs

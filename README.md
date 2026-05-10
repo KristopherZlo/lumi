@@ -20,7 +20,7 @@ Lumi is a Fabric mod for Minecraft `1.21.11`.
 
 It gives builders a project-oriented history workflow for a dimension or selected build area. Instead of copying whole save folders, Lumi records block and entity state transitions as compact history payloads, lets the player compare versions, branch a build, restore older states, partially restore a selected region, recover interrupted work, and share project history packages.
 
-The mod is singleplayer-first. In an integrated singleplayer world, builder edits are captured immediately. On dedicated servers, mutating Lumi actions require operator-level access through the mod's access-control layer.
+The mod is singleplayer-first. Lumi capture and mutating actions activate only when the current player has the required admin/operator-level permission; in singleplayer this follows the world's command permission state, and dedicated servers use the same access-control layer.
 
 ## Product Model
 
@@ -48,6 +48,7 @@ The mod is singleplayer-first. In an integrated singleplayer world, builder edit
 - Branch creation, branch switching, local branch merge, variant import/export, full project archives, imported review projects, and safety checks for imported executable world-state data.
 - Crash recovery through durable working drafts, write-ahead log compaction, operation-draft isolation, recovery journals, and restore return points.
 - Capture of non-player entity spawn/remove/update with persistent NBT payloads for supported builder-facing entities.
+- Pre-Lumi world backup gate with visible progress and a vanilla Edit World restore action that can roll backed-up chunks to their pre-Lumi state while keeping Lumi project commits on disk.
 - Optional WorldEdit/FAWE/Axiom/tool-stack capture without hard runtime dependencies.
 - Client-side textured isometric previews and large-diff overlays prepared away from the render thread.
 - Runtime diagnostics, load logs, block-apply logs, light-refresh logs, smoke tests, and a broad singleplayer regression suite.
@@ -100,7 +101,7 @@ Project data lives under:
 The current storage model is patch-first:
 
 - `versions/*.json` are lightweight manifests.
-- `patches/*.meta.json` stores patch metadata and the chunk index.
+- `patches/*.meta.json` stores patch metadata, the chunk index, visible section bounds metadata, and the entity old/new chunk index.
 - `patches/*.bin.lz4` stores chunk-addressable binary patch payloads.
 - `snapshots/*.bin.lz4` stores checkpoint full-state anchors.
 - `cache/baseline-chunks/` stores first-touch whole-dimension baseline chunks.
@@ -108,7 +109,7 @@ The current storage model is patch-first:
 - `recovery/draft.bin.lz4` and `recovery/draft.wal.lz4` store crash-safe drafts.
 - `recovery/operation-draft.bin.lz4` isolates a save/amend draft while the async operation is running.
 
-New patch payloads use binary schema v9. Each file has a small Lumi header followed by independently compressed per-chunk LZ4 frames. The metadata records each chunk frame's physical offset and length, so selected-region restore can seek directly to relevant chunks instead of decoding the whole payload.
+New patch payloads use binary schema v9. Each file has a small Lumi header followed by independently compressed per-chunk LZ4 frames. The metadata records each chunk frame's physical offset and length, visible section fingerprints for previews, and entity old/new chunk membership, so selected-region restore can seek directly to relevant chunks instead of decoding the whole payload.
 
 Inside a patch chunk, block changes are grouped by 16x16x16 chunk section:
 
@@ -179,7 +180,7 @@ Hard runtime rule: JSON parsing, LZ4 decompression, and block-state decoding mus
 - Save/amend operation drafts are isolated from new live edits.
 - Recovery WAL corruption or truncation quarantines the damaged WAL and salvages the latest valid draft when possible.
 - Malformed `world-origin.json` is quarantined and regenerated from the current world instead of blocking the UI.
-- Existing pre-Lumi worlds without a completed Lumi backup show an alpha backup gate before opening. Pressing `Got it!` starts the compressed backup with a progress bar, and the world opens only after the backup manifest is complete. Fresh worlds created through Lumi are marked and skip that gate.
+- Existing pre-Lumi worlds without a completed Lumi backup show an alpha backup gate before opening. Pressing `Got it!` starts the compressed backup with a visible Minecraft experience-bar progress indicator, and the world opens only after the backup manifest is complete. Fresh worlds created through Lumi are marked and skip that gate. The vanilla Edit World screen exposes `RESTORE FROM LUMI BACKUP` when restorable backup chunks exist; that restore writes the pre-Lumi chunk payloads back into region files and leaves Lumi project commits on disk for later inspection.
 - Archive import validates paths, ids, sizes, and payload digests before promotion.
 - Cleanup is conservative and does not delete referenced history or baseline chunks.
 - Logs are part of the support surface for capture, save, restore, recovery, apply, light, and load diagnostics.

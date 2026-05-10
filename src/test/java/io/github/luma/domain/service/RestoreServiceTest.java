@@ -374,6 +374,40 @@ class RestoreServiceTest {
         assertEquals(0, batches.getFirst().entityBatch().entitiesToUpdate().size());
     }
 
+    @Test
+    void authoritativeEntityReplacementRemovesEntityMovedOutOfSelectedChunk(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        String entityId = "00000000-0000-0000-0000-000000000061";
+        EntityPayload inSelectedChunk = entity(entityId, 1.0D);
+        EntityPayload movedOut = entity(entityId, 32.0D);
+        this.snapshotWriter.writeFile(layout.snapshotFile("snapshot-0001"), snapshot(List.of(inSelectedChunk)));
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(),
+                List.of(new StoredEntityChange(entityId, "minecraft:block_display", inSelectedChunk, movedOut))
+        ));
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", "snapshot-0001", List.of()),
+                version("v0002", "main", "v0001", "", List.of("patch-0002"))
+        );
+
+        List<PreparedChunkBatch> batches = service.authoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                "v0002",
+                List.of(new ChunkPoint(0, 0))
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(new ChunkPoint(0, 0), batches.getFirst().chunk());
+        assertEquals(true, batches.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(0, batches.getFirst().entityBatch().entitiesToUpdate().size());
+    }
+
     private static BuildProject project(String activeVariantId) {
         return BuildProject.create(
                         "project",
