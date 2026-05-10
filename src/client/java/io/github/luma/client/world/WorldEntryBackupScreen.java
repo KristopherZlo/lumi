@@ -12,9 +12,9 @@ import net.minecraft.util.FormattedCharSequence;
 
 final class WorldEntryBackupScreen extends Screen {
 
-    private static final int MESSAGE_COLOR = 0x55D6FF;
-    private static final int ERROR_COLOR = 0xFF5555;
-    private static final int TEXT_COLOR = 0xE8EEF8;
+    private static final int MESSAGE_COLOR = 0xFF55D6FF;
+    private static final int ERROR_COLOR = 0xFFFF5555;
+    private static final int TEXT_COLOR = 0xFFE8EEF8;
     private static final int XP_BAR_WIDTH = 182;
     private static final int XP_BAR_HEIGHT = 5;
     private static final Identifier XP_BAR_BACKGROUND =

@@ -20,6 +20,7 @@ import net.minecraft.world.level.storage.LevelResource;
 public final class WorldInitialBackupService {
 
     private static final long BACKGROUND_PAUSE_NANOS = 500_000L;
+    private static final int PROGRESS_PUBLISH_INTERVAL_CHUNKS = 32;
     private final WorldInitialBackupRepository repository;
     private final RegionChunkScanner regionScanner;
     private final WorldChunkActivityClassifier activityClassifier;
@@ -295,7 +296,9 @@ public final class WorldInitialBackupService {
                 this.backedUpChunks += 1;
                 this.compressedBytes += Math.max(0L, compressedBytes);
             }
-            this.publish(dimensionId);
+            if (this.shouldPublishProgress()) {
+                this.publish(dimensionId);
+            }
         }
 
         private void complete() {
@@ -311,6 +314,10 @@ public final class WorldInitialBackupService {
                     this.compressedBytes,
                     dimensionId
             ));
+        }
+
+        private boolean shouldPublishProgress() {
+            return this.completedChunks % PROGRESS_PUBLISH_INTERVAL_CHUNKS == 0;
         }
     }
 }
