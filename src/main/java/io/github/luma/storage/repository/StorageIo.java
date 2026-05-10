@@ -7,9 +7,12 @@ import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -42,21 +45,63 @@ final class StorageIo {
         Files.createDirectories(targetFile.getParent());
         Path tempFile = tempFileFor(targetFile);
         boolean moved = false;
-        try (OutputStream output = Files.newOutputStream(
-                tempFile,
-                StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE
-        )) {
-            writerAction.write(output);
-        }
-
         try {
+            writeFileDurably(tempFile, writerAction, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             moveWithRetries(tempFile, targetFile, moveAction, retrySleeper);
             moved = true;
+            forceDirectoryBestEffort(targetFile.getParent());
         } finally {
             if (!moved) {
                 Files.deleteIfExists(tempFile);
             }
+        }
+    }
+
+    static void appendDurably(Path targetFile, WriterAction writerAction) throws IOException {
+        Files.createDirectories(targetFile.getParent());
+        writeFileDurably(
+                targetFile,
+                writerAction,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.APPEND
+        );
+        forceDirectoryBestEffort(targetFile.getParent());
+    }
+
+    private static void writeFileDurably(
+            Path file,
+            WriterAction writerAction,
+            StandardOpenOption... options
+    ) throws IOException {
+        try (FileChannel channel = FileChannel.open(file, options)) {
+            OutputStream output = new NonClosingOutputStream(Channels.newOutputStream(channel));
+            writerAction.write(output);
+            output.flush();
+            channel.force(true);
+        }
+    }
+
+    private static void forceDirectoryBestEffort(Path directory) {
+        if (directory == null) {
+            return;
+        }
+        try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
+            channel.force(true);
+        } catch (IOException | UnsupportedOperationException ignored) {
+            // Some platforms, including common Windows configurations, do not allow directory fsync.
+        }
+    }
+
+    private static final class NonClosingOutputStream extends FilterOutputStream {
+
+        private NonClosingOutputStream(OutputStream output) {
+            super(output);
+        }
+
+        @Override
+        public void close() throws IOException {
+            this.flush();
         }
     }
 

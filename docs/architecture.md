@@ -122,7 +122,7 @@ Important boundaries:
 - history tombstone repositories persist soft-delete visibility metadata without touching history payloads
 - `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export, including manifest size limits, safe storage-id validation, stable source-file hashing, bounded entry copying, entry digest verification, and symlink rejection
 - `ProjectCleanupRepository` owns file scanning and deletion for conservative storage cleanup, resolving deletion candidates through the project root and skipping symlink directories during empty-folder pruning
-- `StorageIo` owns low-level atomic-write and NBT binary helpers
+- `StorageIo` owns low-level atomic-write, durable append, and NBT binary helpers. Atomic writes go through a temp file, force the file contents before publish, move into place, and best-effort force the parent directory when the platform permits it.
 
 ### Client UI layer
 

@@ -23,12 +23,14 @@ public final class PatchRepository {
     public void save(ProjectLayout layout, BlockPatch patch, List<BlockChangeRecord> changes) throws IOException {
         Files.createDirectories(layout.patchesDir());
 
-        try (var output = new OutputStreamWriter(
-                new LZ4FrameOutputStream(new BufferedOutputStream(Files.newOutputStream(layout.patchFile(patch.id())))),
-                StandardCharsets.UTF_8
-        )) {
-            GsonProvider.gson().toJson(new PatchFile(patch, changes), PATCH_FILE_TYPE, output);
-        }
+        StorageIo.writeAtomically(layout.patchFile(patch.id()), output -> {
+            try (var writer = new OutputStreamWriter(
+                    new LZ4FrameOutputStream(new BufferedOutputStream(output)),
+                    StandardCharsets.UTF_8
+            )) {
+                GsonProvider.gson().toJson(new PatchFile(patch, changes), PATCH_FILE_TYPE, writer);
+            }
+        });
     }
 
     public BlockPatch loadPatch(ProjectLayout layout, String patchId) throws IOException {

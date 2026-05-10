@@ -3,6 +3,8 @@ package io.github.luma.storage.repository;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.storage.GsonProvider;
 import io.github.luma.storage.ProjectLayout;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectRepositoryTest {
@@ -108,6 +111,33 @@ class ProjectRepositoryTest {
     }
 
     @Test
+    void atomicWriteCleansTempFileWhenWriterFails() throws Exception {
+        Path target = this.tempDir.resolve("project.json");
+
+        assertThrows(IOException.class, () -> StorageIo.writeAtomically(target, output -> {
+            output.write("partial".getBytes(StandardCharsets.UTF_8));
+            throw new IOException("boom");
+        }));
+
+        assertFalse(Files.exists(target));
+        assertFalse(this.hasTempFiles());
+    }
+
+    @Test
+    void atomicWriteAllowsWritersToCloseTheirWrapper() throws Exception {
+        Path target = this.tempDir.resolve("project.json");
+
+        StorageIo.writeAtomically(target, output -> {
+            try (OutputStreamWriter writer = new OutputStreamWriter(output, StandardCharsets.UTF_8)) {
+                writer.write("ok");
+            }
+        });
+
+        assertEquals("ok", Files.readString(target, StandardCharsets.UTF_8));
+        assertFalse(this.hasTempFiles());
+    }
+
+    @Test
     void atomicWriteFallsBackWhenAtomicMoveIsUnsupported() throws Exception {
         Path target = this.tempDir.resolve("project.json");
         AtomicInteger attempts = new AtomicInteger();
@@ -134,5 +164,11 @@ class ProjectRepositoryTest {
 
         assertEquals(2, attempts.get());
         assertEquals("ok", Files.readString(target, StandardCharsets.UTF_8));
+    }
+
+    private boolean hasTempFiles() throws IOException {
+        try (var files = Files.list(this.tempDir)) {
+            return files.anyMatch(path -> path.getFileName().toString().endsWith(".tmp"));
+        }
     }
 }

@@ -177,6 +177,7 @@ Hard runtime rule: JSON parsing, LZ4 decompression, and block-state decoding mus
 - Only one world operation runs per world at a time.
 - Long operations publish progress through `OperationSnapshot` and Minecraft bossbars.
 - Save manifests are written only after patch payloads and metadata exist.
+- Atomic storage writes flush the temporary file before publishing it, so interrupted writes do not expose partial manifests or payloads.
 - Save/amend operation drafts are isolated from new live edits.
 - Recovery WAL corruption or truncation quarantines the damaged WAL and salvages the latest valid draft when possible.
 - Malformed `world-origin.json` is quarantined and regenerated from the current world instead of blocking the UI.

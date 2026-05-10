@@ -25,7 +25,6 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -183,17 +182,13 @@ public final class RecoveryRepository {
     }
 
     private void appendWalEntry(Path walFile, RecoveryDraft draft) throws IOException {
-        Files.createDirectories(walFile.getParent());
         byte[] compressedEntry = this.compressEntry(this.serializeDraft(draft));
-        try (DataOutputStream data = new DataOutputStream(Files.newOutputStream(
-                walFile,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.APPEND,
-                StandardOpenOption.WRITE
-        ))) {
+        StorageIo.appendDurably(walFile, output -> {
+            DataOutputStream data = new DataOutputStream(output);
             data.writeInt(compressedEntry.length);
             data.write(compressedEntry);
-        }
+            data.flush();
+        });
     }
 
     private RecoveryDraft readSingleEntry(Path baseFile) throws IOException {
