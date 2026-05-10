@@ -1,20 +1,20 @@
 package io.github.luma.client.world;
 
 import io.github.luma.minecraft.bootstrap.WorldInitialBackupProgress;
-import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.MultiLineTextWidget;
+import net.minecraft.client.gui.components.StringWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.FormattedCharSequence;
 
 final class WorldEntryBackupScreen extends Screen {
 
-    private static final int MESSAGE_COLOR = 0xFF55D6FF;
-    private static final int ERROR_COLOR = 0xFFFF5555;
-    private static final int TEXT_COLOR = 0xFFE8EEF8;
+    private static final int MESSAGE_TEXT_COLOR = 0x55D6FF;
+    private static final int ERROR_TEXT_COLOR = 0xFF5555;
+    private static final int BODY_TEXT_COLOR = 0xE8EEF8;
     private static final int XP_BAR_WIDTH = 182;
     private static final int XP_BAR_HEIGHT = 5;
     private static final Identifier XP_BAR_BACKGROUND =
@@ -24,10 +24,17 @@ final class WorldEntryBackupScreen extends Screen {
 
     private final Runnable onAccepted;
     private final Runnable onFailedBack;
+    private StringWidget titleText;
+    private MultiLineTextWidget messageText;
+    private MultiLineTextWidget statusText;
+    private StringWidget progressText;
     private Button actionButton;
     private boolean running;
     private boolean failed;
     private boolean opening;
+    private boolean progressVisible;
+    private int progressBarX;
+    private int progressBarY;
     private Component failureMessage = Component.empty();
     private WorldInitialBackupProgress progress = new WorldInitialBackupProgress(0, 1, 0, 0L, "");
 
@@ -41,64 +48,53 @@ final class WorldEntryBackupScreen extends Screen {
 
     @Override
     protected void init() {
+        int contentWidth = Math.min(420, this.width - 40);
+        int centerX = this.width / 2;
+        int y = Math.max(34, this.height / 2 - 96);
+
+        this.titleText = new StringWidget(this.title, this.font);
+        this.titleText.setX(centerX - this.titleText.getWidth() / 2);
+        this.titleText.setY(y);
+        this.addRenderableWidget(this.titleText);
+
+        y += 28;
+        this.messageText = new MultiLineTextWidget(Component.empty(), this.font)
+                .setMaxWidth(contentWidth)
+                .setCentered(true);
+        this.messageText.setY(y);
+        this.addRenderableWidget(this.messageText);
+
+        this.statusText = new MultiLineTextWidget(Component.empty(), this.font)
+                .setMaxWidth(contentWidth)
+                .setCentered(true);
+        this.statusText.visible = false;
+        this.statusText.setY(y);
+        this.addRenderableWidget(this.statusText);
+
+        this.progressText = new StringWidget(Component.empty(), this.font);
+        this.progressText.visible = false;
+        this.addRenderableWidget(this.progressText);
+
         int buttonWidth = 120;
         this.actionButton = Button.builder(Component.literal("Got it!"), button -> this.accept())
                 .bounds((this.width - buttonWidth) / 2, this.height / 2 + 70, buttonWidth, 20)
                 .build();
         this.addRenderableWidget(this.actionButton);
-        this.updateButtonState();
+        this.updateViewState();
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderStaticBackground(graphics);
-        super.render(graphics, mouseX, mouseY, partialTick);
-
-        int centerX = this.width / 2;
-        int contentWidth = Math.min(420, this.width - 40);
-        int y = Math.max(34, this.height / 2 - 96);
-
-        graphics.drawCenteredString(this.font, this.title, centerX, y, TEXT_COLOR);
-        y += 28;
-
-        if (this.failed) {
-            y = this.drawWrappedCentered(graphics, this.failureMessage, centerX, y, contentWidth, ERROR_COLOR);
-        } else if (this.running || this.opening) {
-            y = this.drawWrappedCentered(
+        if (this.progressVisible) {
+            this.renderExperienceProgress(
                     graphics,
-                    Component.translatable(this.opening
-                            ? "luma.alpha_warning.opening_world"
-                            : "luma.alpha_warning.backup_loading"),
-                    centerX,
-                    y,
-                    contentWidth,
-                    TEXT_COLOR
-            );
-            y += 10;
-            this.renderExperienceProgress(graphics, centerX - XP_BAR_WIDTH / 2, y, this.opening ? 1.0D : this.progress.fraction());
-            y += 14;
-            graphics.drawCenteredString(
-                    this.font,
-                    Component.translatable(
-                            "luma.alpha_warning.backup_progress",
-                            this.progress.completedChunks(),
-                            this.progress.totalChunks(),
-                            this.progress.backedUpChunks()
-                    ),
-                    centerX,
-                    y,
-                    TEXT_COLOR
-            );
-        } else {
-            this.drawWrappedCentered(
-                    graphics,
-                    Component.translatable("luma.alpha_warning.message"),
-                    centerX,
-                    y,
-                    contentWidth,
-                    MESSAGE_COLOR
+                    this.progressBarX,
+                    this.progressBarY,
+                    this.opening ? 1.0D : this.progress.fraction()
             );
         }
+        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override
@@ -112,7 +108,7 @@ final class WorldEntryBackupScreen extends Screen {
         }
         this.running = true;
         this.failed = false;
-        this.updateButtonState();
+        this.updateViewState();
     }
 
     void markOpening() {
@@ -126,7 +122,7 @@ final class WorldEntryBackupScreen extends Screen {
                 this.progress.compressedBytes(),
                 this.progress.currentDimensionId()
         );
-        this.updateButtonState();
+        this.updateViewState();
     }
 
     void fail(Component failureMessage) {
@@ -136,7 +132,7 @@ final class WorldEntryBackupScreen extends Screen {
         this.failureMessage = failureMessage == null
                 ? Component.translatable("luma.alpha_warning.backup_failed")
                 : failureMessage;
-        this.updateButtonState();
+        this.updateViewState();
     }
 
     private void accept() {
@@ -145,32 +141,76 @@ final class WorldEntryBackupScreen extends Screen {
             return;
         }
         this.running = true;
-        this.updateButtonState();
+        this.updateViewState();
         this.onAccepted.run();
     }
 
-    private void updateButtonState() {
-        if (this.actionButton == null) {
-            return;
+    private void updateViewState() {
+        if (this.actionButton != null) {
+            this.actionButton.setMessage(this.failed ? Component.translatable("gui.back") : Component.literal("Got it!"));
+            this.actionButton.active = !this.running && !this.opening;
         }
-        this.actionButton.setMessage(this.failed ? Component.translatable("gui.back") : Component.literal("Got it!"));
-        this.actionButton.active = !this.running && !this.opening;
+        this.updateTextState();
     }
 
-    private int drawWrappedCentered(
-            GuiGraphics graphics,
-            Component text,
-            int centerX,
-            int y,
-            int width,
-            int color
-    ) {
-        List<FormattedCharSequence> lines = this.font.split(text, width);
-        for (FormattedCharSequence line : lines) {
-            graphics.drawString(this.font, line, centerX - this.font.width(line) / 2, y, color);
-            y += 11;
+    private void updateTextState() {
+        if (this.messageText == null || this.statusText == null || this.progressText == null) {
+            return;
         }
-        return y;
+
+        int contentWidth = Math.min(420, this.width - 40);
+        int centerX = this.width / 2;
+        int y = Math.max(34, this.height / 2 - 96);
+        if (this.titleText != null) {
+            this.titleText.setX(centerX - this.titleText.getWidth() / 2);
+            this.titleText.setY(y);
+        }
+        y += 28;
+
+        this.messageText.visible = false;
+        this.statusText.visible = false;
+        this.progressText.visible = false;
+        this.progressVisible = false;
+
+        if (this.failed) {
+            this.statusText.setMessage(this.failureMessage.copy().withColor(ERROR_TEXT_COLOR));
+            this.statusText.visible = true;
+            this.layoutMultilineText(this.statusText, centerX, y, contentWidth);
+            return;
+        }
+
+        if (this.running || this.opening) {
+            this.statusText.setMessage(Component.translatable(this.opening
+                    ? "luma.alpha_warning.opening_world"
+                    : "luma.alpha_warning.backup_loading").withColor(BODY_TEXT_COLOR));
+            this.statusText.visible = true;
+            y = this.layoutMultilineText(this.statusText, centerX, y, contentWidth) + 10;
+            this.progressBarX = centerX - XP_BAR_WIDTH / 2;
+            this.progressBarY = y;
+            this.progressVisible = true;
+            y += 14;
+            this.progressText.setMessage(Component.translatable(
+                    "luma.alpha_warning.backup_progress",
+                    this.progress.completedChunks(),
+                    this.progress.totalChunks(),
+                    this.progress.backedUpChunks()
+            ).withColor(BODY_TEXT_COLOR));
+            this.progressText.visible = true;
+            this.progressText.setX(centerX - this.progressText.getWidth() / 2);
+            this.progressText.setY(y);
+            return;
+        }
+
+        this.messageText.setMessage(Component.translatable("luma.alpha_warning.message").withColor(MESSAGE_TEXT_COLOR));
+        this.messageText.visible = true;
+        this.layoutMultilineText(this.messageText, centerX, y, contentWidth);
+    }
+
+    private int layoutMultilineText(MultiLineTextWidget text, int centerX, int y, int width) {
+        text.setMaxWidth(width).setCentered(true);
+        text.setX(centerX - text.getWidth() / 2);
+        text.setY(y);
+        return y + text.getHeight();
     }
 
     private void renderStaticBackground(GuiGraphics graphics) {
