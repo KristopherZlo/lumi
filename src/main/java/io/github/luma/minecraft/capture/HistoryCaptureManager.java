@@ -241,8 +241,16 @@ public final class HistoryCaptureManager {
                 ChunkPoint chunk = ChunkPoint.from(pos);
                 CaptureSessionState.DeferredActionContext deferredActionContext =
                         this.deferredActionContext(existingSession, chunk, source);
-                if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION
-                        && !this.canUseDeferredStabilization(source, deferredActionContext)) {
+                boolean usesDeferredStabilization = this.usesDeferredStabilization(
+                        trackedProject.project(),
+                        source
+                );
+                if (usesDeferredStabilization
+                        && !this.canUseDeferredStabilization(
+                                trackedProject.project(),
+                                source,
+                                deferredActionContext
+                        )) {
                     LumaDebugLog.log(
                             trackedProject.project(),
                             "capture",
@@ -318,7 +326,7 @@ public final class HistoryCaptureManager {
                 if (this.isExplicitRootSource(source)) {
                     this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
                     session.addRootChunk(chunk);
-                } else if (this.usesDeferredStabilization(trackedProject.project(), source)) {
+                } else if (usesDeferredStabilization) {
                     if (!this.activeSessionRegionPolicy.contains(level, session, chunk)) {
                         LumaDebugLog.log(
                                 trackedProject.project(),
@@ -1286,10 +1294,11 @@ public final class HistoryCaptureManager {
     }
 
     private boolean canUseDeferredStabilization(
+            BuildProject project,
             io.github.luma.domain.model.WorldMutationSource source,
             CaptureSessionState.DeferredActionContext deferredActionContext
     ) {
-        return SOURCE_POLICY.canUseDeferredStabilization(source, actionId(deferredActionContext));
+        return SOURCE_POLICY.canUseDeferredStabilization(project, source, actionId(deferredActionContext));
     }
 
     private void recordDeferredBlockMutation(

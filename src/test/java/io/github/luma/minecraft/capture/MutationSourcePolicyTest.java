@@ -60,6 +60,27 @@ class MutationSourcePolicyTest {
     }
 
     @Test
+    void projectDeferredStabilizationCombinesProjectScopeWithCausalAction() {
+        BuildProject wholeDimension = BuildProject.createWorldWorkspace(
+                "World",
+                "minecraft:overworld",
+                Instant.parse("2026-04-28T10:00:00Z")
+        );
+        BuildProject bounded = BuildProject.create(
+                "Area",
+                "minecraft:overworld",
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(15, 80, 15)),
+                new BlockPoint(0, 64, 0),
+                Instant.parse("2026-04-28T10:00:00Z")
+        );
+
+        assertFalse(this.policy.canUseDeferredStabilization(wholeDimension, WorldMutationSource.FLUID, ""));
+        assertTrue(this.policy.canUseDeferredStabilization(wholeDimension, WorldMutationSource.FLUID, "action-1"));
+        assertFalse(this.policy.canUseDeferredStabilization(bounded, WorldMutationSource.FLUID, "action-1"));
+        assertTrue(this.policy.canUseDeferredStabilization(bounded, WorldMutationSource.BLOCK_UPDATE, "action-1"));
+    }
+
+    @Test
     void ambientGrowthDirectCaptureRequiresCausalAction() {
         assertTrue(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.GROWTH));
         assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.GROWTH, ""));

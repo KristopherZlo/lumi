@@ -118,6 +118,11 @@ final class MutationSourcePolicy {
                 || this.hasCausalAction(actionId);
     }
 
+    boolean canUseDeferredStabilization(BuildProject project, WorldMutationSource source, String actionId) {
+        return this.usesDeferredStabilization(project, source)
+                && this.canUseDeferredStabilization(source, actionId);
+    }
+
     boolean requiresCausalActionForDirectCapture(WorldMutationSource source) {
         return source == WorldMutationSource.GROWTH;
     }
