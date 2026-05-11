@@ -438,8 +438,6 @@ public final class WorldOperationManager {
     public record PreparedApplyOperation(
             LocalQueue localQueue,
             CompletionAction onComplete,
-            BatchProcessor batchProcessor,
-            HistoryStore historyStore,
             boolean completeOnServerThread
     ) {
 
@@ -457,8 +455,6 @@ public final class WorldOperationManager {
                             ? List.of()
                             : batches.stream().map(ChunkBatch::fromPrepared).toList()),
                     onComplete,
-                    BatchProcessor.NO_OP,
-                    HistoryStore.NO_OP,
                     completeOnServerThread
             );
         }
@@ -820,9 +816,7 @@ public final class WorldOperationManager {
                         stopReason = "dispatcher-empty";
                         break;
                     }
-                    this.currentBatch = this.pruneNoOpBatch(
-                            this.prepared.batchProcessor().processSet(this.currentBatch)
-                    );
+                    this.currentBatch = this.pruneNoOpBatch(this.currentBatch);
                     startedChunksThisTick += 1;
                     this.currentNativeSections = this.currentBatch.orderedNativeSections();
                     this.currentSections = this.currentBatch.orderedSections();
@@ -938,8 +932,6 @@ public final class WorldOperationManager {
                         );
                     }
                     finishedChunksThisTick += 1;
-                    this.prepared.historyStore().record(this.currentBatch);
-                    this.prepared.batchProcessor().postProcessSet(this.currentBatch);
                     this.exactReplayStateQueue.record(this.currentBatch);
                     this.logBlockApplyChunkFinish(this.currentBatch);
                     this.currentBatch = null;

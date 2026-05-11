@@ -72,7 +72,7 @@ Use `src/main/java/io/github/luma/domain/model` for value objects, persisted rec
 
 - Project identity/settings: `BuildProject`, `ProjectSettings`, `ProjectVariant`, `ProjectVersion`, `VersionKind`, `WorldOriginInfo`, `WorldInitialBackupManifest`.
 - Coordinates/bounds/chunks: `BlockPoint`, `Bounds3i`, `ChunkPoint`, `ChunkSectionPoint`, `ChunkDelta`.
-- Stored changes and payloads: `StoredBlockChange`, `StoredEntityChange`, `StoredChangeAccumulator`, `StatePayload`, `EntityPayload`, `BlockPatch`, `PatchWorldChanges`, `PatchMetadata`, `PatchStats`, `PatchChunkSlice`, `PatchEntityChunkIndex`, `SectionFingerprint`, `ChunkPayloadSlice`, `ContentRef`.
+- Stored changes and payloads: `StoredBlockChange`, `StoredEntityChange`, `StoredChangeAccumulator`, `StatePayload`, `EntityPayload`, `PatchWorldChanges`, `PatchMetadata`, `PatchStats`, `PatchChunkSlice`, `PatchEntityChunkIndex`, `SectionFingerprint`, `ChunkPayloadSlice`, `ContentRef`.
 - Snapshots: `SnapshotRef`, `SnapshotMetadata`, `SnapshotData`, `SnapshotChunkData`, `SnapshotSectionData`, `ChunkSnapshotPayload`, `ChunkSectionSnapshotPayload`.
 - Recovery: `RecoveryDraft`, `RecoveryDraftSummary`, `RecoveryJournalEntry`, `RestoreReturnPoint`.
 - Operations/progress/HUD: `OperationHandle`, `OperationProgress`, `OperationSnapshot`, `OperationStage`, `WorkspaceHudSnapshot`; native in-world progress is adapted by `WorldOperationBossBarManager`.
@@ -126,7 +126,6 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 - `WorldOriginRepository`: shared `world-origin.json` manifest and corruption quarantine behavior.
 - `WorldInstallationRepository`: world-level Lumi installation markers such as fresh-world creation and alpha checkpoint gate acknowledgement.
 - `WorldInitialBackupRepository`: one-time pre-mod raw chunk backup manifest and size-budgeted compressed chunk NBT payloads.
-- `PatchRepository`: patch metadata/data facade.
 - `PatchMetaRepository`: `patches/*.meta.json` chunk index, visible section index, entity old/new chunk index, and lightweight patch metadata.
 - `PatchDataRepository`: `patches/*.bin.lz4` schema reads/writes, section fingerprint metadata, entity index construction, and selective chunk/section/entity-frame reads.
 - `SnapshotRepository`, `SnapshotReader`, `SnapshotWriter`: checkpoint snapshot payload boundary, including chunk-addressable frame indexes and snapshot section content refs.
@@ -187,9 +186,8 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `PistonMechanismPlacementExpander`: settled piston base/head replay companions. It may add the expected `piston_head` for an explicit extended piston base, replace normalized transient air at the expected head position, recover a retracted base when undo targets a transient moving-piston base, or clear the old head for a known retracting base; it must not infer a piston base from a head-only placement.
 - `PreparedBlockPlacement`, `PreparedChunkBatch`, `PreparedSectionApplyBatch`, `PreparedChunkBatchCollapser`, `LumiSectionBuffer`, `SectionChangeMask`: prepared immutable apply data and collapse logic for sparse and section-native work, including internal replay hints for generated mechanical companion placements.
 - `ChunkBatch`, `SectionBatch`, `EntityBatch`: per-chunk apply units.
-- `GlobalDispatcher`, `LocalQueue`, `BatchState`, `BatchProcessor`, `HistoryStore`: queue/runtime state for bounded apply.
+- `GlobalDispatcher`, `LocalQueue`, `BatchState`: queue/runtime state for bounded apply.
 - `BlockStateNbtCodec`: Minecraft block-state and NBT conversion.
-- `EditOperation`: operation identity/type for apply workflows.
 
 ### Other Minecraft Modules
 

@@ -291,8 +291,6 @@ Current world-apply runtime types:
 - `LocalQueue`
 - `GlobalDispatcher`
 - `BatchState`
-- `BatchProcessor`
-- `HistoryStore`
 
 ## Build and packaging notes
 

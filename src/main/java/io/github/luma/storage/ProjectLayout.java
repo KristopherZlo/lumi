@@ -74,10 +74,6 @@ public record ProjectLayout(Path root) {
         return this.versionsDir().resolve("index.json");
     }
 
-    public Path patchFile(String patchId) {
-        return this.patchDataFile(patchId);
-    }
-
     public Path patchMetaFile(String patchId) {
         return StoragePathPolicy.resolveStorageFile(this.patchesDir(), patchId, ".meta.json", "patch id");
     }
