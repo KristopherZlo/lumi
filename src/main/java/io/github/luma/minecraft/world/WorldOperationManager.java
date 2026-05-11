@@ -439,17 +439,27 @@ public final class WorldOperationManager {
             LocalQueue localQueue,
             CompletionAction onComplete,
             BatchProcessor batchProcessor,
-            HistoryStore historyStore
+            HistoryStore historyStore,
+            boolean completeOnServerThread
     ) {
 
         public PreparedApplyOperation(List<PreparedChunkBatch> batches, CompletionAction onComplete) {
+            this(batches, onComplete, false);
+        }
+
+        public PreparedApplyOperation(
+                List<PreparedChunkBatch> batches,
+                CompletionAction onComplete,
+                boolean completeOnServerThread
+        ) {
             this(
                     LocalQueue.completed(batches == null
                             ? List.of()
                             : batches.stream().map(ChunkBatch::fromPrepared).toList()),
                     onComplete,
                     BatchProcessor.NO_OP,
-                    HistoryStore.NO_OP
+                    HistoryStore.NO_OP,
+                    completeOnServerThread
             );
         }
 
@@ -762,8 +772,11 @@ public final class WorldOperationManager {
                 }
             }
 
-            if (this.chunkPreloader != null && this.chunkPreloader.required() && !this.chunkPreloader.complete()) {
-                return this.advancePreload(budget, deadlineNanos);
+            if (this.chunkPreloader != null
+                    && this.chunkPreloader.required()
+                    && !this.chunkPreloader.complete()
+                    && !this.advancePreload(budget, deadlineNanos)) {
+                return false;
             }
 
             if (this.dispatcher == null) {
@@ -1076,7 +1089,7 @@ public final class WorldOperationManager {
                             + ", outstandingTickets=" + result.outstandingTickets()
                             + ", syncFallbackLoads=" + result.syncFallbackLoads()
             );
-            return false;
+            return result.complete();
         }
 
         private void startApply() {
@@ -1392,6 +1405,17 @@ public final class WorldOperationManager {
         }
 
         private boolean advanceCompletion() throws Exception {
+            if (this.prepared.completeOnServerThread()) {
+                this.progressSink().update(
+                        OperationStage.FINALIZING,
+                        this.appliedWorkUnits,
+                        this.prepared.totalWorkUnits(),
+                        "Finalizing"
+                );
+                this.prepared.onComplete().run();
+                this.complete("Completed");
+                return true;
+            }
             if (this.completionFuture == null) {
                 this.progressSink().update(
                         OperationStage.FINALIZING,

@@ -26,6 +26,8 @@ import net.minecraft.server.level.ServerLevel;
  */
 public final class UndoRedoService {
 
+    private static final int SERVER_THREAD_COMPLETION_MAX_BLOCKS = 256;
+
     private final ProjectService projectService = new ProjectService();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
@@ -81,6 +83,7 @@ public final class UndoRedoService {
         List<StoredEntityChange> pendingEntityAdjustments = direction == Direction.UNDO
                 ? action.inverseEntityChanges()
                 : action.redoEntityChanges();
+        boolean completeOnServerThread = this.canCompleteOnServerThread(targetChanges, targetEntityChanges);
         String label = direction == Direction.UNDO ? "undo-action" : "redo-action";
         int totalChanges = targetChanges.size() + targetEntityChanges.size();
         this.deferredActionFalloutGuard.suppressAction(action.id(), level.getGameTime());
@@ -137,10 +140,19 @@ public final class UndoRedoService {
                                         targetChanges.size(),
                                         targetEntityChanges.size()
                                 );
-                            }
+                            },
+                            completeOnServerThread
                     );
                 }
         );
+    }
+
+    private boolean canCompleteOnServerThread(
+            List<StoredBlockChange> targetChanges,
+            List<StoredEntityChange> targetEntityChanges
+    ) {
+        return targetEntityChanges.isEmpty()
+                && targetChanges.size() <= SERVER_THREAD_COMPLETION_MAX_BLOCKS;
     }
 
     private enum Direction {

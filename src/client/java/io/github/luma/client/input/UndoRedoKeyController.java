@@ -168,7 +168,6 @@ public final class UndoRedoKeyController {
             BuildProject project,
             boolean undo
     ) throws Exception {
-        this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
         UndoRedoActionStack.Selection selection = undo
                 ? this.historyManager.selectUndo(project.id().toString())
                 : this.historyManager.selectRedo(project.id().toString());
@@ -178,6 +177,22 @@ public final class UndoRedoKeyController {
 
         UndoRedoAction action = selection.action();
         ExternalUndoRedoPolicy.Decision decision = this.externalUndoRedoPolicy.decisionForAction(
+                action.actor(),
+                action.id()
+        );
+        if (decision == ExternalUndoRedoPolicy.Decision.LUMI_REPLAY) {
+            return false;
+        }
+
+        this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
+        selection = undo
+                ? this.historyManager.selectUndo(project.id().toString())
+                : this.historyManager.selectRedo(project.id().toString());
+        if (selection == null) {
+            return false;
+        }
+        action = selection.action();
+        decision = this.externalUndoRedoPolicy.decisionForAction(
                 action.actor(),
                 action.id()
         );
