@@ -5,6 +5,7 @@ import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -41,6 +42,10 @@ public final class AxiomBlockBufferCaptureService {
         if (mutations.isEmpty()) {
             return;
         }
+        List<HistoryCaptureManager.BlockChangeInput> inputs = this.captureInputs(level, mutations);
+        if (inputs.isEmpty()) {
+            return;
+        }
 
         String actor = this.actorName(player);
         String actionId = "axiom-buffer-" + UUID.randomUUID();
@@ -52,40 +57,52 @@ public final class AxiomBlockBufferCaptureService {
                 actionId,
                 accessAllowed
         );
-        for (AxiomBlockMutation mutation : mutations) {
-            this.recordMutation(level, mutation, actor, actionId, accessAllowed);
-        }
-    }
-
-    private void recordMutation(
-            ServerLevel level,
-            AxiomBlockMutation mutation,
-            String actor,
-            String actionId,
-            boolean accessAllowed
-    ) {
-        if (mutation == null || mutation.pos() == null || mutation.newState() == null) {
-            return;
-        }
-
-        BlockPos pos = mutation.pos();
-        BlockState oldState = level.getBlockState(pos);
-        CompoundTag oldBlockEntity = this.blockEntityTag(level, pos, oldState);
         try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
                 WorldMutationSource.AXIOM,
                 actor,
                 actionId,
                 accessAllowed
         )) {
-            HistoryCaptureManager.getInstance().recordBlockChange(
-                    level,
+            HistoryCaptureManager.getInstance().recordBlockChanges(level, inputs);
+        }
+    }
+
+    private List<HistoryCaptureManager.BlockChangeInput> captureInputs(
+            ServerLevel level,
+            List<AxiomBlockMutation> mutations
+    ) {
+        List<HistoryCaptureManager.BlockChangeInput> inputs = new ArrayList<>(mutations.size());
+        for (AxiomBlockMutation mutation : mutations) {
+            if (mutation == null || mutation.pos() == null || mutation.newState() == null) {
+                continue;
+            }
+
+            BlockPos pos = mutation.pos();
+            BlockState oldState = level.getBlockState(pos);
+            CompoundTag oldBlockEntity = this.blockEntityTag(level, pos, oldState);
+            if (this.sameStateWithoutBlockEntityChange(oldState, oldBlockEntity, mutation)) {
+                continue;
+            }
+            inputs.add(new HistoryCaptureManager.BlockChangeInput(
                     pos,
                     oldState,
                     mutation.newState(),
                     oldBlockEntity,
                     mutation.newBlockEntity()
-            );
+            ));
         }
+        return List.copyOf(inputs);
+    }
+
+    private boolean sameStateWithoutBlockEntityChange(
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            AxiomBlockMutation mutation
+    ) {
+        return oldState != null
+                && oldState.equals(mutation.newState())
+                && oldBlockEntity == null
+                && mutation.newBlockEntity() == null;
     }
 
     private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos, BlockState state) {

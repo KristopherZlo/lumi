@@ -106,6 +106,42 @@ final class LiveUndoRedoActionRecorder {
         );
     }
 
+    void recordBlockAction(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            Instant now
+    ) {
+        List<StoredBlockChange> visibleChanges = changes == null
+                ? List.of()
+                : changes.stream()
+                .filter(change -> change != null && !change.isNoOp() && !change.hidden())
+                .toList();
+        if (visibleChanges.isEmpty()) {
+            return;
+        }
+
+        WorldMutationSource source = WorldMutationContext.currentSource();
+        String actionId = WorldMutationContext.currentActionId();
+        boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
+        if (actionAllowed && actionId != null && !actionId.isBlank() && this.sourcePolicy.isExplicitRootSource(source)) {
+            this.historyManager.recordAction(
+                    trackedProject.project().id().toString(),
+                    level.dimension().identifier().toString(),
+                    actionId,
+                    WorldMutationContext.currentActor(),
+                    visibleChanges,
+                    List.of(),
+                    now
+            );
+            return;
+        }
+
+        for (StoredBlockChange change : visibleChanges) {
+            this.recordBlockAction(trackedProject, level, change, now);
+        }
+    }
+
     void recordEntityAction(
             TrackedProject trackedProject,
             ServerLevel level,

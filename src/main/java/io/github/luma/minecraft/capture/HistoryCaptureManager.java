@@ -79,6 +79,21 @@ public final class HistoryCaptureManager {
     private HistoryCaptureManager() {
     }
 
+    public record BlockChangeInput(
+            BlockPos pos,
+            BlockState oldState,
+            BlockState newState,
+            CompoundTag oldBlockEntity,
+            CompoundTag newBlockEntity
+    ) {
+
+        public BlockChangeInput {
+            pos = pos == null ? null : pos.immutable();
+            oldBlockEntity = oldBlockEntity == null ? null : oldBlockEntity.copy();
+            newBlockEntity = newBlockEntity == null ? null : newBlockEntity.copy();
+        }
+    }
+
     public static HistoryCaptureManager getInstance() {
         return INSTANCE;
     }
@@ -401,6 +416,224 @@ public final class HistoryCaptureManager {
             }
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Failed to capture block change at {} in {}", pos, level.dimension().identifier(), exception);
+        }
+    }
+
+    public void recordBlockChanges(
+            ServerLevel level,
+            List<BlockChangeInput> changes
+    ) {
+        io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
+        if (level == null
+                || changes == null
+                || changes.isEmpty()
+                || !shouldCaptureMutation(source)
+                || !this.canUseMutationSource(level.getServer(), source)) {
+            return;
+        }
+
+        try {
+            Instant now = Instant.now();
+            boolean autoWorkspaceCreated = false;
+            Map<String, TrackedProject> liveUndoProjects = new LinkedHashMap<>();
+            Map<String, List<StoredBlockChange>> liveUndoChanges = new LinkedHashMap<>();
+            for (BlockChangeInput input : changes) {
+                if (input == null) {
+                    continue;
+                }
+                try {
+                    autoWorkspaceCreated = this.recordBulkBlockChange(
+                            level,
+                            input,
+                            source,
+                            now,
+                            autoWorkspaceCreated,
+                            liveUndoProjects,
+                            liveUndoChanges
+                    );
+                } catch (Exception exception) {
+                    LumaMod.LOGGER.warn("Failed to capture bulk block change at {} in {}", input.pos(), level.dimension().identifier(), exception);
+                }
+            }
+
+            for (Map.Entry<String, List<StoredBlockChange>> entry : liveUndoChanges.entrySet()) {
+                TrackedProject trackedProject = liveUndoProjects.get(entry.getKey());
+                if (trackedProject != null) {
+                    this.liveUndoRedoActionRecorder.recordBlockAction(trackedProject, level, entry.getValue(), now);
+                }
+            }
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to capture {} block changes in {}", changes.size(), level.dimension().identifier(), exception);
+        }
+    }
+
+    private boolean recordBulkBlockChange(
+            ServerLevel level,
+            BlockChangeInput input,
+            io.github.luma.domain.model.WorldMutationSource source,
+            Instant now,
+            boolean autoWorkspaceCreated,
+            Map<String, TrackedProject> liveUndoProjects,
+            Map<String, List<StoredBlockChange>> liveUndoChanges
+    ) throws IOException {
+        WorldMutationCapturePolicy.CaptureResult captureResult = CAPTURE_POLICY.evaluate(
+                source,
+                input.pos(),
+                input.oldState(),
+                input.newState(),
+                input.oldBlockEntity(),
+                input.newBlockEntity()
+        );
+        if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.REJECTED) {
+            return autoWorkspaceCreated;
+        }
+
+        List<TrackedProject> matchingProjects = this.matchingProjects(level, input.pos());
+        if (matchingProjects.isEmpty()
+                && !autoWorkspaceCreated
+                && captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.CAPTURED
+                && allowsAutomaticProjectCreation(source)) {
+            this.projectService.ensureWorldProject(level, defaultActor(source));
+            this.invalidateProjectCache(level.getServer());
+            matchingProjects = this.matchingProjects(level, input.pos());
+            autoWorkspaceCreated = true;
+            LumaMod.LOGGER.info("Created world workspace automatically for dimension {}", level.dimension().identifier());
+        }
+        if (matchingProjects.isEmpty()) {
+            return autoWorkspaceCreated;
+        }
+
+        for (TrackedProject trackedProject : matchingProjects) {
+            this.recordBulkBlockChangeForProject(
+                    level,
+                    trackedProject,
+                    source,
+                    now,
+                    input,
+                    captureResult,
+                    liveUndoProjects,
+                    liveUndoChanges
+            );
+        }
+        return autoWorkspaceCreated;
+    }
+
+    private void recordBulkBlockChangeForProject(
+            ServerLevel level,
+            TrackedProject trackedProject,
+            io.github.luma.domain.model.WorldMutationSource source,
+            Instant now,
+            BlockChangeInput input,
+            WorldMutationCapturePolicy.CaptureResult captureResult,
+            Map<String, TrackedProject> liveUndoProjects,
+            Map<String, List<StoredBlockChange>> liveUndoChanges
+    ) throws IOException {
+        String projectId = trackedProject.project().id().toString();
+        CaptureSessionState existingSession = this.workingDrafts.session(projectId);
+        ChunkPoint chunk = ChunkPoint.from(input.pos());
+        CaptureSessionState.DeferredActionContext deferredActionContext =
+                this.deferredActionContext(existingSession, chunk, source);
+        boolean usesDeferredStabilization = this.usesDeferredStabilization(trackedProject.project(), source);
+        if (usesDeferredStabilization
+                && !this.canUseDeferredStabilization(trackedProject.project(), source, deferredActionContext)) {
+            return;
+        }
+        if (!this.canCaptureIntoSession(trackedProject, level, source, input.pos())) {
+            return;
+        }
+
+        WorldMutationCapturePolicy.CapturedMutation mutation = captureResult.mutation();
+        boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
+        if (!this.ensureTrackedChunk(
+                trackedProject,
+                level,
+                input.pos(),
+                mutation == null ? input.oldState() : mutation.oldState(),
+                mutation == null ? input.oldBlockEntity() : mutation.oldBlockEntity(),
+                source,
+                activeSessionRegion,
+                now
+        )) {
+            return;
+        }
+        if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION) {
+            this.recordDeferredBlockMutation(
+                    trackedProject,
+                    level,
+                    source,
+                    input.pos(),
+                    chunk,
+                    input.oldState(),
+                    input.oldBlockEntity(),
+                    now,
+                    deferredActionContext
+            );
+            return;
+        }
+
+        TrackedChangeBuffer buffer = this.getOrCreateWorkingDraft(trackedProject, source, now);
+        CaptureSessionState session = this.workingDrafts.session(projectId);
+        if (session == null || mutation == null) {
+            return;
+        }
+        if (!session.isRootChunk(chunk)) {
+            session.recordBaselineCorrection(
+                    BlockPoint.from(input.pos()),
+                    StatePayload.capture(mutation.oldState(), mutation.oldBlockEntity())
+            );
+        }
+        if (this.isExplicitRootSource(source)) {
+            this.captureSessionChunkBaseline(
+                    trackedProject,
+                    level,
+                    session,
+                    chunk,
+                    input.pos(),
+                    mutation.oldState(),
+                    mutation.oldBlockEntity()
+            );
+            session.addRootChunk(chunk);
+        } else if (usesDeferredStabilization) {
+            if (!this.activeSessionRegionPolicy.contains(level, session, chunk)) {
+                return;
+            }
+            this.captureSessionChunkBaseline(
+                    trackedProject,
+                    level,
+                    session,
+                    chunk,
+                    input.pos(),
+                    mutation.oldState(),
+                    mutation.oldBlockEntity()
+            );
+            session.markDirtySection(
+                    new ChunkSectionPoint(chunk, Math.floorDiv(input.pos().getY(), 16)),
+                    this.deferredActionContext(session, chunk, source),
+                    level.getGameTime()
+            );
+            this.workingDrafts.markDirty(projectId);
+            return;
+        }
+
+        int pendingBefore = buffer.size();
+        StoredBlockChange capturedChange = mutation.change();
+        buffer.addChange(capturedChange, now);
+        liveUndoProjects.putIfAbsent(projectId, trackedProject);
+        liveUndoChanges.computeIfAbsent(projectId, ignored -> new ArrayList<>()).add(capturedChange);
+        CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
+        diagnostics.record(
+                source,
+                input.pos(),
+                mutation.oldState(),
+                mutation.newState(),
+                mutation.oldBlockEntity() != null,
+                mutation.newBlockEntity() != null
+        );
+        this.logAcceptedCaptureTrace(trackedProject.project(), buffer, diagnostics, pendingBefore, buffer.size());
+        if (buffer.isEmpty()) {
+            this.workingDrafts.discardIfEmpty(trackedProject, "after bulk block capture");
+        } else {
+            this.workingDrafts.markDirty(projectId);
         }
     }
 
