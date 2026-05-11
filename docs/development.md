@@ -60,6 +60,7 @@ This now includes regression checks for:
 - compare/recent overlay spatial selection, cached section mesh behavior, and small/large/extreme overlay geometry paths
 - recent-action preview color selection for the next undo/redo target, shortcut catalog coverage, and clean active-head save-details compare routing
 - container block-entity payload undo
+- bounded connected-fluid replay tick scheduling
 - commit graph layout on large histories
 - detached commit visibility after a restore-style reset
 - recovery draft isolation while save/amend operations run

@@ -412,7 +412,7 @@ Rules:
 
 Undo and redo restore stored block states and captured block-entity payloads, including container item counts, with side-effect-suppressed placement flags.
 
-Redstone power/source changes queue scoped neighbor updates after stored blocks are written so nearby circuitry can settle. Ordinary replay still avoids placement physics and suppresses stale replay callbacks around piston/observer mechanism positions.
+Redstone power/source changes queue scoped neighbor updates after stored blocks are written so nearby circuitry can settle. Fluid replay queues bounded vanilla fluid ticks around loaded connected fluid tails while exact replay keeps the stored target cells fixed, so removed water or lava tails do not hang until a nearby block update. Ordinary replay still avoids placement physics and suppresses stale replay callbacks around piston/observer mechanism positions.
 
 Undo also removes item drops caused by the tracked edit, such as:
 

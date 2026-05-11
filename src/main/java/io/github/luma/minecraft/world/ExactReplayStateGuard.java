@@ -33,6 +33,7 @@ public final class ExactReplayStateGuard {
     private final BlockPlacementUpdateDecider updateDecider = new BlockPlacementUpdateDecider();
     private final WorldApplyBlockUpdatePolicy updatePolicy = new WorldApplyBlockUpdatePolicy();
     private final WorldReplayTickSuppression replaySuppression = WorldReplayTickSuppression.getInstance();
+    private final FluidReplayUpdateScheduler fluidReplayUpdateScheduler = new FluidReplayUpdateScheduler();
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final Map<ServerLevel, GuardedWorld> guardedWorlds = new IdentityHashMap<>();
 
@@ -62,6 +63,7 @@ public final class ExactReplayStateGuard {
         }
 
         this.replaySuppression.protect(level, callbackProtectedPositions, ticks);
+        this.fluidReplayUpdateScheduler.schedule(level, placements);
         this.historyDebugLog.logExactGuard(level, exactStates, callbackProtectedPositions.size(), ticks);
         guardedWorld.removeExpired(level.getGameTime());
         if (guardedWorld.isEmpty()) {
@@ -95,13 +97,13 @@ public final class ExactReplayStateGuard {
     }
 
     boolean shouldGuard(PreparedBlockPlacement placement) {
-        return placement != null && this.shouldGuard(placement.state());
+        return placement != null
+                && (placement.replayHint().suppressesPostReplayFluid() || this.shouldGuard(placement.state()));
     }
 
     List<BlockPos> callbackSuppressionPositions(PreparedBlockPlacement placement) {
         if (placement == null || placement.pos() == null
-                || (!placement.replayHint().suppressesPostReplayFluid()
-                && !this.guardBlockPolicy.shouldSuppressCallbacks(placement.state()))) {
+                || !this.guardBlockPolicy.shouldSuppressCallbacks(placement.state())) {
             return List.of();
         }
 

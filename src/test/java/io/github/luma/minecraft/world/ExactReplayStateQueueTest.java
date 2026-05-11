@@ -148,7 +148,7 @@ class ExactReplayStateQueueTest {
     }
 
     @Test
-    void fluidReplayHintProtectsAirTargetsFromPostReplayFluidTicks() {
+    void fluidReplayHintGuardsAirTargetsWithoutSuppressingFluidCallbacks() {
         ExactReplayStateQueue queue = new ExactReplayStateQueue();
         ExactReplayStateGuard guard = new ExactReplayStateGuard();
         ExactReplayTargetPolicy targetPolicy = new ExactReplayTargetPolicy();
@@ -165,8 +165,8 @@ class ExactReplayStateQueueTest {
         assertEquals(0, queue.pendingCount());
         assertEquals(1, queue.takeRecordedPlacements().size());
         assertTrue(targetPolicy.requiresPostReplayGuard(placement));
-        assertTrue(guard.callbackSuppressionPositions(placement).contains(pos));
-        assertTrue(guard.callbackSuppressionPositions(placement).contains(pos.below()));
+        assertTrue(guard.shouldGuard(placement));
+        assertTrue(guard.callbackSuppressionPositions(placement).isEmpty());
     }
 
     @Test
