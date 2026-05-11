@@ -250,6 +250,13 @@ final class WorkingDraftSessionManager {
         return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY);
     }
 
+    Optional<TrackedChangeBuffer> freezeForRecoveryAfterReconciliation(
+            String projectId,
+            TrackedProject trackedProject
+    ) throws IOException {
+        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY);
+    }
+
     Optional<TrackedChangeBuffer> freezeForShutdownAfterReconciliation(
             String projectId,
             TrackedProject trackedProject
@@ -390,7 +397,7 @@ final class WorkingDraftSessionManager {
             changed = buffer.rebaseBaseVersion(expectedBaseVersionId, newBaseVersionId, now);
             if (changed && !buffer.isEmpty()) {
                 this.sessionRegistry.markDirty(projectId);
-                this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
+                this.persistenceCoordinator.drainDraftFlushes(projectId, trackedProject.project().name());
                 this.recoveryRepository.saveDraft(trackedProject.layout(), buffer.toDraft());
             }
         }

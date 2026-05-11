@@ -160,6 +160,81 @@ class WorkingDraftSessionManagerTest {
         }
     }
 
+    @Test
+    void recoveryFreezeDoesNotWaitForPendingBaselineWrites() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("recovery-freeze.mbp"));
+        BuildProject project = project();
+        TrackedProject trackedProject = trackedProject(layout, project);
+        ExecutorService draftExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService baselineExecutor = Executors.newSingleThreadExecutor();
+        CountDownLatch releaseBaseline = blockBaselineExecutor(baselineExecutor);
+        CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(),
+                new BaselineChunkRepository(),
+                draftExecutor,
+                baselineExecutor
+        );
+        try (coordinator) {
+            WorkingDraftSessionManager manager = new WorkingDraftSessionManager(coordinator);
+            TrackedChangeBuffer buffer = manager.getOrCreate(trackedProject, WorldMutationSource.PLAYER, NOW);
+            buffer.addChange(change("minecraft:stone", "minecraft:gold_block"), NOW.plusSeconds(1));
+            coordinator.enqueueBaselineWrite(layout, project.id().toString(), project.name(), chunkSnapshot(), NOW);
+
+            CompletableFuture<Optional<TrackedChangeBuffer>> frozen = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return manager.freezeForRecoveryAfterReconciliation(project.id().toString(), trackedProject);
+                } catch (Exception exception) {
+                    throw new CompletionException(exception);
+                }
+            });
+
+            assertTrue(frozen.get(1, TimeUnit.SECONDS).isPresent());
+            assertTrue(coordinator.hasPendingBaselineWrite(project.id().toString(), chunkSnapshot().chunk()));
+        } finally {
+            releaseBaseline.countDown();
+            draftExecutor.shutdownNow();
+            baselineExecutor.shutdownNow();
+        }
+    }
+
+    @Test
+    void rebaseDoesNotWaitForPendingBaselineWrites() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("rebase.mbp"));
+        BuildProject project = project();
+        TrackedProject trackedProject = trackedProject(layout, project);
+        ExecutorService draftExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService baselineExecutor = Executors.newSingleThreadExecutor();
+        CountDownLatch releaseBaseline = blockBaselineExecutor(baselineExecutor);
+        CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(),
+                new BaselineChunkRepository(),
+                draftExecutor,
+                baselineExecutor
+        );
+        try (coordinator) {
+            WorkingDraftSessionManager manager = new WorkingDraftSessionManager(coordinator);
+            TrackedChangeBuffer buffer = manager.getOrCreate(trackedProject, WorldMutationSource.PLAYER, NOW);
+            buffer.addChange(change("minecraft:stone", "minecraft:gold_block"), NOW.plusSeconds(1));
+            coordinator.enqueueBaselineWrite(layout, project.id().toString(), project.name(), chunkSnapshot(), NOW);
+
+            CompletableFuture<Void> rebased = CompletableFuture.runAsync(() -> {
+                try {
+                    manager.rebaseBaseVersion(trackedProject, "v0001", "v0002", NOW.plusSeconds(2));
+                } catch (Exception exception) {
+                    throw new CompletionException(exception);
+                }
+            });
+
+            rebased.get(1, TimeUnit.SECONDS);
+            assertEquals("v0002", manager.snapshotDraft(trackedProject).orElseThrow().baseVersionId());
+            assertTrue(coordinator.hasPendingBaselineWrite(project.id().toString(), chunkSnapshot().chunk()));
+        } finally {
+            releaseBaseline.countDown();
+            draftExecutor.shutdownNow();
+            baselineExecutor.shutdownNow();
+        }
+    }
+
     private static TrackedProject trackedProject(ProjectLayout layout, BuildProject project) {
         return new TrackedProject(
                 layout,

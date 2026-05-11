@@ -671,7 +671,7 @@ public final class HistoryCaptureManager {
     }
 
     public void finalizeProjectSession(MinecraftServer server, String projectId) throws IOException {
-        this.freezeWorkingDraft(server, projectId);
+        this.freezeWorkingDraftForRecovery(server, projectId);
     }
 
     public Optional<RecoveryDraft> snapshotDraft(MinecraftServer server, String projectId) throws IOException {
@@ -718,6 +718,13 @@ public final class HistoryCaptureManager {
         return this.freezeWorkingDraft(server, projectId);
     }
 
+    public Optional<TrackedChangeBuffer> freezeWorkingDraftForRecovery(
+            MinecraftServer server,
+            String projectId
+    ) throws IOException {
+        return this.serverThreadExecutor.call(server, () -> this.freezeWorkingDraftForRecoveryOnServerThread(server, projectId));
+    }
+
     private Optional<TrackedChangeBuffer> freezeWorkingDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         CaptureSessionState sessionState = this.workingDrafts.session(projectId);
@@ -725,6 +732,18 @@ public final class HistoryCaptureManager {
             this.reconcileSession(server, trackedProject, sessionState, true);
         }
         return this.workingDrafts.freezeAfterReconciliation(projectId, trackedProject);
+    }
+
+    private Optional<TrackedChangeBuffer> freezeWorkingDraftForRecoveryOnServerThread(
+            MinecraftServer server,
+            String projectId
+    ) throws IOException {
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        CaptureSessionState sessionState = this.workingDrafts.session(projectId);
+        if (trackedProject != null && sessionState != null) {
+            this.reconcileSession(server, trackedProject, sessionState, true);
+        }
+        return this.workingDrafts.freezeForRecoveryAfterReconciliation(projectId, trackedProject);
     }
 
     private void freezeIdleWorkingDraft(MinecraftServer server, String projectId) throws IOException {

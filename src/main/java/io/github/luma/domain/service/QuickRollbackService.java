@@ -63,7 +63,7 @@ public final class QuickRollbackService {
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout)
                 .filter(draft -> !draft.isEmpty());
         Optional<TrackedChangeBuffer> frozenSession = this.captureManager
-                .freezeWorkingDraft(level.getServer(), project.id().toString());
+                .freezeWorkingDraftForRecovery(level.getServer(), project.id().toString());
         Optional<RecoveryDraft> frozenDraft = frozenSession
                 .map(TrackedChangeBuffer::toDraft)
                 .filter(draft -> !draft.isEmpty());

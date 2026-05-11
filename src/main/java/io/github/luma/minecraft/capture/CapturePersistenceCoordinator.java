@@ -202,7 +202,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
     }
 
     public void deleteDraft(ProjectLayout layout, String projectId, String projectName) throws IOException {
-        this.drainProject(projectId, projectName);
+        this.drainDraftFlushes(projectId, projectName);
         this.recoveryRepository.deleteDraft(layout);
     }
 

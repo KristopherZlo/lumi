@@ -162,6 +162,48 @@ class CapturePersistenceCoordinatorTest {
     }
 
     @Test
+    void deleteDraftDoesNotWaitForBlockedBaselineWrites() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryRepository recoveryRepository = new RecoveryRepository();
+        recoveryRepository.saveDraft(layout, draft("minecraft:gold_block", Instant.parse("2026-04-21T09:00:01Z")));
+        ExecutorService draftExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService baselineExecutor = Executors.newSingleThreadExecutor();
+        CountDownLatch baselineStarted = new CountDownLatch(1);
+        CountDownLatch releaseBaseline = new CountDownLatch(1);
+        baselineExecutor.submit(() -> {
+            baselineStarted.countDown();
+            releaseBaseline.await(5, TimeUnit.SECONDS);
+            return null;
+        });
+        assertTrue(baselineStarted.await(1, TimeUnit.SECONDS));
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                recoveryRepository,
+                new BaselineChunkRepository(),
+                draftExecutor,
+                baselineExecutor
+        )) {
+            coordinator.enqueueBaselineWrite(layout, "project", "Project", chunkSnapshot(), Instant.parse("2026-04-21T09:00:00Z"));
+
+            CompletableFuture<Void> deleted = CompletableFuture.runAsync(() -> {
+                try {
+                    coordinator.deleteDraft(layout, "project", "Project");
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+            });
+
+            deleted.get(1, TimeUnit.SECONDS);
+            assertTrue(recoveryRepository.loadDraft(layout).isEmpty());
+            assertTrue(coordinator.hasPendingBaselineWrite("project", chunkSnapshot().chunk()));
+        } finally {
+            releaseBaseline.countDown();
+            draftExecutor.shutdownNow();
+            baselineExecutor.shutdownNow();
+        }
+    }
+
+    @Test
     void baselineWriterThreadCountUsesBoundedCpuDefaultAndExplicitOverride() {
         assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(1, null));
         assertEquals(2, CapturePersistenceCoordinator.baselineWriterThreads(2, null));

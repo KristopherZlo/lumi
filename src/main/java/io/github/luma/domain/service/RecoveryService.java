@@ -87,7 +87,7 @@ public final class RecoveryService {
         this.restoreInterruptedOperationDraftIfIdle(level.getServer(), layout, project);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
-                .freezeWorkingDraft(level.getServer(), project.id().toString());
+                .freezeWorkingDraftForRecovery(level.getServer(), project.id().toString());
         Optional<RecoveryDraft> frozenDraft = frozenSession.map(TrackedChangeBuffer::toDraft);
         RecoveryDraft draft = frozenDraft
                 .or(() -> persistedDraft)
