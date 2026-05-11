@@ -1,5 +1,8 @@
 package io.github.luma.minecraft.world;
 
+import java.util.EnumMap;
+import java.util.Map;
+
 final class WorldApplyBudgetPlanner {
 
     private static final int MIN_BLOCKS_PER_TICK = 128;
@@ -68,146 +71,24 @@ final class WorldApplyBudgetPlanner {
     private static final int TURBO_MAX_ENTITY_OPERATIONS_PER_TICK = 256;
     private static final int MAXIMUM_MAX_ENTITY_OPERATIONS_PER_TICK = 1024;
 
+    private static final Map<WorldApplyProfile, BudgetSpec> SPECS = specs();
+
     WorldApplyBudget plan(double progressFraction, double adaptiveScale, WorldApplyProfile profile) {
-        WorldApplyProfile resolvedProfile = profile == null ? WorldApplyProfile.NORMAL : profile;
+        BudgetSpec spec = SPECS.get(profile == null ? WorldApplyProfile.NORMAL : profile);
         double fraction = Math.max(0.0D, Math.min(1.0D, progressFraction));
         double scale = Math.max(0.01D, adaptiveScale);
-        int minBlocks = switch (resolvedProfile) {
-            case NORMAL -> MIN_BLOCKS_PER_TICK;
-            case HISTORY_FAST -> RESTORE_MIN_BLOCKS_PER_TICK;
-            case DIAGNOSTIC_TURBO -> TURBO_MIN_BLOCKS_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MIN_BLOCKS_PER_TICK;
-        };
-        int maxBlocks = switch (resolvedProfile) {
-            case NORMAL -> MAX_BLOCKS_PER_TICK;
-            case HISTORY_FAST -> RESTORE_MAX_BLOCKS_PER_TICK;
-            case DIAGNOSTIC_TURBO -> TURBO_MAX_BLOCKS_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MAX_BLOCKS_PER_TICK;
-        };
-        long minNanos = switch (resolvedProfile) {
-            case NORMAL -> MIN_NANOS_PER_TICK;
-            case HISTORY_FAST -> RESTORE_MIN_NANOS_PER_TICK;
-            case DIAGNOSTIC_TURBO -> TURBO_MIN_NANOS_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MIN_NANOS_PER_TICK;
-        };
-        long maxNanos = switch (resolvedProfile) {
-            case NORMAL -> MAX_NANOS_PER_TICK;
-            case HISTORY_FAST -> RESTORE_MAX_NANOS_PER_TICK;
-            case DIAGNOSTIC_TURBO -> TURBO_MAX_NANOS_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MAX_NANOS_PER_TICK;
-        };
-        int minNativeSections = switch (resolvedProfile) {
-            case NORMAL -> MIN_NATIVE_SECTIONS_PER_TICK;
-            case HISTORY_FAST, DIAGNOSTIC_TURBO -> RESTORE_MIN_NATIVE_SECTIONS_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MIN_NATIVE_SECTIONS_PER_TICK;
-        };
-        int maxNativeSections = switch (resolvedProfile) {
-            case NORMAL -> MAX_NATIVE_SECTIONS_PER_TICK;
-            case HISTORY_FAST, DIAGNOSTIC_TURBO -> RESTORE_MAX_NATIVE_SECTIONS_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MAX_NATIVE_SECTIONS_PER_TICK;
-        };
-        int blocks = Math.max(1, scaledInt(minBlocks, maxBlocks, fraction, scale));
-        int nativeSections = Math.max(1, scaledInt(minNativeSections, maxNativeSections, fraction, scale));
-        int rewriteSections = switch (resolvedProfile) {
-            case NORMAL -> MAX_REWRITE_SECTIONS_PER_TICK;
-            case HISTORY_FAST, DIAGNOSTIC_TURBO -> Math.max(1, scaledInt(
-                    RESTORE_MIN_REWRITE_SECTIONS_PER_TICK,
-                    RESTORE_MAX_REWRITE_SECTIONS_PER_TICK,
-                    fraction,
-                    scale
-            ));
-            case MAXIMUM -> Math.max(1, scaledInt(
-                    MAXIMUM_MIN_REWRITE_SECTIONS_PER_TICK,
-                    MAXIMUM_MAX_REWRITE_SECTIONS_PER_TICK,
-                    fraction,
-                    scale
-            ));
-        };
-        int directSections = switch (resolvedProfile) {
-            case NORMAL -> NORMAL_MAX_DIRECT_SECTIONS_PER_TICK;
-            case HISTORY_FAST -> Math.max(
-                    RESTORE_MIN_DIRECT_SECTIONS_PER_TICK,
-                    scaledInt(RESTORE_MIN_DIRECT_SECTIONS_PER_TICK, RESTORE_MAX_DIRECT_SECTIONS_PER_TICK, fraction, scale)
-            );
-            case DIAGNOSTIC_TURBO -> Math.max(
-                    TURBO_MIN_DIRECT_SECTIONS_PER_TICK,
-                    scaledInt(TURBO_MIN_DIRECT_SECTIONS_PER_TICK, TURBO_MAX_DIRECT_SECTIONS_PER_TICK, fraction, scale)
-            );
-            case MAXIMUM -> Math.max(
-                    MAXIMUM_MIN_DIRECT_SECTIONS_PER_TICK,
-                    scaledInt(MAXIMUM_MIN_DIRECT_SECTIONS_PER_TICK, MAXIMUM_MAX_DIRECT_SECTIONS_PER_TICK, fraction, scale)
-            );
-        };
-        int lightChecks = switch (resolvedProfile) {
-            case NORMAL -> Math.max(128, Math.min(NORMAL_MAX_LIGHT_CHECKS_PER_TICK, blocks));
-            case HISTORY_FAST -> Math.max(4096, scaledInt(4096, RESTORE_MAX_LIGHT_CHECKS_PER_TICK, fraction, scale));
-            case DIAGNOSTIC_TURBO -> Math.max(8192, scaledInt(8192, TURBO_MAX_LIGHT_CHECKS_PER_TICK, fraction, scale));
-            case MAXIMUM -> Math.max(32_768, scaledInt(32_768, MAXIMUM_MAX_LIGHT_CHECKS_PER_TICK, fraction, scale));
-        };
-        int redstoneUpdates = switch (resolvedProfile) {
-            case NORMAL -> Math.max(32, Math.min(NORMAL_MAX_REDSTONE_UPDATES_PER_TICK, blocks));
-            case HISTORY_FAST -> Math.max(256, scaledInt(256, RESTORE_MAX_REDSTONE_UPDATES_PER_TICK, fraction, scale));
-            case DIAGNOSTIC_TURBO -> Math.max(512, scaledInt(512, TURBO_MAX_REDSTONE_UPDATES_PER_TICK, fraction, scale));
-            case MAXIMUM -> Math.max(2048, scaledInt(2048, MAXIMUM_MAX_REDSTONE_UPDATES_PER_TICK, fraction, scale));
-        };
-        int sparseStepCap = switch (resolvedProfile) {
-            case NORMAL -> NORMAL_SPARSE_STEP_CAP;
-            case HISTORY_FAST -> RESTORE_SPARSE_STEP_CAP;
-            case DIAGNOSTIC_TURBO -> TURBO_SPARSE_STEP_CAP;
-            case MAXIMUM -> MAXIMUM_SPARSE_STEP_CAP;
-        };
-        int preloadChunks = switch (resolvedProfile) {
-            case NORMAL -> NORMAL_MAX_PRELOAD_CHUNKS_PER_TICK;
-            case HISTORY_FAST -> Math.max(1, scaledInt(
-                    RESTORE_MIN_PRELOAD_CHUNKS_PER_TICK,
-                    RESTORE_MAX_PRELOAD_CHUNKS_PER_TICK,
-                    fraction,
-                    scale
-            ));
-            case DIAGNOSTIC_TURBO -> Math.max(1, scaledInt(
-                    TURBO_MIN_PRELOAD_CHUNKS_PER_TICK,
-                    TURBO_MAX_PRELOAD_CHUNKS_PER_TICK,
-                    fraction,
-                    scale
-            ));
-            case MAXIMUM -> Math.max(1, scaledInt(
-                    MAXIMUM_MIN_PRELOAD_CHUNKS_PER_TICK,
-                    MAXIMUM_MAX_PRELOAD_CHUNKS_PER_TICK,
-                    fraction,
-                    scale
-            ));
-        };
-        int syncChunkLoads = switch (resolvedProfile) {
-            case NORMAL -> NORMAL_MAX_SYNC_CHUNK_LOADS_PER_TICK;
-            case HISTORY_FAST -> RESTORE_MAX_SYNC_CHUNK_LOADS_PER_TICK;
-            case DIAGNOSTIC_TURBO -> TURBO_MAX_SYNC_CHUNK_LOADS_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MAX_SYNC_CHUNK_LOADS_PER_TICK;
-        };
-        int blockEntities = switch (resolvedProfile) {
-            case NORMAL -> NORMAL_MAX_BLOCK_ENTITIES_PER_TICK;
-            case HISTORY_FAST -> RESTORE_MAX_BLOCK_ENTITIES_PER_TICK;
-            case DIAGNOSTIC_TURBO -> TURBO_MAX_BLOCK_ENTITIES_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MAX_BLOCK_ENTITIES_PER_TICK;
-        };
-        int entityOperations = switch (resolvedProfile) {
-            case NORMAL -> NORMAL_MAX_ENTITY_OPERATIONS_PER_TICK;
-            case HISTORY_FAST -> RESTORE_MAX_ENTITY_OPERATIONS_PER_TICK;
-            case DIAGNOSTIC_TURBO -> TURBO_MAX_ENTITY_OPERATIONS_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MAX_ENTITY_OPERATIONS_PER_TICK;
-        };
-        sparseStepCap = Math.max(1, Math.min(sparseStepCap, blocks));
-        lightChecks = Math.max(1, lightChecks);
-        redstoneUpdates = Math.max(1, redstoneUpdates);
-        long minimumProfileNanos = switch (resolvedProfile) {
-            case NORMAL -> 250_000L;
-            case HISTORY_FAST -> RESTORE_MIN_NANOS_PER_TICK;
-            case DIAGNOSTIC_TURBO -> TURBO_MIN_NANOS_PER_TICK;
-            case MAXIMUM -> MAXIMUM_MIN_NANOS_PER_TICK;
-        };
+        int blocks = Math.max(1, spec.blocks().scaled(fraction, scale));
+        int nativeSections = Math.max(1, spec.nativeSections().scaled(fraction, scale));
+        int rewriteSections = spec.rewriteSections().scaled(fraction, scale);
+        int directSections = spec.directSections().scaled(fraction, scale);
+        int lightChecks = spec.lightChecks().scaled(fraction, scale, blocks);
+        int redstoneUpdates = spec.redstoneUpdates().scaled(fraction, scale, blocks);
+        int sparseStepCap = Math.max(1, Math.min(spec.sparseStepCap(), blocks));
         long nanos = Math.max(
-                minimumProfileNanos,
-                Math.round((minNanos + ((maxNanos - minNanos) * fraction)) * scale)
+                spec.minimumProfileNanos(),
+                Math.round((spec.minNanos() + ((spec.maxNanos() - spec.minNanos()) * fraction)) * scale)
         );
+
         return new WorldApplyBudget(
                 blocks,
                 nanos,
@@ -215,13 +96,13 @@ final class WorldApplyBudgetPlanner {
                 blocks,
                 rewriteSections,
                 directSections,
-                lightChecks,
-                redstoneUpdates,
+                Math.max(1, lightChecks),
+                Math.max(1, redstoneUpdates),
                 sparseStepCap,
-                preloadChunks,
-                syncChunkLoads,
-                blockEntities,
-                entityOperations
+                spec.preloadChunks().scaled(fraction, scale),
+                spec.maxSyncChunkLoads(),
+                spec.maxBlockEntities(),
+                spec.maxEntityOperations()
         );
     }
 
@@ -233,7 +114,116 @@ final class WorldApplyBudgetPlanner {
         );
     }
 
+    private static Map<WorldApplyProfile, BudgetSpec> specs() {
+        EnumMap<WorldApplyProfile, BudgetSpec> specs = new EnumMap<>(WorldApplyProfile.class);
+        specs.put(WorldApplyProfile.NORMAL, new BudgetSpec(
+                IntBudgetRange.scaled(MIN_BLOCKS_PER_TICK, MAX_BLOCKS_PER_TICK, 1),
+                MIN_NANOS_PER_TICK,
+                MAX_NANOS_PER_TICK,
+                250_000L,
+                IntBudgetRange.scaled(MIN_NATIVE_SECTIONS_PER_TICK, MAX_NATIVE_SECTIONS_PER_TICK, 1),
+                IntBudgetRange.scaled(MAX_REWRITE_SECTIONS_PER_TICK, MAX_REWRITE_SECTIONS_PER_TICK, 1),
+                IntBudgetRange.scaled(NORMAL_MAX_DIRECT_SECTIONS_PER_TICK, NORMAL_MAX_DIRECT_SECTIONS_PER_TICK, 1),
+                IntBudgetRange.blockLimited(128, NORMAL_MAX_LIGHT_CHECKS_PER_TICK),
+                IntBudgetRange.blockLimited(32, NORMAL_MAX_REDSTONE_UPDATES_PER_TICK),
+                NORMAL_SPARSE_STEP_CAP,
+                IntBudgetRange.scaled(NORMAL_MAX_PRELOAD_CHUNKS_PER_TICK, NORMAL_MAX_PRELOAD_CHUNKS_PER_TICK, 0),
+                NORMAL_MAX_SYNC_CHUNK_LOADS_PER_TICK,
+                NORMAL_MAX_BLOCK_ENTITIES_PER_TICK,
+                NORMAL_MAX_ENTITY_OPERATIONS_PER_TICK
+        ));
+        specs.put(WorldApplyProfile.HISTORY_FAST, new BudgetSpec(
+                IntBudgetRange.scaled(RESTORE_MIN_BLOCKS_PER_TICK, RESTORE_MAX_BLOCKS_PER_TICK, 1),
+                RESTORE_MIN_NANOS_PER_TICK,
+                RESTORE_MAX_NANOS_PER_TICK,
+                RESTORE_MIN_NANOS_PER_TICK,
+                IntBudgetRange.scaled(RESTORE_MIN_NATIVE_SECTIONS_PER_TICK, RESTORE_MAX_NATIVE_SECTIONS_PER_TICK, 1),
+                IntBudgetRange.scaled(RESTORE_MIN_REWRITE_SECTIONS_PER_TICK, RESTORE_MAX_REWRITE_SECTIONS_PER_TICK, 1),
+                IntBudgetRange.scaled(RESTORE_MIN_DIRECT_SECTIONS_PER_TICK, RESTORE_MAX_DIRECT_SECTIONS_PER_TICK, RESTORE_MIN_DIRECT_SECTIONS_PER_TICK),
+                IntBudgetRange.scaled(4096, RESTORE_MAX_LIGHT_CHECKS_PER_TICK, 4096),
+                IntBudgetRange.scaled(256, RESTORE_MAX_REDSTONE_UPDATES_PER_TICK, 256),
+                RESTORE_SPARSE_STEP_CAP,
+                IntBudgetRange.scaled(RESTORE_MIN_PRELOAD_CHUNKS_PER_TICK, RESTORE_MAX_PRELOAD_CHUNKS_PER_TICK, 1),
+                RESTORE_MAX_SYNC_CHUNK_LOADS_PER_TICK,
+                RESTORE_MAX_BLOCK_ENTITIES_PER_TICK,
+                RESTORE_MAX_ENTITY_OPERATIONS_PER_TICK
+        ));
+        specs.put(WorldApplyProfile.DIAGNOSTIC_TURBO, new BudgetSpec(
+                IntBudgetRange.scaled(TURBO_MIN_BLOCKS_PER_TICK, TURBO_MAX_BLOCKS_PER_TICK, 1),
+                TURBO_MIN_NANOS_PER_TICK,
+                TURBO_MAX_NANOS_PER_TICK,
+                TURBO_MIN_NANOS_PER_TICK,
+                IntBudgetRange.scaled(RESTORE_MIN_NATIVE_SECTIONS_PER_TICK, RESTORE_MAX_NATIVE_SECTIONS_PER_TICK, 1),
+                IntBudgetRange.scaled(RESTORE_MIN_REWRITE_SECTIONS_PER_TICK, RESTORE_MAX_REWRITE_SECTIONS_PER_TICK, 1),
+                IntBudgetRange.scaled(TURBO_MIN_DIRECT_SECTIONS_PER_TICK, TURBO_MAX_DIRECT_SECTIONS_PER_TICK, TURBO_MIN_DIRECT_SECTIONS_PER_TICK),
+                IntBudgetRange.scaled(8192, TURBO_MAX_LIGHT_CHECKS_PER_TICK, 8192),
+                IntBudgetRange.scaled(512, TURBO_MAX_REDSTONE_UPDATES_PER_TICK, 512),
+                TURBO_SPARSE_STEP_CAP,
+                IntBudgetRange.scaled(TURBO_MIN_PRELOAD_CHUNKS_PER_TICK, TURBO_MAX_PRELOAD_CHUNKS_PER_TICK, 1),
+                TURBO_MAX_SYNC_CHUNK_LOADS_PER_TICK,
+                TURBO_MAX_BLOCK_ENTITIES_PER_TICK,
+                TURBO_MAX_ENTITY_OPERATIONS_PER_TICK
+        ));
+        specs.put(WorldApplyProfile.MAXIMUM, new BudgetSpec(
+                IntBudgetRange.scaled(MAXIMUM_MIN_BLOCKS_PER_TICK, MAXIMUM_MAX_BLOCKS_PER_TICK, 1),
+                MAXIMUM_MIN_NANOS_PER_TICK,
+                MAXIMUM_MAX_NANOS_PER_TICK,
+                MAXIMUM_MIN_NANOS_PER_TICK,
+                IntBudgetRange.scaled(MAXIMUM_MIN_NATIVE_SECTIONS_PER_TICK, MAXIMUM_MAX_NATIVE_SECTIONS_PER_TICK, 1),
+                IntBudgetRange.scaled(MAXIMUM_MIN_REWRITE_SECTIONS_PER_TICK, MAXIMUM_MAX_REWRITE_SECTIONS_PER_TICK, 1),
+                IntBudgetRange.scaled(MAXIMUM_MIN_DIRECT_SECTIONS_PER_TICK, MAXIMUM_MAX_DIRECT_SECTIONS_PER_TICK, MAXIMUM_MIN_DIRECT_SECTIONS_PER_TICK),
+                IntBudgetRange.scaled(32_768, MAXIMUM_MAX_LIGHT_CHECKS_PER_TICK, 32_768),
+                IntBudgetRange.scaled(2048, MAXIMUM_MAX_REDSTONE_UPDATES_PER_TICK, 2048),
+                MAXIMUM_SPARSE_STEP_CAP,
+                IntBudgetRange.scaled(MAXIMUM_MIN_PRELOAD_CHUNKS_PER_TICK, MAXIMUM_MAX_PRELOAD_CHUNKS_PER_TICK, 1),
+                MAXIMUM_MAX_SYNC_CHUNK_LOADS_PER_TICK,
+                MAXIMUM_MAX_BLOCK_ENTITIES_PER_TICK,
+                MAXIMUM_MAX_ENTITY_OPERATIONS_PER_TICK
+        ));
+        return specs;
+    }
+
     private static int scaledInt(int minValue, int maxValue, double fraction, double adaptiveScale) {
         return (int) Math.round((minValue + ((maxValue - minValue) * fraction)) * adaptiveScale);
+    }
+
+    private record BudgetSpec(
+            IntBudgetRange blocks,
+            long minNanos,
+            long maxNanos,
+            long minimumProfileNanos,
+            IntBudgetRange nativeSections,
+            IntBudgetRange rewriteSections,
+            IntBudgetRange directSections,
+            IntBudgetRange lightChecks,
+            IntBudgetRange redstoneUpdates,
+            int sparseStepCap,
+            IntBudgetRange preloadChunks,
+            int maxSyncChunkLoads,
+            int maxBlockEntities,
+            int maxEntityOperations
+    ) {
+    }
+
+    private record IntBudgetRange(int minValue, int maxValue, int floor, boolean blockLimited) {
+
+        static IntBudgetRange scaled(int minValue, int maxValue, int floor) {
+            return new IntBudgetRange(minValue, maxValue, floor, false);
+        }
+
+        static IntBudgetRange blockLimited(int floor, int maxValue) {
+            return new IntBudgetRange(floor, maxValue, floor, true);
+        }
+
+        int scaled(double fraction, double adaptiveScale) {
+            return Math.max(this.floor, scaledInt(this.minValue, this.maxValue, fraction, adaptiveScale));
+        }
+
+        int scaled(double fraction, double adaptiveScale, int blocks) {
+            if (this.blockLimited) {
+                return Math.max(this.floor, Math.min(this.maxValue, blocks));
+            }
+            return this.scaled(fraction, adaptiveScale);
+        }
     }
 }
