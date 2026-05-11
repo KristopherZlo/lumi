@@ -58,6 +58,7 @@ This now includes regression checks for:
 - admin-only capture source permission gates and AutoCloseable context guard cleanup
 - runtime Lumi region selection state, one-time selection-tool teaching, and selection-backed partial restore form filling
 - compare/recent overlay spatial selection, cached section mesh behavior, and small/large/extreme overlay geometry paths
+- textured preview fluid coordinate translation
 - recent-action preview color selection for the next undo/redo target, shortcut catalog coverage, and clean active-head save-details compare routing
 - container block-entity payload undo
 - bounded connected-fluid replay tick scheduling

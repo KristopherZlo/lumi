@@ -277,7 +277,7 @@ Open a save card with `Open`.
 Save details shows:
 
 - save name;
-- isometric preview with automatic empty-margin trimming;
+- isometric preview of blocks and fluids with automatic empty-margin trimming;
 - preview zoom controls;
 - automatic refresh when async preview generation finishes;
 - time and author;

@@ -48,7 +48,9 @@ final class PreviewRenderMeshBuilder {
         EnumMap<ChunkSectionLayer, BufferBuilder> builders = new EnumMap<>(ChunkSectionLayer.class);
         EnumMap<ChunkSectionLayer, MeshData> layers = new EnumMap<>(ChunkSectionLayer.class);
         PreviewCullingBlockGetter cullingView = new PreviewCullingBlockGetter(level, bounds);
+        PreviewTranslatedBlockGetter localFluidView = new PreviewTranslatedBlockGetter(cullingView, min);
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos localCursor = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos neighbor = new BlockPos.MutableBlockPos();
 
         try {
@@ -59,6 +61,7 @@ final class PreviewRenderMeshBuilder {
                         cursor.set(x, y, z);
                         this.addBlock(
                                 cullingView,
+                                localFluidView,
                                 min,
                                 blockRenderer,
                                 random,
@@ -67,6 +70,7 @@ final class PreviewRenderMeshBuilder {
                                 bufferPack,
                                 builders,
                                 cursor,
+                                localCursor,
                                 neighbor
                         );
                     }
@@ -99,6 +103,7 @@ final class PreviewRenderMeshBuilder {
 
     private void addBlock(
             PreviewCullingBlockGetter blocks,
+            PreviewTranslatedBlockGetter localFluidBlocks,
             BlockPos min,
             BlockRenderDispatcher blockRenderer,
             RandomSource random,
@@ -107,6 +112,7 @@ final class PreviewRenderMeshBuilder {
             SectionBufferBuilderPack bufferPack,
             EnumMap<ChunkSectionLayer, BufferBuilder> builders,
             BlockPos pos,
+            BlockPos.MutableBlockPos localPos,
             BlockPos.MutableBlockPos neighbor
     ) {
         BlockState state = blocks.getBlockState(pos);
@@ -122,9 +128,10 @@ final class PreviewRenderMeshBuilder {
         }
 
         if (renderFluid) {
+            localPos.set(pos.getX() - min.getX(), pos.getY() - min.getY(), pos.getZ() - min.getZ());
             blockRenderer.renderLiquid(
-                    pos,
-                    blocks,
+                    localPos,
+                    localFluidBlocks,
                     this.getOrCreateBuilder(builders, bufferPack, ItemBlockRenderTypes.getRenderLayer(fluidState)),
                     state,
                     fluidState

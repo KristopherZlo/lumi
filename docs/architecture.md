@@ -299,7 +299,7 @@ Current guarantees:
 - prepared apply records debug-only fast-apply metrics for native sections/cells, direct sections, fallback sections, changed/skipped blocks, section packets, block-entity packets, deferred redstone updates, deferred light checks, apply/work ticks, redstone/light-drain ticks/duration, and fallback reasons
 - block entities and entity diffs have explicit per-tick caps instead of running as unbounded chunk tail work
 - entity-only restore, undo/redo, and recovery batches remain visible to the operation model because progress counts entity work as first-class work units
-- preview generation no longer samples or rasterizes on the server; the server only queues request metadata and the client later performs the textured off-screen render with the built-in preview mesh path. The client preview mesh treats the requested bounds as the visible cut surface and skips hidden internal model/fluid faces before capture.
+- preview generation no longer samples or rasterizes on the server; the server only queues request metadata and the client later performs the textured off-screen render with the built-in preview mesh path. The client preview mesh renders blocks and fluids in bounds-local coordinates, treats the requested bounds as the visible cut surface, and skips hidden internal model/fluid faces before capture.
 - startup world-origin metadata bootstrap is low-priority background work and must not block initial server start or the first client render path
 - malformed `world-origin.json` files are quarantined and regenerated from the current world so a damaged manifest cannot prevent the current workspace UI from opening
 - operation progress is observable through `OperationSnapshot`
