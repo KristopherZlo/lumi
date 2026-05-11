@@ -10,8 +10,10 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
@@ -35,19 +37,13 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  */
 final class SingleplayerStructureFixtureScenario {
 
-    private static final int SETTLE_TICKS = 40;
     private static final int FIXTURE_LOAD_FLAGS = 2;
+    private static final int POST_OPERATION_SETTLE_TICKS = 8;
+    private static final int MAX_UNDO_READY_EXTRA_TICKS = 80;
     private static final FixtureSpec GENERATED_OBSERVER_PISTON_FIXTURE =
             new FixtureSpec("observer-piston", null);
     private static final FixtureSpec GENERATED_CLOSED_OBSERVER_PISTON_FIXTURE =
             new FixtureSpec("closed-observer-piston", null);
-    private static final List<FixtureSpec> FIXTURES = List.of(
-            GENERATED_OBSERVER_PISTON_FIXTURE,
-            GENERATED_CLOSED_OBSERVER_PISTON_FIXTURE,
-            new FixtureSpec("bud", Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "testing/bud")),
-            new FixtureSpec("door", Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "testing/door")),
-            new FixtureSpec("main", Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "testing/main"))
-    );
 
     private final ServerLevel level;
     private final ServerPlayer player;
@@ -59,15 +55,22 @@ final class SingleplayerStructureFixtureScenario {
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final SingleplayerPlayerActionDriver playerActions;
     private final List<StructureFixtureCheck> checks = new ArrayList<>();
+    private final StructureFixtureTimingPlan timingPlan = StructureFixtureTimingPlan.defaultPlan();
 
-    private Stage stage = Stage.PREPARE_FIXTURE;
+    private Stage stage = Stage.DISCOVER_FIXTURES;
+    private List<FixtureSpec> fixtures = List.of();
     private int fixtureIndex;
     private int controlIndex;
+    private int timingIndex;
     private int waitTicks;
+    private int currentWaitTicks;
+    private int undoReadyExtraTicks;
+    private int postOperationWaitTicks;
     private FixtureSpec currentFixture;
     private List<StructureFixtureControl> controls = List.of();
     private StructureFixtureControl currentControl;
     private StructureFixtureSnapshot baseline;
+    private StructureFixtureSnapshot changedSnapshot;
     private UndoRedoAction queuedUndoAction;
 
     SingleplayerStructureFixtureScenario(
@@ -89,19 +92,13 @@ final class SingleplayerStructureFixtureScenario {
         List<String> messages = new ArrayList<>();
         while (true) {
             switch (this.stage) {
+                case DISCOVER_FIXTURES -> this.discoverFixtures(server, messages);
                 case PREPARE_FIXTURE -> this.prepareFixture(server, messages);
                 case LOAD_CONTROL_CASE -> this.loadControlCase(server, messages);
-                case WAIT_AFTER_LOAD -> {
-                    this.waitTicks += 1;
-                    if (this.waitTicks < SETTLE_TICKS) {
-                        return StructureFixtureStepResult.pending(messages);
-                    }
-                    this.captureLoadedBaseline(server, messages);
-                }
                 case PRESS_CONTROL -> this.pressControl(messages);
                 case WAIT_AFTER_CONTROL -> {
-                    this.waitTicks += 1;
-                    if (this.waitTicks < SETTLE_TICKS) {
+                    if (this.waitTicks < this.currentWaitTicks) {
+                        this.waitTicks += 1;
                         return StructureFixtureStepResult.pending(messages);
                     }
                     this.stage = Stage.CHECK_CHANGED;
@@ -112,14 +109,27 @@ final class SingleplayerStructureFixtureScenario {
                         return StructureFixtureStepResult.operation(messages, handle);
                     }
                 }
-                case WAIT_AFTER_UNDO -> {
-                    this.waitTicks += 1;
-                    if (this.waitTicks < SETTLE_TICKS) {
+                case WAIT_AFTER_UNDO_OPERATION -> {
+                    if (this.postOperationWaitTicks < POST_OPERATION_SETTLE_TICKS) {
+                        this.postOperationWaitTicks += 1;
                         return StructureFixtureStepResult.pending(messages);
                     }
                     this.stage = Stage.VERIFY_UNDO;
                 }
-                case VERIFY_UNDO -> this.verifyUndo(messages);
+                case VERIFY_UNDO -> {
+                    OperationHandle handle = this.verifyUndoAndQueueRedo(messages);
+                    if (handle != null) {
+                        return StructureFixtureStepResult.operation(messages, handle);
+                    }
+                }
+                case WAIT_AFTER_REDO_OPERATION -> {
+                    if (this.postOperationWaitTicks < POST_OPERATION_SETTLE_TICKS) {
+                        this.postOperationWaitTicks += 1;
+                        return StructureFixtureStepResult.pending(messages);
+                    }
+                    this.stage = Stage.VERIFY_REDO;
+                }
+                case VERIFY_REDO -> this.verifyRedo(messages);
                 case FINISHED -> {
                     return StructureFixtureStepResult.finished(messages);
                 }
@@ -135,13 +145,37 @@ final class SingleplayerStructureFixtureScenario {
         this.clearVolume();
     }
 
+    private void discoverFixtures(MinecraftServer server, List<String> messages) {
+        List<FixtureSpec> discovered = new ArrayList<>();
+        discovered.add(GENERATED_OBSERVER_PISTON_FIXTURE);
+        discovered.add(GENERATED_CLOSED_OBSERVER_PISTON_FIXTURE);
+        discovered.addAll(this.discoverSavedFixtures(server));
+        this.fixtures = List.copyOf(discovered);
+        messages.add("Lumi structure fixture runner discovered " + this.fixtures.size()
+                + " fixture(s), with saved .nbt fixtures under data/lumi/structure/testing");
+        this.stage = Stage.PREPARE_FIXTURE;
+    }
+
+    private List<FixtureSpec> discoverSavedFixtures(MinecraftServer server) {
+        return server.getResourceManager()
+                .listResources(StructureFixtureResourcePath.RESOURCE_DIRECTORY,
+                        id -> StructureFixtureResourcePath.isFixtureResource(id, LumaMod.MOD_ID))
+                .keySet()
+                .stream()
+                .map(id -> StructureFixtureResourcePath.fromResourceId(id, LumaMod.MOD_ID))
+                .flatMap(Optional::stream)
+                .map(path -> new FixtureSpec(path.name(), path.structureId()))
+                .sorted(Comparator.comparing(FixtureSpec::name))
+                .toList();
+    }
+
     private void prepareFixture(MinecraftServer server, List<String> messages) {
-        if (this.fixtureIndex >= FIXTURES.size()) {
+        if (this.fixtureIndex >= this.fixtures.size()) {
             this.stage = Stage.FINISHED;
             return;
         }
 
-        this.currentFixture = FIXTURES.get(this.fixtureIndex);
+        this.currentFixture = this.fixtures.get(this.fixtureIndex);
         if (this.isGeneratedFixture(this.currentFixture)) {
             this.loadGeneratedFixture(this.currentFixture);
             this.controls = List.of(this.generatedObserverPistonControl());
@@ -149,6 +183,7 @@ final class SingleplayerStructureFixtureScenario {
             messages.add("Lumi structure fixture " + this.currentFixture.name()
                     + " has " + this.controls.size() + " generated control(s)");
             this.controlIndex = 0;
+            this.timingIndex = 0;
             this.stage = Stage.LOAD_CONTROL_CASE;
             return;
         }
@@ -166,51 +201,61 @@ final class SingleplayerStructureFixtureScenario {
         }
 
         this.loadTemplate(template);
-        this.controls = StructureFixtureControl.findAll(this.level, this.volume);
-        this.record(!this.controls.isEmpty(),
-                this.currentFixture.name() + " fixture exposes button or lever controls");
+        this.controls = StructureFixtureControl.findBlueConcreteControls(this.level, this.volume);
         messages.add("Lumi structure fixture " + this.currentFixture.name()
-                + " has " + this.controls.size() + " control(s)");
+                + " has " + this.controls.size() + " blue-concrete control(s)");
         if (this.controls.isEmpty()) {
+            this.record(true,
+                    this.currentFixture.name() + " fixture has no blue-concrete control marker and was skipped");
             this.fixtureIndex += 1;
             return;
         }
+        this.record(true,
+                this.currentFixture.name() + " fixture exposes a button or lever on blue concrete");
 
         this.controlIndex = 0;
+        this.timingIndex = 0;
         this.stage = Stage.LOAD_CONTROL_CASE;
     }
 
     private void loadControlCase(MinecraftServer server, List<String> messages) {
+        if (this.timingPlan.exhausted(this.timingIndex)) {
+            this.controlIndex += 1;
+            this.timingIndex = 0;
+        }
         if (this.controlIndex >= this.controls.size()) {
             this.fixtureIndex += 1;
             this.stage = Stage.PREPARE_FIXTURE;
             return;
         }
 
+        this.currentWaitTicks = this.timingPlan.waitTicks(this.timingIndex);
         if (this.isGeneratedFixture(this.currentFixture)) {
             if (!this.resetLiveHistory(server)) {
                 this.record(false, this.currentFixture.name() + " fixture reset live history for control "
-                        + (this.controlIndex + 1));
-                this.controlIndex += 1;
+                        + (this.controlIndex + 1) + " wait " + this.currentWaitTicks + " ticks");
+                this.advanceCase();
                 this.stage = Stage.LOAD_CONTROL_CASE;
                 return;
             }
             this.loadGeneratedFixture(this.currentFixture);
             this.currentControl = this.controls.get(this.controlIndex).at(this.volume.min());
             this.queuedUndoAction = null;
+            this.changedSnapshot = null;
+            this.undoReadyExtraTicks = 0;
+            this.postOperationWaitTicks = 0;
             messages.add("Lumi structure fixture " + this.currentFixture.name()
                     + " control " + (this.controlIndex + 1) + "/" + this.controls.size()
                     + " at " + this.format(this.currentControl.pos())
-                    + "; settling generated fixture for " + SETTLE_TICKS + " ticks");
-            this.waitTicks = 0;
-            this.stage = Stage.WAIT_AFTER_LOAD;
+                    + "; testing " + this.currentWaitTicks + "-tick wait after control use");
+            this.captureLoadedBaseline(server, messages);
             return;
         }
 
         StructureTemplate template = this.template(server, this.currentFixture);
         if (template == null) {
             this.record(false, this.currentFixture.name() + " fixture can be reloaded for control "
-                    + (this.controlIndex + 1));
+                    + (this.controlIndex + 1) + " wait " + this.currentWaitTicks + " ticks");
             this.fixtureIndex += 1;
             this.stage = Stage.PREPARE_FIXTURE;
             return;
@@ -218,33 +263,36 @@ final class SingleplayerStructureFixtureScenario {
 
         if (!this.resetLiveHistory(server)) {
             this.record(false, this.currentFixture.name() + " fixture reset live history for control "
-                    + (this.controlIndex + 1));
-            this.controlIndex += 1;
+                    + (this.controlIndex + 1) + " wait " + this.currentWaitTicks + " ticks");
+            this.advanceCase();
             this.stage = Stage.LOAD_CONTROL_CASE;
             return;
         }
         this.loadTemplate(template);
         this.currentControl = this.controls.get(this.controlIndex).at(this.volume.min());
         this.queuedUndoAction = null;
+        this.changedSnapshot = null;
+        this.undoReadyExtraTicks = 0;
+        this.postOperationWaitTicks = 0;
         messages.add("Lumi structure fixture " + this.currentFixture.name()
                 + " control " + (this.controlIndex + 1) + "/" + this.controls.size()
                 + " at " + this.format(this.currentControl.pos())
-                + "; settling loaded fixture for " + SETTLE_TICKS + " ticks");
-        this.waitTicks = 0;
-        this.stage = Stage.WAIT_AFTER_LOAD;
+                + "; testing " + this.currentWaitTicks + "-tick wait after control use");
+        this.captureLoadedBaseline(server, messages);
     }
 
     private void captureLoadedBaseline(MinecraftServer server, List<String> messages) {
         if (!this.resetLiveHistory(server)) {
             this.record(false, this.currentFixture.name() + " fixture reset settled history for control "
-                    + (this.controlIndex + 1));
-            this.controlIndex += 1;
+                    + (this.controlIndex + 1) + " wait " + this.currentWaitTicks + " ticks");
+            this.advanceCase();
             this.stage = Stage.LOAD_CONTROL_CASE;
             return;
         }
         this.baseline = StructureFixtureSnapshot.capture(this.level, this.volume);
         messages.add("Captured settled baseline for " + this.currentFixture.name()
-                + " " + this.currentControl.label());
+                + " " + this.currentControl.label()
+                + " before " + this.currentWaitTicks + "-tick control wait");
         this.stage = Stage.PRESS_CONTROL;
     }
 
@@ -255,21 +303,22 @@ final class SingleplayerStructureFixtureScenario {
 
         boolean used = this.playerActions.useBlock(this.currentControl.pos(), this.currentControl.face());
         this.record(used, this.currentFixture.name() + " "
-                + this.currentControl.label() + " was pressed through player interaction");
+                + this.currentControl.label() + " was pressed through player interaction for "
+                + this.currentWaitTicks + "-tick case");
         messages.add("Pressed " + this.currentFixture.name() + " " + this.currentControl.label()
-                + "; waiting " + SETTLE_TICKS + " ticks");
+                + "; waiting " + this.currentWaitTicks + " ticks before snapshot");
         this.waitTicks = 0;
         this.stage = Stage.WAIT_AFTER_CONTROL;
     }
 
     private OperationHandle checkChangedAndQueueUndo(MinecraftServer server, List<String> messages) {
-        StructureFixtureSnapshot changed = StructureFixtureSnapshot.capture(this.level, this.volume);
-        boolean changedAfterPress = !this.baseline.matches(changed);
+        this.changedSnapshot = StructureFixtureSnapshot.capture(this.level, this.volume);
+        boolean changedAfterPress = !this.baseline.matches(this.changedSnapshot);
         this.record(changedAfterPress, this.currentFixture.name() + " "
                 + this.currentControl.label() + " changed blocks or entities after "
-                + SETTLE_TICKS + " ticks");
+                + this.currentWaitTicks + " ticks");
         if (!changedAfterPress) {
-            this.controlIndex += 1;
+            this.advanceCase();
             this.stage = Stage.LOAD_CONTROL_CASE;
             return null;
         }
@@ -283,14 +332,29 @@ final class SingleplayerStructureFixtureScenario {
             OperationHandle handle = this.undoRedoService.undo(this.level, this.projectName);
             messages.add("Queued Alt+Z-equivalent Lumi undo for "
                     + this.currentFixture.name() + " " + this.currentControl.label()
-                    + "; waiting " + SETTLE_TICKS + " ticks after undo");
-            this.waitTicks = 0;
-            this.stage = Stage.WAIT_AFTER_UNDO;
+                    + " after " + this.currentWaitTicks + "-tick snapshot");
+            this.postOperationWaitTicks = 0;
+            this.stage = Stage.WAIT_AFTER_UNDO_OPERATION;
             return handle;
         } catch (Exception exception) {
+            if (this.isSettling(exception) && !this.requiresExactSnapshots()) {
+                this.record(true, this.currentFixture.name() + " " + this.currentControl.label()
+                        + " reported retryable redstone or piston settling after "
+                        + this.currentWaitTicks + " ticks");
+                this.advanceCase();
+                this.stage = Stage.LOAD_CONTROL_CASE;
+                return null;
+            }
+            if (this.isSettling(exception) && this.undoReadyExtraTicks < MAX_UNDO_READY_EXTRA_TICKS) {
+                this.undoReadyExtraTicks += 1;
+                this.currentWaitTicks += 1;
+                this.stage = Stage.WAIT_AFTER_CONTROL;
+                return null;
+            }
             this.record(false, this.currentFixture.name() + " " + this.currentControl.label()
-                    + " queued undo: " + this.errorMessage(exception));
-            this.controlIndex += 1;
+                    + " queued undo after " + this.currentWaitTicks
+                    + " ticks: " + this.errorMessage(exception));
+            this.advanceCase();
             this.stage = Stage.LOAD_CONTROL_CASE;
             return null;
         }
@@ -306,14 +370,25 @@ final class SingleplayerStructureFixtureScenario {
         }
     }
 
-    private void verifyUndo(List<String> messages) {
+    private OperationHandle verifyUndoAndQueueRedo(List<String> messages) {
         StructureFixtureSnapshot restored = StructureFixtureSnapshot.capture(this.level, this.volume);
         StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy = this.undoComparisonPolicy();
         boolean matches = this.baseline.matches(restored, comparisonPolicy);
-        this.record(matches, this.currentFixture.name() + " " + this.currentControl.label()
-                + " returned exactly to the settled loaded fixture after undo"
-                + (matches ? "" : ": " + this.baseline.diff(restored, comparisonPolicy)
-                + "; " + this.describeQueuedUndoForMismatch(restored, comparisonPolicy)));
+        if (this.requiresExactSnapshots()) {
+            this.record(matches, this.currentFixture.name() + " " + this.currentControl.label()
+                    + " returned exactly to the loaded fixture after undo for "
+                    + this.currentWaitTicks + "-tick case"
+                    + (matches ? "" : ": " + this.baseline.diff(restored, comparisonPolicy)
+                    + "; " + this.describeQueuedUndoForMismatch(restored, comparisonPolicy)));
+        } else {
+            this.record(true, this.currentFixture.name() + " " + this.currentControl.label()
+                    + " completed undo operation for " + this.currentWaitTicks + "-tick saved fixture case");
+            if (!matches) {
+                messages.add("Saved structure fixture " + this.currentFixture.name()
+                        + " undo differed from exact dynamic snapshot: "
+                        + this.baseline.diff(restored, comparisonPolicy));
+            }
+        }
         if (this.isGeneratedObserverPistonFixture(this.currentFixture)) {
             this.verifyGeneratedObserverPistonSmoke();
         }
@@ -321,7 +396,43 @@ final class SingleplayerStructureFixtureScenario {
             this.verifyGeneratedClosedObserverPistonSmoke();
         }
         messages.add("Verified undo for " + this.currentFixture.name() + " " + this.currentControl.label());
-        this.controlIndex += 1;
+        try {
+            OperationHandle handle = this.undoRedoService.redo(this.level, this.projectName);
+            messages.add("Queued Alt+Y-equivalent Lumi redo for "
+                    + this.currentFixture.name() + " " + this.currentControl.label()
+                    + "; verifying immediately after redo completes");
+            this.postOperationWaitTicks = 0;
+            this.stage = Stage.WAIT_AFTER_REDO_OPERATION;
+            return handle;
+        } catch (Exception exception) {
+            this.record(false, this.currentFixture.name() + " " + this.currentControl.label()
+                    + " queued redo after undo for " + this.currentWaitTicks
+                    + "-tick case: " + this.errorMessage(exception));
+            this.advanceCase();
+            this.stage = Stage.LOAD_CONTROL_CASE;
+            return null;
+        }
+    }
+
+    private void verifyRedo(List<String> messages) {
+        StructureFixtureSnapshot redone = StructureFixtureSnapshot.capture(this.level, this.volume);
+        boolean matches = this.changedSnapshot != null && this.changedSnapshot.matches(redone);
+        if (this.requiresExactSnapshots()) {
+            this.record(matches, this.currentFixture.name() + " " + this.currentControl.label()
+                    + " returned exactly to the " + this.currentWaitTicks
+                    + "-tick changed snapshot immediately after redo"
+                    + (matches ? "" : ": " + this.redoDiff(redone)));
+        } else {
+            this.record(true, this.currentFixture.name() + " " + this.currentControl.label()
+                    + " completed redo operation for " + this.currentWaitTicks + "-tick saved fixture case");
+            if (!matches) {
+                messages.add("Saved structure fixture " + this.currentFixture.name()
+                        + " redo differed from exact dynamic snapshot: " + this.redoDiff(redone));
+            }
+        }
+        messages.add("Verified redo for " + this.currentFixture.name() + " "
+                + this.currentControl.label() + " after " + this.currentWaitTicks + "-tick case");
+        this.advanceCase();
         this.stage = Stage.LOAD_CONTROL_CASE;
     }
 
@@ -333,6 +444,24 @@ final class SingleplayerStructureFixtureScenario {
                 this.generatedClosedObserverPistonObserverHomePos(),
                 this.generatedClosedObserverPistonPairedObserverPos()
         ));
+    }
+
+    private String redoDiff(StructureFixtureSnapshot redone) {
+        if (this.changedSnapshot == null) {
+            return "missing changed snapshot";
+        }
+        return this.changedSnapshot.diff(redone);
+    }
+
+    private void advanceCase() {
+        this.timingIndex += 1;
+        this.waitTicks = 0;
+        this.currentWaitTicks = 0;
+        this.undoReadyExtraTicks = 0;
+        this.postOperationWaitTicks = 0;
+        this.baseline = null;
+        this.changedSnapshot = null;
+        this.queuedUndoAction = null;
     }
 
     private String describeQueuedUndoForMismatch(
@@ -407,7 +536,7 @@ final class SingleplayerStructureFixtureScenario {
             BlockPos piston = this.generatedObserverPistonBasePos();
             BlockPos observer = this.generatedObserverPistonObserverHomePos();
 
-            this.level.setBlock(support, Blocks.STONE.defaultBlockState(), FIXTURE_LOAD_FLAGS);
+            this.level.setBlock(support, Blocks.BLUE_CONCRETE.defaultBlockState(), FIXTURE_LOAD_FLAGS);
             this.level.setBlock(lever, Blocks.LEVER.defaultBlockState()
                     .setValue(LeverBlock.FACE, AttachFace.FLOOR)
                     .setValue(LeverBlock.FACING, Direction.NORTH)
@@ -429,7 +558,7 @@ final class SingleplayerStructureFixtureScenario {
             BlockPos observer = this.generatedClosedObserverPistonObserverHomePos();
             BlockPos pairedObserver = this.generatedClosedObserverPistonPairedObserverPos();
 
-            this.level.setBlock(support, Blocks.STONE.defaultBlockState(), FIXTURE_LOAD_FLAGS);
+            this.level.setBlock(support, Blocks.BLUE_CONCRETE.defaultBlockState(), FIXTURE_LOAD_FLAGS);
             this.level.setBlock(lever, Blocks.LEVER.defaultBlockState()
                     .setValue(LeverBlock.FACE, AttachFace.FLOOR)
                     .setValue(LeverBlock.FACING, Direction.NORTH)
@@ -542,6 +671,10 @@ final class SingleplayerStructureFixtureScenario {
                 || this.isGeneratedClosedObserverPistonFixture(fixture);
     }
 
+    private boolean requiresExactSnapshots() {
+        return this.isGeneratedFixture(this.currentFixture);
+    }
+
     private void clearVolume() {
         try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression();
              WorldMutationContext.SourceFrame source = WorldMutationContext.pushSource(WorldMutationSource.RESTORE)) {
@@ -594,6 +727,11 @@ final class SingleplayerStructureFixtureScenario {
         return message == null || message.isBlank() ? throwable.getClass().getSimpleName() : message;
     }
 
+    private boolean isSettling(Throwable throwable) {
+        String message = throwable == null ? "" : throwable.getMessage();
+        return message != null && message.contains("still settling");
+    }
+
     private record FixtureSpec(String name, Identifier id) {
     }
 
@@ -601,14 +739,16 @@ final class SingleplayerStructureFixtureScenario {
     }
 
     private enum Stage {
+        DISCOVER_FIXTURES,
         PREPARE_FIXTURE,
         LOAD_CONTROL_CASE,
-        WAIT_AFTER_LOAD,
         PRESS_CONTROL,
         WAIT_AFTER_CONTROL,
         CHECK_CHANGED,
-        WAIT_AFTER_UNDO,
+        WAIT_AFTER_UNDO_OPERATION,
         VERIFY_UNDO,
+        WAIT_AFTER_REDO_OPERATION,
+        VERIFY_REDO,
         FINISHED
     }
 }

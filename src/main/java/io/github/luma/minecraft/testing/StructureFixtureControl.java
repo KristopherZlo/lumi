@@ -7,6 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -17,13 +18,16 @@ import net.minecraft.world.level.block.state.properties.AttachFace;
  */
 record StructureFixtureControl(BlockPos relativePos, BlockPos pos, Direction face, String label) {
 
-    static List<StructureFixtureControl> findAll(ServerLevel level, SingleplayerTestVolume volume) {
+    static List<StructureFixtureControl> findBlueConcreteControls(ServerLevel level, SingleplayerTestVolume volume) {
         List<StructureFixtureControl> found = new ArrayList<>();
         for (BlockPos pos : BlockPos.betweenClosed(volume.min(), volume.max())) {
             BlockPos immutable = pos.immutable();
             BlockState state = level.getBlockState(immutable);
             Block block = state.getBlock();
             if (!(block instanceof ButtonBlock) && !(block instanceof LeverBlock)) {
+                continue;
+            }
+            if (!level.getBlockState(supportPos(immutable, state)).is(Blocks.BLUE_CONCRETE)) {
                 continue;
             }
             found.add(fromWorld(volume.min(), immutable, state));
@@ -57,6 +61,22 @@ record StructureFixtureControl(BlockPos relativePos, BlockPos pos, Direction fac
             case CEILING -> Direction.DOWN;
             case FLOOR -> Direction.UP;
             case WALL -> facing;
+        };
+    }
+
+    private static BlockPos supportPos(BlockPos pos, BlockState state) {
+        if (!state.hasProperty(LeverBlock.FACE)) {
+            return pos.below();
+        }
+
+        AttachFace face = state.getValue(LeverBlock.FACE);
+        Direction facing = state.hasProperty(LeverBlock.FACING)
+                ? state.getValue(LeverBlock.FACING)
+                : Direction.NORTH;
+        return switch (face) {
+            case CEILING -> pos.above();
+            case FLOOR -> pos.below();
+            case WALL -> pos.relative(facing.getOpposite());
         };
     }
 

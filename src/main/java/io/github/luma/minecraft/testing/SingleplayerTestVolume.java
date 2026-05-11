@@ -12,9 +12,9 @@ import net.minecraft.world.phys.AABB;
  */
 final class SingleplayerTestVolume {
 
-    static final int WIDTH = 11;
-    static final int HEIGHT = 6;
-    static final int DEPTH = 11;
+    static final int WIDTH = 16;
+    static final int HEIGHT = 12;
+    static final int DEPTH = 16;
 
     private final BlockPos min;
     private final BlockPos max;

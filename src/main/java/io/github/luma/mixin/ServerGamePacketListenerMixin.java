@@ -62,7 +62,7 @@ abstract class ServerGamePacketListenerMixin {
         WorldMutationContext.pushPlayerSource(
                 WorldMutationSource.PLAYER,
                 this.player == null ? "player" : this.player.getName().getString(),
-                LumaAccessControl.getInstance().canUse(this.player)
+                LumaAccessControl.getInstance().canUse(this.player) || WorldMutationContext.currentAccessAllowed()
         );
     }
 
