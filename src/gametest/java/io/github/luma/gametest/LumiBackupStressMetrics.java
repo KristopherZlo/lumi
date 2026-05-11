@@ -1,6 +1,7 @@
 package io.github.luma.gametest;
 
 import io.github.luma.LumaMod;
+import io.github.luma.domain.model.VersionSaveTiming;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -9,7 +10,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Focused mutable state for the backup stress scenario's timing report.
@@ -34,6 +37,7 @@ final class LumiBackupStressMetrics {
     long compressedBytes;
     long worldProjectCreateMs;
     long historySaveMs;
+    private final Map<String, Long> historySaveTimingsMs = new LinkedHashMap<>();
     int historySavedBlocks;
     int historySavedChunks;
     int historyPatchCount;
@@ -46,6 +50,16 @@ final class LumiBackupStressMetrics {
         this.targetBlocks = targetBlocks;
         this.targetChunks = targetChunks;
         this.backupBudgetMiB = backupBudgetMiB;
+    }
+
+    void recordVersionSaveTiming(VersionSaveTiming timing) {
+        if (timing == null) {
+            return;
+        }
+        this.historySaveTimingsMs.clear();
+        for (String phase : VersionSaveTiming.PHASES) {
+            this.historySaveTimingsMs.put(phase, timing.durationMs(phase));
+        }
     }
 
     void write() {
@@ -80,6 +94,7 @@ final class LumiBackupStressMetrics {
         lines.add("compressedBytes=" + this.compressedBytes);
         lines.add("worldProjectCreateMs=" + this.worldProjectCreateMs);
         lines.add("historySaveMs=" + this.historySaveMs);
+        this.addHistorySaveTimingLines(lines);
         lines.add("historySavedBlocks=" + this.historySavedBlocks);
         lines.add("historySavedChunks=" + this.historySavedChunks);
         lines.add("historyPatchCount=" + this.historyPatchCount);
@@ -88,5 +103,12 @@ final class LumiBackupStressMetrics {
         lines.add("restoredChunks=" + this.restoredChunks);
         lines.add("finalExitMs=" + this.finalExitMs);
         return lines;
+    }
+
+    private void addHistorySaveTimingLines(List<String> lines) {
+        for (String phase : VersionSaveTiming.PHASES) {
+            long durationMs = this.historySaveTimingsMs.getOrDefault(phase, 0L);
+            lines.add("historySave" + phase + "Ms=" + durationMs);
+        }
     }
 }

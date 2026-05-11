@@ -5,6 +5,7 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.VersionSaveTiming;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -67,6 +68,7 @@ final class LumiBackupStressHistorySaveFlow {
                 ));
         OperationSnapshot snapshot = this.waitForOperation(context, singleplayer, handle);
         metrics.historySaveMs = elapsedMillis(startedAt);
+        this.versionService.saveTiming(handle).ifPresent(metrics::recordVersionSaveTiming);
         if (snapshot.failed()) {
             throw new AssertionError("Lumi history save failed: " + snapshot.detail());
         }

@@ -23,6 +23,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.domain.model.VersionSaveTiming;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
 import io.github.luma.debug.LumiTestFailpoints;
@@ -43,6 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -67,9 +69,18 @@ public final class VersionService {
     private final PreviewBoundsResolver previewBoundsResolver = new PreviewBoundsResolver();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final Map<String, VersionSaveTimingBuilder> saveTimingsByOperationId = new ConcurrentHashMap<>();
 
     public OperationHandle startSaveVersion(ServerLevel level, String projectName, String message, String author) throws IOException {
         return this.startSaveVersion(level, projectName, message, author, VersionKind.MANUAL);
+    }
+
+    public Optional<VersionSaveTiming> saveTiming(OperationHandle handle) {
+        if (handle == null || handle.id() == null || handle.id().isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(this.saveTimingsByOperationId.get(handle.id()))
+                .map(VersionSaveTimingBuilder::snapshot);
     }
 
     public OperationHandle startAmendVersion(ServerLevel level, String projectName, String message, String author) throws IOException {
@@ -180,16 +191,24 @@ public final class VersionService {
             String author,
             VersionKind versionKind
     ) throws IOException {
+        VersionSaveTimingBuilder timing = new VersionSaveTimingBuilder();
+        long requestStartedAt = System.nanoTime();
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         BuildProject project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         if (this.worldOperationManager.hasActiveOperation(level.getServer())) {
             throw new IllegalStateException("Another world operation is already running");
         }
+        long sectionStartedAt = System.nanoTime();
         this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
+        timing.record(VersionSaveTiming.RESTORE_INTERRUPTED_DRAFT, sectionStartedAt);
+        sectionStartedAt = System.nanoTime();
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
+        timing.record(VersionSaveTiming.LOAD_PERSISTED_DRAFT, sectionStartedAt);
+        sectionStartedAt = System.nanoTime();
         Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
                 .consumeWorkingDraft(level.getServer(), project.id().toString());
+        timing.record(VersionSaveTiming.CONSUME_WORKING_DRAFT, sectionStartedAt);
         Optional<RecoveryDraft> liveDraft = liveSession.map(TrackedChangeBuffer::toDraft);
         RecoveryDraft draft = liveDraft
                 .or(() -> persistedDraft)
@@ -215,12 +234,17 @@ public final class VersionService {
         );
 
         // Keep a durable fallback until the async save fully commits, without exposing it to live capture.
+        sectionStartedAt = System.nanoTime();
         this.recoveryRepository.saveOperationDraft(layout, draft);
+        timing.record(VersionSaveTiming.OPERATION_DRAFT_WRITE, sectionStartedAt);
         LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_OPERATION_DRAFT_WRITE);
+        sectionStartedAt = System.nanoTime();
         this.recoveryRepository.deleteDraft(layout);
+        timing.record(VersionSaveTiming.RECOVERY_DRAFT_DELETE, sectionStartedAt);
 
         try {
-            return this.worldOperationManager.startBackgroundOperation(
+            sectionStartedAt = System.nanoTime();
+            OperationHandle handle = this.worldOperationManager.startBackgroundOperation(
                     level,
                     project.id().toString(),
                     "save-version",
@@ -237,9 +261,14 @@ public final class VersionService {
                             true,
                             "",
                             draft.baseVersionId(),
-                            progressSink
+                            progressSink,
+                            timing
                     )
             );
+            timing.record(VersionSaveTiming.OPERATION_QUEUE, sectionStartedAt);
+            timing.record(VersionSaveTiming.REQUEST_TOTAL, requestStartedAt);
+            this.saveTimingsByOperationId.put(handle.id(), timing);
+            return handle;
         } catch (RuntimeException exception) {
             this.restoreOperationDraftIfNoLiveDraft(layout, project);
             throw exception;
@@ -295,6 +324,34 @@ public final class VersionService {
             String parentVersionIdOverride,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
+        return this.writeVersion(
+                level,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                versionKind,
+                schedulePreview,
+                parentVersionIdOverride,
+                progressSink,
+                null
+        );
+    }
+
+    private ProjectVersion writeVersion(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String message,
+            String author,
+            VersionKind versionKind,
+            boolean schedulePreview,
+            String parentVersionIdOverride,
+            WorldOperationManager.ProgressSink progressSink,
+            VersionSaveTimingBuilder timing
+    ) throws IOException {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVariant activeVariant = variants.stream()
@@ -323,12 +380,15 @@ public final class VersionService {
         String versionId = ProjectService.versionId(nextIndex);
         String patchId = ProjectService.patchId(nextIndex);
         ChangeStats stats;
+        long sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure(
                 "save",
                 "VersionService.summarizeChanges",
                 "project=" + project.name() + ", changes=" + draft.changes().size()
         )) {
             stats = ChangeStatsFactory.summarize(draft.changes());
+        } finally {
+            recordTiming(timing, VersionSaveTiming.SUMMARIZE_CHANGES, sectionStartedAt);
         }
         LumaMod.LOGGER.info(
                 "Preparing version {} for project {}: {} blocks and {} entities across {} chunks",
@@ -341,6 +401,7 @@ public final class VersionService {
 
         progressSink.update(OperationStage.PREPARING, 0, draft.totalChangeCount(), "Preparing version payload");
         PatchMetadata patchMetadata;
+        sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure(
                 "save",
                 "PatchDataRepository.writePayload",
@@ -358,17 +419,25 @@ public final class VersionService {
                     draft.entityChanges()
             );
             LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_PATCH_DATA_WRITE);
+        } finally {
+            recordTiming(timing, VersionSaveTiming.PATCH_PAYLOAD_WRITE, sectionStartedAt);
         }
         progressSink.update(OperationStage.WRITING, draft.totalChangeCount(), draft.totalChangeCount(), "Writing patch index");
+        sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure("save", "PatchMetaRepository.save", "patch=" + patchMetadata.id())) {
             this.patchMetaRepository.save(layout, patchMetadata);
+        } finally {
+            recordTiming(timing, VersionSaveTiming.PATCH_META_WRITE, sectionStartedAt);
         }
 
         String snapshotId = "";
         boolean createSnapshot;
+        sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure("save", "VersionService.snapshotPolicy", "project=" + project.name())) {
             createSnapshot = (parentVersionId == null || parentVersionId.isBlank())
                     || this.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind);
+        } finally {
+            recordTiming(timing, VersionSaveTiming.SNAPSHOT_POLICY, sectionStartedAt);
         }
         LumaMod.LOGGER.info(
                 "Snapshot policy for version {} in project {} resolved to {}",
@@ -380,8 +449,11 @@ public final class VersionService {
             snapshotId = ProjectService.snapshotId(nextIndex);
             progressSink.update(OperationStage.WRITING, draft.changes().size(), draft.changes().size(), "Capturing snapshot");
             List<ChunkPoint> snapshotChunks;
+            sectionStartedAt = System.nanoTime();
             try (var ignored = LumaLoadLog.measure("save", "VersionService.collectSnapshotChunks", "project=" + project.name())) {
                 snapshotChunks = this.collectSnapshotChunks(layout, project, versions, draft);
+            } finally {
+                recordTiming(timing, VersionSaveTiming.SNAPSHOT_PREPARATION, sectionStartedAt);
             }
             LumaDebugLog.log(
                     project,
@@ -391,6 +463,7 @@ public final class VersionService {
                     versionId,
                     snapshotChunks.size()
             );
+            sectionStartedAt = System.nanoTime();
             try (var ignored = LumaLoadLog.measure(
                     "save",
                     "SnapshotCaptureService.capture",
@@ -404,6 +477,8 @@ public final class VersionService {
                         level,
                         now
                 );
+            } finally {
+                recordTiming(timing, VersionSaveTiming.SNAPSHOT_CAPTURE, sectionStartedAt);
             }
         }
 
@@ -424,6 +499,7 @@ public final class VersionService {
         );
 
         progressSink.update(OperationStage.FINALIZING, draft.changes().size(), draft.changes().size(), "Finalizing version");
+        sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure("save", "VersionService.writeVersionManifests", "version=" + version.id())) {
             LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VERSION_MANIFEST_WRITE);
             this.versionRepository.save(layout, version);
@@ -444,6 +520,8 @@ public final class VersionService {
                     version.id(),
                     activeVariant.id()
             ));
+        } finally {
+            recordTiming(timing, VersionSaveTiming.MANIFEST_WRITE, sectionStartedAt);
         }
         HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
         LumaMod.LOGGER.info(
@@ -456,11 +534,14 @@ public final class VersionService {
 
         if (schedulePreview && project.settings().previewGenerationEnabled()) {
             Bounds3i bounds;
+            sectionStartedAt = System.nanoTime();
             try (var ignored = LumaLoadLog.measure("save", "PreviewBoundsResolver.resolve", "version=" + version.id())) {
                 bounds = this.previewBoundsResolver.resolve(layout, project, versions, version, draft, level);
             }
             try (var ignored = LumaLoadLog.measure("save", "PreviewCaptureRequestService.queue", "version=" + version.id())) {
                 this.previewCaptureRequestService.queue(layout, version.id(), project.dimensionId(), bounds);
+            } finally {
+                recordTiming(timing, VersionSaveTiming.PREVIEW_QUEUE, sectionStartedAt);
             }
             LumaDebugLog.log(project, "preview", "Queued preview capture request for version {} with bounds {}", version.id(), bounds);
         }
@@ -481,6 +562,37 @@ public final class VersionService {
             String rebaseFromVersionId,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
+        return this.writeVersionFromOperationDraft(
+                level,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                versionKind,
+                schedulePreview,
+                parentVersionIdOverride,
+                rebaseFromVersionId,
+                progressSink,
+                null
+        );
+    }
+
+    private ProjectVersion writeVersionFromOperationDraft(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String message,
+            String author,
+            VersionKind versionKind,
+            boolean schedulePreview,
+            String parentVersionIdOverride,
+            String rebaseFromVersionId,
+            WorldOperationManager.ProgressSink progressSink,
+            VersionSaveTimingBuilder timing
+    ) throws IOException {
+        long backgroundStartedAt = System.nanoTime();
         try {
             ProjectVersion version = this.writeVersion(
                     level,
@@ -492,14 +604,21 @@ public final class VersionService {
                     versionKind,
                     schedulePreview,
                     parentVersionIdOverride,
-                    progressSink
+                    progressSink,
+                    timing
             );
+            long sectionStartedAt = System.nanoTime();
             this.rebaseConsumedWorkingDraft(level, project, rebaseFromVersionId, version.id());
+            recordTiming(timing, VersionSaveTiming.REBASE_WORKING_DRAFT, sectionStartedAt);
+            sectionStartedAt = System.nanoTime();
             this.recoveryRepository.deleteOperationDraft(layout);
+            recordTiming(timing, VersionSaveTiming.OPERATION_DRAFT_DELETE, sectionStartedAt);
             return version;
         } catch (IOException | RuntimeException exception) {
             this.restoreOperationDraftIfNoLiveDraft(layout, project);
             throw exception;
+        } finally {
+            recordTiming(timing, VersionSaveTiming.BACKGROUND_TOTAL, backgroundStartedAt);
         }
     }
 
@@ -862,6 +981,32 @@ public final class VersionService {
             case AUTO_CHECKPOINT -> "Saved automatic checkpoint before a large edit";
             case INITIAL, MANUAL -> "Saved version from tracked changes";
         };
+    }
+
+    private static void recordTiming(VersionSaveTimingBuilder timing, String phase, long startedAtNanos) {
+        if (timing != null) {
+            timing.record(phase, startedAtNanos);
+        }
+    }
+
+    private static long elapsedMillis(long startedAtNanos) {
+        return Math.max(0L, (System.nanoTime() - startedAtNanos) / 1_000_000L);
+    }
+
+    private static final class VersionSaveTimingBuilder {
+
+        private final Map<String, Long> durationsMs = new LinkedHashMap<>();
+
+        private synchronized void record(String phase, long startedAtNanos) {
+            if (phase == null || phase.isBlank()) {
+                return;
+            }
+            this.durationsMs.put(phase, elapsedMillis(startedAtNanos));
+        }
+
+        private synchronized VersionSaveTiming snapshot() {
+            return new VersionSaveTiming(this.durationsMs);
+        }
     }
 
 }
