@@ -7,6 +7,8 @@
     "CropBlockMixin",
     "EntityMutationMixin",
     "AxiomSetBufferPacketMixin",
+    "BaseContainerBlockEntityMixin",
+    "BlockEntitySetChangedMixin",
     "BlockEventDataContextMixin",
     "BlockUpdateCaptureMixin",
     "BlockStateRandomTickMixin",

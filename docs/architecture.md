@@ -63,6 +63,7 @@ These services should express product rules, not raw Minecraft side effects or r
 Important adapters:
 
 - `HistoryCaptureManager`: facade for mixin capture entrypoints; it captures explicit tracked actions immediately, coordinates per-project causal envelopes, and fans accepted mutations out to the durable working draft and the volatile live action stack. It drains dirty-chunk stabilization before drafts are persisted, consumed, or selected for live undo/redo. Draft-flush throttling limits recovery-file writes only; it does not postpone dirty-chunk reconciliation.
+- `BlockEntityMutationSnapshotRegistry`: captures before/after block-entity payload changes that do not replace the owning block state, including container slot mutations from vanilla block behavior, so live undo/redo and drafts preserve item counts instead of only the block id/properties.
 - `WorkingDraftSessionManager`: owns active `TrackedChangeBuffer` sessions, recovery-draft persistence, freeze/consume/snapshot/discard operations, idle draft flushes, and rebasing a new draft from the old branch head to the version written by an async save.
 - `LiveUndoRedoActionRecorder`: mirrors authorized root, causal, related, and reconciled stabilization deltas into `UndoRedoHistoryManager`; these actions are runtime-only and are not part of durable project history.
 - `CaptureSessionRegistry`: owns active working-draft buffers, active session state, dirty-session flags, and live-draft flush fingerprints for `WorkingDraftSessionManager`

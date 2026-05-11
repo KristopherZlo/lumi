@@ -156,6 +156,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `WorldMutationCapturePolicy`: block mutation classification for direct capture, deferred stabilization, and transient-state rejection.
 - `BlockUpdateCaptureContext`: redstone/mechanism neighbor and scheduled-tick source scoping for final-state stabilization.
 - `DeferredWorldMutationContext`, `DeferredWorldMutationContexts`: action/source/access propagation for delayed vanilla block events, scheduled ticks, and moving piston block entities so their settled fallout can join the originating live undo/redo action. Block events and scheduled ticks consume bounded mechanism depth so self-sustaining redstone clocks cannot regenerate the same action indefinitely; moving piston block entities preserve the existing piston action id without increasing that depth so chained piston carriers still reconcile their moved blocks. Dirty chunks reconcile only after a short tick-settle window unless a final save/freeze drain explicitly requires immediate loaded-chunk reconciliation; live undo/redo force-loads pending stabilization chunks before its pre-selection drain.
+- `BlockEntityMutationSnapshotRegistry`: before/after payload capture for block entities whose NBT changes without a block-state replacement, including vanilla container slot mutations.
 - `EntityMutationCapturePolicy`, `EntityMutationTracker`, `EntityCausalContextRegistry`, `EntitySpawnCaptureQueue`, `EntitySnapshotService`, `EntitySnapshotOverride`: entity capture filtering and payload handling, including player-caused death context and post-world-acceptance spawn snapshots that preserve the original live undo action order.
 - `AutoCheckpointService`, `AutoCheckpointCommandClassifier`: pending-draft auto checkpoints before large vanilla commands and external WorldEdit/Axiom edits.
 - `MutationSourcePolicy`: mutation source classification, including causal-action gates for ambient growth, pending dirty-chunk redstone/piston fallback, and deferred physics fallout.
@@ -207,7 +208,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 
 Use `src/main/java/io/github/luma/mixin` only for Minecraft hook entrypoints. Mixins should delegate quickly to capture/integration services.
 
-- Block mutation hooks: `LevelSetBlockMixin`, `LevelChunkSetBlockStateMixin`, `LevelChunkSectionSetBlockStateMixin`.
+- Block mutation hooks: `LevelSetBlockMixin`, `LevelChunkSetBlockStateMixin`, `LevelChunkSectionSetBlockStateMixin`, `BaseContainerBlockEntityMixin`, `BlockEntitySetChangedMixin`.
 - Entity hooks: `EntityMutationMixin`, `ServerLevelEntityLifecycleMixin`, `ServerLevelEntityTickMixin`.
 - Player/input/server hooks: `ServerPlayerGameModeMixin`, `ServerGamePacketListenerMixin`.
 - Explosion/TNT/falling hooks: `TntBlockMixin`, `ServerLevelExplosionMixin`, `LevelExplosionMixin`, `FallingBlockMixin`, `FallingBlockEntityMixin`.

@@ -410,7 +410,7 @@ Rules:
 - redo remains available after passive fallout is folded into the active action;
 - undo/redo waits for still-settling redstone or piston chunks instead of selecting a partial lever-only action, and it can load those pending chunks even if you have walked away from the edit area.
 
-Undo and redo restore stored block states with side-effect-suppressed placement flags.
+Undo and redo restore stored block states and captured block-entity payloads, including container item counts, with side-effect-suppressed placement flags.
 
 Redstone power/source changes queue scoped neighbor updates after stored blocks are written so nearby circuitry can settle. Ordinary replay still avoids placement physics and suppresses stale replay callbacks around piston/observer mechanism positions.
 
