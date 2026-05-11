@@ -2,8 +2,6 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import io.github.luma.domain.model.WorldMutationSource;
-import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
@@ -22,9 +20,7 @@ abstract class CropBlockMixin {
             RandomSource random,
             Operation<Void> original
     ) {
-        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.GROWTH)) {
-            original.call(state, level, pos, random);
-        }
+        GrowthMutationSourceScope.runAmbient(() -> original.call(state, level, pos, random));
     }
 
     @WrapMethod(method = "performBonemeal")
@@ -35,8 +31,6 @@ abstract class CropBlockMixin {
             BlockState state,
             Operation<Void> original
     ) {
-        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushCausalSource(WorldMutationSource.GROWTH)) {
-            original.call(level, random, pos, state);
-        }
+        GrowthMutationSourceScope.runCausal(() -> original.call(level, random, pos, state));
     }
 }
