@@ -63,6 +63,8 @@ If you want to launch the broader performance-mod profile:
 
 You can also call Gradle directly:
 
+`runProductionClientGameTest` enables XVFB automatically on Linux CI and runs without XVFB on Windows local hosts.
+
 ```powershell
 .\gradlew.bat installTestClientMods runTestClient -Plumi.testUsername=YourNickHere
 ```

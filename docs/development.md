@@ -102,7 +102,7 @@ Run the idle startup-only client GameTests:
 .\scripts\run-idle-client.ps1
 ```
 
-CI can run the headless production client GameTest task:
+CI can run the production client GameTest task. The task enables XVFB automatically on Linux CI and runs without XVFB on Windows local hosts:
 
 ```powershell
 .\scripts\run-test-client.ps1 -GradleTasks runProductionClientGameTest

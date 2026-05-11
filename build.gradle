@@ -353,7 +353,7 @@ tasks.matching { it.name in ['jar', 'sourcesJar', 'remapJar', 'remapSourcesJar']
 tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
     jvmArgs.add('-Dfabric.client.gametest')
     jvmArgs.add('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
-    useXVFB = true
+    useXVFB = System.getProperty('os.name', '').toLowerCase(Locale.ROOT).contains('linux')
 }
 
 def mutedClientAudioOptions = [
