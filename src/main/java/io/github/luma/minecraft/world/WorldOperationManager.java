@@ -15,7 +15,6 @@ import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.debug.LumiTestFailpoints;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,10 +57,7 @@ public final class WorldOperationManager {
     private final WorldApplyTickWorkGate tickWorkGate = new WorldApplyTickWorkGate();
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private ExecutorService backgroundExecutor = createExecutor();
-    private final Map<String, ActiveOperation> activeOperations = new HashMap<>();
-    private final Map<String, OperationSnapshot> lastSnapshots = new HashMap<>();
-    private final Map<String, OperationSnapshot> lastSnapshotsByOperationId = new HashMap<>();
-    private final Map<String, String> lastApplyMetrics = new HashMap<>();
+    private final WorldOperationRegistry operationRegistry = new WorldOperationRegistry();
 
     private WorldOperationManager() {
     }
@@ -71,46 +67,23 @@ public final class WorldOperationManager {
     }
 
     public synchronized boolean hasActiveOperation(MinecraftServer server) {
-        return this.activeOperations.containsKey(this.serverKey(server));
+        return this.operationRegistry.hasActive(this.serverKey(server));
     }
 
     public synchronized Optional<OperationSnapshot> snapshot(MinecraftServer server) {
-        String serverKey = this.serverKey(server);
-        ActiveOperation active = this.activeOperations.get(serverKey);
-        if (active != null) {
-            return Optional.of(active.snapshot());
-        }
-        return Optional.ofNullable(this.lastSnapshots.get(serverKey));
+        return this.operationRegistry.snapshot(this.serverKey(server));
     }
 
     public synchronized Optional<OperationSnapshot> snapshot(MinecraftServer server, String projectId) {
-        return this.snapshot(server)
-                .filter(snapshot -> snapshot.handle() != null)
-                .filter(snapshot -> projectId == null || projectId.equals(snapshot.handle().projectId()));
+        return this.operationRegistry.snapshot(this.serverKey(server), projectId);
     }
 
     public synchronized Optional<OperationSnapshot> snapshot(MinecraftServer server, OperationHandle handle) {
-        if (handle == null || handle.id() == null || handle.id().isBlank()) {
-            return Optional.empty();
-        }
-        String serverKey = this.serverKey(server);
-        ActiveOperation active = this.activeOperations.get(serverKey);
-        if (active != null
-                && active.handle() != null
-                && handle.id().equals(active.handle().id())) {
-            return Optional.of(active.snapshot());
-        }
-        return Optional.ofNullable(this.lastSnapshotsByOperationId.get(handle.id()))
-                .filter(snapshot -> snapshot.handle() != null)
-                .filter(snapshot -> handle.projectId() == null
-                        || handle.projectId().equals(snapshot.handle().projectId()));
+        return this.operationRegistry.snapshot(this.serverKey(server), handle);
     }
 
     public synchronized Optional<String> applyMetrics(OperationHandle handle) {
-        if (handle == null || handle.id() == null || handle.id().isBlank()) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(this.lastApplyMetrics.get(handle.id()));
+        return this.operationRegistry.applyMetrics(handle);
     }
 
     /**
@@ -133,7 +106,7 @@ public final class WorldOperationManager {
                     unitLabel,
                     work
             );
-            this.activeOperations.put(serverKey, operation);
+            this.operationRegistry.putActive(serverKey, operation);
             LumaMod.LOGGER.info(
                     "Queued background operation {} for project {}",
                     operation.handle().label(),
@@ -169,7 +142,7 @@ public final class WorldOperationManager {
                     unitLabel,
                     work
             );
-            this.activeOperations.put(serverKey, operation);
+            this.operationRegistry.putActive(serverKey, operation);
             LumaMod.LOGGER.info(
                     "Queued prepared apply operation {} for project {}",
                     operation.handle().label(),
@@ -199,7 +172,7 @@ public final class WorldOperationManager {
 
         ActiveOperation operation;
         synchronized (this) {
-            operation = this.activeOperations.get(this.serverKey(server));
+            operation = this.operationRegistry.active(this.serverKey(server));
         }
         if (operation == null) {
             return;
@@ -242,18 +215,14 @@ public final class WorldOperationManager {
 
     private synchronized void complete(MinecraftServer server, ActiveOperation operation) {
         String serverKey = this.serverKey(server);
-        ActiveOperation active = this.activeOperations.get(serverKey);
+        ActiveOperation active = this.operationRegistry.active(serverKey);
         if (active == operation) {
-            this.activeOperations.remove(serverKey);
-            this.lastSnapshots.put(serverKey, operation.snapshot());
-            this.lastSnapshotsByOperationId.put(operation.handle().id(), operation.snapshot());
-            operation.applyMetricsSummary().ifPresent(metrics -> {
-                this.lastApplyMetrics.put(operation.handle().id(), metrics);
-                LumaLoadLog.operationMetrics(operation.handle(), metrics);
-            });
+            this.operationRegistry.removeActive(serverKey);
+            this.operationRegistry.remember(serverKey, operation)
+                    .ifPresent(metrics -> LumaLoadLog.operationMetrics(operation.handle(), metrics));
             ActiveOperation followUp = operation.followUpOperation();
             if (followUp != null) {
-                this.activeOperations.put(serverKey, followUp);
+                this.operationRegistry.putActive(serverKey, followUp);
                 LumaMod.LOGGER.info(
                         "Queued follow-up world operation {} for project {}",
                         followUp.handle().label(),
@@ -281,7 +250,7 @@ public final class WorldOperationManager {
         String serverKey = this.serverKey(server);
         ActiveOperation operation;
         synchronized (this) {
-            operation = this.activeOperations.get(serverKey);
+            operation = this.operationRegistry.active(serverKey);
         }
         if (operation == null) {
             return;
@@ -292,19 +261,15 @@ public final class WorldOperationManager {
         }
 
         synchronized (this) {
-            ActiveOperation active = this.activeOperations.remove(serverKey);
+            ActiveOperation active = this.operationRegistry.removeActive(serverKey);
             if (active == null) {
                 return;
             }
             if (!active.snapshot().terminal()) {
                 active.fail(new IllegalStateException("Server stopped before world operation completed"));
             }
-            this.lastSnapshots.put(serverKey, active.snapshot());
-            this.lastSnapshotsByOperationId.put(active.handle().id(), active.snapshot());
-            active.applyMetricsSummary().ifPresent(metrics -> {
-                this.lastApplyMetrics.put(active.handle().id(), metrics);
-                LumaLoadLog.operationMetrics(active.handle(), metrics);
-            });
+            this.operationRegistry.remember(serverKey, active)
+                    .ifPresent(metrics -> LumaLoadLog.operationMetrics(active.handle(), metrics));
             LumaMod.LOGGER.warn(
                     "Cancelled active world operation {} for project {} during server shutdown",
                     active.handle().label(),
@@ -331,7 +296,7 @@ public final class WorldOperationManager {
         );
         while (System.nanoTime() < deadlineNanos) {
             synchronized (this) {
-                if (this.activeOperations.get(this.serverKey(server)) != operation) {
+                if (this.operationRegistry.active(this.serverKey(server)) != operation) {
                     return;
                 }
             }
@@ -394,7 +359,7 @@ public final class WorldOperationManager {
     }
 
     private void ensureIdle(String serverKey) {
-        if (this.activeOperations.containsKey(serverKey)) {
+        if (this.operationRegistry.hasActive(serverKey)) {
             throw new IllegalStateException("Another world operation is already running");
         }
     }
@@ -464,7 +429,7 @@ public final class WorldOperationManager {
         }
     }
 
-    private abstract static class ActiveOperation {
+    abstract static class ActiveOperation {
 
         private final ServerLevel level;
         private final OperationHandle handle;
