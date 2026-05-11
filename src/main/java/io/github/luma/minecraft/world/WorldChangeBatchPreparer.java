@@ -118,13 +118,16 @@ public final class WorldChangeBatchPreparer {
             StatePayload source = applyNewValues ? change.oldValue() : change.newValue();
             StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
             BlockPos pos = new BlockPos(change.pos().x(), change.pos().y(), change.pos().z());
+            BlockState sourceState = blockStateDecoder.decode(level, source == null ? null : source.stateTag());
+            BlockState targetState = blockStateDecoder.decode(level, target == null ? null : target.stateTag());
             blockPlacements.add(new ConnectedBlockPlacementExpander.ChangePlacement(
                     new PreparedBlockPlacement(
                             pos,
-                            blockStateDecoder.decode(level, target == null ? null : target.stateTag()),
-                            target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
+                            targetState,
+                            target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy(),
+                            replayHintFor(sourceState, targetState)
                     ),
-                    blockStateDecoder.decode(level, source == null ? null : source.stateTag())
+                    sourceState
             ));
             completed += 1;
             progressListener.onDecoded(completed, total);
@@ -315,10 +318,12 @@ public final class WorldChangeBatchPreparer {
             BlockState sourceState = decodedSourcePalette[sourceStateIds[index]];
             BlockState targetState = decodedTargetPalette[targetStateIds[index]];
             CompoundTag blockEntityTag = this.blockEntityAt(blockEntityPalette, blockEntityIds[index]);
+            PreparedBlockPlacement.ReplayHint replayHint = replayHintFor(sourceState, targetState);
             builder.set(
                     localIndex,
                     targetState,
-                    blockEntityTag
+                    blockEntityTag,
+                    replayHint
             );
             decodedChanges.add(new ConnectedBlockPlacementExpander.ChangePlacement(
                     new PreparedBlockPlacement(
@@ -328,7 +333,8 @@ public final class WorldChangeBatchPreparer {
                                     (frame.chunkZ() << 4) + SectionChangeMask.localZ(localIndex)
                             ),
                             targetState,
-                            blockEntityTag
+                            blockEntityTag,
+                            replayHint
                     ),
                     sourceState
             ));
@@ -336,6 +342,14 @@ public final class WorldChangeBatchPreparer {
             progressListener.onDecoded(completed[0], total);
         }
         return new DecodedSectionChanges(builder.build(), List.copyOf(decodedChanges));
+    }
+
+    private static PreparedBlockPlacement.ReplayHint replayHintFor(BlockState sourceState, BlockState targetState) {
+        return PreparedBlockPlacement.ReplayHint.of(false, isFluidRelated(sourceState) || isFluidRelated(targetState));
+    }
+
+    private static boolean isFluidRelated(BlockState state) {
+        return state != null && !state.getFluidState().isEmpty();
     }
 
     private BlockState[] decodePalette(

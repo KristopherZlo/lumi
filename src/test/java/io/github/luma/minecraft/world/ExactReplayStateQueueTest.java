@@ -148,6 +148,28 @@ class ExactReplayStateQueueTest {
     }
 
     @Test
+    void fluidReplayHintProtectsAirTargetsFromPostReplayFluidTicks() {
+        ExactReplayStateQueue queue = new ExactReplayStateQueue();
+        ExactReplayStateGuard guard = new ExactReplayStateGuard();
+        ExactReplayTargetPolicy targetPolicy = new ExactReplayTargetPolicy();
+        BlockPos pos = new BlockPos(1, 64, 1);
+        PreparedBlockPlacement placement = new PreparedBlockPlacement(
+                pos,
+                Blocks.AIR.defaultBlockState(),
+                null,
+                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_FLUID
+        );
+
+        queue.record(batch(placement));
+
+        assertEquals(0, queue.pendingCount());
+        assertEquals(1, queue.takeRecordedPlacements().size());
+        assertTrue(targetPolicy.requiresPostReplayGuard(placement));
+        assertTrue(guard.callbackSuppressionPositions(placement).contains(pos));
+        assertTrue(guard.callbackSuppressionPositions(placement).contains(pos.below()));
+    }
+
+    @Test
     void replaySuppressionTreatsBlankCallbackSourceAsReplayFallout() {
         WorldReplayTickSuppression suppression = WorldReplayTickSuppression.getInstance();
 

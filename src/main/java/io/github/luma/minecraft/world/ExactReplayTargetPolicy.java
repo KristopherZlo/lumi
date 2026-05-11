@@ -38,7 +38,8 @@ final class ExactReplayTargetPolicy {
     boolean requiresPostReplayGuard(PreparedBlockPlacement placement) {
         return placement != null
                 && placement.state() != null
-                && this.requiresPostReplayGuard(placement.state());
+                && (placement.replayHint().suppressesPostReplayFluid()
+                || this.requiresPostReplayGuard(placement.state()));
     }
 
     boolean requiresPostReplayGuard(BlockState state) {

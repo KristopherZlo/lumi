@@ -254,6 +254,7 @@ public final class HistoryCaptureManager {
                 String projectId = trackedProject.project().id().toString();
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
+                boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
                 CaptureSessionState.DeferredActionContext deferredActionContext =
                         this.deferredActionContext(existingSession, chunk, source);
                 boolean usesDeferredStabilization = this.usesDeferredStabilization(
@@ -264,7 +265,8 @@ public final class HistoryCaptureManager {
                         && !this.canUseDeferredStabilization(
                                 trackedProject.project(),
                                 source,
-                                deferredActionContext
+                                deferredActionContext,
+                                activeSessionRegion
                         )) {
                     LumaDebugLog.log(
                             trackedProject.project(),
@@ -300,7 +302,6 @@ public final class HistoryCaptureManager {
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
-                boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
                 if (!this.ensureTrackedChunk(
                         trackedProject,
                         level,
@@ -531,11 +532,17 @@ public final class HistoryCaptureManager {
         String projectId = trackedProject.project().id().toString();
         CaptureSessionState existingSession = this.workingDrafts.session(projectId);
         ChunkPoint chunk = ChunkPoint.from(input.pos());
+        boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
         CaptureSessionState.DeferredActionContext deferredActionContext =
                 this.deferredActionContext(existingSession, chunk, source);
         boolean usesDeferredStabilization = this.usesDeferredStabilization(trackedProject.project(), source);
         if (usesDeferredStabilization
-                && !this.canUseDeferredStabilization(trackedProject.project(), source, deferredActionContext)) {
+                && !this.canUseDeferredStabilization(
+                        trackedProject.project(),
+                        source,
+                        deferredActionContext,
+                        activeSessionRegion
+                )) {
             return;
         }
         if (!this.canCaptureIntoSession(trackedProject, level, source, input.pos())) {
@@ -543,7 +550,6 @@ public final class HistoryCaptureManager {
         }
 
         WorldMutationCapturePolicy.CapturedMutation mutation = captureResult.mutation();
-        boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
         if (!this.ensureTrackedChunk(
                 trackedProject,
                 level,
@@ -1566,9 +1572,15 @@ public final class HistoryCaptureManager {
     private boolean canUseDeferredStabilization(
             BuildProject project,
             io.github.luma.domain.model.WorldMutationSource source,
-            CaptureSessionState.DeferredActionContext deferredActionContext
+            CaptureSessionState.DeferredActionContext deferredActionContext,
+            boolean activeSessionRegion
     ) {
-        return SOURCE_POLICY.canUseDeferredStabilization(project, source, actionId(deferredActionContext));
+        return SOURCE_POLICY.canUseDeferredStabilization(
+                project,
+                source,
+                activeSessionRegion,
+                actionId(deferredActionContext)
+        );
     }
 
     private void recordDeferredBlockMutation(

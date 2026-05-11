@@ -76,7 +76,9 @@ public final class WorldReplayTickSuppression {
     }
 
     public boolean shouldSuppressMutation(ServerLevel level, BlockPos pos, WorldMutationSource source) {
-        return (source == WorldMutationSource.BLOCK_UPDATE || source == WorldMutationSource.PISTON)
+        return (source == WorldMutationSource.BLOCK_UPDATE
+                || source == WorldMutationSource.PISTON
+                || source == WorldMutationSource.FLUID)
                 && this.shouldSuppress(level, pos);
     }
 

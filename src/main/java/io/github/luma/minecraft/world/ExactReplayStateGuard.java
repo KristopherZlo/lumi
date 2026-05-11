@@ -100,7 +100,8 @@ public final class ExactReplayStateGuard {
 
     List<BlockPos> callbackSuppressionPositions(PreparedBlockPlacement placement) {
         if (placement == null || placement.pos() == null
-                || !this.guardBlockPolicy.shouldSuppressCallbacks(placement.state())) {
+                || (!placement.replayHint().suppressesPostReplayFluid()
+                && !this.guardBlockPolicy.shouldSuppressCallbacks(placement.state()))) {
             return List.of();
         }
 

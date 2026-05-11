@@ -85,6 +85,8 @@ class MutationSourcePolicyTest {
         );
 
         assertFalse(this.policy.canUseDeferredStabilization(wholeDimension, WorldMutationSource.FLUID, ""));
+        assertTrue(this.policy.canUseDeferredStabilization(wholeDimension, WorldMutationSource.FLUID, true, ""));
+        assertFalse(this.policy.canUseDeferredStabilization(wholeDimension, WorldMutationSource.BLOCK_UPDATE, true, ""));
         assertTrue(this.policy.canUseDeferredStabilization(wholeDimension, WorldMutationSource.FLUID, "action-1"));
         assertFalse(this.policy.canUseDeferredStabilization(bounded, WorldMutationSource.FLUID, "action-1"));
         assertTrue(this.policy.canUseDeferredStabilization(bounded, WorldMutationSource.BLOCK_UPDATE, "action-1"));
@@ -102,7 +104,7 @@ class MutationSourcePolicyTest {
     }
 
     @Test
-    void deferredPreMutationBaselineRequiresActiveSessionRegionAndCausalAction() {
+    void deferredPreMutationBaselineAllowsActionlessPhysicsOnlyInsideActiveSessionRegion() {
         BuildProject wholeDimension = BuildProject.createWorldWorkspace(
                 "World",
                 "minecraft:overworld",
@@ -132,12 +134,12 @@ class MutationSourcePolicyTest {
                 wholeDimension,
                 WorldMutationSource.FLUID,
                 true,
-                "action-1"
+                ""
         ));
         assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(
                 wholeDimension,
                 WorldMutationSource.FLUID,
-                true,
+                false,
                 ""
         ));
         assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(

@@ -103,7 +103,7 @@ final class MutationSourcePolicy {
         return activeSessionRegion
                 && this.requiresActiveRegionMembership(source)
                 && this.usesDeferredStabilization(project, source)
-                && this.canUseDeferredStabilization(source, actionId);
+                && this.canUseDeferredStabilization(project, source, activeSessionRegion, actionId);
     }
 
     boolean requiresCausalActionForDeferredStabilization(WorldMutationSource source) {
@@ -121,6 +121,22 @@ final class MutationSourcePolicy {
     boolean canUseDeferredStabilization(BuildProject project, WorldMutationSource source, String actionId) {
         return this.usesDeferredStabilization(project, source)
                 && this.canUseDeferredStabilization(source, actionId);
+    }
+
+    boolean canUseDeferredStabilization(
+            BuildProject project,
+            WorldMutationSource source,
+            boolean activeSessionRegion,
+            String actionId
+    ) {
+        return this.usesDeferredStabilization(project, source)
+                && (this.canUseDeferredStabilization(source, actionId)
+                || this.canUseActionlessDeferredStabilization(source, activeSessionRegion));
+    }
+
+    boolean canUseActionlessDeferredStabilization(WorldMutationSource source, boolean activeSessionRegion) {
+        return activeSessionRegion
+                && (source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK);
     }
 
     boolean canReuseDeferredActionContext(WorldMutationSource source) {

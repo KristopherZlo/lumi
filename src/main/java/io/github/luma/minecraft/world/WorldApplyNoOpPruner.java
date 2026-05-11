@@ -236,6 +236,9 @@ final class WorldApplyNoOpPruner {
         if (placement.replayHint().forcesFinalReplay()) {
             return true;
         }
+        if (placement.replayHint().suppressesPostReplayFluid()) {
+            return true;
+        }
         if (!this.exactReplayTargetPolicy.requiresFinalReplay(placement)
                 && !this.exactReplayTargetPolicy.requiresPostReplayGuard(placement)) {
             return false;

@@ -233,12 +233,16 @@ public final class PreparedChunkBatchCollapser {
             if (localIndex < 0 || localIndex >= SectionChangeMask.ENTRY_COUNT) {
                 return;
             }
+            PreparedBlockPlacement.ReplayHint existingHint = this.changedCells[localIndex]
+                    ? this.replayHints[localIndex]
+                    : PreparedBlockPlacement.ReplayHint.NONE;
+            PreparedBlockPlacement.ReplayHint incomingHint = replayHint == null
+                    ? PreparedBlockPlacement.ReplayHint.NONE
+                    : replayHint;
             this.changedCells[localIndex] = true;
             this.states[localIndex] = state == null ? Blocks.AIR.defaultBlockState() : state;
             this.blockEntityTags[localIndex] = blockEntityTag == null ? null : blockEntityTag.copy();
-            this.replayHints[localIndex] = replayHint == null
-                    ? PreparedBlockPlacement.ReplayHint.NONE
-                    : replayHint;
+            this.replayHints[localIndex] = PreparedBlockPlacement.ReplayHint.merge(existingHint, incomingHint);
             this.connectedExpansionCandidates[localIndex] = connectedExpansionCandidate;
         }
 

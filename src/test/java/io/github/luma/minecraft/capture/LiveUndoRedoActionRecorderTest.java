@@ -1,7 +1,11 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.time.Duration;
+import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,5 +24,30 @@ class LiveUndoRedoActionRecorderTest {
     void ordinarySecondarySourcesKeepTightRelatedActionWindow() {
         assertEquals(Duration.ofSeconds(10), LiveUndoRedoActionRecorder.relatedJoinWindowFor(WorldMutationSource.BLOCK_UPDATE));
         assertEquals(2, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(WorldMutationSource.BLOCK_UPDATE));
+    }
+
+    @Test
+    void reconciledFluidFallbackChangesUseWiderRelatedActionWindow() {
+        StoredBlockChange fluidChange = new StoredBlockChange(
+                new BlockPoint(0, 64, 0),
+                state("minecraft:air"),
+                state("minecraft:water")
+        );
+        StoredBlockChange ordinaryChange = new StoredBlockChange(
+                new BlockPoint(1, 64, 0),
+                state("minecraft:air"),
+                state("minecraft:stone")
+        );
+
+        assertEquals(Duration.ofSeconds(60), LiveUndoRedoActionRecorder.relatedJoinWindowFor(fluidChange));
+        assertEquals(8, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(fluidChange));
+        assertEquals(Duration.ofSeconds(10), LiveUndoRedoActionRecorder.relatedJoinWindowFor(ordinaryChange));
+        assertEquals(2, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(ordinaryChange));
+    }
+
+    private static StatePayload state(String blockId) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("Name", blockId);
+        return new StatePayload(tag, null);
     }
 }
