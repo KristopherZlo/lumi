@@ -1156,13 +1156,16 @@ public final class RestoreService {
         return Optional.of(collapsed);
     }
 
-    private RecoveryDraft alignPendingEntityRollbackWithTarget(
+    RecoveryDraft alignPendingEntityRollbackWithTarget(
             ProjectLayout layout,
             List<ProjectVersion> versions,
             ProjectVersion targetVersion,
             RecoveryDraft pendingDraft
     ) throws IOException {
         if (pendingDraft == null || pendingDraft.entityChanges().isEmpty()) {
+            return pendingDraft;
+        }
+        if (targetVersion != null && targetVersion.id().equals(pendingDraft.baseVersionId())) {
             return pendingDraft;
         }
 
@@ -1216,7 +1219,7 @@ public final class RestoreService {
             return Map.of();
         }
 
-        RestoreChain chain = this.resolveChain(versions, targetVersion);
+        RestoreChain chain = this.resolveEntityStateChain(versions, targetVersion);
         Map<String, EntityPayload> states = new LinkedHashMap<>();
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
             var snapshot = candidateChunks == null || candidateChunks.isEmpty()
@@ -1229,6 +1232,8 @@ public final class RestoreService {
                     }
                 }
             }
+        } else if (chain.anchor().versionKind() == VersionKind.WORLD_ROOT) {
+            this.seedWorldRootEntityStates(layout, entityIds, candidateChunks, states);
         }
         for (ProjectVersion version : chain.patchVersions()) {
             for (StoredEntityChange change : this.loadVersionEntityChanges(layout, version, entityIds)) {
@@ -1240,6 +1245,32 @@ public final class RestoreService {
             }
         }
         return states;
+    }
+
+    private void seedWorldRootEntityStates(
+            ProjectLayout layout,
+            Set<String> entityIds,
+            List<ChunkPoint> candidateChunks,
+            Map<String, EntityPayload> states
+    ) throws IOException {
+        if (entityIds == null || entityIds.isEmpty() || states == null) {
+            return;
+        }
+        List<ChunkPoint> chunks = candidateChunks == null || candidateChunks.isEmpty()
+                ? this.baselineChunkRepository.listChunks(layout)
+                : candidateChunks;
+        for (ChunkPoint chunk : chunks) {
+            if (chunk == null || !this.baselineChunkRepository.contains(layout, chunk)) {
+                continue;
+            }
+            for (var snapshotChunk : this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)).chunks()) {
+                for (EntityPayload entity : snapshotChunk.entitySnapshots()) {
+                    if (entityIds.contains(entity.entityId())) {
+                        states.put(entity.entityId(), entity);
+                    }
+                }
+            }
+        }
     }
 
     private List<ChunkPoint> entityTargetCandidateChunks(List<StoredEntityChange> changes) {
@@ -1642,6 +1673,28 @@ public final class RestoreService {
                 cursor.id(),
                 patchVersions.size()
         );
+        return new RestoreChain(cursor, patchVersions);
+    }
+
+    private RestoreChain resolveEntityStateChain(List<ProjectVersion> versions, ProjectVersion targetVersion) {
+        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
+
+        List<ProjectVersion> patchVersions = new ArrayList<>();
+        ProjectVersion cursor = targetVersion;
+        while (cursor != null
+                && (cursor.snapshotId() == null || cursor.snapshotId().isBlank())
+                && cursor.versionKind() != VersionKind.WORLD_ROOT) {
+            patchVersions.add(cursor);
+            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
+                    ? null
+                    : versionMap.get(cursor.parentVersionId());
+        }
+
+        if (cursor == null) {
+            throw new IllegalArgumentException("No checkpoint snapshot found for version " + targetVersion.id());
+        }
+
+        patchVersions.sort(Comparator.comparing(ProjectVersion::createdAt));
         return new RestoreChain(cursor, patchVersions);
     }
 

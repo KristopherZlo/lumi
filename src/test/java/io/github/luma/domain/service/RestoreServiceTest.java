@@ -342,6 +342,75 @@ class RestoreServiceTest {
     }
 
     @Test
+    void pendingEntityRollbackToDraftBaseSkipsSnapshotLookupForWorldRootLineage(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        String entityId = "00000000-0000-0000-0000-000000000070";
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion target = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0002",
+                "Alex",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                List.of(),
+                List.of(new StoredEntityChange(
+                        entityId,
+                        "minecraft:block_display",
+                        entity(entityId, 1.0D),
+                        entity(entityId, 2.0D)
+                ))
+        );
+
+        RecoveryDraft aligned = service.alignPendingEntityRollbackWithTarget(layout, List.of(root, target), target, draft);
+
+        assertEquals(1.0D, x(aligned.entityChanges().getFirst().oldValue()));
+        assertEquals(2.0D, x(aligned.entityChanges().getFirst().newValue()));
+    }
+
+    @Test
+    void pendingEntityRollbackCanResolveTargetStateFromWorldRootPatchChain(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        String entityId = "00000000-0000-0000-0000-000000000071";
+        EntityPayload targetEntity = entity(entityId, 1.0D);
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(),
+                List.of(new StoredEntityChange(entityId, "minecraft:block_display", null, targetEntity))
+        ));
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion target = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0003",
+                "Alex",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                List.of(),
+                List.of(new StoredEntityChange(
+                        entityId,
+                        "minecraft:block_display",
+                        entity(entityId, 2.0D),
+                        entity(entityId, 3.0D)
+                ))
+        );
+
+        RecoveryDraft aligned = service.alignPendingEntityRollbackWithTarget(layout, List.of(root, target), target, draft);
+
+        assertEquals(1.0D, x(aligned.entityChanges().getFirst().oldValue()));
+        assertEquals(3.0D, x(aligned.entityChanges().getFirst().newValue()));
+    }
+
+    @Test
     void authoritativeEntityReplacementKeepsEmptyTargetChunkAuthoritative(@TempDir Path tempDir) throws Exception {
         RestoreService service = new RestoreService();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
@@ -551,5 +620,9 @@ class RestoreServiceTest {
         pos.add(DoubleTag.valueOf(0.0D));
         tag.put("Pos", pos);
         return new EntityPayload(tag);
+    }
+
+    private static double x(EntityPayload payload) {
+        return payload.copyTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D);
     }
 }
