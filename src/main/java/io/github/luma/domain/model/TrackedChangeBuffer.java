@@ -101,38 +101,13 @@ public final class TrackedChangeBuffer {
     }
 
     public void addChange(StoredBlockChange change, Instant now) {
-        long key = BlockPos.asLong(change.pos().x(), change.pos().y(), change.pos().z());
-        StoredBlockChange current = this.changes.get(key);
-        StoredBlockChange merged = current == null
-                ? change
-                : current.withLatestChange(change);
-        if (merged.isNoOp()) {
-            this.changes.remove(key);
-        } else {
-            this.changes.put(key, merged);
-        }
+        StoredChangeAccumulator.mergeBlockChange(this.changes, change);
         this.updatedAt = now;
     }
 
     public void addEntityChange(StoredEntityChange change, Instant now) {
-        if (change == null || change.entityId() == null || change.entityId().isBlank()) {
-            return;
-        }
-        StoredEntityChange current = this.entityChanges.get(change.entityId());
-        StoredEntityChange merged = current == null
-                ? change
-                : this.mergeEntityChange(current, change);
-        if (merged.isNoOp()) {
-            this.entityChanges.remove(change.entityId());
-        } else {
-            this.entityChanges.put(change.entityId(), merged);
-        }
+        StoredChangeAccumulator.mergeUndoableEntityChange(this.entityChanges, change);
         this.updatedAt = now;
-    }
-
-    private StoredEntityChange mergeEntityChange(StoredEntityChange current, StoredEntityChange change) {
-        StoredEntityChange merged = current.withLatestState(change.newValue());
-        return change.isSpawn() ? merged.withInitialState(null) : merged;
     }
 
     public void replaceChunks(Collection<ChunkPoint> chunks, Collection<StoredBlockChange> replacements, Instant now) {

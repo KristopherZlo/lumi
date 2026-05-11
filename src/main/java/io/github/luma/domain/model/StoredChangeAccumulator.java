@@ -14,34 +14,35 @@ public final class StoredChangeAccumulator {
     private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
 
     public void addBlockChange(StoredBlockChange change) {
-        if (change == null) {
+        mergeBlockChange(this.blockChanges, change);
+    }
+
+    public void addEntityChange(StoredEntityChange change) {
+        mergeEntityChange(this.entityChanges, change);
+    }
+
+    static void mergeBlockChange(LinkedHashMap<Long, StoredBlockChange> target, StoredBlockChange change) {
+        if (target == null || change == null) {
             return;
         }
         long key = BlockPos.asLong(change.pos().x(), change.pos().y(), change.pos().z());
-        StoredBlockChange current = this.blockChanges.get(key);
+        StoredBlockChange current = target.get(key);
         StoredBlockChange merged = current == null
                 ? change
                 : current.withLatestChange(change);
         if (merged.isNoOp()) {
-            this.blockChanges.remove(key);
+            target.remove(key);
         } else {
-            this.blockChanges.put(key, merged);
+            target.put(key, merged);
         }
     }
 
-    public void addEntityChange(StoredEntityChange change) {
-        if (change == null || change.entityId() == null || change.entityId().isBlank()) {
-            return;
-        }
-        StoredEntityChange current = this.entityChanges.get(change.entityId());
-        StoredEntityChange merged = current == null
-                ? change
-                : current.withLatestState(change.newValue());
-        if (merged.isNoOp()) {
-            this.entityChanges.remove(change.entityId());
-        } else {
-            this.entityChanges.put(change.entityId(), merged);
-        }
+    static void mergeEntityChange(LinkedHashMap<String, StoredEntityChange> target, StoredEntityChange change) {
+        mergeEntityChange(target, change, false);
+    }
+
+    static void mergeUndoableEntityChange(LinkedHashMap<String, StoredEntityChange> target, StoredEntityChange change) {
+        mergeEntityChange(target, change, true);
     }
 
     public void addBlockChanges(List<StoredBlockChange> changes) {
@@ -84,5 +85,27 @@ public final class StoredChangeAccumulator {
                 this.blockChanges(),
                 this.entityChanges()
         );
+    }
+
+    private static void mergeEntityChange(
+            LinkedHashMap<String, StoredEntityChange> target,
+            StoredEntityChange change,
+            boolean resetInitialStateForSpawnMerge
+    ) {
+        if (target == null || change == null || change.entityId() == null || change.entityId().isBlank()) {
+            return;
+        }
+        StoredEntityChange current = target.get(change.entityId());
+        StoredEntityChange merged = current == null
+                ? change
+                : current.withLatestState(change.newValue());
+        if (current != null && resetInitialStateForSpawnMerge && change.isSpawn()) {
+            merged = merged.withInitialState(null);
+        }
+        if (merged.isNoOp()) {
+            target.remove(change.entityId());
+        } else {
+            target.put(change.entityId(), merged);
+        }
     }
 }

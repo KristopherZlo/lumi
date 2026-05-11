@@ -60,16 +60,7 @@ public final class UndoRedoAction {
             return;
         }
 
-        long key = key(change);
-        StoredBlockChange current = this.changes.get(key);
-        StoredBlockChange merged = current == null
-                ? change
-                : current.withLatestChange(change);
-        if (merged.isNoOp()) {
-            this.changes.remove(key);
-        } else {
-            this.changes.put(key, merged);
-        }
+        StoredChangeAccumulator.mergeBlockChange(this.changes, change);
         this.updatedAt = now;
     }
 
@@ -78,21 +69,8 @@ public final class UndoRedoAction {
             return;
         }
 
-        StoredEntityChange current = this.entityChanges.get(change.entityId());
-        StoredEntityChange merged = current == null
-                ? change
-                : this.mergeEntityChange(current, change);
-        if (merged.isNoOp()) {
-            this.entityChanges.remove(change.entityId());
-        } else {
-            this.entityChanges.put(change.entityId(), merged);
-        }
+        StoredChangeAccumulator.mergeUndoableEntityChange(this.entityChanges, change);
         this.updatedAt = now;
-    }
-
-    private StoredEntityChange mergeEntityChange(StoredEntityChange current, StoredEntityChange change) {
-        StoredEntityChange merged = current.withLatestState(change.newValue());
-        return change.isSpawn() ? merged.withInitialState(null) : merged;
     }
 
     public boolean canAbsorbRelatedChange(
