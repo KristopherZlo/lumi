@@ -127,7 +127,7 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 - `WorldInstallationRepository`: world-level Lumi installation markers such as fresh-world creation and alpha checkpoint gate acknowledgement.
 - `WorldInitialBackupRepository`: one-time pre-mod raw chunk backup manifest and size-budgeted compressed chunk NBT payloads.
 - `PatchMetaRepository`: `patches/*.meta.json` chunk index, visible section index, entity old/new chunk index, and lightweight patch metadata.
-- `PatchDataRepository`, `PatchFrameCompression`: `patches/*.bin.lz4` schema reads/writes, patch frame compression, section fingerprint metadata, entity index construction, and selective chunk/section/entity-frame reads.
+- `PatchDataRepository`, `PatchFrameCompression`, `PatchEntityChunkIndexLookup`: `patches/*.bin.lz4` schema reads/writes, patch frame compression, section fingerprint metadata, entity index construction, and selective chunk/section/entity-frame reads.
 - `SnapshotRepository`, `SnapshotReader`, `SnapshotWriter`: checkpoint snapshot payload boundary, including chunk-addressable frame indexes and snapshot section content refs.
 - `PayloadContentRepository`: content-addressed immutable payload blobs under `cache/content`.
 - `RecoveryRepository`: recovery draft, WAL, operation draft, journal, restore return point persistence.

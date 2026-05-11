@@ -120,6 +120,7 @@ Important boundaries:
 - payload repositories read and write compressed binary history data
 - repositories do not depend on `ServerLevel`, block-state codecs, or apply-batch runtime types
 - patch frame LZ4 compression is isolated in `PatchFrameCompression`; `PatchDataRepository` owns schema orchestration and delegates frame compression/decompression to that helper
+- patch entity chunk index construction and lookup are isolated in `PatchEntityChunkIndexLookup`, keeping selective entity reads separate from binary frame decoding
 - preview request repositories persist lightweight capture jobs for the client renderer
 - history tombstone repositories persist soft-delete visibility metadata without touching history payloads
 - `ProjectArchiveRepository` owns zip archive manifests and file-copy boundaries for history import/export, including manifest size limits, safe storage-id validation, stable source-file hashing, bounded entry copying, entry digest verification, and symlink rejection
