@@ -50,6 +50,9 @@ class ProjectArchiveRepositoryTest {
     void exportArchiveExcludesRecoveryDraftsAndOptionalPreviewsByDefault() throws Exception {
         ProjectLayout layout = this.seedProject(this.tempDir.resolve("source").resolve("tower.mbp"));
         Path archiveFile = this.tempDir.resolve("tower.zip");
+        Files.writeString(layout.versionFile("v0001").resolveSibling("v0002.json.83cf2152-3ea4-4342-957b-68a129df6197.tmp"), "{}", StandardCharsets.UTF_8);
+        Files.write(layout.patchDataFile("patch-0001").resolveSibling("patch-0002.bin.lz4.83cf2152-3ea4-4342-957b-68a129df6197.tmp"), new byte[] {13});
+        Files.write(layout.cacheDir().resolve("baseline-chunks").resolve("chunk_0_1.bin.lz4.83cf2152-3ea4-4342-957b-68a129df6197.tmp"), new byte[] {14});
 
         var manifest = this.projectArchiveRepository.exportArchive(
                 layout,
@@ -65,6 +68,7 @@ class ProjectArchiveRepositoryTest {
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/recovery/journal.json")));
         assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().startsWith("project/previews/")));
         assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().contains("draft")));
+        assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().endsWith(".tmp")));
 
         try (ZipFile zip = new ZipFile(archiveFile.toFile(), StandardCharsets.UTF_8)) {
             assertTrue(zip.getEntry("manifest.json") != null);
@@ -74,6 +78,9 @@ class ProjectArchiveRepositoryTest {
             assertTrue(zip.getEntry("project/previews/v0001.png") == null);
             assertTrue(zip.getEntry("project/recovery/draft.bin.lz4") == null);
             assertTrue(zip.getEntry("project/recovery/operation-draft.bin.lz4") == null);
+            assertTrue(zip.getEntry("project/versions/v0002.json.83cf2152-3ea4-4342-957b-68a129df6197.tmp") == null);
+            assertTrue(zip.getEntry("project/patches/patch-0002.bin.lz4.83cf2152-3ea4-4342-957b-68a129df6197.tmp") == null);
+            assertTrue(zip.getEntry("project/cache/baseline-chunks/chunk_0_1.bin.lz4.83cf2152-3ea4-4342-957b-68a129df6197.tmp") == null);
         }
     }
 
@@ -204,6 +211,23 @@ class ProjectArchiveRepositoryTest {
         );
 
         assertThrows(IOException.class, () -> this.projectArchiveRepository.importArchive(this.tempDir.resolve("target"), archiveFile));
+    }
+
+    @Test
+    void importArchiveRejectsTransientStorageEntries() throws Exception {
+        Path archiveFile = this.tempDir.resolve("transient-entry.zip");
+        ProjectArchiveEntry transientEntry = new ProjectArchiveEntry(
+                "project/versions/v0002.json.83cf2152-3ea4-4342-957b-68a129df6197.tmp",
+                2L,
+                true
+        );
+        this.writeArchive(
+                archiveFile,
+                manifest("tower.mbp", List.of(transientEntry)),
+                Map.of(transientEntry.path(), "{}".getBytes(StandardCharsets.UTF_8))
+        );
+
+        assertThrows(IOException.class, () -> this.projectArchiveRepository.loadManifest(archiveFile));
     }
 
     @Test

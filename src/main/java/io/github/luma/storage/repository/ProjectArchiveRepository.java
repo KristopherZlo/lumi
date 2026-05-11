@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -37,6 +38,7 @@ public final class ProjectArchiveRepository {
     private static final String MANIFEST_ENTRY = "manifest.json";
     private static final String PROJECT_PREFIX = "project/";
     private static final String BASELINE_PREFIX = PROJECT_PREFIX + "cache/baseline-chunks/";
+    private static final String TRANSIENT_STORAGE_SUFFIX = ".tmp";
     private static final int MAX_MANIFEST_BYTES = 1024 * 1024;
     private static final int MAX_ARCHIVE_ENTRIES = 20_000;
     private static final long MAX_ENTRY_BYTES = 512L * 1024L * 1024L;
@@ -54,28 +56,26 @@ public final class ProjectArchiveRepository {
             boolean includePreviews
     ) throws IOException {
         List<ProjectArchiveEntry> entries = this.collectEntries(layout, includePreviews);
-        ProjectArchiveManifest manifest = new ProjectArchiveManifest(
-                ProjectArchiveManifest.CURRENT_SCHEMA_VERSION,
-                ProjectArchiveScope.project(),
-                project.name(),
-                StoragePathPolicy.safeArchiveFolderName(layout.root().getFileName().toString()),
-                project.id().toString(),
-                Instant.now(),
-                includePreviews,
-                entries
-        );
+        AtomicReference<ProjectArchiveManifest> writtenManifest = new AtomicReference<>();
 
         StorageIo.writeAtomically(archiveFile, output -> {
             try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
-                zip.putNextEntry(new ZipEntry(MANIFEST_ENTRY));
-                OutputStreamWriter writer = new OutputStreamWriter(zip, StandardCharsets.UTF_8);
-                GsonProvider.compactGson().toJson(manifest, writer);
-                writer.flush();
-                zip.closeEntry();
-                this.writeArchiveEntries(layout, entries, zip);
+                List<ProjectArchiveEntry> copiedEntries = this.writeArchiveEntries(layout, entries, zip);
+                ProjectArchiveManifest manifest = new ProjectArchiveManifest(
+                        ProjectArchiveManifest.CURRENT_SCHEMA_VERSION,
+                        ProjectArchiveScope.project(),
+                        project.name(),
+                        StoragePathPolicy.safeArchiveFolderName(layout.root().getFileName().toString()),
+                        project.id().toString(),
+                        Instant.now(),
+                        includePreviews,
+                        copiedEntries
+                );
+                this.writeManifestEntry(zip, manifest);
+                writtenManifest.set(manifest);
             }
         });
-        return manifest;
+        return writtenManifest.get();
     }
 
     public ProjectArchiveManifest exportVariantArchive(
@@ -87,28 +87,26 @@ public final class ProjectArchiveRepository {
             boolean includePreviews
     ) throws IOException {
         List<ProjectArchiveEntry> entries = this.collectVariantEntries(layout, variant, versions, includePreviews);
-        ProjectArchiveManifest manifest = new ProjectArchiveManifest(
-                ProjectArchiveManifest.CURRENT_SCHEMA_VERSION,
-                ProjectArchiveScope.variant(variant),
-                project.name(),
-                StoragePathPolicy.safeArchiveFolderName(layout.root().getFileName().toString()),
-                project.id().toString(),
-                Instant.now(),
-                includePreviews,
-                entries
-        );
+        AtomicReference<ProjectArchiveManifest> writtenManifest = new AtomicReference<>();
 
         StorageIo.writeAtomically(archiveFile, output -> {
             try (ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
-                zip.putNextEntry(new ZipEntry(MANIFEST_ENTRY));
-                OutputStreamWriter writer = new OutputStreamWriter(zip, StandardCharsets.UTF_8);
-                GsonProvider.compactGson().toJson(manifest, writer);
-                writer.flush();
-                zip.closeEntry();
-                this.writeArchiveEntries(layout, entries, zip);
+                List<ProjectArchiveEntry> copiedEntries = this.writeArchiveEntries(layout, entries, zip);
+                ProjectArchiveManifest manifest = new ProjectArchiveManifest(
+                        ProjectArchiveManifest.CURRENT_SCHEMA_VERSION,
+                        ProjectArchiveScope.variant(variant),
+                        project.name(),
+                        StoragePathPolicy.safeArchiveFolderName(layout.root().getFileName().toString()),
+                        project.id().toString(),
+                        Instant.now(),
+                        includePreviews,
+                        copiedEntries
+                );
+                this.writeManifestEntry(zip, manifest);
+                writtenManifest.set(manifest);
             }
         });
-        return manifest;
+        return writtenManifest.get();
     }
 
     public ProjectArchiveManifest loadManifest(Path archiveFile) throws IOException {
@@ -293,6 +291,9 @@ public final class ProjectArchiveRepository {
                 if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
                     continue;
                 }
+                if (this.isTransientStorageFile(file)) {
+                    continue;
+                }
                 String relative = directory.relativize(file).toString().replace('\\', '/');
                 entries.add(this.optionalEntry(file, prefix + relative));
             }
@@ -308,6 +309,9 @@ public final class ProjectArchiveRepository {
             for (Path file : stream.sorted().toList()) {
                 this.rejectSymbolicLink(file);
                 if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+                    continue;
+                }
+                if (this.isTransientStorageFile(file)) {
                     continue;
                 }
                 String relative = directory.relativize(file).toString().replace('\\', '/');
@@ -350,19 +354,34 @@ public final class ProjectArchiveRepository {
         entries.putIfAbsent(entry.path(), entry);
     }
 
-    private void writeArchiveEntries(
+    private List<ProjectArchiveEntry> writeArchiveEntries(
             ProjectLayout layout,
             List<ProjectArchiveEntry> entries,
             ZipOutputStream zip
     ) throws IOException {
+        List<ProjectArchiveEntry> copiedEntries = new ArrayList<>();
         for (ProjectArchiveEntry entry : entries) {
             this.validateArchiveEntry(entry.path());
             Path source = this.resolveSource(layout, entry.path());
             zip.putNextEntry(new ZipEntry(entry.path()));
             FileContentHash copied = this.fileContentHasher.copyStable(source, zip);
-            this.validateEntryContent(entry, copied);
             zip.closeEntry();
+            copiedEntries.add(new ProjectArchiveEntry(
+                    entry.path(),
+                    copied.sizeBytes(),
+                    entry.optional(),
+                    copied.sha256Hex()
+            ));
         }
+        return List.copyOf(copiedEntries);
+    }
+
+    private void writeManifestEntry(ZipOutputStream zip, ProjectArchiveManifest manifest) throws IOException {
+        zip.putNextEntry(new ZipEntry(MANIFEST_ENTRY));
+        OutputStreamWriter writer = new OutputStreamWriter(zip, StandardCharsets.UTF_8);
+        GsonProvider.compactGson().toJson(manifest, writer);
+        writer.flush();
+        zip.closeEntry();
     }
 
     private String projectRelativePath(String archivePath) {
@@ -383,6 +402,9 @@ public final class ProjectArchiveRepository {
         for (String segment : archivePath.split("/")) {
             if (segment.isBlank() || segment.equals(".") || segment.equals("..") || segment.contains("..")) {
                 throw new IOException("Unsupported archive entry " + archivePath);
+            }
+            if (segment.endsWith(TRANSIENT_STORAGE_SUFFIX)) {
+                throw new IOException("Archive entry is a transient storage file: " + archivePath);
             }
         }
         if (archivePath.equals(PROJECT_PREFIX + "project.json")
@@ -491,6 +513,11 @@ public final class ProjectArchiveRepository {
         if (Files.isSymbolicLink(path)) {
             throw new IOException("Symbolic links are not supported in project archives: " + path.getFileName());
         }
+    }
+
+    private boolean isTransientStorageFile(Path file) {
+        Path fileName = file.getFileName();
+        return fileName != null && fileName.toString().endsWith(TRANSIENT_STORAGE_SUFFIX);
     }
 
     private Map<String, ZipEntry> indexZipEntries(ZipFile zip) {
