@@ -26,7 +26,7 @@ final class ChunkSectionUpdateBroadcaster {
         }
 
         ClientboundSectionBlocksUpdatePacket packet =
-                new ClientboundSectionBlocksUpdatePacket(sectionPos, changedCells, section);
+                new ClientboundSectionBlocksUpdatePacket(sectionPos, renderInvalidationCells(changedCells), section);
         int sent = 0;
         for (ServerPlayer player : level.getChunkSource().chunkMap.getPlayers(sectionPos.chunk(), false)) {
             player.connection.send(packet);
@@ -60,5 +60,49 @@ final class ChunkSectionUpdateBroadcaster {
             cells.add(SectionPos.sectionRelativePos(pos));
         }
         return cells;
+    }
+
+    static ShortSet renderInvalidationCells(ShortSet changedCells) {
+        ShortOpenHashSet cells = new ShortOpenHashSet();
+        if (changedCells == null || changedCells.isEmpty()) {
+            return cells;
+        }
+
+        for (short cell : changedCells.toShortArray()) {
+            int localX = localX(cell);
+            int localY = localY(cell);
+            int localZ = localZ(cell);
+            cells.add(cell);
+            addCellIfInside(cells, localX - 1, localY, localZ);
+            addCellIfInside(cells, localX + 1, localY, localZ);
+            addCellIfInside(cells, localX, localY - 1, localZ);
+            addCellIfInside(cells, localX, localY + 1, localZ);
+            addCellIfInside(cells, localX, localY, localZ - 1);
+            addCellIfInside(cells, localX, localY, localZ + 1);
+        }
+        return cells;
+    }
+
+    private static void addCellIfInside(ShortSet cells, int localX, int localY, int localZ) {
+        if (localX < 0 || localX > 15 || localY < 0 || localY > 15 || localZ < 0 || localZ > 15) {
+            return;
+        }
+        cells.add(cell(localX, localY, localZ));
+    }
+
+    private static short cell(int localX, int localY, int localZ) {
+        return (short) ((localX << 8) | (localZ << 4) | localY);
+    }
+
+    private static int localX(short cell) {
+        return (cell >>> 8) & 15;
+    }
+
+    private static int localY(short cell) {
+        return cell & 15;
+    }
+
+    private static int localZ(short cell) {
+        return (cell >>> 4) & 15;
     }
 }
