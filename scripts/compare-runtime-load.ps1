@@ -25,7 +25,13 @@ param(
 
     [switch]$RequireLumiActionRun,
 
-    [switch]$RequireBaselineActionRun
+    [switch]$RequireBaselineActionRun,
+
+    [ValidateRange(60, 7200)]
+    [int]$SampleTimeoutSeconds = 900,
+
+    [ValidateRange(5, 300)]
+    [int]$HeartbeatSeconds = 30
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,6 +57,19 @@ function Resolve-RepoPath {
         return [System.IO.Path]::GetFullPath($Path)
     }
     return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
+}
+
+function Stop-ProcessTree {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$ProcessId
+    )
+
+    $children = Get-CimInstance Win32_Process -Filter "ParentProcessId=$ProcessId" -ErrorAction SilentlyContinue
+    foreach ($child in $children) {
+        Stop-ProcessTree -ProcessId $child.ProcessId
+    }
+    Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
 }
 
 function Get-LogOffsets {
@@ -133,24 +152,64 @@ function Invoke-LoggedCommand {
     $processInfo.UseShellExecute = $false
 
     $process = [System.Diagnostics.Process]::Start($processInfo)
+    if ($null -eq $process) {
+        throw "Failed to start runtime-load command: $Command"
+    }
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
-    $process.WaitForExit()
+    $deadline = [DateTime]::UtcNow.AddSeconds($SampleTimeoutSeconds)
+    $nextHeartbeat = [DateTime]::UtcNow.AddSeconds($HeartbeatSeconds)
+    $timedOut = $false
+    while (-not $process.WaitForExit(1000)) {
+        $now = [DateTime]::UtcNow
+        if ($now -ge $nextHeartbeat) {
+            Write-Host ("Still running sample for {0}s: {1}" -f [int]$start.Elapsed.TotalSeconds, $Command)
+            $nextHeartbeat = $now.AddSeconds($HeartbeatSeconds)
+        }
+        if ($now -ge $deadline) {
+            $timedOut = $true
+            Write-Warning ("Runtime-load sample timed out after {0}s: {1}" -f $SampleTimeoutSeconds, $Command)
+            Stop-ProcessTree -ProcessId $process.Id
+            $process.WaitForExit(10000) | Out-Null
+            break
+        }
+    }
     $start.Stop()
+
+    $stdout = ""
+    $stderr = ""
+    try {
+        $stdout = $stdoutTask.Result
+    } catch {
+        $stdout = "Failed to read stdout: $($_.Exception.Message)"
+    }
+    try {
+        $stderr = $stderrTask.Result
+    } catch {
+        $stderr = "Failed to read stderr: $($_.Exception.Message)"
+    }
+    $exitCode = if ($timedOut) {
+        124
+    } elseif ($process.HasExited) {
+        $process.ExitCode
+    } else {
+        -1
+    }
 
     $log = @(
         "Command: $Command"
-        "ExitCode: $($process.ExitCode)"
+        "ExitCode: $exitCode"
         "WallClockMs: $($start.ElapsedMilliseconds)"
+        "TimedOut: $timedOut"
         ""
-        $stdoutTask.Result
-        $stderrTask.Result
+        $stdout
+        $stderr
     ) -join [Environment]::NewLine
     [System.IO.File]::WriteAllText($LogPath, $log)
     Append-ExtraLogs -LogPath $LogPath -Offsets $extraLogOffsets
 
     return [PSCustomObject]@{
-        ExitCode = $process.ExitCode
+        ExitCode = $exitCode
         WallClockMs = [int64]$start.ElapsedMilliseconds
     }
 }

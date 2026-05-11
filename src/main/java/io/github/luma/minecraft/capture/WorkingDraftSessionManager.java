@@ -249,6 +249,7 @@ final class WorkingDraftSessionManager {
         this.clearSessionDiagnostics(projectId);
         if (session == null) {
             if (trackedProject == null) {
+                LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
                 return Optional.empty();
             }
             LumaDebugLog.log(
@@ -257,13 +258,16 @@ final class WorkingDraftSessionManager {
                     "Freezing project {} without active working draft; loading persisted draft fallback",
                     trackedProject.project().name()
             );
-            return this.recoveryRepository.loadDraft(trackedProject.layout())
+            Optional<TrackedChangeBuffer> persistedDraft = this.recoveryRepository.loadDraft(trackedProject.layout())
                     .map(draft -> TrackedChangeBuffer.fromDraft(UUID.randomUUID().toString(), draft));
+            LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
+            return persistedDraft;
         }
 
         if (trackedProject != null && !session.isEmpty()) {
             if (persistedDraftIsCurrent) {
                 this.sessionRegistry.markCurrentRunDraft(projectId);
+                LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
                 LumaMod.LOGGER.info(
                         "Skipped shutdown draft rewrite for project {} because the active working draft is already persisted",
                         trackedProject.project().name()
@@ -287,7 +291,9 @@ final class WorkingDraftSessionManager {
                     session.size()
             );
         }
-        return session.isEmpty() ? Optional.empty() : Optional.of(session);
+        Optional<TrackedChangeBuffer> frozenSession = session.isEmpty() ? Optional.empty() : Optional.of(session);
+        LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
+        return frozenSession;
     }
 
     Optional<TrackedChangeBuffer> consumeAfterReconciliation(String projectId, TrackedProject trackedProject) throws IOException {

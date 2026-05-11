@@ -11,7 +11,7 @@ public final class LumiOverlayClientGameTests implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
         try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
-            singleplayer.getClientWorld().waitForChunksRender();
+            ClientGameTestSingleplayerSupport.prepare(singleplayer);
             new LumiOverlayClientSmoke().run(context, singleplayer);
             context.takeScreenshot("lumi-overlay-client-smoke");
         } catch (RuntimeException | Error exception) {

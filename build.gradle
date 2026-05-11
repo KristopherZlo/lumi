@@ -356,6 +356,83 @@ tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.Client
     useXVFB = true
 }
 
+def mutedClientAudioOptions = [
+        'soundCategory_master': '0.0',
+        'soundCategory_music': '0.0',
+        'soundCategory_record': '0.0',
+        'soundCategory_weather': '0.0',
+        'soundCategory_block': '0.0',
+        'soundCategory_hostile': '0.0',
+        'soundCategory_neutral': '0.0',
+        'soundCategory_player': '0.0',
+        'soundCategory_ambient': '0.0',
+        'soundCategory_voice': '0.0',
+        'soundCategory_ui': '0.0'
+]
+
+def writeMutedClientAudioOptions = { String runDirPath ->
+    File optionsFile = layout.projectDirectory.file("${runDirPath}/options.txt").asFile
+    optionsFile.parentFile.mkdirs()
+
+    List<String> existingLines = optionsFile.exists() ? optionsFile.readLines('UTF-8') : []
+    Map<String, String> updatedValues = [:]
+
+    existingLines.each { line ->
+        int separatorIndex = line.indexOf(':')
+        if (separatorIndex <= 0) {
+            return
+        }
+        updatedValues[line.substring(0, separatorIndex)] = line.substring(separatorIndex + 1)
+    }
+    mutedClientAudioOptions.each { key, value ->
+        updatedValues[key] = value
+    }
+
+    List<String> rewrittenLines = []
+    Set<String> rewrittenKeys = new LinkedHashSet<>()
+    existingLines.each { line ->
+        int separatorIndex = line.indexOf(':')
+        if (separatorIndex <= 0) {
+            rewrittenLines.add(line)
+            return
+        }
+        String key = line.substring(0, separatorIndex)
+        rewrittenLines.add("${key}:${updatedValues[key]}")
+        rewrittenKeys.add(key)
+    }
+    mutedClientAudioOptions.each { key, value ->
+        if (!rewrittenKeys.contains(key)) {
+            rewrittenLines.add("${key}:${value}")
+        }
+    }
+
+    if (rewrittenLines.isEmpty()) {
+        mutedClientAudioOptions.each { key, value ->
+            rewrittenLines.add("${key}:${value}")
+        }
+    }
+
+    optionsFile.setText(rewrittenLines.join(System.lineSeparator()) + System.lineSeparator(), 'UTF-8')
+}
+
+[
+        'runTestClient': 'run/test-client',
+        'runClientGameTest': 'build/run/clientGameTest',
+        'runBaselineClientGameTest': 'build/run/baselineClientGameTest',
+        'runIdleClientGameTest': 'build/run/idleClientGameTest',
+        'runBaselineIdleClientGameTest': 'build/run/baselineIdleClientGameTest'
+].each { taskName, runDirPath ->
+    tasks.named(taskName).configure {
+        doFirst {
+            writeMutedClientAudioOptions(runDirPath)
+        }
+    }
+}
+
+tasks.named('runClientGameTest').configure {
+    jvmArgs('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
+}
+
 ['runClient',
  'runTestClient',
  'runGameTest',

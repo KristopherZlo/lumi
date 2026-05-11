@@ -32,6 +32,46 @@ function Stop-ProcessTree {
     Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
 }
 
+function ConvertTo-ProcessArgument {
+    param(
+        [AllowNull()]
+        [string]$Argument
+    )
+
+    if ($null -eq $Argument -or $Argument.Length -eq 0) {
+        return '""'
+    }
+    if ($Argument -notmatch '[\s"]') {
+        return $Argument
+    }
+    return '"' + ($Argument -replace '"', '\"') + '"'
+}
+
+function Join-ProcessArguments {
+    param(
+        [string[]]$Arguments
+    )
+
+    return (($Arguments | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join " ")
+}
+
+function Set-ProcessEnvironmentVariable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Diagnostics.ProcessStartInfo]$StartInfo,
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [string]$Value
+    )
+
+    if ($StartInfo.PSObject.Properties["Environment"]) {
+        $StartInfo.Environment[$Name] = $Value
+        return
+    }
+    $StartInfo.EnvironmentVariables[$Name] = $Value
+}
+
 function Invoke-TestClientMode {
     param(
         [string]$Mode,
@@ -46,12 +86,14 @@ function Invoke-TestClientMode {
     $previousMode = $env:LUMI_SINGLEPLAYER_TEST_MODE
     try {
         $env:LUMI_SINGLEPLAYER_TEST_MODE = $Mode
-        $arguments = @("-GradleTasks", "runClientGameTest")
+        $arguments = @{
+            GradleTasks = @("runClientGameTest")
+        }
         if ($JavaHome) {
-            $arguments += @("-JavaHome", $JavaHome)
+            $arguments.JavaHome = $JavaHome
         }
         if ($FullStack) {
-            $arguments += "-FullStack"
+            $arguments.FullStack = $true
         }
         & $testClientScript @arguments
     } finally {
@@ -83,28 +125,36 @@ function Invoke-CrashSample {
         "-GradleTasks", "runClientGameTest"
     )
     if ($JavaHome) {
-        $arguments += @("-JavaHome", $JavaHome)
+        $arguments = @(
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", $testClientScript,
+            "-JavaHome", $JavaHome,
+            "-GradleTasks", "runClientGameTest"
+        )
     }
     if ($FullStack) {
         $arguments += "-FullStack"
     }
 
-    $startInfo = [System.Diagnostics.ProcessStartInfo]::new("powershell.exe")
-    foreach ($argument in $arguments) {
-        [void]$startInfo.ArgumentList.Add($argument)
-    }
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = "powershell.exe"
+    $startInfo.Arguments = Join-ProcessArguments -Arguments $arguments
     $startInfo.WorkingDirectory = $repoRoot
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
     $startInfo.UseShellExecute = $false
-    $startInfo.Environment["LUMI_SINGLEPLAYER_TEST_MODE"] = "crash-safety"
-    $startInfo.Environment["LUMI_TEST_FAILPOINT_ENABLED"] = "true"
-    $startInfo.Environment["LUMI_TEST_FAILPOINT"] = $Failpoint
-    $startInfo.Environment["LUMI_TEST_FAILPOINT_ACTION"] = "sleep"
-    $startInfo.Environment["LUMI_TEST_FAILPOINT_SLEEP_MILLIS"] = "60000"
-    $startInfo.Environment["LUMI_TEST_FAILPOINT_MARKER"] = $marker
+    Set-ProcessEnvironmentVariable -StartInfo $startInfo -Name "LUMI_SINGLEPLAYER_TEST_MODE" -Value "crash-safety"
+    Set-ProcessEnvironmentVariable -StartInfo $startInfo -Name "LUMI_TEST_FAILPOINT_ENABLED" -Value "true"
+    Set-ProcessEnvironmentVariable -StartInfo $startInfo -Name "LUMI_TEST_FAILPOINT" -Value $Failpoint
+    Set-ProcessEnvironmentVariable -StartInfo $startInfo -Name "LUMI_TEST_FAILPOINT_ACTION" -Value "sleep"
+    Set-ProcessEnvironmentVariable -StartInfo $startInfo -Name "LUMI_TEST_FAILPOINT_SLEEP_MILLIS" -Value "60000"
+    Set-ProcessEnvironmentVariable -StartInfo $startInfo -Name "LUMI_TEST_FAILPOINT_MARKER" -Value $marker
 
     $process = [System.Diagnostics.Process]::Start($startInfo)
+    if ($null -eq $process) {
+        throw "Failed to start crash sample process for failpoint '$Failpoint'."
+    }
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
     $deadline = [DateTime]::UtcNow.AddSeconds($MarkerTimeoutSeconds)
@@ -136,11 +186,17 @@ New-Item -ItemType Directory -Force -Path $runDirectory | Out-Null
 
 Push-Location $repoRoot
 try {
+    $failpointCount = $Failpoints.Count
+    $failpointIndex = 0
     foreach ($failpoint in $Failpoints) {
+        $failpointIndex++
+        Write-Host "Crash safety failpoint $failpointIndex/$failpointCount crash sample: $failpoint"
         Invoke-CrashSample -Failpoint $failpoint -RunDirectory $runDirectory
+        Write-Host "Crash safety failpoint $failpointIndex/$failpointCount recovery verify: $failpoint"
         Invoke-TestClientMode -Mode "crash-safety" -Environment @{
             LUMI_TEST_CRASH_VERIFY = "true"
         }
+        Write-Host "Crash safety failpoint $failpointIndex/$failpointCount passed: $failpoint"
     }
     Write-Host "Crash safety logs: $runDirectory"
 } finally {

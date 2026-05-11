@@ -115,6 +115,10 @@ try {
     }
 
     & .\gradlew.bat @arguments
+    $gradleExitCode = $LASTEXITCODE
+    if ($gradleExitCode -ne 0) {
+        throw "Gradle tasks failed with exit code $gradleExitCode."
+    }
 } finally {
     Pop-Location
 }

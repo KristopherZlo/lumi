@@ -4,7 +4,12 @@ param(
     [switch]$SkipCrashHarness,
     [switch]$FullStack,
     [ValidateRange(1, 20)]
-    [int]$RuntimeLoadRuns = 1
+    [int]$RuntimeLoadRuns = 1,
+    [ValidateRange(60, 7200)]
+    [int]$RuntimeLoadSampleTimeoutSeconds = 900,
+    [ValidateRange(30, 7200)]
+    [int]$CrashHarnessMarkerTimeoutSeconds = 240,
+    [string[]]$CrashHarnessFailpoints = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,13 +33,14 @@ function Invoke-TestClientGradle {
             $env:LUMI_SINGLEPLAYER_TEST_MODE = $Mode
         }
 
-        $arguments = @("-GradleTasks")
-        $arguments += $Tasks
+        $arguments = @{
+            GradleTasks = $Tasks
+        }
         if ($JavaHome) {
-            $arguments += @("-JavaHome", $JavaHome)
+            $arguments.JavaHome = $JavaHome
         }
         if ($FullStack) {
-            $arguments += "-FullStack"
+            $arguments.FullStack = $true
         }
         & $testClientScript @arguments
     } finally {
@@ -58,19 +64,33 @@ try {
     if (-not $SkipRuntimeLoad) {
         $baseline = "powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-baseline-client.ps1"
         $lumi = "powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-test-client.ps1 -GradleTasks runClientGameTest"
+        if ($JavaHome) {
+            $quotedJavaHome = '"' + ($JavaHome -replace '"', '\"') + '"'
+            $baseline += " -JavaHome $quotedJavaHome"
+            $lumi += " -JavaHome $quotedJavaHome"
+        }
         & $runtimeCompareScript `
             -BaselineCommand $baseline `
             -LumiCommand $lumi `
             -Runs $RuntimeLoadRuns `
+            -SampleTimeoutSeconds $RuntimeLoadSampleTimeoutSeconds `
             -RequireBaselineActionRun `
             -RequireLumiActionRun `
             -FailOnRegression
     }
 
     if (-not $SkipCrashHarness) {
-        $arguments = @()
+        $arguments = @{
+            MarkerTimeoutSeconds = $CrashHarnessMarkerTimeoutSeconds
+        }
         if ($JavaHome) {
-            $arguments += @("-JavaHome", $JavaHome)
+            $arguments.JavaHome = $JavaHome
+        }
+        if ($CrashHarnessFailpoints.Count -gt 0) {
+            $arguments.Failpoints = $CrashHarnessFailpoints
+        }
+        if ($FullStack) {
+            $arguments.FullStack = $true
         }
         & $crashHarnessScript @arguments
     }
