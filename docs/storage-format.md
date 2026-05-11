@@ -402,7 +402,7 @@ If a full restore starts with unsaved draft changes, Lumi first writes a `RESTOR
 
 Reserved for future cache artifacts and rebuildable derived data.
 
-The `cache/baseline-chunks/` subtree is not rebuildable without touching the live world. It is part of archive export/import and must not be treated as disposable cache data by maintenance workflows. Each baseline file is written from a prepared compact chunk snapshot payload captured on the server thread, then compressed and persisted later by the capture-maintenance executor.
+The `cache/baseline-chunks/` subtree is not rebuildable without touching the live world. It is part of archive export/import and must not be treated as disposable cache data by maintenance workflows. Each baseline file is written from a prepared compact chunk snapshot payload captured on the server thread, then compressed and persisted later by the bounded capture-maintenance baseline writer pool.
 
 `cache/content/` stores content-addressed immutable payload blobs keyed by SHA-256. These files are rebuildable from referenced history payloads or can be compacted by future idle maintenance, but compaction must never run on the server tick path.
 Other cache files are treated as disposable cleanup candidates.

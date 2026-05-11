@@ -161,7 +161,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `MutationSourcePolicy`: mutation source classification, including causal-action gates for ambient growth, pending dirty-chunk redstone/piston fallback, and deferred physics fallout.
 - `ExplosiveEntityContextRegistry`: TNT/explosion causal context.
 - `SessionStabilizationService`: dirty chunk reconciliation before save/freeze/undo/redo; pending dirty chunks keep the latest causal action context so repeated mechanism toggles in one chunk reconcile into the selected live undo/redo action, even when the player is no longer close enough to keep those chunks loaded. Chunks that still contain transient `moving_piston` stay pending instead of being snapshotted as settled air.
-- `CapturePersistenceCoordinator`: separate async draft-flush and baseline-write queues for recovery and baseline persistence.
+- `CapturePersistenceCoordinator`: separate async draft-flush queue and bounded baseline-write pool for recovery and baseline persistence.
 - `ChunkSnapshotCaptureService`, `SnapshotCaptureService`: server-thread chunk/snapshot capture into immutable payloads.
 - `ChunkSectionOwnershipRegistry`, `ChunkSectionOwnerLookup`, `DirectSectionMutationCaptureService`: lower-level section owner fallback capture.
 - `LiveUndoRedoActionRecorder`: fan-out from accepted captured/stabilized deltas into the volatile live undo/redo action stack.

@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.LumaMod;
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -27,6 +28,11 @@ import java.util.concurrent.ThreadFactory;
  */
 public final class CapturePersistenceCoordinator implements AutoCloseable {
 
+    private static final String BASELINE_THREADS_PROPERTY = "lumi.capture.baselineThreads";
+    private static final String BASELINE_LOG_CATEGORY = "capture-baseline";
+    private static final int DEFAULT_BASELINE_THREAD_LIMIT = 4;
+    private static final int MAX_BASELINE_THREAD_LIMIT = 8;
+
     private final RecoveryRepository recoveryRepository;
     private final BaselineChunkRepository baselineChunkRepository;
     private final ExecutorService draftFlushExecutor;
@@ -39,7 +45,10 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                 new RecoveryRepository(),
                 new BaselineChunkRepository(),
                 Executors.newSingleThreadExecutor(new MaintenanceThreadFactory("draft")),
-                Executors.newSingleThreadExecutor(new MaintenanceThreadFactory("baseline"))
+                Executors.newFixedThreadPool(
+                        defaultBaselineWriterThreads(),
+                        new MaintenanceThreadFactory("baseline")
+                )
         );
     }
 
@@ -77,7 +86,8 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             }
             CompletableFuture<Void> future = new CompletableFuture<>();
             this.pendingBaselineWrites.put(key, future);
-            LumaMod.LOGGER.info(
+            LumaDebugLog.log(
+                    BASELINE_LOG_CATEGORY,
                     "Queued async baseline write for project {} chunk {}:{}",
                     projectName,
                     chunkSnapshot.chunkX(),
@@ -121,10 +131,30 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
     }
 
     public void drainProject(String projectId, String projectName) throws IOException {
+        long startedAt = System.nanoTime();
+        boolean waited = false;
+        int peakPendingTasks = 0;
         while (true) {
             List<CompletableFuture<Void>> futures = this.projectFutures(projectId);
             if (futures.isEmpty()) {
+                if (waited) {
+                    LumaMod.LOGGER.info(
+                            "Drained capture maintenance for project {} in {} ms (peak pending tasks: {})",
+                            projectName,
+                            elapsedMillis(startedAt),
+                            peakPendingTasks
+                    );
+                }
                 return;
+            }
+            peakPendingTasks = Math.max(peakPendingTasks, futures.size());
+            if (!waited) {
+                waited = true;
+                LumaMod.LOGGER.info(
+                        "Waiting for {} pending capture maintenance tasks for project {}",
+                        futures.size(),
+                        projectName
+                );
             }
             try {
                 CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
@@ -187,7 +217,8 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         try {
             boolean written = this.baselineChunkRepository.writeIfMissing(layout, projectId, chunkSnapshot, now);
             if (written) {
-                LumaMod.LOGGER.info(
+                LumaDebugLog.log(
+                        BASELINE_LOG_CATEGORY,
                         "Completed async baseline write for project {} chunk {}:{}",
                         projectName,
                         chunkSnapshot.chunkX(),
@@ -261,6 +292,36 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     private static String baselineKey(String projectId, ChunkPoint chunk) {
         return projectId + "::" + chunk.x() + ":" + chunk.z();
+    }
+
+    private static int defaultBaselineWriterThreads() {
+        return baselineWriterThreads(
+                Runtime.getRuntime().availableProcessors(),
+                System.getProperty(BASELINE_THREADS_PROPERTY)
+        );
+    }
+
+    static int baselineWriterThreads(int availableProcessors, String configuredValue) {
+        if (configuredValue != null && !configuredValue.isBlank()) {
+            try {
+                int configured = Integer.parseInt(configuredValue.trim());
+                if (configured > 0) {
+                    return Math.min(configured, MAX_BASELINE_THREAD_LIMIT);
+                }
+            } catch (NumberFormatException ignored) {
+                // Invalid values fall back to the conservative CPU-based default.
+            }
+        }
+
+        int processors = Math.max(1, availableProcessors);
+        if (processors == 1) {
+            return 1;
+        }
+        return Math.min(DEFAULT_BASELINE_THREAD_LIMIT, Math.max(2, processors / 2));
+    }
+
+    private static long elapsedMillis(long startedAt) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 
     private static final class PendingDraftFlush {
