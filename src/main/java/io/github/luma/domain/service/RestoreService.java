@@ -32,7 +32,6 @@ import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
-import io.github.luma.minecraft.world.SectionChangeMask;
 import io.github.luma.minecraft.world.SnapshotBatchPreparer;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -83,6 +82,7 @@ public final class RestoreService {
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SnapshotReader snapshotReader = new SnapshotReader();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
+    private final RestoreChunkCollector chunkCollector = new RestoreChunkCollector(this.patchMetaRepository);
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
@@ -347,7 +347,7 @@ public final class RestoreService {
         String baseVersionId = activeVariant == null ? "" : activeVariant.headVersionId();
         List<ChunkPoint> pendingChunks = HistoryCaptureManager.getInstance()
                 .snapshotDraft(level.getServer(), project.id().toString())
-                .map(this::touchedChunksForDraft)
+                .map(this.chunkCollector::touchedChunksForDraft)
                 .orElse(List.of());
 
         if (targetVersion.id().equals(baseVersionId)) {
@@ -365,7 +365,10 @@ public final class RestoreService {
         if (directPlan != null) {
             return new RestorePlanSummary(
                     RestorePlanMode.PATCH_REPLAY,
-                    this.mergeChunks(this.touchedChunksForVersions(layout, directPlan.allVersions()), pendingChunks),
+                    this.chunkCollector.mergeChunks(
+                            this.chunkCollector.touchedChunksForVersions(layout, directPlan.allVersions()),
+                            pendingChunks
+                    ),
                     targetVersion.variantId(),
                     baseVersionId,
                     targetVersion.id()
@@ -376,7 +379,7 @@ public final class RestoreService {
             List<ChunkPoint> trackedChunks = this.baselineChunkRepository.listChunks(layout);
             return new RestorePlanSummary(
                     this.worldRootFallbackMode(level, project),
-                    this.mergeChunks(trackedChunks, pendingChunks),
+                    this.chunkCollector.mergeChunks(trackedChunks, pendingChunks),
                     targetVersion.variantId(),
                     baseVersionId,
                     targetVersion.id()
@@ -386,7 +389,7 @@ public final class RestoreService {
         RestorePlan plan = this.buildPlan(layout, project, versions, targetVersion);
         return new RestorePlanSummary(
                 RestorePlanMode.BASELINE_CHUNKS,
-                this.mergeChunks(this.touchedChunksForPlan(plan), pendingChunks),
+                this.chunkCollector.mergeChunks(this.touchedChunksForPlan(plan), pendingChunks),
                 targetVersion.variantId(),
                 baseVersionId,
                 targetVersion.id()
@@ -591,7 +594,7 @@ public final class RestoreService {
 
         List<ChunkPoint> selectedChunks = request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA
                 ? null
-                : this.chunksIntersecting(request.bounds());
+                : this.chunkCollector.chunksIntersecting(request.bounds());
         PatchWorldChanges reverseChanges = this.loadVersionWorldChanges(
                 layout,
                 directPlan.reverseVersions(),
@@ -1296,7 +1299,7 @@ public final class RestoreService {
             String targetVersionId,
             List<PreparedChunkBatch> batches
     ) throws IOException {
-        List<ChunkPoint> chunks = this.batchChunks(batches);
+        List<ChunkPoint> chunks = this.chunkCollector.batchChunks(batches);
         if (chunks.isEmpty()) {
             return batches == null ? List.of() : batches;
         }
@@ -1491,9 +1494,9 @@ public final class RestoreService {
         List<ProjectVersion> replayVersions = directPlan == null
                 ? List.of()
                 : directPlan.allVersions();
-        return this.mergeChunks(
-                this.touchedChunksForVersions(layout, replayVersions),
-                this.touchedChunksForDraft(pendingDraft)
+        return this.chunkCollector.mergeChunks(
+                this.chunkCollector.touchedChunksForVersions(layout, replayVersions),
+                this.chunkCollector.touchedChunksForDraft(pendingDraft)
         );
     }
 
@@ -1923,46 +1926,6 @@ public final class RestoreService {
         return batches;
     }
 
-    private List<ChunkPoint> touchedChunksForVersions(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
-        for (ProjectVersion version : versions) {
-            for (String patchId : version.patchIds()) {
-                PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
-                        .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-                for (var chunk : metadata.chunks()) {
-                    chunks.putIfAbsent(chunk.chunkX() + ":" + chunk.chunkZ(), new ChunkPoint(chunk.chunkX(), chunk.chunkZ()));
-                }
-            }
-        }
-        return List.copyOf(chunks.values());
-    }
-
-    private List<ChunkPoint> touchedChunksForDraft(RecoveryDraft draft) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
-        if (draft == null) {
-            return List.of();
-        }
-        for (StoredBlockChange change : draft.changes()) {
-            ChunkPoint chunk = ChunkPoint.from(change.pos());
-            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
-        }
-        for (StoredEntityChange change : draft.entityChanges()) {
-            ChunkPoint chunk = change.chunk();
-            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
-        }
-        return List.copyOf(chunks.values());
-    }
-
-    private List<ChunkPoint> batchChunks(List<PreparedChunkBatch> batches) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
-        for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
-            if (batch != null && batch.chunk() != null) {
-                chunks.putIfAbsent(chunkKey(batch.chunk()), batch.chunk());
-            }
-        }
-        return List.copyOf(chunks.values());
-    }
-
     private static String chunkKey(ChunkPoint chunk) {
         return chunk.x() + ":" + chunk.z();
     }
@@ -2003,7 +1966,10 @@ public final class RestoreService {
 
         if (targetVersion.versionKind() == VersionKind.INITIAL) {
             batches.addAll(this.snapshotBatchPreparer.preparePositions(
-                    this.snapshotReader.readFile(layout.snapshotFile(targetVersion.snapshotId()), this.chunksForPositions(selectedPositions)),
+                    this.snapshotReader.readFile(
+                            layout.snapshotFile(targetVersion.snapshotId()),
+                            this.chunkCollector.chunksForPositions(selectedPositions)
+                    ),
                     level,
                     selectedPositions
             ));
@@ -2029,7 +1995,7 @@ public final class RestoreService {
         }
 
         List<PreparedChunkBatch> prepared = new ArrayList<>();
-        for (Map.Entry<ChunkPoint, List<BlockPoint>> entry : this.positionsByChunk(selectedPositions).entrySet()) {
+        for (Map.Entry<ChunkPoint, List<BlockPoint>> entry : this.chunkCollector.positionsByChunk(selectedPositions).entrySet()) {
             ChunkPoint chunk = entry.getKey();
             try (var ignored = LumaLoadLog.measure(
                     "restore",
@@ -2079,86 +2045,12 @@ public final class RestoreService {
                 .toList();
     }
 
-    private List<ChunkPoint> chunksForPositions(List<BlockPoint> positions) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
-        for (BlockPoint position : positions == null ? List.<BlockPoint>of() : positions) {
-            if (position == null) {
-                continue;
-            }
-            ChunkPoint chunk = ChunkPoint.from(position);
-            chunks.putIfAbsent(chunkKey(chunk), chunk);
-        }
-        return List.copyOf(chunks.values());
-    }
-
-    private Map<ChunkPoint, List<BlockPoint>> positionsByChunk(List<BlockPoint> positions) {
-        Map<ChunkPoint, List<BlockPoint>> grouped = new LinkedHashMap<>();
-        for (BlockPoint position : positions == null ? List.<BlockPoint>of() : positions) {
-            if (position == null) {
-                continue;
-            }
-            grouped.computeIfAbsent(ChunkPoint.from(position), ignored -> new ArrayList<>())
-                    .add(position);
-        }
-        return grouped;
-    }
-
     List<BlockPoint> blockPositions(List<PreparedChunkBatch> batches) {
-        Map<Long, BlockPoint> positions = new LinkedHashMap<>();
-        for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
-            if (batch == null) {
-                continue;
-            }
-            for (var placement : batch.placements()) {
-                if (placement != null && placement.pos() != null) {
-                    BlockPoint point = BlockPoint.from(placement.pos());
-                    positions.putIfAbsent(placement.pos().asLong(), point);
-                }
-            }
-            for (var section : batch.nativeSections()) {
-                if (section == null || section.chunk() == null || section.buffer() == null) {
-                    continue;
-                }
-                section.buffer().changedCells().forEachSetCell(localIndex -> {
-                    BlockPoint point = new BlockPoint(
-                            (section.chunk().x() << 4) + SectionChangeMask.localX(localIndex),
-                            (section.sectionY() << 4) + SectionChangeMask.localY(localIndex),
-                            (section.chunk().z() << 4) + SectionChangeMask.localZ(localIndex)
-                    );
-                    positions.putIfAbsent(BlockPos.asLong(point.x(), point.y(), point.z()), point);
-                });
-            }
-        }
-        return List.copyOf(positions.values());
+        return this.chunkCollector.blockPositions(batches);
     }
 
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
-        for (ChunkPoint chunk : plan.baselineGaps()) {
-            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
-        }
-        for (PatchMetadata metadata : plan.patchChain()) {
-            for (var chunk : metadata.chunks()) {
-                chunks.putIfAbsent(chunk.chunkX() + ":" + chunk.chunkZ(), new ChunkPoint(chunk.chunkX(), chunk.chunkZ()));
-            }
-        }
-        return List.copyOf(chunks.values());
-    }
-
-    @SafeVarargs
-    private final List<ChunkPoint> mergeChunks(List<ChunkPoint>... chunkLists) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
-        for (List<ChunkPoint> chunkList : chunkLists) {
-            if (chunkList == null) {
-                continue;
-            }
-            for (ChunkPoint chunk : chunkList) {
-                if (chunk != null) {
-                    chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
-                }
-            }
-        }
-        return List.copyOf(chunks.values());
+        return this.chunkCollector.touchedChunksForPlan(plan.baselineGaps(), plan.patchChain());
     }
 
     private RestorePlanMode worldRootFallbackMode(ServerLevel level, io.github.luma.domain.model.BuildProject project) throws IOException {
@@ -2240,24 +2132,6 @@ public final class RestoreService {
                 ? change.oldValue().blockPos()
                 : change.newValue().blockPos();
         return bounds.contains(io.github.luma.domain.model.BlockPoint.from(pos));
-    }
-
-    private List<ChunkPoint> chunksIntersecting(io.github.luma.domain.model.Bounds3i bounds) {
-        if (bounds == null) {
-            return List.of();
-        }
-
-        List<ChunkPoint> chunks = new ArrayList<>();
-        int minChunkX = Math.floorDiv(bounds.min().x(), 16);
-        int maxChunkX = Math.floorDiv(bounds.max().x(), 16);
-        int minChunkZ = Math.floorDiv(bounds.min().z(), 16);
-        int maxChunkZ = Math.floorDiv(bounds.max().z(), 16);
-        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
-            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-                chunks.add(new ChunkPoint(chunkX, chunkZ));
-            }
-        }
-        return chunks;
     }
 
     private static int totalPlacements(List<PreparedChunkBatch> batches) {
