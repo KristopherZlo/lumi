@@ -1,7 +1,9 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.ui.LumaScrollContainer;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.container.FlowLayout;
+import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -45,10 +47,33 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
         Minecraft.getInstance().setScreen(null);
     }
 
+    protected final void rebuildPreservingScroll(Supplier<? extends LumaScrollContainer<?>> scrollProvider) {
+        this.rebuildPreservingScroll(scrollProvider, true);
+    }
+
+    protected final void rebuildPreservingScroll(
+            Supplier<? extends LumaScrollContainer<?>> scrollProvider,
+            boolean preserveScroll
+    ) {
+        double scrollProgress = preserveScroll ? scrollProgress(scrollProvider) : 0.0D;
+        this.uiAdapter.rootComponent.clearChildren();
+        this.build(this.uiAdapter.rootComponent);
+        this.uiAdapter.inflateAndMount();
+        LumaScrollContainer<?> scroll = scrollProvider == null ? null : scrollProvider.get();
+        if (scroll != null) {
+            scroll.restoreProgress(scrollProgress);
+        }
+    }
+
     public Screen navigationParent() {
         return null;
     }
 
     protected void onLumaTick() {
+    }
+
+    private static double scrollProgress(Supplier<? extends LumaScrollContainer<?>> scrollProvider) {
+        LumaScrollContainer<?> scroll = scrollProvider == null ? null : scrollProvider.get();
+        return scroll == null ? 0.0D : scroll.progress();
     }
 }

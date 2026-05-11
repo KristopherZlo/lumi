@@ -145,11 +145,7 @@ public final class CompareScreen extends LumaScreen {
     }
 
     private void rebuild() {
-        double scrollProgress = this.currentScrollProgress();
-        this.uiAdapter.rootComponent.clearChildren();
-        this.build(this.uiAdapter.rootComponent);
-        this.uiAdapter.inflateAndMount();
-        this.restoreScroll(scrollProgress);
+        this.rebuildPreservingScroll(() -> this.bodyScroll);
     }
 
     private void runCompare() {
@@ -174,16 +170,6 @@ public final class CompareScreen extends LumaScreen {
 
         this.status = this.controller.showOverlay(this.projectName, comparedState);
         this.rebuild();
-    }
-
-    private double currentScrollProgress() {
-        return this.bodyScroll == null ? 0.0D : this.bodyScroll.progress();
-    }
-
-    private void restoreScroll(double scrollProgress) {
-        if (this.bodyScroll != null) {
-            this.bodyScroll.restoreProgress(scrollProgress);
-        }
     }
 
     private void autoShowInitialOverlay() {

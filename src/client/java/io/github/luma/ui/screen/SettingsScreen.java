@@ -337,20 +337,6 @@ public final class SettingsScreen extends LumaScreen {
     }
 
     private void rebuild() {
-        double scrollProgress = this.currentScrollProgress();
-        this.uiAdapter.rootComponent.clearChildren();
-        this.build(this.uiAdapter.rootComponent);
-        this.uiAdapter.inflateAndMount();
-        this.restoreScroll(scrollProgress);
-    }
-
-    private double currentScrollProgress() {
-        return this.bodyScroll == null ? 0.0D : this.bodyScroll.progress();
-    }
-
-    private void restoreScroll(double scrollProgress) {
-        if (this.bodyScroll != null) {
-            this.bodyScroll.restoreProgress(scrollProgress);
-        }
+        this.rebuildPreservingScroll(() -> this.bodyScroll);
     }
 }

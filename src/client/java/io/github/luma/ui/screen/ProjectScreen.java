@@ -278,12 +278,8 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     }
 
     private void refresh(String statusKey, boolean preserveScroll) {
-        double scrollProgress = this.currentScrollProgress();
         this.statusKey = statusKey == null || statusKey.isBlank() ? "luma.status.project_ready" : statusKey;
-        this.uiAdapter.rootComponent.clearChildren();
-        this.build(this.uiAdapter.rootComponent);
-        this.uiAdapter.inflateAndMount();
-        this.restoreScroll(preserveScroll ? scrollProgress : 0.0D);
+        this.rebuildPreservingScroll(() -> this.bodyScroll, preserveScroll);
     }
 
     @Override
@@ -379,16 +375,6 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 this.projectName,
                 this.state.project().dimensionId()
         );
-    }
-
-    private double currentScrollProgress() {
-        return this.bodyScroll == null ? 0.0D : this.bodyScroll.progress();
-    }
-
-    private void restoreScroll(double scrollProgress) {
-        if (this.bodyScroll != null) {
-            this.bodyScroll.restoreProgress(scrollProgress);
-        }
     }
 
     private final class SectionActions implements ProjectScreenSections.Actions {
