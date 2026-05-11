@@ -254,9 +254,9 @@ Hard rule: JSON parsing, LZ4 decompression, and block-state decoding must never 
 
 Save deletion is intentionally narrow: root saves are blocked, non-leaf saves are blocked, and ambiguous multi-head deletes are blocked. If a deleted leaf is a branch head, that branch head is moved to the parent before the version id is tombstoned. Branch deletion is blocked for `main` and for the active branch.
 
-Local branch merge reuses `VariantMergeService` conflict planning but targets only the current active branch for v1. The source branch is unchanged. Resolved changes are prepared and applied through `WorldOperationManager`, then `VersionService` writes a new `MERGE` version on the active branch.
+Local branch merge reuses `VariantMergeService` conflict planning but targets only the current active branch for v1. The source branch is unchanged. Merge start performs only lightweight validation on the caller thread; lineage planning, conflict resolution, payload decoding, and chunk-batch preparation run inside `WorldOperationManager` preparation work so large branches do not block the client or server tick. Resolved changes are prepared and applied through `WorldOperationManager`, then `VersionService` writes a new `MERGE` version on the active branch.
 
-Imported branch merge plans also carry a `HistoryPackageSafetyReport` from `HistoryPackageSafetyScanner`. The scanner inspects imported block-entity and entity payloads for command-capable blocks, structure/jigsaw/spawner data, command block minecarts, and unknown ids. Unsafe imported payloads require an explicit trusted-package confirmation before `VariantMergeService.startMerge(...)` will apply them; local branch merges remain trusted local history.
+Imported branch merge plans also carry a `HistoryPackageSafetyReport` from `HistoryPackageSafetyScanner`. The scanner inspects imported block-entity and entity payloads for command-capable blocks, structure/jigsaw/spawner data, command block minecarts, and unknown ids. Unsafe imported payloads require an explicit trusted-package confirmation before merge preparation will write a merge version; local branch merges remain trusted local history.
 
 ## Auto checkpoint flow
 

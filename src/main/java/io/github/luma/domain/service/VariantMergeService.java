@@ -105,27 +105,6 @@ public final class VariantMergeService {
             throw new IllegalArgumentException("Discard or save the current recovery draft before merging branches");
         }
 
-        VariantMergePlan plan = this.planMerge(layout, project, activeVariantId, layout, project, sourceVariantId);
-        List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, conflictResolutions);
-        List<StoredEntityChange> mergeEntityChanges = plan.mergeEntityChanges();
-        if (mergeChanges.isEmpty() && mergeEntityChanges.isEmpty()) {
-            throw new IllegalArgumentException("Source branch does not add any new changes");
-        }
-
-        String resolvedAuthor = author == null || author.isBlank() ? "Lumi" : author;
-        Instant now = Instant.now();
-        RecoveryDraft draft = new RecoveryDraft(
-                project.id().toString(),
-                activeVariantId,
-                plan.targetHeadVersionId(),
-                resolvedAuthor,
-                WorldMutationSource.SYSTEM,
-                now,
-                now,
-                mergeChanges,
-                mergeEntityChanges
-        );
-
         return this.worldOperationManager.startPreparedApplyOperation(
                 level,
                 project.id().toString(),
@@ -133,22 +112,26 @@ public final class VariantMergeService {
                 "blocks",
                 LumaDebugLog.enabled(project),
                 progressSink -> {
-                    int totalChanges = mergeChanges.size() + mergeEntityChanges.size();
-                    progressSink.update(OperationStage.PREPARING, 0, Math.max(1, totalChanges), "Preparing branch merge");
-                    List<PreparedChunkBatch> batches = this.batchCollapser.collapse(this.batchPreparer.prepareNewValues(
+                    PreparedLocalMerge merge = this.prepareLocalMerge(
                             level,
-                            mergeChanges,
-                            mergeEntityChanges,
-                            (completed, total) -> progressSink.update(
-                                    OperationStage.PREPARING,
-                                    completed,
-                                    Math.max(1, total),
-                                    "Decoded merge changes"
-                            )
-                    ));
+                            layout,
+                            project,
+                            activeVariantId,
+                            sourceVariantId,
+                            conflictResolutions,
+                            author,
+                            progressSink
+                    );
                     return new WorldOperationManager.PreparedApplyOperation(
-                            batches,
-                            () -> this.completeLocalMerge(level, layout, project, draft, sourceVariantId, batches.size())
+                            merge.batches(),
+                            () -> this.completeLocalMerge(
+                                    level,
+                                    layout,
+                                    project,
+                                    merge.draft(),
+                                    sourceVariantId,
+                                    merge.batches().size()
+                            )
                     );
                 }
         );
@@ -207,21 +190,6 @@ public final class VariantMergeService {
             throw new IllegalStateException("Another world operation is already running");
         }
 
-        VariantMergePlan plan = this.planMerge(
-                targetLayout,
-                targetProject,
-                request.targetVariantId(),
-                sourceLayout,
-                sourceProject,
-                request.sourceVariantId()
-        );
-        this.requireTrustedImportedPackage(plan, targetLayout, sourceLayout, request.trustedPackageConfirmed());
-        List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, request.conflictResolutions());
-        List<StoredEntityChange> mergeEntityChanges = plan.mergeEntityChanges();
-        if (mergeChanges.isEmpty() && mergeEntityChanges.isEmpty()) {
-            throw new IllegalArgumentException("Imported variant does not add any new changes");
-        }
-
         return this.worldOperationManager.startBackgroundOperation(
                 level,
                 targetProject.id().toString(),
@@ -229,8 +197,23 @@ public final class VariantMergeService {
                 "blocks",
                 LumaDebugLog.enabled(targetProject),
                 progressSink -> {
+                    progressSink.update(OperationStage.PREPARING, 0, 1, "Planning imported merge");
+                    VariantMergePlan plan = this.planMerge(
+                            targetLayout,
+                            targetProject,
+                            request.targetVariantId(),
+                            sourceLayout,
+                            sourceProject,
+                            request.sourceVariantId()
+                    );
+                    this.requireTrustedImportedPackage(plan, targetLayout, sourceLayout, request.trustedPackageConfirmed());
+                    List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, request.conflictResolutions());
+                    List<StoredEntityChange> mergeEntityChanges = plan.mergeEntityChanges();
+                    if (mergeChanges.isEmpty() && mergeEntityChanges.isEmpty()) {
+                        throw new IllegalArgumentException("Imported variant does not add any new changes");
+                    }
                     int totalChanges = mergeChanges.size() + mergeEntityChanges.size();
-                    progressSink.update(OperationStage.PREPARING, 0, totalChanges, "Preparing merge");
+                    progressSink.update(OperationStage.PREPARING, 0, Math.max(1, totalChanges), "Writing imported merge");
                     RecoveryDraft draft = new RecoveryDraft(
                             targetProject.id().toString(),
                             plan.targetVariantId(),
@@ -263,6 +246,54 @@ public final class VariantMergeService {
                     ));
                 }
         );
+    }
+
+    private PreparedLocalMerge prepareLocalMerge(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            String activeVariantId,
+            String sourceVariantId,
+            List<MergeConflictZoneResolution> conflictResolutions,
+            String author,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
+        progressSink.update(OperationStage.PREPARING, 0, 1, "Planning branch merge");
+        VariantMergePlan plan = this.planMerge(layout, project, activeVariantId, layout, project, sourceVariantId);
+        List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, conflictResolutions);
+        List<StoredEntityChange> mergeEntityChanges = plan.mergeEntityChanges();
+        if (mergeChanges.isEmpty() && mergeEntityChanges.isEmpty()) {
+            throw new IllegalArgumentException("Source branch does not add any new changes");
+        }
+
+        String resolvedAuthor = author == null || author.isBlank() ? "Lumi" : author;
+        Instant now = Instant.now();
+        RecoveryDraft draft = new RecoveryDraft(
+                project.id().toString(),
+                activeVariantId,
+                plan.targetHeadVersionId(),
+                resolvedAuthor,
+                WorldMutationSource.SYSTEM,
+                now,
+                now,
+                mergeChanges,
+                mergeEntityChanges
+        );
+
+        int totalChanges = mergeChanges.size() + mergeEntityChanges.size();
+        progressSink.update(OperationStage.PREPARING, 0, Math.max(1, totalChanges), "Preparing branch merge");
+        List<PreparedChunkBatch> batches = this.batchCollapser.collapse(this.batchPreparer.prepareNewValues(
+                level,
+                mergeChanges,
+                mergeEntityChanges,
+                (completed, total) -> progressSink.update(
+                        OperationStage.PREPARING,
+                        completed,
+                        Math.max(1, total),
+                        "Decoded merge changes"
+                )
+        ));
+        return new PreparedLocalMerge(draft, batches);
     }
 
     private void completeLocalMerge(
@@ -733,5 +764,8 @@ public final class VariantMergeService {
                     type == null || type.isBlank() ? this.entityType : type
             );
         }
+    }
+
+    private record PreparedLocalMerge(RecoveryDraft draft, List<PreparedChunkBatch> batches) {
     }
 }
