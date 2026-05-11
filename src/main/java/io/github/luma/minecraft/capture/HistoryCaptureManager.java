@@ -1517,7 +1517,7 @@ public final class HistoryCaptureManager {
         if (currentContext != null) {
             return currentContext;
         }
-        if (!canReusePendingMechanismAction(source) || session == null) {
+        if (!SOURCE_POLICY.canReuseDeferredActionContext(source) || session == null) {
             return null;
         }
         return session.deferredActionContext(chunk);
@@ -1533,11 +1533,6 @@ public final class HistoryCaptureManager {
                 WorldMutationContext.currentActor(),
                 WorldMutationContext.currentAccessAllowed()
         );
-    }
-
-    private static boolean canReusePendingMechanismAction(io.github.luma.domain.model.WorldMutationSource source) {
-        return source == io.github.luma.domain.model.WorldMutationSource.BLOCK_UPDATE
-                || source == io.github.luma.domain.model.WorldMutationSource.PISTON;
     }
 
     private static String actionId(CaptureSessionState.DeferredActionContext context) {

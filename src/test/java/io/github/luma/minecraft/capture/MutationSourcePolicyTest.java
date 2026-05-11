@@ -60,6 +60,16 @@ class MutationSourcePolicyTest {
     }
 
     @Test
+    void deferredActionContextCanBeReusedByDelayedPhysicsFallout() {
+        assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.BLOCK_UPDATE));
+        assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.PISTON));
+        assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.FLUID));
+        assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.FALLING_BLOCK));
+        assertFalse(this.policy.canReuseDeferredActionContext(WorldMutationSource.GROWTH));
+        assertFalse(this.policy.canReuseDeferredActionContext(WorldMutationSource.PLAYER));
+    }
+
+    @Test
     void projectDeferredStabilizationCombinesProjectScopeWithCausalAction() {
         BuildProject wholeDimension = BuildProject.createWorldWorkspace(
                 "World",

@@ -4,6 +4,7 @@ import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
+import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +22,8 @@ final class LiveUndoRedoActionRecorder {
 
     private static final Duration SECONDARY_ACTION_JOIN_WINDOW = Duration.ofSeconds(10);
     private static final int SECONDARY_SOURCE_JOIN_RADIUS = 2;
+    private static final Duration SPREADING_FALLOUT_JOIN_WINDOW = Duration.ofSeconds(60);
+    private static final int SPREADING_FALLOUT_JOIN_RADIUS = 8;
 
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final UndoRedoActionGroupingPolicy groupingPolicy = new UndoRedoActionGroupingPolicy();
@@ -91,8 +94,8 @@ final class LiveUndoRedoActionRecorder {
                 level.dimension().identifier().toString(),
                 change,
                 now,
-                SECONDARY_ACTION_JOIN_WINDOW,
-                SECONDARY_SOURCE_JOIN_RADIUS
+                relatedJoinWindowFor(WorldMutationContext.currentSource()),
+                relatedJoinRadiusFor(WorldMutationContext.currentSource())
         );
         this.historyDebugLog.logLiveUndoRedoBlock(
                 trackedProject.project(),
@@ -158,8 +161,8 @@ final class LiveUndoRedoActionRecorder {
                 level.dimension().identifier().toString(),
                 change,
                 now,
-                SECONDARY_ACTION_JOIN_WINDOW,
-                SECONDARY_SOURCE_JOIN_RADIUS
+                relatedJoinWindowFor(WorldMutationContext.currentSource()),
+                relatedJoinRadiusFor(WorldMutationContext.currentSource())
         );
     }
 
@@ -211,6 +214,18 @@ final class LiveUndoRedoActionRecorder {
                     SECONDARY_SOURCE_JOIN_RADIUS
             );
         }
+    }
+
+    static Duration relatedJoinWindowFor(WorldMutationSource source) {
+        return isSpreadingFalloutSource(source) ? SPREADING_FALLOUT_JOIN_WINDOW : SECONDARY_ACTION_JOIN_WINDOW;
+    }
+
+    static int relatedJoinRadiusFor(WorldMutationSource source) {
+        return isSpreadingFalloutSource(source) ? SPREADING_FALLOUT_JOIN_RADIUS : SECONDARY_SOURCE_JOIN_RADIUS;
+    }
+
+    private static boolean isSpreadingFalloutSource(WorldMutationSource source) {
+        return source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK;
     }
 
     private boolean canRecordDeferredAction(

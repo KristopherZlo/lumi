@@ -123,6 +123,13 @@ final class MutationSourcePolicy {
                 && this.canUseDeferredStabilization(source, actionId);
     }
 
+    boolean canReuseDeferredActionContext(WorldMutationSource source) {
+        return source == WorldMutationSource.BLOCK_UPDATE
+                || source == WorldMutationSource.PISTON
+                || source == WorldMutationSource.FLUID
+                || source == WorldMutationSource.FALLING_BLOCK;
+    }
+
     boolean requiresCausalActionForDirectCapture(WorldMutationSource source) {
         return source == WorldMutationSource.GROWTH;
     }
