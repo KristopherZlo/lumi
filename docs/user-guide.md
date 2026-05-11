@@ -824,7 +824,7 @@ They are singleplayer-only, require operator-level permission, refuse to start w
 - bulk apply diagnostics;
 - structure-fixture diagnostics.
 
-`/lumi testing smoke` runs the shorter project smoke path. It covers world bootstrap, the pre-mod backup manifest and budget, snapshot content refs, section-indexed patch reads, capture, pending diff, undo/redo, save/amend, branch save/export, partial restore, full restore, integrity, cleanup, and then stops before gameplay, large-history, bulk-apply, and structure-fixture diagnostics.
+`/lumi testing smoke` runs the shorter project smoke path. It covers world bootstrap, the pre-open checkpoint manifest and opt-in backup budget, snapshot content refs, section-indexed patch reads, capture, pending diff, undo/redo, save/amend, branch save/export, partial restore, full restore, integrity, cleanup, and then stops before gameplay, large-history, bulk-apply, and structure-fixture diagnostics.
 
 `/lumi testing structures` runs only the structure fixture diagnostics and skips the broader save/restore/gameplay/bulk phases. Generated observer/sticky-piston fixtures are strict rollback checks; saved `.nbt` fixtures verify interaction and undo/redo operation flow while logging dynamic redstone/entity snapshot drift as diagnostics.
 
@@ -878,7 +878,7 @@ The origin manifest records:
 
 Old manifests without a Lumi creation marker are treated conservatively and are not eligible for automatic generator regeneration.
 
-Before opening an existing pre-Lumi world without a completed Lumi backup, the client shows an alpha backup gate. Pressing `Got it!` starts the compressed backup, shows a loading label and a Minecraft experience-bar-style progress bar, records the acknowledgement when the backup succeeds, and opens the world only after the staged chunk payloads and manifest are complete. Fresh worlds created through Lumi are marked as Lumi-created and do not show this gate.
+Before opening an existing pre-Lumi world without a completed Lumi checkpoint, the client shows an alpha checkpoint gate. Pressing `Got it!` records a quick pre-open safety checkpoint and opens the world after the manifest is complete. Fresh worlds created through Lumi are marked as Lumi-created and do not show this gate.
 
 Lumi writes the one-time pre-mod backup under:
 
@@ -886,7 +886,7 @@ Lumi writes the one-time pre-mod backup under:
 <save>/lumi/pre-mod-backup/
 ```
 
-The backup scan runs before world entry on Lumi's low-priority client backup thread. It records the world seed, scans generated region chunks, skips pristine and visited-only chunks, and stores chunks with persistent payloads such as block entities, entities, or pending ticks as gzip-compressed raw NBT. The scan writes to staging storage first, then publishes the chunk set and manifest together. If the game or computer stops during backup creation, Lumi retries on the next open instead of treating the partial attempt as restorable. The server bootstrap later verifies the completed manifest instead of repeating the backup. The default compressed payload budget is 128 MiB and can be changed with the `lumi.preModBackup.maxMiB` JVM property.
+By default the checkpoint is manifest-only, so Lumi does not scan and recompress every generated chunk before letting the player enter a large existing save. Set the `lumi.preModBackup.maxMiB` JVM property to a positive value before first open to enable compressed chunk payload capture. In that opt-in mode, the backup scan runs before world entry on Lumi's low-priority client backup thread, records the world seed, scans generated region chunks, skips pristine and visited-only chunks, and stores chunks with persistent payloads such as block entities, entities, or pending ticks as gzip-compressed raw NBT. The scan writes to staging storage first, then publishes the chunk set and manifest together. If the game or computer stops during backup creation, Lumi retries on the next open instead of treating the partial attempt as restorable. The server bootstrap later verifies the completed manifest instead of repeating the backup.
 
 The vanilla Edit World screen shows `RESTORE FROM LUMI BACKUP` when a completed Lumi pre-mod backup has restorable chunk payloads. Pressing it opens a red confirmation screen: the restore button remains disabled until the player checks the acknowledgement box, and Cancel returns without changing the save. Confirming restores the backed-up raw chunks to their pre-Lumi state while keeping Lumi project history and commits on disk.
 

@@ -249,20 +249,20 @@ final class SingleplayerTestRun {
         Path worldRoot = server.getWorldPath(LevelResource.ROOT);
         WorldOriginInfo origin = this.value("World-origin manifest can be loaded after bootstrap", () ->
                 this.worldOriginRepository.load(server).orElse(null));
-        WorldInitialBackupManifest backup = this.value("Pre-mod backup manifest can be loaded after bootstrap", () ->
+        WorldInitialBackupManifest backup = this.value("Pre-open checkpoint manifest can be loaded after bootstrap", () ->
                 this.worldInitialBackupRepository.load(worldRoot).orElse(null));
 
         if (origin != null && backup != null) {
-            this.check(backup.completedForSeed(origin.seed()), "Pre-mod backup manifest completed for the current seed");
-            this.check(backup.maxCompressedBytes() >= 0L, "Pre-mod backup manifest records a storage budget");
+            this.check(backup.completedForSeed(origin.seed()), "Pre-open checkpoint manifest completed for the current seed");
+            this.check(backup.maxCompressedBytes() >= 0L, "Pre-open checkpoint manifest records a storage budget");
             long compressedBytes = backup.dimensions().values().stream()
                     .mapToLong(WorldInitialBackupManifest.DimensionBackupSummary::compressedBytes)
                     .sum();
             this.check(backup.maxCompressedBytes() <= 0L || compressedBytes <= backup.maxCompressedBytes(),
-                    "Pre-mod backup compressed bytes stayed within budget");
+                    "Opt-in pre-mod backup compressed bytes stayed within budget");
             this.check(backup.dimensions().values().stream()
                             .allMatch(summary -> summary.backedUpChunks() <= summary.scannedChunks()),
-                    "Pre-mod backup never wrote more chunks than it scanned");
+                    "Opt-in pre-mod backup never wrote more chunks than it scanned");
         }
 
         ProjectLayout layout = this.projectService.resolveLayout(server, this.project.name());

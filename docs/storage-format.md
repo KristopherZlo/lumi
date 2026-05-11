@@ -23,7 +23,7 @@ World-level installation markers are stored at:
 <world>/lumi/pre-mod-backup/alpha-backup-warning-acknowledged.txt
 ```
 
-The first-entry pre-mod backup is stored at:
+The first-entry pre-open checkpoint and optional pre-mod backup payloads are stored at:
 
 ```text
 <world>/lumi/pre-mod-backup/
@@ -118,13 +118,13 @@ The marker is intentionally separate from `world-origin.json` because it must ex
 
 ### `pre-mod-backup/alpha-backup-warning-acknowledged.txt`
 
-Records that the player accepted the alpha backup gate before opening an existing pre-Lumi world without a completed Lumi backup.
+Records that the player accepted the alpha checkpoint gate before opening an existing pre-Lumi world without a completed Lumi checkpoint.
 
 This file is not a backup manifest and does not imply that the backup scan completed. Lumi no longer treats it as sufficient to enter a pre-Lumi world; the gate repeats until `manifest.json` exists for the current seed.
 
 ### `pre-mod-backup/manifest.json`
 
-Stores the one-time backup scan created before Lumi first opens an existing pre-Lumi world.
+Stores the one-time pre-open safety checkpoint created before Lumi first opens an existing pre-Lumi world.
 
 The manifest records:
 
@@ -138,10 +138,10 @@ The manifest records:
 - compressed backup bytes
 - start and completion timestamps
 
-Chunk payloads live under `pre-mod-backup/chunks/<dimension>/chunk_<x>_<z>.nbt.gz`.
+When full chunk backup is enabled, chunk payloads live under `pre-mod-backup/chunks/<dimension>/chunk_<x>_<z>.nbt.gz`.
 They contain raw chunk NBT compressed with gzip. Backup attempts first write chunk payloads under `pre-mod-backup/staging/attempt-*`; only a fully scanned attempt is promoted to the final `chunks/` directory, and `manifest.json` is written after that promotion. If the game or computer stops during an attempt, the next run discards the staging directory. If interruption happens while replacing a previous completed backup, Lumi restores the previous manifest/chunk set before retrying, so a completed manifest never intentionally points at a partial chunk set.
 
-The scan is storage-first: chunks whose only activity marker is non-zero `InhabitedTime` are treated as visited-only and skipped, because visited terrain can cover very large explored worlds without containing builder edits. Chunks with persistent payloads such as block entities, entities, or pending ticks are kept until the compressed backup budget is reached. The default budget is 128 MiB and can be changed with the `lumi.preModBackup.maxMiB` JVM property; values less than or equal to zero keep only the manifest and skip chunk payload writes.
+The default budget is `0 MiB`, so existing worlds get a manifest-only checkpoint without scanning and recompressing every generated chunk before entry. Set the `lumi.preModBackup.maxMiB` JVM property to a positive value before first open to enable the older full scan. That scan is storage-first: chunks whose only activity marker is non-zero `InhabitedTime` are treated as visited-only and skipped, because visited terrain can cover very large explored worlds without containing builder edits. Chunks with persistent payloads such as block entities, entities, or pending ticks are kept until the compressed backup budget is reached. Values less than or equal to zero keep only the manifest and skip chunk payload writes.
 
 The vanilla Edit World restore action uses the completed manifest and the stored chunk payload files as the only source of truth. It writes each backed-up raw chunk NBT payload back into the matching region file and leaves `<world>/lumi/projects/` untouched, so Lumi commits and history packages remain available for diagnostics or future tooling. Chunks that were skipped by the backup policy are not regenerated or deleted during this restore.
 

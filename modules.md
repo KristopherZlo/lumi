@@ -36,7 +36,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Work area | Start here | Then inspect | Tests/docs |
 | --- | --- | --- | --- |
 | Project creation, settings, workspace open, `WORLD_ROOT` | `ProjectService`, `ClientWorkspaceOpenService`, `WorldBootstrapService` | `ProjectRepository`, `VariantRepository`, `WorldOriginRepository`, `RecoveryRepository`, `ProjectLayout` | `ProjectServiceTest`, `WorldOriginRepositoryTest`, `docs/storage-format.md` |
-| Pre-Lumi backup and restore | `WorldEntryWarningController`, `WorldInitialBackupService`, `WorldInitialBackupRestoreService` | `WorldEntryBackupScreen`, `LumiBackupRestoreConfirmScreen`, `WorldOpenFlowsMixin`, `EditWorldScreenMixin`, `WorldInitialBackupRepository` | `WorldInitialBackupRestoreServiceTest`, `docs/storage-format.md`, `docs/user-guide.md` |
+| Pre-Lumi checkpoint and restore | `WorldEntryWarningController`, `WorldInitialBackupService`, `WorldInitialBackupRestoreService` | `WorldEntryBackupScreen`, `LumiBackupRestoreConfirmScreen`, `WorldOpenFlowsMixin`, `EditWorldScreenMixin`, `WorldInitialBackupRepository` | `WorldInitialBackupRestoreServiceTest`, `docs/storage-format.md`, `docs/user-guide.md` |
 | Save, amend, quick save | `VersionService`, `QuickSaveScreenController` | `OperationDraftRecoveryService`, `WorkingDraftSessionManager`, `CaptureSessionRegistry`, `CapturePersistenceCoordinator`, `PatchDataRepository`, `PatchMetaRepository`, `SnapshotCaptureService`, `PreviewCaptureRequestService` | `VersionServiceTest`, `OperationDraftRecoveryServiceTest`, `PatchDataRepositoryTest`, `SnapshotStorageTest` |
 | Restore, quick rollback, full rollback, operation progress | `RestoreService`, `QuickRollbackService` | `VersionLineageService`, `WorldOperationManager`, `WorldOperationBossBarManager`, `WorldApplyBudgetPlanner`, `WorldChangeBatchPreparer`, `SnapshotBatchPreparer`, `BlockChangeApplier`, `SectionContainerRewriteCommitStrategy`, `SectionNativeBlockCommitStrategy`, `DirectChunkBlockCommitStrategy`, `RecoveryRepository` | `RestoreServiceTest`, `RecoveryRepositoryTest`, `WorldChangeBatchPreparerTest`, `WorldApplyBudgetPlannerTest`, `docs/architecture.md` |
 | Partial restore | `RestoreService`, `PartialRestorePlanner`, `PartialRestoreTargetStatePlanner` | `SaveDetailsScreen`, `SaveDetailsScreenController`, `SaveDetailsPartialRestoreSection`, `LumiRegionSelectionController`, `LumiRegionSelectionTeachingController`, `LumiRegionSelectionRenderer`, `PatchDataRepository`, `SnapshotReader`, `BaselineChunkRepository` | `PartialRestorePlannerTest`, `PartialRestoreTargetStatePlannerTest`, `PartialRestoreFormStateTest`, `LumiRegionSelectionStateTest`, `SelectionToolTeachingStateTest`, `docs/storage-format.md` |
@@ -124,7 +124,7 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 - `HistoryTombstoneRepository`: `history-tombstones.json` soft-delete visibility metadata.
 - `VersionRepository`, `VersionIndexRepository`: `versions/*.json` manifests and disposable `versions/index.json` cache.
 - `WorldOriginRepository`: shared `world-origin.json` manifest and corruption quarantine behavior.
-- `WorldInstallationRepository`: world-level Lumi installation markers such as fresh-world creation and alpha backup gate acknowledgement.
+- `WorldInstallationRepository`: world-level Lumi installation markers such as fresh-world creation and alpha checkpoint gate acknowledgement.
 - `WorldInitialBackupRepository`: one-time pre-mod raw chunk backup manifest and size-budgeted compressed chunk NBT payloads.
 - `PatchRepository`: patch metadata/data facade.
 - `PatchMetaRepository`: `patches/*.meta.json` chunk index, visible section index, entity old/new chunk index, and lightweight patch metadata.
@@ -193,12 +193,12 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 ### Other Minecraft Modules
 
 - `minecraft/access/LumaAccessControl.java`: permission gate for commands, UI entry points, and dedicated-server mutation workflows.
-- `minecraft/bootstrap/WorldBootstrapService.java`: low-priority startup bootstrap for world-origin, completed pre-mod backup verification, migration, and root-version metadata.
-- `minecraft/bootstrap/WorldInitialBackupService.java`: one-time pre-mod raw chunk backup creation for server bootstrap verification and client pre-open backup progress.
+- `minecraft/bootstrap/WorldBootstrapService.java`: low-priority startup bootstrap for world-origin, completed pre-open checkpoint verification, migration, and root-version metadata.
+- `minecraft/bootstrap/WorldInitialBackupService.java`: one-time pre-open checkpoint creation with opt-in raw chunk backup capture for server bootstrap verification and client progress.
 - `minecraft/bootstrap/WorldInitialBackupRestoreService.java`: vanilla Edit World restore service that writes completed pre-mod backup chunks back into region files while preserving Lumi project history.
 - `minecraft/bootstrap/WorldInitialBackupIdentityReader.java`: client-side world identity lookup from Lumi origin metadata or `level.dat` before server entry.
-- `minecraft/bootstrap/WorldInitialBackupProgress.java`: immutable progress snapshot for pre-open backup UI.
-- `minecraft/bootstrap/WorldInitialBackupWarningService.java`: pre-open decision logic for the alpha backup gate on existing pre-Lumi worlds.
+- `minecraft/bootstrap/WorldInitialBackupProgress.java`: immutable progress snapshot for pre-open checkpoint and opt-in backup UI.
+- `minecraft/bootstrap/WorldInitialBackupWarningService.java`: pre-open decision logic for the alpha checkpoint gate on existing pre-Lumi worlds.
 - `minecraft/command/LumaCommands.java`: diagnostics/help and singleplayer smoke/full/structure/crash-safety/external-tool runtime test command entries.
 - `minecraft/testing/*`: integrated singleplayer regression service, performance monitor, test volume/run/log helpers.
 - `debug/LumiTestFailpoints.java`: explicit opt-in crash-harness failpoints shared by storage, domain, and world-apply tests.
@@ -229,8 +229,8 @@ Use `src/main/java/io/github/luma/integration` for external builder tool detecti
 
 Use `src/client/java/io/github/luma` for client-only UI, key input, previews, overlays, and screens. Controllers call services; screens render and own transient route state; view-state records are immutable.
 
-- `client/world/WorldEntryWarningController.java`: client-only world-open gate for the pre-Lumi alpha backup flow and fresh-world marker.
-- `client/world/WorldEntryBackupScreen.java`: pre-open alpha backup screen with blue warning text, `Got it!` acceptance, loading label, and Minecraft experience-bar backup progress.
+- `client/world/WorldEntryWarningController.java`: client-only world-open gate for the pre-Lumi alpha checkpoint flow and fresh-world marker.
+- `client/world/WorldEntryBackupScreen.java`: pre-open alpha checkpoint screen with blue warning text, `Got it!` acceptance, loading label, and Minecraft experience-bar progress.
 - `client/world/LumiBackupRestoreConfirmScreen.java`: red confirmation screen for restoring backed-up pre-Lumi chunks from the vanilla Edit World menu.
 
 ### Navigation And Shared UI

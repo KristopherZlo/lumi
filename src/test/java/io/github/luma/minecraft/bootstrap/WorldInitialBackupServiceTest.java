@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.bootstrap;
 
+import io.github.luma.domain.model.WorldInitialBackupManifest;
 import io.github.luma.storage.repository.WorldInitialBackupRepository;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -27,46 +28,75 @@ class WorldInitialBackupServiceTest {
 
     @Test
     void preOpenBackupWritesManifestAndReportsProgress() throws Exception {
-        this.writeRegionChunk(this.tempDir.resolve("region").resolve("r.0.0.mca"), this.activeChunk());
-        AtomicReference<WorldInitialBackupProgress> lastProgress = new AtomicReference<>();
+        this.withBackupBudgetMiB("1", () -> {
+            this.writeRegionChunk(this.tempDir.resolve("region").resolve("r.0.0.mca"), this.activeChunk());
+            AtomicReference<WorldInitialBackupProgress> lastProgress = new AtomicReference<>();
 
-        new WorldInitialBackupService().backupWorldRootIfNeeded(
-                this.tempDir,
-                "World",
-                123L,
-                lastProgress::set
-        );
+            new WorldInitialBackupService().backupWorldRootIfNeeded(
+                    this.tempDir,
+                    "World",
+                    123L,
+                    lastProgress::set
+            );
 
-        WorldInitialBackupProgress progress = lastProgress.get();
-        assertEquals(1, progress.completedChunks());
-        assertEquals(1, progress.totalChunks());
-        assertEquals(1, progress.backedUpChunks());
-        assertTrue(new WorldInitialBackupRepository().completedForSeed(this.tempDir, 123L));
+            WorldInitialBackupProgress progress = lastProgress.get();
+            assertEquals(1, progress.completedChunks());
+            assertEquals(1, progress.totalChunks());
+            assertEquals(1, progress.backedUpChunks());
+            assertTrue(new WorldInitialBackupRepository().completedForSeed(this.tempDir, 123L));
+        });
     }
 
     @Test
     void preOpenBackupCoalescesLargeProgressUpdates() throws Exception {
-        this.writeRegionChunks(
-                this.tempDir.resolve("region").resolve("r.0.0.mca"),
-                Collections.nCopies(40, this.activeChunk())
-        );
-        AtomicInteger updates = new AtomicInteger();
-        AtomicReference<WorldInitialBackupProgress> lastProgress = new AtomicReference<>();
+        this.withBackupBudgetMiB("1", () -> {
+            this.writeRegionChunks(
+                    this.tempDir.resolve("region").resolve("r.0.0.mca"),
+                    Collections.nCopies(40, this.activeChunk())
+            );
+            AtomicInteger updates = new AtomicInteger();
+            AtomicReference<WorldInitialBackupProgress> lastProgress = new AtomicReference<>();
 
-        new WorldInitialBackupService().backupWorldRootIfNeeded(
-                this.tempDir,
-                "World",
-                123L,
-                progress -> {
-                    updates.incrementAndGet();
-                    lastProgress.set(progress);
-                }
-        );
+            new WorldInitialBackupService().backupWorldRootIfNeeded(
+                    this.tempDir,
+                    "World",
+                    123L,
+                    progress -> {
+                        updates.incrementAndGet();
+                        lastProgress.set(progress);
+                    }
+            );
 
-        assertEquals(3, updates.get());
-        assertEquals(40, lastProgress.get().completedChunks());
-        assertEquals(40, lastProgress.get().totalChunks());
-        assertEquals(40, lastProgress.get().backedUpChunks());
+            assertEquals(3, updates.get());
+            assertEquals(40, lastProgress.get().completedChunks());
+            assertEquals(40, lastProgress.get().totalChunks());
+            assertEquals(40, lastProgress.get().backedUpChunks());
+        });
+    }
+
+    @Test
+    void defaultPreOpenBackupWritesManifestWithoutChunkScan() throws Exception {
+        this.withBackupBudgetMiB(null, () -> {
+            this.writeRegionChunk(this.tempDir.resolve("region").resolve("r.0.0.mca"), this.activeChunk());
+            AtomicReference<WorldInitialBackupProgress> lastProgress = new AtomicReference<>();
+            WorldInitialBackupRepository repository = new WorldInitialBackupRepository();
+
+            new WorldInitialBackupService().backupWorldRootIfNeeded(
+                    this.tempDir,
+                    "World",
+                    123L,
+                    lastProgress::set
+            );
+
+            WorldInitialBackupProgress progress = lastProgress.get();
+            assertEquals(1, progress.completedChunks());
+            assertEquals(1, progress.totalChunks());
+            assertEquals(0, progress.backedUpChunks());
+            WorldInitialBackupManifest manifest = repository.load(this.tempDir).orElseThrow();
+            assertEquals(0L, manifest.maxCompressedBytes());
+            assertEquals(0, manifest.dimensions().get("minecraft:overworld").scannedChunks());
+            assertTrue(repository.completedForSeed(this.tempDir, 123L));
+        });
     }
 
     private CompoundTag activeChunk() {
@@ -129,5 +159,28 @@ class WorldInitialBackupServiceTest {
             deflater.write(bytes);
         }
         return output.toByteArray();
+    }
+
+    private void withBackupBudgetMiB(String budget, ThrowingRunnable runnable) throws Exception {
+        String previous = System.getProperty(WorldInitialBackupStoragePolicy.MAX_MIB_PROPERTY);
+        try {
+            if (budget == null) {
+                System.clearProperty(WorldInitialBackupStoragePolicy.MAX_MIB_PROPERTY);
+            } else {
+                System.setProperty(WorldInitialBackupStoragePolicy.MAX_MIB_PROPERTY, budget);
+            }
+            runnable.run();
+        } finally {
+            if (previous == null) {
+                System.clearProperty(WorldInitialBackupStoragePolicy.MAX_MIB_PROPERTY);
+            } else {
+                System.setProperty(WorldInitialBackupStoragePolicy.MAX_MIB_PROPERTY, previous);
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Exception;
     }
 }

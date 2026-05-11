@@ -48,7 +48,7 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 - Branch creation, branch switching, local branch merge, variant import/export, full project archives, imported review projects, and safety checks for imported executable world-state data.
 - Crash recovery through durable working drafts, write-ahead log compaction, operation-draft isolation, recovery journals, and restore return points.
 - Capture of non-player entity spawn/remove/update with persistent NBT payloads for supported builder-facing entities.
-- Pre-Lumi world backup gate with visible progress and a vanilla Edit World restore action that can roll backed-up chunks to their pre-Lumi state while keeping Lumi project commits on disk.
+- Pre-Lumi world checkpoint gate with visible progress and an opt-in vanilla Edit World restore action for worlds that capture compressed pre-Lumi chunk payloads.
 - Optional WorldEdit/FAWE/Axiom/tool-stack capture without hard runtime dependencies.
 - Client-side textured isometric previews and large-diff overlays prepared away from the render thread.
 - Runtime diagnostics, load logs, block-apply logs, light-refresh logs, smoke tests, and a broad singleplayer regression suite.
@@ -181,7 +181,7 @@ Hard runtime rule: JSON parsing, LZ4 decompression, and block-state decoding mus
 - Save/amend operation drafts are isolated from new live edits.
 - Recovery WAL corruption or truncation quarantines the damaged WAL and salvages the latest valid draft when possible.
 - Malformed `world-origin.json` is quarantined and regenerated from the current world instead of blocking the UI.
-- Existing pre-Lumi worlds without a completed Lumi backup show an alpha backup gate before opening. Pressing `Got it!` starts the compressed backup with a visible Minecraft experience-bar progress indicator, and the world opens only after staged backup chunks are published with a completed manifest. Interrupted attempts are discarded or rolled back to the last consistent backup before retrying. Fresh worlds created through Lumi are marked and skip that gate. The vanilla Edit World screen exposes `RESTORE FROM LUMI BACKUP` when restorable backup chunks exist; that restore writes the pre-Lumi chunk payloads back into region files and leaves Lumi project commits on disk for later inspection.
+- Existing pre-Lumi worlds without a completed Lumi checkpoint show an alpha gate before opening. Pressing `Got it!` writes a quick manifest-only safety checkpoint by default, so the world can open without scanning every region chunk. Setting `-Dlumi.preModBackup.maxMiB=<positive>` enables the older compressed chunk payload capture with visible progress; interrupted attempts are discarded or rolled back to the last consistent checkpoint before retrying. Fresh worlds created through Lumi are marked and skip that gate. The vanilla Edit World screen exposes `RESTORE FROM LUMI BACKUP` only when restorable backup chunks exist; that restore writes the pre-Lumi chunk payloads back into region files and leaves Lumi project commits on disk for later inspection.
 - Archive import validates paths, ids, sizes, and payload digests before promotion.
 - Cleanup is conservative and does not delete referenced history or baseline chunks.
 - Logs are part of the support surface for capture, save, restore, recovery, apply, light, and load diagnostics.
@@ -262,7 +262,7 @@ From a singleplayer world with cheats enabled:
 /lumi testing external-tools
 ```
 
-`/lumi testing smoke` runs the shorter project smoke path. It validates bootstrap storage, pre-mod backup metadata, snapshot content refs, section-indexed patch reads, capture, save/amend, branch/export, partial restore, full restore, integrity, and cleanup.
+`/lumi testing smoke` runs the shorter project smoke path. It validates bootstrap storage, pre-open checkpoint metadata, snapshot content refs, section-indexed patch reads, capture, save/amend, branch/export, partial restore, full restore, integrity, and cleanup.
 
 `/lumi testing singleplayer` runs the broad runtime suite. It covers real save/restore/undo/redo paths, branch/share/archive flows, partial restore, entity history, water/TNT/redstone/piston fixtures, preview fulfillment, integrity, cleanup, and prepared-apply diagnostics.
 

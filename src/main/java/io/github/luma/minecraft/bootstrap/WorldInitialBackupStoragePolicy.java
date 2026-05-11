@@ -3,7 +3,7 @@ package io.github.luma.minecraft.bootstrap;
 final class WorldInitialBackupStoragePolicy {
 
     static final String MAX_MIB_PROPERTY = "lumi.preModBackup.maxMiB";
-    private static final long DEFAULT_MAX_COMPRESSED_BYTES = 128L * 1024L * 1024L;
+    private static final long DEFAULT_MAX_COMPRESSED_BYTES = 0L;
 
     long maxCompressedBytes() {
         String configured = System.getProperty(MAX_MIB_PROPERTY);

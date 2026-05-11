@@ -92,13 +92,20 @@ public final class WorldInitialBackupService {
         progressListener = progressListener == null ? ProgressListener.NO_OP : progressListener;
         Instant startedAt = Instant.now();
         Map<String, WorldInitialBackupManifest.DimensionBackupSummary> dimensions = new LinkedHashMap<>();
-        ProgressState progress = new ProgressState(this.totalChunkCount(plans), progressListener);
+        long maxCompressedBytes = this.storagePolicy.maxCompressedBytes();
+        ProgressState progress = new ProgressState(maxCompressedBytes <= 0L ? 1 : this.totalChunkCount(plans), progressListener);
         WorldInitialBackupRepository.BackupAttempt attempt = this.repository.beginBackupAttempt(worldRoot);
         boolean committed = false;
         progress.publish("");
         try {
-            for (DimensionRegionPlan plan : plans) {
-                dimensions.put(plan.dimensionId(), this.backupDimension(attempt, plan, progress));
+            if (maxCompressedBytes <= 0L) {
+                for (DimensionRegionPlan plan : plans) {
+                    dimensions.put(plan.dimensionId(), this.manifestOnlyDimension(plan));
+                }
+            } else {
+                for (DimensionRegionPlan plan : plans) {
+                    dimensions.put(plan.dimensionId(), this.backupDimension(attempt, plan, progress));
+                }
             }
 
             this.repository.commitBackupAttempt(worldRoot, attempt, new WorldInitialBackupManifest(
@@ -106,7 +113,7 @@ public final class WorldInitialBackupService {
                     levelName,
                     seed,
                     WorldChunkActivityClassifier.NAME,
-                    this.storagePolicy.maxCompressedBytes(),
+                    maxCompressedBytes,
                     dimensions,
                     startedAt,
                     Instant.now()
@@ -122,6 +129,16 @@ public final class WorldInitialBackupService {
                 "Completed pre-mod world backup scan for {} dimensions at {}",
                 dimensions.size(),
                 this.repository.backupRoot(worldRoot)
+        );
+    }
+
+    private WorldInitialBackupManifest.DimensionBackupSummary manifestOnlyDimension(DimensionRegionPlan plan) {
+        return new WorldInitialBackupManifest.DimensionBackupSummary(
+                plan == null ? "" : plan.dimensionId(),
+                0,
+                0,
+                0,
+                0L
         );
     }
 
