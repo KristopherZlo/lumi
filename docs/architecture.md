@@ -47,7 +47,7 @@ Key services:
 - `RestoreService`: build restore plans and orchestrate prepared chunk batches through Minecraft-layer preparers. Full and partial restore requests enter the operation model before lineage metadata loading, pending-draft freezing, restore journals, or batch decoding. Restore chunk and position collection is isolated in `RestoreChunkCollector` so planning stays separate from batch application orchestration.
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching. Branch creation is metadata-only and does not freeze active recovery drafts; branch switching freezes and validates pending edits before asking restore to apply the selected branch head.
-- `VariantMergeService`: compare imported or local variant lineage against the active local target variant, group overlapping conflicts into chunk-connected zones, and write merged saves through the normal patch-first history path
+- `VariantMergeService`: compare imported or local variant lineage against the active local target variant, delegate chunk-connected conflict grouping to `MergeConflictZoneBuilder`, and write merged saves through the normal patch-first history path
 - `DiffService`: reconstruct version or live-world block and entity differences using section fingerprint indexes to skip equal patch sections before falling back to structured state payload comparison
 - `VersionLineageService`: centralizes reachable-version filtering, common ancestor lookup, ancestor checks, and ancestor-to-head path resolution used by restore, diff, and merge workflows
 - `PreviewCaptureRequestService`: queue preview capture jobs without blocking save durability
