@@ -39,7 +39,6 @@ import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +67,10 @@ public final class VersionService {
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final PreviewBoundsResolver previewBoundsResolver = new PreviewBoundsResolver();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
+    private final VersionSnapshotPlanner snapshotPlanner = new VersionSnapshotPlanner(
+            this.baselineChunkRepository,
+            this.patchMetaRepository
+    );
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final Map<String, VersionSaveTimingBuilder> saveTimingsByOperationId = new ConcurrentHashMap<>();
 
@@ -464,7 +467,7 @@ public final class VersionService {
         sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure("save", "VersionService.snapshotPolicy", "project=" + project.name())) {
             createSnapshot = (parentVersionId == null || parentVersionId.isBlank())
-                    || this.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind);
+                    || this.snapshotPlanner.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind);
         } finally {
             recordTiming(timing, VersionSaveTiming.SNAPSHOT_POLICY, sectionStartedAt);
         }
@@ -480,7 +483,7 @@ public final class VersionService {
             List<ChunkPoint> snapshotChunks;
             sectionStartedAt = System.nanoTime();
             try (var ignored = LumaLoadLog.measure("save", "VersionService.collectSnapshotChunks", "project=" + project.name())) {
-                snapshotChunks = this.collectSnapshotChunks(layout, project, versions, draft);
+                snapshotChunks = this.snapshotPlanner.collectSnapshotChunks(layout, project, versions, draft);
             } finally {
                 recordTiming(timing, VersionSaveTiming.SNAPSHOT_PREPARATION, sectionStartedAt);
             }
@@ -760,179 +763,8 @@ public final class VersionService {
         return new PatchWorldChanges(blockChanges, entityChanges);
     }
 
-    private boolean shouldCreateSnapshot(
-            BuildProject project,
-            ProjectLayout layout,
-            List<ProjectVersion> versions,
-            ProjectVariant activeVariant,
-            RecoveryDraft draft,
-            ChangeStats stats,
-            VersionKind versionKind
-    ) throws IOException {
-        VersionKind effectiveKind = project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind;
-        if (effectiveKind == VersionKind.INITIAL || effectiveKind == VersionKind.LEGACY) {
-            LumaDebugLog.log(
-                    project,
-                    "save",
-                    "Snapshot required for project {} because version kind is {}",
-                    project.name(),
-                    effectiveKind
-            );
-            return true;
-        }
-        if (versions.isEmpty()) {
-            LumaDebugLog.log(project, "save", "Snapshot required for project {} because no versions exist yet", project.name());
-            return true;
-        }
-        int versionsSinceSnapshot = this.versionsSinceSnapshot(versions, activeVariant.headVersionId());
-        if (versionsSinceSnapshot >= project.settings().snapshotEveryVersions()) {
-            LumaDebugLog.log(
-                    project,
-                    "save",
-                    "Snapshot required for project {} because versionsSinceSnapshot={} reached limit={}",
-                    project.name(),
-                    versionsSinceSnapshot,
-                    project.settings().snapshotEveryVersions()
-            );
-            return true;
-        }
-        if (project.tracksWholeDimension()) {
-            LumaDebugLog.log(
-                    project,
-                    "save",
-                    "Snapshot skipped for whole-dimension project {} because cadence has not been reached",
-                    project.name()
-            );
-            return false;
-        }
-        boolean exceedsThreshold = this.exceedsSnapshotVolumeThreshold(project, layout, draft, stats);
-        LumaDebugLog.log(
-                project,
-                "save",
-                "Snapshot threshold check for project {}: versionsSinceSnapshot={} limit={} changedBlocks={} changedChunks={} threshold={} exceeded={}",
-                project.name(),
-                versionsSinceSnapshot,
-                project.settings().snapshotEveryVersions(),
-                stats.changedBlocks(),
-                stats.changedChunks(),
-                project.settings().snapshotVolumeThreshold(),
-                exceedsThreshold
-        );
-        return exceedsThreshold;
-    }
-
     int versionsSinceSnapshot(List<ProjectVersion> versions, String headVersionId) {
-        Map<String, ProjectVersion> versionMap = new HashMap<>();
-        for (ProjectVersion version : versions) {
-            versionMap.put(version.id(), version);
-        }
-
-        int count = 0;
-        ProjectVersion cursor = headVersionId == null || headVersionId.isBlank() ? null : versionMap.get(headVersionId);
-        while (cursor != null) {
-            if ((cursor.snapshotId() != null && !cursor.snapshotId().isBlank())
-                    || cursor.versionKind() == VersionKind.WORLD_ROOT) {
-                return count;
-            }
-            count += 1;
-            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                    ? null
-                    : versionMap.get(cursor.parentVersionId());
-        }
-        return Integer.MAX_VALUE;
-    }
-
-    private boolean exceedsSnapshotVolumeThreshold(
-            BuildProject project,
-            ProjectLayout layout,
-            RecoveryDraft draft,
-            ChangeStats stats
-    ) throws IOException {
-        double threshold = project.settings().snapshotVolumeThreshold();
-        if (!project.tracksWholeDimension()) {
-            long volume = Math.max(1L, project.bounds().volume());
-            double fraction = (double) stats.changedBlocks() / (double) volume;
-            LumaDebugLog.log(
-                    project,
-                    "save",
-                    "Bounded snapshot volume check for project {}: changedBlocks={} volume={} fraction={}",
-                    project.name(),
-                    stats.changedBlocks(),
-                    volume,
-                    fraction
-            );
-            return fraction >= threshold;
-        }
-
-        List<ChunkPoint> knownChunks = new ArrayList<>(this.baselineChunkRepository.listChunks(layout));
-        knownChunks = ChunkSelectionFactory.merge(knownChunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
-        int knownChunkCount = Math.max(1, knownChunks.size());
-        int changedChunkCount = ChunkSelectionFactory.fromStoredChanges(draft.changes()).size();
-        double fraction = (double) changedChunkCount / (double) knownChunkCount;
-        LumaDebugLog.log(
-                project,
-                "save",
-                "Whole-dimension snapshot volume check for project {}: changedChunks={} knownChunks={} fraction={}",
-                project.name(),
-                changedChunkCount,
-                knownChunkCount,
-                fraction
-        );
-        return fraction >= threshold;
-    }
-
-    private List<ChunkPoint> collectSnapshotChunks(
-            ProjectLayout layout,
-            BuildProject project,
-            List<ProjectVersion> versions,
-            RecoveryDraft draft
-    ) throws IOException {
-        if (!project.tracksWholeDimension()) {
-            return ChunkSelectionFactory.fromBounds(project.bounds());
-        }
-
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
-        this.addChunks(chunks, this.baselineChunkRepository.listChunks(layout));
-        for (ProjectVersion version : versions) {
-            for (String patchId : version.patchIds()) {
-                Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
-                if (metadata.isEmpty()) {
-                    continue;
-                }
-                for (var chunk : metadata.get().chunks()) {
-                    this.addChunk(chunks, chunk.chunk());
-                }
-            }
-        }
-
-        if (draft == null || draft.isEmpty()) {
-            LumaDebugLog.log(project, "save", "Collected {} snapshot chunks for project {} without working draft", chunks.size(), project.name());
-            return List.copyOf(chunks.values());
-        }
-
-        this.addChunks(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
-        List<ChunkPoint> merged = List.copyOf(chunks.values());
-        LumaDebugLog.log(
-                project,
-                "save",
-                "Collected {} snapshot chunks for project {} including {} draft changes",
-                merged.size(),
-                project.name(),
-                draft.changes().size()
-        );
-        return merged;
-    }
-
-    private void addChunks(Map<String, ChunkPoint> chunks, List<ChunkPoint> source) {
-        for (ChunkPoint chunk : source == null ? List.<ChunkPoint>of() : source) {
-            this.addChunk(chunks, chunk);
-        }
-    }
-
-    private void addChunk(Map<String, ChunkPoint> chunks, ChunkPoint chunk) {
-        if (chunk != null) {
-            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
-        }
+        return this.snapshotPlanner.versionsSinceSnapshot(versions, headVersionId);
     }
 
     private List<ProjectVariant> replaceVariant(List<ProjectVariant> variants, ProjectVariant updatedVariant) {
