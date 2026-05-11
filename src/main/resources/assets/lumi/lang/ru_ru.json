@@ -153,6 +153,7 @@
   "luma.screen.diagnostics.title": "Диагностика",
   "luma.alpha_warning.title": "Lumi в альфа-версии",
   "luma.alpha_warning.message": "Lumi сейчас находится в альфа-версии. Теоретически мод может вызвать повреждение мира. Lumi создаст быстрый checkpoint перед входом в этот существующий до Lumi мир. Полный сжатый backup чанков включается отдельно через JVM-свойство lumi.preModBackup.maxMiB.",
+  "luma.alpha_warning.accept": "Понятно!",
   "luma.alpha_warning.backup_loading": "Готовим checkpoint безопасности Lumi...",
   "luma.alpha_warning.backup_progress": "%s/%s чанков просканировано, %s сохранено",
   "luma.alpha_warning.opening_world": "Checkpoint готов. Открываем мир...",

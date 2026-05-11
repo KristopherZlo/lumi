@@ -75,7 +75,7 @@ final class WorldEntryBackupScreen extends Screen {
         this.addRenderableWidget(this.progressText);
 
         int buttonWidth = 120;
-        this.actionButton = Button.builder(Component.literal("Got it!"), button -> this.accept())
+        this.actionButton = Button.builder(Component.translatable("luma.alpha_warning.accept"), button -> this.accept())
                 .bounds((this.width - buttonWidth) / 2, this.height / 2 + 70, buttonWidth, 20)
                 .build();
         this.addRenderableWidget(this.actionButton);
@@ -146,7 +146,9 @@ final class WorldEntryBackupScreen extends Screen {
 
     private void updateViewState() {
         if (this.actionButton != null) {
-            this.actionButton.setMessage(this.failed ? Component.translatable("gui.back") : Component.literal("Got it!"));
+            this.actionButton.setMessage(this.failed
+                    ? Component.translatable("gui.back")
+                    : Component.translatable("luma.alpha_warning.accept"));
             this.actionButton.active = !this.running && !this.opening;
         }
         this.updateTextState();

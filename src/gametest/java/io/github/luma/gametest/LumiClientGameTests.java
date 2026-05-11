@@ -14,6 +14,10 @@ public final class LumiClientGameTests implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        if (this.modeIs("backup-stress", "backup")) {
+            this.runBackupStress(context);
+            return;
+        }
         try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
             ClientGameTestSingleplayerSupport.prepare(singleplayer);
             this.startSingleplayerRuntimeSuite(singleplayer);
@@ -23,6 +27,17 @@ public final class LumiClientGameTests implements FabricClientGameTest {
             throw exception;
         } catch (Exception exception) {
             throw new RuntimeException("Lumi client gametest failed", exception);
+        }
+    }
+
+    private void runBackupStress(ClientGameTestContext context) {
+        try {
+            new LumiBackupStressClientScenario().run(context);
+            context.takeScreenshot("lumi-backup-stress");
+        } catch (RuntimeException | Error exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new RuntimeException("Lumi backup stress client gametest failed", exception);
         }
     }
 

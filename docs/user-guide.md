@@ -828,6 +828,8 @@ They are singleplayer-only, require operator-level permission, refuse to start w
 
 `/lumi testing structures` runs only the structure fixture diagnostics and skips the broader save/restore/gameplay/bulk phases. Generated observer/sticky-piston fixtures are strict rollback checks; saved `.nbt` fixtures verify interaction and undo/redo operation flow while logging dynamic redstone/entity snapshot drift as diagnostics.
 
+`LUMI_SINGLEPLAYER_TEST_MODE=backup-stress` with `runClientGameTest` runs the client-only pre-open backup stress path. It creates a save, removes Lumi's fresh-world marker, writes 100k blocks across 400 chunks, measures world exit, opens through the real backup gate with a 1024 MiB backup budget, creates a Lumi world workspace, writes another 100k-block builder action, commits that change set to Lumi history, measures exit again, restores the raw pre-Lumi backup offline, reopens, and verifies all 100k positions.
+
 Test logs are written under:
 
 ```text

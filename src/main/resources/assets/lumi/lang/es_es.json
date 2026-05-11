@@ -132,6 +132,7 @@
   "luma.screen.diagnostics.title": "Diagnóstico",
   "luma.alpha_warning.title": "Lumi alpha warning",
   "luma.alpha_warning.message": "Lumi is currently in alpha. In theory, it can cause world corruption. Lumi will record a quick pre-open safety checkpoint for this existing pre-Lumi world before entering it. Full compressed chunk backup is opt-in with the lumi.preModBackup.maxMiB JVM property.",
+  "luma.alpha_warning.accept": "Got it!",
   "luma.alpha_warning.backup_loading": "Preparing Lumi safety checkpoint...",
   "luma.alpha_warning.backup_progress": "%s/%s chunks scanned, %s backed up",
   "luma.alpha_warning.opening_world": "Checkpoint complete. Opening world...",

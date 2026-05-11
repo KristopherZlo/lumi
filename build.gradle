@@ -431,6 +431,11 @@ def writeMutedClientAudioOptions = { String runDirPath ->
 
 tasks.named('runClientGameTest').configure {
     jvmArgs('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
+    if ('backup-stress'.equalsIgnoreCase(System.getenv('LUMI_SINGLEPLAYER_TEST_MODE') ?: '')) {
+        jvmArgs('-Xmx1G')
+        jvmArgs('-Dlumi.singleplayerTest.mode=backup-stress')
+        jvmArgs('-Dlumi.preModBackup.maxMiB=1024')
+    }
 }
 
 ['runClient',

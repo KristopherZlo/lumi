@@ -54,6 +54,8 @@ Runs an integrated-server regression suite against the real in-world Lumi servic
 
 `/lumi testing crash-safety` runs the restart-focused project smoke path used by the crash harness. It covers project creation, capture, undo/redo, save, amend, branch save, partial restore, full restore, recovery-draft cleanup, and integrity checks without continuing into the long gameplay and bulk diagnostics.
 
+The client-only backup stress path is launched with `LUMI_SINGLEPLAYER_TEST_MODE=backup-stress` and `runClientGameTest`, not from an in-world command, because it must close, reopen, and offline-restore the singleplayer save. It writes 100k blocks across 400 chunks twice, measures each world exit, times the pre-open backup gate, creates a Lumi world workspace, commits the second 100k-block change set to history, restores the raw backup, and verifies the restored world state.
+
 `/lumi testing external-tools` runs the normal project smoke path and then records focused WorldEdit- and Axiom-sourced edits through the external capture context before saving and inspecting that patch. Large persisted and bulk-apply stress still live in the full `singleplayer` suite.
 
 The suite shows phase progress in chat, records every check as pass/fail, and keeps running after failed checks when the next workflow can still be exercised. Hard workflow errors are logged, then the runner skips to the next safe phase or cleanup.
