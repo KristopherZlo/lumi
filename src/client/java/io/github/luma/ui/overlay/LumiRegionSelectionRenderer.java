@@ -31,6 +31,10 @@ public final class LumiRegionSelectionRenderer {
             return;
         }
         Minecraft client = Minecraft.getInstance();
+        if (!LumiRegionSelectionController.getInstance().shouldRenderSelection(client)) {
+            clearCachedMesh();
+            return;
+        }
         Optional<BuildProject> project = currentProject(client);
         if (project.isEmpty()) {
             clearCachedMesh();

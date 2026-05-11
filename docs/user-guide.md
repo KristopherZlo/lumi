@@ -222,8 +222,7 @@ Secondary actions include:
 
 - `See changes`;
 - `Quick rollback`;
-- `Return before restore`, only when a restore return point exists;
-- `Branches`.
+- `Return before restore`, only when a restore return point exists.
 
 Recent saves show the selected branch. Each card shows:
 
@@ -235,7 +234,7 @@ Recent saves show the selected branch. Each card shows:
 - `Open`;
 - `Restore this save`.
 
-Use the branch picker above recent saves to view another branch's saves without switching the active branch. Use `Show older saves` when the branch has more saves than the initial recent list.
+Use the branch picker above recent saves to switch to another branch and restore that branch head into the world. Use `Show older saves` when the branch has more saves than the initial recent list.
 
 If a preview PNG is still being generated, the preview card shows the centered loading animation instead of the no-preview text.
 
@@ -469,7 +468,7 @@ Overlay controls:
 - if one side is `current`, the highlight can refresh while you keep editing;
 - very large current-build highlights keep their initial snapshot to avoid client stalls.
 
-Small and moderate diff regions render as a translucent exposed shell with thicker outlines. Extremely large diff regions collapse into merged low-alpha volume blobs.
+Small and moderate diff regions render as a translucent exposed shell with thicker outlines. Extremely large diff regions collapse into merged low-alpha volume blobs and render through blocks so dense edits do not appear missing.
 
 The overlay caches section geometry and reuses GPU buffers. It does not rebuild every highlighted block every frame.
 
@@ -525,7 +524,7 @@ Steps:
 10. Use `Use selected area` in the partial-restore form to copy the selection into restore bounds.
 11. Press `R` with a selection active to quick rollback only the selected area.
 
-The selected cuboid is highlighted in-world.
+The selected cuboid is highlighted in-world only while the wooden sword is still held. Putting the sword away hides the highlight without clearing the selected bounds.
 
 ## Recovery
 

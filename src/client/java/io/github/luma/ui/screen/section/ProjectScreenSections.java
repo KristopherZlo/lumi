@@ -127,7 +127,6 @@ public final class ProjectScreenSections {
         );
         returnButton.active(model.state().hasRestoreReturnPoint() && !operationActive);
         secondary.child(returnButton);
-        secondary.child(LumaUi.button(Component.translatable("luma.action.ideas"), button -> this.actions.openVariants()));
         section.child(secondary);
 
         if (model.state().hasRecoveryDraft()) {

@@ -119,6 +119,15 @@ public final class LumiRegionSelectionController {
         }
     }
 
+    public boolean shouldRenderSelection(Minecraft client) {
+        return client != null
+                && client.player != null
+                && client.level != null
+                && client.screen == null
+                && client.getOverlay() == null
+                && this.selectionToolHand(client.player).isPresent();
+    }
+
     private boolean handleClick(Minecraft client, InteractionHand hand, BlockPos pos, ClickKind clickKind) {
         if (client == null || client.player == null || client.level == null || pos == null) {
             return false;

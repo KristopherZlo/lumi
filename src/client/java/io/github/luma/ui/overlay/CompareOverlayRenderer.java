@@ -351,7 +351,7 @@ public final class CompareOverlayRenderer {
     }
 
     private static void renderOverlay(WorldRenderContext context, OverlayState state) {
-        boolean xrayEnabled = XRAY_ENABLED.get();
+        boolean xrayEnabled = XRAY_ENABLED.get() || state.denseBlob();
         if (context == null) {
             OverlayDiagnostics.getInstance().log(
                     state.debugEnabled(),

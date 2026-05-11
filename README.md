@@ -50,7 +50,7 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 - Capture of non-player entity spawn/remove/update with persistent NBT payloads for supported builder-facing entities.
 - Pre-Lumi world checkpoint gate with visible progress and an opt-in vanilla Edit World restore action for worlds that capture compressed pre-Lumi chunk payloads.
 - Optional WorldEdit/FAWE/Axiom/tool-stack capture without hard runtime dependencies.
-- Client-side textured isometric previews and large-diff overlays prepared away from the render thread.
+- Client-side textured isometric previews that skip hidden internal faces, plus large-diff overlays prepared away from the render thread.
 - Runtime diagnostics, load logs, block-apply logs, light-refresh logs, smoke tests, and a broad singleplayer regression suite.
 
 ## Architecture

@@ -10,6 +10,7 @@ import io.github.luma.domain.model.Bounds3i;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import net.minecraft.client.Minecraft;
@@ -22,7 +23,6 @@ import net.minecraft.client.renderer.block.model.BlockModelPart;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import org.joml.Matrix4f;
@@ -31,6 +31,7 @@ import org.joml.Vector3f;
 final class PreviewRenderMeshBuilder {
 
     private final Minecraft client = Minecraft.getInstance();
+    private final PreviewRenderableBlockFilter renderableBlockFilter = new PreviewRenderableBlockFilter();
 
     CompletableFuture<PreviewRenderMesh> scheduleBuild(ClientLevel level, Bounds3i bounds, Executor executor) {
         return CompletableFuture.supplyAsync(() -> this.build(level, bounds), executor);
@@ -46,49 +47,30 @@ final class PreviewRenderMeshBuilder {
         SectionBufferBuilderPack bufferPack = new SectionBufferBuilderPack();
         EnumMap<ChunkSectionLayer, BufferBuilder> builders = new EnumMap<>(ChunkSectionLayer.class);
         EnumMap<ChunkSectionLayer, MeshData> layers = new EnumMap<>(ChunkSectionLayer.class);
+        PreviewCullingBlockGetter cullingView = new PreviewCullingBlockGetter(level, bounds);
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos neighbor = new BlockPos.MutableBlockPos();
 
         try {
-            for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
-                BlockState state = level.getBlockState(pos);
-                if (state.isAir()) {
-                    continue;
+            for (int x = min.getX(); x <= max.getX(); x++) {
+                for (int y = min.getY(); y <= max.getY(); y++) {
+                    for (int z = min.getZ(); z <= max.getZ(); z++) {
+                        this.throwIfInterrupted();
+                        cursor.set(x, y, z);
+                        this.addBlock(
+                                cullingView,
+                                min,
+                                blockRenderer,
+                                random,
+                                parts,
+                                poseStack,
+                                bufferPack,
+                                builders,
+                                cursor,
+                                neighbor
+                        );
+                    }
                 }
-
-                FluidState fluidState = state.getFluidState();
-                if (!fluidState.isEmpty()) {
-                    blockRenderer.renderLiquid(
-                            pos,
-                            level,
-                            this.getOrCreateBuilder(builders, bufferPack, ItemBlockRenderTypes.getRenderLayer(fluidState)),
-                            state,
-                            fluidState
-                    );
-                }
-
-                if (state.getRenderShape() != RenderShape.MODEL) {
-                    continue;
-                }
-
-                random.setSeed(state.getSeed(pos));
-                parts.clear();
-                blockRenderer.getBlockModel(state).collectParts(random, parts);
-
-                poseStack.pushPose();
-                poseStack.translate(
-                        pos.getX() - min.getX(),
-                        pos.getY() - min.getY(),
-                        pos.getZ() - min.getZ()
-                );
-                blockRenderer.renderBatched(
-                        state,
-                        pos,
-                        level,
-                        poseStack,
-                        this.getOrCreateBuilder(builders, bufferPack, ItemBlockRenderTypes.getChunkRenderType(state)),
-                        true,
-                        parts
-                );
-                poseStack.popPose();
             }
 
             VertexSorting translucentSorting = this.depthSorting();
@@ -115,6 +97,66 @@ final class PreviewRenderMeshBuilder {
         }
     }
 
+    private void addBlock(
+            PreviewCullingBlockGetter blocks,
+            BlockPos min,
+            BlockRenderDispatcher blockRenderer,
+            RandomSource random,
+            List<BlockModelPart> parts,
+            PoseStack poseStack,
+            SectionBufferBuilderPack bufferPack,
+            EnumMap<ChunkSectionLayer, BufferBuilder> builders,
+            BlockPos pos,
+            BlockPos.MutableBlockPos neighbor
+    ) {
+        BlockState state = blocks.getBlockState(pos);
+        if (state.isAir()) {
+            return;
+        }
+
+        FluidState fluidState = state.getFluidState();
+        boolean renderFluid = this.renderableBlockFilter.shouldRenderFluid(blocks, pos, fluidState, neighbor);
+        boolean renderModel = this.renderableBlockFilter.shouldRenderModel(blocks, pos, state, neighbor);
+        if (!renderFluid && !renderModel) {
+            return;
+        }
+
+        if (renderFluid) {
+            blockRenderer.renderLiquid(
+                    pos,
+                    blocks,
+                    this.getOrCreateBuilder(builders, bufferPack, ItemBlockRenderTypes.getRenderLayer(fluidState)),
+                    state,
+                    fluidState
+            );
+        }
+
+        if (!renderModel) {
+            return;
+        }
+
+        random.setSeed(state.getSeed(pos));
+        parts.clear();
+        blockRenderer.getBlockModel(state).collectParts(random, parts);
+
+        poseStack.pushPose();
+        poseStack.translate(
+                pos.getX() - min.getX(),
+                pos.getY() - min.getY(),
+                pos.getZ() - min.getZ()
+        );
+        blockRenderer.renderBatched(
+                state,
+                pos,
+                blocks,
+                poseStack,
+                this.getOrCreateBuilder(builders, bufferPack, ItemBlockRenderTypes.getChunkRenderType(state)),
+                true,
+                parts
+        );
+        poseStack.popPose();
+    }
+
     private BufferBuilder getOrCreateBuilder(
             EnumMap<ChunkSectionLayer, BufferBuilder> builders,
             SectionBufferBuilderPack bufferPack,
@@ -129,5 +171,11 @@ final class PreviewRenderMeshBuilder {
     private VertexSorting depthSorting() {
         Matrix4f rotation = PreviewFramingCalculator.rotationMatrix();
         return VertexSorting.byDistance(vector -> -new Vector3f(vector).mulPosition(rotation).z());
+    }
+
+    private void throwIfInterrupted() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Preview mesh build was interrupted");
+        }
     }
 }
