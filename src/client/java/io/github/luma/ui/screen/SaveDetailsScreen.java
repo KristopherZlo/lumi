@@ -128,11 +128,11 @@ public final class SaveDetailsScreen extends LumaScreen {
         body.child(this.summarySection(version, versionVariant));
         body.child(this.changesSection(version));
         body.child(this.primaryActions(version, versionVariant, operationActive));
+        body.child(this.moreSection(version, operationActive));
         if (this.showPartialRestore) {
             contextualHelp.addHint(body, ClientContextualHelpHint.PARTIAL_RESTORE);
             body.child(this.partialRestoreSection(version, operationActive));
         }
-        body.child(this.moreSection(version, operationActive));
         body.child(LumaUi.bottomSpacer());
     }
 
@@ -305,11 +305,6 @@ public final class SaveDetailsScreen extends LumaScreen {
         comparePrevious.active(!this.parentVersionId(version.id()).isBlank());
         actions.child(comparePrevious);
 
-        actions.child(LumaUi.button(Component.translatable("luma.action.restore_selected_area"), button -> {
-            this.showPartialRestore = !this.showPartialRestore;
-            this.rebuild();
-        }));
-
         section.child(actions);
         return section;
     }
@@ -362,6 +357,11 @@ public final class SaveDetailsScreen extends LumaScreen {
         ));
         replaceButton.active(this.canReplaceLatest(version) && !operationActive);
         actions.child(replaceButton);
+
+        actions.child(LumaUi.button(Component.translatable("luma.action.restore_selected_area"), button -> {
+            this.showPartialRestore = !this.showPartialRestore;
+            this.rebuild();
+        }));
 
         ButtonComponent deleteButton = LumaUi.button(Component.translatable("luma.action.delete_save"), button -> {
             this.pendingDeleteConfirmation = true;

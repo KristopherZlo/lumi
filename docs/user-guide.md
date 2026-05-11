@@ -24,7 +24,7 @@ Lumi UI actions are intended for the local world owner. Capture and mutating Lum
 10. Open a save card when you need details, restore, partial restore, compare, rename, export, or branch actions.
 11. Use `Branches` for alternate build directions.
 12. Use `Import / Export` to move history packages or combine imported work.
-13. Use `More` for cleanup, manual compare, onboarding replay, deleted saves, the history graph, and raw support ids.
+13. Use `More` for cleanup, manual highlight, onboarding replay, deleted saves, the history graph, and raw support ids.
 14. Use `Settings` for safety, previews, HUD, storage cadence, performance, and debug logging.
 
 ## Terms
@@ -286,13 +286,14 @@ Save details shows:
 Primary actions:
 
 - `Restore this save`;
-- `See changes`;
-- `Restore selected area`.
+- highlight changes against the current build;
+- highlight changes from the parent save.
 
-When the selected save is the current active branch head and there is no unsaved work, `See changes` compares the previous save to that latest save instead of opening an empty latest-save-to-current-build comparison.
+When the selected save is the current active branch head and there is no unsaved work, the current-build highlight uses the previous save against that latest save instead of opening an empty latest-save-to-current-build comparison.
 
 Extra actions live under `More`:
 
+- `Restore part of save`;
 - rename save;
 - delete save;
 - replace latest save;
@@ -440,7 +441,7 @@ Open `See changes` from:
 - Build History;
 - save details;
 - Branches;
-- manual compare in `More`.
+- manual highlight in `More`.
 
 You can compare:
 
@@ -478,7 +479,7 @@ Compare highlight takes priority over undo/redo preview.
 
 Use partial restore when you want a bounded restore instead of a full branch reset.
 
-Open it from save details with `Restore selected area`.
+Open it from save details by expanding `More` and choosing `Restore part of save`.
 
 Modes:
 
@@ -493,7 +494,7 @@ Bounds sources:
 Recommended flow:
 
 1. Open the target save.
-2. Choose `Restore selected area`.
+2. Expand `More` and choose `Restore part of save`.
 3. Copy the Lumi selection or enter bounds manually.
 4. Preview the region.
 5. Apply the partial restore.
@@ -658,7 +659,7 @@ Numeric settings must be greater than zero. Invalid values show inline validatio
 
 Project archive controls are not part of Settings. Use `Import / Export`.
 
-Cleanup, diagnostics, manual compare, graph, deleted saves, raw references, onboarding replay, and tip reset live under `More`.
+Cleanup, diagnostics, manual highlight, graph, deleted saves, raw references, onboarding replay, and tip reset live under `More`.
 
 Auto-version and favorite controls are not exposed in the supported UI surface.
 
@@ -676,7 +677,7 @@ Project tools include:
 - `Show onboarding`: replay the short safety tour;
 - `Show tips again`: reset contextual hints;
 - `Storage cleanup`: open Cleanup;
-- `Manual compare`: compare raw save/branch/current references;
+- `Manual highlight`: choose raw save/branch/current references for highlighting;
 - `History graph`: visual graph of saves and branch heads;
 - `Raw references`: project name, active branch id, and recent save ids for support/debug.
 
