@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.jpountz.lz4.LZ4FrameInputStream;
-import net.jpountz.lz4.LZ4FrameOutputStream;
 
 public final class PatchDataRepository {
 
@@ -48,6 +47,7 @@ public final class PatchDataRepository {
     private static final int HIDDEN_MASK_V8 = 8;
     private static final int CHUNK_ADDRESSABLE_V6 = 6;
     private static final int SECTION_FRAME_V7 = 7;
+    private final PatchFrameCompression frameCompression = new PatchFrameCompression();
 
     public PatchMetadata writePayload(
             ProjectLayout layout,
@@ -107,7 +107,7 @@ public final class PatchDataRepository {
                     chunkZ,
                     chunkChanges.size(),
                     chunkBytes.length,
-                    this.compressFrame(chunkBytes),
+                    this.frameCompression.compress(chunkBytes),
                     this.sectionFingerprints(chunkX, chunkZ, chunkChanges),
                     (int) chunkChanges.stream().filter(StoredBlockChange::visibleInBuilderSurfaces).count(),
                     this.sectionFingerprints(chunkX, chunkZ, visibleChanges(chunkChanges)),
@@ -573,7 +573,7 @@ public final class PatchDataRepository {
             byte[] compressedBytes,
             int version
     ) throws IOException {
-        byte[] chunkBytes = this.decompressFrame(compressedBytes, expectedLength);
+        byte[] chunkBytes = this.frameCompression.decompress(compressedBytes, expectedLength);
         try (DataInputStream chunkInput = new DataInputStream(new ByteArrayInputStream(chunkBytes))) {
             PatchWorldChanges changes = this.readChunk(chunkInput, version);
             for (StoredBlockChange change : changes.blockChanges()) {
@@ -688,7 +688,7 @@ public final class PatchDataRepository {
                 StorageLimits.MAX_PATCH_FRAME_COMPRESSED_BYTES,
                 "patch section frame"
         );
-        byte[] chunkBytes = this.decompressFrame(compressedBytes, uncompressedLength);
+        byte[] chunkBytes = this.frameCompression.decompress(compressedBytes, uncompressedLength);
         try (DataInputStream chunkInput = new DataInputStream(new ByteArrayInputStream(chunkBytes))) {
             int frameChunkX = chunkInput.readInt();
             int frameChunkZ = chunkInput.readInt();
@@ -859,35 +859,6 @@ public final class PatchDataRepository {
             ));
         }
         return changes;
-    }
-
-    private byte[] compressFrame(byte[] bytes) throws IOException {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        try (LZ4FrameOutputStream compressed = new LZ4FrameOutputStream(output)) {
-            compressed.write(bytes);
-        }
-        return output.toByteArray();
-    }
-
-    private byte[] decompressFrame(byte[] bytes, int expectedLength) throws IOException {
-        StorageLimits.requireLength(
-                "patch chunk frame uncompressed",
-                expectedLength,
-                StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES
-        );
-        try (LZ4FrameInputStream input = new LZ4FrameInputStream(new ByteArrayInputStream(bytes))) {
-            byte[] decompressed = StorageIo.readAllBytesBounded(
-                    input,
-                    StorageLimits.MAX_PATCH_FRAME_UNCOMPRESSED_BYTES,
-                    "decompressed patch frame"
-            );
-            if (decompressed.length != expectedLength) {
-                throw new IOException("Patch chunk frame length mismatch");
-            }
-            return decompressed;
-        } catch (IOException exception) {
-            throw new IOException("Patch chunk frame length mismatch");
-        }
     }
 
     private int readPatchFrameLength(DataInputStream input, String label, int maxBytes) throws IOException {
