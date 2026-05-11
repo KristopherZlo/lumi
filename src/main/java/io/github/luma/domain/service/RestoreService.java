@@ -178,6 +178,36 @@ public final class RestoreService {
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
 
+        return this.worldOperationManager.startPreparedApplyOperation(
+                level,
+                project.id().toString(),
+                "restore-version",
+                "blocks",
+                LumaDebugLog.enabled(project),
+                progressSink -> this.prepareRestoreOperation(
+                        level,
+                        layout,
+                        project,
+                        versionId,
+                        targetVariantId,
+                        trustedImportedPackage,
+                        recordUndoRedoAction,
+                        progressSink
+                )
+        );
+    }
+
+    private WorldOperationManager.PreparedApplyOperation prepareRestoreOperation(
+            ServerLevel level,
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            String versionId,
+            String targetVariantId,
+            boolean trustedImportedPackage,
+            boolean recordUndoRedoAction,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
+        progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing restore request");
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion version = this.resolveVersion(project, versions, variants, versionId);
@@ -185,6 +215,7 @@ public final class RestoreService {
         ProjectVariant activeVariant = this.activeVariant(project, variants);
         String activeHeadVersionId = activeVariant.headVersionId();
         this.requireTrustedImportedRestore(level, layout, project, versions, trustedImportedPackage);
+
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
                 .freezeWorkingDraft(level.getServer(), project.id().toString());
@@ -217,97 +248,88 @@ public final class RestoreService {
                 targetVariant.id()
         ));
 
-        return this.worldOperationManager.startPreparedApplyOperation(
+        String returnVersionId = activeHeadVersionId;
+        if (pendingDraft != null && !pendingDraft.isEmpty()) {
+            LumaMod.LOGGER.info(
+                    "Creating safety checkpoint before restore for project {} with {} pending changes",
+                    project.name(),
+                    pendingDraft.totalChangeCount()
+            );
+            LumaDebugLog.log(
+                    project,
+                    "restore",
+                    "Writing safety checkpoint before restore for project {} with {} draft changes",
+                    project.name(),
+                    pendingDraft.totalChangeCount()
+            );
+            progressSink.update(OperationStage.WRITING, 0, pendingDraft.totalChangeCount(), "Writing restore checkpoint");
+            ProjectVersion checkpoint = this.versionService.writeVersion(
+                    level,
+                    layout,
+                    project,
+                    pendingDraft,
+                    "",
+                    "Lumi",
+                    VersionKind.RESTORE,
+                    false,
+                    progressSink
+            );
+            returnVersionId = checkpoint.id();
+        }
+        this.saveRestoreReturnPoint(layout, project, activeVariant, returnVersionId, version);
+        RestoreUndoAction restoreUndoAction = recordUndoRedoAction
+                ? this.quickRollbackUndoAction(
+                        project.id().toString(),
+                        level.dimension().identifier().toString(),
+                        version.id(),
+                        pendingDraft
+                )
+                : null;
+
+        Optional<List<PreparedChunkBatch>> prepared = this.tryDecodeDirectRestore(
+                layout,
+                project,
+                versions,
+                variants,
+                version,
+                pendingDraft,
                 level,
-                project.id().toString(),
-                "restore-version",
-                "blocks",
-                LumaDebugLog.enabled(project),
-                progressSink -> {
-                    String returnVersionId = activeHeadVersionId;
-                    if (pendingDraft != null && !pendingDraft.isEmpty()) {
-                        LumaMod.LOGGER.info(
-                                "Creating safety checkpoint before restore for project {} with {} pending changes",
-                                project.name(),
-                                pendingDraft.totalChangeCount()
-                        );
-                        LumaDebugLog.log(
-                                project,
-                                "restore",
-                                "Writing safety checkpoint before restore for project {} with {} draft changes",
-                                project.name(),
-                                pendingDraft.totalChangeCount()
-                        );
-                        progressSink.update(OperationStage.WRITING, 0, pendingDraft.totalChangeCount(), "Writing restore checkpoint");
-                        ProjectVersion checkpoint = this.versionService.writeVersion(
-                                level,
-                                layout,
-                                project,
-                                pendingDraft,
-                                "",
-                                "Lumi",
-                                VersionKind.RESTORE,
-                                false,
-                                progressSink
-                        );
-                        returnVersionId = checkpoint.id();
-                    }
-                    this.saveRestoreReturnPoint(layout, project, activeVariant, returnVersionId, version);
-                    RestoreUndoAction restoreUndoAction = recordUndoRedoAction
-                            ? this.quickRollbackUndoAction(
-                                    project.id().toString(),
-                                    level.dimension().identifier().toString(),
-                                    version.id(),
-                                    pendingDraft
-                            )
-                            : null;
+                progressSink
+        );
 
-                    Optional<List<PreparedChunkBatch>> prepared = this.tryDecodeDirectRestore(
-                            layout,
-                            project,
-                            versions,
-                            variants,
-                            version,
-                            pendingDraft,
-                            level,
-                            progressSink
-                    );
-
-                    List<PreparedChunkBatch> batches = prepared.orElseGet(() -> {
-                        try {
-                            if (version.versionKind() == VersionKind.WORLD_ROOT) {
-                                return this.decodeWorldRootRestore(layout, project, level, progressSink);
-                            }
-                            progressSink.update(OperationStage.PREPARING, 0, 1, "Planning restore");
-                            RestorePlan plan = this.buildPlan(layout, project, versions, version);
-                            LumaMod.LOGGER.info(
-                                    "Restore plan for project {} uses anchor={}, patches={}, baselineGaps={}",
-                                    project.name(),
-                                    plan.anchor().id(),
-                                    plan.patchChain().size(),
-                                    plan.baselineGaps().size()
-                            );
-                            return this.decodePlan(layout, level, plan, progressSink);
-                        } catch (IOException exception) {
-                            throw new RuntimeException(exception);
-                        }
-                    });
-                    List<PreparedChunkBatch> finalBatches =
-                            this.withAuthoritativeEntityReplacementBatches(layout, versions, version.id(), batches);
-                    return new WorldOperationManager.PreparedApplyOperation(
-                            finalBatches,
-                            () -> this.completeRestore(
-                                    level,
-                                    layout,
-                                    project,
-                                    variants,
-                                    targetVariant,
-                                    version,
-                                    finalBatches.size(),
-                                    restoreUndoAction
-                            )
-                    );
+        List<PreparedChunkBatch> batches = prepared.orElseGet(() -> {
+            try {
+                if (version.versionKind() == VersionKind.WORLD_ROOT) {
+                    return this.decodeWorldRootRestore(layout, project, level, progressSink);
                 }
+                progressSink.update(OperationStage.PREPARING, 0, 1, "Planning restore");
+                RestorePlan plan = this.buildPlan(layout, project, versions, version);
+                LumaMod.LOGGER.info(
+                        "Restore plan for project {} uses anchor={}, patches={}, baselineGaps={}",
+                        project.name(),
+                        plan.anchor().id(),
+                        plan.patchChain().size(),
+                        plan.baselineGaps().size()
+                );
+                return this.decodePlan(layout, level, plan, progressSink);
+            } catch (IOException exception) {
+                throw new RuntimeException(exception);
+            }
+        });
+        List<PreparedChunkBatch> finalBatches =
+                this.withAuthoritativeEntityReplacementBatches(layout, versions, version.id(), batches);
+        return new WorldOperationManager.PreparedApplyOperation(
+                finalBatches,
+                () -> this.completeRestore(
+                        level,
+                        layout,
+                        project,
+                        variants,
+                        targetVariant,
+                        version,
+                        finalBatches.size(),
+                        restoreUndoAction
+                )
         );
     }
 
@@ -379,6 +401,25 @@ public final class RestoreService {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), request.projectName());
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + request.projectName()));
+
+        return this.worldOperationManager.startPreparedApplyOperation(
+                level,
+                project.id().toString(),
+                "partial-restore",
+                "blocks",
+                LumaDebugLog.enabled(project),
+                progressSink -> this.preparePartialRestoreOperation(level, layout, project, request, progressSink)
+        );
+    }
+
+    private WorldOperationManager.PreparedApplyOperation preparePartialRestoreOperation(
+            ServerLevel level,
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            PartialRestoreRequest request,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
+        progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing partial restore request");
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion targetVersion = this.resolveVersion(project, versions, variants, request.targetVersionId());
@@ -405,56 +446,47 @@ public final class RestoreService {
                 activeVariant.id()
         ));
 
-        return this.worldOperationManager.startPreparedApplyOperation(
+        PartialRestoreDraft partialDraft = this.buildPartialRestoreDraft(
+                layout,
+                project,
+                versions,
+                variants,
+                activeVariant,
+                targetVersion,
+                pendingDraft,
+                request,
+                level.getMinY(),
+                level.getMaxY(),
+                progressSink
+        );
+        if (partialDraft.draft().isEmpty()) {
+            throw new IllegalArgumentException("Partial restore has no changes inside the selected region");
+        }
+        List<PreparedChunkBatch> decodedBatches = this.decodeStoredChanges(
                 level,
-                project.id().toString(),
-                "partial-restore",
-                "blocks",
-                LumaDebugLog.enabled(project),
-                progressSink -> {
-                    PartialRestoreDraft partialDraft = this.buildPartialRestoreDraft(
-                            layout,
-                            project,
-                            versions,
-                            variants,
-                            activeVariant,
-                            targetVersion,
-                            pendingDraft,
-                            request,
-                            level.getMinY(),
-                            level.getMaxY(),
-                            progressSink
-                    );
-                    if (partialDraft.draft().isEmpty()) {
-                        throw new IllegalArgumentException("Partial restore has no changes inside the selected region");
-                    }
-                    List<PreparedChunkBatch> decodedBatches = this.decodeStoredChanges(
-                            level,
-                            partialDraft.draft().changes(),
-                            partialDraft.draft().entityChanges(),
-                            true
-                    );
-                    List<PreparedChunkBatch> batches;
-                    try (var ignored = LumaLoadLog.measure(
-                            "restore",
-                            "PreparedChunkBatchCollapser.collapse",
-                            "source=partial-restore, batches=" + decodedBatches.size()
-                    )) {
-                        batches = this.batchCollapser.collapse(decodedBatches);
-                    }
-                    return new WorldOperationManager.PreparedApplyOperation(
-                            batches,
-                            () -> this.completePartialRestore(
-                                    level,
-                                    layout,
-                                    project,
-                                    pendingDraft,
-                                    request,
-                                    partialDraft.draft(),
-                                    batches.size()
-                            )
-                    );
-                }
+                partialDraft.draft().changes(),
+                partialDraft.draft().entityChanges(),
+                true
+        );
+        List<PreparedChunkBatch> batches;
+        try (var ignored = LumaLoadLog.measure(
+                "restore",
+                "PreparedChunkBatchCollapser.collapse",
+                "source=partial-restore, batches=" + decodedBatches.size()
+        )) {
+            batches = this.batchCollapser.collapse(decodedBatches);
+        }
+        return new WorldOperationManager.PreparedApplyOperation(
+                batches,
+                () -> this.completePartialRestore(
+                        level,
+                        layout,
+                        project,
+                        pendingDraft,
+                        request,
+                        partialDraft.draft(),
+                        batches.size()
+                )
         );
     }
 

@@ -42,9 +42,9 @@ Key services:
 - `ProjectArchiveService`: export stable project history to zip archives and import it back into project storage
 - `HistoryShareService`: export variant-scoped history packages, import them back as review projects for the same project lineage, and delete imported review packages after lineage validation
 - `ProjectCleanupService`: compute safe cleanup candidates from reachable history metadata and active operation state
-- `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy
+- `VersionService`: save tracked edits as versions, amend the active head, and enforce snapshot policy. Save and amend requests register a world operation before isolating the working draft, so large operation-draft writes and patch preparation are visible progress work instead of blocking the client action that started the save.
 - `HistoryEditService`: rename saves, soft-delete saves, soft-delete branches, move safe branch heads back to parents, and keep tombstoned history hidden without deleting payload files
-- `RestoreService`: build restore plans and orchestrate prepared chunk batches through Minecraft-layer preparers
+- `RestoreService`: build restore plans and orchestrate prepared chunk batches through Minecraft-layer preparers. Full and partial restore requests enter the operation model before lineage metadata loading, pending-draft freezing, restore journals, or batch decoding.
 - `RecoveryService`: restore, persist, or discard interrupted tracked work
 - `VariantService`: branch creation and branch switching. Branch creation is metadata-only and does not freeze active recovery drafts; branch switching freezes and validates pending edits before asking restore to apply the selected branch head.
 - `VariantMergeService`: compare imported or local variant lineage against the active local target variant, group overlapping conflicts into chunk-connected zones, and write merged saves through the normal patch-first history path
@@ -195,17 +195,18 @@ Important invariants:
 ## Save flow
 
 1. UI controllers call `VersionService.startSaveVersion(...)`; Quick save reaches the same path after resolving or creating the current dimension workspace.
-2. The live working draft buffer is consumed on the server thread first; persisted recovery storage is only a fallback. The in-memory undo/redo action stack is not consumed or cleared by save/amend.
-3. The draft is moved into isolated operation-draft storage while async save work runs.
-4. `WorldOperationManager` executes background preparation off the tick thread.
-5. `PatchDataRepository` writes the binary patch payload.
-6. `PatchMetaRepository` writes the lightweight patch index.
-7. `VersionService` evaluates snapshot policy and optionally asks `SnapshotCaptureService` for a server-thread checkpoint capture, then persists the prepared payload through the snapshot writer. Whole-dimension projects use root/cadence checkpoints, not per-save volume snapshots.
-8. `VersionRepository` writes the final version manifest only after payload files exist.
-9. Amend-on-head merges both block and entity changes into the replacement draft before writing the amended version.
-10. If new edits created another working draft while the async save was running, `WorkingDraftSessionManager` rebases that draft from the consumed head id to the newly saved version id without changing its block/entity delta.
-11. Preview generation stores a lightweight request after save durability completes.
-12. The client preview coordinator later builds a local layered preview mesh, renders a textured isometric frame into an off-screen target, and writes the PNG plus preview metadata. Open project and save-details screens poll this metadata and invalidate preview textures when the underlying file changes.
+2. `WorldOperationManager` registers a background operation immediately, so the screen and HUD can show progress before any large draft file is written.
+3. The operation prepare stage consumes the live working draft buffer on the server thread first; persisted recovery storage is only a fallback. The in-memory undo/redo action stack is not consumed or cleared by save/amend.
+4. The draft is moved into isolated operation-draft storage while async save work runs.
+5. `WorldOperationManager` executes background preparation off the tick thread.
+6. `PatchDataRepository` writes the binary patch payload.
+7. `PatchMetaRepository` writes the lightweight patch index.
+8. `VersionService` evaluates snapshot policy and optionally asks `SnapshotCaptureService` for a server-thread checkpoint capture, then persists the prepared payload through the snapshot writer. Whole-dimension projects use root/cadence checkpoints, not per-save volume snapshots.
+9. `VersionRepository` writes the final version manifest only after payload files exist.
+10. Amend-on-head merges both block and entity changes into the replacement draft before writing the amended version.
+11. If new edits created another working draft while the async save was running, `WorkingDraftSessionManager` rebases that draft from the consumed head id to the newly saved version id without changing its block/entity delta.
+12. Preview generation stores a lightweight request after save durability completes.
+13. The client preview coordinator later builds a local layered preview mesh, renders a textured isometric frame into an off-screen target, and writes the PNG plus preview metadata. Open project and save-details screens poll this metadata and invalidate preview textures when the underlying file changes.
 
 For automatic dimension workspaces, the history chain starts with a metadata-backed `WORLD_ROOT` version. It records the world origin context instead of a normal patch/snapshot payload.
 
@@ -214,7 +215,7 @@ For automatic dimension workspaces, the history chain starts with a metadata-bac
 1. UI calls `RestoreService.restore(...)`.
 2. The client requires explicit user confirmation before restoring an `INITIAL` or `WORLD_ROOT` version.
 3. The confirmation UI shows a lightweight `RestorePlanSummary` with mode, branch, base version, target version, and affected chunk count before any world mutation starts. Pending recovery-draft chunks keep the summary actionable even when the selected target is already the active branch head.
-4. Active capture is frozen. If pending draft changes exist, a restore checkpoint is written first, and `recovery/last-restore-return.json` records the exact version/variant to return to before the restore.
+4. `WorldOperationManager` registers the restore operation before heavy storage work starts. The prepare stage freezes active capture, loads lineage metadata, and writes the restore journal. If pending draft changes exist, a restore checkpoint is written first, and `recovery/last-restore-return.json` records the exact version/variant to return to before the restore.
 5. When the target shares saved lineage with the current active variant head, `RestoreService` prefers a direct patch replay path, including shared branch-base ancestors, divergent branch heads, and restores to `WORLD_ROOT`: reverse patch application back to the common ancestor, forward patch application to the target, plus rollback of any pending draft. Direct restores to `INITIAL` append saved initial snapshot chunks only for chunks touched by pending draft rollback or patch replay, and direct restores to `WORLD_ROOT` append only the touched chunks that have tracked root baselines.
 6. If direct replay is not valid and the target is `WORLD_ROOT`, restore falls back to tracked baseline chunks for the current workspace. Generator regeneration remains blocked when the stored origin fingerprint does not match the current world.
 7. If direct replay is not valid for a normal version, `RestoreService` falls back to the anchor snapshot plus patch-chain restore plan.
@@ -273,7 +274,7 @@ Current strategy:
 - periodic flushes enqueue immutable `RecoveryDraft` snapshots to a dedicated capture-maintenance executor, skipping repeated stabilization cycles that leave the live buffer unchanged
 - that executor appends `recovery/draft.wal.lz4` entries and performs WAL compaction into `recovery/draft.bin.lz4`
 - draft flushes and first-touch whole-dimension baseline writes use separate low-priority capture executors, so a baseline backlog cannot delay recovery WAL durability
-- in-progress save/amend drafts move to `recovery/operation-draft.bin.lz4` so new edits can start a separate working draft; when the save commits, that new draft is rebased onto the newly saved head
+- in-progress save/amend drafts move to `recovery/operation-draft.bin.lz4` inside the operation prepare stage so new edits can start a separate working draft without making the initiating UI call wait for a large LZ4/NBT write; when the save commits, that new draft is rebased onto the newly saved head
 - restore/save recovery actions reuse the same operation model as save and restore
 - project open routes directly to the recovery screen only when a non-empty interrupted draft is persisted from a previous run; same-run unsaved drafts remain visible as pending changes instead of repeatedly forcing recovery
 
@@ -286,7 +287,7 @@ Lumi uses a strict two-stage operation pattern:
 
 For live capture, the server thread is limited to compact chunk-copy work. It no longer samples whole chunks block-by-block through `Level.getBlockState()` or compacts recovery WAL data inline.
 
-Capture session entry points that snapshot, freeze, consume, discard, or adjust working draft state marshal onto the Minecraft server thread when a client UI or background completion callback invokes them. This keeps loaded-chunk stabilization and mutable capture maps on the same thread as normal world capture while leaving save payload writing and operation preparation off-thread.
+Capture session entry points that snapshot, freeze, consume, discard, or adjust working draft state marshal onto the Minecraft server thread when a client UI, background operation prepare step, or background completion callback invokes them. This keeps loaded-chunk stabilization and mutable capture maps on the same thread as normal world capture while leaving save payload writing and operation preparation off-thread. Save/amend and restore entrypoints enqueue their world operation before heavy draft isolation or restore planning, so large recovery files, patch metadata reads, and decode work report operation progress instead of freezing the screen that launched them.
 
 Current guarantees:
 
