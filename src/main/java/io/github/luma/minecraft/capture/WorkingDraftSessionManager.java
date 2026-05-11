@@ -239,9 +239,28 @@ final class WorkingDraftSessionManager {
     }
 
     Optional<TrackedChangeBuffer> freezeAfterReconciliation(String projectId, TrackedProject trackedProject) throws IOException {
+        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.ALL);
+    }
+
+    Optional<TrackedChangeBuffer> freezeForShutdownAfterReconciliation(
+            String projectId,
+            TrackedProject trackedProject
+    ) throws IOException {
+        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY);
+    }
+
+    private Optional<TrackedChangeBuffer> freezeAfterReconciliation(
+            String projectId,
+            TrackedProject trackedProject,
+            PersistenceDrainMode drainMode
+    ) throws IOException {
         LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_DRAFT_FREEZE);
         if (trackedProject != null) {
-            this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
+            if (drainMode == PersistenceDrainMode.ALL) {
+                this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
+            } else {
+                this.persistenceCoordinator.drainDraftFlushes(projectId, trackedProject.project().name());
+            }
         }
         TrackedChangeBuffer session = this.sessionRegistry.removeBuffer(projectId);
         boolean persistedDraftIsCurrent = this.sessionRegistry.matchesPersistedDraft(projectId, session);
@@ -410,5 +429,10 @@ final class WorkingDraftSessionManager {
 
     private static String defaultActor(WorldMutationSource source) {
         return new MutationSourcePolicy().defaultActor(source);
+    }
+
+    private enum PersistenceDrainMode {
+        ALL,
+        DRAFT_FLUSHES_ONLY
     }
 }

@@ -89,8 +89,19 @@ class CapturePersistenceCoordinatorTest {
                 draftExecutor,
                 baselineExecutor
         )) {
-            coordinator.enqueueBaselineWrite(layout, "project", "Project", chunkSnapshot(), Instant.parse("2026-04-21T09:00:00Z"));
-            coordinator.enqueueDraftFlush(layout, "project", "Project", draft("minecraft:gold_block", Instant.parse("2026-04-21T09:00:01Z")));
+            coordinator.enqueueBaselineWrite(
+                    layout,
+                    "project",
+                    "Project",
+                    chunkSnapshot(),
+                    Instant.parse("2026-04-21T09:00:00Z")
+            );
+            coordinator.enqueueDraftFlush(
+                    layout,
+                    "project",
+                    "Project",
+                    draft("minecraft:gold_block", Instant.parse("2026-04-21T09:00:01Z"))
+            );
 
             RecoveryDraft flushed = waitForDraft(recoveryRepository, layout);
             assertEquals("minecraft:gold_block", flushed.changes().getFirst().newValue().blockId());
@@ -107,6 +118,42 @@ class CapturePersistenceCoordinatorTest {
 
             releaseBaseline.countDown();
             drained.get(2, TimeUnit.SECONDS);
+        } finally {
+            releaseBaseline.countDown();
+            draftExecutor.shutdownNow();
+            baselineExecutor.shutdownNow();
+        }
+    }
+
+    @Test
+    void draftOnlyDrainDoesNotWaitForBlockedBaselineWrites() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryRepository recoveryRepository = new RecoveryRepository();
+        ExecutorService draftExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService baselineExecutor = Executors.newSingleThreadExecutor();
+        CountDownLatch baselineStarted = new CountDownLatch(1);
+        CountDownLatch releaseBaseline = new CountDownLatch(1);
+        baselineExecutor.submit(() -> {
+            baselineStarted.countDown();
+            releaseBaseline.await(5, TimeUnit.SECONDS);
+            return null;
+        });
+        assertTrue(baselineStarted.await(1, TimeUnit.SECONDS));
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                recoveryRepository,
+                new BaselineChunkRepository(),
+                draftExecutor,
+                baselineExecutor
+        )) {
+            coordinator.enqueueBaselineWrite(layout, "project", "Project", chunkSnapshot(), Instant.parse("2026-04-21T09:00:00Z"));
+            coordinator.enqueueDraftFlush(layout, "project", "Project", draft("minecraft:gold_block", Instant.parse("2026-04-21T09:00:01Z")));
+
+            coordinator.drainDraftFlushes("project", "Project");
+
+            RecoveryDraft restored = recoveryRepository.loadDraft(layout).orElseThrow();
+            assertEquals("minecraft:gold_block", restored.changes().getFirst().newValue().blockId());
+            assertTrue(coordinator.hasPendingBaselineWrite("project", chunkSnapshot().chunk()));
         } finally {
             releaseBaseline.countDown();
             draftExecutor.shutdownNow();

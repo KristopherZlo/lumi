@@ -139,6 +139,29 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         }
     }
 
+    public void drainDraftFlushes(String projectId, String projectName) throws IOException {
+        while (true) {
+            CompletableFuture<Void> future;
+            synchronized (this) {
+                PendingDraftFlush pendingDraftFlush = this.pendingDraftFlushes.get(projectId);
+                if (pendingDraftFlush == null) {
+                    return;
+                }
+                future = pendingDraftFlush.future;
+            }
+            try {
+                future.join();
+            } catch (CompletionException exception) {
+                Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+                LumaMod.LOGGER.warn("Failed to drain capture draft flush for project {}", projectName, cause);
+                if (cause instanceof IOException ioException) {
+                    throw ioException;
+                }
+                throw new IOException("Failed to drain capture draft flush for " + projectName, cause);
+            }
+        }
+    }
+
     public void deleteDraft(ProjectLayout layout, String projectId, String projectName) throws IOException {
         this.drainProject(projectId, projectName);
         this.recoveryRepository.deleteDraft(layout);

@@ -719,6 +719,25 @@ public final class HistoryCaptureManager {
         return this.workingDrafts.freezeAfterReconciliation(projectId, trackedProject);
     }
 
+    private Optional<TrackedChangeBuffer> freezeWorkingDraftForShutdownOnServerThread(
+            MinecraftServer server,
+            String projectId
+    ) throws IOException {
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        CaptureSessionState sessionState = this.workingDrafts.session(projectId);
+        if (trackedProject != null && sessionState != null) {
+            this.reconcileSession(server, trackedProject, sessionState, false);
+            if (sessionState.hasPendingReconciliation()) {
+                LumaMod.LOGGER.info(
+                        "Skipped final shutdown stabilization for project {} with {} pending dirty chunks",
+                        trackedProject.project().name(),
+                        sessionState.pendingReconcileChunks().size()
+                );
+            }
+        }
+        return this.workingDrafts.freezeForShutdownAfterReconciliation(projectId, trackedProject);
+    }
+
     /**
      * Removes and returns the active working draft for save operations.
      *
@@ -852,7 +871,10 @@ public final class HistoryCaptureManager {
     public void flushAll(MinecraftServer server) {
         for (String projectId : this.workingDrafts.activeProjectIds()) {
             try {
-                this.freezeWorkingDraft(server, projectId);
+                this.serverThreadExecutor.call(
+                        server,
+                        () -> this.freezeWorkingDraftForShutdownOnServerThread(server, projectId)
+                );
             } catch (IOException exception) {
                 LumaMod.LOGGER.warn("Failed to flush session for {}", projectId, exception);
             }
