@@ -2,7 +2,7 @@
 
 This repository ships a dedicated Fabric development profile for a local singleplayer test client.
 
-The automated `runClientGameTest` profile runs dedicated client screen and overlay smoke GameTests and invokes the shorter `/lumi testing smoke` storage/runtime path by default. Set `LUMI_SINGLEPLAYER_TEST_MODE=full`, `structure-fixtures`, `external-tools`, or `crash-safety` before `runClientGameTest` to run a focused or destructive runtime mode. Structure fixture comparisons are exact except for the transient `observer.powered` phase on the generated closed observer pair; the structural piston/observer rollback assertions still remain strict. Screen smoke renders safe non-storage owo screens, clicks validation/back/cancel actions, and exercises storage-backed Lumi route sections through live client component fixtures so missing buttons, inactive-state regressions, action callback failures, and render crashes fail the client GameTest without opening screens that synchronously wait on integrated-server storage. Overlay smoke covers small compare/recent overlays through the live renderer, large cached tiled-volume overlay meshes in client context, and pending-draft overlays for cumulative unsaved changes. The pinned recent-preview contract for live edits while the action button preview is held is covered by the focused preview-session regression tests.
+The automated `runClientGameTest` profile runs dedicated client screen and overlay smoke GameTests and invokes the shorter `/lumi testing smoke` storage/runtime path by default. Set `LUMI_SINGLEPLAYER_TEST_MODE=full`, `structure-fixtures`, `external-tools`, or `crash-safety` before `runClientGameTest` to run a focused or destructive runtime mode. Structure fixture mode discovers saved `.nbt` files under `data/lumi/structure/testing`, presses only the button or lever mounted on `blue_concrete`, and checks Alt+Z/Alt+Y-equivalent undo/redo operation flow after `1`, `10`, `20`, and `40` control-wait ticks. Generated observer/sticky-piston fixtures still use strict snapshot comparisons, with only the transient `observer.powered` phase ignored on the generated closed observer pair. Saved `.nbt` fixtures are treated as dynamic redstone diagnostics: fixtures without a blue-concrete control marker are skipped, retryable self-settling is recorded as diagnostic coverage, and exact block/entity snapshot differences are logged instead of failing when vanilla entities, falling blocks, carts, items, or redstone phase continue ticking after the Lumi operation completes. Screen smoke renders safe non-storage owo screens, clicks validation/back/cancel actions, and exercises storage-backed Lumi route sections through live client component fixtures so missing buttons, inactive-state regressions, action callback failures, and render crashes fail the client GameTest without opening screens that synchronously wait on integrated-server storage. Overlay smoke covers small compare/recent overlays through the live renderer, large cached tiled-volume overlay meshes in client context, and pending-draft overlays for cumulative unsaved changes. The pinned recent-preview contract for live edits while the action button preview is held is covered by the focused preview-session regression tests.
 
 ## Launch
 
@@ -28,6 +28,8 @@ The test-client Gradle profile always starts with Lumi diagnostics enabled:
 - `-Dlumi.lightLog=true`
 - `-Dlumi.blockApplyLog=true`
 
+Client GameTest launches also rewrite the run-directory `options.txt` sound categories to `0.0` before startup, so local regression runs stay muted. The singleplayer GameTest harness anchors the spawned player on a small barrier pad in the current chunk before waiting for render readiness, which prevents the client camera from spending the run in continuous void fall.
+
 The load log is written under `run/test-client/logs/lumi-load.log` by default. Restore, undo/redo, and quick rollback runs can emit an automatic `light-refresh` follow-up operation after the block/entity action; runtime checks should treat it as part of the operation window and verify it completes without `runLightUpdates()` thread exceptions.
 Test-client launches also write `run/test-client/logs/lumi-light.log` and `run/test-client/logs/lumi-block-apply.log`. Use the light log for rejoin-only shadow investigations, including dirty-chunk preload, marked chunk counts, and any missing dirty chunks. Use the block-apply log for restore/rollback bottleneck breakdowns by preload, chunk, section path, block entities, and entity operations.
 
@@ -51,7 +53,7 @@ Run the alpha release gate wrapper:
 .\scripts\run-alpha-release-check.ps1
 ```
 
-The wrapper chains the coverage ratchet, GameTests, focused runtime modes, runtime load comparison, and crash harness. Use `-SkipRuntimeLoad` or `-SkipCrashHarness` only for local iteration, not for release sign-off.
+The wrapper chains the coverage ratchet, GameTests, focused runtime modes, runtime load comparison, and crash harness. Use `-SkipRuntimeLoad` or `-SkipCrashHarness` only for local iteration, not for release sign-off. Crash-harness output includes failpoint progress, and `-CrashHarnessFailpoints` can rerun a named subset without repeating the entire failpoint list.
 
 If you want to launch the broader performance-mod profile:
 

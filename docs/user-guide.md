@@ -826,7 +826,7 @@ They are singleplayer-only, require operator-level permission, refuse to start w
 
 `/lumi testing smoke` runs the shorter project smoke path. It covers world bootstrap, the pre-mod backup manifest and budget, snapshot content refs, section-indexed patch reads, capture, pending diff, undo/redo, save/amend, branch save/export, partial restore, full restore, integrity, cleanup, and then stops before gameplay, large-history, bulk-apply, and structure-fixture diagnostics.
 
-`/lumi testing structures` runs only the saved structure fixture diagnostics and skips the broader save/restore/gameplay/bulk phases.
+`/lumi testing structures` runs only the structure fixture diagnostics and skips the broader save/restore/gameplay/bulk phases. Generated observer/sticky-piston fixtures are strict rollback checks; saved `.nbt` fixtures verify interaction and undo/redo operation flow while logging dynamic redstone/entity snapshot drift as diagnostics.
 
 Test logs are written under:
 
