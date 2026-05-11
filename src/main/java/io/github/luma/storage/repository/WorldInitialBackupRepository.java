@@ -12,6 +12,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.Optional;
@@ -127,7 +128,14 @@ public final class WorldInitialBackupRepository {
             long maxCompressedBytes
     ) throws IOException {
         Objects.requireNonNull(attempt, "attempt");
-        return this.writeChunkToChunksRoot(this.chunksRoot(attempt), dimensionId, chunk, nbtBytes, maxCompressedBytes);
+        return this.writeChunkToChunksRoot(
+                this.chunksRoot(attempt),
+                dimensionId,
+                chunk,
+                nbtBytes,
+                maxCompressedBytes,
+                false
+        );
     }
 
     public ChunkWriteResult writeChunk(
@@ -137,7 +145,14 @@ public final class WorldInitialBackupRepository {
             byte[] nbtBytes,
             long maxCompressedBytes
     ) throws IOException {
-        return this.writeChunkToChunksRoot(this.chunksRoot(worldRoot), dimensionId, chunk, nbtBytes, maxCompressedBytes);
+        return this.writeChunkToChunksRoot(
+                this.chunksRoot(worldRoot),
+                dimensionId,
+                chunk,
+                nbtBytes,
+                maxCompressedBytes,
+                true
+        );
     }
 
     public Path backupRoot(Path worldRoot) {
@@ -161,7 +176,8 @@ public final class WorldInitialBackupRepository {
             String dimensionId,
             ChunkPoint chunk,
             byte[] nbtBytes,
-            long maxCompressedBytes
+            long maxCompressedBytes,
+            boolean durable
     ) throws IOException {
         if (maxCompressedBytes <= 0L) {
             return new ChunkWriteResult(false, 0L);
@@ -171,8 +187,27 @@ public final class WorldInitialBackupRepository {
             return new ChunkWriteResult(false, compressed.length);
         }
         Path file = this.chunkFile(chunksRoot, dimensionId, chunk);
-        StorageIo.writeAtomically(file, output -> output.write(compressed));
+        if (durable) {
+            StorageIo.writeAtomically(file, output -> output.write(compressed));
+        } else {
+            this.writeStagedChunk(file, compressed);
+        }
         return new ChunkWriteResult(true, compressed.length);
+    }
+
+    private void writeStagedChunk(Path file, byte[] compressed) throws IOException {
+        Files.createDirectories(file.getParent());
+        Path tempFile = file.resolveSibling(file.getFileName() + "." + UUID.randomUUID() + ".tmp");
+        boolean moved = false;
+        try {
+            Files.write(tempFile, compressed, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            this.movePath(tempFile, file);
+            moved = true;
+        } finally {
+            if (!moved) {
+                Files.deleteIfExists(tempFile);
+            }
+        }
     }
 
     private Path chunkFile(Path chunksRoot, String dimensionId, ChunkPoint chunk) {
