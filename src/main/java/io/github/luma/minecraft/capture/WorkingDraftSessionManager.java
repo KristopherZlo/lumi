@@ -238,8 +238,16 @@ final class WorkingDraftSessionManager {
                 .isPresent();
     }
 
+    boolean hasPendingDraftFlush(String projectId) {
+        return this.persistenceCoordinator.hasPendingDraftFlush(projectId);
+    }
+
     Optional<TrackedChangeBuffer> freezeAfterReconciliation(String projectId, TrackedProject trackedProject) throws IOException {
         return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.ALL);
+    }
+
+    Optional<TrackedChangeBuffer> freezeIdleAfterReconciliation(String projectId, TrackedProject trackedProject) throws IOException {
+        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY);
     }
 
     Optional<TrackedChangeBuffer> freezeForShutdownAfterReconciliation(
@@ -317,7 +325,7 @@ final class WorkingDraftSessionManager {
 
     Optional<TrackedChangeBuffer> consumeAfterReconciliation(String projectId, TrackedProject trackedProject) throws IOException {
         if (trackedProject != null) {
-            this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
+            this.persistenceCoordinator.drainDraftFlushes(projectId, trackedProject.project().name());
         }
         TrackedChangeBuffer session = this.sessionRegistry.removeBuffer(projectId);
         this.sessionRegistry.close(projectId);

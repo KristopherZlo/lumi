@@ -727,6 +727,19 @@ public final class HistoryCaptureManager {
         return this.workingDrafts.freezeAfterReconciliation(projectId, trackedProject);
     }
 
+    private void freezeIdleWorkingDraft(MinecraftServer server, String projectId) throws IOException {
+        this.serverThreadExecutor.run(server, () -> this.freezeIdleWorkingDraftOnServerThread(server, projectId));
+    }
+
+    private void freezeIdleWorkingDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        CaptureSessionState sessionState = this.workingDrafts.session(projectId);
+        if (trackedProject != null && sessionState != null) {
+            this.reconcileSession(server, trackedProject, sessionState, true);
+        }
+        this.workingDrafts.freezeIdleAfterReconciliation(projectId, trackedProject);
+    }
+
     private Optional<TrackedChangeBuffer> freezeWorkingDraftForShutdownOnServerThread(
             MinecraftServer server,
             String projectId
@@ -820,7 +833,12 @@ public final class HistoryCaptureManager {
             String projectId = entry.getKey();
             TrackedChangeBuffer session = entry.getValue();
             int idleSeconds = idleThresholds.getOrDefault(projectId, 5);
-            if (Duration.between(session.updatedAt(), now).getSeconds() >= idleSeconds) {
+            boolean idle = Duration.between(session.updatedAt(), now).getSeconds() >= idleSeconds;
+            boolean dirty = this.workingDrafts.isDirty(projectId);
+            if (idle && !dirty) {
+                if (this.workingDrafts.hasPendingDraftFlush(projectId)) {
+                    continue;
+                }
                 TrackedProject trackedProject = trackedProjects.get(projectId);
                 if (trackedProject != null) {
                     LumaDebugLog.log(
@@ -836,7 +854,7 @@ public final class HistoryCaptureManager {
                 continue;
             }
 
-            if (!this.workingDrafts.isDirty(projectId)) {
+            if (!dirty) {
                 continue;
             }
 
@@ -869,7 +887,7 @@ public final class HistoryCaptureManager {
 
         for (String projectId : sessionsToFinalize) {
             try {
-                this.finalizeProjectSession(server, projectId);
+                this.freezeIdleWorkingDraft(server, projectId);
             } catch (IOException exception) {
                 LumaMod.LOGGER.warn("Failed to finalize idle session for {}", projectId, exception);
             }

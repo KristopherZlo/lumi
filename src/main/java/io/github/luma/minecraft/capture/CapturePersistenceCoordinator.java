@@ -130,6 +130,15 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         }
     }
 
+    public boolean hasPendingDraftFlush(String projectId) {
+        if (projectId == null || projectId.isBlank()) {
+            return false;
+        }
+        synchronized (this) {
+            return this.pendingDraftFlushes.containsKey(projectId);
+        }
+    }
+
     public void drainProject(String projectId, String projectName) throws IOException {
         long startedAt = System.nanoTime();
         boolean waited = false;
