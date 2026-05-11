@@ -91,10 +91,12 @@ public final class VersionService {
             throw new IllegalStateException("Another world operation is already running");
         }
         this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
-        Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
                 .consumeWorkingDraft(level.getServer(), project.id().toString());
         Optional<RecoveryDraft> liveDraft = liveSession.map(TrackedChangeBuffer::toDraft);
+        Optional<RecoveryDraft> persistedDraft = liveDraft.isPresent()
+                ? Optional.empty()
+                : this.recoveryRepository.loadDraft(layout);
         RecoveryDraft draft = liveDraft
                 .or(() -> persistedDraft)
                 .orElseThrow(() -> new IllegalArgumentException("No pending tracked changes for " + projectName));
@@ -203,13 +205,15 @@ public final class VersionService {
         this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
         timing.record(VersionSaveTiming.RESTORE_INTERRUPTED_DRAFT, sectionStartedAt);
         sectionStartedAt = System.nanoTime();
-        Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
-        timing.record(VersionSaveTiming.LOAD_PERSISTED_DRAFT, sectionStartedAt);
-        sectionStartedAt = System.nanoTime();
         Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
                 .consumeWorkingDraft(level.getServer(), project.id().toString());
         timing.record(VersionSaveTiming.CONSUME_WORKING_DRAFT, sectionStartedAt);
         Optional<RecoveryDraft> liveDraft = liveSession.map(TrackedChangeBuffer::toDraft);
+        sectionStartedAt = System.nanoTime();
+        Optional<RecoveryDraft> persistedDraft = liveDraft.isPresent()
+                ? Optional.empty()
+                : this.recoveryRepository.loadDraft(layout);
+        timing.record(VersionSaveTiming.LOAD_PERSISTED_DRAFT, sectionStartedAt);
         RecoveryDraft draft = liveDraft
                 .or(() -> persistedDraft)
                 .orElseThrow(() -> new IllegalArgumentException("No pending tracked changes for " + projectName));
