@@ -32,6 +32,8 @@ public final class CompareOverlayRenderer {
     private static final float OUTLINE_WIDTH = 2.75F;
     private static final float DENSE_OUTLINE_WIDTH = 1.5F;
     private static final float FACE_OUTSET = 0.003F;
+    private static final float DENSE_FACE_OUTSET = 0.02F;
+    private static final float DENSE_OUTLINE_OUTSET = 0.02F;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final OverlayVolumeMerger VOLUME_MERGER = new OverlayVolumeMerger();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
@@ -351,7 +353,7 @@ public final class CompareOverlayRenderer {
     }
 
     private static void renderOverlay(WorldRenderContext context, OverlayState state) {
-        boolean xrayEnabled = XRAY_ENABLED.get() || state.denseBlob();
+        boolean xrayEnabled = XRAY_ENABLED.get();
         if (context == null) {
             OverlayDiagnostics.getInstance().log(
                     state.debugEnabled(),
@@ -723,8 +725,8 @@ public final class CompareOverlayRenderer {
                         denseFillAlpha,
                         color.argb(0xB3),
                         DENSE_OUTLINE_WIDTH,
-                        FACE_OUTSET,
-                        0.0F
+                        DENSE_FACE_OUTSET,
+                        DENSE_OUTLINE_OUTSET
                 );
             }
             return builder.build();

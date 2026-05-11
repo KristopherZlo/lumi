@@ -136,10 +136,12 @@ class CompareOverlayRendererStateTest {
         assertEquals(changedBlockCount, CompareOverlayRenderer.changedBlockCount());
         assertEquals(0, CompareOverlayRenderer.visibleSurfaceBlockCountForTest(8.5D, 80.5D, 8.5D));
         assertTrue(volumeBoxCount > 1);
-        assertTrue(volumeBoxCount <= 128);
+        assertTrue(volumeBoxCount <= OverlayVolumeMerger.MAX_MERGED_BOXES);
         assertEquals(volumeBoxCount, CompareOverlayRenderer.meshSectionCountForTest());
         assertEquals(volumeBoxCount, CompareOverlayRenderer.meshPrimitiveCountForTest());
-        assertEquals(1, CompareOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 80.5D, 8.5D, 0));
+        int visibleNearCamera = CompareOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 80.5D, 8.5D, 0);
+        assertTrue(visibleNearCamera > 0);
+        assertTrue(visibleNearCamera < volumeBoxCount);
         assertEquals(0, CompareOverlayRenderer.visibleMeshSectionCountForTest(2048.0D, 80.5D, 2048.0D, 0));
     }
 
@@ -152,7 +154,7 @@ class CompareOverlayRendererStateTest {
         assertEquals(327_680, CompareOverlayRenderer.changedBlockCount());
         assertEquals(0, CompareOverlayRenderer.visibleSurfaceBlockCountForTest(8.5D, 80.5D, 8.5D));
         assertTrue(volumeBoxCount > 1);
-        assertTrue(volumeBoxCount <= 128);
+        assertTrue(volumeBoxCount <= OverlayVolumeMerger.MAX_MERGED_BOXES);
         assertEquals(volumeBoxCount, CompareOverlayRenderer.meshPrimitiveCountForTest());
     }
 

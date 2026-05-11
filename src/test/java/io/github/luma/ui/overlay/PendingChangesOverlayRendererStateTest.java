@@ -36,7 +36,7 @@ class PendingChangesOverlayRendererStateTest {
         assertTrue(PendingChangesOverlayRenderer.visible());
         assertEquals(100_064, snapshot.blockChanges().size());
         assertTrue(aggregateBoxCount > 1);
-        assertTrue(aggregateBoxCount <= 128);
+        assertTrue(aggregateBoxCount <= OverlayVolumeMerger.MAX_MERGED_BOXES);
         assertEquals(aggregateBoxCount, PendingChangesOverlayRenderer.meshPrimitiveCountForTest());
     }
 
@@ -54,7 +54,7 @@ class PendingChangesOverlayRendererStateTest {
         assertTrue(PendingChangesOverlayRenderer.visible());
         assertEquals(0, PendingChangesOverlayRenderer.visibleSurfaceEntryCountForTest(8.5D, 80.5D, 8.5D));
         assertTrue(aggregateBoxCount > 1);
-        assertTrue(aggregateBoxCount <= 128);
+        assertTrue(aggregateBoxCount <= OverlayVolumeMerger.MAX_MERGED_BOXES);
         assertEquals(aggregateBoxCount, PendingChangesOverlayRenderer.meshSectionCountForTest());
         assertEquals(aggregateBoxCount, PendingChangesOverlayRenderer.meshPrimitiveCountForTest());
     }

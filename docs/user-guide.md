@@ -468,7 +468,7 @@ Overlay controls:
 - if one side is `current`, the highlight can refresh while you keep editing;
 - very large current-build highlights keep their initial snapshot to avoid client stalls.
 
-Small and moderate diff regions render as a translucent exposed shell with thicker outlines. Extremely large diff regions collapse into merged low-alpha volume blobs and render through blocks so dense edits do not appear missing.
+Small and moderate diff regions render as a translucent exposed shell with thicker outlines. Extremely large diff regions collapse into merged low-alpha volume blobs that are split into short section tiles and slightly offset from block faces so dense edits stay visible in normal mode. Hold the compare x-ray key when you intentionally need to see the highlight through blocks.
 
 The overlay caches section geometry and reuses GPU buffers. It does not rebuild every highlighted block every frame.
 

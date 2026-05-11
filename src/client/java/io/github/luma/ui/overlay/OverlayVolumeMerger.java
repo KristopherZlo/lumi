@@ -14,7 +14,7 @@ final class OverlayVolumeMerger {
 
     private static final int SECTION_SIZE = 16;
     private static final int MAX_EXACT_SECTION_KEYS = 4096;
-    private static final int MAX_MERGED_BOXES = 128;
+    static final int MAX_MERGED_BOXES = 2048;
     private static final int MAX_BOX_SPAN_SECTIONS = 2;
 
     List<OverlayBox> merge(List<BlockPoint> positions) {
