@@ -361,7 +361,7 @@ public final class RestoreService {
             );
         }
 
-        DirectRestorePatchPlan directPlan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
+        DirectRestorePatchPlan directPlan = this.applicableDirectRestorePatchPlan(project, versions, variants, targetVersion);
         if (directPlan != null) {
             return new RestorePlanSummary(
                     RestorePlanMode.PATCH_REPLAY,
@@ -573,7 +573,7 @@ public final class RestoreService {
             int worldMaxY,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
-        DirectRestorePatchPlan directPlan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
+        DirectRestorePatchPlan directPlan = this.applicableDirectRestorePatchPlan(project, versions, variants, targetVersion);
         if (directPlan == null) {
             return this.buildTargetStatePartialRestoreDraft(
                     layout,
@@ -1051,7 +1051,7 @@ public final class RestoreService {
             ServerLevel level,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
-        DirectRestorePatchPlan directPlan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
+        DirectRestorePatchPlan directPlan = this.applicableDirectRestorePatchPlan(project, versions, variants, targetVersion);
         if (directPlan == null) {
             LumaDebugLog.log(project, "restore", "Direct restore unavailable for project {} because no shared patch lineage was found", project.name());
             return Optional.empty();
@@ -1575,6 +1575,16 @@ public final class RestoreService {
         } catch (IllegalArgumentException exception) {
             return null;
         }
+    }
+
+    DirectRestorePatchPlan applicableDirectRestorePatchPlan(
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVersion targetVersion
+    ) {
+        DirectRestorePatchPlan plan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
+        return plan == null || plan.isDivergent() ? null : plan;
     }
 
     private List<ProjectVersion> pathFromHeadToAncestor(

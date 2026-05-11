@@ -182,6 +182,7 @@ class RestoreServiceTest {
         assertEquals(List.of("v0002"), plan.reverseVersions().stream().map(ProjectVersion::id).toList());
         assertEquals(List.of("v0003", "v0004"), plan.forwardVersions().stream().map(ProjectVersion::id).toList());
         assertNull(service.directRestorePatchVersions(project("main"), versions, variants, versions.get(3)));
+        assertNull(service.applicableDirectRestorePatchPlan(project("main"), versions, variants, versions.get(3)));
     }
 
     @Test
