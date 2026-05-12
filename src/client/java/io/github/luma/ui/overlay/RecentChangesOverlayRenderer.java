@@ -17,7 +17,8 @@ import net.minecraft.core.BlockPos;
 
 public final class RecentChangesOverlayRenderer {
 
-    private static final int MAX_SECTION_UPLOADS_PER_FRAME = 48;
+    private static final int MAX_SECTION_UPLOADS_PER_FRAME = 12;
+    private static final int MAX_SECTION_DRAWS_PER_FRAME = 64;
     private static final int MAX_ACTIONS = 10;
     private static final int BASE_ALPHA = 136;
     private static final int ALPHA_STEP = 12;
@@ -257,7 +258,8 @@ public final class RecentChangesOverlayRenderer {
                 CompareOverlayRenderTypes.outline(false),
                 camera,
                 renderDistanceChunks(),
-                MAX_SECTION_UPLOADS_PER_FRAME
+                MAX_SECTION_UPLOADS_PER_FRAME,
+                MAX_SECTION_DRAWS_PER_FRAME
         );
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),

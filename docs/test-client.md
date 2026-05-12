@@ -28,7 +28,7 @@ The test-client Gradle profile always starts with Lumi diagnostics enabled:
 - `-Dlumi.lightLog=true`
 - `-Dlumi.blockApplyLog=true`
 
-Client GameTest launches also rewrite the run-directory `options.txt` sound categories to `0.0` before startup, so local regression runs stay muted. The singleplayer GameTest harness anchors the spawned player on a small barrier pad in the current chunk before waiting for render readiness, which prevents the client camera from spending the run in continuous void fall.
+Client GameTest and test-client launches also rewrite the run-directory `options.txt` sound categories to `0.0`, enable v-sync, and cap `maxFps` at `120` before startup, so local regression runs stay muted and do not saturate the GPU while idle diagnostics are enabled. The singleplayer GameTest harness anchors the spawned player on a small barrier pad in the current chunk before waiting for render readiness, which prevents the client camera from spending the run in continuous void fall.
 
 The load log is written under `run/test-client/logs/lumi-load.log` by default. Restore, undo/redo, and quick rollback runs can emit an automatic `light-refresh` follow-up operation after the block/entity action; runtime checks should treat it as part of the operation window and verify it completes without `runLightUpdates()` thread exceptions.
 Test-client launches also write `run/test-client/logs/lumi-light.log` and `run/test-client/logs/lumi-block-apply.log`. Use the light log for rejoin-only shadow investigations, including dirty-chunk preload, marked chunk counts, and any missing dirty chunks. Use the block-apply log for restore/rollback bottleneck breakdowns by preload, chunk, section path, block entities, and entity operations.

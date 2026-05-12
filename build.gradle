@@ -356,7 +356,7 @@ tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.Client
     useXVFB = System.getProperty('os.name', '').toLowerCase(Locale.ROOT).contains('linux')
 }
 
-def mutedClientAudioOptions = [
+def quietClientRuntimeOptions = [
         'soundCategory_master': '0.0',
         'soundCategory_music': '0.0',
         'soundCategory_record': '0.0',
@@ -367,10 +367,12 @@ def mutedClientAudioOptions = [
         'soundCategory_player': '0.0',
         'soundCategory_ambient': '0.0',
         'soundCategory_voice': '0.0',
-        'soundCategory_ui': '0.0'
+        'soundCategory_ui': '0.0',
+        'enableVsync': 'true',
+        'maxFps': '120'
 ]
 
-def writeMutedClientAudioOptions = { String runDirPath ->
+def writeQuietClientRuntimeOptions = { String runDirPath ->
     File optionsFile = layout.projectDirectory.file("${runDirPath}/options.txt").asFile
     optionsFile.parentFile.mkdirs()
 
@@ -384,7 +386,7 @@ def writeMutedClientAudioOptions = { String runDirPath ->
         }
         updatedValues[line.substring(0, separatorIndex)] = line.substring(separatorIndex + 1)
     }
-    mutedClientAudioOptions.each { key, value ->
+    quietClientRuntimeOptions.each { key, value ->
         updatedValues[key] = value
     }
 
@@ -400,14 +402,14 @@ def writeMutedClientAudioOptions = { String runDirPath ->
         rewrittenLines.add("${key}:${updatedValues[key]}")
         rewrittenKeys.add(key)
     }
-    mutedClientAudioOptions.each { key, value ->
+    quietClientRuntimeOptions.each { key, value ->
         if (!rewrittenKeys.contains(key)) {
             rewrittenLines.add("${key}:${value}")
         }
     }
 
     if (rewrittenLines.isEmpty()) {
-        mutedClientAudioOptions.each { key, value ->
+        quietClientRuntimeOptions.each { key, value ->
             rewrittenLines.add("${key}:${value}")
         }
     }
@@ -424,7 +426,7 @@ def writeMutedClientAudioOptions = { String runDirPath ->
 ].each { taskName, runDirPath ->
     tasks.named(taskName).configure {
         doFirst {
-            writeMutedClientAudioOptions(runDirPath)
+            writeQuietClientRuntimeOptions(runDirPath)
         }
     }
 }

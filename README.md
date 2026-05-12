@@ -237,7 +237,7 @@ Run the test-client profile:
 .\scripts\run-test-client.ps1
 ```
 
-The default test-client profile installs a small Fabric `1.21.11` builder-tool stack for local validation: Fabric API, WorldEdit, and a pinned `Axiom-5.4.1-for-MC1.21.11.jar` Modrinth file. The broader performance-mod stack is available with:
+The default test-client profile installs a small Fabric `1.21.11` builder-tool stack for local validation: Fabric API, WorldEdit, and a pinned `Axiom-5.4.1-for-MC1.21.11.jar` Modrinth file. Test-client launchers also rewrite `options.txt` to mute audio, enable v-sync, and cap `maxFps` at `120` so debug sessions do not idle at uncapped GPU load. The broader performance-mod stack is available with:
 
 ```powershell
 .\scripts\run-test-client.ps1 -FullStack

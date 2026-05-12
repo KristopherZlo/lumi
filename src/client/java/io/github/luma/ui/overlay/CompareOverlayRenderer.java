@@ -21,7 +21,8 @@ public final class CompareOverlayRenderer {
 
     private static final String CURRENT_WORLD_REFERENCE = "current";
     static final int DETAILED_DIFF_RENDER_LIMIT = 50_000;
-    private static final int MAX_SECTION_UPLOADS_PER_FRAME = 64;
+    private static final int MAX_SECTION_UPLOADS_PER_FRAME = 24;
+    private static final int MAX_SECTION_DRAWS_PER_FRAME = 96;
     private static final float NORMAL_FILL_ALPHA = 48.0F;
     private static final float XRAY_FILL_ALPHA = 96.0F;
     private static final float DENSE_NORMAL_FILL_ALPHA = 32.0F;
@@ -385,7 +386,8 @@ public final class CompareOverlayRenderer {
                 CompareOverlayRenderTypes.outline(xrayEnabled),
                 camera,
                 renderDistanceChunks(),
-                MAX_SECTION_UPLOADS_PER_FRAME
+                MAX_SECTION_UPLOADS_PER_FRAME,
+                MAX_SECTION_DRAWS_PER_FRAME
         );
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),

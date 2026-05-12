@@ -1,28 +1,25 @@
-package io.github.luma.mixin;
+package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.WorldMutationSource;
-import io.github.luma.minecraft.capture.WorldMutationContext;
 
-final class GrowthMutationSourceScope {
+/**
+ * Opens the capture source used by growth hooks without placing helper types in
+ * the Mixin-owned package.
+ */
+public final class GrowthMutationSourceScope {
 
     private GrowthMutationSourceScope() {
     }
 
-    static void runAmbient(GrowthCall call) {
+    public static void runAmbient(Runnable action) {
         try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.GROWTH)) {
-            call.run();
+            action.run();
         }
     }
 
-    static void runCausal(GrowthCall call) {
+    public static void runCausal(Runnable action) {
         try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushCausalSource(WorldMutationSource.GROWTH)) {
-            call.run();
+            action.run();
         }
-    }
-
-    @FunctionalInterface
-    interface GrowthCall {
-
-        void run();
     }
 }
