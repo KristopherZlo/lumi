@@ -347,7 +347,7 @@ public final class WorldOperationManager {
     private WorldApplyBudget currentTickBudget(ActiveOperation operation) {
         double fraction = operation.snapshot().progress().fraction();
         WorldApplyProfile profile = this.applyProfile(operation);
-        return this.budgetPlanner.plan(fraction, operation.adaptiveScale(), profile);
+        return operation.planBudget(this.budgetPlanner, fraction, profile);
     }
 
     private WorldApplyProfile applyProfile(ActiveOperation operation) {
@@ -437,8 +437,7 @@ public final class WorldOperationManager {
         private volatile OperationSnapshot snapshot;
         private volatile OperationStage lastLoggedStage;
         private volatile int lastLoggedPercent = -1;
-        private volatile double adaptiveScale = 1.0D;
-        private final OperationLoadPolicy loadPolicy = new OperationLoadPolicy();
+        protected final WorldApplyPerformanceGovernor performanceGovernor = new WorldApplyPerformanceGovernor();
 
         private ActiveOperation(ServerLevel level, OperationHandle handle, String unitLabel) {
             this.level = level;
@@ -475,16 +474,29 @@ public final class WorldOperationManager {
         }
 
         protected double adaptiveScale() {
-            return this.adaptiveScale;
+            return this.performanceGovernor.adaptiveScale();
+        }
+
+        protected WorldApplyBudget planBudget(
+                WorldApplyBudgetPlanner planner,
+                double progressFraction,
+                WorldApplyProfile profile
+        ) {
+            return this.performanceGovernor.planBudget(
+                    planner,
+                    progressFraction,
+                    profile,
+                    this.minimumAdaptiveScale(),
+                    this.maximumAdaptiveScale()
+            );
         }
 
         protected void recordAdvanceCost(long elapsedNanos, long budgetNanos) {
-            this.adaptiveScale = this.loadPolicy.nextAdaptiveScale(
-                    this.adaptiveScale,
-                    this.minimumAdaptiveScale(),
-                    this.maximumAdaptiveScale(),
+            this.performanceGovernor.recordTick(
                     elapsedNanos,
-                    budgetNanos
+                    budgetNanos,
+                    this.minimumAdaptiveScale(),
+                    this.maximumAdaptiveScale()
             );
         }
 
@@ -670,8 +682,6 @@ public final class WorldOperationManager {
         private final RedstoneReplayUpdateQueue redstoneUpdateQueue = new RedstoneReplayUpdateQueue();
         private final ExactReplayStateQueue exactReplayStateQueue = new ExactReplayStateQueue();
         private final WorldApplyNoOpPruner noOpPruner = new WorldApplyNoOpPruner();
-        private final WorldApplyChunkCostTracker chunkCostTracker = new WorldApplyChunkCostTracker();
-        private long currentBatchActiveNanos;
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -784,16 +794,6 @@ public final class WorldOperationManager {
                         break;
                     }
                     this.currentBatch = this.pruneNoOpBatch(this.currentBatch);
-                    if (this.chunkCostTracker.shouldDeferChunk(
-                            this.currentBatch,
-                            budget,
-                            System.nanoTime() - applyTickStartedAt,
-                            processedWorkThisTick
-                    )) {
-                        stopReason = "chunk-cost-budget";
-                        break;
-                    }
-                    startedChunksThisTick += 1;
                     this.currentNativeSections = this.currentBatch.orderedNativeSections();
                     this.currentSections = this.currentBatch.orderedSections();
                     this.currentBlockEntities = List.copyOf(this.currentBatch.blockEntities().entrySet());
@@ -805,7 +805,19 @@ public final class WorldOperationManager {
                     this.entityIndex = 0;
                     this.blockEntitiesApplied = false;
                     this.entitiesApplied = false;
-                    this.currentBatchActiveNanos = 0L;
+                    WorldApplyPerformanceGovernor.ChunkStartDecision chunkStartDecision =
+                            this.performanceGovernor.evaluateChunkStart(
+                                    this.currentBatch,
+                                    budget,
+                                    System.nanoTime() - applyTickStartedAt,
+                                    processedWorkThisTick
+                            );
+                    if (!chunkStartDecision.allowed()) {
+                        stopReason = "chunk-cost-" + chunkStartDecision.reason();
+                        this.logChunkCostDefer(chunkStartDecision);
+                        break;
+                    }
+                    startedChunksThisTick += 1;
                     if (this.debugApplyEnabled()) {
                         LumaDebugLog.log(
                                 this.handle(),
@@ -845,7 +857,6 @@ public final class WorldOperationManager {
                 }
 
                 AppliedWork processed;
-                long stepStartedAt = System.nanoTime();
                 try (
                         WorldMutationContext.SourceFrame ignoredSource =
                                 WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
@@ -874,7 +885,6 @@ public final class WorldOperationManager {
                         }
                         WorldLightUpdateContext.pop();
                         WorldRedstoneReplayUpdateContext.pop();
-                        this.currentBatchActiveNanos += System.nanoTime() - stepStartedAt;
                     }
                 }
 
@@ -884,6 +894,11 @@ public final class WorldOperationManager {
                 }
 
                 this.appliedWorkUnits += processed.workUnits();
+                this.performanceGovernor.recordWork(
+                        processed.kind(),
+                        processed.costUnits(),
+                        processed.elapsedNanos()
+                );
                 processedWorkThisTick += processed.workUnits();
                 processedNativeSectionsThisTick += processed.nativeSections();
                 processedNativeCellsThisTick += processed.nativeCells();
@@ -912,14 +927,12 @@ public final class WorldOperationManager {
                     }
                     finishedChunksThisTick += 1;
                     this.exactReplayStateQueue.record(this.currentBatch);
-                    this.chunkCostTracker.recordChunk(this.currentBatch, this.currentBatchActiveNanos);
                     this.logBlockApplyChunkFinish(this.currentBatch);
                     this.currentBatch = null;
                     this.currentNativeSections = List.of();
                     this.currentSections = List.of();
                     this.currentBlockEntities = List.of();
                     this.nativeSectionCursor = null;
-                    this.currentBatchActiveNanos = 0L;
                 }
             }
             if (System.nanoTime() >= deadlineNanos && !"dispatcher-empty".equals(stopReason)) {
@@ -1014,6 +1027,7 @@ public final class WorldOperationManager {
                     result.outstandingTickets(),
                     result.syncFallbackLoads()
             );
+            this.performanceGovernor.recordWork(ApplyWorkKind.PRELOAD_SYNC, result.syncFallbackLoads(), elapsedNanos);
             this.progressSink().update(
                     OperationStage.PRELOADING,
                     result.completedChunks(),
@@ -1167,6 +1181,7 @@ public final class WorldOperationManager {
             long elapsedNanos = System.nanoTime() - startedAt;
             this.applyMetrics.recordRedstoneUpdates(appliedUpdates);
             this.applyMetrics.recordRedstoneDrainTick(elapsedNanos);
+            this.performanceGovernor.recordWork(ApplyWorkKind.REDSTONE_DRAIN, appliedUpdates, elapsedNanos);
             LumaLoadLog.record(
                     "world-op",
                     this.handle().label() + ".redstoneDrainTick",
@@ -1290,6 +1305,37 @@ public final class WorldOperationManager {
                             + ", blockEntities=" + this.currentBlockEntities.size()
                             + ", entityOps=" + BlockChangeApplier.entityOperationCount(batch.entityBatch())
             );
+        }
+
+        private void logChunkCostDefer(WorldApplyPerformanceGovernor.ChunkStartDecision decision) {
+            if (decision == null || this.currentBatch == null) {
+                return;
+            }
+            if (this.debugApplyEnabled()) {
+                LumaDebugLog.log(
+                        this.handle(),
+                        "world-op-apply",
+                        "Deferred chunk {}:{} reason={} predictedMicros={} tickPressure={} adaptiveScale={}",
+                        this.currentBatch.chunk().x(),
+                        this.currentBatch.chunk().z(),
+                        decision.reason(),
+                        decision.predictedNanos() / 1_000L,
+                        decision.tickPressure(),
+                        this.adaptiveScale()
+                );
+            }
+            if (this.blockApplyDiagnosticsEnabled()) {
+                LumaDiagnosticsLog.blockApplyEvent(
+                        "chunk-defer",
+                        "label=" + this.handle().label()
+                                + ", operationId=" + this.handle().id()
+                                + ", chunk=" + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z()
+                                + ", deferReason=" + decision.reason()
+                                + ", predictedCostMs=" + (decision.predictedNanos() / 1_000_000L)
+                                + ", tickPressure=" + decision.tickPressure()
+                                + ", adaptiveScale=" + this.adaptiveScale()
+                );
+            }
         }
 
         private void logBlockApplyChunkFinish(ChunkBatch batch) {
@@ -1489,7 +1535,14 @@ public final class WorldOperationManager {
                         completedNativeSections,
                         nativeCells,
                         completedRewriteSections,
-                        0
+                        0,
+                        nativeSection.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE
+                                ? ApplyWorkKind.SECTION_REWRITE
+                                : ApplyWorkKind.SECTION_NATIVE,
+                        nativeSection.safetyProfile().path() == SectionApplyPath.SECTION_REWRITE
+                                ? completedRewriteSections
+                                : result.processedCells(),
+                        elapsedNanos
                 );
             }
 
@@ -1548,7 +1601,10 @@ public final class WorldOperationManager {
                         0,
                         0,
                         0,
-                        result.commitResult().directSections()
+                        result.commitResult().directSections(),
+                        ApplyWorkKind.SPARSE_DIRECT,
+                        result.processedBlocks(),
+                        elapsedNanos
                 );
             }
 
@@ -1598,7 +1654,7 @@ public final class WorldOperationManager {
                                         + ", completed=" + this.blockEntitiesApplied
                         );
                     }
-                    return new AppliedWork(processed, 0, 0, 0, 0);
+                    return new AppliedWork(processed, 0, 0, 0, 0, ApplyWorkKind.BLOCK_ENTITY, processed, elapsedNanos);
                 }
             }
 
@@ -1650,7 +1706,7 @@ public final class WorldOperationManager {
                                     + ", completed=" + this.entitiesApplied
                     );
                 }
-                return new AppliedWork(processed, 0, 0, 0, 0);
+                return new AppliedWork(processed, 0, 0, 0, 0, ApplyWorkKind.ENTITY, processed, elapsedNanos);
             }
 
             return AppliedWork.none();
@@ -1811,11 +1867,14 @@ public final class WorldOperationManager {
                 int nativeSections,
                 int nativeCells,
                 int rewriteSections,
-                int directSections
+                int directSections,
+                ApplyWorkKind kind,
+                int costUnits,
+                long elapsedNanos
         ) {
 
             private static AppliedWork none() {
-                return new AppliedWork(0, 0, 0, 0, 0);
+                return new AppliedWork(0, 0, 0, 0, 0, ApplyWorkKind.UNKNOWN, 0, 0L);
             }
         }
     }
@@ -2068,6 +2127,7 @@ public final class WorldOperationManager {
             this.applyMetrics.recordLightChecks(appliedChecks);
             this.applyMetrics.recordLightDrainTick(elapsedNanos);
             this.applyMetrics.recordApplyTick(appliedChecks, elapsedNanos);
+            this.performanceGovernor.recordWork(ApplyWorkKind.LIGHT_DRAIN, appliedChecks, elapsedNanos);
             LumaLoadLog.record(
                     "world-op",
                     this.handle().label() + ".lightDrainTick",
