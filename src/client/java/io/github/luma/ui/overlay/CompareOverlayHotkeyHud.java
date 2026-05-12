@@ -17,10 +17,10 @@ public final class CompareOverlayHotkeyHud {
             LumaMod.MOD_ID,
             "compare_overlay_hotkeys"
     );
-    private static final int CARD_WIDTH = 164;
-    private static final int CARD_HEIGHT = 52;
+    private static final int CARD_WIDTH = 180;
+    private static final int CARD_HEIGHT = 68;
     private static final int MARGIN = 8;
-    private static final int ROW_GAP = 16;
+    private static final int ROW_GAP = 22;
 
     private CompareOverlayHotkeyHud() {
     }
@@ -47,11 +47,11 @@ public final class CompareOverlayHotkeyHud {
         int y = Math.max(MARGIN, graphics.guiHeight() - CARD_HEIGHT - MARGIN);
 
         RoundedHudRenderer.card(graphics, x, y, CARD_WIDTH, CARD_HEIGHT);
-        graphics.drawString(font, Component.literal("Compare Overlay"), x + 8, y + 6, RoundedHudRenderer.TEXT, false);
+        graphics.drawString(font, Component.literal("Compare Overlay"), x + 10, y + 7, RoundedHudRenderer.TEXT, false);
 
-        int rowY = y + 20;
-        shortcutRow(graphics, font, x + 8, rowY, null, LumiClientKeyBindings.key(LumiClientKeyBindings.Role.COMPARE), "H", "Show/Hide");
-        shortcutRow(graphics, font, x + 8, rowY + ROW_GAP, "Hold", LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION), "Alt", "X-Ray");
+        int rowY = y + 25;
+        shortcutRow(graphics, font, x + 10, rowY, null, LumiClientKeyBindings.key(LumiClientKeyBindings.Role.COMPARE), "H", "Show/Hide");
+        shortcutRow(graphics, font, x + 10, rowY + ROW_GAP, "Hold", LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION), "Alt", "X-Ray");
     }
 
     private static boolean shouldRender(Minecraft client) {
@@ -78,6 +78,6 @@ public final class CompareOverlayHotkeyHud {
         }
         cursor += RoundedHudRenderer.key(graphics, key, cursor, y, fallback, true);
         int textX = cursor + 4;
-        graphics.drawString(font, Component.literal(": " + action), textX, y + 3, RoundedHudRenderer.MUTED, false);
+        graphics.drawString(font, Component.literal(": " + action), textX, y + 6, RoundedHudRenderer.MUTED, false);
     }
 }

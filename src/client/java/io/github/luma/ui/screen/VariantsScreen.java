@@ -28,6 +28,7 @@ import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -245,14 +246,14 @@ public final class VariantsScreen extends LumaScreen {
         switchButton.active(!active && !this.operationActive());
         actions.child(switchButton);
 
-        actions.child(LumaUi.button(Component.translatable("luma.action.open_saves"), button -> this.router.openProjectIgnoringRecovery(
+        actions.child(LumaUi.iconButton("folder-open", Component.translatable("luma.action.open_saves"), button -> this.router.openProjectIgnoringRecovery(
                 this.parent,
                 this.projectName,
                 variant.id(),
                 "luma.status.project_ready"
         )));
 
-        ButtonComponent compareButton = LumaUi.button(Component.translatable("luma.action.see_changes"), button -> this.router.openCompare(
+        ButtonComponent compareButton = LumaUi.iconButton("eye", Component.translatable("luma.action.see_changes"), button -> this.router.openCompare(
                 this,
                 this.projectName,
                 variant.headVersionId(),
@@ -269,11 +270,12 @@ public final class VariantsScreen extends LumaScreen {
         mergeButton.active(!active && headVersion != null && !this.operationActive());
         actions.child(mergeButton);
 
+        boolean protectedMain = variant.main() || Objects.equals("main", variant.id());
         ButtonComponent deleteButton = LumaUi.iconButton("trash-2", Component.translatable("luma.action.delete_branch"), button -> {
             String result = this.actionController.deleteVariant(this.projectName, variant.id());
             this.refresh(result);
         });
-        deleteButton.active(!active && !variant.main() && !"main".equals(variant.id()) && !this.operationActive());
+        deleteButton.active(!active && !protectedMain && !this.operationActive());
         actions.child(deleteButton);
         card.child(actions);
         return card;

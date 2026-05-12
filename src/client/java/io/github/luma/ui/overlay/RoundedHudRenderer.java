@@ -17,9 +17,8 @@ public final class RoundedHudRenderer {
     private static final int CARD_BORDER = 0x803B4650;
     private static final int CHIP_FILL = 0xD20E1117;
     private static final int CHIP_BORDER = 0xB8A8B0BA;
-    private static final int RADIUS = 6;
+    private static final int RADIUS = 4;
     private static final int CHIP_RADIUS = 3;
-    private static final int COMPACT_KEY_HEIGHT = 14;
 
     private RoundedHudRenderer() {
     }
@@ -34,7 +33,7 @@ public final class RoundedHudRenderer {
 
     public static int keyWidth(KeyMapping key, String fallback, boolean compact) {
         return KeyGlyphResolver.resolve(key)
-                .map(glyph -> compact ? compactWidth(glyph) : glyph.frameWidth())
+                .map(KeyGlyph::frameWidth)
                 .orElseGet(() -> textChipWidth(fallback, compact));
     }
 
@@ -45,8 +44,6 @@ public final class RoundedHudRenderer {
     public static int key(GuiGraphics graphics, KeyMapping key, int x, int y, String fallback, boolean compact) {
         return KeyGlyphResolver.resolve(key)
                 .map(glyph -> {
-                    int width = compact ? compactWidth(glyph) : glyph.frameWidth();
-                    int height = compact ? COMPACT_KEY_HEIGHT : glyph.height();
                     graphics.blit(
                             RenderPipelines.GUI_TEXTURED,
                             glyph.textureId(),
@@ -54,14 +51,14 @@ public final class RoundedHudRenderer {
                             y,
                             0,
                             0,
-                            width,
-                            height,
-                            width,
-                            height,
+                            glyph.frameWidth(),
+                            glyph.height(),
+                            glyph.frameWidth(),
+                            glyph.height(),
                             glyph.textureWidth(),
                             glyph.height()
                     );
-                    return width;
+                    return glyph.frameWidth();
                 })
                 .orElseGet(() -> textChip(graphics, fallback, x, y, compact));
     }
@@ -72,7 +69,7 @@ public final class RoundedHudRenderer {
 
     public static int textChipWidth(String text, boolean compact) {
         Font font = Minecraft.getInstance().font;
-        return Math.max(compact ? 13 : 19, font.width(text) + (compact ? 8 : 10));
+        return Math.max(compact ? 17 : 19, font.width(text) + (compact ? 8 : 10));
     }
 
     public static int textChip(GuiGraphics graphics, String text, int x, int y) {
@@ -82,14 +79,10 @@ public final class RoundedHudRenderer {
     public static int textChip(GuiGraphics graphics, String text, int x, int y, boolean compact) {
         Font font = Minecraft.getInstance().font;
         int width = textChipWidth(text, compact);
-        int height = compact ? COMPACT_KEY_HEIGHT : 21;
+        int height = 21;
         roundedRect(graphics, x, y, width, height, CHIP_RADIUS, CHIP_FILL, CHIP_BORDER);
-        graphics.drawString(font, text, x + ((width - font.width(text)) / 2), y + (compact ? 3 : 6), TEXT, false);
+        graphics.drawString(font, text, x + ((width - font.width(text)) / 2), y + 6, TEXT, false);
         return width;
-    }
-
-    private static int compactWidth(KeyGlyph glyph) {
-        return Math.max(13, Math.round(glyph.frameWidth() * (COMPACT_KEY_HEIGHT / (float) glyph.height())));
     }
 
     public static void roundedRect(GuiGraphics graphics, int x, int y, int width, int height, int radius, int fill, int border) {

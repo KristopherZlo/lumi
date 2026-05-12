@@ -278,7 +278,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         restoreButton.active(!operationActive);
         actions.child(restoreButton);
 
-        actions.child(LumaUi.button(Component.translatable("luma.action.compare_with_current"), button -> {
+        actions.child(LumaUi.iconButton("eye", Component.translatable("luma.action.compare_with_current"), button -> {
             SaveDetailsCompareTarget.Target target = SaveDetailsCompareTarget.seeChangesTarget(
                     this.state.project(),
                     this.state.versions(),
@@ -295,7 +295,7 @@ public final class SaveDetailsScreen extends LumaScreen {
             );
         }));
 
-        ButtonComponent comparePrevious = LumaUi.button(Component.translatable("luma.action.compare_with_parent"), button -> this.router.openCompare(
+        ButtonComponent comparePrevious = LumaUi.iconButton("eye", Component.translatable("luma.action.compare_with_parent"), button -> this.router.openCompare(
                 this,
                 this.projectName,
                 this.parentVersionId(version.id()),

@@ -322,10 +322,11 @@ public final class LumaUi {
 
     public static ButtonComponent iconButton(String iconName, Component tooltip, Consumer<ButtonComponent> onPress) {
         Identifier icon = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/" + iconName + ".png");
+        Identifier disabledIcon = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/" + iconName + "_disabled.png");
         ButtonComponent button = styledButton(Component.empty(), onPress, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED);
-        button.sizing(Sizing.fixed(22), Sizing.fixed(20));
+        button.sizing(Sizing.fixed(28), Sizing.fixed(18));
         button.tooltip(tooltip);
-        button.renderer(new IconButtonRenderer(icon, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED));
+        button.renderer(new IconButtonRenderer(icon, disabledIcon, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED));
         return button;
     }
 

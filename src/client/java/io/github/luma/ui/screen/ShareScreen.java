@@ -271,7 +271,7 @@ public final class ShareScreen extends LumaScreen {
         )));
 
         FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.button(Component.translatable("luma.action.open_project"), button -> this.router.openProjectIgnoringRecovery(
+        actions.child(LumaUi.iconButton("folder-open", Component.translatable("luma.action.open_project"), button -> this.router.openProjectIgnoringRecovery(
                 this,
                 importedProject.projectName()
         )));

@@ -342,8 +342,23 @@ public final class ProjectScreenSections {
         });
         restoreButton.active(versionVariant != null && !operationActive);
         saveActions.child(restoreButton);
+        ButtonComponent deleteButton = LumaUi.iconButton("trash-2", Component.translatable("luma.action.delete_save"), button -> this.actions.openSaveDetails(version.id()));
+        deleteButton.active(canDeleteVersion(model, version) && !operationActive);
+        saveActions.child(deleteButton);
         card.child(saveActions);
         return card;
+    }
+
+    private static boolean canDeleteVersion(Model model, ProjectVersion version) {
+        if (version == null
+                || version.versionKind() == VersionKind.INITIAL
+                || version.versionKind() == VersionKind.WORLD_ROOT
+                || version.parentVersionId() == null
+                || version.parentVersionId().isBlank()) {
+            return false;
+        }
+        return model.state().versions().stream()
+                .noneMatch(candidate -> version.id().equals(candidate.parentVersionId()));
     }
 
     private boolean operationActive(Model model) {

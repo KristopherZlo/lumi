@@ -120,18 +120,18 @@ public final class LumiRegionSelectionTeachingController {
                 new Row(List.of("ACTION", "RMB"), "Clear"),
                 new Row(List.of("ACTION", "Scroll"), "Mode")
         );
-        int lineHeight = 16;
+        int lineHeight = 23;
         int width = rows.stream()
                 .mapToInt(row -> this.rowWidth(font, row))
                 .max()
-                .orElse(1) + 16;
-        int height = (rows.size() * lineHeight) + 8;
+                .orElse(1) + 20;
+        int height = (rows.size() * lineHeight) + 10;
         int x = 8;
         int y = Math.max(8, graphics.guiHeight() - height - 8 - CompareOverlayHotkeyHud.reservedBottomHeight());
 
         RoundedHudRenderer.card(graphics, x, y, width, height);
         for (int index = 0; index < rows.size(); index++) {
-            this.drawRow(graphics, font, rows.get(index), x + 8, y + 4 + (index * lineHeight));
+            this.drawRow(graphics, font, rows.get(index), x + 10, y + 5 + (index * lineHeight));
         }
     }
 
@@ -164,7 +164,7 @@ public final class LumiRegionSelectionTeachingController {
                     ? RoundedHudRenderer.key(graphics, this.cachedActionKey, cursor, y, "Alt", true)
                     : RoundedHudRenderer.textChip(graphics, key, cursor, y, true);
         }
-        graphics.drawString(font, Component.literal(": " + row.text()), cursor + 4, y + 3, RoundedHudRenderer.MUTED, false);
+        graphics.drawString(font, Component.literal(": " + row.text()), cursor + 4, y + 6, RoundedHudRenderer.MUTED, false);
     }
 
     private KeyMapping actionKey() {

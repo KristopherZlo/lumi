@@ -223,20 +223,20 @@ public final class WorkspaceHudCoordinator {
         int plusWidth = client.font.width(plusText);
         int minusWidth = client.font.width(minusText);
         int countersWidth = counterLabelWidth + 4 + plusWidth + 8 + minusWidth;
-        int boxHeight = branchText.isBlank() ? 32 : 42;
-        int boxWidth = Math.max(Math.max(titleWidth, placeWidth), Math.max(branchWidth, countersWidth)) + 16;
+        int boxHeight = branchText.isBlank() ? 34 : 46;
+        int boxWidth = Math.max(Math.max(titleWidth, placeWidth), Math.max(branchWidth, countersWidth)) + 20;
         int x = drawContext.guiWidth() - boxWidth - 8;
         int y = 8;
 
         RoundedHudRenderer.card(drawContext, x, y, boxWidth, boxHeight);
-        drawContext.drawString(client.font, titleText, x + 8, y + 4, RoundedHudRenderer.TEXT, false);
-        drawContext.drawString(client.font, placeText, x + 8, y + 13, 0xFFA8B2BE, false);
-        int counterY = y + 22;
+        drawContext.drawString(client.font, titleText, x + 10, y + 5, RoundedHudRenderer.TEXT, false);
+        drawContext.drawString(client.font, placeText, x + 10, y + 15, 0xFFA8B2BE, false);
+        int counterY = y + 25;
         if (!branchText.isBlank()) {
-            drawContext.drawString(client.font, branchText, x + 8, y + 22, 0xFFA8B2BE, false);
-            counterY = y + 32;
+            drawContext.drawString(client.font, branchText, x + 10, y + 25, 0xFFA8B2BE, false);
+            counterY = y + 36;
         }
-        int counterX = x + 8;
+        int counterX = x + 10;
         drawContext.drawString(client.font, counterLabel, counterX, counterY, 0xFFA8B2BE, false);
         int plusX = counterX + counterLabelWidth + 4;
         drawContext.drawString(client.font, plusText, plusX, counterY, 0xFF69E38A, false);
