@@ -223,21 +223,21 @@ public final class WorkspaceHudCoordinator {
         int plusWidth = client.font.width(plusText);
         int minusWidth = client.font.width(minusText);
         int countersWidth = counterLabelWidth + 4 + plusWidth + 8 + minusWidth;
-        int boxHeight = branchText.isBlank() ? 34 : 44;
-        int boxWidth = Math.max(Math.max(titleWidth, placeWidth), Math.max(branchWidth, countersWidth)) + 12;
+        int boxHeight = branchText.isBlank() ? 32 : 42;
+        int boxWidth = Math.max(Math.max(titleWidth, placeWidth), Math.max(branchWidth, countersWidth)) + 16;
         int x = drawContext.guiWidth() - boxWidth - 8;
         int y = 8;
 
-        drawContext.fill(x, y, x + boxWidth, y + boxHeight, 0x7A0B1016);
-        drawContext.drawString(client.font, titleText, x + 6, y + 4, 0xFFF3F7FA, true);
-        drawContext.drawString(client.font, placeText, x + 6, y + 14, 0xFF98A6B3, false);
-        int counterY = y + 24;
+        RoundedHudRenderer.card(drawContext, x, y, boxWidth, boxHeight);
+        drawContext.drawString(client.font, titleText, x + 8, y + 4, RoundedHudRenderer.TEXT, false);
+        drawContext.drawString(client.font, placeText, x + 8, y + 13, 0xFFA8B2BE, false);
+        int counterY = y + 22;
         if (!branchText.isBlank()) {
-            drawContext.drawString(client.font, branchText, x + 6, y + 24, 0xFF98A6B3, false);
-            counterY = y + 34;
+            drawContext.drawString(client.font, branchText, x + 8, y + 22, 0xFFA8B2BE, false);
+            counterY = y + 32;
         }
-        int counterX = x + 6;
-        drawContext.drawString(client.font, counterLabel, counterX, counterY, 0xFF98A6B3, false);
+        int counterX = x + 8;
+        drawContext.drawString(client.font, counterLabel, counterX, counterY, 0xFFA8B2BE, false);
         int plusX = counterX + counterLabelWidth + 4;
         drawContext.drawString(client.font, plusText, plusX, counterY, 0xFF69E38A, false);
         drawContext.drawString(client.font, minusText, plusX + plusWidth + 8, counterY, 0xFFFF7373, false);

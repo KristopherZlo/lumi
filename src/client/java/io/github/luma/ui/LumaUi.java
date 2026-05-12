@@ -14,7 +14,6 @@ import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.function.Consumer;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
@@ -43,7 +42,6 @@ public final class LumaUi {
     private static final int PRIMARY_BUTTON_HOVER = 0xFF936D29;
     private static final int STATUS_FILL = 0xFF211F18;
     private static final int STATUS_BORDER = 0xFF5A4724;
-    private static final int ROUNDED_RADIUS = 5;
     private static final int BUTTON_WRAP_BOTTOM_MARGIN = 4;
     private static final int VALUE_WRAP_WIDTH = 420;
     private static final int BODY_WRAP_WIDTH = 360;
@@ -259,7 +257,7 @@ public final class LumaUi {
 
     public static FlowLayout statChip(Component label, Component value) {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-        chip.surface(roundedSurface(CHIP_FILL, CHIP_BORDER, ROUNDED_RADIUS));
+        chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
         chip.padding(Insets.of(3));
         chip.gap(4);
         chip.child(statValue(value));
@@ -327,15 +325,7 @@ public final class LumaUi {
         ButtonComponent button = styledButton(Component.empty(), onPress, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED);
         button.sizing(Sizing.fixed(22), Sizing.fixed(20));
         button.tooltip(tooltip);
-        button.renderer((context, component, delta) -> {
-            int fill = component.active()
-                    ? component.isHovered() ? BUTTON_HOVER : BUTTON_FILL
-                    : BUTTON_DISABLED;
-            drawRoundedRect(context, component.getX(), component.getY(), component.getWidth(), component.getHeight(), ROUNDED_RADIUS, fill, CHIP_BORDER);
-            int iconX = component.getX() + ((component.getWidth() - 16) / 2);
-            int iconY = component.getY() + ((component.getHeight() - 16) / 2);
-            context.blit(RenderPipelines.GUI_TEXTURED, icon, iconX, iconY, 0, 0, 16, 16, 16, 16, 16, 16);
-        });
+        button.renderer(new IconButtonRenderer(icon, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED));
         return button;
     }
 
@@ -393,65 +383,5 @@ public final class LumaUi {
 
     private static LabelComponent statLabel(Component text) {
         return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(108);
-    }
-
-    private static Surface roundedSurface(int fill, int border, int radius) {
-        return (context, component) -> drawRoundedRect(
-                context,
-                component.x(),
-                component.y(),
-                component.width(),
-                component.height(),
-                radius,
-                fill,
-                border
-        );
-    }
-
-    private static void drawRoundedRect(
-            io.wispforest.owo.ui.core.OwoUIGraphics graphics,
-            int x,
-            int y,
-            int width,
-            int height,
-            int radius,
-            int fill,
-            int border
-    ) {
-        fillRounded(graphics, x, y, width, height, radius, border);
-        fillRounded(graphics, x + 1, y + 1, width - 2, height - 2, Math.max(1, radius - 1), fill);
-    }
-
-    private static void fillRounded(
-            io.wispforest.owo.ui.core.OwoUIGraphics graphics,
-            int x,
-            int y,
-            int width,
-            int height,
-            int radius,
-            int color
-    ) {
-        if (width <= 0 || height <= 0) {
-            return;
-        }
-        int clampedRadius = Math.max(0, Math.min(radius, Math.min(width, height) / 2));
-        for (int row = 0; row < height; row++) {
-            int inset = roundedInset(row, height, clampedRadius);
-            graphics.fill(x + inset, y + row, x + width - inset, y + row + 1, color);
-        }
-    }
-
-    private static int roundedInset(int row, int height, int radius) {
-        if (radius <= 0) {
-            return 0;
-        }
-        int topDistance = radius - row;
-        int bottomDistance = row - (height - radius - 1);
-        int distance = Math.max(topDistance, bottomDistance);
-        if (distance <= 0) {
-            return 0;
-        }
-        double inside = Math.max(0.0D, (radius * radius) - (distance * distance));
-        return Math.max(0, (int) Math.ceil(radius - Math.sqrt(inside)));
     }
 }

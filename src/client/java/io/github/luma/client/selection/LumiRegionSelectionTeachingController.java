@@ -117,21 +117,21 @@ public final class LumiRegionSelectionTeachingController {
         List<Row> rows = List.of(
                 new Row(List.of("LMB"), "First corner"),
                 new Row(List.of("RMB"), "Second corner"),
-                new Row(List.of("ACTION", "RMB"), "Clear selection"),
-                new Row(List.of("ACTION", "Scroll"), "Selection mode")
+                new Row(List.of("ACTION", "RMB"), "Clear"),
+                new Row(List.of("ACTION", "Scroll"), "Mode")
         );
-        int lineHeight = 24;
+        int lineHeight = 16;
         int width = rows.stream()
                 .mapToInt(row -> this.rowWidth(font, row))
                 .max()
-                .orElse(1) + 28;
-        int height = (rows.size() * lineHeight) + 12;
+                .orElse(1) + 16;
+        int height = (rows.size() * lineHeight) + 8;
         int x = 8;
         int y = Math.max(8, graphics.guiHeight() - height - 8 - CompareOverlayHotkeyHud.reservedBottomHeight());
 
         RoundedHudRenderer.card(graphics, x, y, width, height);
         for (int index = 0; index < rows.size(); index++) {
-            this.drawRow(graphics, font, rows.get(index), x + 12, y + 7 + (index * lineHeight));
+            this.drawRow(graphics, font, rows.get(index), x + 8, y + 4 + (index * lineHeight));
         }
     }
 
@@ -147,8 +147,8 @@ public final class LumiRegionSelectionTeachingController {
             }
             String key = keys.get(index);
             width += "ACTION".equals(key)
-                    ? RoundedHudRenderer.keyWidth(this.cachedActionKey, "Alt")
-                    : RoundedHudRenderer.textChipWidth(key);
+                    ? RoundedHudRenderer.keyWidth(this.cachedActionKey, "Alt", true)
+                    : RoundedHudRenderer.textChipWidth(key, true);
         }
         return width;
     }
@@ -161,10 +161,10 @@ public final class LumiRegionSelectionTeachingController {
             }
             String key = row.keys().get(index);
             cursor += "ACTION".equals(key)
-                    ? RoundedHudRenderer.key(graphics, this.cachedActionKey, cursor, y, "Alt")
-                    : RoundedHudRenderer.textChip(graphics, key, cursor, y);
+                    ? RoundedHudRenderer.key(graphics, this.cachedActionKey, cursor, y, "Alt", true)
+                    : RoundedHudRenderer.textChip(graphics, key, cursor, y, true);
         }
-        graphics.drawString(font, Component.literal(": " + row.text()), cursor + 6, y + 6, RoundedHudRenderer.MUTED, false);
+        graphics.drawString(font, Component.literal(": " + row.text()), cursor + 4, y + 3, RoundedHudRenderer.MUTED, false);
     }
 
     private KeyMapping actionKey() {
