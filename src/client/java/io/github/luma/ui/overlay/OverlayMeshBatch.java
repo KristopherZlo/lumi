@@ -11,6 +11,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,7 @@ final class OverlayMeshBatch implements AutoCloseable {
 
     private static final int SECTION_SIZE = 16;
     private static final int DEFAULT_UPLOAD_BUDGET = 64;
+    private static final int DEFAULT_DRAW_BUDGET = 384;
 
     static final OverlayMeshBatch EMPTY = new OverlayMeshBatch(List.of());
 
@@ -77,20 +79,41 @@ final class OverlayMeshBatch implements AutoCloseable {
             int renderDistanceChunks,
             int uploadBudget
     ) {
+        return this.render(fillType, outlineType, camera, renderDistanceChunks, uploadBudget, DEFAULT_DRAW_BUDGET);
+    }
+
+    synchronized RenderStats render(
+            RenderType fillType,
+            RenderType outlineType,
+            Vec3 camera,
+            int renderDistanceChunks,
+            int uploadBudget,
+            int drawBudget
+    ) {
         if (this.closed || this.closeRequested || this.sections.isEmpty() || camera == null) {
             return RenderStats.empty(this.sections.size());
         }
 
         int uploaded = 0;
-        int visible = 0;
         int skipped = 0;
-        List<SectionMesh> drawableSections = new ArrayList<>();
+        List<SectionMesh> visibleSections = new ArrayList<>();
         for (SectionMesh section : this.sections) {
             if (!section.visibleFrom(camera, renderDistanceChunks)) {
                 skipped += 1;
                 continue;
             }
-            visible += 1;
+            visibleSections.add(section);
+        }
+
+        int drawLimit = Math.max(1, drawBudget);
+        if (visibleSections.size() > drawLimit) {
+            visibleSections.sort(Comparator.comparingDouble(section -> section.distanceSquaredTo(camera)));
+            skipped += visibleSections.size() - drawLimit;
+            visibleSections = visibleSections.subList(0, drawLimit);
+        }
+
+        List<SectionMesh> drawableSections = new ArrayList<>(visibleSections.size());
+        for (SectionMesh section : visibleSections) {
             if (!section.uploaded() && uploaded < uploadBudget) {
                 section.upload(fillType, outlineType);
                 uploaded += 1;
@@ -102,7 +125,7 @@ final class OverlayMeshBatch implements AutoCloseable {
 
         int filledSections = this.drawPass("fill", fillType, camera, drawableSections, MeshLayer.FILL);
         int outlinedSections = this.drawPass("outline", outlineType, camera, drawableSections, MeshLayer.OUTLINE);
-        return new RenderStats(this.sections.size(), visible, skipped, uploaded, filledSections, outlinedSections);
+        return new RenderStats(this.sections.size(), visibleSections.size(), skipped, uploaded, filledSections, outlinedSections);
     }
 
     @Override
@@ -576,6 +599,10 @@ final class OverlayMeshBatch implements AutoCloseable {
             return this.bounds.intersectsChunkRange(cameraChunkX, cameraChunkZ, range);
         }
 
+        private double distanceSquaredTo(Vec3 camera) {
+            return this.bounds.distanceSquaredTo(camera);
+        }
+
         private boolean uploaded() {
             return this.uploaded;
         }
@@ -691,6 +718,16 @@ final class OverlayMeshBatch implements AutoCloseable {
                     && minChunkX <= cameraChunkX + range
                     && maxChunkZ >= cameraChunkZ - range
                     && minChunkZ <= cameraChunkZ + range;
+        }
+
+        private double distanceSquaredTo(Vec3 point) {
+            double centerX = (this.minX + this.maxX) * 0.5D;
+            double centerY = (this.minY + this.maxY) * 0.5D;
+            double centerZ = (this.minZ + this.maxZ) * 0.5D;
+            double dx = centerX - point.x;
+            double dy = centerY - point.y;
+            double dz = centerZ - point.z;
+            return dx * dx + dy * dy + dz * dz;
         }
     }
 }

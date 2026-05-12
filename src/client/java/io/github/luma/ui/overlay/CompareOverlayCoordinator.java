@@ -40,6 +40,10 @@ public final class CompareOverlayCoordinator {
             this.refreshCooldown = 0;
             return;
         }
+        if (!request.visible()) {
+            this.refreshCooldown = 0;
+            return;
+        }
         if (client == null || client.player == null || client.level == null || !client.hasSingleplayerServer()) {
             this.logSkip(request.debugEnabled(), "client-not-ready", request.leftVersionId(), request.rightVersionId());
             this.refreshCooldown = 0;

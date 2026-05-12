@@ -167,7 +167,7 @@ Lumi's important performance work is mostly structural:
 - Redstone replay writes final saved states first, then drains a bounded neighbor-update phase only for relevant signal transitions.
 - Light checks are deferred into a separate `light-refresh` follow-up operation.
 - Large overlays switch from exact per-block rendering to bounded section-volume boxes.
-- Overlay geometry is section-batched, GPU-uploaded under a per-frame budget, and culled by render distance.
+- Overlay geometry is section-batched, GPU-uploaded and drawn under per-frame budgets, prioritized near the camera, and culled by render distance.
 - Isometric previews project the 8 bounds corners through a fixed isometric rotation, then choose scale, offset, and image resolution from the projected span.
 
 Hard runtime rule: JSON parsing, LZ4 decompression, and block-state decoding must not run on the tick-thread apply path.

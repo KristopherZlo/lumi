@@ -467,12 +467,12 @@ Overlay controls:
 - hold the compare x-ray key to see the highlight through blocks;
 - the x-ray key defaults to the Lumi action button, `Left Alt`;
 - when compare data is active, a lower-left hotkey card shows the current show/hide and x-ray bindings;
-- if one side is `current`, the highlight can refresh while you keep editing;
+- if one side is `current`, the highlight can refresh while it is visible and you keep editing;
 - very large current-build highlights keep their initial snapshot to avoid client stalls.
 
 Small and moderate diff regions render as a translucent exposed shell with thicker outlines. Extremely large diff regions collapse into merged low-alpha volume blobs that are split into short section tiles and slightly offset from block faces so dense edits stay visible in normal mode. Hold the compare x-ray key when you intentionally need to see the highlight through blocks.
 
-The overlay caches section geometry and reuses GPU buffers. It does not rebuild every highlighted block every frame.
+The overlay caches section geometry and reuses GPU buffers. It does not rebuild every highlighted block every frame, and very broad highlights draw the nearest visible sections first under a per-frame draw budget.
 
 Compare highlight takes priority over undo/redo preview.
 
