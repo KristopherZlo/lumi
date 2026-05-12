@@ -40,4 +40,13 @@ class OperationLoadPolicyTest {
         assertEquals(1.0D, policy.nextAdaptiveScale(1.0D, 0.25D, 1.25D, 0L, 1_000_000L));
         assertEquals(0.25D, policy.nextAdaptiveScale(0.1D, 0.25D, 1.25D, 0L, 0L));
     }
+
+    @Test
+    void highThroughputBudgetsStillMeasurePressureAgainstResponsiveTickTime() {
+        OperationLoadPolicy policy = new OperationLoadPolicy();
+
+        double scale = policy.nextAdaptiveScale(1.0D, 0.25D, 1.25D, 100_000_000L, 200_000_000L);
+
+        assertTrue(scale < 1.0D);
+    }
 }

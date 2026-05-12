@@ -670,6 +670,8 @@ public final class WorldOperationManager {
         private final RedstoneReplayUpdateQueue redstoneUpdateQueue = new RedstoneReplayUpdateQueue();
         private final ExactReplayStateQueue exactReplayStateQueue = new ExactReplayStateQueue();
         private final WorldApplyNoOpPruner noOpPruner = new WorldApplyNoOpPruner();
+        private final WorldApplyChunkCostTracker chunkCostTracker = new WorldApplyChunkCostTracker();
+        private long currentBatchActiveNanos;
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -782,6 +784,15 @@ public final class WorldOperationManager {
                         break;
                     }
                     this.currentBatch = this.pruneNoOpBatch(this.currentBatch);
+                    if (this.chunkCostTracker.shouldDeferChunk(
+                            this.currentBatch,
+                            budget,
+                            System.nanoTime() - applyTickStartedAt,
+                            processedWorkThisTick
+                    )) {
+                        stopReason = "chunk-cost-budget";
+                        break;
+                    }
                     startedChunksThisTick += 1;
                     this.currentNativeSections = this.currentBatch.orderedNativeSections();
                     this.currentSections = this.currentBatch.orderedSections();
@@ -794,6 +805,7 @@ public final class WorldOperationManager {
                     this.entityIndex = 0;
                     this.blockEntitiesApplied = false;
                     this.entitiesApplied = false;
+                    this.currentBatchActiveNanos = 0L;
                     if (this.debugApplyEnabled()) {
                         LumaDebugLog.log(
                                 this.handle(),
@@ -833,6 +845,7 @@ public final class WorldOperationManager {
                 }
 
                 AppliedWork processed;
+                long stepStartedAt = System.nanoTime();
                 try (
                         WorldMutationContext.SourceFrame ignoredSource =
                                 WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
@@ -861,6 +874,7 @@ public final class WorldOperationManager {
                         }
                         WorldLightUpdateContext.pop();
                         WorldRedstoneReplayUpdateContext.pop();
+                        this.currentBatchActiveNanos += System.nanoTime() - stepStartedAt;
                     }
                 }
 
@@ -898,12 +912,14 @@ public final class WorldOperationManager {
                     }
                     finishedChunksThisTick += 1;
                     this.exactReplayStateQueue.record(this.currentBatch);
+                    this.chunkCostTracker.recordChunk(this.currentBatch, this.currentBatchActiveNanos);
                     this.logBlockApplyChunkFinish(this.currentBatch);
                     this.currentBatch = null;
                     this.currentNativeSections = List.of();
                     this.currentSections = List.of();
                     this.currentBlockEntities = List.of();
                     this.nativeSectionCursor = null;
+                    this.currentBatchActiveNanos = 0L;
                 }
             }
             if (System.nanoTime() >= deadlineNanos && !"dispatcher-empty".equals(stopReason)) {
@@ -1354,11 +1370,6 @@ public final class WorldOperationManager {
             return this.profile != WorldApplyProfile.NORMAL
                     && this.chunkPreloader != null
                     && this.chunkPreloader.complete();
-        }
-
-        @Override
-        protected double minimumAdaptiveScale() {
-            return this.profile == WorldApplyProfile.MAXIMUM ? 1.0D : super.minimumAdaptiveScale();
         }
 
         private boolean advanceCompletion() throws Exception {

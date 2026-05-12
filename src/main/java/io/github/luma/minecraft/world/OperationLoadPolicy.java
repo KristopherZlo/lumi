@@ -3,6 +3,7 @@ package io.github.luma.minecraft.world;
 final class OperationLoadPolicy {
 
     private static final int WINDOW_SIZE = 32;
+    private static final long RESPONSIVE_TICK_NANOS = 50_000_000L;
     private final double[] pressureSamples = new double[WINDOW_SIZE];
     private int sampleCount;
     private int nextSample;
@@ -18,7 +19,7 @@ final class OperationLoadPolicy {
             return clamp(currentScale, minimumScale, maximumScale);
         }
 
-        double pressure = Math.max(0.0D, (double) elapsedNanos / (double) budgetNanos);
+        double pressure = Math.max(0.0D, (double) elapsedNanos / (double) pressureBudgetNanos(budgetNanos));
         this.record(pressure);
         double p95Pressure = this.percentile95();
         double next = currentScale;
@@ -32,6 +33,13 @@ final class OperationLoadPolicy {
             next *= 1.03D;
         }
         return clamp(next, minimumScale, maximumScale);
+    }
+
+    static long pressureBudgetNanos(long budgetNanos) {
+        if (budgetNanos <= 0L) {
+            return 0L;
+        }
+        return Math.min(budgetNanos, RESPONSIVE_TICK_NANOS);
     }
 
     private void record(double pressure) {

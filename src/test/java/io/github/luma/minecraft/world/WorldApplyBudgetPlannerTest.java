@@ -90,7 +90,7 @@ class WorldApplyBudgetPlannerTest {
         assertEquals(128, turbo.maxDirectSections());
         assertEquals(32_000_000L, turbo.maxNanos());
         assertEquals(512, maximum.maxDirectSections());
-        assertEquals(80_000_000L, maximum.maxNanos());
+        assertEquals(20_000_000L, maximum.maxNanos());
     }
 
     @Test

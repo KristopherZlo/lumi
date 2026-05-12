@@ -13,7 +13,7 @@ import net.minecraft.client.Minecraft;
  */
 public final class CompareOverlayCoordinator {
 
-    private static final int REFRESH_INTERVAL_TICKS = 40;
+    private static final int REFRESH_INTERVAL_TICKS = 10;
     private static final int LARGE_DIFF_AUTO_REFRESH_LIMIT = CompareOverlayRenderer.DETAILED_DIFF_RENDER_LIMIT;
     private static final CompareOverlayCoordinator INSTANCE = new CompareOverlayCoordinator();
 
