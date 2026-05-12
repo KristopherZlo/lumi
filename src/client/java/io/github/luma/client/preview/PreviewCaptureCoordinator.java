@@ -12,6 +12,7 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PreviewCaptureRequestRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.nio.file.Files;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -27,6 +28,7 @@ public final class PreviewCaptureCoordinator {
     private static final int IDLE_SCAN_COOLDOWN_TICKS = 40;
     private static final int COMPLETED_SCAN_COOLDOWN_TICKS = 20;
     private static final int FAILED_SCAN_COOLDOWN_TICKS = 40;
+    private static final int RETRY_LATER_SCAN_COOLDOWN_TICKS = 80;
 
     private final ProjectService projectService = new ProjectService();
     private final PreviewCaptureRequestRepository requestRepository = new PreviewCaptureRequestRepository();
@@ -98,7 +100,7 @@ public final class PreviewCaptureCoordinator {
                 capture = capture.withMesh(mesh);
             }
             if (client.level == null || !client.level.dimension().identifier().toString().equals(capture.project().dimensionId())) {
-                this.completeCapture(capture, false);
+                this.completeCapture(capture, CaptureCompletion.RETRY_LATER, "dimension changed before preview render");
                 return;
             }
             this.activeCapture = capture.withPendingCapture(this.captureService.capture(client, capture.request().bounds(), mesh));
@@ -109,7 +111,7 @@ public final class PreviewCaptureCoordinator {
                     capture.project().name(),
                     exception
             );
-            this.completeCapture(capture, false);
+            this.completeCapture(capture, CaptureCompletion.FAILED_ATTEMPT, exception.getClass().getSimpleName() + ": " + exception.getMessage());
         }
     }
 
@@ -147,7 +149,7 @@ public final class PreviewCaptureCoordinator {
             this.requestService.clear(capture.layout(), capture.request().versionId());
             LumaMod.LOGGER.info("Rendered textured preview for version {} in project {}", version.id(), capture.project().name());
             LumaDebugLog.log(capture.project(), "preview", "Rendered textured preview for version {}", version.id());
-            this.completeCapture(capture, true);
+            this.completeCapture(capture, CaptureCompletion.SUCCESS, "");
         } catch (Exception exception) {
             LumaMod.LOGGER.warn(
                     "Failed to store textured preview for version {} in project {}",
@@ -155,12 +157,13 @@ public final class PreviewCaptureCoordinator {
                     capture.project().name(),
                     exception
             );
-            this.completeCapture(capture, false);
+            this.completeCapture(capture, CaptureCompletion.FAILED_ATTEMPT, exception.getClass().getSimpleName() + ": " + exception.getMessage());
         }
     }
 
     private boolean startNextCapture(Minecraft client) {
         String dimensionId = client.level.dimension().identifier().toString();
+        Instant now = Instant.now();
         try {
             for (BuildProject project : this.projectService.listProjects(client.getSingleplayerServer())) {
                 if (!project.settings().previewGenerationEnabled() || !dimensionId.equals(project.dimensionId())) {
@@ -171,6 +174,9 @@ public final class PreviewCaptureCoordinator {
                 List<io.github.luma.domain.model.PreviewCaptureRequest> requests = this.requestRepository.loadAll(layout);
                 for (io.github.luma.domain.model.PreviewCaptureRequest request : requests) {
                     if (!dimensionId.equals(request.dimensionId()) || request.bounds() == null) {
+                        continue;
+                    }
+                    if (!this.requestService.shouldAttempt(request, now)) {
                         continue;
                     }
 
@@ -192,16 +198,49 @@ public final class PreviewCaptureCoordinator {
         if (this.activeCapture == null) {
             return;
         }
-        this.completeCapture(this.activeCapture, false);
+        this.completeCapture(this.activeCapture, CaptureCompletion.RETRY_LATER, "client world closed before preview capture completed");
     }
 
-    private void completeCapture(ActiveCapture capture, boolean success) {
+    private void completeCapture(ActiveCapture capture, CaptureCompletion completion, String failure) {
         if (capture.pendingCapture() != null) {
             capture.pendingCapture().renderTarget().destroyBuffers();
         }
         this.closeMesh(capture);
+        if (completion == CaptureCompletion.FAILED_ATTEMPT) {
+            this.recordFailedAttempt(capture, failure);
+        }
         this.activeCapture = null;
-        this.scanCooldownTicks = success ? COMPLETED_SCAN_COOLDOWN_TICKS : FAILED_SCAN_COOLDOWN_TICKS;
+        this.scanCooldownTicks = switch (completion) {
+            case SUCCESS -> COMPLETED_SCAN_COOLDOWN_TICKS;
+            case RETRY_LATER -> RETRY_LATER_SCAN_COOLDOWN_TICKS;
+            case FAILED_ATTEMPT -> FAILED_SCAN_COOLDOWN_TICKS;
+        };
+    }
+
+    private void recordFailedAttempt(ActiveCapture capture, String failure) {
+        try {
+            boolean retryQueued = this.requestService.recordFailure(capture.layout(), capture.request(), failure);
+            if (!retryQueued) {
+                LumaMod.LOGGER.warn(
+                        "Dropped textured preview request for version {} in project {} after repeated failures",
+                        capture.request().versionId(),
+                        capture.project().name()
+                );
+                return;
+            }
+            LumaMod.LOGGER.warn(
+                    "Delayed textured preview retry for version {} in project {} after a failed attempt",
+                    capture.request().versionId(),
+                    capture.project().name()
+            );
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn(
+                    "Failed to update preview retry state for version {} in project {}",
+                    capture.request().versionId(),
+                    capture.project().name(),
+                    exception
+            );
+        }
     }
 
     private void closeMesh(ActiveCapture capture) {
@@ -246,6 +285,12 @@ public final class PreviewCaptureCoordinator {
         private ActiveCapture withPendingCapture(TexturedPreviewCaptureService.PendingPreviewCapture pendingCapture) {
             return new ActiveCapture(this.project, this.layout, this.request, this.buildFuture, this.mesh, pendingCapture);
         }
+    }
+
+    private enum CaptureCompletion {
+        SUCCESS,
+        RETRY_LATER,
+        FAILED_ATTEMPT
     }
 
     private static final class PreviewThreadFactory implements ThreadFactory {

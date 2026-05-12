@@ -32,53 +32,62 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
     PendingPreviewCapture capture(Minecraft client, Bounds3i bounds, PreviewRenderMesh mesh) {
         PreviewFramingCalculator.PreviewFraming framing = this.framingCalculator.calculate(bounds);
         TextureTarget renderTarget = new TextureTarget("Lumi Preview", framing.resolution(), framing.resolution(), true);
-
-        GpuTexture colorTexture = Objects.requireNonNull(renderTarget.getColorTexture(), "Preview color texture is missing");
-        GpuTextureView colorTextureView = Objects.requireNonNull(renderTarget.getColorTextureView(), "Preview color texture view is missing");
-        GpuTexture depthTexture = Objects.requireNonNull(renderTarget.getDepthTexture(), "Preview depth texture is missing");
-        GpuTextureView depthTextureView = Objects.requireNonNull(renderTarget.getDepthTextureView(), "Preview depth texture view is missing");
-
-        RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(colorTexture, 0, depthTexture, 1.0);
-        RenderSystem.backupProjectionMatrix();
-        RenderSystem.setProjectionMatrix(this.projectionMatrixBuffer.getBuffer(framing.resolution(), framing.resolution()), ProjectionType.ORTHOGRAPHIC);
-
-        Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
-        modelViewStack.pushMatrix();
-        modelViewStack.identity();
-
-        GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
-        GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
-        GpuBufferSlice previousLights = RenderSystem.getShaderLights();
-        RenderSystem.outputColorTextureOverride = colorTextureView;
-        RenderSystem.outputDepthTextureOverride = depthTextureView;
+        boolean handedOff = false;
 
         try {
-            client.gameRenderer.lightTexture().updateLightTexture(1.0F);
-            client.gameRenderer.getLighting().setupFor(Lighting.Entry.LEVEL);
+            GpuTexture colorTexture = Objects.requireNonNull(renderTarget.getColorTexture(), "Preview color texture is missing");
+            GpuTextureView colorTextureView = Objects.requireNonNull(renderTarget.getColorTextureView(), "Preview color texture view is missing");
+            GpuTexture depthTexture = Objects.requireNonNull(renderTarget.getDepthTexture(), "Preview depth texture is missing");
+            GpuTextureView depthTextureView = Objects.requireNonNull(renderTarget.getDepthTextureView(), "Preview depth texture view is missing");
 
-            float halfResolution = framing.resolution() * 0.5F;
-            float pixelScale = framing.scale() * halfResolution;
-            modelViewStack.translate(
-                    halfResolution + framing.offsetX() * halfResolution,
-                    halfResolution + framing.offsetY() * halfResolution,
-                    0.0F
-            );
-            modelViewStack.scale(pixelScale, pixelScale, pixelScale);
-            modelViewStack.rotateX(PreviewFramingCalculator.ISO_PITCH_RADIANS);
-            modelViewStack.rotateY(PreviewFramingCalculator.ISO_YAW_RADIANS);
-            modelViewStack.translate(-framing.halfX(), -framing.halfY(), -framing.halfZ());
-            mesh.render();
-        } finally {
-            RenderSystem.outputColorTextureOverride = previousColor;
-            RenderSystem.outputDepthTextureOverride = previousDepth;
-            if (previousLights != null) {
-                RenderSystem.setShaderLights(previousLights);
+            RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(colorTexture, 0, depthTexture, 1.0);
+            RenderSystem.backupProjectionMatrix();
+            RenderSystem.setProjectionMatrix(this.projectionMatrixBuffer.getBuffer(framing.resolution(), framing.resolution()), ProjectionType.ORTHOGRAPHIC);
+
+            Matrix4fStack modelViewStack = RenderSystem.getModelViewStack();
+            modelViewStack.pushMatrix();
+            modelViewStack.identity();
+
+            GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
+            GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
+            GpuBufferSlice previousLights = RenderSystem.getShaderLights();
+            RenderSystem.outputColorTextureOverride = colorTextureView;
+            RenderSystem.outputDepthTextureOverride = depthTextureView;
+
+            try {
+                client.gameRenderer.lightTexture().updateLightTexture(1.0F);
+                client.gameRenderer.getLighting().setupFor(Lighting.Entry.LEVEL);
+
+                float halfResolution = framing.resolution() * 0.5F;
+                float pixelScale = framing.scale() * halfResolution;
+                modelViewStack.translate(
+                        halfResolution + framing.offsetX() * halfResolution,
+                        halfResolution + framing.offsetY() * halfResolution,
+                        0.0F
+                );
+                modelViewStack.scale(pixelScale, pixelScale, pixelScale);
+                modelViewStack.rotateX(PreviewFramingCalculator.ISO_PITCH_RADIANS);
+                modelViewStack.rotateY(PreviewFramingCalculator.ISO_YAW_RADIANS);
+                modelViewStack.translate(-framing.halfX(), -framing.halfY(), -framing.halfZ());
+                mesh.render();
+            } finally {
+                RenderSystem.outputColorTextureOverride = previousColor;
+                RenderSystem.outputDepthTextureOverride = previousDepth;
+                if (previousLights != null) {
+                    RenderSystem.setShaderLights(previousLights);
+                }
+                modelViewStack.popMatrix();
+                RenderSystem.restoreProjectionMatrix();
             }
-            modelViewStack.popMatrix();
-            RenderSystem.restoreProjectionMatrix();
-        }
 
-        return new PendingPreviewCapture(renderTarget, this.readPixels(renderTarget).thenApply(this.imageCropper::crop));
+            PendingPreviewCapture capture = new PendingPreviewCapture(renderTarget, this.readPixels(renderTarget).thenApply(this.imageCropper::crop));
+            handedOff = true;
+            return capture;
+        } finally {
+            if (!handedOff) {
+                renderTarget.destroyBuffers();
+            }
+        }
     }
 
     private CompletableFuture<NativeImage> readPixels(RenderTarget renderTarget) {

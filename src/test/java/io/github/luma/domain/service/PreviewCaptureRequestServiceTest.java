@@ -6,6 +6,7 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PreviewCaptureRequestRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import java.nio.file.Path;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -38,6 +39,8 @@ class PreviewCaptureRequestServiceTest {
         assertEquals("v0001", request.versionId());
         assertEquals("minecraft:overworld", request.dimensionId());
         assertTrue(request.requestedAt() != null);
+        assertEquals(0, request.attempts());
+        assertTrue(this.service.shouldAttempt(request, Instant.now()));
 
         this.service.clear(layout, "v0001");
 
@@ -52,5 +55,33 @@ class PreviewCaptureRequestServiceTest {
         this.service.queue(layout, "", "minecraft:overworld", null);
 
         assertTrue(this.repository.loadAll(layout).isEmpty());
+    }
+
+    @Test
+    void backsOffFailedRequestsAndDropsRepeatedFailures() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("tower.mbp"));
+        this.projectRepository.initializeLayout(layout);
+
+        this.service.queue(
+                layout,
+                "v0001",
+                "minecraft:overworld",
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(15, 80, 15))
+        );
+
+        var request = this.repository.load(layout, "v0001").orElseThrow();
+        assertTrue(this.service.recordFailure(layout, request, "IllegalStateException: preview failed"));
+
+        var delayed = this.repository.load(layout, "v0001").orElseThrow();
+        assertEquals(1, delayed.attempts());
+        assertEquals("IllegalStateException: preview failed", delayed.lastFailure());
+        assertFalse(this.service.shouldAttempt(delayed, Instant.now()));
+
+        assertTrue(this.service.recordFailure(layout, delayed, "second failure"));
+        var delayedAgain = this.repository.load(layout, "v0001").orElseThrow();
+        assertEquals(2, delayedAgain.attempts());
+
+        assertFalse(this.service.recordFailure(layout, delayedAgain, "third failure"));
+        assertFalse(this.repository.load(layout, "v0001").isPresent());
     }
 }

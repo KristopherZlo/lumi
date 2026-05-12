@@ -365,8 +365,9 @@ Important fields:
 - `dimensionId`
 - `bounds`, usually tightened to the changed block span with safe padding
 - `requestedAt`
+- `attempts`, `nextAttemptAt`, and `lastFailure` for bounded client retry backoff after render or write failures
 
-These files let server-side save and refresh workflows queue preview work without trying to render textured images on the server thread or background server executors.
+These files let server-side save and refresh workflows queue preview work without trying to render textured images on the server thread or background server executors. If client-side preview rendering repeatedly fails, Lumi delays retries and drops the request after the retry limit so one bad preview cannot keep scheduling off-screen GPU work forever.
 
 ### `recovery/draft.bin.lz4`
 

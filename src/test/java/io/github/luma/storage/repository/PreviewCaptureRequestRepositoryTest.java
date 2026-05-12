@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.PreviewCaptureRequest;
 import io.github.luma.storage.ProjectLayout;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,29 @@ class PreviewCaptureRequestRepositoryTest {
 
         assertFalse(this.repository.load(layout, "v0001").isPresent());
         assertTrue(this.repository.load(layout, "v0002").isPresent());
+    }
+
+    @Test
+    void loadsLegacyRequestsWithoutRetryMetadata() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("tower.mbp"));
+        this.projectRepository.initializeLayout(layout);
+        Files.writeString(layout.previewRequestFile("v0001"), """
+                {
+                  "versionId": "v0001",
+                  "dimensionId": "minecraft:overworld",
+                  "bounds": {
+                    "min": {"x": 0, "y": 64, "z": 0},
+                    "max": {"x": 15, "y": 80, "z": 15}
+                  },
+                  "requestedAt": "2026-04-22T08:00:00Z"
+                }
+                """);
+
+        PreviewCaptureRequest request = this.repository.load(layout, "v0001").orElseThrow();
+
+        assertEquals(0, request.attempts());
+        assertTrue(request.dueAt(Instant.parse("2026-04-22T08:00:01Z")));
+        assertEquals("", request.lastFailure());
     }
 
     private static PreviewCaptureRequest request(String versionId, String dimensionId, Bounds3i bounds, Instant requestedAt) {

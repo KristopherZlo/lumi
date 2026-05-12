@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -42,7 +43,7 @@ public final class PreviewCaptureRequestRepository {
             }
         }
 
-        requests.sort(Comparator.comparing(PreviewCaptureRequest::requestedAt));
+        requests.sort(Comparator.comparing(request -> request.requestedAt() == null ? Instant.EPOCH : request.requestedAt()));
         return List.copyOf(requests);
     }
 
