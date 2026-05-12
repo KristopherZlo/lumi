@@ -1072,6 +1072,10 @@ public final class HistoryCaptureManager {
         if (this.idleFlushTicker % IDLE_FLUSH_TICK_INTERVAL != 0) {
             return;
         }
+        List<Map.Entry<String, TrackedChangeBuffer>> activeEntries = this.workingDrafts.activeBufferEntries();
+        if (activeEntries.isEmpty()) {
+            return;
+        }
         Instant now = Instant.now();
         List<String> sessionsToFinalize = new ArrayList<>();
         Map<String, Integer> idleThresholds = new HashMap<>();
@@ -1087,7 +1091,7 @@ public final class HistoryCaptureManager {
             LumaMod.LOGGER.warn("Failed to load tracked projects for idle flush", exception);
         }
 
-        for (Map.Entry<String, TrackedChangeBuffer> entry : this.workingDrafts.activeBufferEntries()) {
+        for (Map.Entry<String, TrackedChangeBuffer> entry : activeEntries) {
             String projectId = entry.getKey();
             TrackedChangeBuffer session = entry.getValue();
             int idleSeconds = idleThresholds.getOrDefault(projectId, 5);

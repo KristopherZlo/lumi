@@ -20,7 +20,9 @@ import io.github.luma.client.preview.PreviewCaptureCoordinator;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.client.selection.LumiRegionSelectionTeachingController;
 import io.github.luma.debug.StartupProfiler;
+import io.github.luma.ui.controller.AsyncCompareCache;
 import io.github.luma.ui.controller.ClientWorkspaceOpenService;
+import io.github.luma.ui.preview.ProjectPreviewTextureCache;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
@@ -68,6 +70,7 @@ public final class LumaClient implements ClientModInitializer {
     private final LumiShortcutScreenPolicy shortcutScreenPolicy = new LumiShortcutScreenPolicy();
     private final LumiRegionSelectionTeachingController selectionTeachingController = new LumiRegionSelectionTeachingController();
     private final ClientWorkspaceOpenService workspaceOpenService = new ClientWorkspaceOpenService();
+    private boolean worldActive;
 
     static {
         StartupProfiler.logElapsed("client.class-load", CLASS_LOAD_STARTED_AT);
@@ -164,6 +167,12 @@ public final class LumaClient implements ClientModInitializer {
     }
 
     private void onEndTick(Minecraft client) {
+        boolean activeWorldNow = client != null && client.level != null;
+        if (this.worldActive && !activeWorldNow) {
+            this.clearWorldClientState();
+        }
+        this.worldActive = activeWorldNow;
+
         boolean shortcutsSuppressed = this.lumiShortcutsSuppressed(client);
         boolean overlayHold = !shortcutsSuppressed && this.keyBindingState.isDown(client, this.lumiActionButtonKey);
         boolean worldInputActive = this.shortcutScreenPolicy.worldInputActive(client, shortcutsSuppressed);
@@ -270,6 +279,14 @@ public final class LumaClient implements ClientModInitializer {
         if (worldInputActive && openDashboardClicked) {
             this.workspaceOpenService.openCurrentWorkspace(client, client.screen);
         }
+    }
+
+    private void clearWorldClientState() {
+        CompareOverlayRenderer.clear();
+        PendingChangesOverlayRenderer.clear();
+        RecentChangesOverlayRenderer.clear();
+        AsyncCompareCache.getInstance().clear();
+        ProjectPreviewTextureCache.releaseAll();
     }
 
     private boolean lumiShortcutsSuppressed(Minecraft client) {

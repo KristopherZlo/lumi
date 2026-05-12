@@ -3,15 +3,18 @@ package io.github.luma.minecraft.world;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationSnapshot;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
 final class WorldOperationRegistry {
 
+    private static final int LAST_OPERATION_LIMIT = 32;
+
     private final Map<String, WorldOperationManager.ActiveOperation> activeOperations = new HashMap<>();
     private final Map<String, OperationSnapshot> lastSnapshots = new HashMap<>();
-    private final Map<String, OperationSnapshot> lastSnapshotsByOperationId = new HashMap<>();
-    private final Map<String, String> lastApplyMetrics = new HashMap<>();
+    private final Map<String, OperationSnapshot> lastSnapshotsByOperationId = new LinkedHashMap<>();
+    private final Map<String, String> lastApplyMetrics = new LinkedHashMap<>();
 
     boolean hasActive(String serverKey) {
         return this.activeOperations.containsKey(serverKey);
@@ -71,6 +74,19 @@ final class WorldOperationRegistry {
         this.lastSnapshotsByOperationId.put(operation.handle().id(), operation.snapshot());
         Optional<String> metrics = operation.applyMetricsSummary();
         metrics.ifPresent(value -> this.lastApplyMetrics.put(operation.handle().id(), value));
+        this.trimRememberedOperations();
         return metrics;
+    }
+
+    private void trimRememberedOperations() {
+        while (this.lastSnapshotsByOperationId.size() > LAST_OPERATION_LIMIT) {
+            String operationId = this.lastSnapshotsByOperationId.keySet().iterator().next();
+            this.lastSnapshotsByOperationId.remove(operationId);
+            this.lastApplyMetrics.remove(operationId);
+        }
+        while (this.lastApplyMetrics.size() > LAST_OPERATION_LIMIT) {
+            String operationId = this.lastApplyMetrics.keySet().iterator().next();
+            this.lastApplyMetrics.remove(operationId);
+        }
     }
 }

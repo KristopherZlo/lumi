@@ -176,11 +176,17 @@ public final class CompareOverlayRenderer {
         }
 
         boolean resolvedDebug = debugEnabled || current.debugEnabled() || LumaDebugLog.globalEnabled();
+        List<DiffBlockEntry> resolvedBlocks = changedBlocks == null ? List.of() : changedBlocks;
+        if (current.matches(projectName, leftVersionId, rightVersionId)
+                && current.sameContent(resolvedBlocks.size(), resolvedBlocks.hashCode())
+                && current.debugEnabled() == resolvedDebug) {
+            return;
+        }
         OverlayState replacement = new OverlayState(
                 projectName,
                 leftVersionId,
                 rightVersionId,
-                changedBlocks == null ? List.of() : changedBlocks,
+                resolvedBlocks,
                 resolvedDebug,
                 current.visible()
         );
@@ -479,6 +485,7 @@ public final class CompareOverlayRenderer {
         private final String leftVersionId;
         private final String rightVersionId;
         private final int changedBlockCount;
+        private final int changedBlocksFingerprint;
         private final Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocksByPosition;
         private final List<VolumeBox> volumeBoxes;
         private final OverlayMeshBatch normalMeshBatch;
@@ -495,11 +502,13 @@ public final class CompareOverlayRenderer {
                 boolean debugEnabled,
                 boolean visible
         ) {
+            List<DiffBlockEntry> resolvedBlocks = changedBlocks == null ? List.of() : changedBlocks;
             this.projectName = projectName == null ? "" : projectName;
             this.leftVersionId = leftVersionId;
             this.rightVersionId = rightVersionId;
-            this.changedBlockCount = changedBlocks == null ? 0 : changedBlocks.size();
-            OverlayGeometry geometry = buildGeometry(changedBlocks == null ? List.of() : changedBlocks);
+            this.changedBlockCount = resolvedBlocks.size();
+            this.changedBlocksFingerprint = resolvedBlocks.hashCode();
+            OverlayGeometry geometry = buildGeometry(resolvedBlocks);
             this.surfaceBlocksByPosition = geometry.surfaceBlocksByPosition();
             this.volumeBoxes = geometry.volumeBoxes();
             this.normalMeshBatch = buildMeshBatch(this.surfaceBlocksByPosition.values().stream().toList(), this.volumeBoxes, false);
@@ -514,6 +523,7 @@ public final class CompareOverlayRenderer {
                 String leftVersionId,
                 String rightVersionId,
                 int changedBlockCount,
+                int changedBlocksFingerprint,
                 Map<Long, CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocksByPosition,
                 List<VolumeBox> volumeBoxes,
                 OverlayMeshBatch normalMeshBatch,
@@ -526,6 +536,7 @@ public final class CompareOverlayRenderer {
             this.leftVersionId = leftVersionId;
             this.rightVersionId = rightVersionId;
             this.changedBlockCount = changedBlockCount;
+            this.changedBlocksFingerprint = changedBlocksFingerprint;
             this.surfaceBlocksByPosition = surfaceBlocksByPosition;
             this.volumeBoxes = volumeBoxes;
             this.normalMeshBatch = normalMeshBatch;
@@ -561,12 +572,18 @@ public final class CompareOverlayRenderer {
                     && java.util.Objects.equals(this.rightVersionId, rightVersionId);
         }
 
+        private boolean sameContent(int changedBlockCount, int changedBlocksFingerprint) {
+            return this.changedBlockCount == changedBlockCount
+                    && this.changedBlocksFingerprint == changedBlocksFingerprint;
+        }
+
         private synchronized OverlayState withVisible(boolean nextVisible) {
             OverlayState replacement = new OverlayState(
                     this.projectName,
                     this.leftVersionId,
                     this.rightVersionId,
                     this.changedBlockCount,
+                    this.changedBlocksFingerprint,
                     this.surfaceBlocksByPosition,
                     this.volumeBoxes,
                     this.normalMeshBatch,
