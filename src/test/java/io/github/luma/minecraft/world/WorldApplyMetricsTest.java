@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +23,7 @@ class WorldApplyMetricsTest {
         metrics.recordApplyTick(0);
         metrics.recordLightPrepared(9, 2);
         metrics.recordLightEngineFlushTick();
+        metrics.recordVerification(new WorldApplyVerificationResult(7, 2, 1, 1, List.of()));
         metrics.recordLightDrainTick(2_500_000L);
         metrics.recordTotalDuration(12_000_000L);
 
@@ -58,6 +60,10 @@ class WorldApplyMetricsTest {
         Assertions.assertTrue(summary.contains("lightPrepared=9"));
         Assertions.assertTrue(summary.contains("lightDirtyChunks=2"));
         Assertions.assertTrue(summary.contains("lightEngineFlushTicks=1"));
+        Assertions.assertTrue(summary.contains("verificationMatched=7"));
+        Assertions.assertTrue(summary.contains("verificationMismatched=2"));
+        Assertions.assertTrue(summary.contains("verificationRepaired=1"));
+        Assertions.assertTrue(summary.contains("verificationSkipped=1"));
         Assertions.assertTrue(summary.contains("applyTicks=2"));
         Assertions.assertTrue(summary.contains("workTicks=1"));
         Assertions.assertTrue(summary.contains("avgWorkPerTick=34"));

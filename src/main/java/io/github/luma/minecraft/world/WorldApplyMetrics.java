@@ -24,6 +24,10 @@ final class WorldApplyMetrics {
     private int lightDirtyChunks;
     private int lightEngineFlushTicks;
     private int redstoneUpdates;
+    private int verificationMatched;
+    private int verificationMismatched;
+    private int verificationRepaired;
+    private int verificationSkipped;
     private int applyTicks;
     private int workTicks;
     private int maxWorkPerTick;
@@ -95,6 +99,16 @@ final class WorldApplyMetrics {
 
     void recordRedstoneUpdates(int redstoneUpdates) {
         this.redstoneUpdates += Math.max(0, redstoneUpdates);
+    }
+
+    void recordVerification(WorldApplyVerificationResult result) {
+        if (result == null) {
+            return;
+        }
+        this.verificationMatched += Math.max(0, result.matched());
+        this.verificationMismatched += Math.max(0, result.mismatched());
+        this.verificationRepaired += Math.max(0, result.repaired());
+        this.verificationSkipped += Math.max(0, result.skipped());
     }
 
     void recordApplyTick(int workUnits) {
@@ -204,6 +218,10 @@ final class WorldApplyMetrics {
                 + ", lightDirtyChunks=" + this.lightDirtyChunks
                 + ", lightEngineFlushTicks=" + this.lightEngineFlushTicks
                 + ", redstoneUpdates=" + this.redstoneUpdates
+                + ", verificationMatched=" + this.verificationMatched
+                + ", verificationMismatched=" + this.verificationMismatched
+                + ", verificationRepaired=" + this.verificationRepaired
+                + ", verificationSkipped=" + this.verificationSkipped
                 + ", applyTicks=" + this.applyTicks
                 + ", workTicks=" + this.workTicks
                 + ", avgWorkPerTick=" + this.avgWorkPerTick()
