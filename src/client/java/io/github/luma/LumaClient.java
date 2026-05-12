@@ -1,12 +1,14 @@
 package io.github.luma;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.luma.client.command.LumaClientCommands;
+import io.github.luma.client.diagnostics.ClientRuntimeLoadSampler;
 import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.client.input.LumiShortcutInteractionGate;
@@ -149,10 +151,12 @@ public final class LumaClient implements ClientModInitializer {
 
         long eventRegistrationStartedAt = StartupProfiler.start();
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
+        WorldRenderEvents.END_MAIN.register(ClientRuntimeLoadSampler.getInstance()::onWorldRender);
         WorldRenderEvents.END_MAIN.register(CompareOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(LumiRegionSelectionRenderer::render);
         WorldRenderEvents.END_MAIN.register(PendingChangesOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(RecentChangesOverlayRenderer::render);
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> ClientRuntimeLoadSampler.getInstance().close());
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 new LumaClientCommands(this.workspaceOpenService).register(dispatcher));
         OverlayDiagnostics.getInstance().clientRenderCallbacksRegistered("END_MAIN");
@@ -167,6 +171,7 @@ public final class LumaClient implements ClientModInitializer {
     }
 
     private void onEndTick(Minecraft client) {
+        ClientRuntimeLoadSampler.getInstance().tick(client);
         boolean activeWorldNow = client != null && client.level != null;
         if (this.worldActive && !activeWorldNow) {
             this.clearWorldClientState();

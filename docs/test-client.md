@@ -25,6 +25,7 @@ The test-client Gradle profile always starts with Lumi diagnostics enabled:
 - `-Dlumi.debug=true`
 - `-Dlumi.startupProfile=true`
 - `-Dlumi.loadLog=true`
+- `-Dlumi.clientLoadLog=true`
 - `-Dlumi.lightLog=true`
 - `-Dlumi.blockApplyLog=true`
 
@@ -32,6 +33,8 @@ Client GameTest and test-client launches also rewrite the run-directory `options
 
 The load log is written under `run/test-client/logs/lumi-load.log` by default. Restore, undo/redo, and quick rollback runs can emit an automatic `light-refresh` follow-up operation after the block/entity action; runtime checks should treat it as part of the operation window and verify it completes without `runLightUpdates()` thread exceptions.
 Test-client launches also write `run/test-client/logs/lumi-light.log` and `run/test-client/logs/lumi-block-apply.log`. Use the light log for rejoin-only shadow investigations, including dirty-chunk preload, marked chunk counts, and any missing dirty chunks. Use the block-apply log for restore/rollback bottleneck breakdowns by preload, chunk, section path, block entities, and entity operations.
+
+The client load log is written under `run/test-client/logs/lumi-client-load.log` by default. It samples every 20 client ticks and records heap/non-heap/direct-buffer memory, GC totals, live thread count, JVM process/system CPU load, render-frame pressure from world render intervals, OpenGL vendor/renderer/version, and GPU utilization/memory when `nvidia-smi` is available. GPU probing runs on a low-priority background thread every 5 seconds so diagnostics do not block the client tick. Tune with `-Dlumi.clientLoadLog.sampleTicks=<ticks>`, `-Dlumi.clientLoadLog.gpuSampleSeconds=<seconds>`, and `-Dlumi.clientLoadLog.path=<path>`.
 
 If you want to force a specific JDK:
 
