@@ -16,8 +16,9 @@ import net.minecraft.resources.Identifier;
 
 public final class ProjectPreviewTextureCache {
 
-    private static final int MAX_TEXTURES = 64;
+    private static final long MAX_TEXTURE_BYTES = 96L * 1024L * 1024L;
     private static final Map<String, CachedTexture> LOADED_TEXTURES = new LinkedHashMap<>(16, 0.75F, true);
+    private static long loadedTextureBytes;
 
     private ProjectPreviewTextureCache() {
     }
@@ -38,6 +39,7 @@ public final class ProjectPreviewTextureCache {
         try (var stream = Files.newInputStream(previewPath)) {
             image = NativeImage.read(stream);
         }
+        long textureBytes = estimatedTextureBytes(image.getWidth(), image.getHeight());
 
         Identifier textureId = Identifier.fromNamespaceAndPath(
                 LumaMod.MOD_ID,
@@ -46,7 +48,8 @@ public final class ProjectPreviewTextureCache {
         DynamicTexture texture = new DynamicTexture(() -> "luma-preview-" + key, image);
         texture.upload();
         Minecraft.getInstance().getTextureManager().register(textureId, texture);
-        LOADED_TEXTURES.put(key, new CachedTexture(textureId, fingerprint));
+        LOADED_TEXTURES.put(key, new CachedTexture(textureId, fingerprint, textureBytes));
+        loadedTextureBytes += textureBytes;
         trimToMax();
         return textureId;
     }
@@ -64,6 +67,7 @@ public final class ProjectPreviewTextureCache {
             releaseTexture(texture);
         }
         LOADED_TEXTURES.clear();
+        loadedTextureBytes = 0L;
     }
 
     private static String cacheKey(String projectName, String versionId) {
@@ -76,7 +80,7 @@ public final class ProjectPreviewTextureCache {
 
     private static void trimToMax() {
         Iterator<Map.Entry<String, CachedTexture>> iterator = LOADED_TEXTURES.entrySet().iterator();
-        while (LOADED_TEXTURES.size() > MAX_TEXTURES && iterator.hasNext()) {
+        while (loadedTextureBytes > MAX_TEXTURE_BYTES && LOADED_TEXTURES.size() > 1 && iterator.hasNext()) {
             Map.Entry<String, CachedTexture> eldest = iterator.next();
             iterator.remove();
             releaseTexture(eldest.getValue());
@@ -85,9 +89,20 @@ public final class ProjectPreviewTextureCache {
 
     private static void releaseTexture(CachedTexture texture) {
         Minecraft.getInstance().getTextureManager().release(texture.textureId());
+        loadedTextureBytes = Math.max(0L, loadedTextureBytes - texture.estimatedBytes());
     }
 
-    private record CachedTexture(Identifier textureId, PreviewFileFingerprint fingerprint) {
+    static long estimatedTextureBytesForTest(int width, int height) {
+        return estimatedTextureBytes(width, height);
+    }
+
+    private static long estimatedTextureBytes(int width, int height) {
+        long sanitizedWidth = Math.max(1L, width);
+        long sanitizedHeight = Math.max(1L, height);
+        return Math.multiplyExact(Math.multiplyExact(sanitizedWidth, sanitizedHeight), 4L);
+    }
+
+    private record CachedTexture(Identifier textureId, PreviewFileFingerprint fingerprint, long estimatedBytes) {
     }
 
     private record PreviewFileFingerprint(

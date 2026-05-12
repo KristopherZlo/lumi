@@ -2,7 +2,6 @@ package io.github.luma.ui.controller;
 
 import io.github.luma.domain.model.MaterialDeltaEntry;
 import io.github.luma.domain.model.VersionDiff;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,7 +18,13 @@ import java.util.function.Supplier;
  */
 public final class AsyncCompareCache {
 
-    private static final int DEFAULT_MAX_REQUESTS = 24;
+    private static final long DEFAULT_MAX_BYTES = 64L * 1024L * 1024L;
+    private static final long PENDING_REQUEST_BYTES = 64L * 1024L;
+    private static final long MIN_RESULT_BYTES = 16L * 1024L;
+    private static final long BASE_RESULT_BYTES = 4L * 1024L;
+    private static final long DIFF_BLOCK_BYTES = 384L;
+    private static final long ENTITY_DIFF_BYTES = 512L;
+    private static final long MATERIAL_DELTA_BYTES = 96L;
     private static final AsyncCompareCache INSTANCE = new AsyncCompareCache();
 
     private final ExecutorService executor = Executors.newFixedThreadPool(2, task -> {
@@ -30,7 +35,11 @@ public final class AsyncCompareCache {
     private final BoundedRequestCache requests;
 
     private AsyncCompareCache() {
-        this.requests = new BoundedRequestCache(DEFAULT_MAX_REQUESTS);
+        this(DEFAULT_MAX_BYTES);
+    }
+
+    AsyncCompareCache(long maxBytes) {
+        this.requests = new BoundedRequestCache(maxBytes);
     }
 
     public static AsyncCompareCache getInstance() {
@@ -65,6 +74,10 @@ public final class AsyncCompareCache {
         return this.requests.size();
     }
 
+    long cachedBytesForTest() {
+        return this.requests.bytes();
+    }
+
     private static void cancelIfRunning(CompletableFuture<CompareResult> future) {
         if (!future.isDone()) {
             future.cancel(true);
@@ -81,35 +94,49 @@ public final class AsyncCompareCache {
 
     private static final class BoundedRequestCache {
 
-        private final int maxRequests;
-        private final LinkedHashMap<CompareRequestKey, CompletableFuture<CompareResult>> requests =
+        private final long maxBytes;
+        private final LinkedHashMap<CompareRequestKey, CachedRequest> requests =
                 new LinkedHashMap<>(16, 0.75F, true);
+        private long currentBytes;
 
-        private BoundedRequestCache(int maxRequests) {
-            this.maxRequests = Math.max(1, maxRequests);
+        private BoundedRequestCache(long maxBytes) {
+            this.maxBytes = Math.max(MIN_RESULT_BYTES, maxBytes);
         }
 
         private synchronized CompletableFuture<CompareResult> getOrCreate(
                 CompareRequestKey key,
                 Supplier<CompletableFuture<CompareResult>> supplier
         ) {
-            CompletableFuture<CompareResult> existing = this.requests.get(key);
+            CachedRequest existing = this.requests.get(key);
             if (existing != null) {
-                return existing;
+                return existing.future();
             }
             CompletableFuture<CompareResult> future = supplier.get();
-            this.requests.put(key, future);
+            CachedRequest request = new CachedRequest(future, PENDING_REQUEST_BYTES);
+            this.requests.put(key, request);
+            this.currentBytes += request.estimatedBytes();
+            future.whenComplete((result, failure) ->
+                    this.updateEstimatedBytes(key, request, result == null ? MIN_RESULT_BYTES : result.estimatedBytes())
+            );
             this.trimToMax();
             return future;
         }
 
         private synchronized Optional<CompletableFuture<CompareResult>> remove(CompareRequestKey key) {
-            return Optional.ofNullable(this.requests.remove(key));
+            CachedRequest request = this.requests.remove(key);
+            if (request == null) {
+                return Optional.empty();
+            }
+            this.currentBytes -= request.estimatedBytes();
+            return Optional.of(request.future());
         }
 
         private synchronized void clear() {
-            List<CompletableFuture<CompareResult>> futures = new ArrayList<>(this.requests.values());
+            List<CompletableFuture<CompareResult>> futures = this.requests.values().stream()
+                    .map(CachedRequest::future)
+                    .toList();
             this.requests.clear();
+            this.currentBytes = 0L;
             futures.forEach(AsyncCompareCache::cancelIfRunning);
         }
 
@@ -117,14 +144,37 @@ public final class AsyncCompareCache {
             return this.requests.size();
         }
 
-        private void trimToMax() {
-            Iterator<Map.Entry<CompareRequestKey, CompletableFuture<CompareResult>>> iterator =
-                    this.requests.entrySet().iterator();
-            while (this.requests.size() > this.maxRequests && iterator.hasNext()) {
-                Map.Entry<CompareRequestKey, CompletableFuture<CompareResult>> eldest = iterator.next();
-                iterator.remove();
-                cancelIfRunning(eldest.getValue());
+        private synchronized long bytes() {
+            return this.currentBytes;
+        }
+
+        private synchronized void updateEstimatedBytes(
+                CompareRequestKey key,
+                CachedRequest request,
+                long estimatedBytes
+        ) {
+            CachedRequest current = this.requests.get(key);
+            if (current != request) {
+                return;
             }
+            long sanitizedBytes = Math.max(MIN_RESULT_BYTES, estimatedBytes);
+            this.currentBytes += sanitizedBytes - request.estimatedBytes();
+            this.requests.put(key, new CachedRequest(request.future(), sanitizedBytes));
+            this.trimToMax();
+        }
+
+        private void trimToMax() {
+            Iterator<Map.Entry<CompareRequestKey, CachedRequest>> iterator =
+                    this.requests.entrySet().iterator();
+            while (this.currentBytes > this.maxBytes && this.requests.size() > 1 && iterator.hasNext()) {
+                Map.Entry<CompareRequestKey, CachedRequest> eldest = iterator.next();
+                iterator.remove();
+                this.currentBytes -= eldest.getValue().estimatedBytes();
+                cancelIfRunning(eldest.getValue().future());
+            }
+        }
+
+        private record CachedRequest(CompletableFuture<CompareResult> future, long estimatedBytes) {
         }
     }
 
@@ -138,6 +188,26 @@ public final class AsyncCompareCache {
 
         public CompareResult {
             materialDelta = materialDelta == null ? List.of() : List.copyOf(materialDelta);
+        }
+
+        long estimatedBytes() {
+            long bytes = BASE_RESULT_BYTES;
+            if (this.diff != null) {
+                bytes += (long) this.diff.changedEntityCount() * ENTITY_DIFF_BYTES;
+                for (var block : this.diff.changedBlocks()) {
+                    bytes += DIFF_BLOCK_BYTES
+                            + stringBytes(block.leftState())
+                            + stringBytes(block.rightState())
+                            + stringBytes(block.leftBlockId())
+                            + stringBytes(block.rightBlockId());
+                }
+            }
+            bytes += (long) this.materialDelta.size() * MATERIAL_DELTA_BYTES;
+            return Math.max(MIN_RESULT_BYTES, bytes);
+        }
+
+        private static long stringBytes(String value) {
+            return value == null ? 0L : (long) value.length() * 2L;
         }
     }
 

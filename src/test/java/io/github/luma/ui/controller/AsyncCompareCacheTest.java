@@ -1,6 +1,10 @@
 package io.github.luma.ui.controller;
 
+import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.ChangeType;
+import io.github.luma.domain.model.DiffBlockEntry;
 import io.github.luma.domain.model.VersionDiff;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -82,20 +86,20 @@ class AsyncCompareCacheTest {
     }
 
     @Test
-    void oldestRequestsAreEvictedWhenCacheLimitIsReached() throws Exception {
-        AsyncCompareCache cache = AsyncCompareCache.getInstance();
+    void oldestRequestsAreEvictedWhenByteLimitIsReached() throws Exception {
+        AsyncCompareCache cache = new AsyncCompareCache(48L * 1024L);
         CompareRequestKey firstKey = key(0);
 
         cache.request(firstKey, () -> result(0), true);
         awaitReady(cache, firstKey);
-        for (int index = 1; index <= 24; index++) {
+        for (int index = 1; index <= 2; index++) {
             int marker = index;
             CompareRequestKey requestKey = key(marker);
-            cache.request(requestKey, () -> result(marker), true);
+            cache.request(requestKey, () -> resultWithBlocks(marker, 50), true);
             awaitReady(cache, requestKey);
         }
 
-        assertEquals(24, cache.cachedRequestCountForTest());
+        assertTrue(cache.cachedBytesForTest() <= 48L * 1024L);
 
         cache.request(firstKey, () -> result(99), false);
         AsyncCompareCache.CompareResultState reloaded = awaitReady(cache, firstKey);
@@ -120,6 +124,22 @@ class AsyncCompareCacheTest {
     private static AsyncCompareCache.CompareResult result(int marker) {
         return new AsyncCompareCache.CompareResult(
                 new VersionDiff("v%04d".formatted(marker), "v0002", List.of(), 0),
+                List.of()
+        );
+    }
+
+    private static AsyncCompareCache.CompareResult resultWithBlocks(int marker, int count) {
+        List<DiffBlockEntry> blocks = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            blocks.add(new DiffBlockEntry(
+                    new BlockPoint(index, 64, marker),
+                    "minecraft:stone",
+                    "minecraft:glass",
+                    ChangeType.CHANGED
+            ));
+        }
+        return new AsyncCompareCache.CompareResult(
+                new VersionDiff("v%04d".formatted(marker), "v0002", blocks, 1),
                 List.of()
         );
     }
