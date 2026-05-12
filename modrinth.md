@@ -1,134 +1,249 @@
 # Lumi
 
-![Lumi banner](lumi-banner.png)
+![Lumi banner showing the Lumi build history mod branding](lumi-banner.png)
 
-![Minecraft](https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge)
-![Loader](https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge)
-![Java](https://img.shields.io/badge/Java-21-1F6FEB?style=for-the-badge)
-![Environment](https://img.shields.io/badge/Environment-Singleplayer%20First-2EA043?style=for-the-badge)
+![Minecraft 1.21.11](https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge)
+![Fabric loader](https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge)
+![Java 21](https://img.shields.io/badge/Java-21-1F6FEB?style=for-the-badge)
+![Singleplayer first](https://img.shields.io/badge/Environment-Singleplayer%20First-2EA043?style=for-the-badge)
 [![Donate with PayPal](https://img.shields.io/badge/Donate-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W)
 
-Lumi is singleplayer-first build history for Minecraft.
+Stop duplicating world folders just to protect a build.
 
-Save builds, compare changes, branch ideas, restore older states, recover interrupted work, and undo recent tracked edits without juggling duplicate world folders.
+Lumi gives Minecraft builders project-style history: save versions, compare changes, branch ideas, roll back mistakes, recover interrupted work, and keep building with less fear.
 
-## What Lumi Is For
+**Focus:** build history, rollback, branching, compare, recovery, and undo/redo.
 
-Lumi is made for builders and redstoners who want to:
+**For:** singleplayer builders, redstoners, map makers, and creative players who iterate a lot.
 
-- save named restore points for a build
-- see exactly what changed since a save
-- try alternate design branches without losing the stable version
-- restore a whole save or only a selected region
-- recover unsaved work after a crash or accidental close
-- undo recent gameplay, explosion, water, and supported builder-tool edits
-- move project history between worlds with import/export packages
+**Minecraft / Loader / Java:** Minecraft `1.21.11`, Fabric Loader `0.19.2+`, Java `21`.
 
-## Core Features
+**Status:** Alpha. Keep normal world backups.
 
-- Automatic project history for the current dimension or tracked build area.
-- Save versions with a message, stats, preview image, patch payload, and optional checkpoint snapshot.
-- Branch-like variants for alternate ideas.
-- Local branch merge into the current branch with conflict planning and a new merge save.
-- Rename saves, soft-delete saves, soft-delete inactive branches, and review deleted saves from the More screen.
-- Compare a save against its parent, another save, a branch head, or the live current build.
-- In-world compare highlight with an x-ray hold mode through the Lumi action button.
-- Hotkey information table with default `Left Alt+I`, using your current remapped Lumi controls.
-- Restore saved versions back into the world with progress reporting.
-- Partial restore from save details using manual XYZ bounds or the current Lumi selection, with `Only selected area` and `Everything except selection` modes, plus live undo/redo for the applied partial restore.
-- Runtime-only wooden-sword region selection with highlighted cuboid bounds.
-- Crash recovery drafts with a direct recovery prompt only for interrupted work from a previous session.
-- Optional auto checkpoints before large vanilla `/fill` or `/clone`, WorldEdit, or Axiom edits when pending work exists. This setting is off by default.
-- Zip import/export for portable history packages and review projects.
-- Storage cleanup for orphaned snapshots, previews, caches, and stale operation drafts.
-- Material delta summaries and integrity checks.
-- Localized UI resources for English, Russian, French, Spanish, German, and Finnish.
+## What To Expect
 
-## Undo And Redo
+Lumi is for players who want a safer way to experiment with builds.
 
-Lumi tracks recent builder actions separately from saved versions.
+It is focused on:
 
-- Default undo chord: `Left Alt+Z`.
-- Default redo chord: `Left Alt+Y`.
-- Default hotkey information chord: `Left Alt+I`.
-- `Left Alt` is the default Lumi action button and can be rebound in Minecraft controls.
-- Changing the Lumi action button changes the undo, redo, quick-save, preview, selection, and deselect chords that use it.
-- WorldEdit and FAWE actions use the tools' native undo/redo commands through Lumi's hotkeys.
-- Axiom capability actions replay through Lumi undo/redo, including tool-assisted breaks and placements.
-- TNT, explosion, water, falling-block, and nearby block-update fallout can be folded into the matching tracked action.
-- Dropped item entities from those effects are undo-only action data: undo removes them, redo respawns them, and saved versions/recovery drafts do not persist them.
+- saving build milestones
+- seeing what changed
+- trying alternate directions
+- restoring old states
+- recovering interrupted work
+- undoing recent tracked edits
+- singleplayer and integrated-server workflows
 
-## Region Selection And Partial Restore
+It is not focused on:
 
-Use a wooden sword as Lumi's selection tool.
+- new blocks, items, mobs, biomes, or dimensions
+- survival progression
+- tech automation
+- server claims or economy systems
+- replacing normal world backups
 
-- Left click in `corners` mode sets corner A.
-- Right click in `corners` mode sets corner B.
-- Left click in `extend` mode expands the selected bounds.
-- Right click in `extend` mode resets the selection to the looked-at block.
-- Lumi action button + scroll toggles `corners` / `extend`.
-- Lumi action button + right click clears the selection.
-- Selection raycasts through already loaded/rendered client chunks and does not force chunk loading.
+## Features
 
-Open a save, choose `Restore selected area`, choose `Only selected area` to copy the selection from that save or `Everything except selection` to restore around it, use the current Lumi selection or edit XYZ bounds manually, preview the affected blocks, then apply the partial restore as a new save.
+### Save Your Build Like A Project
 
-## Builder Tool Capture
+Turn a dimension or build area into a Lumi project. Save named versions as your build evolves, keep preview images and change stats, and return to earlier milestones without juggling copies of the entire save folder.
 
-Lumi captures normal player edits and a conservative set of builder-tool mutation paths, including:
+- Create project history for the current dimension or a tracked build area.
+- Save named versions with stats, previews, and restore data.
+- Use quick save for fast checkpoints while building.
+- Rename saves, soft-delete old saves, and review deleted saves later.
+
+### See What Changed
+
+Lumi helps you inspect progress before you commit to a restore or merge.
+
+- Compare a save with its parent.
+- Compare two saves.
+- Compare a branch head with another state.
+- Compare a save with the current world.
+- Highlight changed blocks in the world.
+- Hold the Lumi action button to view compare highlights through blocks.
+
+### Rollback Without Panic
+
+Mistakes happen. Lumi gives you several ways back.
+
+- Restore a full saved version.
+- Quick rollback unsaved work to the active save.
+- Restore only a selected region.
+- Restore everything except a selected region.
+- Track restore progress during longer operations.
+- Undo and redo recent tracked actions without creating a full save first.
+
+### Try Ideas With Branches
+
+Want to test a roof shape, palette swap, redstone layout, or alternate facade without losing the stable version? Branch it.
+
+- Create branch-like variants for alternate ideas.
+- Switch between build directions.
+- Merge local branch work back into the current branch.
+- Export and import portable history packages.
+- Export and import full project archives.
+- Review imported projects before applying them.
+
+### Recover Interrupted Work
+
+Crashes and accidental closes should not automatically erase your latest work.
+
+- Keep interrupted edits in recovery drafts.
+- Restore, save, or discard recovered work.
+- Use restore return points for safer restore workflows.
+- Run cleanup tools for unused previews, caches, stale operation drafts, and orphaned data.
+- Run integrity checks from the Lumi UI.
+
+### Works With Builder Tools
+
+Lumi captures normal player edits and a conservative set of builder-tool mutation paths.
+
+Supported or partially supported paths include:
 
 - WorldEdit
 - FAWE-style chunk placement
-- Axiom block buffers
+- Axiom-style block buffers
 - Axion
 - AutoBuild
 - SimpleBuilding
 - Effortless Building
 - Litematica/Tweakeroo placement paths
-- known tool stacks that reach Minecraft block or entity mutation paths
+- other tools that modify blocks through normal Minecraft mutation paths
 
-WorldEdit support is optional and does not add a hard runtime dependency.
+Builder-tool capture is best-effort because external tools change worlds in different ways. WorldEdit support is optional and does not add a hard runtime dependency.
 
-## Recovery And Safety
+## Hotkeys
 
-- Pending changes are flushed to recovery draft storage in the background.
-- If the game crashes or the world is closed with an interrupted draft, Lumi routes project opening to a recovery screen.
-- Recovery actions let you restore, save, or discard the draft.
-- Auto checkpointing before large external edits is available in settings and is disabled by default.
-- Old history data is soft-deleted or left on disk for safety unless cleanup tools explicitly identify removable files.
+All keybinds can be changed in Minecraft `Controls` -> `Lumi`.
 
-## Performance Notes
+| Default | Action |
+| --- | --- |
+| `U` | Open the current Build History workspace |
+| `Left Alt+S` | Open Quick save |
+| `Left Alt+Z` | Undo the latest tracked action |
+| `Left Alt+Y` | Redo the latest undone tracked action |
+| Hold `Left Alt` | Preview next undo/redo targets, or use compare x-ray when compare is active |
+| `R` | Quick rollback unsaved work, or only the selected area when a Lumi selection is active |
+| `H` | Hide or show the active compare overlay |
+| `Left Alt+I` | Open the Lumi hotkey information table |
 
-- Heavy save, compare, and restore preparation stays off the server tick.
-- Restore apply uses prepared chunk batches and reports progress.
-- JSON parsing, LZ4 decompression, and block-state decoding are kept away from the tick-thread apply path.
-- Lumi screens do not pause the game.
-- The mod is designed for singleplayer and integrated-server workflows first.
+`Left Alt` is the default Lumi action button. Rebinding it changes the shortcuts that use it.
 
-## Quick Start
+## Region Selection
 
-1. Open a local singleplayer world.
-2. Press `U` to open Build History.
-3. Create or open the project for the current dimension.
-4. Build normally.
-5. Use `Left Alt+S` for quick save, or `Save build` for the full save screen.
-6. Use `See changes`, `Restore`, `Branches`, `Import / Export`, or `More` from the workspace UI.
-7. Use `Left Alt+Z` / `Left Alt+Y` while no screen is open to undo/redo the latest tracked action.
+Use a wooden sword as Lumi's selection tool.
 
-All default keybinds can be changed under Minecraft `Controls` -> `Lumi`.
+| Input | Action |
+| --- | --- |
+| Left click in `corners` mode | Set corner A |
+| Right click in `corners` mode | Set corner B |
+| Left click in `extend` mode | Expand the selected bounds |
+| Right click in `extend` mode | Reset the selection to the looked-at block |
+| Lumi action button + scroll | Toggle `corners` / `extend` mode |
+| Lumi action button + right click | Clear the selection |
 
-## Builder Terms
+Selections are used for partial restore and selected-area quick rollback.
 
-- `Project` - one tracked dimension or build area.
-- `Version` - one saved history point.
-- `Variant` - a named branch-like line of work.
-- `Compare` - a diff between saved data and another saved state or the current world.
-- `Restore` - applying saved data back into the map.
-- `Partial restore` - applying selected bounds from an older save, or restoring the save around selected bounds.
-- `Recovery` - draft data kept for interrupted unsaved work.
+## Client / Server
 
-## Requirements
+Required on:
 
-- Minecraft `1.21.11`
-- Fabric Loader `0.19.2`
+- Client: Yes
+- Server: Yes, when used on a dedicated server
+
+Support:
+
+- Singleplayer: Supported and primary target
+- Integrated server: Supported
+- Dedicated server: Available, but not the main target
+- Server-side only: No
+- Client-side only: No
+
+Lumi is singleplayer-first. Multiplayer and dedicated-server use should be treated as advanced usage.
+
+## Installation
+
+1. Install Fabric Loader for Minecraft `1.21.11`.
+2. Install Fabric API.
+3. Install Lumi and its required dependencies.
+4. Put the `.jar` files in your `mods` folder.
+5. Launch the game.
+
+## Dependencies
+
+Required:
+
+- Fabric Loader `0.19.2+`
 - Fabric API `0.141.3+1.21.11`
-- Java `21`
+- Java `21+`
+- owo-lib `0.13.0+1.21.11`
+- Cloth Config `21.11.153+`
+
+Bundled inside Lumi:
+
+- lz4-java
+
+Optional:
+
+- WorldEdit
+- FAWE-compatible tools
+- Axiom
+- other builder tools listed above
+
+Dependencies should also be set in the Modrinth version metadata.
+
+## Compatibility
+
+Known:
+
+- Designed for Minecraft `1.21.11`.
+- Designed for Fabric.
+- Built for singleplayer and integrated-server creative/building workflows.
+- Optional builder-tool support is best-effort and conservative.
+
+Not guaranteed:
+
+- Large public multiplayer servers.
+- Heavy modpacks that replace core world mutation behavior.
+- Every version of every builder tool.
+- Use as a replacement for normal world backups.
+
+## Known Issues And Risks
+
+- Lumi is alpha software. Keep normal world backups.
+- Existing pre-Lumi worlds may show a one-time safety checkpoint gate before opening.
+- Very large restores can take time, but should report progress.
+- Builder-tool capture depends on how the external tool changes the world.
+
+## FAQ
+
+**Does Lumi add blocks, items, mobs, or worldgen?**
+
+No. Lumi adds build history tools and UI.
+
+**Can I use it on an existing world?**
+
+Yes, but keep a backup. Existing pre-Lumi worlds may need the safety checkpoint step.
+
+**Is this only for singleplayer?**
+
+Singleplayer is the primary target. Dedicated server use exists but is not the main focus.
+
+**Does it replace world backups?**
+
+No. Lumi helps with build history, restore, recovery, and iteration. You should still keep normal backups.
+
+**Can I use it in a modpack?**
+
+Yes, as long as the license and dependencies are respected. Test carefully in large packs.
+
+## Credits
+
+- Developer: Zlo
+- Translations: Lumi project contributors
+
+## License
+
+Lumi is licensed under `GPL-3.0-only`.
