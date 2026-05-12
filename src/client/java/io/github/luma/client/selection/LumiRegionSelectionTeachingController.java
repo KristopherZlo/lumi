@@ -6,12 +6,15 @@ import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.ui.controller.ClientProjectAccess;
+import io.github.luma.ui.overlay.CompareOverlayHotkeyHud;
+import io.github.luma.ui.overlay.RoundedHudRenderer;
 import java.util.List;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
@@ -33,7 +36,7 @@ public final class LumiRegionSelectionTeachingController {
     private final ClientContextualHelpService helpService;
     private final SelectionToolTeachingState teachingState;
     private boolean hudVisible;
-    private Component cachedActionKey = Component.empty();
+    private KeyMapping cachedActionKey;
 
     public LumiRegionSelectionTeachingController() {
         this(new ProjectService(), new ClientContextualHelpService(), new SelectionToolTeachingState());
@@ -110,33 +113,64 @@ public final class LumiRegionSelectionTeachingController {
             return;
         }
 
-        List<Component> lines = List.of(
-                Component.translatable("luma.selection.hud_primary"),
-                Component.translatable("luma.selection.hud_secondary"),
-                Component.translatable("luma.selection.hud_clear", this.cachedActionKey),
-                Component.translatable("luma.selection.hud_mode", this.cachedActionKey)
+        Font font = client.font;
+        List<Row> rows = List.of(
+                new Row(List.of("LMB"), "First corner"),
+                new Row(List.of("RMB"), "Second corner"),
+                new Row(List.of("ACTION", "RMB"), "Clear selection"),
+                new Row(List.of("ACTION", "Scroll"), "Selection mode")
         );
-        int lineHeight = 10;
-        int width = lines.stream()
-                .mapToInt(client.font::width)
+        int lineHeight = 24;
+        int width = rows.stream()
+                .mapToInt(row -> this.rowWidth(font, row))
                 .max()
-                .orElse(1) + 12;
-        int height = (lines.size() * lineHeight) + 8;
+                .orElse(1) + 28;
+        int height = (rows.size() * lineHeight) + 12;
         int x = 8;
-        int y = Math.max(8, graphics.guiHeight() - height - 8);
+        int y = Math.max(8, graphics.guiHeight() - height - 8 - CompareOverlayHotkeyHud.reservedBottomHeight());
 
-        graphics.fill(x, y, x + width, y + height, 0xB80B1016);
-        graphics.renderOutline(x, y, width, height, 0xFF35C6FF);
-        for (int index = 0; index < lines.size(); index++) {
-            graphics.drawString(client.font, lines.get(index), x + 6, y + 5 + (index * lineHeight), 0xFFF3F7FA, false);
+        RoundedHudRenderer.card(graphics, x, y, width, height);
+        for (int index = 0; index < rows.size(); index++) {
+            this.drawRow(graphics, font, rows.get(index), x + 12, y + 7 + (index * lineHeight));
         }
     }
 
-    private Component actionKey() {
-        KeyMapping key = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
-        if (key == null || key.isUnbound()) {
-            return Component.translatable("luma.onboarding.key_unbound");
+    private int rowWidth(Font font, Row row) {
+        return this.keyGroupWidth(row.keys()) + 6 + font.width(row.text());
+    }
+
+    private int keyGroupWidth(List<String> keys) {
+        int width = 0;
+        for (int index = 0; index < keys.size(); index++) {
+            if (index > 0) {
+                width += 3;
+            }
+            String key = keys.get(index);
+            width += "ACTION".equals(key)
+                    ? RoundedHudRenderer.keyWidth(this.cachedActionKey, "Alt")
+                    : RoundedHudRenderer.textChipWidth(key);
         }
-        return key.getTranslatedKeyMessage();
+        return width;
+    }
+
+    private void drawRow(GuiGraphics graphics, Font font, Row row, int x, int y) {
+        int cursor = x;
+        for (int index = 0; index < row.keys().size(); index++) {
+            if (index > 0) {
+                cursor += 3;
+            }
+            String key = row.keys().get(index);
+            cursor += "ACTION".equals(key)
+                    ? RoundedHudRenderer.key(graphics, this.cachedActionKey, cursor, y, "Alt")
+                    : RoundedHudRenderer.textChip(graphics, key, cursor, y);
+        }
+        graphics.drawString(font, Component.literal(": " + row.text()), cursor + 6, y + 6, RoundedHudRenderer.MUTED, false);
+    }
+
+    private KeyMapping actionKey() {
+        return LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
+    }
+
+    private record Row(List<String> keys, String text) {
     }
 }

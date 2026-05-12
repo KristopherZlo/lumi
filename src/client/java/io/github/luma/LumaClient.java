@@ -25,6 +25,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
+import io.github.luma.ui.overlay.CompareOverlayHotkeyHud;
 import io.github.luma.ui.overlay.CompareOverlayCoordinator;
 import io.github.luma.ui.overlay.PendingChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.PendingChangesOverlayRenderer;
@@ -155,6 +156,7 @@ public final class LumaClient implements ClientModInitializer {
         StartupProfiler.logElapsed("client.fabric-events", eventRegistrationStartedAt);
         long hudStartedAt = StartupProfiler.start();
         WorkspaceHudCoordinator.getInstance().registerHud();
+        CompareOverlayHotkeyHud.registerHud();
         this.selectionTeachingController.registerHud();
         ClientOnboardingFlowCoordinator.getInstance().registerHud();
         StartupProfiler.logElapsed("client.hud-registration", hudStartedAt);

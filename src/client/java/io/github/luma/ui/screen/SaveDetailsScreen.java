@@ -211,14 +211,14 @@ public final class SaveDetailsScreen extends LumaScreen {
         ));
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent zoomOut = LumaUi.button(Component.translatable("luma.action.zoom_out"), button -> {
+        ButtonComponent zoomOut = LumaUi.iconButton("zoom-out", Component.translatable("luma.action.zoom_out"), button -> {
             this.previewZoomStep = Math.max(0, this.previewZoomStep - 1);
             this.rebuild();
         });
         zoomOut.active(this.previewZoomStep > 0);
         actions.child(zoomOut);
 
-        ButtonComponent zoomIn = LumaUi.button(Component.translatable("luma.action.zoom_in"), button -> {
+        ButtonComponent zoomIn = LumaUi.iconButton("zoom-in", Component.translatable("luma.action.zoom_in"), button -> {
             this.previewZoomStep = Math.min(this.maxPreviewZoomStep(), this.previewZoomStep + 1);
             this.rebuild();
         });
@@ -363,7 +363,7 @@ public final class SaveDetailsScreen extends LumaScreen {
             this.rebuild();
         }));
 
-        ButtonComponent deleteButton = LumaUi.button(Component.translatable("luma.action.delete_save"), button -> {
+        ButtonComponent deleteButton = LumaUi.iconButton("trash-2", Component.translatable("luma.action.delete_save"), button -> {
             this.pendingDeleteConfirmation = true;
             this.refresh("luma.status.version_delete_confirm");
         });

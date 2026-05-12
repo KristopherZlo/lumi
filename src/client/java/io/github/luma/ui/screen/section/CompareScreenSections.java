@@ -97,11 +97,13 @@ public final class CompareScreenSections {
         section.child(stats);
 
         FlowLayout actionsRow = LumaUi.actionRow();
-        ButtonComponent overlayButton = LumaUi.button(this.overlayButtonLabel(model), button -> this.actions.toggleOverlay());
+        ButtonComponent overlayButton = LumaUi.iconButton(this.overlayIcon(model), this.overlayButtonLabel(model), button -> this.actions.toggleOverlay());
         overlayButton.active(!model.state().diff().changedBlocks().isEmpty() || this.overlayMatches(model));
         actionsRow.child(overlayButton);
 
-        actionsRow.child(LumaUi.button(Component.translatable(
+        actionsRow.child(LumaUi.iconButton(
+                model.showMoreDetails() ? "chevron-up" : "chevron-down",
+                Component.translatable(
                 model.showMoreDetails() ? "luma.action.hide_tools" : "luma.compare.more_details"
         ), button -> this.actions.toggleMoreDetails()));
         section.child(actionsRow);
@@ -222,6 +224,16 @@ public final class CompareScreenSections {
         )
                 ? "luma.action.hide_highlight"
                 : "luma.action.show_highlight");
+    }
+
+    private String overlayIcon(Model model) {
+        return this.overlayMatches(model) && CompareOverlayRenderer.visibleFor(
+                model.projectName(),
+                model.state().leftResolvedVersionId(),
+                model.state().rightResolvedVersionId()
+        )
+                ? "eye-off"
+                : "eye";
     }
 
     private boolean overlayMatches(Model model) {

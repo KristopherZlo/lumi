@@ -285,7 +285,7 @@ public final class ShareScreen extends LumaScreen {
         });
         reviewButton.active(true);
         actions.child(reviewButton);
-        ButtonComponent deleteButton = LumaUi.button(Component.translatable("luma.action.delete_package"), button -> this.deleteImportedProject(importedProject));
+        ButtonComponent deleteButton = LumaUi.iconButton("trash-2", Component.translatable("luma.action.delete_package"), button -> this.deleteImportedProject(importedProject));
         deleteButton.active(!this.operationActive());
         actions.child(deleteButton);
         card.child(actions);

@@ -466,6 +466,7 @@ Overlay controls:
 - press `H` to hide or show the current highlight without rebuilding the comparison;
 - hold the compare x-ray key to see the highlight through blocks;
 - the x-ray key defaults to the Lumi action button, `Left Alt`;
+- when compare data is active, a lower-left hotkey card shows the current show/hide and x-ray bindings;
 - if one side is `current`, the highlight can refresh while you keep editing;
 - very large current-build highlights keep their initial snapshot to avoid client stalls.
 

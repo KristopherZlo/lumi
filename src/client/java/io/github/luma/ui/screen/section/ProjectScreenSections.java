@@ -334,8 +334,8 @@ public final class ProjectScreenSections {
         card.child(hero);
 
         FlowLayout saveActions = LumaUi.actionRow();
-        saveActions.child(LumaUi.button(Component.translatable("luma.action.open_save"), button -> this.actions.openSaveDetails(version.id())));
-        ButtonComponent restoreButton = LumaUi.button(Component.translatable("luma.action.restore_this_save"), button -> {
+        saveActions.child(LumaUi.iconButton("folder-open", Component.translatable("luma.action.open_save"), button -> this.actions.openSaveDetails(version.id())));
+        ButtonComponent restoreButton = LumaUi.iconButton("rotate-ccw", Component.translatable("luma.action.restore_this_save"), button -> {
             if (versionVariant != null) {
                 this.actions.requestRestore(versionVariant, version);
             }

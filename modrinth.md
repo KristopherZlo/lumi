@@ -20,6 +20,10 @@ Lumi gives Minecraft builders project-style history: save versions, compare chan
 
 **Status:** Alpha. Keep normal world backups.
 
+![AI placeholder showing the Lumi Build History UI over a Minecraft-style build](docs/modrinth-assets/hero-build-history.png)
+
+![Decorative Lumi section divider with a dark voxel timeline style](docs/modrinth-assets/section-divider.png)
+
 ## What To Expect
 
 Lumi is for players who want a safer way to experiment with builds.
@@ -42,6 +46,8 @@ It is not focused on:
 - server claims or economy systems
 - replacing normal world backups
 
+![Decorative Lumi section divider with a dark voxel timeline style](docs/modrinth-assets/section-divider.png)
+
 ## Features
 
 ### Save Your Build Like A Project
@@ -57,6 +63,8 @@ Turn a dimension or build area into a Lumi project. Save named versions as your 
 
 Lumi helps you inspect progress before you commit to a restore or merge.
 
+![AI placeholder showing a Lumi compare overlay highlighting changed blocks](docs/modrinth-assets/compare-overlay-placeholder.png)
+
 - Compare a save with its parent.
 - Compare two saves.
 - Compare a branch head with another state.
@@ -68,6 +76,8 @@ Lumi helps you inspect progress before you commit to a restore or merge.
 
 Mistakes happen. Lumi gives you several ways back.
 
+![AI placeholder showing Lumi undo and redo restoring a Minecraft-style build edit](docs/modrinth-assets/undo-redo-placeholder.png)
+
 - Restore a full saved version.
 - Quick rollback unsaved work to the active save.
 - Restore only a selected region.
@@ -78,6 +88,8 @@ Mistakes happen. Lumi gives you several ways back.
 ### Try Ideas With Branches
 
 Want to test a roof shape, palette swap, redstone layout, or alternate facade without losing the stable version? Branch it.
+
+![AI placeholder showing Lumi branch and recovery UI panels](docs/modrinth-assets/branches-recovery-placeholder.png)
 
 - Create branch-like variants for alternate ideas.
 - Switch between build directions.
@@ -114,6 +126,8 @@ Supported or partially supported paths include:
 
 Builder-tool capture is best-effort because external tools change worlds in different ways. WorldEdit support is optional and does not add a hard runtime dependency.
 
+![Decorative Lumi section divider with a dark voxel timeline style](docs/modrinth-assets/section-divider.png)
+
 ## Hotkeys
 
 All keybinds can be changed in Minecraft `Controls` -> `Lumi`.
@@ -135,6 +149,8 @@ All keybinds can be changed in Minecraft `Controls` -> `Lumi`.
 
 Use a wooden sword as Lumi's selection tool.
 
+![AI placeholder showing Lumi partial restore region selection around part of a build](docs/modrinth-assets/partial-restore-placeholder.png)
+
 | Input | Action |
 | --- | --- |
 | Left click in `corners` mode | Set corner A |
@@ -145,6 +161,8 @@ Use a wooden sword as Lumi's selection tool.
 | Lumi action button + right click | Clear the selection |
 
 Selections are used for partial restore and selected-area quick rollback.
+
+![Decorative Lumi section divider with a dark voxel timeline style](docs/modrinth-assets/section-divider.png)
 
 ## Client / Server
 

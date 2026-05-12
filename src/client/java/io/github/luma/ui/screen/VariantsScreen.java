@@ -269,7 +269,7 @@ public final class VariantsScreen extends LumaScreen {
         mergeButton.active(!active && headVersion != null && !this.operationActive());
         actions.child(mergeButton);
 
-        ButtonComponent deleteButton = LumaUi.button(Component.translatable("luma.action.delete_branch"), button -> {
+        ButtonComponent deleteButton = LumaUi.iconButton("trash-2", Component.translatable("luma.action.delete_branch"), button -> {
             String result = this.actionController.deleteVariant(this.projectName, variant.id());
             this.refresh(result);
         });
