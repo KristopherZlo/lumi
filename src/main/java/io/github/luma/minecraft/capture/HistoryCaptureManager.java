@@ -15,7 +15,6 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.service.ProjectService;
-import io.github.luma.minecraft.debug.CaptureSkipLogThrottler;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import io.github.luma.storage.repository.BaselineChunkRepository;
@@ -50,13 +49,11 @@ public final class HistoryCaptureManager {
     private static final HistoryCaptureManager INSTANCE = new HistoryCaptureManager();
     private static final Duration ACTIVE_DRAFT_FLUSH_INTERVAL = Duration.ofSeconds(3);
     private static final int IDLE_FLUSH_TICK_INTERVAL = 5;
-    private static final int STARTUP_CAPTURE_TRACE_LIMIT = 32;
-    private static final int CAPTURE_SUMMARY_ENTRY_LIMIT = 4;
     private static final CaptureEligibilityService ELIGIBILITY = new CaptureEligibilityService();
     private static final EntityMutationCapturePolicy ENTITY_CAPTURE_POLICY = new EntityMutationCapturePolicy();
 
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
-    private final CaptureSkipLogThrottler captureSkipLogThrottler = new CaptureSkipLogThrottler();
+    private final CaptureDiagnosticsLogger diagnosticsLogger = new CaptureDiagnosticsLogger();
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
     private final WorkingDraftSessionManager workingDrafts = new WorkingDraftSessionManager(this.persistenceCoordinator);
     private final LiveUndoRedoActionRecorder liveUndoRedoActionRecorder =
@@ -387,7 +384,13 @@ public final class HistoryCaptureManager {
                         mutation.oldBlockEntity() != null,
                         mutation.newBlockEntity() != null
                 );
-                this.logAcceptedCaptureTrace(trackedProject.project(), buffer, diagnostics, pendingBefore, pendingAfter);
+                this.diagnosticsLogger.logAcceptedCaptureTrace(
+                        trackedProject.project(),
+                        buffer,
+                        diagnostics,
+                        pendingBefore,
+                        pendingAfter
+                );
                 LumaDebugLog.log(
                         trackedProject.project(),
                         "capture",
@@ -398,7 +401,7 @@ public final class HistoryCaptureManager {
                         buffer.variantId(),
                         buffer.baseVersionId()
                 );
-                this.logBufferProgress(trackedProject.project(), buffer, diagnostics);
+                this.diagnosticsLogger.logBufferProgress(trackedProject.project(), buffer, diagnostics);
                 if (buffer.isEmpty()) {
                     this.workingDrafts.discardIfEmpty(trackedProject, "after block capture");
                 } else {
@@ -625,7 +628,13 @@ public final class HistoryCaptureManager {
                 mutation.oldBlockEntity() != null,
                 mutation.newBlockEntity() != null
         );
-        this.logAcceptedCaptureTrace(trackedProject.project(), buffer, diagnostics, pendingBefore, buffer.size());
+        this.diagnosticsLogger.logAcceptedCaptureTrace(
+                trackedProject.project(),
+                buffer,
+                diagnostics,
+                pendingBefore,
+                buffer.size()
+        );
         if (buffer.isEmpty()) {
             this.workingDrafts.discardIfEmpty(trackedProject, "after bulk block capture");
         } else {
@@ -731,7 +740,11 @@ public final class HistoryCaptureManager {
                         pendingAfter,
                         pendingAfter - pendingBefore
                 );
-                this.logBufferProgress(trackedProject.project(), buffer, this.diagnosticsForSession(projectId));
+                this.diagnosticsLogger.logBufferProgress(
+                        trackedProject.project(),
+                        buffer,
+                        this.diagnosticsForSession(projectId)
+                );
                 if (buffer.isEmpty()) {
                     this.workingDrafts.discardIfEmpty(trackedProject, "after entity capture");
                 } else {
@@ -1469,7 +1482,7 @@ public final class HistoryCaptureManager {
             return true;
         }
         if (!ELIGIBILITY.allowsTrackedChunkExpansion(source, activeSessionRegion)) {
-            this.logSkippedCapture(
+            this.diagnosticsLogger.logSkippedCapture(
                     trackedProject,
                     source,
                     pos,
@@ -1502,7 +1515,7 @@ public final class HistoryCaptureManager {
         String projectId = trackedProject.project().id().toString();
         if (this.workingDrafts.hasBuffer(projectId)) {
             if (!ELIGIBILITY.canUseDirectCapture(source, WorldMutationContext.currentActionId())) {
-                this.logSkippedCapture(
+                this.diagnosticsLogger.logSkippedCapture(
                         trackedProject,
                         source,
                         pos,
@@ -1519,7 +1532,7 @@ public final class HistoryCaptureManager {
             if (this.activeSessionRegionPolicy.contains(level, sessionState, chunk)) {
                 return true;
             }
-            this.logSkippedCapture(
+            this.diagnosticsLogger.logSkippedCapture(
                     trackedProject,
                     source,
                     pos,
@@ -1531,7 +1544,7 @@ public final class HistoryCaptureManager {
         if (allowsSessionBootstrap(source)) {
             return true;
         }
-        this.logSkippedCapture(
+        this.diagnosticsLogger.logSkippedCapture(
                 trackedProject,
                 source,
                 pos,
@@ -1539,45 +1552,6 @@ public final class HistoryCaptureManager {
                 "no active session exists and the source cannot bootstrap capture"
         );
         return false;
-    }
-
-    private void logSkippedCapture(
-            TrackedProject trackedProject,
-            io.github.luma.domain.model.WorldMutationSource source,
-            BlockPos pos,
-            String reason,
-            String detail
-    ) {
-        if (trackedProject == null || !LumaDebugLog.enabled(trackedProject.project())) {
-            return;
-        }
-        BuildProject project = trackedProject.project();
-        CaptureSkipLogThrottler.Decision decision = this.captureSkipLogThrottler.record(project, source, reason, pos);
-        if (!decision.shouldLog()) {
-            return;
-        }
-        if (decision.logSample()) {
-            LumaDebugLog.log(
-                    project,
-                    "capture",
-                    "Skipped {} mutation at {} for project {} because {}",
-                    source,
-                    pos,
-                    project.name(),
-                    detail
-            );
-            return;
-        }
-        LumaDebugLog.log(
-                project,
-                "capture",
-                "Suppressed {} skipped {} mutation logs for project {} reason={} latest={}",
-                decision.suppressedSinceLastLog(),
-                source,
-                project.name(),
-                reason,
-                decision.latestPos()
-        );
     }
 
     private CaptureSessionDiagnostics diagnosticsForSession(String projectId) {
@@ -1744,39 +1718,10 @@ public final class HistoryCaptureManager {
             return;
         }
         String projectId = trackedProject.project().id().toString();
-        this.logReconciliation(trackedProject, result);
+        this.diagnosticsLogger.logReconciliation(trackedProject, result);
         this.liveUndoRedoActionRecorder.recordReconciledChanges(trackedProject, level, result, Instant.now());
         if (session.buffer().isEmpty()) {
             this.workingDrafts.discardIfEmpty(trackedProject, "after reconciliation");
-        }
-    }
-
-    private void logReconciliation(
-            TrackedProject trackedProject,
-            SessionStabilizationService.ReconciliationResult result
-    ) {
-        String message = "Reconciled {} dirty chunks for project {}: delta={} composed={} buffer {} -> {}";
-        LumaDebugLog.log(
-                trackedProject.project(),
-                "capture",
-                message,
-                result.chunkCount(),
-                trackedProject.project().name(),
-                result.deltaChangeCount(),
-                result.composedChangeCount(),
-                result.bufferBefore(),
-                result.bufferAfter()
-        );
-        if (result.bufferChanged()) {
-            LumaMod.LOGGER.info(
-                    message,
-                    result.chunkCount(),
-                    trackedProject.project().name(),
-                    result.deltaChangeCount(),
-                    result.composedChangeCount(),
-                    result.bufferBefore(),
-                    result.bufferAfter()
-            );
         }
     }
 
@@ -1828,70 +1773,6 @@ public final class HistoryCaptureManager {
             }
         }
         return null;
-    }
-
-    private void logAcceptedCaptureTrace(
-            BuildProject project,
-            TrackedChangeBuffer buffer,
-            CaptureSessionDiagnostics diagnostics,
-            int pendingBefore,
-            int pendingAfter
-    ) {
-        int accepted = diagnostics.acceptedMutations();
-        if (accepted <= STARTUP_CAPTURE_TRACE_LIMIT) {
-            LumaDebugLog.log(
-                    project,
-                    "capture",
-                    "Capture trace {}/{} for project {}: source={} sessionSource={} pos={} chunk={}:{} {} -> {} oldBe={} newBe={} pending={} delta={}",
-                    accepted,
-                    STARTUP_CAPTURE_TRACE_LIMIT,
-                    project.name(),
-                    diagnostics.lastSource(),
-                    buffer.mutationSource(),
-                    this.formatPos(diagnostics.lastPos()),
-                    diagnostics.lastChunk().x(),
-                    diagnostics.lastChunk().z(),
-                    diagnostics.lastOldBlockId(),
-                    diagnostics.lastNewBlockId(),
-                    diagnostics.lastOldBlockEntity(),
-                    diagnostics.lastNewBlockEntity(),
-                    pendingAfter,
-                    pendingAfter - pendingBefore
-            );
-            if (accepted == STARTUP_CAPTURE_TRACE_LIMIT) {
-                LumaDebugLog.log(
-                        project,
-                        "capture",
-                        "Capture trace limit reached for project {}. Further accepted mutations in this session will be summarized only at progress checkpoints.",
-                        project.name()
-                );
-            }
-        }
-    }
-
-    private void logBufferProgress(BuildProject project, TrackedChangeBuffer buffer, CaptureSessionDiagnostics diagnostics) {
-        int size = buffer.size();
-        if (size == 1 || size == 64 || size == 256 || (size % 1024) == 0) {
-            LumaMod.LOGGER.info(
-                    "Captured {} pending changes for project {} (accepted={} sources=[{}] transitions=[{}] last={} source={} chunk={}:{})",
-                    size,
-                    project.name(),
-                    diagnostics.acceptedMutations(),
-                    diagnostics.describeTopSources(CAPTURE_SUMMARY_ENTRY_LIMIT),
-                    diagnostics.describeTopTransitions(CAPTURE_SUMMARY_ENTRY_LIMIT),
-                    this.formatPos(diagnostics.lastPos()),
-                    diagnostics.lastSource(),
-                    diagnostics.lastChunk().x(),
-                    diagnostics.lastChunk().z()
-            );
-        }
-    }
-
-    private String formatPos(BlockPos pos) {
-        if (pos == null) {
-            return "unknown";
-        }
-        return pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
 
     public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
