@@ -13,7 +13,6 @@ import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +55,7 @@ public final class WorldOperationManager {
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private ExecutorService backgroundExecutor = createExecutor();
     private final WorldOperationLifecycle lifecycle = new WorldOperationLifecycle();
+    private final WorldOperationMetricsReporter metricsReporter = new WorldOperationMetricsReporter();
     private final WorldOperationShutdownHandler shutdownHandler = new WorldOperationShutdownHandler(
             this.lifecycle,
             this.budgetPlanner,
@@ -1840,8 +1840,7 @@ public final class WorldOperationManager {
 
         @Override
         protected Optional<String> applyMetricsSummary() {
-            this.applyMetrics.recordTotalDuration(Duration.between(this.handle().startedAt(), Instant.now()).toNanos());
-            return Optional.of(this.applyMetrics.summary());
+            return Optional.of(WorldOperationManager.this.metricsReporter.summary(this.handle(), this.applyMetrics));
         }
 
         @Override
@@ -2509,8 +2508,7 @@ public final class WorldOperationManager {
 
         @Override
         protected Optional<String> applyMetricsSummary() {
-            this.applyMetrics.recordTotalDuration(Duration.between(this.handle().startedAt(), Instant.now()).toNanos());
-            return Optional.of(this.applyMetrics.summary());
+            return Optional.of(WorldOperationManager.this.metricsReporter.summary(this.handle(), this.applyMetrics));
         }
 
         @Override
