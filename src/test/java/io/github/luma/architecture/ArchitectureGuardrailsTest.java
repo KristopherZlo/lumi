@@ -42,7 +42,7 @@ class ArchitectureGuardrailsTest {
                 MAIN_SOURCES.resolve("io/github/luma/minecraft/world/WorldOperationManager.java"), 2700,
                 MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 2300,
                 MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/HistoryCaptureManager.java"), 2000,
-                MAIN_SOURCES.resolve("io/github/luma/storage/repository/PatchDataRepository.java"), 830
+                MAIN_SOURCES.resolve("io/github/luma/storage/repository/PatchDataRepository.java"), 640
         );
 
         List<String> offenders = limits.entrySet().stream()
