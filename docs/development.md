@@ -342,4 +342,5 @@ The current repo also ships that policy in [commit-policy.md](commit-policy.md).
 - Preview generation now has a split responsibility: the server can queue preview capture requests in storage, while the client render path fulfills them later.
 - Apply OOP and SOLID consistently. Favor small, focused collaborators with explicit responsibilities over utility-heavy procedural code.
 - Keep business rules in domain services and models, Minecraft-specific side effects in adapter layers, and file I/O inside repositories.
+- Stabilization refactors should shrink hot-path facades by extracting named owner classes with one reason to change. Keep storage schemas and public service APIs stable unless a separate migration plan exists, and use architecture guardrail tests to prevent new layer leaks or helper-style dumps.
 - Treat documentation as part of the implementation. If a change alters data flow, storage, or user-visible behavior, update the docs before the work is considered done.

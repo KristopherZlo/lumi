@@ -15,6 +15,7 @@ Lumi is organized around project history for builders: project, version, branch,
 - Broaden only when a collaborator, test failure, compile error, or documented flow points to another module.
 - For cross-layer work, follow the normal path: UI screen -> UI controller -> domain service -> repository or Minecraft adapter -> model/test.
 - Do not put product rules in UI, Minecraft adapters, repositories, mixins, or static helper sprawl.
+- During stabilization refactors, add named owner classes around hot paths instead of growing `PatchDataRepository`, `RestoreService`, `WorldOperationManager`, or `HistoryCaptureManager`. Keep public facades stable and prove no behavior drift with focused tests.
 - Update this file when adding a new module, workflow owner, or cross-layer responsibility.
 
 ## Documentation Routing
