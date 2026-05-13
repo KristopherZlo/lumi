@@ -95,7 +95,13 @@ class MutationSourcePolicyTest {
     }
 
     @Test
-    void ambientGrowthDirectCaptureRequiresCausalAction() {
+    void ambientSecondaryDirectCaptureRequiresCausalAction() {
+        assertTrue(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.EXPLOSION));
+        assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.EXPLOSION, ""));
+        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.EXPLOSION, "action-1"));
+        assertTrue(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.FIRE));
+        assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.FIRE, ""));
+        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.FIRE, "action-1"));
         assertTrue(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.GROWTH));
         assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.GROWTH, ""));
         assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.GROWTH, null));
@@ -106,8 +112,13 @@ class MutationSourcePolicyTest {
         assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.FALLING_BLOCK, null));
         assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.FLUID, "action-1"));
         assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.FALLING_BLOCK, "action-1"));
-        assertFalse(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.FIRE));
-        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.FIRE, ""));
+        assertTrue(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.MOB));
+        assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.MOB, null));
+        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.MOB, "action-1"));
+        assertFalse(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.PLAYER));
+        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.PLAYER, ""));
+        assertFalse(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.EXPLOSIVE));
+        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.EXPLOSIVE, ""));
     }
 
     @Test

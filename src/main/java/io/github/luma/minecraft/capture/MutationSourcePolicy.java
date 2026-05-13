@@ -142,9 +142,12 @@ final class MutationSourcePolicy {
     }
 
     boolean requiresCausalActionForDirectCapture(WorldMutationSource source) {
-        return source == WorldMutationSource.GROWTH
+        return source == WorldMutationSource.EXPLOSION
+                || source == WorldMutationSource.FIRE
+                || source == WorldMutationSource.GROWTH
                 || source == WorldMutationSource.FLUID
-                || source == WorldMutationSource.FALLING_BLOCK;
+                || source == WorldMutationSource.FALLING_BLOCK
+                || source == WorldMutationSource.MOB;
     }
 
     boolean canUseDirectCapture(WorldMutationSource source, String actionId) {
