@@ -1,5 +1,6 @@
 package io.github.luma.ui.overlay;
 
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import java.util.List;
 import java.util.Objects;
@@ -91,7 +92,7 @@ final class RecentChangesPreviewSession {
 
         private static boolean hasUndoBlockPreview(List<UndoRedoAction> actions) {
             for (UndoRedoAction action : actions) {
-                if (action != null && !action.undoChanges().isEmpty()) {
+                if (action != null && hasVisibleBlockChanges(action.undoChanges())) {
                     return true;
                 }
             }
@@ -100,7 +101,16 @@ final class RecentChangesPreviewSession {
 
         private static boolean hasRedoBlockPreview(List<UndoRedoAction> actions) {
             for (UndoRedoAction action : actions) {
-                if (action != null && !action.redoChanges().isEmpty()) {
+                if (action != null && hasVisibleBlockChanges(action.redoChanges())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static boolean hasVisibleBlockChanges(List<StoredBlockChange> changes) {
+            for (StoredBlockChange change : changes) {
+                if (change != null && change.visibleInBuilderSurfaces()) {
                     return true;
                 }
             }

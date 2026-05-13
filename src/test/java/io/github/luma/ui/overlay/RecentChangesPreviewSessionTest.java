@@ -136,6 +136,23 @@ class RecentChangesPreviewSessionTest {
         assertFalse(preview.hasBlockPreview());
     }
 
+    @Test
+    void hiddenHeldActionButtonPreviewDoesNotClaimOverlay() {
+        RecentChangesPreviewSession session = new RecentChangesPreviewSession();
+
+        RecentChangesPreviewSession.PinnedPreview preview = session.request(
+                "project",
+                RecentChangesOverlayCoordinator.PreviewTarget.BOTH,
+                () -> new RecentChangesPreviewSession.ActionSnapshot(
+                        120L,
+                        List.of(hiddenBlockAction("undo")),
+                        List.of(hiddenBlockAction("redo"))
+                )
+        );
+
+        assertFalse(preview.hasBlockPreview());
+    }
+
     private static RecentChangesPreviewSession.ActionSnapshot snapshot(long revision, UndoRedoAction action) {
         return new RecentChangesPreviewSession.ActionSnapshot(revision, List.of(action), List.of());
     }
@@ -170,6 +187,17 @@ class RecentChangesPreviewSessionTest {
                 new BlockPoint(10, 64, 10),
                 new StatePayload(state("minecraft:stone"), null),
                 new StatePayload(state("minecraft:glass"), null)
+        ), Instant.parse("2026-04-23T08:00:01Z"));
+        return action;
+    }
+
+    private static UndoRedoAction hiddenBlockAction(String id) {
+        UndoRedoAction action = action(id);
+        action.recordChange(new StoredBlockChange(
+                new BlockPoint(10, 64, 10),
+                new StatePayload(state("minecraft:stone"), null),
+                new StatePayload(state("minecraft:glass"), null),
+                true
         ), Instant.parse("2026-04-23T08:00:01Z"));
         return action;
     }
