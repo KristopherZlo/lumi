@@ -47,6 +47,10 @@ public final class WorldOperationManager {
     private final WorldApplyOperationProfile applyOperationProfile = new WorldApplyOperationProfile();
     private final WorldApplyBudgetPlanner budgetPlanner = new WorldApplyBudgetPlanner();
     private final WorldApplyTickWorkGate tickWorkGate = new WorldApplyTickWorkGate();
+    private final WorldOperationTickRunner tickRunner = new WorldOperationTickRunner(
+            this.budgetPlanner,
+            this.applyOperationProfile
+    );
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private ExecutorService backgroundExecutor = createExecutor();
     private final WorldOperationLifecycle lifecycle = new WorldOperationLifecycle();
@@ -176,27 +180,7 @@ public final class WorldOperationManager {
             return;
         }
 
-        try {
-            WorldApplyBudget budget = this.currentTickBudget(operation);
-            long startedAt = System.nanoTime();
-            if (operation.advance(budget, startedAt + budget.maxNanos())) {
-                this.complete(server, operation);
-            }
-            long elapsedNanos = System.nanoTime() - startedAt;
-            operation.recordAdvanceCost(elapsedNanos, budget.maxNanos());
-            LumaLoadLog.record(
-                    "world-op-tick",
-                    operation.handle().label() + ".advance",
-                    elapsedNanos,
-                    "stage=" + operation.snapshot().stage()
-                            + ", budgetMicros=" + (budget.maxNanos() / 1_000L)
-                            + ", adaptiveScale=" + operation.adaptiveScale()
-            );
-        } catch (Exception exception) {
-            operation.fail(exception);
-            this.complete(server, operation);
-            LumaMod.LOGGER.warn("World operation {} failed", operation.handle().label(), exception);
-        }
+        this.tickRunner.advance(server, operation, this::complete);
     }
 
     public void shutdown() {
@@ -239,20 +223,6 @@ public final class WorldOperationManager {
                 );
             }
         }
-    }
-
-    private WorldApplyBudget currentTickBudget(ActiveOperation operation) {
-        double fraction = operation.snapshot().progress().fraction();
-        WorldApplyProfile profile = this.applyProfile(operation);
-        return operation.planBudget(this.budgetPlanner, fraction, profile);
-    }
-
-    private WorldApplyProfile applyProfile(ActiveOperation operation) {
-        if (operation == null
-                || operation.handle() == null) {
-            return WorldApplyProfile.NORMAL;
-        }
-        return this.applyOperationProfile.profileFor(operation.handle().label());
     }
 
     private synchronized ExecutorService executor() {
