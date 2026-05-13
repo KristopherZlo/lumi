@@ -16,6 +16,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -26,6 +27,7 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class ExactReplayStateGuard {
 
     private static final int MAX_REASSERTIONS_PER_TICK = 4096;
+    private static final int MAX_IMMEDIATE_FLUID_TAIL_REASSERTIONS = 512;
     private static final ExactReplayStateGuard INSTANCE = new ExactReplayStateGuard();
 
     private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
@@ -61,6 +63,8 @@ public final class ExactReplayStateGuard {
             }
             callbackProtectedPositions.addAll(this.callbackSuppressionPositions(copied));
         }
+        this.addFluidReplayTargets(placements, callbackProtectedPositions);
+        exactStates += this.guardConnectedFluidTails(level, placements, guardedWorld, expiresAt, callbackProtectedPositions);
 
         this.replaySuppression.protect(level, callbackProtectedPositions, ticks);
         this.fluidReplayUpdateScheduler.schedule(level, placements);
@@ -166,7 +170,80 @@ public final class ExactReplayStateGuard {
         return this.guardBlockPolicy.shouldGuard(state);
     }
 
+    private int guardConnectedFluidTails(
+            ServerLevel level,
+            Collection<PreparedBlockPlacement> placements,
+            GuardedWorld guardedWorld,
+            long expiresAt,
+            Set<BlockPos> callbackProtectedPositions
+    ) {
+        Set<BlockPos> tailPositions = this.fluidReplayUpdateScheduler.collectFluidTailCleanupPositions(
+                placements,
+                level::getFluidState,
+                pos -> level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4) != null
+        );
+        if (tailPositions.isEmpty()) {
+            return 0;
+        }
+
+        List<PreparedBlockPlacement> cleanupPlacements = new ArrayList<>(tailPositions.size());
+        for (BlockPos pos : tailPositions) {
+            PreparedBlockPlacement placement = new PreparedBlockPlacement(
+                    pos.immutable(),
+                    Blocks.AIR.defaultBlockState(),
+                    null,
+                    PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_FLUID
+            );
+            guardedWorld.guard(placement, expiresAt);
+            callbackProtectedPositions.add(placement.pos());
+            cleanupPlacements.add(placement);
+        }
+
+        this.applyImmediateFluidTailCleanup(level, cleanupPlacements);
+        return cleanupPlacements.size();
+    }
+
+    private void addFluidReplayTargets(
+            Collection<PreparedBlockPlacement> placements,
+            Set<BlockPos> callbackProtectedPositions
+    ) {
+        if (placements == null || callbackProtectedPositions == null) {
+            return;
+        }
+        for (PreparedBlockPlacement placement : placements) {
+            if (this.isFluidRemovalTarget(placement)) {
+                callbackProtectedPositions.add(placement.pos().immutable());
+            }
+        }
+    }
+
+    private boolean isFluidRemovalTarget(PreparedBlockPlacement placement) {
+        return placement != null
+                && placement.pos() != null
+                && placement.state() != null
+                && placement.replayHint().suppressesPostReplayFluid()
+                && placement.state().getFluidState().isEmpty();
+    }
+
+    private void applyImmediateFluidTailCleanup(ServerLevel level, List<PreparedBlockPlacement> placements) {
+        int limit = Math.min(MAX_IMMEDIATE_FLUID_TAIL_REASSERTIONS, placements.size());
+        try (
+                WorldMutationContext.SourceFrame ignoredSource =
+                        WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
+                WorldMutationContext.SuppressionFrame ignoredSuppression =
+                        WorldMutationContext.pushCaptureSuppression()
+        ) {
+            for (int index = 0; index < limit; index += 1) {
+                this.applyExact(level, placements.get(index), "guard-fluid-tail");
+            }
+        }
+    }
+
     private boolean applyExact(ServerLevel level, PreparedBlockPlacement placement) {
+        return this.applyExact(level, placement, "guard-tick");
+    }
+
+    private boolean applyExact(ServerLevel level, PreparedBlockPlacement placement, String phase) {
         PersistentBlockStatePolicy.PersistentBlockState target = this.blockStatePolicy.normalize(
                 placement.state(),
                 placement.blockEntityTag()
@@ -176,7 +253,7 @@ public final class ExactReplayStateGuard {
         BlockState targetState = target.state();
         CompoundTag targetBlockEntityTag = target.blockEntityTag();
         if (!this.updateDecider.requiresUpdate(level, pos, currentState, targetState, targetBlockEntityTag)) {
-            this.historyDebugLog.logExactReplay(null, level, "guard-tick", pos, currentState, targetState, false);
+            this.historyDebugLog.logExactReplay(null, level, phase, pos, currentState, targetState, false);
             return false;
         }
 
@@ -193,7 +270,7 @@ public final class ExactReplayStateGuard {
                 level.setBlockEntity(blockEntity);
             }
         }
-        this.historyDebugLog.logExactReplay(null, level, "guard-tick", pos, currentState, targetState, true);
+        this.historyDebugLog.logExactReplay(null, level, phase, pos, currentState, targetState, true);
         return true;
     }
 

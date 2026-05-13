@@ -42,14 +42,48 @@ final class FluidReplayUpdateScheduler {
             Function<BlockPos, FluidState> fluidLookup,
             Predicate<BlockPos> loaded
     ) {
-        if (placements == null || placements.isEmpty() || fluidLookup == null || loaded == null) {
+        return this.collectFluidPositions(placements, this::isFluidReplayTarget, fluidLookup, loaded);
+    }
+
+    Set<BlockPos> collectFluidTailCleanupPositions(
+            Collection<PreparedBlockPlacement> placements,
+            Function<BlockPos, FluidState> fluidLookup,
+            Predicate<BlockPos> loaded
+    ) {
+        Set<BlockPos> candidates = this.collectFluidPositions(
+                placements,
+                this::isFluidRemovalTarget,
+                fluidLookup,
+                loaded
+        );
+        if (candidates.isEmpty()) {
+            return Set.of();
+        }
+
+        LinkedHashSet<BlockPos> cleanup = new LinkedHashSet<>();
+        for (BlockPos pos : candidates) {
+            FluidState fluidState = fluidLookup.apply(pos);
+            if (fluidState != null && !fluidState.isEmpty() && !fluidState.isSource()) {
+                cleanup.add(pos.immutable());
+            }
+        }
+        return Set.copyOf(cleanup);
+    }
+
+    private Set<BlockPos> collectFluidPositions(
+            Collection<PreparedBlockPlacement> placements,
+            Predicate<PreparedBlockPlacement> replayTarget,
+            Function<BlockPos, FluidState> fluidLookup,
+            Predicate<BlockPos> loaded
+    ) {
+        if (placements == null || placements.isEmpty() || replayTarget == null || fluidLookup == null || loaded == null) {
             return Set.of();
         }
 
         LinkedHashSet<BlockPos> scheduled = new LinkedHashSet<>();
         ArrayDeque<SearchNode> queue = new ArrayDeque<>();
         for (PreparedBlockPlacement placement : placements) {
-            if (!this.isFluidReplayTarget(placement)) {
+            if (!replayTarget.test(placement)) {
                 continue;
             }
             this.addSeed(placement.pos(), fluidLookup, loaded, scheduled, queue);
@@ -120,6 +154,14 @@ final class FluidReplayUpdateScheduler {
         }
         return placement.replayHint().suppressesPostReplayFluid()
                 || !placement.state().getFluidState().isEmpty();
+    }
+
+    private boolean isFluidRemovalTarget(PreparedBlockPlacement placement) {
+        return placement != null
+                && placement.pos() != null
+                && placement.state() != null
+                && placement.replayHint().suppressesPostReplayFluid()
+                && placement.state().getFluidState().isEmpty();
     }
 
     private record SearchNode(BlockPos pos, int distance) {

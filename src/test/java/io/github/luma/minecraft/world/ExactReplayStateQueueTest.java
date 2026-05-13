@@ -163,10 +163,45 @@ class ExactReplayStateQueueTest {
         queue.record(batch(placement));
 
         assertEquals(0, queue.pendingCount());
+        assertTrue(queue.hasRecordedPlacements());
         assertEquals(1, queue.takeRecordedPlacements().size());
+        assertFalse(queue.hasRecordedPlacements());
         assertTrue(targetPolicy.requiresPostReplayGuard(placement));
         assertTrue(guard.shouldGuard(placement));
         assertTrue(guard.callbackSuppressionPositions(placement).isEmpty());
+    }
+
+    @Test
+    void nativeSectionReplayHintGuardsAirTargetsWithoutFinalReplay() {
+        ExactReplayStateQueue queue = new ExactReplayStateQueue();
+        int localIndex = SectionChangeMask.localIndex(1, 2, 3);
+        LumiSectionBuffer buffer = LumiSectionBuffer.builder(4)
+                .set(
+                        localIndex,
+                        Blocks.AIR.defaultBlockState(),
+                        null,
+                        PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_FLUID
+                )
+                .build();
+
+        queue.record(new ChunkBatch(
+                new ChunkPoint(0, 0),
+                Map.of(4, new PreparedSectionApplyBatch(
+                        new ChunkPoint(0, 0),
+                        4,
+                        buffer,
+                        SectionApplySafetyProfile.directSection("test"),
+                        false
+                )),
+                Map.of(),
+                Map.of(),
+                EntityBatch.empty(),
+                BatchState.COMPLETE
+        ));
+
+        assertEquals(0, queue.pendingCount());
+        assertTrue(queue.hasRecordedPlacements());
+        assertEquals(1, queue.takeRecordedPlacements().size());
     }
 
     @Test
@@ -175,6 +210,7 @@ class ExactReplayStateQueueTest {
 
         assertTrue(suppression.isReplayCallbackSource(null));
         assertTrue(suppression.isReplayCallbackSource(io.github.luma.domain.model.WorldMutationSource.SYSTEM));
+        assertTrue(suppression.isReplayCallbackSource(io.github.luma.domain.model.WorldMutationSource.FLUID));
         assertFalse(suppression.isReplayCallbackSource(io.github.luma.domain.model.WorldMutationSource.PLAYER));
     }
 

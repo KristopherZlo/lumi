@@ -87,8 +87,8 @@ public final class WorldReplayTickSuppression {
             return true;
         }
         return switch (source) {
-            case BLOCK_UPDATE, PISTON, RESTORE, SYSTEM -> true;
-            case PLAYER, ENTITY, EXPLOSION, FLUID, FIRE, GROWTH, FALLING_BLOCK, EXPLOSIVE,
+            case BLOCK_UPDATE, PISTON, RESTORE, SYSTEM, FLUID -> true;
+            case PLAYER, ENTITY, EXPLOSION, FIRE, GROWTH, FALLING_BLOCK, EXPLOSIVE,
                     MOB, EXTERNAL_TOOL, WORLDEDIT, FAWE, AXIOM -> false;
         };
     }

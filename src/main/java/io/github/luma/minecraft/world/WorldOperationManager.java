@@ -1137,6 +1137,7 @@ public final class WorldOperationManager {
 
         private boolean drainExactReplayStates(WorldApplyBudget budget, long deadlineNanos) {
             if (!this.exactReplayStateQueue.hasPending()) {
+                this.guardRecordedExactReplayStates();
                 return true;
             }
 
@@ -1159,11 +1160,7 @@ public final class WorldOperationManager {
                     "reapplied=" + reapplied + ", pendingBefore=" + pendingBefore
             );
             if (!this.exactReplayStateQueue.hasPending()) {
-                ExactReplayStateGuard.getInstance().guard(
-                        this.level(),
-                        this.exactReplayStateQueue.takeRecordedPlacements(),
-                        EXACT_REPLAY_GUARD_TICKS
-                );
+                this.guardRecordedExactReplayStates();
             }
             this.progressSink().update(
                     OperationStage.FINALIZING,
@@ -1174,6 +1171,17 @@ public final class WorldOperationManager {
                             + " blocks queued")
             );
             return !this.exactReplayStateQueue.hasPending() || reapplied > 0;
+        }
+
+        private void guardRecordedExactReplayStates() {
+            if (!this.exactReplayStateQueue.hasRecordedPlacements()) {
+                return;
+            }
+            ExactReplayStateGuard.getInstance().guard(
+                    this.level(),
+                    this.exactReplayStateQueue.takeRecordedPlacements(),
+                    EXACT_REPLAY_GUARD_TICKS
+            );
         }
 
         private boolean drainDeferredRedstoneUpdates(WorldApplyBudget budget, long deadlineNanos) {

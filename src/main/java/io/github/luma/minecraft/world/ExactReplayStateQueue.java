@@ -55,6 +55,10 @@ final class ExactReplayStateQueue {
         return this.pending.size();
     }
 
+    boolean hasRecordedPlacements() {
+        return !this.recordedPlacements.isEmpty();
+    }
+
     int drain(ServerLevel level, int maxBlocks, long deadlineNanos) {
         return this.drain(level, maxBlocks, deadlineNanos, null);
     }
@@ -99,20 +103,21 @@ final class ExactReplayStateQueue {
                 return;
             }
             CompoundTag blockEntityTag = buffer.blockEntityPlan().tagAt(localIndex);
-            boolean finalReplay = this.targetPolicy.requiresFinalReplay(state, blockEntityTag);
-            boolean postReplayGuard = this.targetPolicy.requiresPostReplayGuard(state);
+            PreparedBlockPlacement placement = new PreparedBlockPlacement(
+                    this.blockPos(section, localIndex),
+                    state,
+                    blockEntityTag,
+                    buffer.replayHintAt(localIndex)
+            );
+            boolean finalReplay = this.targetPolicy.requiresFinalReplay(placement);
+            boolean postReplayGuard = this.targetPolicy.requiresPostReplayGuard(placement);
             if (!finalReplay && !postReplayGuard) {
                 long packedPos = this.packedPos(section, localIndex);
                 this.pending.remove(packedPos);
                 this.recordedPlacements.remove(packedPos);
                 return;
             }
-            this.record(new PreparedBlockPlacement(
-                    this.blockPos(section, localIndex),
-                    state,
-                    blockEntityTag,
-                    buffer.replayHintAt(localIndex)
-            ));
+            this.record(placement);
         });
     }
 

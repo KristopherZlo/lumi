@@ -7,7 +7,9 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.FlowingFluid;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -68,5 +70,54 @@ class FluidReplayUpdateSchedulerTest {
         );
 
         assertFalse(positions.contains(tail));
+    }
+
+    @Test
+    void cleanupCollectsOnlyConnectedNonSourceFluidAroundReplayedAirCell() {
+        BlockPos source = new BlockPos(0, 64, 0);
+        BlockPos flowingTail = source.east();
+        BlockPos sourceNeighbor = source.west();
+        PreparedBlockPlacement replayedAir = new PreparedBlockPlacement(
+                source,
+                Blocks.AIR.defaultBlockState(),
+                null,
+                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_FLUID
+        );
+        Map<BlockPos, FluidState> fluids = Map.of(
+                flowingTail, Fluids.FLOWING_WATER.defaultFluidState().setValue(FlowingFluid.LEVEL, 7),
+                sourceNeighbor, Fluids.WATER.defaultFluidState()
+        );
+
+        Set<BlockPos> positions = this.scheduler.collectFluidTailCleanupPositions(
+                List.of(replayedAir),
+                pos -> fluids.getOrDefault(pos, Blocks.AIR.defaultBlockState().getFluidState()),
+                ignored -> true
+        );
+
+        assertTrue(positions.contains(flowingTail));
+        assertFalse(positions.contains(sourceNeighbor));
+    }
+
+    @Test
+    void cleanupSkipsFluidPlacementTargets() {
+        BlockPos source = new BlockPos(0, 64, 0);
+        BlockPos flowingTail = source.east();
+        PreparedBlockPlacement replayedWater = new PreparedBlockPlacement(
+                source,
+                Blocks.WATER.defaultBlockState(),
+                null,
+                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_FLUID
+        );
+        Map<BlockPos, FluidState> fluids = Map.of(
+                flowingTail, Fluids.FLOWING_WATER.defaultFluidState().setValue(FlowingFluid.LEVEL, 7)
+        );
+
+        Set<BlockPos> positions = this.scheduler.collectFluidTailCleanupPositions(
+                List.of(replayedWater),
+                pos -> fluids.getOrDefault(pos, Blocks.AIR.defaultBlockState().getFluidState()),
+                ignored -> true
+        );
+
+        assertTrue(positions.isEmpty());
     }
 }
