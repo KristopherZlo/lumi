@@ -95,7 +95,7 @@ public final class RestoreService {
     private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final VersionLineageService lineageService = new VersionLineageService();
-    private final HistoryPackageSafetyScanner safetyScanner = new HistoryPackageSafetyScanner();
+    private final RestoreRequestResolver requestResolver = new RestoreRequestResolver();
 
     /**
      * Starts a restore operation for the given project and target version.
@@ -210,11 +210,11 @@ public final class RestoreService {
         progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing restore request");
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
-        ProjectVersion version = this.resolveVersion(project, versions, variants, versionId);
-        ProjectVariant targetVariant = this.restoreTargetVariant(variants, version, targetVariantId);
-        ProjectVariant activeVariant = this.activeVariant(project, variants);
+        ProjectVersion version = this.requestResolver.resolveVersion(project, versions, variants, versionId);
+        ProjectVariant targetVariant = this.requestResolver.restoreTargetVariant(variants, version, targetVariantId);
+        ProjectVariant activeVariant = this.requestResolver.activeVariant(project, variants);
         String activeHeadVersionId = activeVariant.headVersionId();
-        this.requireTrustedImportedRestore(level, layout, project, versions, trustedImportedPackage);
+        this.requestResolver.requireTrustedImportedRestore(level, layout, project, versions, trustedImportedPackage);
 
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
@@ -339,7 +339,7 @@ public final class RestoreService {
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
-        ProjectVersion targetVersion = this.resolveVersion(project, versions, variants, versionId);
+        ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, versionId);
         ProjectVariant activeVariant = variants.stream()
                 .filter(variant -> variant.id().equals(project.activeVariantId()))
                 .findFirst()
@@ -425,8 +425,8 @@ public final class RestoreService {
         progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing partial restore request");
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
-        ProjectVersion targetVersion = this.resolveVersion(project, versions, variants, request.targetVersionId());
-        ProjectVariant activeVariant = this.activeVariant(project, variants);
+        ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, request.targetVersionId());
+        ProjectVariant activeVariant = this.requestResolver.activeVariant(project, variants);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
                 .freezeWorkingDraft(level.getServer(), project.id().toString());
@@ -503,8 +503,8 @@ public final class RestoreService {
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + request.projectName()));
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
-        ProjectVersion targetVersion = this.resolveVersion(project, versions, variants, request.targetVersionId());
-        ProjectVariant activeVariant = this.activeVariant(project, variants);
+        ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, request.targetVersionId());
+        ProjectVariant activeVariant = this.requestResolver.activeVariant(project, variants);
         Optional<RecoveryDraft> pendingDraft = this.recoveryRepository.loadDraft(layout);
 
         PartialRestoreDraft draft = this.buildPartialRestoreDraft(
@@ -801,16 +801,6 @@ public final class RestoreService {
         ));
     }
 
-    private ProjectVariant activeVariant(
-            io.github.luma.domain.model.BuildProject project,
-            List<ProjectVariant> variants
-    ) {
-        return variants.stream()
-                .filter(variant -> variant.id().equals(project.activeVariantId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
-    }
-
     private List<StoredBlockChange> loadVersionChanges(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
         return this.loadVersionWorldChanges(layout, versions).blockChanges();
     }
@@ -1017,31 +1007,6 @@ public final class RestoreService {
                 collapsed.size()
         );
         return collapsed;
-    }
-
-    private ProjectVersion resolveVersion(
-            io.github.luma.domain.model.BuildProject project,
-            List<ProjectVersion> versions,
-            List<ProjectVariant> variants,
-            String versionId
-    ) {
-        if (versionId != null && !versionId.isBlank()) {
-            return versions.stream()
-                    .filter(candidate -> candidate.id().equals(versionId))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
-        }
-
-        String activeVariantId = project.activeVariantId();
-        ProjectVariant activeVariant = variants.stream()
-                .filter(variant -> variant.id().equals(activeVariantId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
-
-        return versions.stream()
-                .filter(candidate -> candidate.id().equals(activeVariant.headVersionId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Variant head version is missing: " + activeVariant.headVersionId()));
     }
 
     private Optional<List<PreparedChunkBatch>> tryDecodeDirectRestore(
@@ -1857,46 +1822,6 @@ public final class RestoreService {
         )) {
             return this.batchCollapser.collapse(batches);
         }
-    }
-
-    ProjectVariant restoreTargetVariant(List<ProjectVariant> variants, ProjectVersion version, String targetVariantId) {
-        if (targetVariantId != null && !targetVariantId.isBlank()) {
-            return variants.stream()
-                    .filter(candidate -> candidate.id().equals(targetVariantId))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Variant not found: " + targetVariantId));
-        }
-        return variants.stream()
-                .filter(candidate -> candidate.id().equals(version.variantId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Version branch is missing: " + version.variantId()));
-    }
-
-    private void requireTrustedImportedRestore(
-            ServerLevel level,
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            List<ProjectVersion> versions,
-            boolean trustedImportedPackage
-    ) throws IOException {
-        if (!this.isImportedReviewProject(level, project)) {
-            return;
-        }
-        var report = this.safetyScanner.scanProjectHistory(layout, versions);
-        if (report.requiresTrustedConfirmation() && !trustedImportedPackage) {
-            throw new IllegalArgumentException("Imported package contains executable world-state data. Confirm that you trust this package before restoring it.");
-        }
-    }
-
-    private boolean isImportedReviewProject(
-            ServerLevel level,
-            io.github.luma.domain.model.BuildProject project
-    ) throws IOException {
-        if (project == null || project.name() == null || !project.name().contains(" - Shared ")) {
-            return false;
-        }
-        return this.projectService.listProjects(level.getServer()).stream()
-                .anyMatch(candidate -> project.id().equals(candidate.id()) && !project.name().equals(candidate.name()));
     }
 
     private List<PreparedChunkBatch> decodeStoredChanges(

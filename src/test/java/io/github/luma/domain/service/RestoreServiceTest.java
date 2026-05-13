@@ -301,14 +301,14 @@ class RestoreServiceTest {
 
     @Test
     void restoreTargetCanUseExplicitBranchWhenHeadVersionBelongsToMain() {
-        RestoreService service = new RestoreService();
+        RestoreRequestResolver resolver = new RestoreRequestResolver();
         ProjectVersion baseVersion = version("v0001", "main", "");
         List<ProjectVariant> variants = List.of(
                 new ProjectVariant("main", "main", "v0001", "v0003", true, NOW),
                 new ProjectVariant("feature", "feature", "v0001", "v0001", false, NOW)
         );
 
-        ProjectVariant target = service.restoreTargetVariant(variants, baseVersion, "feature");
+        ProjectVariant target = resolver.restoreTargetVariant(variants, baseVersion, "feature");
 
         assertEquals("feature", target.id());
     }
