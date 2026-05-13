@@ -20,7 +20,6 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(highThroughput.maxDirectSections() > normal.maxDirectSections());
         assertTrue(highThroughput.maxLightChecks() > normal.maxLightChecks());
         assertTrue(highThroughput.maxPreloadChunks() > normal.maxPreloadChunks());
-        assertTrue(highThroughput.maxSyncChunkLoads() > normal.maxSyncChunkLoads());
         assertTrue(highThroughput.maxBlockEntities() > normal.maxBlockEntities());
         assertTrue(highThroughput.maxEntityOperations() > normal.maxEntityOperations());
         assertEquals(highThroughput.maxBlocks(), highThroughput.maxNativeCells());
@@ -55,7 +54,6 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(turbo.maxLightChecks() > historyFast.maxLightChecks());
         assertTrue(turbo.sparseStepCap() > historyFast.sparseStepCap());
         assertTrue(turbo.maxPreloadChunks() > historyFast.maxPreloadChunks());
-        assertTrue(turbo.maxSyncChunkLoads() > historyFast.maxSyncChunkLoads());
     }
 
     @Test
@@ -71,9 +69,16 @@ class WorldApplyBudgetPlannerTest {
         assertTrue(maximum.maxLightChecks() > turbo.maxLightChecks());
         assertTrue(maximum.maxRedstoneUpdates() > turbo.maxRedstoneUpdates());
         assertTrue(maximum.maxPreloadChunks() > turbo.maxPreloadChunks());
-        assertTrue(maximum.maxSyncChunkLoads() > turbo.maxSyncChunkLoads());
         assertTrue(maximum.maxBlockEntities() > turbo.maxBlockEntities());
         assertTrue(maximum.maxEntityOperations() > turbo.maxEntityOperations());
+    }
+
+    @Test
+    void runtimeProfilesAvoidSynchronousChunkLoadsByDefault() {
+        assertEquals(0, this.planner.plan(1.0D, 1.0D, WorldApplyProfile.NORMAL).maxSyncChunkLoads());
+        assertEquals(0, this.planner.plan(1.0D, 1.0D, WorldApplyProfile.HISTORY_FAST).maxSyncChunkLoads());
+        assertEquals(0, this.planner.plan(1.0D, 1.0D, WorldApplyProfile.DIAGNOSTIC_TURBO).maxSyncChunkLoads());
+        assertEquals(0, this.planner.plan(1.0D, 1.0D, WorldApplyProfile.MAXIMUM).maxSyncChunkLoads());
     }
 
     @Test

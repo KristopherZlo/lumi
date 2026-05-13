@@ -59,9 +59,9 @@ final class WorldApplyBudgetPlanner {
     private static final int MAXIMUM_MIN_PRELOAD_CHUNKS_PER_TICK = 256;
     private static final int MAXIMUM_MAX_PRELOAD_CHUNKS_PER_TICK = 512;
     private static final int NORMAL_MAX_SYNC_CHUNK_LOADS_PER_TICK = 0;
-    private static final int RESTORE_MAX_SYNC_CHUNK_LOADS_PER_TICK = 32;
-    private static final int TURBO_MAX_SYNC_CHUNK_LOADS_PER_TICK = 128;
-    private static final int MAXIMUM_MAX_SYNC_CHUNK_LOADS_PER_TICK = 512;
+    private static final int RESTORE_MAX_SYNC_CHUNK_LOADS_PER_TICK = 0;
+    private static final int TURBO_MAX_SYNC_CHUNK_LOADS_PER_TICK = 0;
+    private static final int MAXIMUM_MAX_SYNC_CHUNK_LOADS_PER_TICK = 0;
     private static final int NORMAL_MAX_BLOCK_ENTITIES_PER_TICK = 64;
     private static final int RESTORE_MAX_BLOCK_ENTITIES_PER_TICK = 256;
     private static final int TURBO_MAX_BLOCK_ENTITIES_PER_TICK = 512;
