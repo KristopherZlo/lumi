@@ -52,9 +52,8 @@ public final class HistoryCaptureManager {
     private static final int IDLE_FLUSH_TICK_INTERVAL = 5;
     private static final int STARTUP_CAPTURE_TRACE_LIMIT = 32;
     private static final int CAPTURE_SUMMARY_ENTRY_LIMIT = 4;
-    private static final WorldMutationCapturePolicy CAPTURE_POLICY = new WorldMutationCapturePolicy();
+    private static final CaptureEligibilityService ELIGIBILITY = new CaptureEligibilityService();
     private static final EntityMutationCapturePolicy ENTITY_CAPTURE_POLICY = new EntityMutationCapturePolicy();
-    private static final MutationSourcePolicy SOURCE_POLICY = new MutationSourcePolicy();
 
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final CaptureSkipLogThrottler captureSkipLogThrottler = new CaptureSkipLogThrottler();
@@ -140,7 +139,7 @@ public final class HistoryCaptureManager {
                         this.deferredActionContext(existingSession, chunk, source);
                 if (!explicitRootSource
                         && (existingSession == null
-                        || !SOURCE_POLICY.canCaptureDeferredPreMutationBaseline(
+                        || !ELIGIBILITY.canCaptureDeferredPreMutationBaseline(
                                 trackedProject.project(),
                                 source,
                                 activeSessionRegion,
@@ -203,7 +202,7 @@ public final class HistoryCaptureManager {
 
         try {
             Instant now = Instant.now();
-            WorldMutationCapturePolicy.CaptureResult captureResult = CAPTURE_POLICY.evaluate(
+            WorldMutationCapturePolicy.CaptureResult captureResult = ELIGIBILITY.evaluateBlockMutation(
                     source,
                     pos,
                     oldState,
@@ -468,7 +467,7 @@ public final class HistoryCaptureManager {
             Map<String, TrackedProject> liveUndoProjects,
             Map<String, List<StoredBlockChange>> liveUndoChanges
     ) throws IOException {
-        WorldMutationCapturePolicy.CaptureResult captureResult = CAPTURE_POLICY.evaluate(
+        WorldMutationCapturePolicy.CaptureResult captureResult = ELIGIBILITY.evaluateBlockMutation(
                 source,
                 input.pos(),
                 input.oldState(),
@@ -1255,7 +1254,7 @@ public final class HistoryCaptureManager {
             boolean accessAllowed,
             io.github.luma.domain.model.WorldMutationSource source
     ) {
-        return SOURCE_POLICY.canUse(dedicatedServer, accessAllowed, source);
+        return ELIGIBILITY.canUseMutationSource(dedicatedServer, accessAllowed, source);
     }
 
     private BlockPos entityMutationPos(EntityPayload oldPayload, EntityPayload newPayload) {
@@ -1469,7 +1468,7 @@ public final class HistoryCaptureManager {
         if (this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
             return true;
         }
-        if (!SOURCE_POLICY.allowsTrackedChunkExpansion(source, activeSessionRegion)) {
+        if (!ELIGIBILITY.allowsTrackedChunkExpansion(source, activeSessionRegion)) {
             this.logSkippedCapture(
                     trackedProject,
                     source,
@@ -1502,7 +1501,7 @@ public final class HistoryCaptureManager {
     ) {
         String projectId = trackedProject.project().id().toString();
         if (this.workingDrafts.hasBuffer(projectId)) {
-            if (!SOURCE_POLICY.canUseDirectCapture(source, WorldMutationContext.currentActionId())) {
+            if (!ELIGIBILITY.canUseDirectCapture(source, WorldMutationContext.currentActionId())) {
                 this.logSkippedCapture(
                         trackedProject,
                         source,
@@ -1590,11 +1589,11 @@ public final class HistoryCaptureManager {
     }
 
     private static boolean isExplicitRootSource(io.github.luma.domain.model.WorldMutationSource source) {
-        return SOURCE_POLICY.isExplicitRootSource(source);
+        return ELIGIBILITY.isExplicitRootSource(source);
     }
 
     private boolean usesDeferredStabilization(BuildProject project, io.github.luma.domain.model.WorldMutationSource source) {
-        return SOURCE_POLICY.usesDeferredStabilization(project, source);
+        return ELIGIBILITY.usesDeferredStabilization(project, source);
     }
 
     private boolean canUseDeferredStabilization(
@@ -1603,7 +1602,7 @@ public final class HistoryCaptureManager {
             CaptureSessionState.DeferredActionContext deferredActionContext,
             boolean activeSessionRegion
     ) {
-        return SOURCE_POLICY.canUseDeferredStabilization(
+        return ELIGIBILITY.canUseDeferredStabilization(
                 project,
                 source,
                 activeSessionRegion,
@@ -1790,7 +1789,7 @@ public final class HistoryCaptureManager {
         if (currentContext != null) {
             return currentContext;
         }
-        if (!SOURCE_POLICY.canReuseDeferredActionContext(source) || session == null) {
+        if (!ELIGIBILITY.canReuseDeferredActionContext(source) || session == null) {
             return null;
         }
         return session.deferredActionContext(chunk);
@@ -1807,7 +1806,7 @@ public final class HistoryCaptureManager {
                 actionId,
                 WorldMutationContext.currentActor(),
                 WorldMutationContext.currentAccessAllowed(),
-                CAPTURE_POLICY.hiddenInBuilderSurfaces(source)
+                ELIGIBILITY.hiddenInBuilderSurfaces(source)
         );
     }
 
@@ -1899,23 +1898,23 @@ public final class HistoryCaptureManager {
         if (WorldMutationContext.captureSuppressed()) {
             return false;
         }
-        return CAPTURE_POLICY.shouldCaptureMutation(source);
+        return ELIGIBILITY.shouldCaptureMutation(source);
     }
 
     public static boolean allowsAutomaticProjectCreation(io.github.luma.domain.model.WorldMutationSource source) {
-        return SOURCE_POLICY.allowsAutomaticProjectCreation(source);
+        return ELIGIBILITY.allowsAutomaticProjectCreation(source);
     }
 
     public static boolean allowsSessionBootstrap(io.github.luma.domain.model.WorldMutationSource source) {
-        return SOURCE_POLICY.allowsSessionBootstrap(source);
+        return ELIGIBILITY.allowsSessionBootstrap(source);
     }
 
     public static boolean allowsTrackedChunkExpansion(io.github.luma.domain.model.WorldMutationSource source) {
-        return SOURCE_POLICY.allowsTrackedChunkExpansion(source);
+        return ELIGIBILITY.allowsTrackedChunkExpansion(source);
     }
 
     static boolean requiresActiveRegionMembership(io.github.luma.domain.model.WorldMutationSource source) {
-        return SOURCE_POLICY.requiresActiveRegionMembership(source);
+        return ELIGIBILITY.requiresActiveRegionMembership(source);
     }
 
     static boolean isWithinChunkRadius(ChunkPoint first, ChunkPoint second, int radius) {
@@ -1927,6 +1926,6 @@ public final class HistoryCaptureManager {
     }
 
     public static String defaultActor(io.github.luma.domain.model.WorldMutationSource source) {
-        return SOURCE_POLICY.defaultActor(source);
+        return ELIGIBILITY.defaultActor(source);
     }
 }
