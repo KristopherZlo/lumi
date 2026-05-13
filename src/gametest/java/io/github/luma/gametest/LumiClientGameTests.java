@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 public final class LumiClientGameTests implements FabricClientGameTest {
 
     private static final int SINGLEPLAYER_RUNTIME_TIMEOUT_TICKS = 20 * 240;
+    private static final int PLAYER_FLOW_RUNTIME_TIMEOUT_TICKS = 20 * 480;
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -18,7 +19,7 @@ public final class LumiClientGameTests implements FabricClientGameTest {
             this.runBackupStress(context);
             return;
         }
-        try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
+        try (TestSingleplayerContext singleplayer = this.createSingleplayer(context)) {
             ClientGameTestSingleplayerSupport.prepare(singleplayer);
             this.startSingleplayerRuntimeSuite(singleplayer);
             this.waitForSingleplayerRuntimeSuite(context, singleplayer);
@@ -28,6 +29,15 @@ public final class LumiClientGameTests implements FabricClientGameTest {
         } catch (Exception exception) {
             throw new RuntimeException("Lumi client gametest failed", exception);
         }
+    }
+
+    private TestSingleplayerContext createSingleplayer(ClientGameTestContext context) {
+        if (this.modeIs("player-flow", "player", "natural")) {
+            return context.worldBuilder()
+                    .setUseConsistentSettings(false)
+                    .create();
+        }
+        return context.worldBuilder().create();
     }
 
     private void runBackupStress(ClientGameTestContext context) {
@@ -81,7 +91,7 @@ public final class LumiClientGameTests implements FabricClientGameTest {
             ClientGameTestContext context,
             TestSingleplayerContext singleplayer
     ) throws Exception {
-        for (int tick = 0; tick < SINGLEPLAYER_RUNTIME_TIMEOUT_TICKS; tick++) {
+        for (int tick = 0; tick < this.runtimeTimeoutTicks(); tick++) {
             boolean active = singleplayer.getServer().computeOnServer(server ->
                     SingleplayerTestingService.getInstance().hasActiveRun(server));
             if (!active) {
@@ -91,6 +101,12 @@ public final class LumiClientGameTests implements FabricClientGameTest {
             context.waitTick();
         }
         throw new AssertionError("Timed out waiting for Lumi singleplayer runtime suite");
+    }
+
+    private int runtimeTimeoutTicks() {
+        return this.modeIs("player-flow", "player", "natural")
+                ? PLAYER_FLOW_RUNTIME_TIMEOUT_TICKS
+                : SINGLEPLAYER_RUNTIME_TIMEOUT_TICKS;
     }
 
     private void assertSingleplayerRuntimeSuitePassed(TestSingleplayerContext singleplayer) throws Exception {

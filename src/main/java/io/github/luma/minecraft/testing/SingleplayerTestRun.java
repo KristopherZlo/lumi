@@ -43,6 +43,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -505,12 +506,9 @@ final class SingleplayerTestRun {
     }
 
     private void checkRestoreInitial(MinecraftServer server) throws Exception {
-        this.check(
-                this.initialVolumeRestored(),
-                this.mode == SingleplayerTestMode.PLAYER_FLOW
-                        ? "Full restore returned the test volume to the prepared platform baseline"
-                        : "Full restore returned the test volume to initial air"
-        );
+        this.checkInitialVolumeRestored(this.mode == SingleplayerTestMode.PLAYER_FLOW
+                ? "Full restore returned the test volume to the prepared platform baseline"
+                : "Full restore returned the test volume to initial air");
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
         Phase next = switch (this.mode) {
             case SMOKE, CRASH_SAFETY -> Phase.CLEANUP;
@@ -820,7 +818,12 @@ final class SingleplayerTestRun {
 
     private void startExplosionInteraction(MinecraftServer server) {
         this.explosionWaitTicks = 0;
-        this.explosionReport = new SingleplayerExplosionRegressionScenario().start(this.level, this.player, this.volume);
+        this.explosionReport = new SingleplayerExplosionRegressionScenario().start(
+                this.level,
+                this.player,
+                this.volume,
+                ACTOR
+        );
         this.check(this.explosionReport.placed(), "Player placed TNT through gameMode useItemOn");
         this.check(this.explosionReport.ignited(), "Player ignited TNT through gameMode useItemOn");
         this.completePhase(server, Phase.CHECK_EXPLOSION_CAPTURE);
@@ -834,6 +837,9 @@ final class SingleplayerTestRun {
         }
         this.check(this.explosionReport != null && this.explosionReport.exploded(this.level),
                 "Controlled TNT explosion changed the fixture");
+        if (!this.waitForUndoRedoStabilization("explosion draft capture")) {
+            return;
+        }
 
         RecoveryDraft draft = this.value("Explosion recovery draft can be loaded", () ->
                 HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
@@ -851,6 +857,9 @@ final class SingleplayerTestRun {
     }
 
     private void startExplosionUndo() throws Exception {
+        if (!this.waitForUndoRedoStabilization("explosion undo")) {
+            return;
+        }
         this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
         this.log.info("Queued explosion undo operation " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_EXPLOSION_UNDO);
@@ -889,12 +898,9 @@ final class SingleplayerTestRun {
     }
 
     private void checkRestoreInitialAfterPlayerInteractions(MinecraftServer server) throws Exception {
-        this.check(
-                this.initialVolumeRestored(),
-                this.mode == SingleplayerTestMode.PLAYER_FLOW
-                        ? "Full restore returned all gameplay blocks to the prepared platform baseline"
-                        : "Full restore returned all gameplay blocks to initial air"
-        );
+        this.checkInitialVolumeRestored(this.mode == SingleplayerTestMode.PLAYER_FLOW
+                ? "Full restore returned all gameplay blocks to the prepared platform baseline"
+                : "Full restore returned all gameplay blocks to initial air");
         if (this.gameplayReport != null) {
             this.check(this.gameplayReport.spawnedEntities().stream()
                             .allMatch(entity -> entity == null || entity.isRemoved()),
@@ -1286,10 +1292,13 @@ final class SingleplayerTestRun {
         return Files.exists(previewFile) && Files.size(previewFile) > 0L;
     }
 
-    private boolean initialVolumeRestored() {
-        return this.mode == SingleplayerTestMode.PLAYER_FLOW
-                ? this.volume.isPreparedPlayerPlatform(this.level)
-                : this.volume.isAir(this.level);
+    private void checkInitialVolumeRestored(String label) {
+        List<String> mismatches = this.mode == SingleplayerTestMode.PLAYER_FLOW
+                ? this.volume.preparedPlayerPlatformMismatches(this.level, 8)
+                : this.volume.airMismatches(this.level, 8);
+        this.check(mismatches.isEmpty(), mismatches.isEmpty()
+                ? label
+                : label + ": mismatches=" + String.join("; ", mismatches));
     }
 
     private String chunkGeneratorName() {

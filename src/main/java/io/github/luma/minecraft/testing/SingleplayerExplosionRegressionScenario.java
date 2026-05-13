@@ -18,7 +18,7 @@ import net.minecraft.world.level.block.Blocks;
  */
 final class SingleplayerExplosionRegressionScenario {
 
-    ExplosionRegressionReport start(ServerLevel level, ServerPlayer player, SingleplayerTestVolume volume) {
+    ExplosionRegressionReport start(ServerLevel level, ServerPlayer player, SingleplayerTestVolume volume, String actor) {
         SingleplayerPlayerActionDriver actions = new SingleplayerPlayerActionDriver(level, player);
         BlockPos support = volume.min().offset(8, 0, 2);
         BlockPos tnt = support.above();
@@ -29,7 +29,7 @@ final class SingleplayerExplosionRegressionScenario {
                 tnt.west()
         );
 
-        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+        this.trackedPlayerAction(actor, () -> {
             level.setBlock(support, Blocks.STONE.defaultBlockState(), 3);
             for (BlockPos witness : witnesses) {
                 level.setBlock(witness, Blocks.OAK_PLANKS.defaultBlockState(), 3);
@@ -39,6 +39,15 @@ final class SingleplayerExplosionRegressionScenario {
         boolean placed = actions.placeAgainst(support, Direction.UP, Blocks.TNT, tnt);
         boolean ignited = actions.useItemOn(tnt, Direction.UP, new ItemStack(Items.FLINT_AND_STEEL, 1));
         return new ExplosionRegressionReport(placed, ignited, tnt, Set.copyOf(witnesses));
+    }
+
+    private void trackedPlayerAction(String actor, Runnable runnable) {
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, actor, true);
+        try {
+            runnable.run();
+        } finally {
+            WorldMutationContext.popSource();
+        }
     }
 
     record ExplosionRegressionReport(

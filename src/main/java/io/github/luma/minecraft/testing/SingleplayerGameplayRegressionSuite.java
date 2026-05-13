@@ -177,6 +177,12 @@ final class SingleplayerGameplayRegressionSuite {
             }
         }
 
+        private boolean destroyTransientFixtureBlock(BlockPos pos) {
+            try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression()) {
+                return this.playerActions.destroyBlock(pos);
+            }
+        }
+
         private void expectDraftBlock(BlockPos pos) {
             this.expectedDraftBlocks.add(BlockPoint.from(pos));
         }
@@ -260,14 +266,14 @@ final class SingleplayerGameplayRegressionSuite {
 
         @Override
         public void run(GameplayScenarioContext context) {
-            BlockPos support = context.volume.min().offset(0, 0, 0);
+            BlockPos support = context.volume.min().offset(0, 1, 0);
             BlockPos flower = support.above();
             WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
                 context.level.setBlock(support, Blocks.GRASS_BLOCK.defaultBlockState(), 3);
                 context.level.setBlock(flower, Blocks.DANDELION.defaultBlockState(), 3);
             });
 
-            boolean destroyed = context.player.gameMode.destroyBlock(support);
+            boolean destroyed = context.destroyTransientFixtureBlock(support);
             context.checks.check(destroyed, "gameplay block break destroys support");
             context.checks.check(context.level.getBlockState(support).isAir(), "gameplay support block became air");
             context.checks.check(context.level.getBlockState(flower).isAir(), "gameplay adjacent flower became air");
@@ -498,7 +504,7 @@ final class SingleplayerGameplayRegressionSuite {
 
         @Override
         public void run(GameplayScenarioContext context) {
-            BlockPos farmland = context.volume.min().offset(2, 0, 4);
+            BlockPos farmland = context.volume.min().offset(2, 1, 4);
             BlockPos crop = farmland.above();
             context.trackedPlayerAction(() -> {
                 context.level.setBlock(farmland, Blocks.FARMLAND.defaultBlockState(), 3);
@@ -553,12 +559,16 @@ final class SingleplayerGameplayRegressionSuite {
             BlockPos anchor = context.volume.min().offset(1, 2, 8);
             List<BlockPos> bridge = new ArrayList<>();
             context.beginLatestUndoRedoAction();
-            WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+            Set<BlockPos> fixtureBlocks = new LinkedHashSet<>();
+            context.trackedPlayerAction(() -> {
                 context.level.setBlock(anchor, Blocks.STONE.defaultBlockState(), 3);
+                fixtureBlocks.add(anchor);
                 for (int index = 1; index <= BRIDGE_LENGTH; index++) {
                     BlockPos water = anchor.offset(index, -1, 0);
                     context.level.setBlock(water.below(), Blocks.STONE.defaultBlockState(), 3);
                     context.level.setBlock(water, Blocks.WATER.defaultBlockState(), 3);
+                    fixtureBlocks.add(water.below());
+                    fixtureBlocks.add(water);
                 }
             });
 
@@ -579,6 +589,7 @@ final class SingleplayerGameplayRegressionSuite {
                     .count();
             context.checks.check(verified == BRIDGE_LENGTH,
                     "gameplay water bridge verified " + verified + "/" + BRIDGE_LENGTH + " planks above source water");
+            fixtureBlocks.forEach(context::expectDraftBlock);
             bridge.forEach(context::expectDraftBlock);
             context.expectLatestUndoRedoBlock(bridge.getLast());
         }
@@ -588,7 +599,7 @@ final class SingleplayerGameplayRegressionSuite {
 
         @Override
         public void run(GameplayScenarioContext context) {
-            BlockPos piston = context.volume.min().offset(7, 1, 8);
+            BlockPos piston = context.volume.min().offset(7, 1, 10);
             BlockPos home = piston.east();
             BlockPos moved = home.east();
             BlockPos water = piston.west();

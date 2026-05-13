@@ -13,6 +13,7 @@ public final class WorldMutationContext {
         return stack;
     });
     private static final ThreadLocal<Integer> CAPTURE_SUPPRESSION_DEPTH = ThreadLocal.withInitial(() -> 0);
+    private static final ThreadLocal<Integer> ENTITY_REPLAY_DEPTH = ThreadLocal.withInitial(() -> 0);
 
     private WorldMutationContext() {
     }
@@ -39,6 +40,10 @@ public final class WorldMutationContext {
 
     public static boolean internalWorldApplyActive() {
         return currentSource() == WorldMutationSource.RESTORE;
+    }
+
+    public static boolean historyEntityReplayActive() {
+        return ENTITY_REPLAY_DEPTH.get() > 0;
     }
 
     public static SourceFrame pushSource(WorldMutationSource source) {
@@ -169,6 +174,20 @@ public final class WorldMutationContext {
         }
     }
 
+    public static EntityReplayFrame pushHistoryEntityReplay() {
+        ENTITY_REPLAY_DEPTH.set(ENTITY_REPLAY_DEPTH.get() + 1);
+        return new EntityReplayFrame();
+    }
+
+    public static void popHistoryEntityReplay() {
+        int nextDepth = Math.max(0, ENTITY_REPLAY_DEPTH.get() - 1);
+        if (nextDepth == 0) {
+            ENTITY_REPLAY_DEPTH.remove();
+        } else {
+            ENTITY_REPLAY_DEPTH.set(nextDepth);
+        }
+    }
+
     private static Frame currentFrame() {
         Frame frame = SOURCE_STACK.get().peek();
         return frame == null ? Frame.system() : frame;
@@ -261,6 +280,23 @@ public final class WorldMutationContext {
             }
             this.closed = true;
             popCaptureSuppression();
+        }
+    }
+
+    public static final class EntityReplayFrame implements AutoCloseable {
+
+        private boolean closed;
+
+        private EntityReplayFrame() {
+        }
+
+        @Override
+        public void close() {
+            if (this.closed) {
+                return;
+            }
+            this.closed = true;
+            popHistoryEntityReplay();
         }
     }
 }

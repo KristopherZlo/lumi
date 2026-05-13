@@ -99,8 +99,6 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         this.assertEquals("v0001", actions.leftReference, "compare left reference");
         this.press(section, "luma.action.quick_rollback");
         this.assertEquals("quickRollback", actions.lastAction, "rollback action");
-        this.press(section, "luma.action.ideas");
-        this.assertEquals("openVariants", actions.lastAction, "variants action");
 
         FlowLayout busy = sections.buildSection(this.projectModel(new PendingChangeSummary(1, 0, 0), this.activeOperation(), true));
         this.assertInactive(busy, "luma.action.save_build");

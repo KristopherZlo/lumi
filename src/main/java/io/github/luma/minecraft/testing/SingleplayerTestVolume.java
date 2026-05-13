@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.testing;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -102,12 +104,21 @@ final class SingleplayerTestVolume {
     }
 
     boolean isAir(ServerLevel level) {
+        return this.airMismatches(level, 1).isEmpty();
+    }
+
+    List<String> airMismatches(ServerLevel level, int limit) {
+        List<String> mismatches = new ArrayList<>();
         for (BlockPos pos : BlockPos.betweenClosed(this.min, this.max)) {
             if (!level.getBlockState(pos).isAir()) {
-                return false;
+                mismatches.add(this.describeBlock(level, pos));
+                if (mismatches.size() >= limit) {
+                    return mismatches;
+                }
             }
         }
-        return level.getEntities((Entity) null, this.bounds(), entity -> !(entity instanceof ServerPlayer)).isEmpty();
+        this.addEntityMismatches(level, limit, mismatches);
+        return mismatches;
     }
 
     void preparePlayerPlatform(ServerLevel level) {
@@ -126,17 +137,42 @@ final class SingleplayerTestVolume {
     }
 
     boolean isPreparedPlayerPlatform(ServerLevel level) {
+        return this.preparedPlayerPlatformMismatches(level, 1).isEmpty();
+    }
+
+    List<String> preparedPlayerPlatformMismatches(ServerLevel level, int limit) {
+        List<String> mismatches = new ArrayList<>();
         for (BlockPos pos : BlockPos.betweenClosed(this.min, this.max)) {
             if (pos.getY() == this.min.getY()) {
                 if (!level.getBlockState(pos).is(Blocks.SMOOTH_STONE)) {
-                    return false;
+                    mismatches.add(this.describeBlock(level, pos));
+                    if (mismatches.size() >= limit) {
+                        return mismatches;
+                    }
                 }
                 continue;
             }
             if (!level.getBlockState(pos).isAir()) {
-                return false;
+                mismatches.add(this.describeBlock(level, pos));
+                if (mismatches.size() >= limit) {
+                    return mismatches;
+                }
             }
         }
-        return level.getEntities((Entity) null, this.bounds(), entity -> !(entity instanceof ServerPlayer)).isEmpty();
+        this.addEntityMismatches(level, limit, mismatches);
+        return mismatches;
+    }
+
+    private String describeBlock(ServerLevel level, BlockPos pos) {
+        return pos.getX() + " " + pos.getY() + " " + pos.getZ() + "=" + level.getBlockState(pos);
+    }
+
+    private void addEntityMismatches(ServerLevel level, int limit, List<String> mismatches) {
+        for (Entity entity : level.getEntities((Entity) null, this.bounds(), entity -> !(entity instanceof ServerPlayer))) {
+            mismatches.add("entity=" + entity.getType() + " at " + entity.blockPosition().toShortString());
+            if (mismatches.size() >= limit) {
+                return;
+            }
+        }
     }
 }

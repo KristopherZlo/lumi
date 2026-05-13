@@ -200,4 +200,19 @@ class WorldMutationContextTest {
 
         assertFalse(WorldMutationContext.captureSuppressed());
     }
+
+    @Test
+    void historyEntityReplayFrameIsScoped() {
+        assertFalse(WorldMutationContext.historyEntityReplayActive());
+
+        try (WorldMutationContext.EntityReplayFrame ignored = WorldMutationContext.pushHistoryEntityReplay()) {
+            assertTrue(WorldMutationContext.historyEntityReplayActive());
+            try (WorldMutationContext.EntityReplayFrame nested = WorldMutationContext.pushHistoryEntityReplay()) {
+                assertTrue(WorldMutationContext.historyEntityReplayActive());
+            }
+            assertTrue(WorldMutationContext.historyEntityReplayActive());
+        }
+
+        assertFalse(WorldMutationContext.historyEntityReplayActive());
+    }
 }

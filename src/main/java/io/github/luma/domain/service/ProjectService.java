@@ -15,6 +15,7 @@ import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
 import io.github.luma.minecraft.bootstrap.WorldInitialBackupService;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.HistoryTombstoneRepository;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -55,6 +56,7 @@ public final class ProjectService {
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final WorldInitialBackupService worldInitialBackupService = new WorldInitialBackupService();
+    private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     public List<BuildProject> listProjects(MinecraftServer server) throws IOException {
         return this.projectRepository.loadAll(this.projectsRoot(server));
@@ -124,10 +126,13 @@ public final class ProjectService {
     public void bootstrapWorld(MinecraftServer server) throws IOException {
         WorldOriginInfo origin = this.ensureWorldOrigin(server);
         this.worldInitialBackupService.backupIfNeeded(server, origin);
+        boolean activeOperation = this.worldOperationManager.hasActiveOperation(server);
         for (BuildProject project : this.listProjects(server)) {
             ProjectLayout layout = this.resolveLayout(server, project.name());
             this.historyMigrationService.migrate(layout, project);
-            this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
+            if (!activeOperation) {
+                this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
+            }
             if (!project.tracksWholeDimension()) {
                 continue;
             }

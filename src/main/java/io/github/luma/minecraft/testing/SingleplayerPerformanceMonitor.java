@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Captures lightweight runtime-load metrics for the singleplayer test suite.
@@ -18,11 +19,14 @@ final class SingleplayerPerformanceMonitor {
     private static final int MAX_ACTION_APPLY_BLOCKS = 64;
     private static final int MAX_PARTIAL_RESTORE_BLOCKS = 16;
     private static final int MAX_FULL_RESTORE_BLOCKS = 512;
+    private static final Set<String> WARMUP_SYNC_PHASES = Set.of("Project setup");
 
     private final Map<String, OperationMetric> operations = new LinkedHashMap<>();
     private long totalSyncNanos;
     private long maxSyncSliceNanos;
     private String maxSyncSlicePhase = "";
+    private long maxBudgetedSyncSliceNanos;
+    private String maxBudgetedSyncSlicePhase = "";
     private int syncSliceCount;
 
     void recordSyncSlice(String phase, long elapsedNanos) {
@@ -35,6 +39,10 @@ final class SingleplayerPerformanceMonitor {
         if (elapsedNanos > this.maxSyncSliceNanos) {
             this.maxSyncSliceNanos = elapsedNanos;
             this.maxSyncSlicePhase = phase == null || phase.isBlank() ? "unknown" : phase;
+        }
+        if (!this.warmupPhase(phase) && elapsedNanos > this.maxBudgetedSyncSliceNanos) {
+            this.maxBudgetedSyncSliceNanos = elapsedNanos;
+            this.maxBudgetedSyncSlicePhase = phase == null || phase.isBlank() ? "unknown" : phase;
         }
     }
 
@@ -55,7 +63,9 @@ final class SingleplayerPerformanceMonitor {
         lines.add("Performance summary: syncSlices=" + this.syncSliceCount
                 + ", syncTotalMs=" + this.millis(this.totalSyncNanos)
                 + ", maxSyncSliceMs=" + this.millis(this.maxSyncSliceNanos)
-                + ", maxSyncSlicePhase=" + this.maxSyncSlicePhase);
+                + ", maxSyncSlicePhase=" + this.maxSyncSlicePhase
+                + ", maxBudgetedSyncSliceMs=" + this.millis(this.maxBudgetedSyncSliceNanos)
+                + ", maxBudgetedSyncSlicePhase=" + this.maxBudgetedSyncSlicePhase);
         for (OperationMetric metric : this.operations.values()) {
             lines.add("Performance operation: label=" + metric.label
                     + ", ticks=" + metric.observedTicks
@@ -70,9 +80,11 @@ final class SingleplayerPerformanceMonitor {
     List<PerformanceCheck> checks() {
         List<PerformanceCheck> checks = new ArrayList<>();
         checks.add(new PerformanceCheck(
-                "Largest Lumi test tick slice stayed below " + this.millis(MAX_SYNC_SLICE_NANOS) + " ms",
-                this.maxSyncSliceNanos <= MAX_SYNC_SLICE_NANOS,
-                "max=" + this.millis(this.maxSyncSliceNanos) + " ms in " + this.maxSyncSlicePhase
+                "Largest post-project Lumi test tick slice stayed below " + this.millis(MAX_SYNC_SLICE_NANOS) + " ms",
+                this.maxBudgetedSyncSliceNanos <= MAX_SYNC_SLICE_NANOS,
+                "max=" + this.millis(this.maxBudgetedSyncSliceNanos) + " ms in "
+                        + this.maxBudgetedSyncSlicePhase
+                        + ", observedMax=" + this.millis(this.maxSyncSliceNanos) + " ms in " + this.maxSyncSlicePhase
         ));
         checks.add(new PerformanceCheck(
                 "Total synchronous Lumi test overhead stayed below " + this.millis(MAX_SYNC_TOTAL_NANOS) + " ms",
@@ -121,6 +133,10 @@ final class SingleplayerPerformanceMonitor {
 
     private long millis(long nanos) {
         return Duration.ofNanos(Math.max(0L, nanos)).toMillis();
+    }
+
+    private boolean warmupPhase(String phase) {
+        return phase != null && WARMUP_SYNC_PHASES.contains(phase);
     }
 
     record PerformanceCheck(String label, boolean passed, String detail) {

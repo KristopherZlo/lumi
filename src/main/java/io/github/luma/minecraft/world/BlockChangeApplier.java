@@ -6,6 +6,7 @@ import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
 import io.github.luma.minecraft.capture.PlacedEntityHistoryPolicy;
+import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
@@ -429,7 +430,9 @@ public final class BlockChangeApplier {
                 }
             }
         }
-        level.tryAddFreshEntityWithPassengers(entity);
+        try (WorldMutationContext.EntityReplayFrame ignored = WorldMutationContext.pushHistoryEntityReplay()) {
+            level.tryAddFreshEntityWithPassengers(entity);
+        }
     }
 
     private static void removeExtraPlacedEntities(ServerLevel level, ChunkPoint chunk, EntityBatch targetBatch) {
