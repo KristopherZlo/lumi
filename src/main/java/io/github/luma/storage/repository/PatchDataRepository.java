@@ -48,6 +48,7 @@ public final class PatchDataRepository {
     private static final int SECTION_FRAME_V7 = 7;
     private final PatchFrameCompression frameCompression = new PatchFrameCompression();
     private final PatchEntityChunkIndexLookup entityIndexLookup = new PatchEntityChunkIndexLookup();
+    private final PatchPayloadMetadataBuilder metadataBuilder = new PatchPayloadMetadataBuilder();
 
     public PatchMetadata writePayload(
             ProjectLayout layout,
@@ -108,9 +109,9 @@ public final class PatchDataRepository {
                     chunkChanges.size(),
                     chunkBytes.length,
                     this.frameCompression.compress(chunkBytes),
-                    this.sectionFingerprints(chunkX, chunkZ, chunkChanges),
-                    (int) chunkChanges.stream().filter(StoredBlockChange::visibleInBuilderSurfaces).count(),
-                    this.sectionFingerprints(chunkX, chunkZ, visibleChanges(chunkChanges)),
+                    this.metadataBuilder.sectionFingerprints(chunkX, chunkZ, chunkChanges),
+                    this.metadataBuilder.visibleChangeCount(chunkChanges),
+                    this.metadataBuilder.visibleSectionFingerprints(chunkX, chunkZ, chunkChanges),
                     chunkEntityChanges.size()
             ));
             chunkIndex += 1;
@@ -1011,58 +1012,6 @@ public final class PatchDataRepository {
             }
         }
         return builder.build().words();
-    }
-
-    private List<SectionFingerprint> sectionFingerprints(
-            int chunkX,
-            int chunkZ,
-            List<StoredBlockChange> chunkChanges
-    ) throws IOException {
-        if (chunkChanges == null || chunkChanges.isEmpty()) {
-            return List.of();
-        }
-        Map<Integer, List<StoredBlockChange>> bySection = new LinkedHashMap<>();
-        for (StoredBlockChange change : chunkChanges) {
-            bySection.computeIfAbsent(Math.floorDiv(change.pos().y(), 16), ignored -> new ArrayList<>()).add(change);
-        }
-        List<SectionFingerprint> fingerprints = new ArrayList<>(bySection.size());
-        for (Map.Entry<Integer, List<StoredBlockChange>> entry : bySection.entrySet()) {
-            List<StoredBlockChange> sorted = entry.getValue().stream()
-                    .sorted(Comparator.comparingInt(change -> sectionLocalIndex(change.pos())))
-                    .toList();
-            fingerprints.add(SectionFingerprint.fromBytes(
-                    chunkX,
-                    chunkZ,
-                    entry.getKey(),
-                    sorted.size(),
-                    this.fingerprintBytes(sorted)
-            ));
-        }
-        return List.copyOf(fingerprints);
-    }
-
-    private static List<StoredBlockChange> visibleChanges(List<StoredBlockChange> changes) {
-        return changes == null
-                ? List.of()
-                : changes.stream()
-                        .filter(StoredBlockChange::visibleInBuilderSurfaces)
-                        .toList();
-    }
-
-    private byte[] fingerprintBytes(List<StoredBlockChange> sectionChanges) throws IOException {
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (DataOutputStream output = new DataOutputStream(bytes)) {
-            output.writeInt(sectionChanges.size());
-            for (StoredBlockChange change : sectionChanges) {
-                output.writeInt(sectionLocalIndex(change.pos()));
-                StorageIo.writeNullableCompound(output, change.oldValue() == null ? null : change.oldValue().stateTag());
-                StorageIo.writeNullableCompound(output, change.oldValue() == null ? null : change.oldValue().blockEntityTag());
-                StorageIo.writeNullableCompound(output, change.newValue() == null ? null : change.newValue().stateTag());
-                StorageIo.writeNullableCompound(output, change.newValue() == null ? null : change.newValue().blockEntityTag());
-                output.writeBoolean(change.hidden());
-            }
-        }
-        return bytes.toByteArray();
     }
 
     private static boolean isSet(long[] mask, int localIndex) {
