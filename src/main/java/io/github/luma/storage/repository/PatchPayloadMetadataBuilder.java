@@ -1,6 +1,7 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.BuilderChangeSurfacePolicy;
 import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.minecraft.world.SectionChangeMask;
@@ -17,8 +18,10 @@ import java.util.Map;
  */
 final class PatchPayloadMetadataBuilder {
 
+    private final BuilderChangeSurfacePolicy builderSurface = new BuilderChangeSurfacePolicy();
+
     int visibleChangeCount(List<StoredBlockChange> changes) {
-        return (int) visibleChanges(changes).size();
+        return this.builderSurface.visibleBlockChangeCount(changes);
     }
 
     List<SectionFingerprint> visibleSectionFingerprints(
@@ -26,7 +29,7 @@ final class PatchPayloadMetadataBuilder {
             int chunkZ,
             List<StoredBlockChange> chunkChanges
     ) throws IOException {
-        return this.sectionFingerprints(chunkX, chunkZ, visibleChanges(chunkChanges));
+        return this.sectionFingerprints(chunkX, chunkZ, this.builderSurface.visibleBlockChanges(chunkChanges));
     }
 
     List<SectionFingerprint> sectionFingerprints(
@@ -71,14 +74,6 @@ final class PatchPayloadMetadataBuilder {
             }
         }
         return bytes.toByteArray();
-    }
-
-    private static List<StoredBlockChange> visibleChanges(List<StoredBlockChange> changes) {
-        return changes == null
-                ? List.of()
-                : changes.stream()
-                        .filter(StoredBlockChange::visibleInBuilderSurfaces)
-                        .toList();
     }
 
     private static int sectionLocalIndex(BlockPoint pos) {

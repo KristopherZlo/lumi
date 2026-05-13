@@ -111,9 +111,10 @@ Use `src/main/java/io/github/luma/domain/service` for business workflows and pro
 - `ProjectIntegrityService`: storage consistency validation.
 - `PreviewCaptureRequestService`: durable request queue for client-side preview capture.
 - `PreviewService`: legacy/simple preview sampling and PNG writing.
-- `PreviewBoundsResolver`: changed-region bounds for previews.
+- `PreviewBoundsResolver`: changed-region bounds for previews, filtered through builder-visible changes.
 - `PreviewColumnSampler`, `IsometricPreviewRenderer`: preview scene sampling/render helpers.
 - `PartialRestorePlanner`: selected-region restore planning and filtering.
+- `BuilderChangeSurfacePolicy`: shared builder-visible block-change rule for stats, diffs, overlays, and preview framing.
 - `ChangeStatsFactory`: change stats, patch metadata summaries, pending summaries.
 - `ChunkSelectionFactory`: chunk list derivation from bounds or changes.
 

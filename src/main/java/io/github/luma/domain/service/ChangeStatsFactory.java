@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.ChunkDelta;
 import io.github.luma.domain.model.ChangeStats;
+import io.github.luma.domain.model.BuilderChangeSurfacePolicy;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchStats;
@@ -14,6 +15,8 @@ import java.util.Map;
 
 public final class ChangeStatsFactory {
 
+    private static final BuilderChangeSurfacePolicy BUILDER_SURFACE = new BuilderChangeSurfacePolicy();
+
     private ChangeStatsFactory() {
     }
 
@@ -22,7 +25,7 @@ public final class ChangeStatsFactory {
         Map<String, Integer> chunkCounters = new LinkedHashMap<>();
 
         for (StoredBlockChange change : changes) {
-            if (change == null || !change.visibleInBuilderSurfaces()) {
+            if (!BUILDER_SURFACE.includes(change)) {
                 continue;
             }
             chunkCounters.merge(chunkKey(change), 1, Integer::sum);
@@ -61,7 +64,7 @@ public final class ChangeStatsFactory {
     public static List<ChunkDelta> chunkDeltas(List<StoredBlockChange> changes) {
         Map<String, Integer> chunkCounters = new LinkedHashMap<>();
         for (StoredBlockChange change : changes) {
-            if (change == null || !change.visibleInBuilderSurfaces()) {
+            if (!BUILDER_SURFACE.includes(change)) {
                 continue;
             }
             chunkCounters.merge(chunkKey(change), 1, Integer::sum);
@@ -82,7 +85,7 @@ public final class ChangeStatsFactory {
         int changed = 0;
 
         for (StoredBlockChange change : changes) {
-            if (change == null || !change.visibleInBuilderSurfaces()) {
+            if (!BUILDER_SURFACE.includes(change)) {
                 continue;
             }
             boolean oldAir = isAir(change.oldValue().blockId());

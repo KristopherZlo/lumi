@@ -1,5 +1,6 @@
 package io.github.luma.ui.overlay;
 
+import io.github.luma.domain.model.BuilderChangeSurfacePolicy;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StoredBlockChange;
 import java.util.List;
@@ -15,6 +16,8 @@ public record PendingChangesOverlaySnapshot(
         int entityChangeCount
 ) {
 
+    private static final BuilderChangeSurfacePolicy BUILDER_SURFACE = new BuilderChangeSurfacePolicy();
+
     public PendingChangesOverlaySnapshot {
         projectId = projectId == null ? "" : projectId;
         blockChanges = blockChanges == null ? List.of() : List.copyOf(blockChanges);
@@ -27,9 +30,7 @@ public record PendingChangesOverlaySnapshot(
         return new PendingChangesOverlaySnapshot(
                 projectId,
                 revision(projectId, draft),
-                draft.changes().stream()
-                        .filter(change -> change != null && change.visibleInBuilderSurfaces())
-                        .toList(),
+                BUILDER_SURFACE.visibleBlockChanges(draft.changes()),
                 draft.entityChanges().size()
         );
     }

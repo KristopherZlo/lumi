@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.BuilderChangeSurfacePolicy;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
 import io.github.luma.domain.model.EntityPayload;
@@ -40,6 +41,7 @@ public final class DiffService {
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final VersionLineageService lineageService = new VersionLineageService();
+    private final BuilderChangeSurfacePolicy builderSurface = new BuilderChangeSurfacePolicy();
 
     public VersionDiff compareVersions(MinecraftServer server, String projectName, String leftVersionId, String rightVersionId) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
@@ -525,7 +527,7 @@ public final class DiffService {
     }
 
     private boolean visible(StoredBlockChange change) {
-        return change != null && change.visibleInBuilderSurfaces();
+        return this.builderSurface.includes(change);
     }
 
     private record StateAccumulator(StatePayload initialState, StatePayload finalState) {

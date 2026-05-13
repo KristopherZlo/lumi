@@ -3,6 +3,7 @@ package io.github.luma.ui.overlay;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.BuilderChangeSurfacePolicy;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ public final class RecentChangesOverlayRenderer {
     static final int REDO_TARGET_OUTLINE = 0xFF4ADE80;
     private static final CompareOverlaySurfaceResolver SURFACE_RESOLVER = new CompareOverlaySurfaceResolver();
     private static final AtomicReference<OverlayState> ACTIVE_STATE = new AtomicReference<>(null);
+    private static final BuilderChangeSurfacePolicy BUILDER_SURFACE = new BuilderChangeSurfacePolicy();
 
     private RecentChangesOverlayRenderer() {
     }
@@ -396,9 +398,7 @@ public final class RecentChangesOverlayRenderer {
         if (changes == null || changes.isEmpty()) {
             return List.of();
         }
-        return changes.stream()
-                .filter(change -> change != null && change.visibleInBuilderSurfaces())
-                .toList();
+        return BUILDER_SURFACE.visibleBlockChanges(changes);
     }
 
     private static int outlineArgb(

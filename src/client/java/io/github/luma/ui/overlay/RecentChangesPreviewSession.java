@@ -1,5 +1,6 @@
 package io.github.luma.ui.overlay;
 
+import io.github.luma.domain.model.BuilderChangeSurfacePolicy;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import java.util.List;
@@ -10,6 +11,8 @@ import java.util.function.Supplier;
  * Pins the recent-action preview selected at the start of an overlay hold.
  */
 final class RecentChangesPreviewSession {
+
+    private static final BuilderChangeSurfacePolicy BUILDER_SURFACE = new BuilderChangeSurfacePolicy();
 
     private PinnedPreview pinnedPreview;
 
@@ -109,12 +112,7 @@ final class RecentChangesPreviewSession {
         }
 
         private static boolean hasVisibleBlockChanges(List<StoredBlockChange> changes) {
-            for (StoredBlockChange change : changes) {
-                if (change != null && change.visibleInBuilderSurfaces()) {
-                    return true;
-                }
-            }
-            return false;
+            return BUILDER_SURFACE.hasVisibleBlockChanges(changes);
         }
     }
 }

@@ -19,6 +19,8 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public final class TrackedChangeBuffer {
 
+    private static final BuilderChangeSurfacePolicy BUILDER_SURFACE = new BuilderChangeSurfacePolicy();
+
     private final String id;
     private final String projectId;
     private final String variantId;
@@ -266,7 +268,7 @@ public final class TrackedChangeBuffer {
     public List<BlockChangeRecord> asDisplayChanges() {
         List<BlockChangeRecord> display = new ArrayList<>();
         for (StoredBlockChange change : this.changes.values()) {
-            if (change.visibleInBuilderSurfaces()) {
+            if (BUILDER_SURFACE.includes(change)) {
                 display.add(change.toRecord());
             }
         }
