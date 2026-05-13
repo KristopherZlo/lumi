@@ -2,7 +2,6 @@ package io.github.luma.minecraft.capture;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
-import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
@@ -10,7 +9,6 @@ import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.RecoveryDraft;
-import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -68,10 +66,11 @@ public final class HistoryCaptureManager {
     );
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
+    private final CaptureBaselineCoordinator baselineCoordinator =
+            new CaptureBaselineCoordinator(this.stabilizationService, new PersistentBlockStatePolicy());
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final ActiveSessionRegionPolicy activeSessionRegionPolicy = new ActiveSessionRegionPolicy();
-    private final PersistentBlockStatePolicy persistentBlockStatePolicy = new PersistentBlockStatePolicy();
     private long idleFlushTicker;
 
     private HistoryCaptureManager() {
@@ -163,9 +162,17 @@ public final class HistoryCaptureManager {
                     continue;
                 }
 
-                this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
+                this.baselineCoordinator.captureSessionChunkBaseline(
+                        trackedProject,
+                        level,
+                        session,
+                        chunk,
+                        pos,
+                        oldState,
+                        oldBlockEntity
+                );
                 if (!explicitRootSource) {
-                    this.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
+                    this.baselineCoordinator.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
                 }
                 if (explicitRootSource) {
                     session.addRootChunk(chunk);
@@ -321,13 +328,23 @@ public final class HistoryCaptureManager {
                     continue;
                 }
                 if (mutation != null && !session.isRootChunk(chunk)) {
-                    session.recordBaselineCorrection(
-                            BlockPoint.from(pos),
-                            StatePayload.capture(mutation.oldState(), mutation.oldBlockEntity())
+                    this.baselineCoordinator.recordBaselineCorrection(
+                            session,
+                            pos,
+                            mutation.oldState(),
+                            mutation.oldBlockEntity()
                     );
                 }
                 if (this.isExplicitRootSource(source)) {
-                    this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
+                    this.baselineCoordinator.captureSessionChunkBaseline(
+                            trackedProject,
+                            level,
+                            session,
+                            chunk,
+                            pos,
+                            mutation.oldState(),
+                            mutation.oldBlockEntity()
+                    );
                     session.addRootChunk(chunk);
                 } else if (usesDeferredStabilization) {
                     if (!this.activeSessionRegionPolicy.contains(level, session, chunk)) {
@@ -343,7 +360,15 @@ public final class HistoryCaptureManager {
                         );
                         continue;
                     }
-                    this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, mutation.oldState(), mutation.oldBlockEntity());
+                    this.baselineCoordinator.captureSessionChunkBaseline(
+                            trackedProject,
+                            level,
+                            session,
+                            chunk,
+                            pos,
+                            mutation.oldState(),
+                            mutation.oldBlockEntity()
+                    );
                     session.markDirtySection(
                             new ChunkSectionPoint(chunk, Math.floorDiv(pos.getY(), 16)),
                             this.deferredActionContext(session, chunk, source),
@@ -576,13 +601,15 @@ public final class HistoryCaptureManager {
             return;
         }
         if (!session.isRootChunk(chunk)) {
-            session.recordBaselineCorrection(
-                    BlockPoint.from(input.pos()),
-                    StatePayload.capture(mutation.oldState(), mutation.oldBlockEntity())
+            this.baselineCoordinator.recordBaselineCorrection(
+                    session,
+                    input.pos(),
+                    mutation.oldState(),
+                    mutation.oldBlockEntity()
             );
         }
         if (this.isExplicitRootSource(source)) {
-            this.captureSessionChunkBaseline(
+            this.baselineCoordinator.captureSessionChunkBaseline(
                     trackedProject,
                     level,
                     session,
@@ -596,7 +623,7 @@ public final class HistoryCaptureManager {
             if (!this.activeSessionRegionPolicy.contains(level, session, chunk)) {
                 return;
             }
-            this.captureSessionChunkBaseline(
+            this.baselineCoordinator.captureSessionChunkBaseline(
                     trackedProject,
                     level,
                     session,
@@ -1604,8 +1631,16 @@ public final class HistoryCaptureManager {
         if (this.isExplicitRootSource(source)) {
             session.addRootChunk(chunk);
         }
-        this.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
-        this.captureSessionChunkBaseline(trackedProject, level, session, chunk, pos, oldState, oldBlockEntity);
+        this.baselineCoordinator.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
+        this.baselineCoordinator.captureSessionChunkBaseline(
+                trackedProject,
+                level,
+                session,
+                chunk,
+                pos,
+                oldState,
+                oldBlockEntity
+        );
         session.markDirtySection(
                 new ChunkSectionPoint(chunk, Math.floorDiv(pos.getY(), 16)),
                 deferredActionContext,
@@ -1641,48 +1676,6 @@ public final class HistoryCaptureManager {
                 buffer.size(),
                 actionId(deferredActionContext),
                 actor(deferredActionContext)
-        );
-    }
-
-    private void captureSessionChunkBaseline(
-            TrackedProject trackedProject,
-            ServerLevel level,
-            CaptureSessionState session,
-            ChunkPoint chunk,
-            BlockPos changedPos,
-            BlockState oldState,
-            CompoundTag oldBlockEntity
-    ) {
-        if (session.hasBaselineChunk(chunk)) {
-            return;
-        }
-        session.captureBaselineChunk(
-                chunk,
-                this.stabilizationService.captureBaselineChunkState(
-                        level,
-                        trackedProject.project(),
-                        chunk,
-                        changedPos,
-                        oldState,
-                        oldBlockEntity
-                )
-        );
-    }
-
-    private void recordBaselineCorrection(
-            CaptureSessionState session,
-            BlockPos pos,
-            BlockState oldState,
-            CompoundTag oldBlockEntity
-    ) {
-        if (session == null || pos == null) {
-            return;
-        }
-        PersistentBlockStatePolicy.PersistentBlockState persistentState =
-                this.persistentBlockStatePolicy.normalize(oldState, oldBlockEntity);
-        session.recordBaselineCorrection(
-                BlockPoint.from(pos),
-                StatePayload.capture(persistentState.state(), persistentState.blockEntityTag())
         );
     }
 

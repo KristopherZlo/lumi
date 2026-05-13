@@ -41,7 +41,7 @@ class ArchitectureGuardrailsTest {
         Map<Path, Integer> limits = Map.of(
                 MAIN_SOURCES.resolve("io/github/luma/minecraft/world/WorldOperationManager.java"), 2000,
                 MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 2065,
-                MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/HistoryCaptureManager.java"), 1830,
+                MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/HistoryCaptureManager.java"), 1815,
                 MAIN_SOURCES.resolve("io/github/luma/storage/repository/PatchDataRepository.java"), 215
         );
 
