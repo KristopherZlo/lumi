@@ -43,6 +43,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -94,7 +95,7 @@ final class SingleplayerTestRun {
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final SingleplayerPerformanceMonitor performanceMonitor = new SingleplayerPerformanceMonitor();
 
-    private Phase phase = Phase.CREATE_PROJECT;
+    private Phase phase;
     private Phase announcedPhase;
     private OperationHandle pendingOperation;
     private String lastOperationProgressKey = "";
@@ -134,6 +135,9 @@ final class SingleplayerTestRun {
         this.level = level;
         this.player = player;
         this.volume = volume;
+        this.phase = this.mode == SingleplayerTestMode.PLAYER_FLOW
+                ? Phase.PREPARE_PLAYER_AREA
+                : Phase.CREATE_PROJECT;
         this.log.info("Reserved test volume " + this.describeVolume());
     }
 
@@ -173,6 +177,7 @@ final class SingleplayerTestRun {
 
             this.announcePhase(server);
             switch (this.phase) {
+                case PREPARE_PLAYER_AREA -> this.preparePlayerArea(server);
                 case CREATE_PROJECT -> this.createProject(server);
                 case CHECK_BOOTSTRAP_STORAGE -> this.checkBootstrapStorage(server);
                 case CAPTURE_DRAFT -> this.captureDraft(server);
@@ -231,6 +236,37 @@ final class SingleplayerTestRun {
         this.log.fail(this.phase.title(), "Unhandled test runner failure", exception);
         this.cleanup(server);
         this.finishWithSummary(server);
+    }
+
+    private void preparePlayerArea(MinecraftServer server) {
+        String generatorName = this.chunkGeneratorName();
+        this.log.info("Player-flow source world generator=" + generatorName);
+        this.check(
+                !generatorName.toLowerCase(Locale.ROOT).contains("flat"),
+                "Player-flow source world is not using a flat chunk generator"
+        );
+
+        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () ->
+                this.volume.preparePlayerPlatform(this.level));
+        BlockPos standOnPlatform = this.volume.min().offset(1, 1, 1);
+        this.player.teleportTo(
+                standOnPlatform.getX() + 0.5D,
+                standOnPlatform.getY(),
+                standOnPlatform.getZ() + 0.5D
+        );
+        this.player.setDeltaMovement(0.0D, 0.0D, 0.0D);
+        this.player.snapTo(
+                standOnPlatform.getX() + 0.5D,
+                standOnPlatform.getY(),
+                standOnPlatform.getZ() + 0.5D,
+                180.0F,
+                20.0F
+        );
+        this.check(
+                this.volume.isPreparedPlayerPlatform(this.level),
+                "Player-flow prepared a smooth-stone build platform with clear working air"
+        );
+        this.completePhase(server, Phase.CREATE_PROJECT);
     }
 
     private void createProject(MinecraftServer server) throws Exception {
@@ -469,7 +505,12 @@ final class SingleplayerTestRun {
     }
 
     private void checkRestoreInitial(MinecraftServer server) throws Exception {
-        this.check(this.volume.isAir(this.level), "Full restore returned the test volume to initial air");
+        this.check(
+                this.initialVolumeRestored(),
+                this.mode == SingleplayerTestMode.PLAYER_FLOW
+                        ? "Full restore returned the test volume to the prepared platform baseline"
+                        : "Full restore returned the test volume to initial air"
+        );
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
         Phase next = switch (this.mode) {
             case SMOKE, CRASH_SAFETY -> Phase.CLEANUP;
@@ -848,7 +889,12 @@ final class SingleplayerTestRun {
     }
 
     private void checkRestoreInitialAfterPlayerInteractions(MinecraftServer server) throws Exception {
-        this.check(this.volume.isAir(this.level), "Full restore returned all gameplay blocks to initial air");
+        this.check(
+                this.initialVolumeRestored(),
+                this.mode == SingleplayerTestMode.PLAYER_FLOW
+                        ? "Full restore returned all gameplay blocks to the prepared platform baseline"
+                        : "Full restore returned all gameplay blocks to initial air"
+        );
         if (this.gameplayReport != null) {
             this.check(this.gameplayReport.spawnedEntities().stream()
                             .allMatch(entity -> entity == null || entity.isRemoved()),
@@ -1082,7 +1128,7 @@ final class SingleplayerTestRun {
         this.phaseStartPasses = this.log.passedChecks();
         this.phaseStartFailures = this.log.failedChecks();
         this.lastOperationProgressKey = "";
-        this.message(server, "Lumi testing [" + this.phase.stepNumber() + "/" + Phase.totalSteps() + "] "
+        this.message(server, "Lumi testing [" + this.phaseStepNumber() + "/" + this.phaseTotalSteps() + "] "
                 + this.phase.title() + " - " + this.phase.description());
     }
 
@@ -1090,9 +1136,20 @@ final class SingleplayerTestRun {
         int passed = this.log.passedChecks() - this.phaseStartPasses;
         int failed = this.log.failedChecks() - this.phaseStartFailures;
         String status = failed == 0 ? "passed" : "completed with " + failed + " failure(s)";
-        this.message(server, "Lumi testing [" + this.phase.stepNumber() + "/" + Phase.totalSteps() + "] "
+        this.message(server, "Lumi testing [" + this.phaseStepNumber() + "/" + this.phaseTotalSteps() + "] "
                 + this.phase.title() + " " + status + " (" + passed + " pass, " + failed + " fail)");
         this.phase = nextPhase;
+    }
+
+    private int phaseStepNumber() {
+        int step = this.phase.stepNumber();
+        return this.mode == SingleplayerTestMode.PLAYER_FLOW ? step : step - 1;
+    }
+
+    private int phaseTotalSteps() {
+        return this.mode == SingleplayerTestMode.PLAYER_FLOW
+                ? Phase.totalSteps()
+                : Phase.totalSteps() - 1;
     }
 
     private void handlePhaseException(MinecraftServer server, Exception exception) {
@@ -1229,6 +1286,17 @@ final class SingleplayerTestRun {
         return Files.exists(previewFile) && Files.size(previewFile) > 0L;
     }
 
+    private boolean initialVolumeRestored() {
+        return this.mode == SingleplayerTestMode.PLAYER_FLOW
+                ? this.volume.isPreparedPlayerPlatform(this.level)
+                : this.volume.isAir(this.level);
+    }
+
+    private String chunkGeneratorName() {
+        Object generator = this.level.getChunkSource().getGenerator();
+        return generator == null ? "unknown" : generator.getClass().getName();
+    }
+
     private Entity gameplayEntity() {
         if (this.gameplayReport == null) {
             return null;
@@ -1326,6 +1394,10 @@ final class SingleplayerTestRun {
     }
 
     private enum Phase {
+        PREPARE_PLAYER_AREA(
+                "Player-flow area setup",
+                "find normal-world terrain, prepare a build platform, and stand the player on it"
+        ),
         CREATE_PROJECT("Project setup", "create the temporary project and initial snapshot"),
         CHECK_BOOTSTRAP_STORAGE(
                 "Bootstrap storage smoke",
@@ -1429,7 +1501,7 @@ final class SingleplayerTestRun {
                 return CLEANUP;
             }
             return switch (this) {
-                case CREATE_PROJECT, CHECK_BOOTSTRAP_STORAGE, CAPTURE_DRAFT -> CLEANUP;
+                case PREPARE_PLAYER_AREA, CREATE_PROJECT, CHECK_BOOTSTRAP_STORAGE, CAPTURE_DRAFT -> CLEANUP;
                 case START_UNDO, CHECK_UNDO, START_REDO, CHECK_REDO -> START_SAVE;
                 case START_SAVE, CHECK_SAVE -> CLEANUP;
                 case START_AMEND, CHECK_AMEND -> START_BRANCH_SAVE;

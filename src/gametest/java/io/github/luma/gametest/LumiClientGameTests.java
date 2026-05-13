@@ -50,6 +50,8 @@ public final class LumiClientGameTests implements FabricClientGameTest {
             ServerPlayer player = players.get(0);
             if (this.modeIs("full", "singleplayer")) {
                 SingleplayerTestingService.getInstance().start(server, server.overworld(), player);
+            } else if (this.modeIs("player-flow", "player", "natural")) {
+                SingleplayerTestingService.getInstance().startPlayerFlow(server, server.overworld(), player);
             } else if (this.modeIs("structure-fixtures", "structures")) {
                 SingleplayerTestingService.getInstance().startStructureFixtures(server, server.overworld(), player);
             } else if (this.modeIs("crash-safety", "crash")) {

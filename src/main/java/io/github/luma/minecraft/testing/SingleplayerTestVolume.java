@@ -5,6 +5,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
 /**
@@ -15,6 +17,7 @@ final class SingleplayerTestVolume {
     static final int WIDTH = 16;
     static final int HEIGHT = 12;
     static final int DEPTH = 16;
+    private static final int SURFACE_VOLUME_MARGIN = 5;
 
     private final BlockPos min;
     private final BlockPos max;
@@ -39,6 +42,29 @@ final class SingleplayerTestVolume {
             }
         }
         return Optional.empty();
+    }
+
+    static Optional<SingleplayerTestVolume> findNearSurface(ServerLevel level, BlockPos near) {
+        int chunkBaseX = Math.floorDiv(near.getX(), 16) << 4;
+        int chunkBaseZ = Math.floorDiv(near.getZ(), 16) << 4;
+        int originX = chunkBaseX + SURFACE_VOLUME_MARGIN;
+        int originZ = chunkBaseZ + SURFACE_VOLUME_MARGIN;
+        int floorY = highestSurfaceY(level, originX, originZ);
+        int maxBaseY = level.getMaxY() - HEIGHT + 1;
+        if (floorY < level.getMinY() || floorY > maxBaseY) {
+            return Optional.empty();
+        }
+        return Optional.of(new SingleplayerTestVolume(new BlockPos(originX, floorY, originZ)));
+    }
+
+    private static int highestSurfaceY(ServerLevel level, int originX, int originZ) {
+        int highest = level.getMinY();
+        for (int x = originX; x < originX + WIDTH; x++) {
+            for (int z = originZ; z < originZ + DEPTH; z++) {
+                highest = Math.max(highest, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z));
+            }
+        }
+        return highest;
     }
 
     BlockPos min() {
@@ -77,6 +103,36 @@ final class SingleplayerTestVolume {
 
     boolean isAir(ServerLevel level) {
         for (BlockPos pos : BlockPos.betweenClosed(this.min, this.max)) {
+            if (!level.getBlockState(pos).isAir()) {
+                return false;
+            }
+        }
+        return level.getEntities((Entity) null, this.bounds(), entity -> !(entity instanceof ServerPlayer)).isEmpty();
+    }
+
+    void preparePlayerPlatform(ServerLevel level) {
+        for (Entity entity : level.getEntities((Entity) null, this.bounds(), entity -> !(entity instanceof ServerPlayer))) {
+            entity.discard();
+        }
+        for (BlockPos pos : BlockPos.betweenClosed(this.min, this.max)) {
+            level.setBlock(
+                    pos,
+                    pos.getY() == this.min.getY()
+                            ? Blocks.SMOOTH_STONE.defaultBlockState()
+                            : Blocks.AIR.defaultBlockState(),
+                    3
+            );
+        }
+    }
+
+    boolean isPreparedPlayerPlatform(ServerLevel level) {
+        for (BlockPos pos : BlockPos.betweenClosed(this.min, this.max)) {
+            if (pos.getY() == this.min.getY()) {
+                if (!level.getBlockState(pos).is(Blocks.SMOOTH_STONE)) {
+                    return false;
+                }
+                continue;
+            }
             if (!level.getBlockState(pos).isAir()) {
                 return false;
             }

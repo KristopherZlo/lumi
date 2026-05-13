@@ -45,6 +45,16 @@ public final class SingleplayerTestingService {
         return this.start(server, level, player, SingleplayerTestMode.SMOKE);
     }
 
+    public synchronized int startPlayerFlow(CommandSourceStack source) throws Exception {
+        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
+                SingleplayerTestMode.PLAYER_FLOW);
+    }
+
+    public synchronized int startPlayerFlow(MinecraftServer server, ServerLevel level, ServerPlayer player)
+            throws Exception {
+        return this.start(server, level, player, SingleplayerTestMode.PLAYER_FLOW);
+    }
+
     public synchronized int startStructureFixtures(CommandSourceStack source) throws Exception {
         return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
                 SingleplayerTestMode.STRUCTURE_FIXTURES);
@@ -91,13 +101,29 @@ public final class SingleplayerTestingService {
             throw new IllegalStateException("Wait for the active Lumi world operation to finish before testing");
         }
 
-        SingleplayerTestVolume volume = SingleplayerTestVolume.find(level, player.blockPosition())
-                .orElseThrow(() -> new IllegalStateException("No empty 5x4x5 air volume was found above the player chunk"));
+        SingleplayerTestVolume volume = this.reserveVolume(level, player, mode);
         this.lastRunServerKey = serverKey(server);
         this.lastRunPassed = false;
         this.activeRun = new SingleplayerTestRun(server, level, player, volume, mode);
         this.activeRun.message(server, "Lumi " + mode.label() + " started at " + this.activeRun.describeVolume());
         return 1;
+    }
+
+    private SingleplayerTestVolume reserveVolume(
+            ServerLevel level,
+            ServerPlayer player,
+            SingleplayerTestMode mode
+    ) {
+        if (mode == SingleplayerTestMode.PLAYER_FLOW) {
+            return SingleplayerTestVolume.findNearSurface(level, player.blockPosition())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "No surface-adjacent 16x12x16 player-flow test volume was found near the player chunk"
+                    ));
+        }
+        return SingleplayerTestVolume.find(level, player.blockPosition())
+                .orElseThrow(() -> new IllegalStateException(
+                        "No empty 16x12x16 air volume was found above the player chunk"
+                ));
     }
 
     public synchronized boolean hasActiveRun(MinecraftServer server) {

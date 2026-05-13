@@ -41,14 +41,17 @@ Shows:
 ```mcfunction
 /lumi testing singleplayer
 /lumi testing smoke
+/lumi testing player-flow
 /lumi testing structures
 /lumi testing crash-safety
 /lumi testing external-tools
 ```
 
-Runs an integrated-server regression suite against the real in-world Lumi services. The command is singleplayer-only, refuses to start while another Lumi world operation is active, and needs a small empty air volume above the player's current chunk.
+Runs an integrated-server regression suite against the real in-world Lumi services. The command is singleplayer-only and refuses to start while another Lumi world operation is active. Most modes reserve a small empty air volume above the player's current chunk; `player-flow` instead starts near normal terrain, prepares a build platform, and snapshots that prepared platform as the initial project state.
 
 `/lumi testing smoke` runs the shorter project smoke path. It creates a temporary bounded project, verifies world bootstrap storage, the pre-open checkpoint manifest and opt-in backup budget, snapshot section content refs, section-indexed patch reads, capture, pending diff, undo/redo, save, amend, branching, export, partial restore, full restore, integrity, and cleanup. It stops before gameplay, large-history, bulk-apply, and structure-fixture diagnostics.
+
+`/lumi testing player-flow` is the player-journey mode for ordinary non-flat worlds. It finds the terrain surface near the player, clears a `16x12x16` work volume, lays a smooth-stone platform, teleports the player onto it, creates a temporary project over that prepared area, then runs the full `singleplayer` workflow from capture through commits, branch work, partial/full restore, gameplay, entities, TNT, performance, large-history, and bulk-apply diagnostics. It fails the run if the world uses a flat chunk generator.
 
 `/lumi testing structures` runs only the structure fixture diagnostics. It creates the same temporary bounded project, then skips the broader save, restore, gameplay, bulk apply, and performance phases. Generated observer/sticky-piston fixtures remain strict rollback checks, while saved `.nbt` fixtures verify player interaction and undo/redo operation flow and log dynamic redstone/entity snapshot drift instead of treating vanilla post-operation ticking as a failure. This keeps the default client GameTest focused on UI, overlay, storage, gameplay, large-history, and bulk-apply coverage while the alpha release wrapper still runs the fixture diagnostics as a separate focused mode.
 

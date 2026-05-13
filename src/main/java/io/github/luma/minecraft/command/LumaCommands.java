@@ -36,6 +36,9 @@ public final class LumaCommands {
                         .executes(context -> this.execute(context.getSource(), this.singleplayerTestingService::start)))
                 .then(Commands.literal("smoke")
                         .executes(context -> this.execute(context.getSource(), this.singleplayerTestingService::startSmoke)))
+                .then(Commands.literal("player-flow")
+                        .executes(context -> this.execute(context.getSource(),
+                                this.singleplayerTestingService::startPlayerFlow)))
                 .then(Commands.literal("structures")
                         .executes(context -> this.execute(context.getSource(),
                                 this.singleplayerTestingService::startStructureFixtures)))
@@ -55,6 +58,7 @@ public final class LumaCommands {
         source.sendSuccess(() -> Component.literal("/lumi status - show project and operation status"), false);
         source.sendSuccess(() -> Component.literal("/lumi testing singleplayer - run the integrated-world Lumi regression suite"), false);
         source.sendSuccess(() -> Component.literal("/lumi testing smoke - run a shorter in-world project smoke suite"), false);
+        source.sendSuccess(() -> Component.literal("/lumi testing player-flow - run the full suite from a prepared platform in a normal terrain world"), false);
         source.sendSuccess(() -> Component.literal("/lumi testing structures - run only saved structure fixture diagnostics"), false);
         source.sendSuccess(() -> Component.literal("/lumi testing crash-safety - run the restart-focused safety smoke suite"), false);
         source.sendSuccess(() -> Component.literal("/lumi testing external-tools - run focused external-tool source diagnostics"), false);
