@@ -147,7 +147,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `HistoryCaptureManager`: mixin-facing capture facade.
 - `CaptureSessionRegistry`: active buffers, dirty flags, session states, flush fingerprints.
 - `WorkingDraftSessionManager`: durable working draft session ownership, recovery draft persistence, freeze/consume/snapshot/discard, idle flushes, and post-save working-draft base rebasing.
-- `ActiveSessionRegionPolicy`: active causal-envelope and player-loaded chunk membership for action-scoped secondary capture.
+- `ActiveSessionRegionPolicy`: active causal-envelope and player-loaded chunk membership for secondary capture that still carries or can reuse causal action ownership.
 - `CaptureDiagnosticsRegistry`, `CaptureSessionDiagnostics`: accepted mutation traces and capture summaries.
 - `TrackedProjectCatalog`, `ProjectCatalogCache`: active project metadata cache for capture matching, refreshed only by explicit invalidation and released on server shutdown.
 - `TrackedProject`, `ProjectTrackingIndex`: dimension/chunk membership for tracked workspaces.

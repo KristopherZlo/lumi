@@ -130,13 +130,8 @@ final class MutationSourcePolicy {
             String actionId
     ) {
         return this.usesDeferredStabilization(project, source)
-                && (this.canUseDeferredStabilization(source, actionId)
-                || this.canUseActionlessDeferredStabilization(source, activeSessionRegion));
-    }
-
-    boolean canUseActionlessDeferredStabilization(WorldMutationSource source, boolean activeSessionRegion) {
-        return activeSessionRegion
-                && (source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK);
+                && activeSessionRegion
+                && this.canUseDeferredStabilization(source, actionId);
     }
 
     boolean canReuseDeferredActionContext(WorldMutationSource source) {
@@ -147,7 +142,9 @@ final class MutationSourcePolicy {
     }
 
     boolean requiresCausalActionForDirectCapture(WorldMutationSource source) {
-        return source == WorldMutationSource.GROWTH;
+        return source == WorldMutationSource.GROWTH
+                || source == WorldMutationSource.FLUID
+                || source == WorldMutationSource.FALLING_BLOCK;
     }
 
     boolean canUseDirectCapture(WorldMutationSource source, String actionId) {
