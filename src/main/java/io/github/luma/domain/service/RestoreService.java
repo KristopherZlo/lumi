@@ -96,6 +96,7 @@ public final class RestoreService {
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final VersionLineageService lineageService = new VersionLineageService();
     private final RestoreRequestResolver requestResolver = new RestoreRequestResolver();
+    private final RestorePlanBuilder restorePlanBuilder = new RestorePlanBuilder();
 
     /**
      * Starts a restore operation for the given project and target version.
@@ -303,7 +304,7 @@ public final class RestoreService {
                     return this.decodeWorldRootRestore(layout, project, level, progressSink);
                 }
                 progressSink.update(OperationStage.PREPARING, 0, 1, "Planning restore");
-                RestorePlan plan = this.buildPlan(layout, project, versions, version);
+                RestorePlan plan = this.restorePlanBuilder.build(layout, project, versions, version);
                 LumaMod.LOGGER.info(
                         "Restore plan for project {} uses anchor={}, patches={}, baselineGaps={}",
                         project.name(),
@@ -386,7 +387,7 @@ public final class RestoreService {
             );
         }
 
-        RestorePlan plan = this.buildPlan(layout, project, versions, targetVersion);
+        RestorePlan plan = this.restorePlanBuilder.build(layout, project, versions, targetVersion);
         return new RestorePlanSummary(
                 RestorePlanMode.BASELINE_CHUNKS,
                 this.chunkCollector.mergeChunks(this.touchedChunksForPlan(plan), pendingChunks),
@@ -1367,7 +1368,7 @@ public final class RestoreService {
         }
         Set<String> selectedChunkKeys = selected.keySet();
 
-        RestoreChain chain = this.resolveChain(versions, targetVersion);
+        RestoreChain chain = this.restorePlanBuilder.resolveChain(versions, targetVersion);
         Map<String, EntityPayload> states = new LinkedHashMap<>();
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
             for (var chunk : this.snapshotReader.readFile(
@@ -1569,89 +1570,6 @@ public final class RestoreService {
                     : versionMap.get(cursor.parentVersionId());
         }
         return cursor == null ? null : directVersions;
-    }
-
-    private RestorePlan buildPlan(
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            List<ProjectVersion> versions,
-            ProjectVersion targetVersion
-    ) throws IOException {
-        RestoreChain chain = this.resolveChain(versions, targetVersion);
-        LumaDebugLog.log(
-                project,
-                "restore",
-                "Building restore plan for project {} target {} with anchor {}",
-                project.name(),
-                targetVersion.id(),
-                chain.anchor().id()
-        );
-        List<ChunkPointAccumulator> restoredChunks = new ArrayList<>();
-
-        if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
-            for (var chunk : this.snapshotReader.loadChunks(layout.snapshotFile(chain.anchor().snapshotId()))) {
-                restoredChunks.add(new ChunkPointAccumulator(chunk.x(), chunk.z()));
-            }
-        }
-
-        List<PatchMetadata> patchMetadata = new ArrayList<>();
-        for (ProjectVersion patchVersion : chain.patchVersions()) {
-            for (String patchId : patchVersion.patchIds()) {
-                PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
-                        .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-                patchMetadata.add(metadata);
-                for (var chunk : metadata.chunks()) {
-                    restoredChunks.add(new ChunkPointAccumulator(chunk.chunkX(), chunk.chunkZ()));
-                }
-            }
-        }
-
-        List<io.github.luma.domain.model.ChunkPoint> dedupedChunks = new ArrayList<>();
-        Map<String, io.github.luma.domain.model.ChunkPoint> deduped = new LinkedHashMap<>();
-        for (ChunkPointAccumulator chunk : restoredChunks) {
-            deduped.put(chunk.chunkX + ":" + chunk.chunkZ, new io.github.luma.domain.model.ChunkPoint(chunk.chunkX, chunk.chunkZ));
-        }
-        dedupedChunks.addAll(deduped.values());
-
-        List<io.github.luma.domain.model.ChunkPoint> baselineGaps = project.tracksWholeDimension()
-                ? this.baselineChunkRepository.listMissingChunks(layout, dedupedChunks)
-                : List.of();
-        LumaDebugLog.log(
-                project,
-                "restore",
-                "Restore plan for project {} resolved {} patch metadata entries and {} baseline gaps",
-                project.name(),
-                patchMetadata.size(),
-                baselineGaps.size()
-        );
-
-        return new RestorePlan(chain.anchor(), patchMetadata, baselineGaps);
-    }
-
-    private RestoreChain resolveChain(List<ProjectVersion> versions, ProjectVersion targetVersion) {
-        Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
-
-        List<ProjectVersion> patchVersions = new ArrayList<>();
-        ProjectVersion cursor = targetVersion;
-        while (cursor != null && (cursor.snapshotId() == null || cursor.snapshotId().isBlank())) {
-            patchVersions.add(cursor);
-            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
-                    ? null
-                    : versionMap.get(cursor.parentVersionId());
-        }
-
-        if (cursor == null) {
-            throw new IllegalArgumentException("No checkpoint snapshot found for version " + targetVersion.id());
-        }
-
-        patchVersions.sort(Comparator.comparing(ProjectVersion::createdAt));
-        LumaMod.LOGGER.info(
-                "Resolved restore chain for version {} with anchor {} and {} patch versions",
-                targetVersion.id(),
-                cursor.id(),
-                patchVersions.size()
-        );
-        return new RestoreChain(cursor, patchVersions);
     }
 
     private RestoreChain resolveEntityStateChain(List<ProjectVersion> versions, ProjectVersion targetVersion) {
@@ -2158,16 +2076,6 @@ public final class RestoreService {
         }
     }
 
-    private record RestoreChain(ProjectVersion anchor, List<ProjectVersion> patchVersions) {
-    }
-
-    private record RestorePlan(
-            ProjectVersion anchor,
-            List<PatchMetadata> patchChain,
-            List<io.github.luma.domain.model.ChunkPoint> baselineGaps
-    ) {
-    }
-
     private record PartialRestoreDraft(RestorePlanMode mode, RecoveryDraft draft) {
     }
 
@@ -2188,9 +2096,6 @@ public final class RestoreService {
         private boolean isEmpty() {
             return this.changes.isEmpty() && this.entityChanges.isEmpty();
         }
-    }
-
-    private record ChunkPointAccumulator(int chunkX, int chunkZ) {
     }
 
 }

@@ -40,7 +40,7 @@ class ArchitectureGuardrailsTest {
     void hotPathClassesDoNotGrowBeforeTheyAreSplit() throws IOException {
         Map<Path, Integer> limits = Map.of(
                 MAIN_SOURCES.resolve("io/github/luma/minecraft/world/WorldOperationManager.java"), 2700,
-                MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 2220,
+                MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 2125,
                 MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/HistoryCaptureManager.java"), 2000,
                 MAIN_SOURCES.resolve("io/github/luma/storage/repository/PatchDataRepository.java"), 215
         );
