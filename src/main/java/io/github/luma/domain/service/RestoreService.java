@@ -97,6 +97,7 @@ public final class RestoreService {
     private final VersionLineageService lineageService = new VersionLineageService();
     private final RestoreRequestResolver requestResolver = new RestoreRequestResolver();
     private final RestorePlanBuilder restorePlanBuilder = new RestorePlanBuilder();
+    private final RestorePayloadLoader payloadLoader = new RestorePayloadLoader();
 
     /**
      * Starts a restore operation for the given project and target version.
@@ -596,12 +597,12 @@ public final class RestoreService {
         List<ChunkPoint> selectedChunks = request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA
                 ? null
                 : this.chunkCollector.chunksIntersecting(request.bounds());
-        PatchWorldChanges reverseChanges = this.loadVersionWorldChanges(
+        PatchWorldChanges reverseChanges = this.payloadLoader.loadVersionWorldChanges(
                 layout,
                 directPlan.reverseVersions(),
                 selectedChunks
         );
-        PatchWorldChanges forwardChanges = this.loadVersionWorldChanges(
+        PatchWorldChanges forwardChanges = this.payloadLoader.loadVersionWorldChanges(
                 layout,
                 directPlan.forwardVersions(),
                 selectedChunks
@@ -800,69 +801,6 @@ public final class RestoreService {
                 remaining,
                 remainingEntities
         ));
-    }
-
-    private List<StoredBlockChange> loadVersionChanges(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
-        return this.loadVersionWorldChanges(layout, versions).blockChanges();
-    }
-
-    private PatchWorldChanges loadVersionWorldChanges(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
-        return this.loadVersionWorldChanges(layout, versions, null);
-    }
-
-    private PatchWorldChanges loadVersionWorldChanges(
-            ProjectLayout layout,
-            List<ProjectVersion> versions,
-            List<ChunkPoint> selectedChunks
-    ) throws IOException {
-        List<StoredBlockChange> changes = new ArrayList<>();
-        List<StoredEntityChange> entityChanges = new ArrayList<>();
-        for (ProjectVersion version : versions) {
-            for (String patchId : version.patchIds()) {
-                PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
-                        .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-                PatchWorldChanges worldChanges = selectedChunks == null
-                        ? this.patchDataRepository.loadWorldChanges(layout, metadata)
-                        : this.patchDataRepository.loadWorldChanges(layout, metadata, selectedChunks);
-                changes.addAll(worldChanges.blockChanges());
-                entityChanges.addAll(worldChanges.entityChanges());
-            }
-        }
-        return new PatchWorldChanges(changes, entityChanges);
-    }
-
-    private List<StoredEntityChange> loadVersionEntityChanges(
-            ProjectLayout layout,
-            ProjectVersion version,
-            Set<String> entityIds
-    ) throws IOException {
-        if (version == null || entityIds == null || entityIds.isEmpty()) {
-            return List.of();
-        }
-        List<StoredEntityChange> entityChanges = new ArrayList<>();
-        for (String patchId : version.patchIds()) {
-            PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
-                    .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-            entityChanges.addAll(this.patchDataRepository.loadEntityChanges(layout, metadata, entityIds));
-        }
-        return entityChanges;
-    }
-
-    private List<StoredEntityChange> loadVersionEntityChangesForChunks(
-            ProjectLayout layout,
-            ProjectVersion version,
-            Collection<ChunkPoint> chunks
-    ) throws IOException {
-        if (version == null || chunks == null || chunks.isEmpty()) {
-            return List.of();
-        }
-        List<StoredEntityChange> entityChanges = new ArrayList<>();
-        for (String patchId : version.patchIds()) {
-            PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
-                    .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
-            entityChanges.addAll(this.patchDataRepository.loadEntityChangesForChunks(layout, metadata, chunks));
-        }
-        return entityChanges;
     }
 
     private static WorldOperationManager.ProgressSink progressSinkNoOp() {
@@ -1205,7 +1143,7 @@ public final class RestoreService {
             this.seedWorldRootEntityStates(layout, entityIds, candidateChunks, states);
         }
         for (ProjectVersion version : chain.patchVersions()) {
-            for (StoredEntityChange change : this.loadVersionEntityChanges(layout, version, entityIds)) {
+            for (StoredEntityChange change : this.payloadLoader.loadVersionEntityChanges(layout, version, entityIds)) {
                 if (change.newValue() == null) {
                     states.remove(change.entityId());
                 } else {
@@ -1384,7 +1322,7 @@ public final class RestoreService {
             }
         }
         for (ProjectVersion version : chain.patchVersions()) {
-            for (StoredEntityChange change : this.loadVersionEntityChangesForChunks(layout, version, selected.values())) {
+            for (StoredEntityChange change : this.payloadLoader.loadVersionEntityChangesForChunks(layout, version, selected.values())) {
                 if (change.newValue() == null) {
                     states.remove(change.entityId());
                 } else {
