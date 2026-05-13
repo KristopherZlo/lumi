@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.WorldMutationSource;
+import java.util.List;
 import java.util.Optional;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorldMutationCapturePolicyTest {
@@ -105,18 +107,48 @@ class WorldMutationCapturePolicyTest {
     }
 
     @Test
-    void capturesGrowthAsHiddenBuilderSurfaceChange() {
-        Optional<WorldMutationCapturePolicy.CapturedMutation> mutation = this.policy.capture(
+    void capturesCausalSecondaryFalloutAsHiddenBuilderSurfaceChanges() {
+        for (WorldMutationSource source : List.of(
+                WorldMutationSource.EXPLOSION,
+                WorldMutationSource.FLUID,
+                WorldMutationSource.FIRE,
                 WorldMutationSource.GROWTH,
-                POS,
-                Blocks.AIR.defaultBlockState(),
-                Blocks.AMETHYST_CLUSTER.defaultBlockState(),
-                null,
-                null
-        );
+                WorldMutationSource.FALLING_BLOCK,
+                WorldMutationSource.MOB
+        )) {
+            Optional<WorldMutationCapturePolicy.CapturedMutation> mutation = this.policy.capture(
+                    source,
+                    POS,
+                    Blocks.AIR.defaultBlockState(),
+                    Blocks.COBBLESTONE.defaultBlockState(),
+                    null,
+                    null
+            );
 
-        assertTrue(mutation.isPresent());
-        assertTrue(mutation.get().change().hidden());
+            assertTrue(mutation.isPresent(), source.name());
+            assertTrue(mutation.get().change().hidden(), source.name());
+        }
+    }
+
+    @Test
+    void keepsBuilderRootSourcesVisible() {
+        for (WorldMutationSource source : List.of(
+                WorldMutationSource.PLAYER,
+                WorldMutationSource.EXPLOSIVE,
+                WorldMutationSource.AXIOM
+        )) {
+            Optional<WorldMutationCapturePolicy.CapturedMutation> mutation = this.policy.capture(
+                    source,
+                    POS,
+                    Blocks.AIR.defaultBlockState(),
+                    Blocks.COBBLESTONE.defaultBlockState(),
+                    null,
+                    null
+            );
+
+            assertTrue(mutation.isPresent(), source.name());
+            assertFalse(mutation.get().change().hidden(), source.name());
+        }
     }
 
     @Test

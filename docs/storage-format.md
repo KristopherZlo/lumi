@@ -349,7 +349,7 @@ Whole-dimension projects do not create volume-triggered snapshots. They rely on 
 
 Preview images are textured isometric PNG files generated on the client per version when preview generation is enabled.
 
-Preview coverage is resolved from the visible changed block positions first, with a small context padding around that span. Hidden action-scoped growth changes are ignored so bonemeal crop/plant/amethyst updates do not move or invalidate screenshots, while unrelated ambient random ticks are skipped before storage. For saved patch versions, Lumi resolves bounds from section fingerprints and chunk metadata before considering coarser touched-chunk fallback, so preview scheduling does not need to decode the patch payload only to find bounds.
+Preview coverage is resolved from the visible changed block positions first, with a small context padding around that span. Hidden causal secondary fallout such as action-scoped growth, fluid/lava-water block formation, fire, falling blocks, fallback explosion edits, and mob block edits remains durable and replayable but does not move or invalidate screenshots; unrelated ambient random ticks and actionless physics are skipped before storage. For saved patch versions, Lumi resolves bounds from section fingerprints and chunk metadata before considering coarser touched-chunk fallback, so preview scheduling does not need to decode the patch payload only to find bounds.
 
 Preview generation failure does not block version save.
 

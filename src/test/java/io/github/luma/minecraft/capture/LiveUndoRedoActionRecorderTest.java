@@ -5,10 +5,13 @@ import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LiveUndoRedoActionRecorderTest {
 
@@ -43,6 +46,31 @@ class LiveUndoRedoActionRecorderTest {
         assertEquals(8, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(fluidChange));
         assertEquals(Duration.ofSeconds(10), LiveUndoRedoActionRecorder.relatedJoinWindowFor(ordinaryChange));
         assertEquals(2, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(ordinaryChange));
+    }
+
+    @Test
+    void hiddenCausalBlockChangesRemainRecordableForUndoRedo() {
+        StoredBlockChange hiddenFallout = new StoredBlockChange(
+                new BlockPoint(0, 64, 0),
+                state("minecraft:water"),
+                state("minecraft:cobblestone"),
+                true
+        );
+        StoredBlockChange noOp = new StoredBlockChange(
+                new BlockPoint(1, 64, 0),
+                state("minecraft:stone"),
+                state("minecraft:stone"),
+                true
+        );
+        List<StoredBlockChange> changes = new ArrayList<>();
+        changes.add(null);
+        changes.add(hiddenFallout);
+        changes.add(noOp);
+
+        List<StoredBlockChange> recordable = LiveUndoRedoActionRecorder.recordableBlockChanges(changes);
+
+        assertEquals(List.of(hiddenFallout), recordable);
+        assertTrue(recordable.getFirst().hidden());
     }
 
     private static StatePayload state(String blockId) {

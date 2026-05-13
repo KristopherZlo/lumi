@@ -92,6 +92,8 @@ public final class SessionStabilizationService {
 
             Map<BlockPoint, StatePayload> baselineCorrections = session.baselineCorrections(processedChunks);
             Map<ChunkPoint, Set<Integer>> dirtySections = session.dirtySections(processedChunks);
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts =
+                    session.deferredActionContexts(processedChunks);
             List<StoredBlockChange> deltaChanges = this.deltaChanges(
                     project,
                     session,
@@ -99,6 +101,7 @@ public final class SessionStabilizationService {
                     baselineCorrections,
                     dirtySections
             );
+            deltaChanges = this.applyDeferredVisibility(deltaChanges, deferredActionContexts);
             List<StoredBlockChange> startingChanges = session.startingChunkChanges(processedChunks);
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
             List<StoredBlockChange> persistentDeltaChanges = this.persistentDeltaChanges(currentChanges, deltaChanges);
@@ -115,8 +118,6 @@ public final class SessionStabilizationService {
                 session.replaceChunkChanges(processedChunks, composedChanges, Instant.now());
             }
             int bufferAfter = bufferChanged ? session.buffer().size() : bufferBefore;
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts =
-                    session.deferredActionContexts(processedChunks);
             session.finishReconciliation(processedChunks);
             if (!capturedChunks.missingChunks().isEmpty()) {
                 session.requeuePendingChunks(capturedChunks.missingChunks());
@@ -288,6 +289,36 @@ public final class SessionStabilizationService {
             }
         }
         return changes;
+    }
+
+    List<StoredBlockChange> applyDeferredVisibility(
+            List<StoredBlockChange> changes,
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
+    ) {
+        if (changes == null || changes.isEmpty()) {
+            return List.of();
+        }
+        if (deferredActionContexts == null || deferredActionContexts.isEmpty()) {
+            return List.copyOf(changes);
+        }
+
+        List<StoredBlockChange> rewrittenChanges = new ArrayList<>(changes.size());
+        boolean changed = false;
+        for (StoredBlockChange change : changes) {
+            if (change == null) {
+                changed = true;
+                continue;
+            }
+            CaptureSessionState.DeferredActionContext context =
+                    deferredActionContexts.get(ChunkPoint.from(change.pos()));
+            if (context != null && context.hiddenInBuilderSurfaces() && !change.hidden()) {
+                rewrittenChanges.add(change.asHidden());
+                changed = true;
+            } else {
+                rewrittenChanges.add(change);
+            }
+        }
+        return changed ? List.copyOf(rewrittenChanges) : List.copyOf(changes);
     }
 
     private boolean hasBaselineCorrectionInSection(
@@ -516,7 +547,8 @@ public final class SessionStabilizationService {
             StoredBlockChange relatedChange = new StoredBlockChange(
                     deltaChange.pos(),
                     currentChange.newValue(),
-                    deltaChange.newValue()
+                    deltaChange.newValue(),
+                    currentChange.hidden() && deltaChange.hidden()
             );
             if (!relatedChange.isNoOp()) {
                 related.add(relatedChange);
@@ -535,7 +567,8 @@ public final class SessionStabilizationService {
                 StoredBlockChange revertedCurrentChange = new StoredBlockChange(
                         currentChange.pos(),
                         currentChange.newValue(),
-                        livePayload
+                        livePayload,
+                        currentChange.hidden()
                 );
                 if (!revertedCurrentChange.isNoOp()) {
                     related.add(revertedCurrentChange);

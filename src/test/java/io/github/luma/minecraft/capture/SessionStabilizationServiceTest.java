@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -50,6 +52,34 @@ class SessionStabilizationServiceTest {
     void emptyReconciliationResultsHaveNoDeltaChanges() {
         assertTrue(SessionStabilizationService.ReconciliationResult.noOp().deltaChanges().isEmpty());
         assertTrue(SessionStabilizationService.ReconciliationResult.busy().deltaChanges().isEmpty());
+    }
+
+    @Test
+    void hiddenDeferredContextMarksChunkDeltasHidden() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        StoredBlockChange fluidFallout = new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:water"),
+                payload("minecraft:cobblestone")
+        );
+        StoredBlockChange ordinaryMechanism = new StoredBlockChange(
+                new BlockPoint(32, 64, 1),
+                payload("minecraft:air"),
+                payload("minecraft:piston_head")
+        );
+
+        List<StoredBlockChange> changes = service.applyDeferredVisibility(
+                List.of(fluidFallout, ordinaryMechanism),
+                Map.of(
+                        new ChunkPoint(0, 0),
+                        new CaptureSessionState.DeferredActionContext("fluid-action", "builder", true, true),
+                        new ChunkPoint(2, 0),
+                        new CaptureSessionState.DeferredActionContext("piston-action", "builder", true, false)
+                )
+        );
+
+        assertTrue(changes.get(0).hidden());
+        assertFalse(changes.get(1).hidden());
     }
 
     @Test

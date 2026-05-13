@@ -172,6 +172,26 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void causalHiddenChangesStayInUndoRedoPayload() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("place-water", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:air", "minecraft:water"), NOW);
+
+        stack.recordCausalChange(
+                "place-water",
+                hiddenChange(2, "minecraft:air", "minecraft:cobblestone"),
+                NOW.plusSeconds(1)
+        );
+
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
+        assertNotNull(selection);
+        assertEquals("place-water", selection.action().id());
+        assertEquals(2, selection.action().size());
+        assertTrue(selection.action().redoChanges().stream().anyMatch(StoredBlockChange::hidden));
+        assertTrue(selection.action().inverseChanges().stream().anyMatch(StoredBlockChange::hidden));
+    }
+
+    @Test
     void causalBatchDoesNotPromoteOlderRedstoneAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
@@ -469,10 +489,19 @@ class UndoRedoActionStackTest {
     }
 
     private static StoredBlockChange change(int x, String oldBlock, String newBlock) {
+        return change(x, oldBlock, newBlock, false);
+    }
+
+    private static StoredBlockChange hiddenChange(int x, String oldBlock, String newBlock) {
+        return change(x, oldBlock, newBlock, true);
+    }
+
+    private static StoredBlockChange change(int x, String oldBlock, String newBlock, boolean hidden) {
         return new StoredBlockChange(
                 new BlockPoint(x, 64, 1),
                 new StatePayload(state(oldBlock), null),
-                new StatePayload(state(newBlock), null)
+                new StatePayload(state(newBlock), null),
+                hidden
         );
     }
 

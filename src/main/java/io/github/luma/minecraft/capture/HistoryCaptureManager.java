@@ -1786,7 +1786,7 @@ public final class HistoryCaptureManager {
             ChunkPoint chunk,
             io.github.luma.domain.model.WorldMutationSource source
     ) {
-        CaptureSessionState.DeferredActionContext currentContext = this.currentDeferredActionContext();
+        CaptureSessionState.DeferredActionContext currentContext = this.currentDeferredActionContext(source);
         if (currentContext != null) {
             return currentContext;
         }
@@ -1796,7 +1796,9 @@ public final class HistoryCaptureManager {
         return session.deferredActionContext(chunk);
     }
 
-    private CaptureSessionState.DeferredActionContext currentDeferredActionContext() {
+    private CaptureSessionState.DeferredActionContext currentDeferredActionContext(
+            io.github.luma.domain.model.WorldMutationSource source
+    ) {
         String actionId = WorldMutationContext.currentActionId();
         if (actionId == null || actionId.isBlank()) {
             return null;
@@ -1804,7 +1806,8 @@ public final class HistoryCaptureManager {
         return new CaptureSessionState.DeferredActionContext(
                 actionId,
                 WorldMutationContext.currentActor(),
-                WorldMutationContext.currentAccessAllowed()
+                WorldMutationContext.currentAccessAllowed(),
+                CAPTURE_POLICY.hiddenInBuilderSurfaces(source)
         );
     }
 

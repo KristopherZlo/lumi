@@ -182,7 +182,7 @@ Lumi tracks explicit builder-driven changes in the current workspace:
 
 Lumi does not record its own restore/apply pass as normal history.
 
-Ambient world-settling changes do not create a workspace by themselves. Loading a world, fluid spread, crop growth, ordinary mob movement, or unrelated block updates do not start a new pending draft unless they are connected to an explicit tracked builder action. Natural `GROWTH` changes that are captured inside an active tracked area are stored as hidden history: restore can replay them, but change summaries, screenshots/previews, compare overlays, pending overlays, and recent undo/redo overlays ignore them.
+Ambient world-settling changes do not create a workspace by themselves. Loading a world, fluid spread, crop growth, ordinary mob movement, or unrelated block updates do not start a new pending draft unless they are connected to an explicit tracked builder action. Causal secondary fallout from tracked actions, including fluid/lava-water block formation, fire, growth, falling blocks, fallback explosion edits, and mob block edits, is stored as hidden history: save, restore, recovery, undo, and redo can replay it, but change summaries, screenshots/previews, compare overlays, pending overlays, and recent undo/redo overlays ignore it.
 
 Whole-dimension workspaces treat the explicit edit as the root of a causal envelope. Related fallout can join the draft while it stays near the action and inside player-loaded chunks. Lumi waits a short settle window before finalizing redstone and piston chunks so saves and undo/redo target the final block state instead of transient animation states.
 

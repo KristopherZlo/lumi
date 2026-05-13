@@ -120,13 +120,14 @@ class CaptureSessionStateTest {
         CaptureSessionState.DeferredActionContext firstAction =
                 new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
         CaptureSessionState.DeferredActionContext secondAction =
-                new CaptureSessionState.DeferredActionContext("action-2", "builder", true);
+                new CaptureSessionState.DeferredActionContext("action-2", "builder", true, true);
 
         assertTrue(state.markDirtyChunk(chunk, firstAction));
         assertTrue(state.markDirtyChunk(chunk, secondAction));
         state.markDirtyChunk(chunk);
 
         assertEquals(secondAction, state.deferredActionContexts(List.of(chunk)).get(chunk));
+        assertTrue(state.deferredActionContext(chunk).hiddenInBuilderSurfaces());
     }
 
     @Test

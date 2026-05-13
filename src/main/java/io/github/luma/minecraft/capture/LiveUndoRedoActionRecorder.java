@@ -69,7 +69,7 @@ final class LiveUndoRedoActionRecorder {
             StoredBlockChange change,
             Instant now
     ) {
-        if (change == null || change.isNoOp() || change.hidden()) {
+        if (change == null || change.isNoOp()) {
             return;
         }
 
@@ -114,6 +114,10 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
 
+        if (change.hidden()) {
+            return;
+        }
+
         if (this.sourcePolicy.isExplicitRootSource(WorldMutationContext.currentSource())) {
             return;
         }
@@ -141,12 +145,8 @@ final class LiveUndoRedoActionRecorder {
             List<StoredBlockChange> changes,
             Instant now
     ) {
-        List<StoredBlockChange> visibleChanges = changes == null
-                ? List.of()
-                : changes.stream()
-                .filter(change -> change != null && !change.isNoOp() && !change.hidden())
-                .toList();
-        if (visibleChanges.isEmpty()) {
+        List<StoredBlockChange> recordableChanges = recordableBlockChanges(changes);
+        if (recordableChanges.isEmpty()) {
             return;
         }
 
@@ -159,14 +159,14 @@ final class LiveUndoRedoActionRecorder {
                     level.dimension().identifier().toString(),
                     actionId,
                     WorldMutationContext.currentActor(),
-                    visibleChanges,
+                    recordableChanges,
                     List.of(),
                     now
             );
             return;
         }
 
-        for (StoredBlockChange change : visibleChanges) {
+        for (StoredBlockChange change : recordableChanges) {
             this.recordBlockAction(trackedProject, level, change, now);
         }
     }
@@ -270,6 +270,9 @@ final class LiveUndoRedoActionRecorder {
         }
 
         for (StoredBlockChange change : relatedChanges) {
+            if (change.hidden()) {
+                continue;
+            }
             this.historyManager.recordRelatedChange(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
@@ -295,6 +298,14 @@ final class LiveUndoRedoActionRecorder {
 
     static int relatedJoinRadiusFor(StoredBlockChange change) {
         return isSpreadingFalloutChange(change) ? SPREADING_FALLOUT_JOIN_RADIUS : SECONDARY_SOURCE_JOIN_RADIUS;
+    }
+
+    static List<StoredBlockChange> recordableBlockChanges(List<StoredBlockChange> changes) {
+        return changes == null
+                ? List.of()
+                : changes.stream()
+                .filter(change -> change != null && !change.isNoOp())
+                .toList();
     }
 
     private static boolean isSpreadingFalloutSource(WorldMutationSource source) {

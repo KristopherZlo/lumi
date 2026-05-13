@@ -99,8 +99,24 @@ public final class WorldMutationCapturePolicy {
         };
     }
 
-    private boolean hiddenInBuilderSurfaces(WorldMutationSource source) {
-        return source == WorldMutationSource.GROWTH;
+    boolean hiddenInBuilderSurfaces(WorldMutationSource source) {
+        if (source == null) {
+            return false;
+        }
+        return switch (source) {
+            case EXPLOSION, FLUID, FIRE, GROWTH, FALLING_BLOCK, MOB -> true;
+            case PLAYER,
+                    ENTITY,
+                    BLOCK_UPDATE,
+                    EXPLOSIVE,
+                    EXTERNAL_TOOL,
+                    WORLDEDIT,
+                    FAWE,
+                    AXIOM,
+                    PISTON,
+                    RESTORE,
+                    SYSTEM -> false;
+        };
     }
 
     public enum CaptureDecision {

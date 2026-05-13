@@ -358,8 +358,13 @@ public final class CaptureSessionState {
     public record DeferredActionContext(
             String actionId,
             String actor,
-            boolean accessAllowed
+            boolean accessAllowed,
+            boolean hiddenInBuilderSurfaces
     ) {
+
+        public DeferredActionContext(String actionId, String actor, boolean accessAllowed) {
+            this(actionId, actor, accessAllowed, false);
+        }
 
         public DeferredActionContext {
             actionId = actionId == null ? "" : actionId;
