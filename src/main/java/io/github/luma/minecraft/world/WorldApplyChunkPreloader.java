@@ -7,10 +7,15 @@ import java.util.Set;
 
 final class WorldApplyChunkPreloader {
 
+    static final int STALL_SYNC_FALLBACK_TICKS = 20;
+    private static final int STALLED_SYNC_FALLBACK_LOADS_PER_TICK = 1;
+
     private final List<ChunkPoint> chunks;
     private final Set<ChunkPoint> ticketedChunks = new LinkedHashSet<>();
     private int nextIndex;
     private int ticketIndex;
+    private int stalledTicks;
+    private boolean stalledSyncFallbackActive;
     private boolean released;
 
     private WorldApplyChunkPreloader(List<ChunkPoint> chunks) {
@@ -44,6 +49,10 @@ final class WorldApplyChunkPreloader {
         int syncFallbackLoads = 0;
         int processedLoads = 0;
         int maxSyncLoads = Math.max(0, budget.maxSyncChunkLoads());
+        boolean usingStalledFallback = maxSyncLoads <= 0 && this.stalledSyncFallbackActive;
+        if (usingStalledFallback) {
+            maxSyncLoads = STALLED_SYNC_FALLBACK_LOADS_PER_TICK;
+        }
         while (this.ticketIndex < this.chunks.size()
                 && ticketed < maxChunks
                 && System.nanoTime() < deadlineNanos) {
@@ -68,6 +77,9 @@ final class WorldApplyChunkPreloader {
                 alreadyLoaded += 1;
                 this.nextIndex += 1;
                 processedLoads += 1;
+                if (usingStalledFallback) {
+                    maxSyncLoads = 0;
+                }
                 continue;
             }
             if (syncFallbackLoads >= maxSyncLoads) {
@@ -82,6 +94,7 @@ final class WorldApplyChunkPreloader {
             }
             break;
         }
+        this.updateStallState(newlyLoaded, alreadyLoaded);
         return new PreloadTickResult(
                 newlyLoaded,
                 alreadyLoaded,
@@ -103,6 +116,8 @@ final class WorldApplyChunkPreloader {
             access.releaseTicket(chunk);
         }
         this.ticketedChunks.clear();
+        this.stalledTicks = 0;
+        this.stalledSyncFallbackActive = false;
     }
 
     boolean required() {
@@ -119,6 +134,30 @@ final class WorldApplyChunkPreloader {
 
     int completedChunks() {
         return this.nextIndex;
+    }
+
+    private void updateStallState(int newlyLoadedChunks, int alreadyLoadedChunks) {
+        if (this.complete() || alreadyLoadedChunks > 0 || !this.waitingOnTicketedChunk()) {
+            this.stalledTicks = 0;
+            this.stalledSyncFallbackActive = false;
+            return;
+        }
+        if (newlyLoadedChunks > 0) {
+            if (this.stalledSyncFallbackActive) {
+                this.stalledTicks = STALL_SYNC_FALLBACK_TICKS;
+            }
+            return;
+        }
+        this.stalledTicks += 1;
+        if (this.stalledTicks >= STALL_SYNC_FALLBACK_TICKS) {
+            this.stalledSyncFallbackActive = true;
+        }
+    }
+
+    private boolean waitingOnTicketedChunk() {
+        return this.ticketIndex >= this.chunks.size()
+                && this.nextIndex < this.chunks.size()
+                && this.ticketedChunks.contains(this.chunks.get(this.nextIndex));
     }
 
     record PreloadTickResult(

@@ -35,21 +35,7 @@ class WorldApplyChunkPreloaderTest {
         WorldApplyChunkPreloader preloader = WorldApplyChunkPreloader.create(queue, WorldApplyProfile.HISTORY_FAST);
         FakeChunkPreloadAccess access = new FakeChunkPreloadAccess();
         access.loaded.add(new ChunkPoint(1, 2));
-        WorldApplyBudget budget = new WorldApplyBudget(
-                512,
-                1_000_000L,
-                1,
-                512,
-                1,
-                1,
-                512,
-                128,
-                128,
-                2,
-                2,
-                64,
-                32
-        );
+        WorldApplyBudget budget = budget(2, 2);
 
         WorldApplyChunkPreloader.PreloadTickResult first = preloader.advance(access, budget, Long.MAX_VALUE);
 
@@ -77,21 +63,7 @@ class WorldApplyChunkPreloaderTest {
         ));
         WorldApplyChunkPreloader preloader = WorldApplyChunkPreloader.create(queue, WorldApplyProfile.MAXIMUM);
         FakeChunkPreloadAccess access = new FakeChunkPreloadAccess();
-        WorldApplyBudget budget = new WorldApplyBudget(
-                512,
-                1_000_000L,
-                1,
-                512,
-                1,
-                1,
-                512,
-                128,
-                128,
-                3,
-                1,
-                64,
-                32
-        );
+        WorldApplyBudget budget = budget(3, 1);
 
         WorldApplyChunkPreloader.PreloadTickResult result = preloader.advance(access, budget, Long.MAX_VALUE);
 
@@ -102,6 +74,59 @@ class WorldApplyChunkPreloaderTest {
         Assertions.assertFalse(result.complete());
     }
 
+    @Test
+    void zeroSyncBudgetWaitsOnTicketsBeforeStalledFallback() {
+        LocalQueue queue = LocalQueue.completed(List.of(
+                batch(1, 2),
+                batch(3, 4)
+        ));
+        WorldApplyChunkPreloader preloader = WorldApplyChunkPreloader.create(queue, WorldApplyProfile.HISTORY_FAST);
+        FakeChunkPreloadAccess access = new FakeChunkPreloadAccess();
+        WorldApplyBudget budget = budget(2, 0);
+
+        WorldApplyChunkPreloader.PreloadTickResult result = preloader.advance(access, budget, Long.MAX_VALUE);
+
+        Assertions.assertEquals(0, result.completedChunks());
+        Assertions.assertEquals(0, result.syncFallbackLoads());
+        Assertions.assertEquals(2, result.ticketedChunks());
+        for (int tick = 1; tick < WorldApplyChunkPreloader.STALL_SYNC_FALLBACK_TICKS; tick++) {
+            result = preloader.advance(access, budget, Long.MAX_VALUE);
+            Assertions.assertEquals(0, result.completedChunks());
+            Assertions.assertEquals(0, result.syncFallbackLoads());
+        }
+
+        result = preloader.advance(access, budget, Long.MAX_VALUE);
+
+        Assertions.assertEquals(1, result.completedChunks());
+        Assertions.assertEquals(1, result.newlyLoadedChunks());
+        Assertions.assertEquals(1, result.syncFallbackLoads());
+    }
+
+    @Test
+    void ticketProgressDisarmsStalledFallback() {
+        LocalQueue queue = LocalQueue.completed(List.of(
+                batch(1, 2),
+                batch(3, 4)
+        ));
+        WorldApplyChunkPreloader preloader = WorldApplyChunkPreloader.create(queue, WorldApplyProfile.HISTORY_FAST);
+        FakeChunkPreloadAccess access = new FakeChunkPreloadAccess();
+        WorldApplyBudget budget = budget(2, 0);
+
+        for (int tick = 0; tick < WorldApplyChunkPreloader.STALL_SYNC_FALLBACK_TICKS; tick++) {
+            preloader.advance(access, budget, Long.MAX_VALUE);
+        }
+        access.loaded.add(new ChunkPoint(1, 2));
+
+        WorldApplyChunkPreloader.PreloadTickResult ticketProgress = preloader.advance(access, budget, Long.MAX_VALUE);
+        WorldApplyChunkPreloader.PreloadTickResult next = preloader.advance(access, budget, Long.MAX_VALUE);
+
+        Assertions.assertEquals(1, ticketProgress.completedChunks());
+        Assertions.assertEquals(1, ticketProgress.alreadyLoadedChunks());
+        Assertions.assertEquals(0, ticketProgress.syncFallbackLoads());
+        Assertions.assertEquals(1, next.completedChunks());
+        Assertions.assertEquals(0, next.syncFallbackLoads());
+    }
+
     private static ChunkBatch batch(int x, int z) {
         return new ChunkBatch(
                 new ChunkPoint(x, z),
@@ -109,6 +134,24 @@ class WorldApplyChunkPreloaderTest {
                 Map.of(),
                 EntityBatch.empty(),
                 BatchState.COMPLETE
+        );
+    }
+
+    private static WorldApplyBudget budget(int maxPreloadChunks, int maxSyncChunkLoads) {
+        return new WorldApplyBudget(
+                512,
+                1_000_000L,
+                1,
+                512,
+                1,
+                1,
+                512,
+                128,
+                128,
+                maxPreloadChunks,
+                maxSyncChunkLoads,
+                64,
+                32
         );
     }
 
