@@ -15,6 +15,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.minecraft.debug.CaptureSkipLogThrottler;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import io.github.luma.storage.repository.BaselineChunkRepository;
@@ -56,6 +57,7 @@ public final class HistoryCaptureManager {
     private static final MutationSourcePolicy SOURCE_POLICY = new MutationSourcePolicy();
 
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
+    private final CaptureSkipLogThrottler captureSkipLogThrottler = new CaptureSkipLogThrottler();
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
     private final WorkingDraftSessionManager workingDrafts = new WorkingDraftSessionManager(this.persistenceCoordinator);
     private final LiveUndoRedoActionRecorder liveUndoRedoActionRecorder =
@@ -288,17 +290,6 @@ public final class HistoryCaptureManager {
                 }
                 WorldMutationCapturePolicy.CapturedMutation mutation = captureResult.mutation();
                 StoredBlockChange capturedChange = mutation == null ? null : mutation.change();
-                LumaDebugLog.log(
-                        trackedProject.project(),
-                        "capture",
-                        "Recording {} mutation for project {} at {} in {}: {} -> {}",
-                        source,
-                        trackedProject.project().name(),
-                        pos,
-                        level.dimension().identifier(),
-                        oldState,
-                        newState
-                );
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
@@ -1479,14 +1470,13 @@ public final class HistoryCaptureManager {
             return true;
         }
         if (!SOURCE_POLICY.allowsTrackedChunkExpansion(source, activeSessionRegion)) {
-            LumaDebugLog.log(
-                    trackedProject.project(),
-                    "capture",
-                    "Skipped {} mutation at {} because chunk {}:{} is not tracked yet and the source cannot expand tracking",
+            this.logSkippedCapture(
+                    trackedProject,
                     source,
                     pos,
-                    chunk.x(),
-                    chunk.z()
+                    "untracked-chunk-source-cannot-expand",
+                    "chunk " + chunk.x() + ":" + chunk.z()
+                            + " is not tracked yet and the source cannot expand tracking"
             );
             return false;
         }
@@ -1513,13 +1503,12 @@ public final class HistoryCaptureManager {
         String projectId = trackedProject.project().id().toString();
         if (this.workingDrafts.hasBuffer(projectId)) {
             if (!SOURCE_POLICY.canUseDirectCapture(source, WorldMutationContext.currentActionId())) {
-                LumaDebugLog.log(
-                        trackedProject.project(),
-                        "capture",
-                        "Skipped {} mutation at {} for project {} because no causal action is active",
+                this.logSkippedCapture(
+                        trackedProject,
                         source,
                         pos,
-                        trackedProject.project().name()
+                        "no-causal-action",
+                        "no causal action is active"
                 );
                 return false;
             }
@@ -1531,30 +1520,65 @@ public final class HistoryCaptureManager {
             if (this.activeSessionRegionPolicy.contains(level, sessionState, chunk)) {
                 return true;
             }
-            LumaDebugLog.log(
-                trackedProject.project(),
-                "capture",
-                    "Skipped {} mutation at {} for project {} because chunk {}:{} is outside the active session region",
+            this.logSkippedCapture(
+                    trackedProject,
                     source,
                     pos,
-                    trackedProject.project().name(),
-                    chunk.x(),
-                    chunk.z()
+                    "outside-active-session-region",
+                    "chunk " + chunk.x() + ":" + chunk.z() + " is outside the active session region"
             );
             return false;
         }
         if (allowsSessionBootstrap(source)) {
             return true;
         }
-        LumaDebugLog.log(
-                trackedProject.project(),
-                "capture",
-                "Skipped {} mutation at {} for project {} because no active session exists and the source cannot bootstrap capture",
+        this.logSkippedCapture(
+                trackedProject,
                 source,
                 pos,
-                trackedProject.project().name()
+                "no-active-session-source-cannot-bootstrap",
+                "no active session exists and the source cannot bootstrap capture"
         );
         return false;
+    }
+
+    private void logSkippedCapture(
+            TrackedProject trackedProject,
+            io.github.luma.domain.model.WorldMutationSource source,
+            BlockPos pos,
+            String reason,
+            String detail
+    ) {
+        if (trackedProject == null || !LumaDebugLog.enabled(trackedProject.project())) {
+            return;
+        }
+        BuildProject project = trackedProject.project();
+        CaptureSkipLogThrottler.Decision decision = this.captureSkipLogThrottler.record(project, source, reason, pos);
+        if (!decision.shouldLog()) {
+            return;
+        }
+        if (decision.logSample()) {
+            LumaDebugLog.log(
+                    project,
+                    "capture",
+                    "Skipped {} mutation at {} for project {} because {}",
+                    source,
+                    pos,
+                    project.name(),
+                    detail
+            );
+            return;
+        }
+        LumaDebugLog.log(
+                project,
+                "capture",
+                "Suppressed {} skipped {} mutation logs for project {} reason={} latest={}",
+                decision.suppressedSinceLastLog(),
+                source,
+                project.name(),
+                reason,
+                decision.latestPos()
+        );
     }
 
     private CaptureSessionDiagnostics diagnosticsForSession(String projectId) {

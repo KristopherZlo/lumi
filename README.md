@@ -299,6 +299,8 @@ Useful JVM flags:
 
 `-Dlumi.clientLoadLog=true` writes `logs/lumi-client-load.log` from the client process with CPU, heap/direct-buffer memory, GC, frame-pressure, OpenGL renderer, and optional `nvidia-smi` GPU utilization/memory samples. The test-client and client GameTest profiles enable it automatically.
 
+High-volume capture skip diagnostics are sampled and then summarized per project, source, and reason so debug mode does not turn ambient world ticks into sustained disk and CPU load.
+
 ## Scope
 
 Current scope:
