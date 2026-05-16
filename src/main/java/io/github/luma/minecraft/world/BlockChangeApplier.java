@@ -5,7 +5,6 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
-import io.github.luma.minecraft.capture.PlacedEntityHistoryPolicy;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.io.IOException;
 import java.util.HashSet;
@@ -53,7 +52,7 @@ public final class BlockChangeApplier {
             UPDATE_BROADCASTER,
             SECTION_NATIVE_COMMIT_STRATEGY);
     private static final EntitySnapshotService ENTITY_SNAPSHOT_SERVICE = new EntitySnapshotService();
-    private static final PlacedEntityHistoryPolicy PLACED_ENTITY_POLICY = new PlacedEntityHistoryPolicy();
+    private static final RestoreEntityCleanupPolicy RESTORE_ENTITY_CLEANUP_POLICY = new RestoreEntityCleanupPolicy();
 
     private BlockChangeApplier() {
     }
@@ -272,7 +271,7 @@ public final class BlockChangeApplier {
         int updateCount = entityBatch.entitiesToUpdate().size();
         for (int index = startIndex; index < endIndex; index++) {
             if (entityBatch.replacePlacedEntities() && index == 0) {
-                removeExtraPlacedEntities(level, chunk, entityBatch);
+                removeExtraEntities(level, chunk, entityBatch);
                 continue;
             }
 
@@ -435,7 +434,7 @@ public final class BlockChangeApplier {
         }
     }
 
-    private static void removeExtraPlacedEntities(ServerLevel level, ChunkPoint chunk, EntityBatch targetBatch) {
+    private static void removeExtraEntities(ServerLevel level, ChunkPoint chunk, EntityBatch targetBatch) {
         if (level == null || chunk == null || targetBatch == null || !targetBatch.replacePlacedEntities()) {
             return;
         }
@@ -454,14 +453,10 @@ public final class BlockChangeApplier {
                 level.getMaxY() + 1,
                 (chunk.z() << 4) + 18
         );
-        for (Entity entity : level.getEntities((Entity) null, bounds, PLACED_ENTITY_POLICY::shouldPersist)) {
-            if (entity instanceof ServerPlayer) {
-                continue;
-            }
+        for (Entity entity : level.getEntities((Entity) null, bounds,
+                RESTORE_ENTITY_CLEANUP_POLICY::shouldInspectExtraEntity)) {
             EntityPayload payload = ENTITY_SNAPSHOT_SERVICE.capture(level, entity);
-            if (payload == null
-                    || !PLACED_ENTITY_POLICY.belongsToChunk(payload, chunk.x(), chunk.z())
-                    || targetIds.contains(payload.entityId())) {
+            if (!RESTORE_ENTITY_CLEANUP_POLICY.shouldRemoveExtraEntity(payload, chunk, targetIds)) {
                 continue;
             }
             entity.discard();
