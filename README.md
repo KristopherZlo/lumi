@@ -46,6 +46,7 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 - Version compare for saved versions, branches, and the current build, with world overlays for changed blocks.
 - Full restore, quick rollback, return-before-restore, and partial restore in `Only selected area` or `Everything except selection` mode.
 - Branch creation, branch switching, local branch merge, variant import/export, full project archives, imported review projects, and safety checks for imported executable world-state data.
+- Same-Minecraft-version update notices when the Build History UI opens, checked through the Lumi website with a GitHub raw manifest fallback.
 - Crash recovery through durable working drafts, write-ahead log compaction, operation-draft isolation, recovery journals, and restore return points.
 - Capture of non-player entity spawn/remove/update with persistent NBT payloads for supported builder-facing entities.
 - Pre-Lumi world checkpoint gate with visible progress and an opt-in vanilla Edit World restore action for worlds that capture compressed pre-Lumi chunk payloads.
@@ -303,6 +304,16 @@ Useful JVM flags:
 `-Dlumi.clientLoadLog=true` writes `logs/lumi-client-load.log` from the client process with CPU, heap/direct-buffer memory, GC, frame-pressure, OpenGL renderer, and optional `nvidia-smi` GPU utilization/memory samples. The test-client and client GameTest profiles enable it automatically.
 
 High-volume capture skip diagnostics are sampled and then summarized per project, source, and reason so debug mode does not turn ambient world ticks into sustained disk and CPU load.
+
+Update checks can be overridden for local testing with:
+
+```text
+-Dlumi.update.primaryUrl=<manifest-url>
+-Dlumi.update.fallbackUrl=<manifest-url>
+-Dlumi.update.disabled=true
+```
+
+The shipped fallback manifest is `updates/lumi-fabric.json`; keep it in sync with public release metadata.
 
 ## Scope
 

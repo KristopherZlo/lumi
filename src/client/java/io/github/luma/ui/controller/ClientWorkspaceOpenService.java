@@ -2,6 +2,7 @@ package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
 import io.github.luma.client.onboarding.ClientOnboardingService;
+import io.github.luma.client.update.UpdatePromptCoordinator;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.ui.ActionBarMessagePresenter;
@@ -27,6 +28,7 @@ public final class ClientWorkspaceOpenService {
     private final ProjectService projectService;
     private final RecoveryService recoveryService;
     private final ClientOnboardingService onboardingService;
+    private final UpdatePromptCoordinator updatePromptCoordinator = new UpdatePromptCoordinator();
     private final AtomicReference<CompletableFuture<WorkspaceOpenResult>> pendingOpen = new AtomicReference<>();
 
     public ClientWorkspaceOpenService() {
@@ -135,7 +137,7 @@ public final class ClientWorkspaceOpenService {
             client.setScreen(new OnboardingScreen(parent, result.projectName(), this.onboardingService));
             return;
         }
-        client.setScreen(new ProjectScreen(parent, result.projectName()));
+        this.updatePromptCoordinator.openProjectScreen(client, new ProjectScreen(parent, result.projectName()));
     }
 
     private enum WorkspaceOpenTarget {

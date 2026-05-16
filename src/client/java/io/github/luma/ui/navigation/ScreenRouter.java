@@ -1,6 +1,7 @@
 package io.github.luma.ui.navigation;
 
 import io.github.luma.client.onboarding.ClientOnboardingService;
+import io.github.luma.client.update.UpdatePromptCoordinator;
 import io.github.luma.ui.screen.CleanupScreen;
 import io.github.luma.ui.screen.CompareScreen;
 import io.github.luma.ui.screen.CreateProjectScreen;
@@ -24,6 +25,7 @@ public final class ScreenRouter {
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectScreenController projectController = new ProjectScreenController();
     private final ClientOnboardingService onboardingService = new ClientOnboardingService();
+    private final UpdatePromptCoordinator updatePromptCoordinator = new UpdatePromptCoordinator();
 
     public void openDashboard(Screen parent) {
         this.client.setScreen(new DashboardScreen(parent));
@@ -62,11 +64,14 @@ public final class ScreenRouter {
     }
 
     public void openProjectSkippingOnboarding(Screen parent, String projectName) {
-        this.client.setScreen(new ProjectScreen(parent, projectName));
+        this.updatePromptCoordinator.openProjectScreen(this.client, new ProjectScreen(parent, projectName));
     }
 
     public void openProjectSkippingOnboarding(Screen parent, String projectName, String variantId, String statusKey) {
-        this.client.setScreen(new ProjectScreen(parent, projectName, variantId, statusKey));
+        this.updatePromptCoordinator.openProjectScreen(
+                this.client,
+                new ProjectScreen(parent, projectName, variantId, statusKey)
+        );
     }
 
     public void openOnboarding(Screen parent, String projectName) {
@@ -142,6 +147,9 @@ public final class ScreenRouter {
             ));
             return;
         }
-        this.client.setScreen(new ProjectScreen(parent, projectName, variantId, statusKey));
+        this.updatePromptCoordinator.openProjectScreen(
+                this.client,
+                new ProjectScreen(parent, projectName, variantId, statusKey)
+        );
     }
 }

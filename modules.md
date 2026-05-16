@@ -53,6 +53,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditSessionBridge`, `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
 | Commands and runtime tests | `LumaCommands`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, `SingleplayerBulkApplyDiagnostics`, `LumiBackupStressClientScenario`, `LumiTestFailpoints`, scripts under `scripts/` | `/lumi testing smoke`, `/lumi testing player-flow`, `/lumi testing crash-safety`, `/lumi testing external-tools`, `LUMI_SINGLEPLAYER_TEST_MODE=backup-stress`, `docs/commands.md`, `docs/test-client.md` |
 | Client navigation and screen behavior | `ScreenRouter`, the route screen, route controller, route view state | `LumaScreen`, `ProjectWindowLayout`, `ProjectSidebarNavigation`, section builders | UI controller tests, `LumiScreenClientGameTests`, `docs/development.md` |
+| Client update notices | `UpdateCheckService`, `UpdatePromptCoordinator` | `HttpUpdateSource`, `UpdateSourceChain`, `UpdateCandidateSelector`, `UpdateAvailableScreen`, `updates/lumi-fabric.json` | `src/test/java/io/github/luma/client/update`, `LanguageFilesTest`, `docs/user-guide.md`, `docs/development.md` |
 
 ## Bootstrap And Global Entry Points
 
@@ -239,6 +240,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 - `client/world/WorldEntryWarningController.java`: client-only world-open gate for the pre-Lumi alpha checkpoint flow and fresh-world marker.
 - `client/world/WorldEntryBackupScreen.java`: pre-open alpha checkpoint screen with blue warning text, `Got it!` acceptance, loading label, and Minecraft experience-bar progress.
 - `client/world/LumiBackupRestoreConfirmScreen.java`: red confirmation screen for restoring backed-up pre-Lumi chunks from the vanilla Edit World menu.
+- `client/update/*`: client-only update-check manifest loading, same-Minecraft-version candidate selection, cached prompt state, website-first source chain, and GitHub fallback manifest handling.
 
 ### Navigation And Shared UI
 

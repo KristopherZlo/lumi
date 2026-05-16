@@ -53,6 +53,27 @@ class UpdateCheckServiceTest {
         assertEquals("0.1.0-alpha.2", repository.state.dismissedVersion());
     }
 
+    @Test
+    void snoozeVersionHidesPromptForCurrentSessionOnly() {
+        InMemoryStateRepository repository = new InMemoryStateRepository();
+        repository.state = UpdateCheckState.empty().withChecked(
+                Instant.parse("2026-05-16T10:00:00Z"),
+                UpdateCheckResult.available(release("0.1.0-alpha.2"))
+        );
+        UpdateCheckService service = new UpdateCheckService(
+                () -> new SourcedUpdateManifest("site", manifest("0.1.0-alpha.2")),
+                new UpdateCandidateSelector(),
+                repository,
+                () -> new InstalledModInfo("0.1.0-alpha.1", "1.21.11", "fabric"),
+                Clock.fixed(Instant.parse("2026-05-16T10:00:00Z"), ZoneOffset.UTC)
+        );
+
+        service.snoozeVersion("0.1.0-alpha.2");
+
+        assertTrue(service.promptRelease().isEmpty());
+        assertEquals("", repository.state.dismissedVersion());
+    }
+
     private static UpdateManifest manifest(String version) {
         return new UpdateManifest(1, "lumi", List.of(release(version)));
     }

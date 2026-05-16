@@ -50,8 +50,19 @@ Lumi UI actions are intended for the local world owner. Capture and mutating Lum
 - If interrupted recovered work exists, Lumi opens `Recovered work` first.
 - If onboarding has not been completed for this installation, Lumi opens onboarding before the normal workspace.
 - If another Lumi world operation is active, screens show operation progress and block conflicting mutation actions.
+- If a newer Lumi version is available for the same Minecraft version, Lumi can show an update notice after the normal workspace opens.
 
 `Esc` closes the current Lumi screen. Detail screens return to their parent. Top-level workspace screens close the Lumi UI.
+
+## Update Notices
+
+Lumi checks for mod updates when Build History opens. It only prompts for a newer Lumi release that supports the Minecraft version you are currently running.
+
+The normal source is the Lumi website manifest. If that source cannot be loaded, Lumi tries the GitHub fallback manifest from the public repository.
+
+The update window can open the download page, open the changelog, hide the prompt until the game restarts with `Later`, or permanently hide that specific version with `Don't show this version`.
+
+The check is cached for about 12 hours so opening the menu repeatedly does not keep hitting the network.
 
 ## Projects Screen
 

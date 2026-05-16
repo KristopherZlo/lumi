@@ -304,6 +304,30 @@ Current world-apply runtime types:
 - Fabric API remains an external required mod.
 - Packaging tasks prune stale legacy `luma-*` outputs from `build/libs` before writing the current `lumi-*` artifacts.
 
+## Update check manifests
+
+The client checks for Lumi releases when the Build History project screen opens. The check is client-only, runs off the render thread, and only prompts for a stable Fabric release whose `minecraftVersions` contains the installed Minecraft version and whose mod version is newer than the installed Lumi version.
+
+Default sources:
+
+- primary website manifest: `https://kristopherzlo.github.io/lumi/updates/lumi-fabric.json`
+- fallback GitHub raw manifest: `https://raw.githubusercontent.com/KristopherZlo/lumi/main/updates/lumi-fabric.json`
+
+Local diagnostics can override or disable the check:
+
+```text
+-Dlumi.update.primaryUrl=<manifest-url>
+-Dlumi.update.fallbackUrl=<manifest-url>
+-Dlumi.update.disabled=true
+```
+
+Release maintenance:
+
+- update the website manifest first;
+- update the repository fallback at `updates/lumi-fabric.json` in the same release change;
+- keep `versionCode` increasing for newer releases;
+- keep releases for each supported Minecraft version in the manifest instead of pointing players at builds for another game version.
+
 ## Storage references
 
 Project data is stored per world under:

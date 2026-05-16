@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "modId": "lumi",
+  "versions": [
+    {
+      "version": "0.1.0-alpha.1",
+      "versionCode": 100001,
+      "minecraftVersions": [
+        "1.21.11"
+      ],
+      "loader": "fabric",
+      "channel": "stable",
+      "title": "Lumi 0.1.0 alpha 1",
+      "summary": "Initial alpha update metadata.",
+      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases",
+      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases",
+      "sha256": ""
+    }
+  ]
+}

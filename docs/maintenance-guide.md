@@ -133,6 +133,10 @@ Recovery drafts remain the active crash-safety surface. Opening a project with a
 
 Interrupted save/amend operation drafts in `recovery/operation-draft.bin.lz4` must be promoted or merged before recovery screens, save/amend startup, bootstrap repair, or cleanup treat the project as clean. Cleanup should preserve unresolved operation drafts and report a warning instead of deleting a potentially recoverable player edit.
 
+## Release metadata
+
+The update notice flow depends on public JSON manifests. For every public release, update the website manifest first and keep the repository fallback at `updates/lumi-fabric.json` in sync. The fallback manifest should include only versions that are safe to advertise, should keep `versionCode` increasing, and should list the exact supported Minecraft versions so players are not prompted to install a build for a different game version.
+
 ## Change review checklist
 
 Before considering work complete, verify:

@@ -7,7 +7,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,6 +34,7 @@ public final class UpdateCheckService {
     private final Clock clock;
     private final Executor executor;
     private final Duration checkInterval;
+    private final Set<String> snoozedVersions = ConcurrentHashMap.newKeySet();
     private volatile UpdateCheckState state;
     private CompletableFuture<UpdateCheckResult> inFlight;
 
@@ -69,12 +72,19 @@ public final class UpdateCheckService {
     }
 
     public Optional<UpdateRelease> promptRelease() {
-        return this.state.promptRelease();
+        return this.state.promptRelease()
+                .filter(release -> !this.snoozedVersions.contains(release.version()));
     }
 
     public synchronized void dismissVersion(String version) {
         this.state = this.state.withDismissedVersion(version);
         this.saveState(this.state);
+    }
+
+    public void snoozeVersion(String version) {
+        if (version != null && !version.isBlank()) {
+            this.snoozedVersions.add(version.trim());
+        }
     }
 
     public synchronized CompletableFuture<UpdateCheckResult> requestCheckIfStale() {
