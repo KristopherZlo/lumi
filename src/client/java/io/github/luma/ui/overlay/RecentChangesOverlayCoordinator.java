@@ -19,6 +19,7 @@ public final class RecentChangesOverlayCoordinator {
     private static final int PREVIEW_ACTION_COUNT = 10;
 
     private final ProjectService projectService = new ProjectService();
+    private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final ExecutorService previewExecutor = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "lumi-recent-overlay-preview");
         thread.setDaemon(true);
@@ -76,9 +77,11 @@ public final class RecentChangesOverlayCoordinator {
             }
 
             String projectId = project.get().id().toString();
+            long streamRevision = this.historyManager.revision(projectId);
             RecentChangesPreviewSession.PinnedPreview pinnedPreview = this.previewSession.request(
                     projectId,
                     previewTarget,
+                    streamRevision,
                     () -> this.recentActionsSnapshot(projectId, previewTarget)
             );
             if (!pinnedPreview.hasBlockPreview()) {
@@ -183,10 +186,9 @@ public final class RecentChangesOverlayCoordinator {
             String projectId,
             PreviewTarget previewTarget
     ) {
-        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
         if (previewTarget == PreviewTarget.BOTH) {
             UndoRedoHistoryManager.UndoRedoActionsSnapshot snapshot =
-                    historyManager.recentUndoRedoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
+                    this.historyManager.recentUndoRedoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
             return new RecentChangesPreviewSession.ActionSnapshot(
                     snapshot.revision(),
                     snapshot.undoActions(),
@@ -195,14 +197,14 @@ public final class RecentChangesOverlayCoordinator {
         }
         UndoRedoHistoryManager.RecentActionsSnapshot snapshot;
         if (previewTarget == PreviewTarget.REDO) {
-            snapshot = historyManager.recentRedoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
+            snapshot = this.historyManager.recentRedoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
             return new RecentChangesPreviewSession.ActionSnapshot(
                     snapshot.revision(),
                     List.of(),
                     snapshot.actions()
             );
         } else {
-            snapshot = historyManager.recentUndoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
+            snapshot = this.historyManager.recentUndoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
             return new RecentChangesPreviewSession.ActionSnapshot(
                     snapshot.revision(),
                     snapshot.actions(),

@@ -40,6 +40,42 @@ class RecentChangesPreviewSessionTest {
     }
 
     @Test
+    void refreshesPinnedPreviewWhenStreamRevisionChanges() {
+        RecentChangesPreviewSession session = new RecentChangesPreviewSession();
+        AtomicInteger snapshotReads = new AtomicInteger();
+
+        RecentChangesPreviewSession.PinnedPreview first = session.request(
+                "project",
+                RecentChangesOverlayCoordinator.PreviewTarget.BOTH,
+                50L,
+                () -> new RecentChangesPreviewSession.ActionSnapshot(
+                        50L,
+                        List.of(blockAction("undo-before")),
+                        List.of(blockAction("redo-before"))
+                )
+        );
+        RecentChangesPreviewSession.PinnedPreview afterUndoRedo = session.request(
+                "project",
+                RecentChangesOverlayCoordinator.PreviewTarget.BOTH,
+                90L,
+                () -> {
+                    snapshotReads.incrementAndGet();
+                    return new RecentChangesPreviewSession.ActionSnapshot(
+                            90L,
+                            List.of(blockAction("undo-after")),
+                            List.of(blockAction("redo-after"))
+                    );
+                }
+        );
+
+        assertEquals(1, snapshotReads.get());
+        assertEquals(50L, first.key().revision());
+        assertEquals(90L, afterUndoRedo.key().revision());
+        assertEquals("undo-after", afterUndoRedo.undoActions().get(0).id());
+        assertEquals("redo-after", afterUndoRedo.redoActions().get(0).id());
+    }
+
+    @Test
     void startsNewPinnedRevisionAfterRelease() {
         RecentChangesPreviewSession session = new RecentChangesPreviewSession();
 

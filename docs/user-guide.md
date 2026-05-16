@@ -432,6 +432,8 @@ When compare highlight is not active:
 
 Small and medium previews render exposed translucent sides with thicker outlines. The next undo target is highlighted red; the next redo target is highlighted green; older recent actions remain orange. If no live action preview is available, Lumi falls back to the pending unsaved changes overlay. Large dense pending previews collapse into merged low-alpha volume blobs.
 
+If you keep holding the Lumi action button after `Left Alt+Z` or `Left Alt+Y`, the recent-action overlay refreshes when the undo/redo stack changes. You do not need to release and hold the key again to inspect the next target.
+
 Previews are temporary. They do not create saves, change history, or apply blocks.
 
 ## See Changes
