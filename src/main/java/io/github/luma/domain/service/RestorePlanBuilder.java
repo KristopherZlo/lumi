@@ -6,6 +6,7 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
@@ -62,9 +63,7 @@ final class RestorePlanBuilder {
             }
         }
 
-        List<ChunkPoint> baselineGaps = project.tracksWholeDimension()
-                ? this.baselineChunkRepository.listMissingChunks(layout, List.copyOf(restoredChunks.values()))
-                : List.of();
+        List<ChunkPoint> baselineGaps = this.baselineSources(layout, project, chain, restoredChunks);
         LumaDebugLog.log(
                 project,
                 "restore",
@@ -82,7 +81,9 @@ final class RestorePlanBuilder {
 
         List<ProjectVersion> patchVersions = new ArrayList<>();
         ProjectVersion cursor = targetVersion;
-        while (cursor != null && (cursor.snapshotId() == null || cursor.snapshotId().isBlank())) {
+        while (cursor != null
+                && (cursor.snapshotId() == null || cursor.snapshotId().isBlank())
+                && cursor.versionKind() != VersionKind.WORLD_ROOT) {
             patchVersions.add(cursor);
             cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
                     ? null
@@ -101,6 +102,21 @@ final class RestorePlanBuilder {
                 patchVersions.size()
         );
         return new RestoreChain(cursor, patchVersions);
+    }
+
+    private List<ChunkPoint> baselineSources(
+            ProjectLayout layout,
+            BuildProject project,
+            RestoreChain chain,
+            Map<String, ChunkPoint> restoredChunks
+    ) throws IOException {
+        if (!project.tracksWholeDimension()) {
+            return List.of();
+        }
+        if (chain.anchor().versionKind() == VersionKind.WORLD_ROOT) {
+            return this.baselineChunkRepository.listChunks(layout);
+        }
+        return this.baselineChunkRepository.listMissingChunks(layout, List.copyOf(restoredChunks.values()));
     }
 
     private static void putChunk(Map<String, ChunkPoint> chunks, ChunkPoint chunk) {

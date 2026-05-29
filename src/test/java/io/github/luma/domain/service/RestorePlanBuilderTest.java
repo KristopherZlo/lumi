@@ -16,6 +16,7 @@ import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.SnapshotWriter;
 import java.nio.file.Path;
@@ -36,6 +37,7 @@ class RestorePlanBuilderTest {
     Path tempDir;
 
     private final RestorePlanBuilder builder = new RestorePlanBuilder();
+    private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final SnapshotWriter snapshotWriter = new SnapshotWriter();
 
@@ -54,6 +56,38 @@ class RestorePlanBuilderTest {
         assertTrue(plan.baselineGaps().isEmpty());
     }
 
+    @Test
+    void buildsWorldRootAnchoredPatchPlanForWholeDimensionProject() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("world-project.mbp"));
+        ChunkPoint touchedChunk = new ChunkPoint(2, 0);
+        ChunkPoint untouchedChunk = new ChunkPoint(7, 1);
+        this.snapshotWriter.writeFile(
+                layout,
+                this.baselineChunkRepository.filePath(layout, touchedChunk),
+                snapshot(touchedChunk)
+        );
+        this.snapshotWriter.writeFile(
+                layout,
+                this.baselineChunkRepository.filePath(layout, untouchedChunk),
+                snapshot(untouchedChunk)
+        );
+        this.patchMetaRepository.save(layout, patchMetadata("patch-0002", "v0002", touchedChunk));
+        ProjectVersion root = version("v0001", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion target = version("v0002", "v0001", "", List.of("patch-0002"));
+
+        RestorePlan plan = this.builder.build(
+                layout,
+                wholeDimensionProject(),
+                List.of(root, target),
+                target
+        );
+
+        assertEquals(root, plan.anchor());
+        assertEquals(List.of("patch-0002"), plan.patchChain().stream().map(PatchMetadata::id).toList());
+        assertEquals(2, plan.baselineGaps().size());
+        assertTrue(plan.baselineGaps().containsAll(List.of(touchedChunk, untouchedChunk)));
+    }
+
     private static BuildProject project() {
         return BuildProject.create(
                 "project",
@@ -64,7 +98,21 @@ class RestorePlanBuilderTest {
         );
     }
 
+    private static BuildProject wholeDimensionProject() {
+        return BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW);
+    }
+
     private static ProjectVersion version(String id, String parentVersionId, String snapshotId, List<String> patchIds) {
+        return version(id, parentVersionId, snapshotId, patchIds, VersionKind.MANUAL);
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String parentVersionId,
+            String snapshotId,
+            List<String> patchIds,
+            VersionKind versionKind
+    ) {
         return new ProjectVersion(
                 id,
                 "project",
@@ -72,7 +120,7 @@ class RestorePlanBuilderTest {
                 parentVersionId,
                 snapshotId,
                 patchIds,
-                VersionKind.MANUAL,
+                versionKind,
                 "tester",
                 id,
                 ChangeStats.empty(),
