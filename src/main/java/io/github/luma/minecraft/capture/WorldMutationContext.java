@@ -110,8 +110,20 @@ public final class WorldMutationContext {
     }
 
     public static SourceFrame pushPlayerSource(WorldMutationSource source, String actor, boolean accessAllowed) {
+        WorldMutationSource resolvedSource = source == null ? WorldMutationSource.PLAYER : source;
+        Frame parent = currentFrame();
+        if (parent.hasAction()) {
+            SOURCE_STACK.get().push(new Frame(
+                    resolvedSource,
+                    parent.actor(),
+                    parent.actionId(),
+                    parent.accessAllowed() || accessAllowed
+            ));
+            return new SourceFrame();
+        }
+
         SOURCE_STACK.get().push(new Frame(
-                source == null ? WorldMutationSource.PLAYER : source,
+                resolvedSource,
                 actor == null || actor.isBlank() ? "player" : actor,
                 UUID.randomUUID().toString(),
                 accessAllowed

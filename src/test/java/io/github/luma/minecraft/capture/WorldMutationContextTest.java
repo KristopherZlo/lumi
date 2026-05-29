@@ -97,6 +97,51 @@ class WorldMutationContextTest {
     }
 
     @Test
+    void nestedPlayerSourceInheritsActivePlayerActionIdentity() {
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "builder", true);
+        String playerActionId = WorldMutationContext.currentActionId();
+        try {
+            WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "nested-builder", false);
+            try {
+                assertEquals(WorldMutationSource.PLAYER, WorldMutationContext.currentSource());
+                assertEquals("builder", WorldMutationContext.currentActor());
+                assertEquals(playerActionId, WorldMutationContext.currentActionId());
+                assertTrue(WorldMutationContext.currentAccessAllowed());
+            } finally {
+                WorldMutationContext.popSource();
+            }
+
+            assertEquals(WorldMutationSource.PLAYER, WorldMutationContext.currentSource());
+            assertEquals("builder", WorldMutationContext.currentActor());
+            assertEquals(playerActionId, WorldMutationContext.currentActionId());
+            assertTrue(WorldMutationContext.currentAccessAllowed());
+        } finally {
+            WorldMutationContext.popSource();
+        }
+    }
+
+    @Test
+    void nestedPlayerSourceCanUpgradeAccessWithinActivePlayerAction() {
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "builder", false);
+        String playerActionId = WorldMutationContext.currentActionId();
+        try {
+            WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "nested-builder", true);
+            try {
+                assertEquals("builder", WorldMutationContext.currentActor());
+                assertEquals(playerActionId, WorldMutationContext.currentActionId());
+                assertTrue(WorldMutationContext.currentAccessAllowed());
+            } finally {
+                WorldMutationContext.popSource();
+            }
+
+            assertEquals(playerActionId, WorldMutationContext.currentActionId());
+            assertFalse(WorldMutationContext.currentAccessAllowed());
+        } finally {
+            WorldMutationContext.popSource();
+        }
+    }
+
+    @Test
     void sourceFrameClosesAfterException() {
         assertEquals(WorldMutationSource.SYSTEM, WorldMutationContext.currentSource());
 
