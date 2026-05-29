@@ -302,20 +302,12 @@ class RestoreServiceTest {
 
     @Test
     void exactRootReplayPositionsStaySparseWithoutMechanismScope() {
-        RestoreService service = new RestoreService();
-        PreparedChunkBatch batch = new PreparedChunkBatch(
-                new ChunkPoint(0, 0),
-                List.of(new PreparedBlockPlacement(
-                        new BlockPos(2, 64, 3),
-                        Blocks.STONE.defaultBlockState(),
-                        null
-                ))
-        );
+        RestoreMechanismReconciliationPlanner planner = new RestoreMechanismReconciliationPlanner();
 
-        var positions = service.boundedExactRootReplayPositions(
+        var positions = planner.boundedExactRootReplayPositions(
                 project("main"),
                 MechanismReplayScope.empty(),
-                List.of(batch),
+                List.of(new BlockPoint(2, 64, 3)),
                 null
         );
 
@@ -325,7 +317,7 @@ class RestoreServiceTest {
 
     @Test
     void exactRootReplayPositionsExpandMechanismSectionsInsideProjectBounds() {
-        RestoreService service = new RestoreService();
+        RestoreMechanismReconciliationPlanner planner = new RestoreMechanismReconciliationPlanner();
         MechanismReplayScope scope = new MechanismReplayScope(
                 List.of(new BlockPoint(2, 64, 3)),
                 List.of(new io.github.luma.domain.model.ChunkSectionPoint(0, 0, 4))
@@ -338,7 +330,7 @@ class RestoreServiceTest {
                 NOW
         );
 
-        var positions = service.boundedExactRootReplayPositions(project, scope, List.of(), null).orElseThrow();
+        var positions = planner.boundedExactRootReplayPositions(project, scope, List.of(), null).orElseThrow();
 
         assertEquals(8, positions.size());
         assertTrue(positions.contains(new BlockPoint(1, 64, 2)));
@@ -349,14 +341,14 @@ class RestoreServiceTest {
 
     @Test
     void exactRootReplayPositionsRejectLargeMechanismScope() {
-        RestoreService service = new RestoreService();
+        RestoreMechanismReconciliationPlanner planner = new RestoreMechanismReconciliationPlanner();
         List<io.github.luma.domain.model.ChunkSectionPoint> sections = java.util.stream.IntStream
                 .range(0, 17)
                 .mapToObj(index -> new io.github.luma.domain.model.ChunkSectionPoint(index, 0, 4))
                 .toList();
         MechanismReplayScope scope = new MechanismReplayScope(List.of(), sections);
 
-        var positions = service.boundedExactRootReplayPositions(
+        var positions = planner.boundedExactRootReplayPositions(
                 BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW),
                 scope,
                 List.of(),
@@ -403,11 +395,11 @@ class RestoreServiceTest {
 
     @Test
     void detectsMechanismPayloadsForTargetStatePartialRestoreFallback() {
-        RestoreService service = new RestoreService();
+        RestoreMechanismReconciliationPlanner planner = new RestoreMechanismReconciliationPlanner();
 
-        assertTrue(service.containsMechanismState(List.of(change(1, "minecraft:redstone_wire", "minecraft:air"))));
-        assertTrue(service.containsMechanismState(List.of(change(1, "minecraft:stone", "minecraft:comparator"))));
-        assertFalse(service.containsMechanismState(List.of(change(1, "minecraft:dirt", "minecraft:stone"))));
+        assertTrue(planner.containsMechanismState(List.of(change(1, "minecraft:redstone_wire", "minecraft:air"))));
+        assertTrue(planner.containsMechanismState(List.of(change(1, "minecraft:stone", "minecraft:comparator"))));
+        assertFalse(planner.containsMechanismState(List.of(change(1, "minecraft:dirt", "minecraft:stone"))));
     }
 
     @Test
