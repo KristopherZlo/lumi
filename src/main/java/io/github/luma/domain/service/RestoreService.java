@@ -4,6 +4,8 @@ import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.OperationHandle;
@@ -30,8 +32,10 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.minecraft.world.EntityBatch;
+import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
+import io.github.luma.minecraft.world.PreparedWorldChangeBatches;
 import io.github.luma.minecraft.world.SnapshotBatchPreparer;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -74,6 +78,7 @@ public final class RestoreService {
 
     private static final int MAX_COLLAPSE_PLACEMENTS = 1_000_000;
     private static final int MAX_COLLAPSE_NATIVE_SECTIONS = 2_048;
+    private static final int MAX_MECHANISM_RECONCILIATION_CELLS = 65_536;
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -977,6 +982,7 @@ public final class RestoreService {
                 + exactRootStatePlan.sourceCount();
         int completedSources = 0;
         List<PreparedChunkBatch> batches = new ArrayList<>();
+        MechanismReplayScope.Builder mechanismScope = MechanismReplayScope.builder();
 
         if (pendingDraft != null && !pendingDraft.isEmpty()) {
             RecoveryDraft rollbackDraft = this.alignPendingEntityRollbackWithTarget(
@@ -988,7 +994,14 @@ public final class RestoreService {
             List<StoredBlockChange> rollbackChanges = rollbackDraft.changes();
             List<StoredEntityChange> rollbackEntityChanges = rollbackDraft.entityChanges();
             if (!rollbackChanges.isEmpty() || !rollbackEntityChanges.isEmpty()) {
-                batches.addAll(this.decodeStoredChanges(level, rollbackChanges, rollbackEntityChanges, false));
+                PreparedWorldChangeBatches analyzed = this.decodeStoredChangesAnalyzed(
+                        level,
+                        rollbackChanges,
+                        rollbackEntityChanges,
+                        false
+                );
+                batches.addAll(analyzed.batches());
+                mechanismScope.addAll(analyzed.mechanismReplayScope());
             }
             completedSources += 1;
             progressSink.update(
@@ -1003,7 +1016,9 @@ public final class RestoreService {
 
         for (ProjectVersion version : directPlan.reverseVersions()) {
             int before = batches.size();
-            batches.addAll(this.decodeVersionChanges(layout, level, version, false));
+            PreparedWorldChangeBatches analyzed = this.decodeVersionChangesAnalyzed(layout, level, version, false);
+            batches.addAll(analyzed.batches());
+            mechanismScope.addAll(analyzed.mechanismReplayScope());
             completedSources += 1;
             progressSink.update(
                     OperationStage.PREPARING,
@@ -1017,7 +1032,9 @@ public final class RestoreService {
 
         for (ProjectVersion version : directPlan.forwardVersions()) {
             int before = batches.size();
-            batches.addAll(this.decodeVersionChanges(layout, level, version, true));
+            PreparedWorldChangeBatches analyzed = this.decodeVersionChangesAnalyzed(layout, level, version, true);
+            batches.addAll(analyzed.batches());
+            mechanismScope.addAll(analyzed.mechanismReplayScope());
             completedSources += 1;
             progressSink.update(
                     OperationStage.PREPARING,
@@ -1029,12 +1046,34 @@ public final class RestoreService {
             );
         }
 
+        Optional<List<BlockPoint>> exactRootPositions = this.boundedExactRootReplayPositions(
+                project,
+                mechanismScope.build(),
+                batches,
+                level
+        );
+        if (exactRootPositions.isEmpty()) {
+            LumaMod.LOGGER.info(
+                    "Direct restore for project {} to {} skipped because mechanism reconciliation scope exceeded {} cells",
+                    project.name(),
+                    targetVersion.id(),
+                    MAX_MECHANISM_RECONCILIATION_CELLS
+            );
+            LumaDebugLog.log(
+                    project,
+                    "restore",
+                    "Direct restore skipped for project {} target {} due to large mechanism reconciliation scope",
+                    project.name(),
+                    targetVersion.id()
+            );
+            return Optional.empty();
+        }
         List<PreparedChunkBatch> exactRootBatches = this.decodeExactRootStateRestore(
                 layout,
                 level,
                 targetVersion,
                 exactRootStatePlan,
-                this.blockPositions(batches),
+                exactRootPositions.orElseThrow(),
                 completedSources,
                 Math.max(1, totalSources),
                 progressSink
@@ -1617,7 +1656,17 @@ public final class RestoreService {
             ProjectVersion version,
             boolean applyNewValues
     ) throws IOException {
+        return this.decodeVersionChangesAnalyzed(layout, level, version, applyNewValues).batches();
+    }
+
+    private PreparedWorldChangeBatches decodeVersionChangesAnalyzed(
+            ProjectLayout layout,
+            ServerLevel level,
+            ProjectVersion version,
+            boolean applyNewValues
+    ) throws IOException {
         List<PreparedChunkBatch> batches = new ArrayList<>();
+        MechanismReplayScope.Builder mechanismScope = MechanismReplayScope.builder();
         for (String patchId : version.patchIds()) {
             PatchMetadata metadata;
             try (var ignored = LumaLoadLog.measure(
@@ -1637,16 +1686,18 @@ public final class RestoreService {
                 if (changes.sectionFrames().isEmpty() && changes.entityChanges().isEmpty()) {
                     continue;
                 }
-                batches.addAll(this.batchPreparer.prepare(
+                PreparedWorldChangeBatches analyzed = this.batchPreparer.prepareAnalyzed(
                         level,
                         changes,
                         applyNewValues,
                         (completed, total) -> {
                         }
-                ));
+                );
+                batches.addAll(analyzed.batches());
+                mechanismScope.addAll(analyzed.mechanismReplayScope());
             }
         }
-        return batches;
+        return new PreparedWorldChangeBatches(batches, mechanismScope.build());
     }
 
     private List<PreparedChunkBatch> collapsePreparedRestoreBatches(String source, List<PreparedChunkBatch> batches) {
@@ -1686,6 +1737,15 @@ public final class RestoreService {
             List<StoredEntityChange> entityChanges,
             boolean applyNewValues
     ) throws IOException {
+        return this.decodeStoredChangesAnalyzed(level, changes, entityChanges, applyNewValues).batches();
+    }
+
+    private PreparedWorldChangeBatches decodeStoredChangesAnalyzed(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues
+    ) throws IOException {
         List<PreparedChunkBatch> batches;
         try (var ignored = LumaLoadLog.measure(
                 "restore",
@@ -1694,21 +1754,31 @@ public final class RestoreService {
                         + ", entities=" + (entityChanges == null ? 0 : entityChanges.size())
                         + ", applyNewValues=" + applyNewValues
         )) {
-            batches = this.batchPreparer.prepare(level, changes, entityChanges, applyNewValues);
+            PreparedWorldChangeBatches analyzed = this.batchPreparer.prepareAnalyzed(
+                    level,
+                    changes,
+                    entityChanges,
+                    applyNewValues
+            );
+            batches = analyzed.batches();
+            LumaDebugLog.log(
+                    "restore",
+                    "Decoded {} block and {} entity stored changes into {} grouped chunk batches using {} values",
+                    changes.size(),
+                    entityChanges == null ? 0 : entityChanges.size(),
+                    batches.size(),
+                    applyNewValues ? "new" : "old"
+            );
+            return analyzed;
         }
-        LumaDebugLog.log(
-                "restore",
-                "Decoded {} block and {} entity stored changes into {} grouped chunk batches using {} values",
-                changes.size(),
-                entityChanges == null ? 0 : entityChanges.size(),
-                batches.size(),
-                applyNewValues ? "new" : "old"
-        );
-        return batches;
     }
 
     private static String chunkKey(ChunkPoint chunk) {
         return chunk.x() + ":" + chunk.z();
+    }
+
+    private static String positionKey(BlockPoint position) {
+        return position.x() + ":" + position.y() + ":" + position.z();
     }
 
     private DecodedExactRootState decodeExactRootStateRestore(
@@ -1828,6 +1898,73 @@ public final class RestoreService {
 
     List<BlockPoint> blockPositions(List<PreparedChunkBatch> batches) {
         return this.chunkCollector.blockPositions(batches);
+    }
+
+    Optional<List<BlockPoint>> boundedExactRootReplayPositions(
+            io.github.luma.domain.model.BuildProject project,
+            MechanismReplayScope mechanismScope,
+            List<PreparedChunkBatch> batches,
+            ServerLevel level
+    ) {
+        LinkedHashMap<String, BlockPoint> selected = new LinkedHashMap<>();
+        for (BlockPoint position : this.blockPositions(batches)) {
+            selected.putIfAbsent(positionKey(position), position);
+        }
+        if (mechanismScope == null || mechanismScope.isEmpty()) {
+            return Optional.of(List.copyOf(selected.values()));
+        }
+
+        int extraCells = 0;
+        for (BlockPoint position : mechanismScope.positions()) {
+            if (!this.insideMechanismReconciliationBounds(project, position, level)) {
+                continue;
+            }
+            if (!selected.containsKey(positionKey(position))) {
+                extraCells += 1;
+                if (extraCells > MAX_MECHANISM_RECONCILIATION_CELLS) {
+                    return Optional.empty();
+                }
+            }
+            selected.putIfAbsent(positionKey(position), position);
+        }
+        for (ChunkSectionPoint section : mechanismScope.sections()) {
+            int baseX = section.chunkX() << 4;
+            int baseZ = section.chunkZ() << 4;
+            int baseY = section.sectionY() << 4;
+            for (int localY = 0; localY < 16; localY += 1) {
+                for (int localZ = 0; localZ < 16; localZ += 1) {
+                    for (int localX = 0; localX < 16; localX += 1) {
+                        BlockPoint position = new BlockPoint(baseX + localX, baseY + localY, baseZ + localZ);
+                        if (!this.insideMechanismReconciliationBounds(project, position, level)) {
+                            continue;
+                        }
+                        if (!selected.containsKey(positionKey(position))) {
+                            extraCells += 1;
+                            if (extraCells > MAX_MECHANISM_RECONCILIATION_CELLS) {
+                                return Optional.empty();
+                            }
+                        }
+                        selected.putIfAbsent(positionKey(position), position);
+                    }
+                }
+            }
+        }
+        return Optional.of(List.copyOf(selected.values()));
+    }
+
+    private boolean insideMechanismReconciliationBounds(
+            io.github.luma.domain.model.BuildProject project,
+            BlockPoint position,
+            ServerLevel level
+    ) {
+        if (position == null) {
+            return false;
+        }
+        Bounds3i bounds = project == null ? null : project.bounds();
+        if (bounds != null && !bounds.contains(position)) {
+            return false;
+        }
+        return level == null || (position.y() >= level.getMinY() && position.y() < level.getMaxY());
     }
 
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {

@@ -24,6 +24,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.LumiSectionBuffer;
+import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedSectionApplyBatch;
@@ -297,6 +298,72 @@ class RestoreServiceTest {
         assertEquals(2, positions.size());
         assertEquals(new BlockPoint(33, 66, -13), positions.getFirst());
         assertTrue(positions.contains(new BlockPoint(34, 66, -13)));
+    }
+
+    @Test
+    void exactRootReplayPositionsStaySparseWithoutMechanismScope() {
+        RestoreService service = new RestoreService();
+        PreparedChunkBatch batch = new PreparedChunkBatch(
+                new ChunkPoint(0, 0),
+                List.of(new PreparedBlockPlacement(
+                        new BlockPos(2, 64, 3),
+                        Blocks.STONE.defaultBlockState(),
+                        null
+                ))
+        );
+
+        var positions = service.boundedExactRootReplayPositions(
+                project("main"),
+                MechanismReplayScope.empty(),
+                List.of(batch),
+                null
+        );
+
+        assertTrue(positions.isPresent());
+        assertEquals(List.of(new BlockPoint(2, 64, 3)), positions.orElseThrow());
+    }
+
+    @Test
+    void exactRootReplayPositionsExpandMechanismSectionsInsideProjectBounds() {
+        RestoreService service = new RestoreService();
+        MechanismReplayScope scope = new MechanismReplayScope(
+                List.of(new BlockPoint(2, 64, 3)),
+                List.of(new io.github.luma.domain.model.ChunkSectionPoint(0, 0, 4))
+        );
+        BuildProject project = BuildProject.create(
+                "project",
+                "minecraft:overworld",
+                new Bounds3i(new BlockPoint(1, 64, 2), new BlockPoint(2, 65, 3)),
+                new BlockPoint(1, 64, 2),
+                NOW
+        );
+
+        var positions = service.boundedExactRootReplayPositions(project, scope, List.of(), null).orElseThrow();
+
+        assertEquals(8, positions.size());
+        assertTrue(positions.contains(new BlockPoint(1, 64, 2)));
+        assertTrue(positions.contains(new BlockPoint(2, 65, 3)));
+        assertFalse(positions.contains(new BlockPoint(0, 64, 2)));
+        assertFalse(positions.contains(new BlockPoint(2, 66, 3)));
+    }
+
+    @Test
+    void exactRootReplayPositionsRejectLargeMechanismScope() {
+        RestoreService service = new RestoreService();
+        List<io.github.luma.domain.model.ChunkSectionPoint> sections = java.util.stream.IntStream
+                .range(0, 17)
+                .mapToObj(index -> new io.github.luma.domain.model.ChunkSectionPoint(index, 0, 4))
+                .toList();
+        MechanismReplayScope scope = new MechanismReplayScope(List.of(), sections);
+
+        var positions = service.boundedExactRootReplayPositions(
+                BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW),
+                scope,
+                List.of(),
+                null
+        );
+
+        assertTrue(positions.isEmpty());
     }
 
     @Test
