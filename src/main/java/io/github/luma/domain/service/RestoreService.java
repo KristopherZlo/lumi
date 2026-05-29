@@ -23,6 +23,7 @@ import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.RestorePlanSummary;
 import io.github.luma.domain.model.RestoreReturnPoint;
+import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -33,6 +34,7 @@ import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.MechanismReplayScope;
+import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.minecraft.world.PreparedWorldChangeBatches;
@@ -57,6 +59,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -79,6 +82,25 @@ public final class RestoreService {
     private static final int MAX_COLLAPSE_PLACEMENTS = 1_000_000;
     private static final int MAX_COLLAPSE_NATIVE_SECTIONS = 2_048;
     private static final int MAX_MECHANISM_RECONCILIATION_CELLS = 65_536;
+    private static final Set<String> MECHANISM_BLOCK_IDS = Set.of(
+            "minecraft:redstone_wire",
+            "minecraft:redstone_torch",
+            "minecraft:redstone_wall_torch",
+            "minecraft:repeater",
+            "minecraft:comparator",
+            "minecraft:redstone_lamp",
+            "minecraft:observer",
+            "minecraft:dispenser",
+            "minecraft:dropper",
+            "minecraft:piston",
+            "minecraft:sticky_piston",
+            "minecraft:piston_head",
+            "minecraft:moving_piston",
+            "minecraft:lever",
+            "minecraft:tripwire",
+            "minecraft:tripwire_hook",
+            "minecraft:target"
+    );
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -103,6 +125,7 @@ public final class RestoreService {
     private final RestoreRequestResolver requestResolver = new RestoreRequestResolver();
     private final RestorePlanBuilder restorePlanBuilder = new RestorePlanBuilder();
     private final RestorePayloadLoader payloadLoader = new RestorePayloadLoader();
+    private final BlockTargetStateResolver blockTargetStateResolver = new BlockTargetStateResolver();
 
     /**
      * Starts a restore operation for the given project and target version.
@@ -612,6 +635,29 @@ public final class RestoreService {
                 directPlan.forwardVersions(),
                 selectedChunks
         );
+        if (this.containsMechanismState(pendingDraft == null ? List.of() : pendingDraft.changes())
+                || this.containsMechanismState(reverseChanges.blockChanges())
+                || this.containsMechanismState(forwardChanges.blockChanges())) {
+            LumaDebugLog.log(
+                    project,
+                    "restore",
+                    "Partial restore for project {} target {} switched to target-state planning because direct path contains mechanism state",
+                    project.name(),
+                    targetVersion.id()
+            );
+            return this.buildTargetStatePartialRestoreDraft(
+                    layout,
+                    project,
+                    versions,
+                    activeVariant,
+                    targetVersion,
+                    pendingDraft,
+                    request,
+                    worldMinY,
+                    worldMaxY,
+                    progressSink
+            );
+        }
         int lineageChangeCount = reverseChanges.blockChanges().size()
                 + reverseChanges.entityChanges().size()
                 + forwardChanges.blockChanges().size()
@@ -1046,9 +1092,10 @@ public final class RestoreService {
             );
         }
 
+        MechanismReplayScope resolvedMechanismScope = mechanismScope.build();
         Optional<List<BlockPoint>> exactRootPositions = this.boundedExactRootReplayPositions(
                 project,
-                mechanismScope.build(),
+                resolvedMechanismScope,
                 batches,
                 level
         );
@@ -1068,18 +1115,55 @@ public final class RestoreService {
             );
             return Optional.empty();
         }
-        List<PreparedChunkBatch> exactRootBatches = this.decodeExactRootStateRestore(
-                layout,
-                level,
-                targetVersion,
-                exactRootStatePlan,
-                exactRootPositions.orElseThrow(),
-                completedSources,
-                Math.max(1, totalSources),
-                progressSink
-        ).batches();
-        if (!exactRootBatches.isEmpty()) {
-            batches.addAll(exactRootBatches);
+        if (exactRootStatePlan.append()) {
+            List<PreparedChunkBatch> exactRootBatches = this.decodeExactRootStateRestore(
+                    layout,
+                    level,
+                    targetVersion,
+                    exactRootStatePlan,
+                    exactRootPositions.orElseThrow(),
+                    completedSources,
+                    Math.max(1, totalSources),
+                    progressSink
+            ).batches();
+            if (!exactRootBatches.isEmpty()) {
+                batches.addAll(exactRootBatches);
+            }
+        } else if (!resolvedMechanismScope.isEmpty()) {
+            Optional<List<BlockPoint>> mechanismPositions = this.boundedMechanismReplayPositions(
+                    project,
+                    resolvedMechanismScope,
+                    level
+            );
+            if (mechanismPositions.isEmpty()) {
+                LumaMod.LOGGER.info(
+                        "Direct restore for project {} to {} skipped because mechanism target-state scope exceeded {} cells",
+                        project.name(),
+                        targetVersion.id(),
+                        MAX_MECHANISM_RECONCILIATION_CELLS
+                );
+                return Optional.empty();
+            }
+            Map<BlockPoint, StatePayload> targetStates = this.targetBlockStates(
+                    layout,
+                    project,
+                    versions,
+                    targetVersion,
+                    mechanismPositions.orElseThrow()
+            );
+            if (!targetStates.isEmpty()) {
+                batches.addAll(this.batchPreparer.prepareTargetStates(
+                        level,
+                        targetStates,
+                        PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY_AND_SUPPRESS_POST_REPLAY_MECHANISM
+                ));
+                progressSink.update(
+                        OperationStage.PREPARING,
+                        completedSources,
+                        Math.max(1, totalSources),
+                        "Decoded mechanism target-state reconciliation"
+                );
+            }
         }
 
         List<PreparedChunkBatch> collapsed;
@@ -1913,7 +1997,26 @@ public final class RestoreService {
         if (mechanismScope == null || mechanismScope.isEmpty()) {
             return Optional.of(List.copyOf(selected.values()));
         }
+        Optional<List<BlockPoint>> mechanismPositions =
+                this.boundedMechanismReplayPositions(project, mechanismScope, level);
+        if (mechanismPositions.isEmpty()) {
+            return Optional.empty();
+        }
+        for (BlockPoint position : mechanismPositions.orElseThrow()) {
+            selected.putIfAbsent(positionKey(position), position);
+        }
+        return Optional.of(List.copyOf(selected.values()));
+    }
 
+    Optional<List<BlockPoint>> boundedMechanismReplayPositions(
+            io.github.luma.domain.model.BuildProject project,
+            MechanismReplayScope mechanismScope,
+            ServerLevel level
+    ) {
+        LinkedHashMap<String, BlockPoint> selected = new LinkedHashMap<>();
+        if (mechanismScope == null || mechanismScope.isEmpty()) {
+            return Optional.of(List.of());
+        }
         int extraCells = 0;
         for (BlockPoint position : mechanismScope.positions()) {
             if (!this.insideMechanismReconciliationBounds(project, position, level)) {
@@ -1950,6 +2053,35 @@ public final class RestoreService {
             }
         }
         return Optional.of(List.copyOf(selected.values()));
+    }
+
+    Map<BlockPoint, StatePayload> targetBlockStates(
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVersion> versions,
+            ProjectVersion targetVersion,
+            List<BlockPoint> positions
+    ) throws IOException {
+        return this.blockTargetStateResolver.resolve(layout, project, versions, targetVersion, positions);
+    }
+
+    boolean containsMechanismState(List<StoredBlockChange> changes) {
+        for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
+            if (this.isMechanismBlockId(change.oldValue()) || this.isMechanismBlockId(change.newValue())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isMechanismBlockId(StatePayload payload) {
+        if (payload == null || payload.blockId() == null) {
+            return false;
+        }
+        String blockId = payload.blockId().toLowerCase(Locale.ROOT);
+        return MECHANISM_BLOCK_IDS.contains(blockId)
+                || blockId.endsWith("_button")
+                || blockId.endsWith("_pressure_plate");
     }
 
     private boolean insideMechanismReconciliationBounds(

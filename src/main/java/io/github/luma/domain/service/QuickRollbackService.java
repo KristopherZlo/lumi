@@ -2,10 +2,12 @@ package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
+import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
@@ -14,7 +16,10 @@ import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
+import io.github.luma.minecraft.world.MechanismReplayScope;
+import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.PreparedWorldChangeBatches;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
@@ -24,7 +29,9 @@ import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
@@ -113,7 +120,7 @@ public final class QuickRollbackService {
                             plan.totalChangeCount(),
                             "Preparing quick rollback"
                     );
-                    List<PreparedChunkBatch> batches = this.batchPreparer.prepareUndoRedo(
+                    PreparedWorldChangeBatches analyzed = this.batchPreparer.prepareUndoRedoAnalyzed(
                             level,
                             plan.blockChanges(),
                             plan.entityChanges(),
@@ -125,10 +132,25 @@ public final class QuickRollbackService {
                                     "Decoded quick rollback"
                             )
                     );
+                    List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+                    ProjectVersion activeHead = versions.stream()
+                            .filter(version -> version.id().equals(activeVariant.headVersionId()))
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalArgumentException("Active head version is missing: " + activeVariant.headVersionId()));
+                    List<PreparedChunkBatch> batches = this.withMechanismReconciliation(
+                            level,
+                            layout,
+                            project,
+                            versions,
+                            activeHead,
+                            analyzed.batches(),
+                            analyzed.mechanismReplayScope(),
+                            selectedBounds
+                    );
                     if (selectedBounds == null) {
                         batches = this.restoreService.withAuthoritativeEntityReplacementBatches(
                                 layout,
-                                this.versionRepository.loadAll(layout),
+                                versions,
                                 activeVariant.headVersionId(),
                                 batches
                         );
@@ -204,6 +226,48 @@ public final class QuickRollbackService {
         if (remainingDraft != null && !remainingDraft.isEmpty()) {
             this.recoveryRepository.saveDraft(layout, remainingDraft);
         }
+    }
+
+    private List<PreparedChunkBatch> withMechanismReconciliation(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            ProjectVersion targetVersion,
+            List<PreparedChunkBatch> batches,
+            MechanismReplayScope mechanismScope,
+            Bounds3i selectedBounds
+    ) throws IOException {
+        List<BlockPoint> positions = this.mechanismReconciliationPositions(mechanismScope, selectedBounds);
+        if (positions.isEmpty()) {
+            return batches == null ? List.of() : batches;
+        }
+        Map<BlockPoint, io.github.luma.domain.model.StatePayload> targetStates = this.restoreService.targetBlockStates(
+                layout,
+                project,
+                versions,
+                targetVersion,
+                positions
+        );
+        if (targetStates.isEmpty()) {
+            return batches == null ? List.of() : batches;
+        }
+        List<PreparedChunkBatch> combined = new ArrayList<>(batches == null ? List.of() : batches);
+        combined.addAll(this.batchPreparer.prepareTargetStates(
+                level,
+                targetStates,
+                PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY_AND_SUPPRESS_POST_REPLAY_MECHANISM
+        ));
+        return RestoreService.collapsePreparedBatches(combined);
+    }
+
+    List<BlockPoint> mechanismReconciliationPositions(MechanismReplayScope mechanismScope, Bounds3i selectedBounds) {
+        if (mechanismScope == null || mechanismScope.positions().isEmpty()) {
+            return List.of();
+        }
+        return mechanismScope.positions().stream()
+                .filter(position -> selectedBounds == null || selectedBounds.contains(position))
+                .toList();
     }
 
     private ProjectVariant activeVariant(ProjectLayout layout, String variantId, String projectName) throws IOException {

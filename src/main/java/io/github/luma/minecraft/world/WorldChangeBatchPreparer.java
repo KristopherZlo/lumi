@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.PatchSectionFrame;
 import io.github.luma.domain.model.PatchSectionWorldChanges;
@@ -77,6 +78,47 @@ public final class WorldChangeBatchPreparer {
             ProgressListener progressListener
     ) throws IOException {
         return this.prepare(level, changes, entityChanges, true, progressListener);
+    }
+
+    public List<PreparedChunkBatch> prepareTargetStates(
+            ServerLevel level,
+            Map<BlockPoint, StatePayload> targetStates,
+            PreparedBlockPlacement.ReplayHint replayHint
+    ) throws IOException {
+        if (targetStates == null || targetStates.isEmpty()) {
+            return List.of();
+        }
+        BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
+        List<ConnectedBlockPlacementExpander.ChangePlacement> placements = new ArrayList<>();
+        for (Map.Entry<BlockPoint, StatePayload> entry : targetStates.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null) {
+                continue;
+            }
+            BlockState targetState = blockStateDecoder.decode(level, entry.getValue().stateTag());
+            PreparedBlockPlacement.ReplayHint mergedHint = PreparedBlockPlacement.ReplayHint.merge(
+                    replayHint,
+                    replayHintFor(null, targetState)
+            );
+            placements.add(new ConnectedBlockPlacementExpander.ChangePlacement(
+                    new PreparedBlockPlacement(
+                            entry.getKey().toBlockPos(),
+                            targetState,
+                            entry.getValue().blockEntityTag() == null
+                                    ? null
+                                    : entry.getValue().blockEntityTag().copy(),
+                            mergedHint
+                    ),
+                    null
+            ));
+        }
+        Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = this.connectedBlockPlacementExpander.groupByChunk(
+                this.expandMechanismChanges(placements)
+        );
+        List<PreparedChunkBatch> batches = new ArrayList<>();
+        for (Map.Entry<ChunkPoint, List<PreparedBlockPlacement>> entry : grouped.entrySet()) {
+            batches.add(this.prepareDecodedChunk(entry.getKey(), entry.getValue(), EntityBatch.empty()));
+        }
+        return List.copyOf(batches);
     }
 
     public List<PreparedChunkBatch> prepare(
@@ -225,7 +267,7 @@ public final class WorldChangeBatchPreparer {
         }
 
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
-        List<PreparedChunkBatch> batches = this.prepareUndoRedoSectionFirst(
+        PreparedWorldChangeBatches analyzed = this.prepareUndoRedoSectionFirst(
                 level,
                 changes,
                 entityChanges,
@@ -234,9 +276,54 @@ public final class WorldChangeBatchPreparer {
                 blockStateDecoder,
                 entityApplyMode
         );
-        return batches == null
+        return analyzed == null
                 ? this.prepare(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode)
-                : batches;
+                : analyzed.batches();
+    }
+
+    public PreparedWorldChangeBatches prepareUndoRedoAnalyzed(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            ProgressListener progressListener
+    ) throws IOException {
+        return this.prepareUndoRedoAnalyzed(
+                level,
+                changes,
+                entityChanges,
+                applyNewValues,
+                progressListener,
+                EntityApplyMode.DELTA
+        );
+    }
+
+    public PreparedWorldChangeBatches prepareUndoRedoAnalyzed(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            ProgressListener progressListener,
+            EntityApplyMode entityApplyMode
+    ) throws IOException {
+        changes = changes == null ? List.of() : changes;
+        if (changes.size() < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD) {
+            return this.prepareAnalyzed(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode);
+        }
+
+        BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
+        PreparedWorldChangeBatches analyzed = this.prepareUndoRedoSectionFirst(
+                level,
+                changes,
+                entityChanges,
+                applyNewValues,
+                progressListener == null ? ProgressListener.NO_OP : progressListener,
+                blockStateDecoder,
+                entityApplyMode
+        );
+        return analyzed == null
+                ? this.prepareAnalyzed(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode)
+                : analyzed;
     }
 
     public List<PreparedChunkBatch> prepare(
@@ -627,7 +714,7 @@ public final class WorldChangeBatchPreparer {
         }
     }
 
-    private List<PreparedChunkBatch> prepareUndoRedoSectionFirst(
+    private PreparedWorldChangeBatches prepareUndoRedoSectionFirst(
             ServerLevel level,
             List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges,
@@ -640,6 +727,7 @@ public final class WorldChangeBatchPreparer {
         int total = changes.size() + entityChanges.size();
         int completed = 0;
         Map<SectionKey, LumiSectionBuffer.Builder> sectionBuilders = new LinkedHashMap<>();
+        MechanismReplayScope.Builder mechanismScope = MechanismReplayScope.builder();
         for (StoredBlockChange change : changes) {
             StatePayload source = applyNewValues ? change.oldValue() : change.newValue();
             StatePayload target = applyNewValues ? change.newValue() : change.oldValue();
@@ -653,14 +741,21 @@ public final class WorldChangeBatchPreparer {
             }
 
             SectionKey key = SectionKey.from(change);
+            BlockPos pos = change.pos().toBlockPos();
+            PreparedBlockPlacement.ReplayHint replayHint = replayHintFor(sourceState, targetState);
             sectionBuilders.computeIfAbsent(key, ignored -> LumiSectionBuffer.builder(key.sectionY()))
                     .set(
                             change.pos().x() & 15,
                             change.pos().y() & 15,
                             change.pos().z() & 15,
                             targetState,
-                            target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy()
+                            target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy(),
+                            replayHint
                     );
+            mechanismScope.addAll(this.mechanismScope(List.of(new ConnectedBlockPlacementExpander.ChangePlacement(
+                    new PreparedBlockPlacement(pos, targetState, null, replayHint),
+                    sourceState
+            ))));
             completed += 1;
             progressListener.onDecoded(completed, total);
         }
@@ -706,7 +801,7 @@ public final class WorldChangeBatchPreparer {
                     this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues, entityApplyMode)
             ));
         }
-        return batches;
+        return new PreparedWorldChangeBatches(batches, mechanismScope.build());
     }
 
     private LumiSectionBuffer toSectionBuffer(int sectionY, List<PreparedBlockPlacement> placements) {

@@ -367,6 +367,50 @@ class RestoreServiceTest {
     }
 
     @Test
+    void targetBlockStatesResolveSnapshotAndPatchChain(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        BlockPoint pos = new BlockPoint(1, 64, 1);
+        this.snapshotWriter.writeFile(
+                layout.snapshotFile("snapshot-0001"),
+                snapshotWithState("minecraft:redstone_wire")
+        );
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(new StoredBlockChange(
+                        pos,
+                        new StatePayload(state("minecraft:redstone_wire"), null),
+                        StatePayload.air()
+                )),
+                List.of()
+        ));
+        ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
+        ProjectVersion target = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+
+        var states = service.targetBlockStates(
+                layout,
+                project("main"),
+                List.of(initial, target),
+                target,
+                List.of(pos)
+        );
+
+        assertEquals("minecraft:air", states.get(pos).blockId());
+    }
+
+    @Test
+    void detectsMechanismPayloadsForTargetStatePartialRestoreFallback() {
+        RestoreService service = new RestoreService();
+
+        assertTrue(service.containsMechanismState(List.of(change(1, "minecraft:redstone_wire", "minecraft:air"))));
+        assertTrue(service.containsMechanismState(List.of(change(1, "minecraft:stone", "minecraft:comparator"))));
+        assertFalse(service.containsMechanismState(List.of(change(1, "minecraft:dirt", "minecraft:stone"))));
+    }
+
+    @Test
     void restoreTargetCanUseExplicitBranchWhenHeadVersionBelongsToMain() {
         RestoreRequestResolver resolver = new RestoreRequestResolver();
         ProjectVersion baseVersion = version("v0001", "main", "");
@@ -622,6 +666,23 @@ class RestoreServiceTest {
                         List.of(new SnapshotSectionData(4, List.of(state("minecraft:air")), indexes)),
                         java.util.Map.of(),
                         entities
+                ))
+        );
+    }
+
+    private static SnapshotData snapshotWithState(String blockId) {
+        short[] indexes = new short[4096];
+        return new SnapshotData(
+                "project",
+                NOW,
+                64,
+                79,
+                List.of(new SnapshotChunkData(
+                        0,
+                        0,
+                        List.of(new SnapshotSectionData(4, List.of(state(blockId)), indexes)),
+                        java.util.Map.of(),
+                        List.of()
                 ))
         );
     }

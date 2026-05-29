@@ -318,6 +318,24 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void preparesExplicitTargetStatesWithReplayHint() throws Exception {
+        BlockPoint pos = new BlockPoint(2, 64, 3);
+
+        List<PreparedChunkBatch> batches = this.preparer.prepareTargetStates(
+                null,
+                java.util.Map.of(pos, StatePayload.air()),
+                PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY_AND_SUPPRESS_POST_REPLAY_MECHANISM
+        );
+
+        assertEquals(1, batches.size());
+        PreparedBlockPlacement placement = batches.getFirst().placements().getFirst();
+        assertEquals(pos.toBlockPos(), placement.pos());
+        assertEquals(Blocks.AIR.defaultBlockState(), placement.state());
+        assertTrue(placement.replayHint().forcesFinalReplay());
+        assertTrue(placement.replayHint().suppressesPostReplayMechanism());
+    }
+
+    @Test
     void blockChangesAddSettledPistonHeadCompanionForExtendedBase() throws Exception {
         BlockPos base = new BlockPos(0, 64, 0);
         BlockState retracted = Blocks.PISTON.defaultBlockState()
