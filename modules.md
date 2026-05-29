@@ -228,7 +228,7 @@ Use `src/main/java/io/github/luma/mixin` only for Minecraft hook entrypoints. Mi
 Use `src/main/java/io/github/luma/integration` for external builder tool detection and adapters. Do not create hard runtime dependencies on optional tools.
 
 - `OptionalIntegrationBootstrap`: reflectively enables optional integrations.
-- `integration/common/*`: capability reporting, external mutation detection, clipboard/schematic/selection contracts.
+- `integration/common/*`: capability reporting, explicit external mutation detection, opt-in stack-trace fallback gating, clipboard/schematic/selection contracts.
 - `integration/worldedit/WorldEditSessionBridge.java`: stable WorldEdit session selection, clipboard, and schematic-format bridge.
 - `integration/worldedit/WorldEditEditSessionTracker.java`: guarded WorldEdit edit-session extent capture.
 - `integration/axiom/*`: Axiom block-buffer extraction/capture helpers and experimental native undo/redo replay guards.

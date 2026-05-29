@@ -89,7 +89,9 @@ public final class ExternalToolMutationOriginDetector implements ExternalToolMut
     private static final ExternalToolMutationOriginDetector INSTANCE = new ExternalToolMutationOriginDetector(
             ExternalToolMutationOriginDetector::currentStackClassNames,
             System::nanoTime,
-            new DetectionAvailability(new ExternalToolIntegrationRegistry())::isAvailable
+            new ExternalToolStackTraceDetectionGate(
+                    new ExternalToolIntegrationRegistry()::stackTraceDetectionAvailable
+            )::available
     );
 
     private final Supplier<List<String>> stackClassNames;
@@ -168,27 +170,6 @@ public final class ExternalToolMutationOriginDetector implements ExternalToolMut
             classNames.add(stackTrace[i].getClassName());
         }
         return classNames;
-    }
-
-    private static final class DetectionAvailability {
-
-        private final ExternalToolIntegrationRegistry registry;
-        private volatile Boolean available;
-
-        private DetectionAvailability(ExternalToolIntegrationRegistry registry) {
-            this.registry = Objects.requireNonNull(registry, "registry");
-        }
-
-        private boolean isAvailable() {
-            Boolean cached = this.available;
-            if (cached != null) {
-                return cached;
-            }
-
-            boolean detected = this.registry.stackTraceDetectionAvailable();
-            this.available = detected;
-            return detected;
-        }
     }
 
     private record ToolProfile(

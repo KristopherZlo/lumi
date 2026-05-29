@@ -43,6 +43,21 @@ class ExternalToolMutationOriginDetectorTest {
     }
 
     @Test
+    void stackTraceFallbackRequiresExplicitRuntimeOptIn() {
+        AtomicBoolean checkedRegistry = new AtomicBoolean(false);
+        ExternalToolStackTraceDetectionGate gate = new ExternalToolStackTraceDetectionGate(
+                () -> {
+                    checkedRegistry.set(true);
+                    return true;
+                },
+                () -> false
+        );
+
+        assertFalse(gate.available());
+        assertFalse(checkedRegistry.get());
+    }
+
+    @Test
     void detectsWorldEditFrames() {
         ExternalToolMutationOriginDetector detector = new ExternalToolMutationOriginDetector(
                 () -> List.of(

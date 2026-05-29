@@ -50,7 +50,7 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 - Crash recovery through durable working drafts, write-ahead log compaction, operation-draft isolation, recovery journals, and restore return points.
 - Capture of non-player entity spawn/remove/update with persistent NBT payloads for supported builder-facing entities.
 - Pre-Lumi world checkpoint gate with visible progress and an opt-in vanilla Edit World restore action for worlds that capture compressed pre-Lumi chunk payloads.
-- Optional WorldEdit/FAWE/Axiom/tool-stack capture without hard runtime dependencies.
+- Optional WorldEdit/FAWE/Axiom capture without hard runtime dependencies; generic stack-trace fallback capture is opt-in for diagnostics.
 - Client-side textured isometric previews that skip hidden internal faces, plus large-diff overlays prepared away from the render thread.
 - Runtime diagnostics, load logs, block-apply logs, light-refresh logs, smoke tests, and a broad singleplayer regression suite.
 
@@ -75,7 +75,7 @@ For file-level navigation, start with [modules.md](modules.md). It maps each wor
 
 ## How Capture Works
 
-1. A mixin hook, optional integration, known-tool fallback, direct section fallback, or entity lifecycle hook observes a world mutation.
+1. A mixin hook, optional integration, opt-in tool-stack fallback, direct section fallback, or entity lifecycle hook observes a world mutation.
 2. `HistoryCaptureManager` resolves matching active projects through a cached dimension/chunk index.
 3. `WorldMutationCapturePolicy` classifies block changes as direct capture, deferred stabilization, or rejected transient state.
 4. Direct explicit builder edits are merged into the durable working draft immediately.
@@ -298,6 +298,7 @@ Useful JVM flags:
 -Dlumi.clientLoadLog=true
 -Dlumi.lightLog=true
 -Dlumi.blockApplyLog=true
+-Dlumi.externalStackDetection=true
 ```
 
 `-Dlumi.loadLog=true` writes `logs/lumi-load.log` and also enables focused light and block-apply logs. Start with `type="summary"` rows, then inspect `type="span"` and `type="operation-metrics"` rows for expensive areas.
@@ -305,6 +306,8 @@ Useful JVM flags:
 `-Dlumi.clientLoadLog=true` writes `logs/lumi-client-load.log` from the client process with CPU, heap/direct-buffer memory, GC, frame-pressure, OpenGL renderer, and optional `nvidia-smi` GPU utilization/memory samples. The test-client and client GameTest profiles enable it automatically.
 
 High-volume capture skip diagnostics are sampled and then summarized per project, source, and reason so debug mode does not turn ambient world ticks into sustained disk and CPU load.
+
+`-Dlumi.externalStackDetection=true` enables the conservative fallback that samples Java stack frames to recognize unsupported builder tools. Leave it disabled during normal play and broad test-client runs; explicit WorldEdit/FAWE/Axiom integrations do not require it.
 
 Update checks can be overridden for local testing with:
 
