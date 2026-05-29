@@ -175,7 +175,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `ChunkSectionOwnershipRegistry`, `ChunkSectionOwnerLookup`, `DirectSectionMutationCaptureService`: lower-level section owner fallback capture.
 - `LiveUndoRedoActionRecorder`: fan-out from accepted captured/stabilized deltas into the volatile live undo/redo action stack.
 - `UndoRedoHistoryManager`: in-memory live undo/redo stacks and recent action source data; these stacks do not survive restart and are not consumed by save/amend.
-- `UndoRedoActionGroupingPolicy`: source-aware live action identity selection, including buffer-level Axiom place/break captures.
+- `UndoRedoActionGroupingPolicy`: source-aware live action identity selection, including buffer-level and set-block-packet Axiom place/break captures.
 - `ServerThreadExecutor`: marshals capture state work to the Minecraft server thread.
 
 ### World Apply
@@ -221,7 +221,7 @@ Use `src/main/java/io/github/luma/mixin` only for Minecraft hook entrypoints. Mi
 - Explosion/TNT/falling hooks: `TntBlockMixin`, `ServerLevelExplosionMixin`, `LevelExplosionMixin`, `FallingBlockMixin`, `FallingBlockEntityMixin`.
 - Growth/fluid/fire/redstone/piston hooks: `SaplingBlockMixin`, `StemBlockMixin`, `CropBlockMixin` delegating growth source scoping to `minecraft/capture/GrowthMutationSourceScope`, plus `FlowingFluidMixin`, `FireBlockMixin`, `BlockUpdateCaptureMixin`, `BlockEventDataContextMixin`, `ScheduledTickContextMixin`, `LevelTicksContextMixin`, `ServerLevelBlockEventContextMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityContextMixin`, and `MovingPistonBlockTickerMixin` for delayed mechanism context propagation, piston capture scoping, and internal replay piston-physics suppression.
 - Client interaction hooks: `MouseHandlerMixin`, `MinecraftInteractionMixin`, `WorldOpenFlowsMixin`, `EditWorldScreenMixin`. These must only establish input suppression/selection context, world-open gating, or vanilla Edit World entry points and delegate to client services such as `LumiShortcutInteractionGate`, `WorldEntryWarningController`, and `WorldInitialBackupRestoreService`.
-- Section ownership and Axiom fallback: `ChunkAccessSectionOwnershipMixin`, `AxiomSetBufferPacketMixin`.
+- Section ownership and Axiom fallback: `ChunkAccessSectionOwnershipMixin`, `AxiomSetBufferPacketMixin`, `AxiomSetBlockPacketMixin`.
 
 ## Optional Integrations
 
@@ -231,7 +231,7 @@ Use `src/main/java/io/github/luma/integration` for external builder tool detecti
 - `integration/common/*`: capability reporting, explicit external mutation detection, opt-in stack-trace fallback gating, clipboard/schematic/selection contracts.
 - `integration/worldedit/WorldEditSessionBridge.java`: stable WorldEdit session selection, clipboard, and schematic-format bridge.
 - `integration/worldedit/WorldEditEditSessionTracker.java`: guarded WorldEdit edit-session extent capture.
-- `integration/axiom/*`: Axiom block-buffer extraction/capture helpers and experimental native undo/redo replay guards.
+- `integration/axiom/*`: Axiom block-buffer extraction/capture helpers, set-block packet source scoping, and experimental native undo/redo replay guards.
 
 ## Client Layer
 

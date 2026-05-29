@@ -760,7 +760,7 @@ Axiom:
 
 - captured capability edits replay through Lumi undo/redo;
 - tool-assisted breaks and placements use the state Lumi recorded;
-- simple Axiom place/break buffers, such as bulldozer or fast-place style hand edits, become block-scoped undo actions;
+- simple Axiom place/break buffers and set-block packets, including infinite-reach hand edits, become block-scoped undo actions;
 - Axiom does not claim stable WorldEdit-style capabilities unless a stable API exists.
 
 Other supported or conservatively captured builder paths can include FAWE-style chunk placement, Axion, AutoBuild, SimpleBuilding, Effortless Building, and Litematica/Tweakeroo placement paths when they reach normal Minecraft block or entity mutation paths. Generic Java stack-trace fallback for unsupported tools is disabled by default; start the game with `-Dlumi.externalStackDetection=true` only when diagnosing one of those paths.
