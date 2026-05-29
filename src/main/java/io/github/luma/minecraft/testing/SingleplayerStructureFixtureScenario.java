@@ -23,12 +23,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.LeverBlock;
-import net.minecraft.world.level.block.ObserverBlock;
-import net.minecraft.world.level.block.piston.PistonBaseBlock;
-import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -40,10 +35,6 @@ final class SingleplayerStructureFixtureScenario {
     private static final int FIXTURE_LOAD_FLAGS = 2;
     private static final int POST_OPERATION_SETTLE_TICKS = 8;
     private static final int MAX_UNDO_READY_EXTRA_TICKS = 80;
-    private static final FixtureSpec GENERATED_OBSERVER_PISTON_FIXTURE =
-            new FixtureSpec("observer-piston", null);
-    private static final FixtureSpec GENERATED_CLOSED_OBSERVER_PISTON_FIXTURE =
-            new FixtureSpec("closed-observer-piston", null);
 
     private final ServerLevel level;
     private final ServerPlayer player;
@@ -147,8 +138,9 @@ final class SingleplayerStructureFixtureScenario {
 
     private void discoverFixtures(MinecraftServer server, List<String> messages) {
         List<FixtureSpec> discovered = new ArrayList<>();
-        discovered.add(GENERATED_OBSERVER_PISTON_FIXTURE);
-        discovered.add(GENERATED_CLOSED_OBSERVER_PISTON_FIXTURE);
+        GeneratedRedstoneStructureFixtures.names().stream()
+                .map(name -> new FixtureSpec(name, null))
+                .forEach(discovered::add);
         discovered.addAll(this.discoverSavedFixtures(server));
         this.fixtures = List.copyOf(discovered);
         messages.add("Lumi structure fixture runner discovered " + this.fixtures.size()
@@ -178,8 +170,8 @@ final class SingleplayerStructureFixtureScenario {
         this.currentFixture = this.fixtures.get(this.fixtureIndex);
         if (this.isGeneratedFixture(this.currentFixture)) {
             this.loadGeneratedFixture(this.currentFixture);
-            this.controls = List.of(this.generatedObserverPistonControl());
-            this.record(true, this.currentFixture.name() + " generated observer piston fixture is available");
+            this.controls = GeneratedRedstoneStructureFixtures.controls(this.currentFixture.name(), this.volume);
+            this.record(true, this.currentFixture.name() + " generated redstone fixture is available");
             messages.add("Lumi structure fixture " + this.currentFixture.name()
                     + " has " + this.controls.size() + " generated control(s)");
             this.controlIndex = 0;
@@ -389,11 +381,13 @@ final class SingleplayerStructureFixtureScenario {
                         + this.baseline.diff(restored, comparisonPolicy));
             }
         }
-        if (this.isGeneratedObserverPistonFixture(this.currentFixture)) {
-            this.verifyGeneratedObserverPistonSmoke();
-        }
-        if (this.isGeneratedClosedObserverPistonFixture(this.currentFixture)) {
-            this.verifyGeneratedClosedObserverPistonSmoke();
+        if (this.isGeneratedFixture(this.currentFixture)) {
+            GeneratedRedstoneStructureFixtures.verifyUndoSmoke(
+                    this.currentFixture.name(),
+                    this.level,
+                    this.volume,
+                    this::record
+            );
         }
         messages.add("Verified undo for " + this.currentFixture.name() + " " + this.currentControl.label());
         try {
@@ -437,13 +431,9 @@ final class SingleplayerStructureFixtureScenario {
     }
 
     private StructureFixtureSnapshot.ComparisonPolicy undoComparisonPolicy() {
-        if (!this.isGeneratedClosedObserverPistonFixture(this.currentFixture)) {
-            return StructureFixtureSnapshot.exactComparison();
-        }
-        return StructureFixtureSnapshot.ignoringObserverPoweredAt(List.of(
-                this.generatedClosedObserverPistonObserverHomePos(),
-                this.generatedClosedObserverPistonPairedObserverPos()
-        ));
+        return this.isGeneratedFixture(this.currentFixture)
+                ? GeneratedRedstoneStructureFixtures.undoComparisonPolicy(this.currentFixture.name(), this.volume)
+                : StructureFixtureSnapshot.exactComparison();
     }
 
     private String redoDiff(StructureFixtureSnapshot redone) {
@@ -528,147 +518,13 @@ final class SingleplayerStructureFixtureScenario {
         }
     }
 
-    private void loadGeneratedObserverPistonFixture() {
-        this.clearVolume();
-        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
-            BlockPos support = this.generatedObserverPistonLeverPos().below();
-            BlockPos lever = this.generatedObserverPistonLeverPos();
-            BlockPos piston = this.generatedObserverPistonBasePos();
-            BlockPos observer = this.generatedObserverPistonObserverHomePos();
-
-            this.level.setBlock(support, Blocks.BLUE_CONCRETE.defaultBlockState(), FIXTURE_LOAD_FLAGS);
-            this.level.setBlock(lever, Blocks.LEVER.defaultBlockState()
-                    .setValue(LeverBlock.FACE, AttachFace.FLOOR)
-                    .setValue(LeverBlock.FACING, Direction.NORTH)
-                    .setValue(LeverBlock.POWERED, false), FIXTURE_LOAD_FLAGS);
-            this.level.setBlock(piston, Blocks.STICKY_PISTON.defaultBlockState()
-                    .setValue(PistonBaseBlock.FACING, Direction.EAST)
-                    .setValue(PistonBaseBlock.EXTENDED, false), FIXTURE_LOAD_FLAGS);
-            this.level.setBlock(observer, Blocks.OBSERVER.defaultBlockState()
-                    .setValue(ObserverBlock.FACING, Direction.EAST), FIXTURE_LOAD_FLAGS);
-        });
-    }
-
-    private void loadGeneratedClosedObserverPistonFixture() {
-        this.clearVolume();
-        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
-            BlockPos support = this.generatedObserverPistonLeverPos().below();
-            BlockPos lever = this.generatedObserverPistonLeverPos();
-            BlockPos piston = this.generatedObserverPistonBasePos();
-            BlockPos observer = this.generatedClosedObserverPistonObserverHomePos();
-            BlockPos pairedObserver = this.generatedClosedObserverPistonPairedObserverPos();
-
-            this.level.setBlock(support, Blocks.BLUE_CONCRETE.defaultBlockState(), FIXTURE_LOAD_FLAGS);
-            this.level.setBlock(lever, Blocks.LEVER.defaultBlockState()
-                    .setValue(LeverBlock.FACE, AttachFace.FLOOR)
-                    .setValue(LeverBlock.FACING, Direction.NORTH)
-                    .setValue(LeverBlock.POWERED, false), FIXTURE_LOAD_FLAGS);
-            this.level.setBlock(piston, Blocks.STICKY_PISTON.defaultBlockState()
-                    .setValue(PistonBaseBlock.FACING, Direction.UP)
-                    .setValue(PistonBaseBlock.EXTENDED, false), FIXTURE_LOAD_FLAGS);
-            this.level.setBlock(observer, Blocks.OBSERVER.defaultBlockState()
-                    .setValue(ObserverBlock.FACING, Direction.EAST), FIXTURE_LOAD_FLAGS);
-            this.level.setBlock(pairedObserver, Blocks.OBSERVER.defaultBlockState()
-                    .setValue(ObserverBlock.FACING, Direction.WEST), FIXTURE_LOAD_FLAGS);
-        });
-    }
-
     private void loadGeneratedFixture(FixtureSpec fixture) {
-        if (this.isGeneratedClosedObserverPistonFixture(fixture)) {
-            this.loadGeneratedClosedObserverPistonFixture();
-        } else {
-            this.loadGeneratedObserverPistonFixture();
-        }
-    }
-
-    private StructureFixtureControl generatedObserverPistonControl() {
-        BlockPos relative = this.generatedObserverPistonLeverPos().subtract(this.volume.min());
-        return new StructureFixtureControl(relative, this.generatedObserverPistonLeverPos(), Direction.UP,
-                "observer sticky piston lever");
-    }
-
-    private void verifyGeneratedObserverPistonSmoke() {
-        BlockPos piston = this.generatedObserverPistonBasePos();
-        BlockPos observerHome = this.generatedObserverPistonObserverHomePos();
-        BlockPos observerExtended = observerHome.east();
-
-        this.record(this.level.getBlockState(piston).is(Blocks.STICKY_PISTON)
-                        && !this.level.getBlockState(piston).getValue(PistonBaseBlock.EXTENDED),
-                this.currentFixture.name() + " rollback left sticky piston retracted");
-        this.record(this.level.getBlockState(observerHome).is(Blocks.OBSERVER),
-                this.currentFixture.name() + " rollback pulled observer back to the sticky piston");
-        this.record(this.level.getBlockState(observerExtended).isAir(),
-                this.currentFixture.name() + " rollback cleared the pushed observer cell");
-        this.record(this.countBlocks(Blocks.PISTON_HEAD) == 0,
-                this.currentFixture.name() + " rollback left no stray piston heads");
-        this.record(this.countBlocks(Blocks.MOVING_PISTON) == 0,
-                this.currentFixture.name() + " rollback left no moving piston placeholders");
-    }
-
-    private void verifyGeneratedClosedObserverPistonSmoke() {
-        BlockPos piston = this.generatedObserverPistonBasePos();
-        BlockPos observerHome = this.generatedClosedObserverPistonObserverHomePos();
-        BlockPos pairedObserver = this.generatedClosedObserverPistonPairedObserverPos();
-        BlockPos observerExtended = observerHome.above();
-
-        this.record(this.level.getBlockState(piston).is(Blocks.STICKY_PISTON)
-                        && !this.level.getBlockState(piston).getValue(PistonBaseBlock.EXTENDED),
-                this.currentFixture.name() + " rollback left vertical sticky piston retracted");
-        this.record(this.level.getBlockState(observerHome).is(Blocks.OBSERVER),
-                this.currentFixture.name() + " rollback pulled the lifted observer home");
-        this.record(this.level.getBlockState(pairedObserver).is(Blocks.OBSERVER),
-                this.currentFixture.name() + " rollback kept the facing observer in place");
-        this.record(this.level.getBlockState(observerExtended).isAir(),
-                this.currentFixture.name() + " rollback cleared the lifted observer cell");
-        this.record(this.countBlocks(Blocks.OBSERVER) == 2,
-                this.currentFixture.name() + " rollback left exactly two observers");
-        this.record(this.countBlocks(Blocks.PISTON_HEAD) == 0,
-                this.currentFixture.name() + " rollback left no orphan piston heads");
-        this.record(this.countBlocks(Blocks.MOVING_PISTON) == 0,
-                this.currentFixture.name() + " rollback left no moving piston placeholders");
-    }
-
-    private int countBlocks(Block block) {
-        int count = 0;
-        for (BlockPos pos : BlockPos.betweenClosed(this.volume.min(), this.volume.max())) {
-            if (this.level.getBlockState(pos).is(block)) {
-                count += 1;
-            }
-        }
-        return count;
-    }
-
-    private BlockPos generatedObserverPistonLeverPos() {
-        return this.volume.min().offset(2, 1, 2);
-    }
-
-    private BlockPos generatedObserverPistonBasePos() {
-        return this.volume.min().offset(3, 1, 2);
-    }
-
-    private BlockPos generatedObserverPistonObserverHomePos() {
-        return this.volume.min().offset(4, 1, 2);
-    }
-
-    private BlockPos generatedClosedObserverPistonObserverHomePos() {
-        return this.generatedObserverPistonBasePos().above();
-    }
-
-    private BlockPos generatedClosedObserverPistonPairedObserverPos() {
-        return this.generatedClosedObserverPistonObserverHomePos().east();
-    }
-
-    private boolean isGeneratedObserverPistonFixture(FixtureSpec fixture) {
-        return GENERATED_OBSERVER_PISTON_FIXTURE.equals(fixture);
-    }
-
-    private boolean isGeneratedClosedObserverPistonFixture(FixtureSpec fixture) {
-        return GENERATED_CLOSED_OBSERVER_PISTON_FIXTURE.equals(fixture);
+        this.clearVolume();
+        GeneratedRedstoneStructureFixtures.load(fixture.name(), this.level, this.volume);
     }
 
     private boolean isGeneratedFixture(FixtureSpec fixture) {
-        return this.isGeneratedObserverPistonFixture(fixture)
-                || this.isGeneratedClosedObserverPistonFixture(fixture);
+        return fixture != null && GeneratedRedstoneStructureFixtures.isGenerated(fixture.name());
     }
 
     private boolean requiresExactSnapshots() {
