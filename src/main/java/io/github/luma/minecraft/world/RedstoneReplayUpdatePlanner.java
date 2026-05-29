@@ -5,21 +5,13 @@ import java.util.LinkedHashSet;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.BasePressurePlateBlock;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.ButtonBlock;
-import net.minecraft.world.level.block.LeverBlock;
-import net.minecraft.world.level.block.TripWireBlock;
-import net.minecraft.world.level.block.TripWireHookBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.Property;
 
 /**
  * Replays neighbor notifications only when the signal-capable block itself changes.
@@ -32,6 +24,7 @@ import net.minecraft.world.level.block.state.properties.Property;
 final class RedstoneReplayUpdatePlanner {
 
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
+    private final MechanismStatePolicy mechanismStatePolicy = new MechanismStatePolicy();
 
     void propagate(ServerLevel level, BlockPos pos, BlockState currentState, BlockState targetState) {
         if (level == null || pos == null) {
@@ -90,98 +83,28 @@ final class RedstoneReplayUpdatePlanner {
 
     private boolean signalSourceBlockChanged(BlockState currentState, BlockState targetState) {
         if (currentState == null || targetState == null) {
-            return this.signalRelevant(currentState) || this.signalRelevant(targetState);
+            return this.mechanismStatePolicy.signalRelevant(currentState)
+                    || this.mechanismStatePolicy.signalRelevant(targetState);
         }
         return currentState.getBlock() != targetState.getBlock()
-                && (this.signalRelevant(currentState) || this.signalRelevant(targetState));
+                && (this.mechanismStatePolicy.signalRelevant(currentState)
+                || this.mechanismStatePolicy.signalRelevant(targetState));
     }
 
     private boolean playerInputSignalChanged(BlockState currentState, BlockState targetState) {
         if (currentState == null || targetState == null || currentState.getBlock() != targetState.getBlock()) {
             return false;
         }
-        if (!this.isPlayerInputControl(currentState) && !this.isPlayerInputControl(targetState)) {
+        if (!this.mechanismStatePolicy.isPlayerInputControl(currentState)
+                && !this.mechanismStatePolicy.isPlayerInputControl(targetState)) {
             return false;
         }
-        return this.propertyChanged(currentState, targetState, "powered")
-                || this.propertyChanged(currentState, targetState, "power");
-    }
-
-    private boolean isPlayerInputControl(BlockState state) {
-        Block block = state.getBlock();
-        return block instanceof LeverBlock
-                || block instanceof ButtonBlock
-                || block instanceof BasePressurePlateBlock
-                || block instanceof TripWireBlock
-                || block instanceof TripWireHookBlock;
-    }
-
-    private boolean propertyChanged(BlockState currentState, BlockState targetState, String propertyName) {
-        Optional<String> currentValue = this.stringPropertyValue(currentState, propertyName);
-        Optional<String> targetValue = this.stringPropertyValue(targetState, propertyName);
-        return currentValue.isPresent() && targetValue.isPresent() && !currentValue.equals(targetValue);
-    }
-
-    private boolean signalRelevant(BlockState state) {
-        return this.signalSource(state) || this.analogSignalSource(state);
-    }
-
-    private boolean signalSource(BlockState state) {
-        return state != null && state.isSignalSource();
-    }
-
-    private boolean analogSignalSource(BlockState state) {
-        return state != null && state.hasAnalogOutputSignal();
+        return this.mechanismStatePolicy.propertyChanged(currentState, targetState, "powered")
+                || this.mechanismStatePolicy.propertyChanged(currentState, targetState, "power");
     }
 
     private Optional<BlockPos> attachedNeighbor(BlockPos pos, BlockState state) {
-        if (pos == null || state == null || !this.hasProperty(state, "face")) {
-            return Optional.empty();
-        }
-
-        String face = this.stringPropertyValue(state, "face").orElse("");
-        if ("floor".equals(face)) {
-            return Optional.of(pos.below());
-        }
-        if ("ceiling".equals(face)) {
-            return Optional.of(pos.above());
-        }
-        Direction facing = this.directionProperty(state, "facing");
-        return facing == null
-                ? Optional.empty()
-                : Optional.of(pos.relative(facing.getOpposite()));
-    }
-
-    private boolean hasProperty(BlockState state, String propertyName) {
-        for (Property<?> property : state.getProperties()) {
-            if (property.getName().equals(propertyName)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private Optional<String> stringPropertyValue(BlockState state, String propertyName) {
-        if (state == null) {
-            return Optional.empty();
-        }
-        for (Property<?> property : state.getProperties()) {
-            if (property.getName().equals(propertyName)) {
-                return Optional.of(String.valueOf(state.getValue(property)).toLowerCase(Locale.ROOT));
-            }
-        }
-        return Optional.empty();
-    }
-
-    private Direction directionProperty(BlockState state, String propertyName) {
-        for (Property<?> property : state.getProperties()) {
-            if (!property.getName().equals(propertyName)) {
-                continue;
-            }
-            Comparable<?> value = state.getValue(property);
-            return value instanceof Direction direction ? direction : null;
-        }
-        return null;
+        return this.mechanismStatePolicy.attachedNeighbor(pos, state);
     }
 
     private Block sourceBlock(BlockState currentState, BlockState targetState) {
