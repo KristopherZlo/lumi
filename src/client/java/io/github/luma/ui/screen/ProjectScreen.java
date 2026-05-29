@@ -17,6 +17,7 @@ import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
+import io.github.luma.ui.controller.BranchCreationDialogStateFactory;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
@@ -25,7 +26,9 @@ import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.onboarding.OnboardingSpotlightOverlay;
 import io.github.luma.ui.onboarding.OnboardingTour;
+import io.github.luma.ui.screen.section.BranchCreationDialogView;
 import io.github.luma.ui.screen.section.ProjectScreenSections;
+import io.github.luma.ui.state.BranchCreationDialogState;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
@@ -52,9 +55,11 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectHomeScreenController stateController = new ProjectHomeScreenController();
     private final ProjectScreenController actionController = new ProjectScreenController();
+    private final BranchCreationDialogStateFactory branchDialogFactory = new BranchCreationDialogStateFactory();
     private final ScreenRouter router = new ScreenRouter();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ProjectScreenSections sections = new ProjectScreenSections(this.actionController, new SectionActions());
+    private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.actionController, new BranchDialogActions());
     private final ClientOnboardingService onboardingService;
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private OnboardingTour onboardingTour;
@@ -74,6 +79,8 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private boolean showAllSaves = false;
     private String pendingRestoreVariantId = "";
     private String pendingRestoreVersionId = "";
+    private String pendingBranchBaseVersionId = "";
+    private String branchName = "";
     private int refreshCooldown = 0;
 
     public ProjectScreen(Screen parent, String projectName) {
@@ -180,6 +187,16 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         body.child(this.sections.historySection(model));
         body.child(LumaUi.bottomSpacer());
 
+        BranchCreationDialogState branchDialog = this.branchDialogState();
+        if (branchDialog.visible() && this.onboardingTour == null) {
+            stack.child(this.branchDialogView.overlay(new BranchCreationDialogView.Model(
+                    this.projectName,
+                    this.width,
+                    branchDialog,
+                    this.shouldShowStatusBanner() ? this.bannerText() : null
+            )));
+        }
+
         if (this.onboardingTour != null && spotlightTarget != OnboardingTour.SpotlightTarget.NONE) {
             stack.child(new OnboardingSpotlightOverlay(
                     () -> this.sections.onboardingTargetComponent(spotlightTarget),
@@ -202,6 +219,10 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             return true;
         }
         if (this.onboardingTour != null) {
+            return true;
+        }
+        if (this.branchDialogState().visible() && OnboardingScreen.isEscapeKey(event)) {
+            this.closeBranchDialog();
             return true;
         }
         return super.keyPressed(event);
@@ -228,6 +249,55 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 this.pendingRestoreVersionId,
                 this.selectedLumiBounds()
         );
+    }
+
+    private BranchCreationDialogState branchDialogState() {
+        return this.branchDialogFactory.create(this.state, this.pendingBranchBaseVersionId, this.branchName);
+    }
+
+    private void createBranch(BranchCreationDialogState dialog) {
+        if (!dialog.canCreate()) {
+            return;
+        }
+        String result = this.actionController.createVariant(
+                this.projectName,
+                this.branchName.trim(),
+                dialog.baseVersion().id()
+        );
+        if ("luma.status.variant_created".equals(result)) {
+            this.pendingBranchBaseVersionId = "";
+            this.branchName = "";
+        }
+        this.refresh(result);
+    }
+
+    private void closeBranchDialog() {
+        this.pendingBranchBaseVersionId = "";
+        this.branchName = "";
+        this.refresh("luma.status.project_ready");
+    }
+
+    private final class BranchDialogActions implements BranchCreationDialogView.Actions {
+
+        @Override
+        public void updateBranchName(String value) {
+            branchName = value == null ? "" : value;
+        }
+
+        @Override
+        public boolean canCreate() {
+            return branchDialogState().canCreate();
+        }
+
+        @Override
+        public void create() {
+            createBranch(branchDialogState());
+        }
+
+        @Override
+        public void cancel() {
+            closeBranchDialog();
+        }
     }
 
     private void executeRestore(ProjectVariant variant, ProjectVersion version) {
@@ -412,6 +482,13 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         @Override
         public void openSaveDetails(String versionId) {
             router.openSaveDetails(ProjectScreen.this, projectName, versionId);
+        }
+
+        @Override
+        public void openBranchDialog(ProjectVersion version) {
+            pendingBranchBaseVersionId = version == null ? "" : version.id();
+            branchName = "";
+            refresh("luma.status.project_ready");
         }
 
         @Override

@@ -15,16 +15,20 @@ import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.controller.BranchCreationDialogStateFactory;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
+import io.github.luma.ui.screen.section.BranchCreationDialogView;
 import io.github.luma.ui.screen.section.SaveDetailsPartialRestoreSection;
+import io.github.luma.ui.state.BranchCreationDialogState;
 import io.github.luma.ui.state.PartialRestoreFormState;
 import io.github.luma.ui.state.SaveDetailsViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
@@ -32,8 +36,10 @@ import io.wispforest.owo.ui.core.Sizing;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 public final class SaveDetailsScreen extends LumaScreen {
 
@@ -44,6 +50,8 @@ public final class SaveDetailsScreen extends LumaScreen {
     private final String versionId;
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectScreenController controller = new ProjectScreenController();
+    private final BranchCreationDialogStateFactory branchDialogFactory = new BranchCreationDialogStateFactory();
+    private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.controller, new BranchDialogActions());
     private final ScreenRouter router = new ScreenRouter();
     private final PartialRestoreFormState partialRestoreForm = new PartialRestoreFormState();
     private final SaveDetailsPartialRestoreSection partialRestoreSections = new SaveDetailsPartialRestoreSection(new PartialRestoreActions());
@@ -66,6 +74,8 @@ public final class SaveDetailsScreen extends LumaScreen {
     private boolean showAdvancedInfo = false;
     private String renameVersionId = "";
     private String renameMessage = "";
+    private String pendingBranchBaseVersionId = "";
+    private String branchName = "";
     private int previewZoomStep = 1;
     private int refreshCooldown = 0;
 
@@ -92,8 +102,11 @@ public final class SaveDetailsScreen extends LumaScreen {
         root.padding(Insets.of(10));
         root.gap(0);
 
+        StackLayout stack = UIContainers.stack(Sizing.fill(100), Sizing.fill(100));
+        root.child(stack);
+
         FlowLayout frame = LumaUi.screenFrame();
-        root.child(frame);
+        stack.child(frame);
 
         FlowLayout header = LumaUi.actionRow();
         header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
@@ -134,11 +147,30 @@ public final class SaveDetailsScreen extends LumaScreen {
             body.child(this.partialRestoreSection(version, operationActive));
         }
         body.child(LumaUi.bottomSpacer());
+
+        BranchCreationDialogState branchDialog = this.branchDialogState();
+        if (branchDialog.visible()) {
+            stack.child(this.branchDialogView.overlay(new BranchCreationDialogView.Model(
+                    this.projectName,
+                    this.width,
+                    branchDialog,
+                    this.shouldShowStatusBanner() ? Component.translatable(this.state.status()) : null
+            )));
+        }
     }
 
     @Override
     public void onClose() {
         this.client.setScreen(this.parent);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (this.branchDialogState().visible() && event.key() == GLFW.GLFW_KEY_ESCAPE) {
+            this.closeBranchDialog();
+            return true;
+        }
+        return super.keyPressed(event);
     }
 
     @Override
@@ -295,7 +327,7 @@ public final class SaveDetailsScreen extends LumaScreen {
             );
         }));
 
-        ButtonComponent comparePrevious = LumaUi.iconButton("eye", Component.translatable("luma.action.compare_with_parent"), button -> this.router.openCompare(
+        ButtonComponent comparePrevious = LumaUi.iconButton("git-branch", Component.translatable("luma.action.compare_with_parent"), button -> this.router.openCompare(
                 this,
                 this.projectName,
                 this.parentVersionId(version.id()),
@@ -370,11 +402,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         deleteButton.active(this.canDeleteVersion(version) && !operationActive);
         actions.child(deleteButton);
 
-        actions.child(LumaUi.button(Component.translatable("luma.save_details.create_idea"), button -> this.router.openVariants(
-                this,
-                this.projectName,
-                version.id()
-        )));
+        actions.child(LumaUi.button(Component.translatable("luma.save_details.create_idea"), button -> this.openBranchDialog(version)));
         expanded.child(actions);
 
         FlowLayout advanced = LumaUi.actionRow();
@@ -455,6 +483,44 @@ public final class SaveDetailsScreen extends LumaScreen {
             this.renameVersionId = version.id();
             this.renameMessage = ProjectUiSupport.displayMessage(version);
         }
+    }
+
+    private BranchCreationDialogState branchDialogState() {
+        return this.branchDialogFactory.create(
+                this.state.versions(),
+                this.state.variants(),
+                this.state.operationSnapshot(),
+                this.pendingBranchBaseVersionId,
+                this.branchName
+        );
+    }
+
+    private void openBranchDialog(ProjectVersion version) {
+        this.pendingBranchBaseVersionId = version == null ? "" : version.id();
+        this.branchName = "";
+        this.refresh("luma.status.project_ready");
+    }
+
+    private void createBranch(BranchCreationDialogState dialog) {
+        if (!dialog.canCreate()) {
+            return;
+        }
+        String result = this.controller.createVariant(
+                this.projectName,
+                this.branchName.trim(),
+                dialog.baseVersion().id()
+        );
+        if ("luma.status.variant_created".equals(result)) {
+            this.pendingBranchBaseVersionId = "";
+            this.branchName = "";
+        }
+        this.refresh(result);
+    }
+
+    private void closeBranchDialog() {
+        this.pendingBranchBaseVersionId = "";
+        this.branchName = "";
+        this.refresh("luma.status.project_ready");
     }
 
     private FlowLayout advancedInfoSection(ProjectVersion version) {
@@ -634,6 +700,29 @@ public final class SaveDetailsScreen extends LumaScreen {
 
     private void rebuild() {
         this.rebuildPreservingScroll(() -> this.bodyScroll);
+    }
+
+    private final class BranchDialogActions implements BranchCreationDialogView.Actions {
+
+        @Override
+        public void updateBranchName(String value) {
+            branchName = value == null ? "" : value;
+        }
+
+        @Override
+        public boolean canCreate() {
+            return branchDialogState().canCreate();
+        }
+
+        @Override
+        public void create() {
+            createBranch(branchDialogState());
+        }
+
+        @Override
+        public void cancel() {
+            closeBranchDialog();
+        }
     }
 
     private final class PartialRestoreActions implements SaveDetailsPartialRestoreSection.Actions {

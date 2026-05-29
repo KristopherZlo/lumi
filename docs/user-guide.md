@@ -21,7 +21,7 @@ Lumi UI actions are intended for the local world owner. Capture and mutating Lum
 7. Use `Left Alt+Z` and `Left Alt+Y` to undo or redo recent tracked actions.
 8. Press `Left Alt+I` if you forget Lumi's shortcuts.
 9. Press `R` to quick rollback unsaved work to the active branch head, or only the selected area when a wooden-sword selection is active.
-10. Open a save card when you need details, restore, partial restore, compare, rename, export, or branch actions.
+10. Use the branch action on a save card to create a branch from that save, or open the save card when you need details, partial restore, rename, or delete actions.
 11. Use `Branches` for alternate build directions.
 12. Use `Import / Export` to move history packages or combine imported work.
 13. Use `More` for cleanup, manual highlight, onboarding replay, deleted saves, the history graph, and raw support ids.
@@ -243,7 +243,10 @@ Recent saves show the selected branch. Each card shows:
 - changed-block summary;
 - current-head badge when applicable;
 - `Open`;
-- `Restore this save`.
+- `Restore this save`;
+- `Create branch`.
+
+`Create branch` opens a small dialog on Build History. The dialog asks for the branch name and shows a compact preview of the save the new branch will start from. It creates the branch metadata in place; it does not move you to the `Branches` screen.
 
 Use the branch picker above recent saves to switch to another branch and restore that branch head into the world. Use `Show older saves` when the branch has more saves than the initial recent list.
 
@@ -308,7 +311,7 @@ Extra actions live under `More`:
 - rename save;
 - delete save;
 - replace latest save;
-- create branch from this save;
+- create branch from this save, using the same in-place dialog as Build History;
 - export this save;
 - raw info.
 
@@ -586,14 +589,14 @@ Branches are separate build directions inside one workspace.
 Use `Branches` to:
 
 - see the active branch;
-- create a new branch from the current build or selected save;
+- create a new branch from the current build;
 - switch the active branch;
 - open saves for one branch;
 - compare a branch against the current build;
 - merge another local branch into the current branch;
 - delete inactive branches.
 
-Creating a branch only adds a new branch head from the selected save or active branch head. It does not consume, discard, or freeze unsaved recovery draft edits.
+Creating a branch from the `Branches` tab starts from the active branch head. Creating a branch from a specific save is faster from Build History or Save details, where the save card opens an in-place dialog with the source-save preview. Branch creation only adds a new branch head from the selected save or active branch head. It does not consume, discard, or freeze unsaved recovery draft edits.
 
 Branch names stay as written. Lumi generates stable internal ids when names normalize to the same value.
 
