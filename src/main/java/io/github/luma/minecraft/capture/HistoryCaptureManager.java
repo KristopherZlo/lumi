@@ -44,14 +44,16 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public final class HistoryCaptureManager {
 
-    private static final HistoryCaptureManager INSTANCE = new HistoryCaptureManager();
     private static final Duration ACTIVE_DRAFT_FLUSH_INTERVAL = Duration.ofSeconds(3);
     private static final int IDLE_FLUSH_TICK_INTERVAL = 5;
     private static final CaptureEligibilityService ELIGIBILITY = new CaptureEligibilityService();
     private static final EntityMutationCapturePolicy ENTITY_CAPTURE_POLICY = new EntityMutationCapturePolicy();
+    private static final HistoryCaptureManager INSTANCE = new HistoryCaptureManager();
 
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final CaptureDiagnosticsLogger diagnosticsLogger = new CaptureDiagnosticsLogger();
+    private final BlockMutationCaptureGate blockMutationGate =
+            new BlockMutationCaptureGate(ELIGIBILITY, this.diagnosticsLogger);
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
     private final WorkingDraftSessionManager workingDrafts = new WorkingDraftSessionManager(this.persistenceCoordinator);
     private final LiveUndoRedoActionRecorder liveUndoRedoActionRecorder =
@@ -106,7 +108,7 @@ public final class HistoryCaptureManager {
             CompoundTag oldBlockEntity
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        boolean explicitRootSource = this.isExplicitRootSource(source);
+        boolean explicitRootSource = ELIGIBILITY.isExplicitRootSource(source);
         if (level == null
                 || pos == null
                 || !shouldCaptureMutation(source)
@@ -206,33 +208,28 @@ public final class HistoryCaptureManager {
 
         try {
             Instant now = Instant.now();
-            WorldMutationCapturePolicy.CaptureResult captureResult = ELIGIBILITY.evaluateBlockMutation(
-                    source,
-                    pos,
-                    oldState,
-                    newState,
-                    oldBlockEntity,
-                    newBlockEntity
-            );
-            if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.REJECTED) {
-                LumaDebugLog.log(
-                        "capture",
-                        "Skipped {} mutation at {} in {} because it is unsupported, unchanged, or transient: {} -> {}",
-                        source,
-                        pos,
-                        level.dimension().identifier(),
-                        oldState,
-                        newState
-                );
-                return;
-            }
+            WorldMutationCapturePolicy.CaptureResult captureResult = null;
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
             if (matchingProjects.isEmpty()) {
-                if (captureResult.decision() != WorldMutationCapturePolicy.CaptureDecision.CAPTURED
-                        || !allowsAutomaticProjectCreation(source)) {
+                if (!allowsAutomaticProjectCreation(source)) {
                     LumaDebugLog.log(
                             "capture",
                             "Skipped {} mutation at {} in {} because no tracked workspace exists and the source cannot bootstrap one",
+                            source,
+                            pos,
+                            level.dimension().identifier()
+                    );
+                    return;
+                }
+                captureResult = this.blockMutationGate.evaluate(source, pos, oldState, newState, oldBlockEntity, newBlockEntity);
+                if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.REJECTED) {
+                    this.blockMutationGate.logRejected(level, source, pos, oldState, newState);
+                    return;
+                }
+                if (captureResult.decision() != WorldMutationCapturePolicy.CaptureDecision.CAPTURED) {
+                    LumaDebugLog.log(
+                            "capture",
+                            "Skipped {} mutation at {} in {} because it cannot bootstrap a tracked workspace",
                             source,
                             pos,
                             level.dimension().identifier()
@@ -262,32 +259,53 @@ public final class HistoryCaptureManager {
                 boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
                 CaptureSessionState.DeferredActionContext deferredActionContext =
                         this.deferredActionContext(existingSession, chunk, source);
-                boolean usesDeferredStabilization = this.usesDeferredStabilization(
+                boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(
                         trackedProject.project(),
                         source
                 );
-                if (usesDeferredStabilization
-                        && !this.canUseDeferredStabilization(
-                                trackedProject.project(),
-                                source,
-                                deferredActionContext,
-                                activeSessionRegion
-                        )) {
-                    LumaDebugLog.log(
-                            trackedProject.project(),
-                            "capture",
-                            "Skipped deferred {} mutation at {} for project {} because no causal action is active",
-                            source,
-                            pos,
-                            trackedProject.project().name()
-                    );
-                    this.historyDebugLog.logSkippedDeferredBlock(
-                            trackedProject.project(),
+                if (!this.blockMutationGate.canInspectPayload(
+                        trackedProject,
+                        source,
+                        pos,
+                        existingSession != null,
+                        activeSessionRegion,
+                        deferredActionContext
+                )) {
+                    continue;
+                }
+                if (captureResult == null) {
+                    captureResult = this.blockMutationGate.evaluate(
                             source,
                             pos,
                             oldState,
                             newState,
-                            "missing-causal-action"
+                            oldBlockEntity,
+                            newBlockEntity
+                    );
+                    if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.REJECTED) {
+                        this.diagnosticsLogger.logSkippedCapture(
+                                trackedProject,
+                                source,
+                                pos,
+                                "unsupported-unchanged-or-transient",
+                                "mutation is unsupported, unchanged, or transient"
+                        );
+                        return;
+                    }
+                }
+                if (usesDeferredStabilization
+                        && !ELIGIBILITY.canUseDeferredStabilization(
+                                trackedProject.project(),
+                                source,
+                                activeSessionRegion,
+                                actionId(deferredActionContext)
+                        )) {
+                    this.diagnosticsLogger.logSkippedCapture(
+                            trackedProject,
+                            source,
+                            pos,
+                            "missing-causal-action",
+                            "no causal action is active"
                     );
                     continue;
                 }
@@ -335,7 +353,7 @@ public final class HistoryCaptureManager {
                             mutation.oldBlockEntity()
                     );
                 }
-                if (this.isExplicitRootSource(source)) {
+                if (ELIGIBILITY.isExplicitRootSource(source)) {
                     this.baselineCoordinator.captureSessionChunkBaseline(
                             trackedProject,
                             level,
@@ -553,13 +571,13 @@ public final class HistoryCaptureManager {
         boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
         CaptureSessionState.DeferredActionContext deferredActionContext =
                 this.deferredActionContext(existingSession, chunk, source);
-        boolean usesDeferredStabilization = this.usesDeferredStabilization(trackedProject.project(), source);
+        boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(trackedProject.project(), source);
         if (usesDeferredStabilization
-                && !this.canUseDeferredStabilization(
+                && !ELIGIBILITY.canUseDeferredStabilization(
                         trackedProject.project(),
                         source,
-                        deferredActionContext,
-                        activeSessionRegion
+                        activeSessionRegion,
+                        actionId(deferredActionContext)
                 )) {
             return;
         }
@@ -608,7 +626,7 @@ public final class HistoryCaptureManager {
                     mutation.oldBlockEntity()
             );
         }
-        if (this.isExplicitRootSource(source)) {
+        if (ELIGIBILITY.isExplicitRootSource(source)) {
             this.baselineCoordinator.captureSessionChunkBaseline(
                     trackedProject,
                     level,
@@ -1589,28 +1607,6 @@ public final class HistoryCaptureManager {
         this.workingDrafts.clearSessionDiagnostics(projectId);
     }
 
-    private static boolean isExplicitRootSource(io.github.luma.domain.model.WorldMutationSource source) {
-        return ELIGIBILITY.isExplicitRootSource(source);
-    }
-
-    private boolean usesDeferredStabilization(BuildProject project, io.github.luma.domain.model.WorldMutationSource source) {
-        return ELIGIBILITY.usesDeferredStabilization(project, source);
-    }
-
-    private boolean canUseDeferredStabilization(
-            BuildProject project,
-            io.github.luma.domain.model.WorldMutationSource source,
-            CaptureSessionState.DeferredActionContext deferredActionContext,
-            boolean activeSessionRegion
-    ) {
-        return ELIGIBILITY.canUseDeferredStabilization(
-                project,
-                source,
-                activeSessionRegion,
-                actionId(deferredActionContext)
-        );
-    }
-
     private void recordDeferredBlockMutation(
             TrackedProject trackedProject,
             ServerLevel level,
@@ -1628,7 +1624,7 @@ public final class HistoryCaptureManager {
         if (session == null) {
             return;
         }
-        if (this.isExplicitRootSource(source)) {
+        if (ELIGIBILITY.isExplicitRootSource(source)) {
             session.addRootChunk(chunk);
         }
         this.baselineCoordinator.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);

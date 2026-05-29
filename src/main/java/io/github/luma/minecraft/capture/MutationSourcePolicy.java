@@ -134,6 +134,28 @@ final class MutationSourcePolicy {
                 && this.canUseDeferredStabilization(source, actionId);
     }
 
+    boolean canInspectBlockMutationPayload(
+            BuildProject project,
+            WorldMutationSource source,
+            boolean hasActiveSession,
+            boolean activeSessionRegion,
+            String actionId
+    ) {
+        if (source == null) {
+            return false;
+        }
+        if (this.usesDeferredStabilization(project, source)) {
+            return this.canUseDeferredStabilization(project, source, activeSessionRegion, actionId);
+        }
+        if (!hasActiveSession) {
+            return this.allowsSessionBootstrap(source);
+        }
+        if (this.requiresActiveRegionMembership(source) && !activeSessionRegion) {
+            return false;
+        }
+        return this.canUseDirectCapture(source, actionId);
+    }
+
     boolean canReuseDeferredActionContext(WorldMutationSource source) {
         return source == WorldMutationSource.BLOCK_UPDATE
                 || source == WorldMutationSource.PISTON

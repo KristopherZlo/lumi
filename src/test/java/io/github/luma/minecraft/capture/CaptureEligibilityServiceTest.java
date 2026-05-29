@@ -30,6 +30,51 @@ class CaptureEligibilityServiceTest {
     }
 
     @Test
+    void skipsPayloadInspectionForAmbientMutationWithoutCapturePath() {
+        BuildProject wholeDimension = BuildProject.createWorldWorkspace(
+                "World",
+                "minecraft:overworld",
+                Instant.parse("2026-04-28T10:00:00Z")
+        );
+
+        assertFalse(this.eligibility.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.FLUID,
+                false,
+                false,
+                ""
+        ));
+        assertFalse(this.eligibility.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.GROWTH,
+                true,
+                true,
+                ""
+        ));
+        assertTrue(this.eligibility.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.GROWTH,
+                true,
+                true,
+                "action-1"
+        ));
+        assertTrue(this.eligibility.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.FLUID,
+                true,
+                true,
+                "action-1"
+        ));
+        assertTrue(this.eligibility.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.PLAYER,
+                false,
+                false,
+                "player-action"
+        ));
+    }
+
+    @Test
     void deferredBaselineRequiresActiveRegionAndCausalAction() {
         BuildProject wholeDimension = BuildProject.createWorldWorkspace(
                 "World",

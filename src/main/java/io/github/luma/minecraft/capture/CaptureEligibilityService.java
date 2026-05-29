@@ -83,6 +83,22 @@ final class CaptureEligibilityService {
         return this.sourcePolicy.canUseDeferredStabilization(project, source, activeSessionRegion, actionId);
     }
 
+    boolean canInspectBlockMutationPayload(
+            BuildProject project,
+            WorldMutationSource source,
+            boolean hasActiveSession,
+            boolean activeSessionRegion,
+            String actionId
+    ) {
+        return this.sourcePolicy.canInspectBlockMutationPayload(
+                project,
+                source,
+                hasActiveSession,
+                activeSessionRegion,
+                actionId
+        );
+    }
+
     boolean canUseDirectCapture(WorldMutationSource source, String actionId) {
         return this.sourcePolicy.canUseDirectCapture(source, actionId);
     }
