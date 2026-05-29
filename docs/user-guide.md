@@ -350,6 +350,8 @@ Restore path:
 - Lumi first tries direct patch replay.
 - For another branch, Lumi can plan from the current live branch through a shared saved ancestor.
 - Direct restores to `Initial` or `WORLD_ROOT` finish by replaying the saved root state for chunks touched by the rollback, so branch switches back to a root save do not rely only on reverse patches.
+- When direct replay touches redstone or mechanisms, Lumi also resolves a bounded target-state envelope off-thread. This lets restore clear stale dust, torches, repeaters, comparators, lamps, observers, dispensers, droppers, pistons, and controls without turning the operation into a full-world restore.
+- If that mechanism envelope is too large, Lumi skips direct replay and uses the existing snapshot/patch-chain restore path instead of silently slowing the operation.
 - If direct replay is not valid, Lumi falls back to checkpoint snapshot plus patch chain.
 - If required payloads are missing or corrupt, restore is rejected before the world changes.
 
@@ -397,6 +399,7 @@ Rules:
 - when a Lumi wooden-sword selection is active, the key restores only pending draft changes inside that selection and leaves the rest pending;
 - it does not move the saved branch head;
 - it applies the inverse draft through the fast action apply path;
+- for redstone/mechanism edits, full quick rollback also resolves the saved head state for the captured mechanism halo; selected quick rollback clips all writes to the selection before applying that halo;
 - it records one fresh live undo/redo action for the rollback itself.
 
 After quick rollback, press `Left Alt+Z` if you need to bring the rolled-back work back. Press `Left Alt+Y` to redo the rollback.
@@ -517,7 +520,7 @@ Lumi writes the result as a new save on the active branch. It does not move the 
 
 The applied partial restore is also undoable with `Left Alt+Z` and redoable with `Left Alt+Y`.
 
-Partial restore can target saves without a direct patch replay path from the current branch. In that case Lumi reconstructs current and target state from snapshots, baseline chunks, and patches before applying the selected region.
+Partial restore can target saves without a direct patch replay path from the current branch. In that case Lumi reconstructs current and target state from snapshots, baseline chunks, and patches before applying the selected region. Same-lineage partial restore uses the same target-state planner when the direct patch path contains redstone/mechanism states, so selected-area and everything-except-selection modes keep their write boundaries.
 
 If stored generator or datapack fingerprints no longer match the world, automatic generator regeneration is blocked and Lumi stays on the safer history/baseline path.
 

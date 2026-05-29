@@ -138,10 +138,10 @@ Restore planning prefers the cheapest valid path:
 - same-lineage rollback uses reverse patch replay
 - forward restore uses forward patch replay
 - divergent branch restore replays back to a common ancestor and forward to the target
-- whole-dimension root fallback uses tracked baseline chunks; direct root rollback reads exact baseline state only for replayed block positions
+- whole-dimension root fallback uses tracked baseline chunks; direct root rollback reads exact baseline state only for replayed block positions plus bounded redstone/mechanism reconciliation scope
 - snapshot fallback reconstructs from a checkpoint snapshot plus patch chain
 - partial restore can read only selected chunk frames when a direct patch path exists
-- non-direct partial restore reconstructs finite current and target states from snapshots, baseline chunks, and patches
+- non-direct partial restore reconstructs finite current and target states from snapshots, baseline chunks, and patches; direct partial restore switches to this target-state path when redstone/mechanism states are involved so writes stay inside the selected mode
 
 The apply layer chooses the safest fast path per prepared section:
 
@@ -158,7 +158,8 @@ Lumi's important performance work is mostly structural:
 
 - Chunk and section addressing keeps selection, storage, diff, restore, and overlay work bounded.
 - Section change masks avoid expanding sparse edits into full 4096-cell loops.
-- Direct restores to `Initial` and `WORLD_ROOT` replay sparse exact-root positions instead of expanding touched chunks into full snapshot sections.
+- Direct restores to `Initial` and `WORLD_ROOT` replay sparse exact-root positions and only expand touched redstone/mechanism sections up to a fixed reconciliation cap.
+- Direct restore and quick rollback resolve extra redstone/mechanism halo targets off-thread by exact position instead of decoding broad chunks on the tick-thread apply path.
 - Patch metadata enables seek-based selected-chunk reads.
 - Section fingerprints let diff skip equal patch sections before loading full state.
 - Block-state palette decode caches avoid parsing identical NBT states repeatedly.
