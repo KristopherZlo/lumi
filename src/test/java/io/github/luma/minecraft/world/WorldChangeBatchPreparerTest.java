@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.world;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.PatchSectionFrame;
@@ -271,6 +272,49 @@ class WorldChangeBatchPreparerTest {
         assertFalse(hint.forcesFinalReplay());
         assertFalse(hint.suppressesPostReplayMechanism());
         assertFalse(hint.suppressesPostReplayFluid());
+    }
+
+    @Test
+    void analyzedPrepareCollectsBoundedMechanismScope() throws Exception {
+        BlockPoint pos = new BlockPoint(2, 64, 3);
+
+        PreparedWorldChangeBatches analyzed = this.preparer.prepareAnalyzed(
+                null,
+                List.of(new StoredBlockChange(
+                        pos,
+                        payload(Blocks.REDSTONE_WIRE.defaultBlockState()),
+                        payload(Blocks.AIR.defaultBlockState())
+                )),
+                List.of(),
+                true
+        );
+
+        assertEquals(1, analyzed.batches().size());
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(pos));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 63, 3)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 65, 3)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(3, 64, 3)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(1, 64, 3)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 64, 4)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 64, 2)));
+        assertTrue(analyzed.mechanismReplayScope().sections().contains(new ChunkSectionPoint(0, 0, 4)));
+    }
+
+    @Test
+    void analyzedPrepareLeavesOrdinaryChangesOutOfMechanismScope() throws Exception {
+        PreparedWorldChangeBatches analyzed = this.preparer.prepareAnalyzed(
+                null,
+                List.of(new StoredBlockChange(
+                        new BlockPoint(2, 64, 3),
+                        payload(Blocks.DIRT.defaultBlockState()),
+                        payload(Blocks.STONE.defaultBlockState())
+                )),
+                List.of(),
+                true
+        );
+
+        assertEquals(1, analyzed.batches().size());
+        assertTrue(analyzed.mechanismReplayScope().isEmpty());
     }
 
     @Test

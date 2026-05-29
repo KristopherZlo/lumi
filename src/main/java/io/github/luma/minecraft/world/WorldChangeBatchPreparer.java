@@ -106,6 +106,43 @@ public final class WorldChangeBatchPreparer {
             ProgressListener progressListener,
             EntityApplyMode entityApplyMode
     ) throws IOException {
+        return this.prepareAnalyzed(
+                level,
+                changes,
+                entityChanges,
+                applyNewValues,
+                progressListener,
+                entityApplyMode
+        ).batches();
+    }
+
+    public PreparedWorldChangeBatches prepareAnalyzed(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues
+    ) throws IOException {
+        return this.prepareAnalyzed(level, changes, entityChanges, applyNewValues, ProgressListener.NO_OP);
+    }
+
+    public PreparedWorldChangeBatches prepareAnalyzed(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            ProgressListener progressListener
+    ) throws IOException {
+        return this.prepareAnalyzed(level, changes, entityChanges, applyNewValues, progressListener, EntityApplyMode.DELTA);
+    }
+
+    public PreparedWorldChangeBatches prepareAnalyzed(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            ProgressListener progressListener,
+            EntityApplyMode entityApplyMode
+    ) throws IOException {
         changes = changes == null ? List.of() : changes;
         entityChanges = entityChanges == null ? List.of() : entityChanges;
         progressListener = progressListener == null ? ProgressListener.NO_OP : progressListener;
@@ -133,6 +170,7 @@ public final class WorldChangeBatchPreparer {
             completed += 1;
             progressListener.onDecoded(completed, total);
         }
+        MechanismReplayScope mechanismReplayScope = this.mechanismScope(blockPlacements);
         Map<ChunkPoint, List<PreparedBlockPlacement>> grouped = this.connectedBlockPlacementExpander.groupByChunk(
                 this.expandMechanismChanges(blockPlacements)
         );
@@ -153,7 +191,7 @@ public final class WorldChangeBatchPreparer {
                     this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues, entityApplyMode)
             ));
         }
-        return batches;
+        return new PreparedWorldChangeBatches(batches, mechanismReplayScope);
     }
 
     public List<PreparedChunkBatch> prepareUndoRedo(
@@ -217,8 +255,27 @@ public final class WorldChangeBatchPreparer {
             ProgressListener progressListener,
             EntityApplyMode entityApplyMode
     ) throws IOException {
+        return this.prepareAnalyzed(level, changes, applyNewValues, progressListener, entityApplyMode).batches();
+    }
+
+    public PreparedWorldChangeBatches prepareAnalyzed(
+            ServerLevel level,
+            PatchSectionWorldChanges changes,
+            boolean applyNewValues,
+            ProgressListener progressListener
+    ) throws IOException {
+        return this.prepareAnalyzed(level, changes, applyNewValues, progressListener, EntityApplyMode.DELTA);
+    }
+
+    public PreparedWorldChangeBatches prepareAnalyzed(
+            ServerLevel level,
+            PatchSectionWorldChanges changes,
+            boolean applyNewValues,
+            ProgressListener progressListener,
+            EntityApplyMode entityApplyMode
+    ) throws IOException {
         if (changes == null || changes.sectionFrames().isEmpty()) {
-            return this.prepare(
+            return this.prepareAnalyzed(
                     level,
                     List.of(),
                     changes == null ? List.of() : changes.entityChanges(),
@@ -235,6 +292,7 @@ public final class WorldChangeBatchPreparer {
 
         Map<ChunkPoint, List<PreparedSectionApplyBatch>> nativeSections = new LinkedHashMap<>();
         Map<ChunkPoint, List<PreparedBlockPlacement>> sparsePlacements = new LinkedHashMap<>();
+        MechanismReplayScope.Builder mechanismScopeBuilder = MechanismReplayScope.builder();
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
         for (PatchSectionFrame frame : changes.sectionFrames()) {
             ChunkPoint chunk = new ChunkPoint(frame.chunkX(), frame.chunkZ());
@@ -247,6 +305,7 @@ public final class WorldChangeBatchPreparer {
                     progressListener,
                     blockStateDecoder
             );
+            mechanismScopeBuilder.addAll(this.mechanismScope(decoded.changes()));
             LumiSectionBuffer buffer = decoded.targetBuffer();
             List<PreparedBlockPlacement> mechanismCompanions = this.generatedMechanismCompanions(decoded.changes());
             boolean fullSection = buffer.changedCellCount() == SectionChangeMask.ENTRY_COUNT;
@@ -290,7 +349,7 @@ public final class WorldChangeBatchPreparer {
                     this.toEntityBatch(groupedEntities.getOrDefault(chunk, List.of()), applyNewValues, entityApplyMode)
             ));
         }
-        return batches;
+        return new PreparedWorldChangeBatches(batches, mechanismScopeBuilder.build());
     }
 
     private DecodedSectionChanges decodeSectionChanges(
@@ -350,6 +409,30 @@ public final class WorldChangeBatchPreparer {
         boolean mechanism = isMechanismRelated(sourceState) || isMechanismRelated(targetState);
         boolean forceFinalReplay = mechanism && (targetState == null || targetState.isAir());
         return PreparedBlockPlacement.ReplayHint.of(forceFinalReplay, fluid, mechanism);
+    }
+
+    private MechanismReplayScope mechanismScope(
+            List<ConnectedBlockPlacementExpander.ChangePlacement> changes
+    ) {
+        MechanismReplayScope.Builder builder = MechanismReplayScope.builder();
+        for (ConnectedBlockPlacementExpander.ChangePlacement change : changes == null
+                ? List.<ConnectedBlockPlacementExpander.ChangePlacement>of()
+                : changes) {
+            if (change == null || change.placement() == null || change.placement().pos() == null) {
+                continue;
+            }
+            BlockState sourceState = change.sourceState();
+            BlockState targetState = change.placement().state();
+            if (!isMechanismRelated(sourceState) && !isMechanismRelated(targetState)) {
+                continue;
+            }
+            BlockPos pos = change.placement().pos();
+            builder.addMechanismPosition(pos);
+            builder.addSignalHalo(pos);
+            MECHANISM_STATE_POLICY.attachedNeighbor(pos, sourceState).ifPresent(builder::addContextPosition);
+            MECHANISM_STATE_POLICY.attachedNeighbor(pos, targetState).ifPresent(builder::addContextPosition);
+        }
+        return builder.build();
     }
 
     private static boolean isFluidRelated(BlockState state) {
