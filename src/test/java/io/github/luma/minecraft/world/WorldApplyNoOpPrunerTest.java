@@ -45,6 +45,18 @@ class WorldApplyNoOpPrunerTest {
     }
 
     @Test
+    void keepsMechanismSuppressionReplayEvenWhenLiveStateAlreadyMatches() {
+        PreparedBlockPlacement placement = new PreparedBlockPlacement(
+                new BlockPos(4, 64, 4),
+                Blocks.AIR.defaultBlockState(),
+                null,
+                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_MECHANISM
+        );
+
+        assertTrue(this.pruner.shouldKeepNoOpReplay(placement, new LongOpenHashSet()));
+    }
+
+    @Test
     void keepsExactReplayNextToRealUpdate() {
         BlockPos pos = new BlockPos(4, 64, 4);
         LongOpenHashSet updatedPositions = new LongOpenHashSet();

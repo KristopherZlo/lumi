@@ -172,6 +172,38 @@ class ExactReplayStateQueueTest {
     }
 
     @Test
+    void mechanismReplayHintGuardsAirTargetsAndSuppressesCallbacks() {
+        ExactReplayStateQueue queue = new ExactReplayStateQueue();
+        ExactReplayStateGuard guard = new ExactReplayStateGuard();
+        ExactReplayTargetPolicy targetPolicy = new ExactReplayTargetPolicy();
+        BlockPos pos = new BlockPos(1, 64, 1);
+        PreparedBlockPlacement placement = new PreparedBlockPlacement(
+                pos,
+                Blocks.AIR.defaultBlockState(),
+                null,
+                PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY_AND_SUPPRESS_POST_REPLAY_MECHANISM
+        );
+
+        queue.record(batch(placement));
+
+        assertEquals(1, queue.pendingCount());
+        assertTrue(queue.hasRecordedPlacements());
+        assertEquals(1, queue.takeRecordedPlacements().size());
+        assertTrue(targetPolicy.requiresFinalReplay(placement));
+        assertTrue(targetPolicy.requiresPostReplayGuard(placement));
+        assertTrue(guard.shouldGuard(placement));
+
+        List<BlockPos> callbackPositions = guard.callbackSuppressionPositions(placement);
+        assertTrue(callbackPositions.contains(pos));
+        assertTrue(callbackPositions.contains(pos.north()));
+        assertTrue(callbackPositions.contains(pos.south()));
+        assertTrue(callbackPositions.contains(pos.east()));
+        assertTrue(callbackPositions.contains(pos.west()));
+        assertTrue(callbackPositions.contains(pos.above()));
+        assertTrue(callbackPositions.contains(pos.below()));
+    }
+
+    @Test
     void nativeSectionReplayHintGuardsAirTargetsWithoutFinalReplay() {
         ExactReplayStateQueue queue = new ExactReplayStateQueue();
         int localIndex = SectionChangeMask.localIndex(1, 2, 3);

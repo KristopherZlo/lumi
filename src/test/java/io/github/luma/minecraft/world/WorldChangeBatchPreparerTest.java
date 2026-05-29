@@ -25,6 +25,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorldChangeBatchPreparerTest {
 
@@ -234,6 +236,41 @@ class WorldChangeBatchPreparerTest {
 
         assertEquals(placements.size(), batch.placements().size());
         assertEquals(0, batch.nativeSections().size());
+    }
+
+    @Test
+    void mechanismRemovalReplayHintForcesFinalReplayAndSuppressesCallbacks() {
+        PreparedBlockPlacement.ReplayHint hint = WorldChangeBatchPreparer.replayHintFor(
+                Blocks.REDSTONE_TORCH.defaultBlockState(),
+                Blocks.AIR.defaultBlockState()
+        );
+
+        assertTrue(hint.forcesFinalReplay());
+        assertTrue(hint.suppressesPostReplayMechanism());
+        assertFalse(hint.suppressesPostReplayFluid());
+    }
+
+    @Test
+    void mechanismTargetReplayHintSuppressesStaleCallbacks() {
+        PreparedBlockPlacement.ReplayHint hint = WorldChangeBatchPreparer.replayHintFor(
+                Blocks.AIR.defaultBlockState(),
+                Blocks.COMPARATOR.defaultBlockState()
+        );
+
+        assertTrue(hint.suppressesPostReplayMechanism());
+        assertFalse(hint.suppressesPostReplayFluid());
+    }
+
+    @Test
+    void ordinaryStoneReplayHintStaysPlain() {
+        PreparedBlockPlacement.ReplayHint hint = WorldChangeBatchPreparer.replayHintFor(
+                Blocks.DIRT.defaultBlockState(),
+                Blocks.STONE.defaultBlockState()
+        );
+
+        assertFalse(hint.forcesFinalReplay());
+        assertFalse(hint.suppressesPostReplayMechanism());
+        assertFalse(hint.suppressesPostReplayFluid());
     }
 
     @Test

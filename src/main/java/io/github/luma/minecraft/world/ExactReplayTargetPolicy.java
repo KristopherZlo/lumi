@@ -39,6 +39,7 @@ final class ExactReplayTargetPolicy {
         return placement != null
                 && placement.state() != null
                 && (placement.replayHint().suppressesPostReplayFluid()
+                || placement.replayHint().suppressesPostReplayMechanism()
                 || this.requiresPostReplayGuard(placement.state()));
     }
 

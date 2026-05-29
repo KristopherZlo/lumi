@@ -28,6 +28,7 @@ public final class WorldChangeBatchPreparer {
     private final ConnectedBlockPlacementExpander connectedBlockPlacementExpander = new ConnectedBlockPlacementExpander();
     private final PistonMechanismPlacementExpander pistonMechanismPlacementExpander = new PistonMechanismPlacementExpander();
     private final SectionApplySafetyClassifier sectionApplySafetyClassifier = new SectionApplySafetyClassifier();
+    private static final MechanismStatePolicy MECHANISM_STATE_POLICY = new MechanismStatePolicy();
     private final Supplier<BlockStateDecoder> blockStateDecoderFactory;
 
     public WorldChangeBatchPreparer() {
@@ -344,12 +345,20 @@ public final class WorldChangeBatchPreparer {
         return new DecodedSectionChanges(builder.build(), List.copyOf(decodedChanges));
     }
 
-    private static PreparedBlockPlacement.ReplayHint replayHintFor(BlockState sourceState, BlockState targetState) {
-        return PreparedBlockPlacement.ReplayHint.of(false, isFluidRelated(sourceState) || isFluidRelated(targetState));
+    static PreparedBlockPlacement.ReplayHint replayHintFor(BlockState sourceState, BlockState targetState) {
+        boolean fluid = isFluidRelated(sourceState) || isFluidRelated(targetState);
+        boolean mechanism = isMechanismRelated(sourceState) || isMechanismRelated(targetState);
+        boolean forceFinalReplay = mechanism && (targetState == null || targetState.isAir());
+        return PreparedBlockPlacement.ReplayHint.of(forceFinalReplay, fluid, mechanism);
     }
 
     private static boolean isFluidRelated(BlockState state) {
         return state != null && !state.getFluidState().isEmpty();
+    }
+
+    private static boolean isMechanismRelated(BlockState state) {
+        return MECHANISM_STATE_POLICY.isMechanismRelevant(state)
+                || MECHANISM_STATE_POLICY.shouldSuppressReplayCallbacks(state);
     }
 
     private BlockState[] decodePalette(
