@@ -92,6 +92,11 @@ final class SingleplayerPerformanceMonitor {
                 "total=" + this.millis(this.totalSyncNanos) + " ms across " + this.syncSliceCount + " slices"
         ));
         checks.add(new PerformanceCheck(
+                "Recorded world operations completed without failure",
+                this.failedOperationLabels().isEmpty(),
+                "failedOperations=" + this.failedOperationLabels()
+        ));
+        checks.add(new PerformanceCheck(
                 "Undo, redo, and quick rollback remained action-scoped instead of broad world work",
                 this.maxOperationUnits("undo-action", "redo-action", "quick-rollback") <= MAX_ACTION_APPLY_BLOCKS,
                 "maxActionUnits=" + this.maxOperationUnits("undo-action", "redo-action", "quick-rollback")
@@ -119,6 +124,16 @@ final class SingleplayerPerformanceMonitor {
             }
         }
         return max;
+    }
+
+    private List<String> failedOperationLabels() {
+        List<String> labels = new ArrayList<>();
+        for (OperationMetric metric : this.operations.values()) {
+            if (metric.failed) {
+                labels.add(metric.label);
+            }
+        }
+        return labels;
     }
 
     private int maxRestoreUnitsWithoutInitialSnapshot() {

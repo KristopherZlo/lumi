@@ -30,6 +30,54 @@ class SingleplayerPerformanceMonitorTest {
     }
 
     @Test
+    void flagsSlowPostSetupTickSlicesAsTpsRegression() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordSyncSlice("Project setup", Duration.ofSeconds(2).toNanos());
+        monitor.recordSyncSlice("Break grass support fallout", Duration.ofMillis(1_500).toNanos());
+
+        SingleplayerPerformanceMonitor.PerformanceCheck tickCheck = checkContaining(
+                monitor,
+                "Largest post-project Lumi test tick slice"
+        );
+
+        assertFalse(tickCheck.passed());
+        assertTrue(tickCheck.detail().contains("Break grass support fallout"));
+    }
+
+    @Test
+    void flagsAccumulatedSaveAndWorldLoadSyncOverhead() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordSyncSlice("Open world", Duration.ofMillis(900).toNanos());
+        monitor.recordSyncSlice("Create world workspace", Duration.ofMillis(900).toNanos());
+        monitor.recordSyncSlice("Verify save", Duration.ofMillis(900).toNanos());
+        monitor.recordSyncSlice("Reopen world", Duration.ofMillis(900).toNanos());
+        monitor.recordSyncSlice("Load project home", Duration.ofMillis(900).toNanos());
+        monitor.recordSyncSlice("Load save details", Duration.ofMillis(900).toNanos());
+
+        SingleplayerPerformanceMonitor.PerformanceCheck totalCheck = checkContaining(
+                monitor,
+                "Total synchronous Lumi test overhead"
+        );
+
+        assertFalse(totalCheck.passed());
+        assertTrue(totalCheck.detail().contains("5400"));
+    }
+
+    @Test
+    void flagsFailedSaveRestoreAndWorldOperations() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordOperationSnapshot(snapshot("save-version", 1, OperationStage.FAILED, "Patch write failed"));
+
+        SingleplayerPerformanceMonitor.PerformanceCheck failureCheck = checkContaining(
+                monitor,
+                "Recorded world operations completed without failure"
+        );
+
+        assertFalse(failureCheck.passed());
+        assertTrue(failureCheck.detail().contains("save-version"));
+    }
+
+    @Test
     void flagsLineageFullChunkRestoreAsLoadRegression() {
         SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
         monitor.recordSyncSlice("Project setup", Duration.ofMillis(20).toNanos());
@@ -114,5 +162,15 @@ class SingleplayerPerformanceMonitorTest {
                 detail,
                 NOW.plusMillis(10)
         );
+    }
+
+    private static SingleplayerPerformanceMonitor.PerformanceCheck checkContaining(
+            SingleplayerPerformanceMonitor monitor,
+            String label
+    ) {
+        return monitor.checks().stream()
+                .filter(check -> check.label().contains(label))
+                .findFirst()
+                .orElseThrow();
     }
 }

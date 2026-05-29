@@ -71,6 +71,34 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
+    void tickHotPathsDoNotSampleJavaStacks() throws IOException {
+        List<Path> offenders = javaFiles(
+                MAIN_SOURCES.resolve("io/github/luma/mixin"),
+                MAIN_SOURCES.resolve("io/github/luma/minecraft/capture"),
+                MAIN_SOURCES.resolve("io/github/luma/minecraft/world")
+        ).stream()
+                .filter(path -> sourceContainsAny(path, ".getStackTrace(", "StackWalker", "new Throwable("))
+                .toList();
+
+        assertTrue(offenders.isEmpty(), "Tick hot paths must not allocate stack traces: " + offenders);
+    }
+
+    @Test
+    void worldApplyTickPathDoesNotImportStorageDecoders() throws IOException {
+        List<Path> offenders = javaFiles(MAIN_SOURCES.resolve("io/github/luma/minecraft/world")).stream()
+                .filter(path -> importsAny(
+                        path,
+                        "io.github.luma.storage",
+                        "com.google.gson",
+                        "net.jpountz.lz4",
+                        "net.minecraft.nbt.NbtIo"
+                ))
+                .toList();
+
+        assertTrue(offenders.isEmpty(), "World apply tick path must receive prepared work, not decode storage payloads: " + offenders);
+    }
+
+    @Test
     void clientCodeDoesNotImportStorageRepositoriesDirectly() throws IOException {
         List<Path> offenders = javaFiles(CLIENT_SOURCES.resolve("io/github/luma")).stream()
                 .filter(path -> importsAny(path, "io.github.luma.storage.repository"))
@@ -110,6 +138,21 @@ class ArchitectureGuardrailsTest {
         }
         for (String packagePrefix : packagePrefixes) {
             if (source.contains("import " + packagePrefix + ".")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean sourceContainsAny(Path path, String... patterns) {
+        String source;
+        try {
+            source = Files.readString(path);
+        } catch (IOException exception) {
+            throw new IllegalStateException(exception);
+        }
+        for (String pattern : patterns) {
+            if (source.contains(pattern)) {
                 return true;
             }
         }
