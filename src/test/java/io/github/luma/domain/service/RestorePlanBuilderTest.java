@@ -84,8 +84,36 @@ class RestorePlanBuilderTest {
 
         assertEquals(root, plan.anchor());
         assertEquals(List.of("patch-0002"), plan.patchChain().stream().map(PatchMetadata::id).toList());
+        assertEquals(List.of(touchedChunk), plan.baselineGaps());
+    }
+
+    @Test
+    void worldRootAnchoredPatchPlanCanIncludeDivergentPathBaselineChunks() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("world-project-scoped.mbp"));
+        ChunkPoint targetChunk = new ChunkPoint(2, 0);
+        ChunkPoint divergentChunk = new ChunkPoint(5, 1);
+        ChunkPoint unrelatedChunk = new ChunkPoint(9, 3);
+        for (ChunkPoint chunk : List.of(targetChunk, divergentChunk, unrelatedChunk)) {
+            this.snapshotWriter.writeFile(
+                    layout,
+                    this.baselineChunkRepository.filePath(layout, chunk),
+                    snapshot(chunk)
+            );
+        }
+        this.patchMetaRepository.save(layout, patchMetadata("patch-0002", "v0002", targetChunk));
+        ProjectVersion root = version("v0001", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion target = version("v0002", "v0001", "", List.of("patch-0002"));
+
+        RestorePlan plan = this.builder.build(
+                layout,
+                wholeDimensionProject(),
+                List.of(root, target),
+                target,
+                List.of(divergentChunk)
+        );
+
         assertEquals(2, plan.baselineGaps().size());
-        assertTrue(plan.baselineGaps().containsAll(List.of(touchedChunk, untouchedChunk)));
+        assertTrue(plan.baselineGaps().containsAll(List.of(targetChunk, divergentChunk)));
     }
 
     private static BuildProject project() {

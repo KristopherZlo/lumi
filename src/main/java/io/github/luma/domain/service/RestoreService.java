@@ -101,6 +101,10 @@ public final class RestoreService {
     private final VersionLineageService lineageService = new VersionLineageService();
     private final RestoreRequestResolver requestResolver = new RestoreRequestResolver();
     private final RestorePlanBuilder restorePlanBuilder = new RestorePlanBuilder();
+    private final WorldRootRestoreBaselineScope worldRootBaselineScope = new WorldRootRestoreBaselineScope(
+            this.restorePlanBuilder,
+            this.chunkCollector
+    );
     private final RestorePayloadLoader payloadLoader = new RestorePayloadLoader();
     private final BlockTargetStateResolver blockTargetStateResolver = new BlockTargetStateResolver();
     private final RestoreMechanismReconciliationPlanner mechanismReconciliationPlanner =
@@ -318,7 +322,16 @@ public final class RestoreService {
                     return this.decodeWorldRootRestore(layout, project, level, progressSink);
                 }
                 progressSink.update(OperationStage.PREPARING, 0, 1, "Planning restore");
-                RestorePlan plan = this.restorePlanBuilder.build(layout, project, versions, version);
+                RestorePlan plan = this.restorePlanBuilder.build(
+                        layout,
+                        project,
+                        versions,
+                        version,
+                        this.chunkCollector.mergeChunks(
+                                this.worldRootFallbackBaselineScope(layout, project, versions, variants, version),
+                                this.chunkCollector.touchedChunksForDraft(pendingDraft)
+                        )
+                );
                 LumaMod.LOGGER.info(
                         "Restore plan for project {} uses anchor={}, patches={}, baselineGaps={}",
                         project.name(),
@@ -401,7 +414,13 @@ public final class RestoreService {
             );
         }
 
-        RestorePlan plan = this.restorePlanBuilder.build(layout, project, versions, targetVersion);
+        RestorePlan plan = this.restorePlanBuilder.build(
+                layout,
+                project,
+                versions,
+                targetVersion,
+                this.worldRootFallbackBaselineScope(layout, project, versions, variants, targetVersion)
+        );
         return new RestorePlanSummary(
                 RestorePlanMode.BASELINE_CHUNKS,
                 this.chunkCollector.mergeChunks(this.touchedChunksForPlan(plan), pendingChunks),
@@ -1602,6 +1621,23 @@ public final class RestoreService {
         return plan == null || plan.isDivergent() ? null : plan;
     }
 
+    private List<ChunkPoint> worldRootFallbackBaselineScope(
+            ProjectLayout layout,
+            io.github.luma.domain.model.BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVersion targetVersion
+    ) throws IOException {
+        DirectRestorePatchPlan plan = this.directRestorePatchPlan(project, versions, variants, targetVersion);
+        return this.worldRootBaselineScope.resolve(
+                layout,
+                project,
+                versions,
+                targetVersion,
+                plan == null ? List.of() : plan.allVersions()
+        );
+    }
+
     private List<ProjectVersion> pathFromHeadToAncestor(
             Map<String, ProjectVersion> versionMap,
             ProjectVersion headVersion,
@@ -1972,46 +2008,6 @@ public final class RestoreService {
             }
         }
         return total;
-    }
-
-    record DirectRestorePatchPlan(List<ProjectVersion> reverseVersions, List<ProjectVersion> forwardVersions) {
-
-        private static DirectRestorePatchPlan empty() {
-            return new DirectRestorePatchPlan(List.of(), List.of());
-        }
-
-        DirectRestorePatchPlan {
-            reverseVersions = reverseVersions == null ? List.of() : List.copyOf(reverseVersions);
-            forwardVersions = forwardVersions == null ? List.of() : List.copyOf(forwardVersions);
-        }
-
-        private int stepCount() {
-            return this.reverseVersions.size() + this.forwardVersions.size();
-        }
-
-        private boolean isDivergent() {
-            return !this.reverseVersions.isEmpty() && !this.forwardVersions.isEmpty();
-        }
-
-        private List<ProjectVersion> allVersions() {
-            List<ProjectVersion> versions = new ArrayList<>(this.stepCount());
-            versions.addAll(this.reverseVersions);
-            versions.addAll(this.forwardVersions);
-            return List.copyOf(versions);
-        }
-
-        private String modeLabel() {
-            if (this.reverseVersions.isEmpty() && this.forwardVersions.isEmpty()) {
-                return "no-op";
-            }
-            if (this.reverseVersions.isEmpty()) {
-                return "forward";
-            }
-            if (this.forwardVersions.isEmpty()) {
-                return "reverse";
-            }
-            return "divergent";
-        }
     }
 
     record ExactRootStateRestorePlan(boolean append, List<ChunkPoint> chunks) {

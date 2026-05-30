@@ -13,6 +13,7 @@ import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.SnapshotReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +34,16 @@ final class RestorePlanBuilder {
             BuildProject project,
             List<ProjectVersion> versions,
             ProjectVersion targetVersion
+    ) throws IOException {
+        return this.build(layout, project, versions, targetVersion, List.of());
+    }
+
+    RestorePlan build(
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            ProjectVersion targetVersion,
+            Collection<ChunkPoint> requiredBaselineChunks
     ) throws IOException {
         RestoreChain chain = this.resolveChain(versions, targetVersion);
         LumaDebugLog.log(
@@ -63,7 +74,7 @@ final class RestorePlanBuilder {
             }
         }
 
-        List<ChunkPoint> baselineGaps = this.baselineSources(layout, project, chain, restoredChunks);
+        List<ChunkPoint> baselineGaps = this.baselineSources(layout, project, chain, restoredChunks, requiredBaselineChunks);
         LumaDebugLog.log(
                 project,
                 "restore",
@@ -108,19 +119,32 @@ final class RestorePlanBuilder {
             ProjectLayout layout,
             BuildProject project,
             RestoreChain chain,
-            Map<String, ChunkPoint> restoredChunks
+            Map<String, ChunkPoint> restoredChunks,
+            Collection<ChunkPoint> requiredBaselineChunks
     ) throws IOException {
         if (!project.tracksWholeDimension()) {
             return List.of();
         }
         if (chain.anchor().versionKind() == VersionKind.WORLD_ROOT) {
-            return this.baselineChunkRepository.listChunks(layout);
+            Map<String, ChunkPoint> chunks = new LinkedHashMap<>(restoredChunks);
+            for (ChunkPoint chunk : requiredBaselineChunks == null ? List.<ChunkPoint>of() : requiredBaselineChunks) {
+                putChunk(chunks, chunk);
+            }
+            List<ChunkPoint> existing = new ArrayList<>();
+            for (ChunkPoint chunk : chunks.values()) {
+                if (this.baselineChunkRepository.contains(layout, chunk)) {
+                    existing.add(chunk);
+                }
+            }
+            return List.copyOf(existing);
         }
         return this.baselineChunkRepository.listMissingChunks(layout, List.copyOf(restoredChunks.values()));
     }
 
     private static void putChunk(Map<String, ChunkPoint> chunks, ChunkPoint chunk) {
-        chunks.put(chunk.x() + ":" + chunk.z(), chunk);
+        if (chunk != null) {
+            chunks.put(chunk.x() + ":" + chunk.z(), chunk);
+        }
     }
 
 }

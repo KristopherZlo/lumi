@@ -172,7 +172,7 @@ class RestoreServiceTest {
                 new ProjectVariant("feature", "feature", "v0001", "v0004", false, NOW)
         );
 
-        RestoreService.DirectRestorePatchPlan plan = service.directRestorePatchPlan(
+        DirectRestorePatchPlan plan = service.directRestorePatchPlan(
                 project("main"),
                 versions,
                 variants,
@@ -191,7 +191,7 @@ class RestoreServiceTest {
         RestoreService service = new RestoreService();
         ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
         ProjectVersion head = version("v0002", "main", "v0001");
-        RestoreService.DirectRestorePatchPlan plan = new RestoreService.DirectRestorePatchPlan(List.of(head), List.of());
+        DirectRestorePatchPlan plan = new DirectRestorePatchPlan(List.of(head), List.of());
 
         assertTrue(service.shouldAppendExactRootState(initial, null, plan));
     }
@@ -201,7 +201,7 @@ class RestoreServiceTest {
         RestoreService service = new RestoreService();
         ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
         ProjectVersion head = version("v0002", "main", "v0001");
-        RestoreService.DirectRestorePatchPlan plan = new RestoreService.DirectRestorePatchPlan(List.of(head), List.of());
+        DirectRestorePatchPlan plan = new DirectRestorePatchPlan(List.of(head), List.of());
 
         assertTrue(service.shouldAppendExactRootState(root, null, plan));
     }
@@ -211,7 +211,7 @@ class RestoreServiceTest {
         RestoreService service = new RestoreService();
         ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
 
-        assertFalse(service.shouldAppendExactRootState(initial, null, new RestoreService.DirectRestorePatchPlan(List.of(), List.of())));
+        assertFalse(service.shouldAppendExactRootState(initial, null, new DirectRestorePatchPlan(List.of(), List.of())));
     }
 
     @Test
@@ -231,7 +231,7 @@ class RestoreServiceTest {
                 layout,
                 initial,
                 draftInChunks(List.of(new ChunkPoint(7, 2))),
-                new RestoreService.DirectRestorePatchPlan(List.of(head), List.of())
+                new DirectRestorePatchPlan(List.of(head), List.of())
         );
 
         assertTrue(plan.append());
@@ -261,7 +261,7 @@ class RestoreServiceTest {
                 layout,
                 root,
                 draftInChunks(List.of(new ChunkPoint(7, 2))),
-                new RestoreService.DirectRestorePatchPlan(List.of(head), List.of())
+                new DirectRestorePatchPlan(List.of(head), List.of())
         );
 
         assertTrue(plan.append());
@@ -512,6 +512,42 @@ class RestoreServiceTest {
 
         assertEquals(1.0D, x(aligned.entityChanges().getFirst().oldValue()));
         assertEquals(3.0D, x(aligned.entityChanges().getFirst().newValue()));
+    }
+
+    @Test
+    void worldRootFallbackBaselineScopeIncludesOnlyDivergentRestorePathChunks(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        ChunkPoint mainChunk = new ChunkPoint(2, 0);
+        ChunkPoint branchChunk = new ChunkPoint(5, 1);
+        this.savePatchMetadata(layout, "patch-0002", "v0002", List.of(mainChunk));
+        this.savePatchMetadata(layout, "patch-0003", "v0003", List.of(branchChunk));
+        BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW)
+                .withActiveVariantId("feature", NOW);
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT),
+                version("v0002", "main", "v0001", "", List.of("patch-0002")),
+                version("v0003", "feature", "v0001", "", List.of("patch-0003"))
+        );
+        List<ProjectVariant> variants = List.of(
+                new ProjectVariant("main", "main", "v0001", "v0002", true, NOW),
+                new ProjectVariant("feature", "feature", "v0001", "v0003", false, NOW)
+        );
+
+        DirectRestorePatchPlan plan = service.directRestorePatchPlan(project, versions, variants, versions.get(1));
+        List<ChunkPoint> chunks = new WorldRootRestoreBaselineScope(
+                new RestorePlanBuilder(),
+                new RestoreChunkCollector(this.patchMetaRepository)
+        ).resolve(
+                layout,
+                project,
+                versions,
+                versions.get(1),
+                plan.allVersions()
+        );
+
+        assertEquals(2, chunks.size());
+        assertTrue(chunks.containsAll(List.of(mainChunk, branchChunk)));
     }
 
     @Test
