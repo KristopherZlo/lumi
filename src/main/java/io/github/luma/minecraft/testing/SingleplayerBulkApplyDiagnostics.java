@@ -12,7 +12,7 @@ import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedSectionApplyBatch;
 import io.github.luma.minecraft.world.SectionApplySafetyClassifier;
-import io.github.luma.minecraft.world.SectionChangeMask;
+import io.github.luma.domain.model.SectionChangeMask;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.time.Duration;
 import java.util.ArrayList;

@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.SectionChangeMask;
+
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
 import it.unimi.dsi.fastutil.shorts.ShortSet;
 import java.util.LinkedHashMap;

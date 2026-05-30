@@ -1,4 +1,4 @@
-package io.github.luma.minecraft.world;
+package io.github.luma.domain.model;
 
 import java.util.BitSet;
 import java.util.function.IntConsumer;

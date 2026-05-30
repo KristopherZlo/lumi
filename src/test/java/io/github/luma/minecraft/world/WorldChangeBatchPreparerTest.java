@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.SectionChangeMask;
+
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkPoint;

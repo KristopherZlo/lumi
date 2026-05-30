@@ -13,7 +13,7 @@ import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
-import io.github.luma.minecraft.world.SectionChangeMask;
+import io.github.luma.domain.model.SectionChangeMask;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

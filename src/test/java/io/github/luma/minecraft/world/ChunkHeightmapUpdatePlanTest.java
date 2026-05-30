@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.SectionChangeMask;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

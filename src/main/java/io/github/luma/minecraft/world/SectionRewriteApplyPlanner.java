@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.SectionChangeMask;
+
 import io.github.luma.minecraft.world.PersistentBlockStatePolicy.PersistentBlockState;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;

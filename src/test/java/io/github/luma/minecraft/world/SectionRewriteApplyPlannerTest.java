@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.SectionChangeMask;
+
 import io.github.luma.domain.model.ChunkPoint;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;

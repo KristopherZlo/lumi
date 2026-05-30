@@ -9,7 +9,7 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
-import io.github.luma.minecraft.world.SectionChangeMask;
+import io.github.luma.domain.model.SectionChangeMask;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import java.io.IOException;

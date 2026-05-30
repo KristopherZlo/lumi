@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.SectionChangeMask;
+
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.util.Iterator;

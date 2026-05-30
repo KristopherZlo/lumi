@@ -4,7 +4,7 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuilderChangeSurfacePolicy;
 import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.StoredBlockChange;
-import io.github.luma.minecraft.world.SectionChangeMask;
+import io.github.luma.domain.model.SectionChangeMask;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;

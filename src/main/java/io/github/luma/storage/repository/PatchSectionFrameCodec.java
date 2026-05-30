@@ -6,7 +6,7 @@ import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
-import io.github.luma.minecraft.world.SectionChangeMask;
+import io.github.luma.domain.model.SectionChangeMask;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;

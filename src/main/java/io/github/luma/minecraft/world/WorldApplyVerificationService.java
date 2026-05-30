@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.SectionChangeMask;
+
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.LinkedHashMap;
