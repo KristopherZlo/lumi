@@ -14,6 +14,7 @@ import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRequest;
+import io.github.luma.domain.model.PendingRestoreCompletion;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -501,6 +502,14 @@ public final class RestoreService {
         if (partialDraft.draft().isEmpty()) {
             throw new IllegalArgumentException("Partial restore has no changes inside the selected region");
         }
+        ProjectVersion stagedVersion = this.versionService.stagePartialRestoreVersion(
+                layout,
+                project,
+                partialDraft.draft(),
+                this.partialRestoreMessage(request),
+                partialDraft.draft().actor(),
+                progressSinkNoOp()
+        );
         List<PreparedChunkBatch> decodedBatches = this.decodeStoredChanges(
                 level,
                 partialDraft.draft().changes(),
@@ -524,6 +533,7 @@ public final class RestoreService {
                         pendingDraft,
                         request,
                         partialDraft.draft(),
+                        stagedVersion,
                         batches.size()
                 )
         );
@@ -766,18 +776,24 @@ public final class RestoreService {
             RecoveryDraft pendingDraft,
             PartialRestoreRequest request,
             RecoveryDraft partialDraft,
+            ProjectVersion stagedVersion,
             int batchCount
     ) throws IOException {
-        this.versionService.writeVersion(
+        this.recoveryRepository.savePendingRestoreCompletion(layout, PendingRestoreCompletion.partial(
+                project.id().toString(),
+                partialDraft.variantId(),
+                stagedVersion.id(),
+                Instant.now(),
+                request.bounds(),
+                request.restoreMode()
+        ));
+        this.versionService.publishStagedVersion(
                 level,
                 layout,
                 project,
+                stagedVersion,
                 partialDraft,
-                this.partialRestoreMessage(request),
-                partialDraft.actor(),
-                VersionKind.PARTIAL_RESTORE,
-                true,
-                progressSinkNoOp()
+                true
         );
         this.recordPartialRestoreUndoAction(level, project, request, partialDraft);
         this.rewritePendingDraftAfterPartialRestore(layout, pendingDraft, request.bounds(), request.restoreMode());
@@ -788,6 +804,7 @@ public final class RestoreService {
                 request.targetVersionId(),
                 partialDraft.variantId()
         ));
+        this.recoveryRepository.deletePendingRestoreCompletion(layout);
         HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
         LumaMod.LOGGER.info(
                 "Completed partial restore for project {} to version {} with {} chunk batches and {} changes",
@@ -876,6 +893,12 @@ public final class RestoreService {
             RestoreUndoAction restoreUndoAction
     ) throws IOException {
         Instant now = Instant.now();
+        this.recoveryRepository.savePendingRestoreCompletion(layout, PendingRestoreCompletion.full(
+                project.id().toString(),
+                targetVariant.id(),
+                version.id(),
+                now
+        ));
         List<ProjectVariant> latestVariants = this.variantRepository.loadAll(layout);
         LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_RESTORE_METADATA_WRITE);
         this.variantRepository.save(layout, this.replaceVariantHead(
@@ -898,6 +921,7 @@ public final class RestoreService {
                 version.id(),
                 targetVariant.id()
         ));
+        this.recoveryRepository.deletePendingRestoreCompletion(layout);
         HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
         LumaMod.LOGGER.info(
                 "Completed restore for project {} to version {} on variant {} with {} prepared chunk batches",

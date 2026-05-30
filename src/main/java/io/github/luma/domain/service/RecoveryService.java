@@ -43,6 +43,7 @@ public final class RecoveryService {
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
+    private final RestoreCompletionRecoveryService restoreCompletionRecoveryService = new RestoreCompletionRecoveryService();
 
     public Optional<RecoveryDraft> loadDraft(MinecraftServer server, String projectName) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
@@ -187,6 +188,7 @@ public final class RecoveryService {
                 .filter(snapshot -> !snapshot.terminal())
                 .isPresent();
         if (!activeOperation) {
+            this.restoreCompletionRecoveryService.completePending(layout, project, server);
             this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
         }
     }

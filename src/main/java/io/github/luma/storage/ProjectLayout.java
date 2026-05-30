@@ -94,6 +94,10 @@ public record ProjectLayout(Path root) {
         return this.recoveryDir().resolve("last-restore-return.json");
     }
 
+    public Path pendingRestoreCompletionFile() {
+        return this.recoveryDir().resolve("pending-restore-completion.json");
+    }
+
     public Path previewFile(String versionId) {
         return StoragePathPolicy.resolveStorageFile(this.previewsDir(), versionId, ".png", "preview version id");
     }

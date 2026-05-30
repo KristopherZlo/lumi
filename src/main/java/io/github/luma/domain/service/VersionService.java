@@ -361,6 +361,31 @@ public final class VersionService {
         );
     }
 
+    ProjectVersion stagePartialRestoreVersion(
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String message,
+            String author,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
+        return this.writeVersion(
+                null,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                VersionKind.PARTIAL_RESTORE,
+                false,
+                "",
+                progressSink,
+                false,
+                false,
+                null
+        );
+    }
+
     private ProjectVersion writeVersion(
             ServerLevel level,
             ProjectLayout layout,
@@ -372,6 +397,38 @@ public final class VersionService {
             boolean schedulePreview,
             String parentVersionIdOverride,
             WorldOperationManager.ProgressSink progressSink,
+            VersionSaveTimingBuilder timing
+    ) throws IOException {
+        return this.writeVersion(
+                level,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                versionKind,
+                schedulePreview,
+                parentVersionIdOverride,
+                progressSink,
+                true,
+                true,
+                timing
+        );
+    }
+
+    private ProjectVersion writeVersion(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String message,
+            String author,
+            VersionKind versionKind,
+            boolean schedulePreview,
+            String parentVersionIdOverride,
+            WorldOperationManager.ProgressSink progressSink,
+            boolean publishHead,
+            boolean allowSnapshotCapture,
             VersionSaveTimingBuilder timing
     ) throws IOException {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
@@ -456,8 +513,9 @@ public final class VersionService {
         boolean createSnapshot;
         sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure("save", "VersionService.snapshotPolicy", "project=" + project.name())) {
-            createSnapshot = (parentVersionId == null || parentVersionId.isBlank())
-                    || this.snapshotPlanner.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind);
+            createSnapshot = allowSnapshotCapture
+                    && ((parentVersionId == null || parentVersionId.isBlank())
+                    || this.snapshotPlanner.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind));
         } finally {
             recordTiming(timing, VersionSaveTiming.SNAPSHOT_POLICY, sectionStartedAt);
         }
@@ -525,29 +583,18 @@ public final class VersionService {
         try (var ignored = LumaLoadLog.measure("save", "VersionService.writeVersionManifests", "version=" + version.id())) {
             LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VERSION_MANIFEST_WRITE);
             this.versionRepository.save(layout, version);
-            LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
-            this.variantRepository.save(layout, this.replaceVariant(variants, new ProjectVariant(
-                    activeVariant.id(),
-                    activeVariant.name(),
-                    activeVariant.baseVersionId(),
-                    version.id(),
-                    activeVariant.main(),
-                    activeVariant.createdAt()
-            )));
-            this.projectRepository.save(layout, project.withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION).withUpdatedAt(now));
-            this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                    now,
-                    "version-saved",
-                    this.resolveJournalMessage(version.versionKind()),
-                    version.id(),
-                    activeVariant.id()
-            ));
+            if (publishHead) {
+                this.publishVersionMetadata(layout, project, variants, activeVariant, version, now);
+            }
         } finally {
             recordTiming(timing, VersionSaveTiming.MANIFEST_WRITE, sectionStartedAt);
         }
-        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
+        if (publishHead && level != null) {
+            HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
+        }
         LumaMod.LOGGER.info(
-                "Committed version {} for project {} with snapshot={} and patch={}",
+                "{} version {} for project {} with snapshot={} and patch={}",
+                publishHead ? "Committed" : "Staged",
                 version.id(),
                 project.name(),
                 version.snapshotId(),
@@ -569,6 +616,57 @@ public final class VersionService {
         }
 
         return version;
+    }
+
+    void publishStagedVersion(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            ProjectVersion version,
+            RecoveryDraft draftForPreview,
+            boolean schedulePreview
+    ) throws IOException {
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        ProjectVariant activeVariant = variants.stream()
+                .filter(variant -> variant.id().equals(version.variantId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Variant is missing for staged version " + version.variantId()));
+        this.publishVersionMetadata(layout, project, variants, activeVariant, version, Instant.now());
+        if (level != null) {
+            HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
+        }
+        if (schedulePreview && project.settings().previewGenerationEnabled() && level != null) {
+            List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+            Bounds3i bounds = this.previewBoundsResolver.resolve(layout, project, versions, version, draftForPreview, level);
+            this.previewCaptureRequestService.queue(layout, version.id(), project.dimensionId(), bounds);
+        }
+    }
+
+    private void publishVersionMetadata(
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVariant> variants,
+            ProjectVariant activeVariant,
+            ProjectVersion version,
+            Instant now
+    ) throws IOException {
+        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
+        this.variantRepository.save(layout, this.replaceVariant(variants, new ProjectVariant(
+                activeVariant.id(),
+                activeVariant.name(),
+                activeVariant.baseVersionId(),
+                version.id(),
+                activeVariant.main(),
+                activeVariant.createdAt()
+        )));
+        this.projectRepository.save(layout, project.withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION).withUpdatedAt(now));
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                now,
+                "version-saved",
+                this.resolveJournalMessage(version.versionKind()),
+                version.id(),
+                activeVariant.id()
+        ));
     }
 
     private ProjectVersion writeVersionFromOperationDraft(

@@ -1,7 +1,10 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.PartialRestoreMode;
+import io.github.luma.domain.model.PendingRestoreCompletion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.StatePayload;
@@ -222,6 +225,27 @@ class RecoveryRepositoryTest {
         this.repository.deleteRestoreReturnPoint(layout);
 
         assertTrue(this.repository.loadRestoreReturnPoint(layout).isEmpty());
+    }
+
+    @Test
+    void roundTripsPendingPartialRestoreCompletion() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        PendingRestoreCompletion completion = PendingRestoreCompletion.partial(
+                "project",
+                "main",
+                "v0002",
+                Instant.parse("2026-04-20T10:10:00Z"),
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(15, 80, 15)),
+                PartialRestoreMode.SELECTED_AREA
+        );
+
+        this.repository.savePendingRestoreCompletion(layout, completion);
+
+        assertEquals(completion, this.repository.loadPendingRestoreCompletion(layout).orElseThrow());
+
+        this.repository.deletePendingRestoreCompletion(layout);
+
+        assertTrue(this.repository.loadPendingRestoreCompletion(layout).isEmpty());
     }
 
     private static RecoveryDraft draft(String blockId, Instant updatedAt) {

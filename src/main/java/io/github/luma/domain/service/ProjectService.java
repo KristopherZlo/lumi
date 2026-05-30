@@ -52,6 +52,7 @@ public final class ProjectService {
     private final SnapshotCaptureService snapshotCaptureService = new SnapshotCaptureService();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
+    private final RestoreCompletionRecoveryService restoreCompletionRecoveryService = new RestoreCompletionRecoveryService();
     private final HistoryMigrationService historyMigrationService = new HistoryMigrationService();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
@@ -131,6 +132,7 @@ public final class ProjectService {
             ProjectLayout layout = this.resolveLayout(server, project.name());
             this.historyMigrationService.migrate(layout, project);
             if (!activeOperation) {
+                this.restoreCompletionRecoveryService.completePending(layout, project, server);
                 this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
             }
             if (!project.tracksWholeDimension()) {

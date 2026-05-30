@@ -3,6 +3,7 @@ package io.github.luma.storage.repository;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import io.github.luma.LumaMod;
+import io.github.luma.domain.model.PendingRestoreCompletion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestoreReturnPoint;
@@ -164,6 +165,36 @@ public final class RecoveryRepository {
 
     public void deleteRestoreReturnPoint(ProjectLayout layout) throws IOException {
         Files.deleteIfExists(layout.restoreReturnPointFile());
+    }
+
+    public Optional<PendingRestoreCompletion> loadPendingRestoreCompletion(ProjectLayout layout) throws IOException {
+        Path file = layout.pendingRestoreCompletionFile();
+        if (!Files.exists(file)) {
+            return Optional.empty();
+        }
+        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            PendingRestoreCompletion completion = GsonProvider.gson().fromJson(reader, PendingRestoreCompletion.class);
+            return completion == null ? Optional.empty() : Optional.of(completion);
+        } catch (JsonSyntaxException exception) {
+            StorageIo.quarantineCorruptedFile(file, exception);
+            return Optional.empty();
+        }
+    }
+
+    public void savePendingRestoreCompletion(
+            ProjectLayout layout,
+            PendingRestoreCompletion completion
+    ) throws IOException {
+        if (completion == null) {
+            throw new IllegalArgumentException("Pending restore completion is required");
+        }
+        StorageIo.writeAtomically(layout.pendingRestoreCompletionFile(), output -> output.write(
+                GsonProvider.compactGson().toJson(completion).getBytes(StandardCharsets.UTF_8)
+        ));
+    }
+
+    public void deletePendingRestoreCompletion(ProjectLayout layout) throws IOException {
+        Files.deleteIfExists(layout.pendingRestoreCompletionFile());
     }
 
     private boolean shouldCompact(ProjectLayout layout) throws IOException {
