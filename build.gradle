@@ -33,6 +33,7 @@ repositories {
 sourceSets.create('baselineGametest')
 sourceSets.create('idleGametest')
 sourceSets.create('baselineIdleGametest')
+sourceSets.create('historyJourneyGametest')
 
 def lumiStartupProfileEnabled = providers.gradleProperty('lumi.startupProfile')
         .map { it.toBoolean() }
@@ -94,6 +95,16 @@ loom {
             vmArg '-Dfabric.client.gametest'
             vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
         }
+
+        historyJourneyClientGameTest {
+            inherit client
+            configName = 'Lumi History Journey Client GameTest'
+            runDir = 'build/run/historyJourneyClientGameTest'
+            source sourceSets.historyJourneyGametest
+            vmArg '-Dfabric.client.gametest'
+            vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
+            vmArg '-Dlumi.clientLoadLog=true'
+        }
     }
 }
 
@@ -127,6 +138,16 @@ sourceSets {
     }
 
     baselineIdleGametest {
+        compileClasspath += sourceSets.main.compileClasspath
+        compileClasspath += sourceSets.client.compileClasspath
+        runtimeClasspath += output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+        runtimeClasspath += sourceSets.client.runtimeClasspath
+    }
+
+    historyJourneyGametest {
+        compileClasspath += sourceSets.main.output
+        compileClasspath += sourceSets.client.output
         compileClasspath += sourceSets.main.compileClasspath
         compileClasspath += sourceSets.client.compileClasspath
         runtimeClasspath += output
@@ -423,7 +444,8 @@ def writeQuietClientRuntimeOptions = { String runDirPath ->
         'runClientGameTest': 'build/run/clientGameTest',
         'runBaselineClientGameTest': 'build/run/baselineClientGameTest',
         'runIdleClientGameTest': 'build/run/idleClientGameTest',
-        'runBaselineIdleClientGameTest': 'build/run/baselineIdleClientGameTest'
+        'runBaselineIdleClientGameTest': 'build/run/baselineIdleClientGameTest',
+        'runHistoryJourneyClientGameTest': 'build/run/historyJourneyClientGameTest'
 ].each { taskName, runDirPath ->
     tasks.named(taskName).configure {
         doFirst {
@@ -449,6 +471,7 @@ tasks.named('runClientGameTest').configure {
  'runBaselineClientGameTest',
  'runIdleClientGameTest',
  'runBaselineIdleClientGameTest',
+ 'runHistoryJourneyClientGameTest',
  'runProductionClientGameTest'].each { taskName ->
     tasks.named(taskName).configure {
         dependsOn(purgeDevRuntimeSelfMods)
@@ -457,7 +480,7 @@ tasks.named('runClientGameTest').configure {
 
 def configureNoLumiClientGameTest = { String taskName, String sourceSetName ->
     tasks.named(taskName).configure {
-        def devSourceSets = ['main', 'client', 'gametest', 'baselineGametest', 'idleGametest', 'baselineIdleGametest']
+        def devSourceSets = ['main', 'client', 'gametest', 'baselineGametest', 'idleGametest', 'baselineIdleGametest', 'historyJourneyGametest']
         def excludedGroups = devSourceSets.findAll { it != sourceSetName }.collectMany { name ->
             ["/build/classes/java/${name}", "/build/resources/${name}"]
         }
