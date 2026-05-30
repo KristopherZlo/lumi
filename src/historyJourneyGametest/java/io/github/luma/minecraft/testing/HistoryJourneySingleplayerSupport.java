@@ -1,10 +1,13 @@
 package io.github.luma.minecraft.testing;
 
 import java.util.List;
+import java.util.Optional;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.players.NameAndId;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.world.level.block.Blocks;
 
 @SuppressWarnings("UnstableApiUsage")
@@ -24,7 +27,13 @@ final class HistoryJourneySingleplayerSupport {
             if (players.isEmpty()) {
                 throw new IllegalStateException("No singleplayer test player is available");
             }
-            stabilize(server.overworld(), players.getFirst());
+            ServerPlayer player = players.getFirst();
+            server.getPlayerList().op(
+                    new NameAndId(player.getGameProfile()),
+                    Optional.of(LevelBasedPermissionSet.GAMEMASTER),
+                    Optional.of(false)
+            );
+            stabilize(server.overworld(), player);
         });
         singleplayer.getClientWorld().waitForChunksRender();
     }
