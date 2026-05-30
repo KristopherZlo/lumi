@@ -1,18 +1,12 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
-import io.github.luma.domain.model.BlockPoint;
-import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
-import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PendingRestoreCompletion;
 import io.github.luma.domain.model.PendingRestoreCompletionKind;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
-import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
-import io.github.luma.domain.model.StoredBlockChange;
-import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -23,7 +17,6 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 
 /**
@@ -36,6 +29,7 @@ final class RestoreCompletionRecoveryService {
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final PartialRestoreDraftRewriter partialRestoreDraftRewriter = new PartialRestoreDraftRewriter();
 
     void completePending(
             ProjectLayout layout,
@@ -63,7 +57,12 @@ final class RestoreCompletionRecoveryService {
                 ));
         this.publishHead(layout, project, completion.variantId(), version.id());
         if (completion.kind() == PendingRestoreCompletionKind.PARTIAL_RESTORE) {
-            this.rewritePendingDraftAfterPartialRestore(layout, completion.partialBounds(), completion.partialMode());
+            this.partialRestoreDraftRewriter.preserveOutsideRestoredRegion(
+                    layout,
+                    this.recoveryRepository.loadDraft(layout).orElse(null),
+                    completion.partialBounds(),
+                    completion.partialMode()
+            );
             this.appendJournalIfMissing(
                     layout,
                     "partial-restore-completed",
@@ -123,40 +122,6 @@ final class RestoreCompletionRecoveryService {
                 .withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION));
     }
 
-    private void rewritePendingDraftAfterPartialRestore(
-            ProjectLayout layout,
-            Bounds3i bounds,
-            PartialRestoreMode mode
-    ) throws IOException {
-        RecoveryDraft pendingDraft = this.recoveryRepository.loadDraft(layout).orElse(null);
-        if (pendingDraft == null || pendingDraft.isEmpty()) {
-            this.recoveryRepository.deleteDraft(layout);
-            return;
-        }
-        PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
-        List<StoredBlockChange> remaining = pendingDraft.changes().stream()
-                .filter(change -> !effectiveMode.includes(bounds.contains(change.pos())))
-                .toList();
-        List<StoredEntityChange> remainingEntities = pendingDraft.entityChanges().stream()
-                .filter(change -> !effectiveMode.includes(this.entityChangeInside(change, bounds)))
-                .toList();
-        if (remaining.isEmpty() && remainingEntities.isEmpty()) {
-            this.recoveryRepository.deleteDraft(layout);
-            return;
-        }
-        this.recoveryRepository.saveDraft(layout, new RecoveryDraft(
-                pendingDraft.projectId(),
-                pendingDraft.variantId(),
-                pendingDraft.baseVersionId(),
-                pendingDraft.actor(),
-                pendingDraft.mutationSource(),
-                pendingDraft.startedAt(),
-                Instant.now(),
-                remaining,
-                remainingEntities
-        ));
-    }
-
     private void appendJournalIfMissing(
             ProjectLayout layout,
             String action,
@@ -179,13 +144,4 @@ final class RestoreCompletionRecoveryService {
         }
     }
 
-    private boolean entityChangeInside(StoredEntityChange change, Bounds3i bounds) {
-        if (change == null || bounds == null) {
-            return false;
-        }
-        BlockPos pos = change.newValue() == null
-                ? change.oldValue().blockPos()
-                : change.newValue().blockPos();
-        return bounds.contains(BlockPoint.from(pos));
-    }
 }

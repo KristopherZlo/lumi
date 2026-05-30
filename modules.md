@@ -116,6 +116,7 @@ Use `src/main/java/io/github/luma/domain/service` for business workflows and pro
 - `PreviewBoundsResolver`: changed-region bounds for previews, filtered through builder-visible changes.
 - `PreviewColumnSampler`, `IsometricPreviewRenderer`: preview scene sampling/render helpers.
 - `PartialRestorePlanner`: selected-region restore planning and filtering.
+- `PartialRestoreDraftRewriter`: shared post-restore recovery-draft rewrite that preserves only out-of-scope pending changes.
 - `BuilderChangeSurfacePolicy`: shared builder-visible block-change rule for stats, diffs, overlays, and preview framing.
 - `ChangeStatsFactory`: change stats, patch metadata summaries, pending summaries.
 - `ChunkSelectionFactory`: chunk list derivation from bounds or changes.

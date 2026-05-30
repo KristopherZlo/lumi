@@ -96,6 +96,7 @@ public final class RestoreService {
     private final VersionService versionService = new VersionService();
     private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
     private final PartialRestoreTargetStatePlanner partialRestoreTargetStatePlanner = new PartialRestoreTargetStatePlanner();
+    private final PartialRestoreDraftRewriter partialRestoreDraftRewriter = new PartialRestoreDraftRewriter();
     private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
@@ -795,7 +796,12 @@ public final class RestoreService {
                 true
         );
         this.recordPartialRestoreUndoAction(level, project, request, partialDraft);
-        this.rewritePendingDraftAfterPartialRestore(layout, pendingDraft, request.bounds(), request.restoreMode());
+        this.partialRestoreDraftRewriter.preserveOutsideRestoredRegion(
+                layout,
+                pendingDraft,
+                request.bounds(),
+                request.restoreMode()
+        );
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
                 "partial-restore-completed",
@@ -840,40 +846,6 @@ public final class RestoreService {
             return "Restore around selection to " + request.targetVersionId();
         }
         return "Restore selection from " + request.targetVersionId();
-    }
-
-    private void rewritePendingDraftAfterPartialRestore(
-            ProjectLayout layout,
-            RecoveryDraft pendingDraft,
-            io.github.luma.domain.model.Bounds3i bounds,
-            PartialRestoreMode mode
-    ) throws IOException {
-        if (pendingDraft == null || pendingDraft.isEmpty()) {
-            this.recoveryRepository.deleteDraft(layout);
-            return;
-        }
-        PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
-        List<StoredBlockChange> remaining = pendingDraft.changes().stream()
-                .filter(change -> !effectiveMode.includes(bounds.contains(change.pos())))
-                .toList();
-        List<StoredEntityChange> remainingEntities = pendingDraft.entityChanges().stream()
-                .filter(change -> !effectiveMode.includes(this.entityChangeInside(change, bounds)))
-                .toList();
-        if (remaining.isEmpty() && remainingEntities.isEmpty()) {
-            this.recoveryRepository.deleteDraft(layout);
-            return;
-        }
-        this.recoveryRepository.saveDraft(layout, new RecoveryDraft(
-                pendingDraft.projectId(),
-                pendingDraft.variantId(),
-                pendingDraft.baseVersionId(),
-                pendingDraft.actor(),
-                pendingDraft.mutationSource(),
-                pendingDraft.startedAt(),
-                Instant.now(),
-                remaining,
-                remainingEntities
-        ));
     }
 
     private static WorldOperationManager.ProgressSink progressSinkNoOp() {
