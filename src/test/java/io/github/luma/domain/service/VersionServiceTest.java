@@ -17,9 +17,13 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
+import io.github.luma.storage.repository.RecoveryRepository;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -31,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VersionServiceTest {
@@ -142,6 +147,49 @@ class VersionServiceTest {
     }
 
     @Test
+    void failedOperationDraftWriteKeepsOperationDraftHidden() throws Exception {
+        VersionService service = new VersionService();
+        RecoveryRepository recoveryRepository = new RecoveryRepository();
+        UUID projectId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("failed-operation.mbp"));
+        BuildProject project = project(projectId);
+        RecoveryDraft draft = new RecoveryDraft(
+                projectId.toString(),
+                "missing-variant",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                instant(10),
+                instant(20),
+                List.of(change(1, "minecraft:stone", "minecraft:gold_block"))
+        );
+        recoveryRepository.saveOperationDraft(layout, draft);
+
+        InvocationTargetException exception = assertThrows(
+                InvocationTargetException.class,
+                () -> writeVersionFromOperationDraft(service).invoke(
+                        service,
+                        null,
+                        layout,
+                        project,
+                        draft,
+                        "save",
+                        "tester",
+                        VersionKind.MANUAL,
+                        false,
+                        "",
+                        draft.baseVersionId(),
+                        (WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
+                        }
+                )
+        );
+
+        assertTrue(exception.getCause() instanceof IllegalArgumentException);
+        assertTrue(recoveryRepository.loadDraft(layout).isEmpty());
+        assertTrue(recoveryRepository.loadOperationDraft(layout).isPresent());
+    }
+
+    @Test
     void versionsSinceSnapshotTreatsWorldRootAsAnchor() {
         VersionService service = new VersionService();
         List<ProjectVersion> versions = List.of(
@@ -230,6 +278,25 @@ class VersionServiceTest {
 
     private static Instant instant(long seconds) {
         return Instant.parse("2026-04-21T00:00:00Z").plusSeconds(seconds);
+    }
+
+    private static Method writeVersionFromOperationDraft(VersionService service) throws NoSuchMethodException {
+        Method method = service.getClass().getDeclaredMethod(
+                "writeVersionFromOperationDraft",
+                net.minecraft.server.level.ServerLevel.class,
+                ProjectLayout.class,
+                BuildProject.class,
+                RecoveryDraft.class,
+                String.class,
+                String.class,
+                VersionKind.class,
+                boolean.class,
+                String.class,
+                String.class,
+                WorldOperationManager.ProgressSink.class
+        );
+        method.setAccessible(true);
+        return method;
     }
 
     private static StoredEntityChange entityChange(String entityId, double oldX, double newX) {

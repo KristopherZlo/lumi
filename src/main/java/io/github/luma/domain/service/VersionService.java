@@ -173,27 +173,22 @@ public final class VersionService {
             WorldOperationManager.ProgressSink progressSink,
             VersionSaveTimingBuilder timing
     ) throws IOException {
-        try {
-            IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, progressSink, timing);
-            RecoveryDraft draft = isolatedDraft.draft();
-            this.writeVersionFromOperationDraft(
-                    level,
-                    layout,
-                    project,
-                    draft,
-                    message,
-                    author,
-                    versionKind,
-                    true,
-                    "",
-                    draft.baseVersionId(),
-                    progressSink,
-                    timing
-            );
-        } catch (IOException | RuntimeException exception) {
-            this.restoreOperationDraftIfNoLiveDraft(layout, project);
-            throw exception;
-        }
+        IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, progressSink, timing);
+        RecoveryDraft draft = isolatedDraft.draft();
+        this.writeVersionFromOperationDraft(
+                level,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                versionKind,
+                true,
+                "",
+                draft.baseVersionId(),
+                progressSink,
+                timing
+        );
     }
 
     private void runAmendVersionOperation(
@@ -204,59 +199,54 @@ public final class VersionService {
             String author,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
-        try {
-            IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, progressSink, null);
-            RecoveryDraft draft = isolatedDraft.draft();
-            List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
-            ProjectVariant activeVariant = variants.stream()
-                    .filter(variant -> variant.id().equals(project.activeVariantId()))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
-            if (activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
-                throw new IllegalArgumentException("Current branch has no head version to amend");
-            }
-
-            ProjectVersion headVersion = this.versionRepository.load(layout, activeVariant.headVersionId())
-                    .orElseThrow(() -> new IllegalArgumentException("Head version is missing: " + activeVariant.headVersionId()));
-            RecoveryDraft amendedDraft = this.buildAmendedDraft(layout, project, activeVariant, headVersion, draft);
-            if (amendedDraft.isEmpty()) {
-                throw new IllegalArgumentException("Amend would produce an empty version");
-            }
-            LumaDebugLog.log(
-                    project,
-                    "save",
-                    "Amending head {} on variant {} for project {}: headChanges + draftChanges -> {} merged changes",
-                    headVersion.id(),
-                    activeVariant.id(),
-                    project.name(),
-                    amendedDraft.changes().size()
-            );
-
-            String amendMessage = message == null || message.isBlank() ? "Amended version" : message;
-            ProjectVersion amendedVersion = this.writeVersionFromOperationDraft(
-                    level,
-                    layout,
-                    project,
-                    amendedDraft,
-                    amendMessage,
-                    author,
-                    VersionKind.MANUAL,
-                    true,
-                    headVersion.parentVersionId(),
-                    headVersion.id(),
-                    progressSink
-            );
-            this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                    Instant.now(),
-                    "version-amended",
-                    "Amended active branch head",
-                    amendedVersion.id(),
-                    activeVariant.id()
-            ));
-        } catch (IOException | RuntimeException exception) {
-            this.restoreOperationDraftIfNoLiveDraft(layout, project);
-            throw exception;
+        IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, progressSink, null);
+        RecoveryDraft draft = isolatedDraft.draft();
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        ProjectVariant activeVariant = variants.stream()
+                .filter(variant -> variant.id().equals(project.activeVariantId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
+        if (activeVariant.headVersionId() == null || activeVariant.headVersionId().isBlank()) {
+            throw new IllegalArgumentException("Current branch has no head version to amend");
         }
+
+        ProjectVersion headVersion = this.versionRepository.load(layout, activeVariant.headVersionId())
+                .orElseThrow(() -> new IllegalArgumentException("Head version is missing: " + activeVariant.headVersionId()));
+        RecoveryDraft amendedDraft = this.buildAmendedDraft(layout, project, activeVariant, headVersion, draft);
+        if (amendedDraft.isEmpty()) {
+            throw new IllegalArgumentException("Amend would produce an empty version");
+        }
+        LumaDebugLog.log(
+                project,
+                "save",
+                "Amending head {} on variant {} for project {}: headChanges + draftChanges -> {} merged changes",
+                headVersion.id(),
+                activeVariant.id(),
+                project.name(),
+                amendedDraft.changes().size()
+        );
+
+        String amendMessage = message == null || message.isBlank() ? "Amended version" : message;
+        ProjectVersion amendedVersion = this.writeVersionFromOperationDraft(
+                level,
+                layout,
+                project,
+                amendedDraft,
+                amendMessage,
+                author,
+                VersionKind.MANUAL,
+                true,
+                headVersion.parentVersionId(),
+                headVersion.id(),
+                progressSink
+        );
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                Instant.now(),
+                "version-amended",
+                "Amended active branch head",
+                amendedVersion.id(),
+                activeVariant.id()
+        ));
     }
 
     private IsolatedDraft isolateVersionDraft(
@@ -646,9 +636,6 @@ public final class VersionService {
             this.recoveryRepository.deleteOperationDraft(layout);
             recordTiming(timing, VersionSaveTiming.OPERATION_DRAFT_DELETE, sectionStartedAt);
             return version;
-        } catch (IOException | RuntimeException exception) {
-            this.restoreOperationDraftIfNoLiveDraft(layout, project);
-            throw exception;
         } finally {
             recordTiming(timing, VersionSaveTiming.BACKGROUND_TOTAL, backgroundStartedAt);
         }
@@ -674,24 +661,6 @@ public final class VersionService {
                     project.name(),
                     previousHeadVersionId,
                     exception
-            );
-        }
-    }
-
-    private void restoreOperationDraftIfNoLiveDraft(ProjectLayout layout, BuildProject project) {
-        try {
-            this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project)
-                    .ifPresent(draft -> LumaDebugLog.log(
-                            project,
-                            "save",
-                            "Restored operation draft for project {} after save/amend failure",
-                            project.name()
-                    ));
-        } catch (IOException recoveryException) {
-            LumaMod.LOGGER.warn(
-                    "Failed to restore operation draft for project {} after save/amend failure",
-                    project.name(),
-                    recoveryException
             );
         }
     }
