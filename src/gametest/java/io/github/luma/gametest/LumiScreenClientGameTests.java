@@ -473,6 +473,11 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         }
 
         @Override
+        public void openBranchDialog(ProjectVersion version) {
+            this.lastAction = "openBranchDialog";
+        }
+
+        @Override
         public void selectVariant(String variantId) {
             this.lastAction = "selectVariant";
         }
