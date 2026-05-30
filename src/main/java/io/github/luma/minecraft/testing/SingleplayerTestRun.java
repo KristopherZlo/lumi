@@ -442,7 +442,7 @@ final class SingleplayerTestRun {
 
     private void startBranchSave(MinecraftServer server) throws Exception {
         this.branch = this.variantService.createVariant(server, this.project.name(), "Testing branch", "");
-        this.variantService.switchVariant(this.level, this.project.name(), this.branch.id(), false);
+        this.variantService.activateVariantMetadataOnlyForTesting(server, this.project.name(), this.branch.id());
         WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
         try {
             this.level.setBlock(this.volume.markerA(), Blocks.GOLD_BLOCK.defaultBlockState(), 3);

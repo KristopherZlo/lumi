@@ -24,10 +24,12 @@ import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VariantServiceTest {
@@ -77,6 +79,34 @@ class VariantServiceTest {
                 List.of("main", "variant", "variant-2"),
                 new VariantRepository().loadAll(layout).stream().map(ProjectVariant::id).toList()
         );
+    }
+
+    @Test
+    void normalSwitchVariantApiDoesNotExposeMetadataOnlyBypass() {
+        assertThrows(
+                NoSuchMethodException.class,
+                () -> VariantService.class.getMethod("switchVariant", ServerLevel.class, String.class, String.class, boolean.class)
+        );
+    }
+
+    @Test
+    void metadataOnlyActivationIsExplicitTestingHelper() throws IOException {
+        ProjectLayout layout = this.prepareProjectLayout();
+        BuildProject project = new ProjectRepository().load(layout).orElseThrow();
+        new VariantRepository().save(layout, List.of(
+                ProjectVariant.main("v0001", NOW),
+                new ProjectVariant("feature", "Feature", "v0001", "v0001", false, NOW)
+        ));
+        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
+        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+
+        ProjectVariant variant = service.activateVariantMetadataOnlyForTesting(null, "Tower", "feature");
+
+        assertEquals("feature", variant.id());
+        assertEquals("feature", new ProjectRepository().load(layout).orElseThrow().activeVariantId());
+        assertEquals(1, captureSessionLifecycle.finalizeCalls);
+        assertEquals(1, captureSessionLifecycle.invalidateCalls);
+        assertEquals(project.id(), new ProjectRepository().load(layout).orElseThrow().id());
     }
 
     private ProjectLayout prepareProjectLayout() throws IOException {

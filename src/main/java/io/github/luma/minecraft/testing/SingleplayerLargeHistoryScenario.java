@@ -248,7 +248,7 @@ final class SingleplayerLargeHistoryScenario {
     private StepResult createBranch(MinecraftServer server) {
         try {
             this.branch = this.variantService.createVariant(server, this.project.name(), "Large branch", ProjectService.versionId(2));
-            this.variantService.switchVariant(this.level, this.project.name(), this.branch.id(), false);
+            this.variantService.activateVariantMetadataOnlyForTesting(server, this.project.name(), this.branch.id());
             this.stage = Stage.PLACE_BRANCH;
             return StepResult.messages(List.of("Large branch created: " + this.branch.id()));
         } catch (Exception exception) {

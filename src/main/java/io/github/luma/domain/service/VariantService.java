@@ -23,8 +23,7 @@ import net.minecraft.server.level.ServerLevel;
  *
  * <p>Variants act as lightweight branch heads within a single project. This
  * service keeps variant metadata consistent, blocks unsafe transitions when a
- * recovery draft exists, and optionally restores the target head when switching
- * variants.
+ * recovery draft exists, and restores the target head when switching variants.
  */
 public final class VariantService {
 
@@ -113,14 +112,6 @@ public final class VariantService {
     }
 
     public ProjectVariant switchVariant(ServerLevel level, String projectName, String variantId) throws IOException {
-        return this.switchVariant(level, projectName, variantId, true);
-    }
-
-    /**
-     * Switches the active variant and optionally restores that variant head into
-     * the world.
-     */
-    public ProjectVariant switchVariant(ServerLevel level, String projectName, String variantId, boolean restoreHead) throws IOException {
         ProjectLayout layout = this.layoutResolver.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
@@ -135,10 +126,32 @@ public final class VariantService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Variant not found: " + variantId));
 
-        if (restoreHead && targetVariant.headVersionId() != null && !targetVariant.headVersionId().isBlank()) {
-            this.restoreService.restoreVariantHead(level, projectName, targetVariant.id());
-            return targetVariant;
+        if (targetVariant.headVersionId() == null || targetVariant.headVersionId().isBlank()) {
+            throw new IllegalArgumentException("Variant head version is missing: " + variantId);
         }
+
+        this.restoreService.restoreVariantHead(level, projectName, targetVariant.id());
+        return targetVariant;
+    }
+
+    public ProjectVariant activateVariantMetadataOnlyForTesting(
+            MinecraftServer server,
+            String projectName,
+            String variantId
+    ) throws IOException {
+        ProjectLayout layout = this.layoutResolver.resolveLayout(server, projectName);
+        var project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        this.captureSessionLifecycle.finalizeProjectSession(server, project.id().toString());
+        if (this.recoveryRepository.loadDraft(layout).isPresent()) {
+            throw new IllegalArgumentException("Discard or save the current recovery draft before switching variants");
+        }
+
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        ProjectVariant targetVariant = variants.stream()
+                .filter(variant -> variant.id().equals(variantId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Variant not found: " + variantId));
 
         LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
         this.projectRepository.save(layout, project.withActiveVariantId(targetVariant.id(), Instant.now()).withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION));
@@ -150,7 +163,7 @@ public final class VariantService {
                 targetVariant.headVersionId(),
                 targetVariant.id()
         ));
-        this.captureSessionLifecycle.invalidateProjectCache(level.getServer());
+        this.captureSessionLifecycle.invalidateProjectCache(server);
         return targetVariant;
     }
 

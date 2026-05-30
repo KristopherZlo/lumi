@@ -287,16 +287,11 @@ public final class ProjectScreenController {
     }
 
     public String switchVariant(String projectName, String variantId) {
-        return this.switchVariant(projectName, variantId, true);
-    }
-
-    public String switchVariant(String projectName, String variantId, boolean restoreHead) {
         try {
             this.variantService.switchVariant(
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName,
-                    variantId,
-                    restoreHead
+                    variantId
             );
             return "luma.status.variant_switched";
         } catch (Exception exception) {
