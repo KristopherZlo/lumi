@@ -54,6 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RestoreServiceTest {
@@ -254,6 +255,7 @@ class RestoreServiceTest {
                 List.of(new ChunkPoint(0, 0), new ChunkPoint(3, 1))
         );
         createBaselineFile(layout, new ChunkPoint(0, 0));
+        createBaselineFile(layout, new ChunkPoint(3, 1));
         createBaselineFile(layout, new ChunkPoint(7, 2));
         createBaselineFile(layout, new ChunkPoint(9, 9));
 
@@ -265,7 +267,7 @@ class RestoreServiceTest {
         );
 
         assertTrue(plan.append());
-        assertEquals(List.of(new ChunkPoint(0, 0), new ChunkPoint(7, 2)), plan.chunks());
+        assertEquals(List.of(new ChunkPoint(0, 0), new ChunkPoint(3, 1), new ChunkPoint(7, 2)), plan.chunks());
     }
 
     @Test
@@ -548,6 +550,46 @@ class RestoreServiceTest {
 
         assertEquals(2, chunks.size());
         assertTrue(chunks.containsAll(List.of(mainChunk, branchChunk)));
+    }
+
+    @Test
+    void exactRootStatePlanFailsWhenAffectedWorldRootChunkHasNoBaseline(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        ChunkPoint missingChunk = new ChunkPoint(2, 0);
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion head = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        this.savePatchMetadata(layout, "patch-0002", "v0002", List.of(missingChunk));
+        RecoveryDraft pendingDraft = null;
+        DirectRestorePatchPlan directPlan = new DirectRestorePatchPlan(List.of(head), List.of());
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> service.exactRootStateRestorePlan(
+                layout,
+                root,
+                pendingDraft,
+                directPlan
+        ));
+
+        assertTrue(exception.getMessage().contains("Missing baseline chunks"));
+        assertTrue(exception.getMessage().contains("2:0"));
+    }
+
+    @Test
+    void targetStateResolverFailsWhenWorldRootPositionHasNoBaseline(@TempDir Path tempDir) {
+        BlockTargetStateResolver resolver = new BlockTargetStateResolver();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> resolver.resolve(
+                layout,
+                BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW),
+                List.of(root),
+                root,
+                List.of(new BlockPoint(32, 64, 0))
+        ));
+
+        assertTrue(exception.getMessage().contains("Missing baseline chunks"));
+        assertTrue(exception.getMessage().contains("2:0"));
     }
 
     @Test

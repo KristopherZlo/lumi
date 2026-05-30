@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RestorePlanBuilderTest {
@@ -114,6 +115,32 @@ class RestorePlanBuilderTest {
 
         assertEquals(2, plan.baselineGaps().size());
         assertTrue(plan.baselineGaps().containsAll(List.of(targetChunk, divergentChunk)));
+    }
+
+    @Test
+    void worldRootAnchoredPatchPlanFailsWhenRequiredBaselineChunkIsMissing() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("world-project-missing-baseline.mbp"));
+        ChunkPoint targetChunk = new ChunkPoint(2, 0);
+        ChunkPoint divergentChunk = new ChunkPoint(5, 1);
+        this.snapshotWriter.writeFile(
+                layout,
+                this.baselineChunkRepository.filePath(layout, targetChunk),
+                snapshot(targetChunk)
+        );
+        this.patchMetaRepository.save(layout, patchMetadata("patch-0002", "v0002", targetChunk));
+        ProjectVersion root = version("v0001", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion target = version("v0002", "v0001", "", List.of("patch-0002"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> this.builder.build(
+                layout,
+                wholeDimensionProject(),
+                List.of(root, target),
+                target,
+                List.of(divergentChunk)
+        ));
+
+        assertTrue(exception.getMessage().contains("Missing baseline chunks"));
+        assertTrue(exception.getMessage().contains("5:1"));
     }
 
     private static BuildProject project() {

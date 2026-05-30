@@ -84,6 +84,8 @@ public final class RestoreService {
     private final VersionRepository versionRepository = new VersionRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
+    private final RestoreBaselineRequirementValidator baselineRequirementValidator =
+            new RestoreBaselineRequirementValidator(this.baselineChunkRepository);
     private final SnapshotReader snapshotReader = new SnapshotReader();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final RestoreChunkCollector chunkCollector = new RestoreChunkCollector(this.patchMetaRepository);
@@ -961,8 +963,9 @@ public final class RestoreService {
     ) throws IOException {
         List<ChunkPoint> trackedChunks = this.baselineChunkRepository.listChunks(layout);
         if (trackedChunks.isEmpty()) {
-            LumaMod.LOGGER.info("World root restore for project {} has no tracked baseline chunks yet", project.name());
-            return List.of();
+            throw new IllegalArgumentException(
+                    "Missing baseline chunks for world-root restore: no tracked baseline chunks"
+            );
         }
 
         List<PreparedChunkBatch> batches = new ArrayList<>();
@@ -1488,10 +1491,12 @@ public final class RestoreService {
             return ExactRootStateRestorePlan.none();
         }
         if (targetVersion.versionKind() == VersionKind.WORLD_ROOT) {
-            List<ChunkPoint> baselineChunks = this.availableBaselineChunks(layout, affectedChunks);
-            return baselineChunks.isEmpty()
-                    ? ExactRootStateRestorePlan.none()
-                    : ExactRootStateRestorePlan.worldRoot(baselineChunks);
+            List<ChunkPoint> baselineChunks = this.baselineRequirementValidator.requirePresent(
+                    layout,
+                    affectedChunks,
+                    "exact world-root restore plan"
+            );
+            return ExactRootStateRestorePlan.worldRoot(baselineChunks);
         }
         return ExactRootStateRestorePlan.initialSnapshot(affectedChunks);
     }
@@ -1529,18 +1534,6 @@ public final class RestoreService {
                 this.chunkCollector.touchedChunksForVersions(layout, replayVersions),
                 this.chunkCollector.touchedChunksForDraft(pendingDraft)
         );
-    }
-
-    private List<ChunkPoint> availableBaselineChunks(
-            ProjectLayout layout,
-            List<ChunkPoint> affectedChunks
-    ) {
-        if (affectedChunks == null || affectedChunks.isEmpty()) {
-            return List.of();
-        }
-        return affectedChunks.stream()
-                .filter(chunk -> this.baselineChunkRepository.contains(layout, chunk))
-                .toList();
     }
 
     List<ProjectVersion> directRestorePatchVersions(

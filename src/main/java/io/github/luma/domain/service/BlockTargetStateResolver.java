@@ -34,6 +34,8 @@ final class BlockTargetStateResolver {
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
+    private final RestoreBaselineRequirementValidator baselineRequirementValidator =
+            new RestoreBaselineRequirementValidator(this.baselineChunkRepository);
     private final VersionLineageService lineageService = new VersionLineageService();
 
     Map<BlockPoint, StatePayload> resolve(
@@ -100,10 +102,11 @@ final class BlockTargetStateResolver {
             Map<ChunkPoint, List<BlockPoint>> positionsByChunk,
             Map<BlockPoint, StatePayload> states
     ) throws IOException {
-        for (ChunkPoint chunk : positionsByChunk.keySet()) {
-            if (!this.baselineChunkRepository.contains(layout, chunk)) {
-                continue;
-            }
+        for (ChunkPoint chunk : this.baselineRequirementValidator.requirePresent(
+                layout,
+                positionsByChunk.keySet(),
+                "target state baseline"
+        )) {
             this.materializeSnapshot(
                     this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
                     positionsByChunk,

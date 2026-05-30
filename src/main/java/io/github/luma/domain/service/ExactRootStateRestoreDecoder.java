@@ -24,6 +24,7 @@ final class ExactRootStateRestoreDecoder {
     private final SnapshotReader snapshotReader;
     private final RestoreChunkCollector chunkCollector;
     private final SnapshotBatchPreparer snapshotBatchPreparer;
+    private final RestoreBaselineRequirementValidator baselineRequirementValidator;
 
     ExactRootStateRestoreDecoder(
             BaselineChunkRepository baselineChunkRepository,
@@ -35,6 +36,7 @@ final class ExactRootStateRestoreDecoder {
         this.snapshotReader = snapshotReader;
         this.chunkCollector = chunkCollector;
         this.snapshotBatchPreparer = snapshotBatchPreparer;
+        this.baselineRequirementValidator = new RestoreBaselineRequirementValidator(baselineChunkRepository);
     }
 
     DecodedExactRootState decode(
@@ -60,7 +62,7 @@ final class ExactRootStateRestoreDecoder {
                     "Skipped exact root state; no changed block positions"
             );
         }
-        List<BlockPoint> selectedPositions = this.filterPositions(layout, targetVersion, positions);
+        List<BlockPoint> selectedPositions = this.requireBaselinePositions(layout, targetVersion, positions);
         if (selectedPositions.isEmpty()) {
             return this.skip(
                     batches,
@@ -139,7 +141,7 @@ final class ExactRootStateRestoreDecoder {
         return new DecodedExactRootState(batches, completedSources);
     }
 
-    private List<BlockPoint> filterPositions(
+    private List<BlockPoint> requireBaselinePositions(
             ProjectLayout layout,
             ProjectVersion targetVersion,
             List<BlockPoint> positions
@@ -147,9 +149,12 @@ final class ExactRootStateRestoreDecoder {
         if (targetVersion.versionKind() != VersionKind.WORLD_ROOT) {
             return positions;
         }
-        return positions.stream()
-                .filter(position -> this.baselineChunkRepository.contains(layout, ChunkPoint.from(position)))
-                .toList();
+        this.baselineRequirementValidator.requirePresent(
+                layout,
+                this.chunkCollector.chunksForPositions(positions),
+                "exact world-root restore"
+        );
+        return positions;
     }
 
     record DecodedExactRootState(List<PreparedChunkBatch> batches, int completedSources) {

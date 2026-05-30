@@ -25,6 +25,8 @@ import java.util.Map;
 final class RestorePlanBuilder {
 
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
+    private final RestoreBaselineRequirementValidator baselineRequirementValidator =
+            new RestoreBaselineRequirementValidator(this.baselineChunkRepository);
     private final SnapshotReader snapshotReader = new SnapshotReader();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final VersionLineageService lineageService = new VersionLineageService();
@@ -130,13 +132,11 @@ final class RestorePlanBuilder {
             for (ChunkPoint chunk : requiredBaselineChunks == null ? List.<ChunkPoint>of() : requiredBaselineChunks) {
                 putChunk(chunks, chunk);
             }
-            List<ChunkPoint> existing = new ArrayList<>();
-            for (ChunkPoint chunk : chunks.values()) {
-                if (this.baselineChunkRepository.contains(layout, chunk)) {
-                    existing.add(chunk);
-                }
-            }
-            return List.copyOf(existing);
+            return this.baselineRequirementValidator.requirePresent(
+                    layout,
+                    chunks.values(),
+                    "world-root restore plan"
+            );
         }
         return this.baselineChunkRepository.listMissingChunks(layout, List.copyOf(restoredChunks.values()));
     }
