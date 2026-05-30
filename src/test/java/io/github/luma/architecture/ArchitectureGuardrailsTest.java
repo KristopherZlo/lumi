@@ -40,7 +40,7 @@ class ArchitectureGuardrailsTest {
     void hotPathClassesDoNotGrowBeforeTheyAreSplit() throws IOException {
         Map<Path, Integer> limits = Map.of(
                 MAIN_SOURCES.resolve("io/github/luma/minecraft/world/WorldOperationManager.java"), 1960,
-                MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 1925,
+                MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 1720,
                 MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/HistoryCaptureManager.java"), 1815,
                 MAIN_SOURCES.resolve("io/github/luma/storage/repository/PatchDataRepository.java"), 215
         );
@@ -127,6 +127,28 @@ class ArchitectureGuardrailsTest {
                 coordinatorSource.contains("savePendingRestoreCompletion")
                         && coordinatorSource.contains("deletePendingRestoreCompletion"),
                 "RestoreCompletionCoordinator must own pending completion journal lifecycle"
+        );
+    }
+
+    @Test
+    void restoreEntityStateWorkflowHasDedicatedResolver() throws IOException {
+        Path restoreService = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java");
+        Path resolver = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreEntityStateResolver.java");
+        String restoreSource = Files.readString(restoreService);
+        String resolverSource = Files.readString(resolver);
+
+        assertTrue(
+                restoreSource.contains("RestoreEntityStateResolver"),
+                "RestoreService should delegate entity target reconstruction to a resolver"
+        );
+        assertTrue(
+                !restoreSource.contains("private Map<String, EntityPayload> targetEntityStates("),
+                "RestoreService should not own entity target-state reconstruction"
+        );
+        assertTrue(
+                resolverSource.contains("alignPendingEntityRollbackWithTarget")
+                        && resolverSource.contains("authoritativeEntityReplacementBatches"),
+                "RestoreEntityStateResolver must own rollback alignment and authoritative replacement batches"
         );
     }
 
