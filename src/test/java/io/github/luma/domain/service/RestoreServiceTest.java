@@ -575,6 +575,31 @@ class RestoreServiceTest {
     }
 
     @Test
+    void initialRestoreSummaryUsesSnapshotChunksInsteadOfBaselineChunks(@TempDir Path tempDir) throws Exception {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        this.snapshotWriter.writeFile(layout.snapshotFile("snapshot-0001"), new SnapshotData(
+                "project",
+                NOW,
+                64,
+                79,
+                List.of(new SnapshotChunkData(
+                        3,
+                        1,
+                        List.of(new SnapshotSectionData(4, List.of(state("minecraft:air")), new short[4096])),
+                        java.util.Map.of(),
+                        List.of()
+                ))
+        ));
+        createBaselineFile(layout, new ChunkPoint(9, 9));
+        ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
+
+        List<ChunkPoint> chunks = service.rootLikeSummaryChunks(layout, initial);
+
+        assertEquals(List.of(new ChunkPoint(3, 1)), chunks);
+    }
+
+    @Test
     void targetStateResolverFailsWhenWorldRootPositionHasNoBaseline(@TempDir Path tempDir) {
         BlockTargetStateResolver resolver = new BlockTargetStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));

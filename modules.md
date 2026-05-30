@@ -74,10 +74,10 @@ Lumi is organized around project history for builders: project, version, branch,
 Use `src/main/java/io/github/luma/domain/model` for value objects, persisted records, summaries, and focused mutable runtime state. Do not add Minecraft APIs, file I/O, UI state, or broad orchestration here.
 
 - Project identity/settings: `BuildProject`, `ProjectSettings`, `ProjectVariant`, `ProjectVersion`, `VersionKind`, `WorldOriginInfo`, `WorldInitialBackupManifest`.
-- Coordinates/bounds/chunks: `BlockPoint`, `Bounds3i`, `ChunkPoint`, `ChunkSectionPoint`, `ChunkDelta`.
+- Coordinates/bounds/chunks: `BlockPoint`, `Bounds3i`, `ChunkPoint`, `ChunkSectionPoint`, `ChunkDelta`, `SectionChangeMask`.
 - Stored changes and payloads: `StoredBlockChange`, `StoredEntityChange`, `StoredChangeAccumulator`, `StatePayload`, `EntityPayload`, `PatchWorldChanges`, `PatchMetadata`, `PatchStats`, `PatchChunkSlice`, `PatchEntityChunkIndex`, `SectionFingerprint`, `ChunkPayloadSlice`, `ContentRef`.
 - Snapshots: `SnapshotRef`, `SnapshotMetadata`, `SnapshotData`, `SnapshotChunkData`, `SnapshotSectionData`, `ChunkSnapshotPayload`, `ChunkSectionSnapshotPayload`.
-- Recovery: `RecoveryDraft`, `RecoveryDraftSummary`, `RecoveryJournalEntry`, `RestoreReturnPoint`.
+- Recovery: `RecoveryDraft`, `RecoveryDraftSummary`, `RecoveryJournalEntry`, `RestoreReturnPoint`, `PendingRestoreCompletion`, `PendingRestoreCompletionKind`.
 - Operations/progress/HUD: `OperationHandle`, `OperationProgress`, `OperationSnapshot`, `OperationStage`, `WorkspaceHudSnapshot`; native in-world progress is adapted by `WorldOperationBossBarManager`.
 - Diff/compare/material summaries: `VersionDiff`, `DiffBlockEntry`, `ChangeStats`, `PendingChangeSummary`, `MaterialDeltaEntry`.
 - Restore and partial restore: `RestorePlanSummary`, `RestorePlanMode`, `PartialRestoreRequest`, `PartialRestorePlanSummary`, `PartialRestoreMode`, `PartialRestoreRegionSource`.
@@ -92,8 +92,9 @@ Use `src/main/java/io/github/luma/domain/model` for value objects, persisted rec
 Use `src/main/java/io/github/luma/domain/service` for business workflows and product rules. Services may coordinate repositories and Minecraft adapters, but they should not render UI, parse raw paths ad hoc, or mutate Minecraft blocks directly.
 
 - `ProjectService`: create/load/update projects, bootstrap dimension workspaces, world-origin and `WORLD_ROOT` project rules, and avoid promoting isolated operation drafts while a world operation is still active.
-- `VersionService`: save/amend versions, isolate operation drafts, write patch-first history, request snapshots/previews; delegates snapshot policy and chunk collection to `VersionSnapshotPlanner`.
-- `RestoreService`: full restore, partial restore, pre-restore safety checkpoints, restore return points, operation orchestration, and bounded mechanism target-state reconciliation; delegates request/variant safety checks to `RestoreRequestResolver`, `WORLD_ROOT` fallback baseline scoping to `WorldRootRestoreBaselineScope`, exact-position target reconstruction to `BlockTargetStateResolver`, and restore chunk/position collection to `RestoreChunkCollector`.
+- `VersionService`: save/amend versions, isolate operation drafts, write patch-first history, stage partial-restore versions before world mutation, publish staged versions after successful apply, request snapshots/previews; delegates snapshot policy and chunk collection to `VersionSnapshotPlanner`.
+- `RestoreService`: full restore, partial restore, pre-restore safety checkpoints, restore return points, operation orchestration, missing-baseline validation for `WORLD_ROOT`, staged partial-restore publication, and bounded mechanism target-state reconciliation; delegates request/variant safety checks to `RestoreRequestResolver`, `WORLD_ROOT` fallback baseline scoping to `WorldRootRestoreBaselineScope`, exact-position target reconstruction to `BlockTargetStateResolver`, and restore chunk/position collection to `RestoreChunkCollector`.
+- `RestoreCompletionRecoveryService`: completes pending full/partial restore metadata publication after successful world apply when the original completion callback was interrupted.
 - `RestoreRequestResolver`: target version/variant resolution and imported-package trust gating before restore planning.
 - `RestorePlanBuilder`: checkpoint snapshot, patch metadata chain, and whole-dimension baseline-gap planning for full restore.
 - `RestorePayloadLoader`: version patch metadata lookup plus full/selective block and entity payload reads for restore planning.
@@ -101,7 +102,7 @@ Use `src/main/java/io/github/luma/domain/service` for business workflows and pro
 - `RecoveryService`: recover, discard, persist, and expose interrupted work.
 - `OperationDraftRecoveryService`: promote or merge interrupted save/amend operation drafts back into visible recovery drafts after a crash, world exit, or cancelled operation once no active world operation can still own the isolated draft.
 - `HistoryEditService`: rename saves, soft-delete safe saves, soft-delete inactive branches, and persist history tombstones.
-- `VariantService`: branch creation, branch switching, active head movement.
+- `VariantService`: branch creation, restore-backed branch switching, active head movement, and explicit metadata-only activation for runtime test setup.
 - `VariantMergeService`: imported and local branch merge planning, merge apply through normal version persistence; delegates chunk-connected conflict zone grouping to `MergeConflictZoneBuilder`.
 - `VersionLineageService`: reachable version filtering, ancestor/common-ancestor/path lookup shared by restore, diff, merge.
 - `DiffService`: version-to-version and live-world diff reconstruction.
@@ -137,7 +138,7 @@ Use `src/main/java/io/github/luma/storage` and `src/main/java/io/github/luma/sto
 - `PatchDataRepository`, `PatchPayloadWriter`, `PatchPayloadReader`, `PatchFrameCompression`, `PatchSectionFrameCodec`, `PatchPayloadMetadataBuilder`, `PatchEntityChunkIndexLookup`: `patches/*.bin.lz4` facade reads/writes, patch frame compression, section frame encoding, section fingerprint metadata, entity index construction, and selective chunk/section/entity-frame reads.
 - `SnapshotRepository`, `SnapshotReader`, `SnapshotWriter`: checkpoint snapshot payload boundary, including chunk-addressable frame indexes and snapshot section content refs.
 - `PayloadContentRepository`: content-addressed immutable payload blobs under `cache/content`.
-- `RecoveryRepository`: recovery draft, WAL, operation draft, journal, restore return point persistence.
+- `RecoveryRepository`: recovery draft, WAL, operation draft, journal, restore return point, and pending restore completion persistence.
 - `BaselineChunkRepository`: whole-dimension baseline chunks under `cache/baseline-chunks`.
 - `PreviewCaptureRequestRepository`: `preview-requests/*.json` queue.
 - `ProjectArchiveRepository`: zip archive import/export file copying and archive manifest boundary.
@@ -193,7 +194,7 @@ Use `src/main/java/io/github/luma/minecraft` for Minecraft APIs, capture hooks, 
 - `PersistentBlockStatePolicy`: restore/snapshot normalization for unsafe transient states such as `moving_piston`.
 - `ConnectedBlockPlacementExpander`: paired blocks such as beds, doors, tall plants.
 - `PistonMechanismPlacementExpander`: settled piston base/head replay companions. It may add the expected `piston_head` for an explicit extended piston base, replace normalized transient air at the expected head position, recover a retracted base when undo targets a transient moving-piston base, or clear the old head for a known retracting base; it must not infer a piston base from a head-only placement.
-- `PreparedBlockPlacement`, `PreparedChunkBatch`, `PreparedSectionApplyBatch`, `PreparedChunkBatchCollapser`, `LumiSectionBuffer`, `SectionChangeMask`: prepared immutable apply data and collapse logic for sparse and section-native work, including internal replay hints for generated mechanical companion placements.
+- `PreparedBlockPlacement`, `PreparedChunkBatch`, `PreparedSectionApplyBatch`, `PreparedChunkBatchCollapser`, `LumiSectionBuffer`: prepared immutable apply data and collapse logic for sparse and section-native work, including internal replay hints for generated mechanical companion placements. Section-cell masks use the storage-neutral domain `SectionChangeMask`.
 - `ChunkBatch`, `SectionBatch`, `EntityBatch`: per-chunk apply units.
 - `GlobalDispatcher`, `LocalQueue`, `BatchState`: queue/runtime state for bounded apply.
 - `BlockStateNbtCodec`: Minecraft block-state and NBT conversion.

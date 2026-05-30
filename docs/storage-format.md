@@ -82,7 +82,9 @@ Current project layout:
   previews/
   preview-requests/
   recovery/
+    pending-restore-completion.json
   cache/
+    baseline-chunks/
     content/
   locks/
 ```
@@ -258,7 +260,7 @@ Important fields:
 - `preview`
 - `sourceInfo`
 
-Version manifests stay lightweight. They are written only after referenced patch and snapshot payloads have been written successfully.
+Version manifests stay lightweight. They are written only after referenced patch and snapshot payloads have been written successfully. A `PARTIAL_RESTORE` version may be staged before world mutation: its manifest and patch payload are loadable by id, but it is not the active branch head until the restore apply succeeds and variant metadata is published. If metadata publication is interrupted after apply, `recovery/pending-restore-completion.json` records the remaining publication work.
 
 `versions/index.json` is an optional disposable cache for `VersionRepository.loadAll(...)`. It stores version records plus each manifest file's size and modification time. Lumi uses it only when every version manifest matches and no extra version JSON file exists; stale or corrupt indexes are ignored and rebuilt. Deleting `index.json` never changes restore correctness and the file is not a version manifest.
 
@@ -273,7 +275,7 @@ Additional semantic version kinds:
 
 - `MERGE`: a local or imported branch merge written as a normal patch-first save on the active branch
 - `AUTO_CHECKPOINT`: a pending draft saved automatically before a large external edit
-- `PARTIAL_RESTORE`: a selected-region restore written as a new save instead of moving the active branch head
+- `PARTIAL_RESTORE`: a selected-region restore written as a new save instead of moving the active branch head; staged before apply and published only after successful apply
 
 ### `patches/<patchId>.meta.json`
 
@@ -389,6 +391,8 @@ This file is separate from `draft.bin.lz4` and `draft.wal.lz4`. Live capture nev
 
 When no Lumi world operation is active, project bootstrap, recovery loading, save/amend startup, and cleanup first treat this file as an interrupted operation. If no live draft exists, Lumi promotes it back to the visible recovery draft. If a compatible live draft exists, Lumi merges the operation draft first and the live draft second so later captured edits win while first-old/latest-new semantics are preserved. If the operation draft is incompatible with the live draft or belongs to another project id, Lumi keeps it in place and cleanup reports a warning instead of deleting it automatically.
 
+Active save/amend failure paths do not promote this file into `draft.bin.lz4`. They leave it isolated until a later idle bootstrap or recovery path can prove no world operation still owns it.
+
 ### `recovery/journal.json`
 
 Stores recovery, restore, migration, and other workflow events shown in the Log tab.
@@ -399,9 +403,15 @@ Stores the local return-before-restore pointer written before each full restore.
 
 If a full restore starts with unsaved draft changes, Lumi first writes a `RESTORE` checkpoint and stores that checkpoint id as the return target. If the draft is clean, Lumi stores the current active branch head id. This file is local operational recovery state and is not included in project or variant archives.
 
+### `recovery/pending-restore-completion.json`
+
+Stores restore metadata publication that must be retried after world apply has already succeeded. It contains the project id, variant id, target version id, completion kind (`FULL_RESTORE` or `PARTIAL_RESTORE`), creation timestamp, and partial restore bounds/mode for partial completions.
+
+Full restore writes this record before publishing variant/project metadata, deleting the recovery draft, and appending the completion journal entry. Partial restore writes the staged version before apply, then writes this record before publishing the staged version as the active head, recording live undo, rewriting the pending draft outside the restored region, and appending the completion journal entry. Idle bootstrap/recovery completes this record only when no Lumi world operation is active.
+
 ### `cache/`
 
-Reserved for future cache artifacts and rebuildable derived data.
+Stores baseline chunks, content-addressed section payloads, and future rebuildable derived data.
 
 The `cache/baseline-chunks/` subtree is not rebuildable without touching the live world. It is part of archive export/import and must not be treated as disposable cache data by maintenance workflows. Each baseline file is written from a prepared compact chunk snapshot payload captured on the server thread, then compressed and persisted later by the bounded capture-maintenance baseline writer pool.
 
@@ -445,7 +455,7 @@ The manifest also records whether preview PNGs were included. Import / Export ex
 Variant share packages still use the same zip format, but they only include the selected variant lineage and the payloads that lineage references. On import, Lumi rewrites the imported project metadata so the review project exposes just that imported variant as its active line.
 Deleting an imported review package from Import / Export removes that review project folder after Lumi verifies it has the same project id as the current target project.
 
-Recovery draft payloads are intentionally excluded from archives, so export/import remains focused on stable project history rather than live unsaved state.
+Recovery draft payloads and pending restore completion records are intentionally excluded from archives, so export/import remains focused on stable project history rather than live unsaved or local operational state.
 
 Archive import is a trust boundary. Lumi validates archive manifests before copying payloads: project folder names must be safe `.mbp` folder names, entry paths must stay under the supported `project/` subtrees, the manifest is size-bounded, and each copied entry is checked against per-file and total unpacked-size limits. Imported version, patch, snapshot, and preview identifiers must be storage-safe file ids, and patch metadata ids must match the patch id referenced by the version manifest. Malformed archives are rejected before they become normal project history.
 New archive manifests store a SHA-256 digest for each payload entry. Export hashes source files from a stable regular-file read, rejects files that change while they are being copied into the zip, and import verifies each digest before the unpacked project is promoted from its temporary folder. Older archives without entry digests remain size-checked and importable.
@@ -462,6 +472,6 @@ Current cleanup is conservative and UI-driven:
 
 - dry-run first
 - delete only unreferenced snapshot payloads, orphaned preview PNGs, disposable cache files outside `baseline-chunks`, and operation drafts that have already been recovered or safely classified by the domain cleanup flow
-- never delete baseline chunks or files still referenced by version manifests
+- never delete baseline chunks, pending restore completion records, or files still referenced by version manifests
 - resolve deletion candidates back through the project root and skip symlink directories while pruning empty folders
 - tombstoned history remains soft-deleted only; physical cleanup of tombstoned version, patch, snapshot, and preview files is not part of the current cleanup policy

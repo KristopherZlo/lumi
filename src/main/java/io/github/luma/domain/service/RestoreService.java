@@ -407,10 +407,9 @@ public final class RestoreService {
         }
 
         if (targetVersion.versionKind() == VersionKind.WORLD_ROOT || targetVersion.versionKind() == VersionKind.INITIAL) {
-            List<ChunkPoint> trackedChunks = this.baselineChunkRepository.listChunks(layout);
             return new RestorePlanSummary(
                     this.worldRootFallbackMode(level, project),
-                    this.chunkCollector.mergeChunks(trackedChunks, pendingChunks),
+                    this.chunkCollector.mergeChunks(this.rootLikeSummaryChunks(layout, targetVersion), pendingChunks),
                     targetVersion.variantId(),
                     baseVersionId,
                     targetVersion.id()
@@ -1915,6 +1914,18 @@ public final class RestoreService {
 
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {
         return this.chunkCollector.touchedChunksForPlan(plan.baselineGaps(), plan.patchChain());
+    }
+
+    List<ChunkPoint> rootLikeSummaryChunks(ProjectLayout layout, ProjectVersion targetVersion) throws IOException {
+        if (targetVersion != null
+                && targetVersion.versionKind() == VersionKind.INITIAL
+                && targetVersion.snapshotId() != null
+                && !targetVersion.snapshotId().isBlank()) {
+            return this.snapshotReader.loadChunks(layout.snapshotFile(targetVersion.snapshotId())).stream()
+                    .map(chunk -> new ChunkPoint(chunk.x(), chunk.z()))
+                    .toList();
+        }
+        return this.baselineChunkRepository.listChunks(layout);
     }
 
     private RestorePlanMode worldRootFallbackMode(ServerLevel level, io.github.luma.domain.model.BuildProject project) throws IOException {

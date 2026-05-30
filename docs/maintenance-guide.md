@@ -131,7 +131,9 @@ Soft deletion is visibility metadata, not physical cleanup. `history-tombstones.
 
 Recovery drafts remain the active crash-safety surface. Opening a project with a non-empty persisted draft should route to the recovery screen, and large external edits should save any existing draft as an auto checkpoint before the edit starts. If another Lumi operation is already active, the checkpoint is skipped and logged instead of racing the operation model.
 
-Interrupted save/amend operation drafts in `recovery/operation-draft.bin.lz4` must be promoted or merged before recovery screens, save/amend startup, bootstrap repair, or cleanup treat the project as clean. Cleanup should preserve unresolved operation drafts and report a warning instead of deleting a potentially recoverable player edit.
+Interrupted save/amend operation drafts in `recovery/operation-draft.bin.lz4` must be promoted or merged before recovery screens, save/amend startup, bootstrap repair, or cleanup treat the project as clean, but only from idle recovery/bootstrap paths where no world operation still owns the draft. Active save/amend failure paths must leave the operation draft isolated. Cleanup should preserve unresolved operation drafts and report a warning instead of deleting a potentially recoverable player edit.
+
+Restore completion recovery uses `recovery/pending-restore-completion.json` when world apply succeeded but metadata publication did not finish. Idle bootstrap/recovery must complete this record before exposing the project as clean, and maintenance cleanup must not delete it as disposable cache data.
 
 ## Release metadata
 
