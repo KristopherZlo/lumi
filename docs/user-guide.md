@@ -808,6 +808,9 @@ Shows:
 
 ### Singleplayer Runtime Tests
 
+Runtime testing commands are hidden unless the game is started with
+`-Dlumi.testing.enabled=true` or `LUMI_TESTING_ENABLED=true`.
+
 ```mcfunction
 /lumi testing singleplayer
 /lumi testing smoke

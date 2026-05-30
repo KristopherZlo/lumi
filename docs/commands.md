@@ -4,6 +4,11 @@ Commands are diagnostics and local testing tools. Lumi project creation, save, r
 
 All `/lumi` commands require an operator-level player permission set. In singleplayer, that means cheats must be enabled for the world.
 
+Runtime testing commands are opt-in. By default `/lumi testing ...` is not registered
+and the runtime test runner does not tick in ordinary gameplay. Start with
+`-Dlumi.testing.enabled=true` or `LUMI_TESTING_ENABLED=true` to expose these
+commands; Gradle test-client and client GameTest runs enable the flag automatically.
+
 The onboarding replay command is client-side and is intentionally separate from `/lumi`, so it does not conflict with the server diagnostic command tree.
 
 ## Onboarding
@@ -37,6 +42,8 @@ Shows:
 - the active or most recent Lumi world operation, including operation id, label, stage, progress, and detail text when available
 
 ## Singleplayer Testing
+
+Requires `lumi.testing.enabled`.
 
 ```mcfunction
 /lumi testing singleplayer

@@ -255,7 +255,10 @@ The wrapper runs the unit coverage ratchet, server/client GameTests, focused str
 
 ## Runtime Testing
 
-From a singleplayer world with cheats enabled:
+Runtime testing commands are hidden in normal builds and launches. Start the
+game with `-Dlumi.testing.enabled=true` or `LUMI_TESTING_ENABLED=true` to expose
+them in a singleplayer world with cheats enabled. The Gradle test-client and
+client GameTest profiles set this flag automatically.
 
 ```mcfunction
 /lumi testing smoke
@@ -325,7 +328,7 @@ Current scope:
 
 - singleplayer and integrated-server first
 - dedicated-server mutation actions behind access control
-- menu-first product flow, with commands limited to diagnostics/help/testing
+- menu-first product flow, with commands limited to diagnostics/help plus opt-in runtime testing
 - project, version, branch, compare, restore, partial restore, recovery, cleanup, import/export, and merge workflows
 - optional capture support for supported external builder tools
 

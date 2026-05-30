@@ -9,7 +9,7 @@ import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.command.LumaCommands;
 import io.github.luma.minecraft.bootstrap.WorldBootstrapService;
-import io.github.luma.minecraft.testing.SingleplayerTestingService;
+import io.github.luma.minecraft.testing.RuntimeTestingHooks;
 import io.github.luma.minecraft.world.WorldOperationBossBarManager;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -31,7 +31,8 @@ public final class LumaMod implements ModInitializer {
     public static final String MOD_ID = "lumi";
     public static final String MOD_NAME = "Lumi";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_NAME);
-    private final LumaCommands commands = new LumaCommands();
+    private final RuntimeTestingHooks runtimeTestingHooks = RuntimeTestingHooks.load();
+    private final LumaCommands commands = new LumaCommands(this.runtimeTestingHooks);
     private final WorldBootstrapService worldBootstrapService = new WorldBootstrapService();
     private final OptionalIntegrationBootstrap optionalIntegrations = new OptionalIntegrationBootstrap();
     private final WorldOperationBossBarManager operationBossBars = new WorldOperationBossBarManager();
@@ -50,7 +51,7 @@ public final class LumaMod implements ModInitializer {
             if (!LumaLoadLog.enabled()) {
                 WorldOperationManager.getInstance().tick(server);
                 this.operationBossBars.tick(server);
-                SingleplayerTestingService.getInstance().tick(server);
+                this.runtimeTestingHooks.tick(server);
                 EntityMutationTracker.tick(server);
                 HistoryCaptureManager.getInstance().flushIdleSessions(server);
                 this.worldBootstrapService.tick(server);
@@ -63,8 +64,8 @@ public final class LumaMod implements ModInitializer {
                 try (var bossBarTick = LumaLoadLog.measure("server-tick", "WorldOperationBossBarManager.tick")) {
                     this.operationBossBars.tick(server);
                 }
-                try (var testingTick = LumaLoadLog.measure("server-tick", "SingleplayerTestingService.tick")) {
-                    SingleplayerTestingService.getInstance().tick(server);
+                try (var testingTick = LumaLoadLog.measure("server-tick", "RuntimeTestingHooks.tick")) {
+                    this.runtimeTestingHooks.tick(server);
                 }
                 try (var entityMutationTick = LumaLoadLog.measure("server-tick", "EntityMutationTracker.tick")) {
                     EntityMutationTracker.tick(server);

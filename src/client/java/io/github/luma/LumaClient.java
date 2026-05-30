@@ -72,6 +72,7 @@ public final class LumaClient implements ClientModInitializer {
     private final LumiShortcutScreenPolicy shortcutScreenPolicy = new LumiShortcutScreenPolicy();
     private final LumiRegionSelectionTeachingController selectionTeachingController = new LumiRegionSelectionTeachingController();
     private final ClientWorkspaceOpenService workspaceOpenService = new ClientWorkspaceOpenService();
+    private final boolean clientRuntimeLoadSamplingEnabled = ClientRuntimeLoadSampler.configuredEnabled();
     private boolean worldActive;
 
     static {
@@ -151,12 +152,14 @@ public final class LumaClient implements ClientModInitializer {
 
         long eventRegistrationStartedAt = StartupProfiler.start();
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
-        WorldRenderEvents.END_MAIN.register(ClientRuntimeLoadSampler.getInstance()::onWorldRender);
+        if (this.clientRuntimeLoadSamplingEnabled) {
+            WorldRenderEvents.END_MAIN.register(ClientRuntimeLoadSampler.getInstance()::onWorldRender);
+            ClientLifecycleEvents.CLIENT_STOPPING.register(client -> ClientRuntimeLoadSampler.getInstance().close());
+        }
         WorldRenderEvents.END_MAIN.register(CompareOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(LumiRegionSelectionRenderer::render);
         WorldRenderEvents.END_MAIN.register(PendingChangesOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(RecentChangesOverlayRenderer::render);
-        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> ClientRuntimeLoadSampler.getInstance().close());
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 new LumaClientCommands(this.workspaceOpenService).register(dispatcher));
         OverlayDiagnostics.getInstance().clientRenderCallbacksRegistered("END_MAIN");
@@ -171,7 +174,9 @@ public final class LumaClient implements ClientModInitializer {
     }
 
     private void onEndTick(Minecraft client) {
-        ClientRuntimeLoadSampler.getInstance().tick(client);
+        if (this.clientRuntimeLoadSamplingEnabled) {
+            ClientRuntimeLoadSampler.getInstance().tick(client);
+        }
         boolean activeWorldNow = client != null && client.level != null;
         if (this.worldActive && !activeWorldNow) {
             this.clearWorldClientState();

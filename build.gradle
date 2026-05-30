@@ -64,6 +64,7 @@ loom {
             vmArg '-Dlumi.clientLoadLog=true'
             vmArg '-Dlumi.lightLog=true'
             vmArg '-Dlumi.blockApplyLog=true'
+            vmArg '-Dlumi.testing.enabled=true'
         }
 
         baselineClientGameTest {
@@ -456,6 +457,7 @@ def writeQuietClientRuntimeOptions = { String runDirPath ->
 
 tasks.named('runClientGameTest').configure {
     jvmArgs('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
+    jvmArgs('-Dlumi.testing.enabled=true')
     jvmArgs('-Dlumi.clientLoadLog=true')
     if ('backup-stress'.equalsIgnoreCase(System.getenv('LUMI_SINGLEPLAYER_TEST_MODE') ?: '')) {
         jvmArgs('-Xmx1G')

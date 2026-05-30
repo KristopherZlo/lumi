@@ -4,7 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.minecraft.access.LumaAccessControl;
-import io.github.luma.minecraft.testing.SingleplayerTestingService;
+import io.github.luma.minecraft.testing.RuntimeTestingHooks;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.io.IOException;
 import java.util.Optional;
@@ -18,36 +18,30 @@ public final class LumaCommands {
     private final ProjectService projectService = new ProjectService();
     private final LumaAccessControl accessControl = LumaAccessControl.getInstance();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
-    private final SingleplayerTestingService singleplayerTestingService = SingleplayerTestingService.getInstance();
+    private final RuntimeTestingHooks runtimeTestingHooks;
+
+    public LumaCommands() {
+        this(RuntimeTestingHooks.load());
+    }
+
+    public LumaCommands(RuntimeTestingHooks runtimeTestingHooks) {
+        this.runtimeTestingHooks = runtimeTestingHooks == null
+                ? RuntimeTestingHooks.disabled()
+                : runtimeTestingHooks;
+    }
 
     public void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         var root = Commands.literal("lumi")
                 .requires(this.accessControl::canUse)
-                .executes(context -> this.execute(context.getSource(), this::help));
+                .executes(context -> LumaCommandExecutor.execute(context.getSource(), this::help));
 
         root.then(Commands.literal("help")
-                .executes(context -> this.execute(context.getSource(), this::help)));
+                .executes(context -> LumaCommandExecutor.execute(context.getSource(), this::help)));
 
         root.then(Commands.literal("status")
-                .executes(context -> this.execute(context.getSource(), this::status)));
+                .executes(context -> LumaCommandExecutor.execute(context.getSource(), this::status)));
 
-        root.then(Commands.literal("testing")
-                .then(Commands.literal("singleplayer")
-                        .executes(context -> this.execute(context.getSource(), this.singleplayerTestingService::start)))
-                .then(Commands.literal("smoke")
-                        .executes(context -> this.execute(context.getSource(), this.singleplayerTestingService::startSmoke)))
-                .then(Commands.literal("player-flow")
-                        .executes(context -> this.execute(context.getSource(),
-                                this.singleplayerTestingService::startPlayerFlow)))
-                .then(Commands.literal("structures")
-                        .executes(context -> this.execute(context.getSource(),
-                                this.singleplayerTestingService::startStructureFixtures)))
-                .then(Commands.literal("crash-safety")
-                        .executes(context -> this.execute(context.getSource(),
-                                this.singleplayerTestingService::startCrashSafety)))
-                .then(Commands.literal("external-tools")
-                        .executes(context -> this.execute(context.getSource(),
-                                this.singleplayerTestingService::startExternalTools))));
+        this.runtimeTestingHooks.registerCommands(root);
 
         dispatcher.register(root);
     }
@@ -56,12 +50,14 @@ public final class LumaCommands {
         source.sendSuccess(() -> Component.literal("Lumi commands are diagnostics and local testing tools."), false);
         source.sendSuccess(() -> Component.literal("/lumi-onboarding - replay the short Lumi onboarding tour"), false);
         source.sendSuccess(() -> Component.literal("/lumi status - show project and operation status"), false);
-        source.sendSuccess(() -> Component.literal("/lumi testing singleplayer - run the integrated-world Lumi regression suite"), false);
-        source.sendSuccess(() -> Component.literal("/lumi testing smoke - run a shorter in-world project smoke suite"), false);
-        source.sendSuccess(() -> Component.literal("/lumi testing player-flow - run the full suite from a prepared platform in a normal terrain world"), false);
-        source.sendSuccess(() -> Component.literal("/lumi testing structures - run only saved structure fixture diagnostics"), false);
-        source.sendSuccess(() -> Component.literal("/lumi testing crash-safety - run the restart-focused safety smoke suite"), false);
-        source.sendSuccess(() -> Component.literal("/lumi testing external-tools - run focused external-tool source diagnostics"), false);
+        if (this.runtimeTestingHooks.enabled()) {
+            source.sendSuccess(() -> Component.literal("/lumi testing singleplayer - run the integrated-world Lumi regression suite"), false);
+            source.sendSuccess(() -> Component.literal("/lumi testing smoke - run a shorter in-world project smoke suite"), false);
+            source.sendSuccess(() -> Component.literal("/lumi testing player-flow - run the full suite from a prepared platform in a normal terrain world"), false);
+            source.sendSuccess(() -> Component.literal("/lumi testing structures - run only saved structure fixture diagnostics"), false);
+            source.sendSuccess(() -> Component.literal("/lumi testing crash-safety - run the restart-focused safety smoke suite"), false);
+            source.sendSuccess(() -> Component.literal("/lumi testing external-tools - run focused external-tool source diagnostics"), false);
+        }
         source.sendSuccess(() -> Component.literal("Use the Lumi UI for project creation, save, restore, variants, recovery, share, merge, import/export, and cleanup."), false);
         return 1;
     }
@@ -99,17 +95,4 @@ public final class LumaCommands {
         return "Lumi operation: " + state + " " + label + " " + id + " " + operation.stage() + progress + detail;
     }
 
-    private int execute(CommandSourceStack source, IoAction action) {
-        try {
-            return action.run(source);
-        } catch (Exception exception) {
-            source.sendFailure(Component.literal("Lumi error: " + exception.getMessage()));
-            return 0;
-        }
-    }
-
-    @FunctionalInterface
-    private interface IoAction {
-        int run(CommandSourceStack source) throws Exception;
-    }
 }

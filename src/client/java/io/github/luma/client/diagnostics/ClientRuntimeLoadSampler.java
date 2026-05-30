@@ -16,7 +16,7 @@ import org.lwjgl.opengl.GL11;
  */
 public final class ClientRuntimeLoadSampler implements AutoCloseable {
 
-    private static final ClientRuntimeLoadSampler INSTANCE = new ClientRuntimeLoadSampler();
+    private static final String ENABLED_FLAG = "lumi.clientLoadLog";
     private static final String SAMPLE_TICKS_FLAG = "lumi.clientLoadLog.sampleTicks";
     private static final String GPU_SAMPLE_SECONDS_FLAG = "lumi.clientLoadLog.gpuSampleSeconds";
     private static final int DEFAULT_FRAME_WINDOW = 256;
@@ -42,8 +42,12 @@ public final class ClientRuntimeLoadSampler implements AutoCloseable {
     private ClientRuntimeLoadSampler() {
     }
 
+    public static boolean configuredEnabled() {
+        return Boolean.getBoolean(ENABLED_FLAG);
+    }
+
     public static ClientRuntimeLoadSampler getInstance() {
-        return INSTANCE;
+        return Holder.INSTANCE;
     }
 
     public boolean enabled() {
@@ -187,6 +191,14 @@ public final class ClientRuntimeLoadSampler implements AutoCloseable {
             thread.setDaemon(true);
             thread.setPriority(Thread.MIN_PRIORITY);
             return thread;
+        }
+    }
+
+    private static final class Holder {
+
+        private static final ClientRuntimeLoadSampler INSTANCE = new ClientRuntimeLoadSampler();
+
+        private Holder() {
         }
     }
 }

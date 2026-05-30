@@ -108,6 +108,48 @@ class ArchitectureGuardrailsTest {
         assertTrue(offenders.isEmpty(), "Client code must reach storage through controllers/services: " + offenders);
     }
 
+    @Test
+    void productionBootstrapDoesNotReferenceRuntimeTestRunnerDirectly() throws IOException {
+        Path bootstrap = MAIN_SOURCES.resolve("io/github/luma/LumaMod.java");
+        String source = Files.readString(bootstrap);
+
+        assertTrue(
+                !source.contains("SingleplayerTestingService"),
+                "LumaMod must use RuntimeTestingHooks instead of ticking the runtime test runner directly"
+        );
+    }
+
+    @Test
+    void clientRuntimeLoadSamplerIsRegisteredOnlyWhenConfigured() throws IOException {
+        String clientSource = Files.readString(CLIENT_SOURCES.resolve("io/github/luma/LumaClient.java"));
+        String samplerSource = Files.readString(CLIENT_SOURCES.resolve(
+                "io/github/luma/client/diagnostics/ClientRuntimeLoadSampler.java"
+        ));
+
+        assertTrue(
+                clientSource.contains("ClientRuntimeLoadSampler.configuredEnabled()"),
+                "LumaClient must check the client load-log flag before registering sampler callbacks"
+        );
+        assertTrue(
+                samplerSource.contains("private static final class Holder"),
+                "ClientRuntimeLoadSampler singleton must be lazy so disabled production runs do not allocate probes"
+        );
+    }
+
+    @Test
+    void gradleRuntimeHarnessRunsEnableRuntimeTestingFlag() throws IOException {
+        String buildScript = Files.readString(Path.of("build.gradle"));
+
+        assertTrue(
+                buildScript.contains("vmArg '-Dlumi.testing.enabled=true'"),
+                "Loom testClient run must enable runtime testing explicitly"
+        );
+        assertTrue(
+                buildScript.contains("jvmArgs('-Dlumi.testing.enabled=true')"),
+                "Client GameTest run must enable runtime testing explicitly"
+        );
+    }
+
     private static List<Path> javaFiles(Path... roots) throws IOException {
         try (Stream<Path> stream = Stream.of(roots)
                 .filter(Files::exists)
