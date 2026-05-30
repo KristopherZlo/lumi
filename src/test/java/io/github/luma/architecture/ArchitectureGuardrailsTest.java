@@ -40,7 +40,7 @@ class ArchitectureGuardrailsTest {
     void hotPathClassesDoNotGrowBeforeTheyAreSplit() throws IOException {
         Map<Path, Integer> limits = Map.of(
                 MAIN_SOURCES.resolve("io/github/luma/minecraft/world/WorldOperationManager.java"), 1960,
-                MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 2065,
+                MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 1925,
                 MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/HistoryCaptureManager.java"), 1815,
                 MAIN_SOURCES.resolve("io/github/luma/storage/repository/PatchDataRepository.java"), 215
         );
@@ -106,6 +106,28 @@ class ArchitectureGuardrailsTest {
                 .toList();
 
         assertTrue(offenders.isEmpty(), "Client code must reach storage through controllers/services: " + offenders);
+    }
+
+    @Test
+    void restoreCompletionWorkflowHasDedicatedCoordinator() throws IOException {
+        Path restoreService = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java");
+        Path coordinator = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreCompletionCoordinator.java");
+        String restoreSource = Files.readString(restoreService);
+        String coordinatorSource = Files.readString(coordinator);
+
+        assertTrue(
+                restoreSource.contains("RestoreCompletionCoordinator"),
+                "RestoreService should delegate post-apply metadata publication to a coordinator"
+        );
+        assertTrue(
+                !restoreSource.contains("private void completeRestore("),
+                "RestoreService should not own full restore completion workflow"
+        );
+        assertTrue(
+                coordinatorSource.contains("savePendingRestoreCompletion")
+                        && coordinatorSource.contains("deletePendingRestoreCompletion"),
+                "RestoreCompletionCoordinator must own pending completion journal lifecycle"
+        );
     }
 
     @Test

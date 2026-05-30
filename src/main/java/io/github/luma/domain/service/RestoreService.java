@@ -14,7 +14,6 @@ import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRequest;
-import io.github.luma.domain.model.PendingRestoreCompletion;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -29,8 +28,6 @@ import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
-import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
-import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
@@ -96,8 +93,7 @@ public final class RestoreService {
     private final VersionService versionService = new VersionService();
     private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
     private final PartialRestoreTargetStatePlanner partialRestoreTargetStatePlanner = new PartialRestoreTargetStatePlanner();
-    private final PartialRestoreDraftRewriter partialRestoreDraftRewriter = new PartialRestoreDraftRewriter();
-    private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
+    private final RestoreCompletionCoordinator completionCoordinator = new RestoreCompletionCoordinator();
     private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
@@ -352,7 +348,7 @@ public final class RestoreService {
                 this.withAuthoritativeEntityReplacementBatches(layout, versions, version.id(), batches);
         return new WorldOperationManager.PreparedApplyOperation(
                 finalBatches,
-                () -> this.completeRestore(
+                () -> this.completionCoordinator.completeRestore(
                         level,
                         layout,
                         project,
@@ -526,7 +522,7 @@ public final class RestoreService {
         }
         return new WorldOperationManager.PreparedApplyOperation(
                 batches,
-                () -> this.completePartialRestore(
+                () -> this.completionCoordinator.completePartialRestore(
                         level,
                         layout,
                         project,
@@ -769,78 +765,6 @@ public final class RestoreService {
         return new PartialRestoreDraft(RestorePlanMode.TARGET_STATE, draft);
     }
 
-    private void completePartialRestore(
-            ServerLevel level,
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            RecoveryDraft pendingDraft,
-            PartialRestoreRequest request,
-            RecoveryDraft partialDraft,
-            ProjectVersion stagedVersion,
-            int batchCount
-    ) throws IOException {
-        this.recoveryRepository.savePendingRestoreCompletion(layout, PendingRestoreCompletion.partial(
-                project.id().toString(),
-                partialDraft.variantId(),
-                stagedVersion.id(),
-                Instant.now(),
-                request.bounds(),
-                request.restoreMode()
-        ));
-        this.versionService.publishStagedVersion(
-                level,
-                layout,
-                project,
-                stagedVersion,
-                partialDraft,
-                true
-        );
-        this.recordPartialRestoreUndoAction(level, project, request, partialDraft);
-        this.partialRestoreDraftRewriter.preserveOutsideRestoredRegion(
-                layout,
-                pendingDraft,
-                request.bounds(),
-                request.restoreMode()
-        );
-        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                Instant.now(),
-                "partial-restore-completed",
-                "Partial restore wrote a new version from selected region",
-                request.targetVersionId(),
-                partialDraft.variantId()
-        ));
-        this.recoveryRepository.deletePendingRestoreCompletion(layout);
-        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
-        LumaMod.LOGGER.info(
-                "Completed partial restore for project {} to version {} with {} chunk batches and {} changes",
-                project.name(),
-                request.targetVersionId(),
-                batchCount,
-                partialDraft.totalChangeCount()
-        );
-    }
-
-    private void recordPartialRestoreUndoAction(
-            ServerLevel level,
-            io.github.luma.domain.model.BuildProject project,
-            PartialRestoreRequest request,
-            RecoveryDraft partialDraft
-    ) {
-        if (partialDraft == null || partialDraft.isEmpty()) {
-            return;
-        }
-        Instant now = Instant.now();
-        this.undoRedoHistoryManager.recordAction(
-                project.id().toString(),
-                level.dimension().identifier().toString(),
-                "partial-restore-" + request.targetVersionId() + "-" + UUID.randomUUID(),
-                partialDraft.actor(),
-                partialDraft.changes(),
-                partialDraft.entityChanges(),
-                now
-        );
-    }
-
     private String partialRestoreMessage(PartialRestoreRequest request) {
         if (request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA) {
             return "Restore around selection to " + request.targetVersionId();
@@ -851,56 +775,6 @@ public final class RestoreService {
     private static WorldOperationManager.ProgressSink progressSinkNoOp() {
         return (stage, completedUnits, totalUnits, detail) -> {
         };
-    }
-
-    private void completeRestore(
-            ServerLevel level,
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            List<ProjectVariant> variants,
-            ProjectVariant targetVariant,
-            ProjectVersion version,
-            int batchCount,
-            RestoreUndoAction restoreUndoAction
-    ) throws IOException {
-        Instant now = Instant.now();
-        this.recoveryRepository.savePendingRestoreCompletion(layout, PendingRestoreCompletion.full(
-                project.id().toString(),
-                targetVariant.id(),
-                version.id(),
-                now
-        ));
-        List<ProjectVariant> latestVariants = this.variantRepository.loadAll(layout);
-        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_RESTORE_METADATA_WRITE);
-        this.variantRepository.save(layout, this.replaceVariantHead(
-                latestVariants.isEmpty() ? variants : latestVariants,
-                targetVariant.id(),
-                version.id()
-        ));
-        io.github.luma.domain.model.BuildProject updatedProject = targetVariant.id().equals(project.activeVariantId())
-                ? project.withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION).withUpdatedAt(now)
-                : project.withActiveVariantId(targetVariant.id(), now)
-                        .withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION);
-        this.projectRepository.save(layout, updatedProject);
-        this.recoveryRepository.deleteDraft(layout);
-        this.undoRedoHistoryManager.clearProject(project.id().toString());
-        this.recordRestoreUndoAction(restoreUndoAction, now);
-        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                now,
-                "restore-completed",
-                "Restored project state and reset branch head to version " + version.id(),
-                version.id(),
-                targetVariant.id()
-        ));
-        this.recoveryRepository.deletePendingRestoreCompletion(layout);
-        HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
-        LumaMod.LOGGER.info(
-                "Completed restore for project {} to version {} on variant {} with {} prepared chunk batches",
-                project.name(),
-                version.id(),
-                targetVariant.id(),
-                batchCount
-        );
     }
 
     RestoreUndoAction quickRollbackUndoAction(
@@ -928,21 +802,6 @@ public final class RestoreService {
                 dimensionId,
                 changes,
                 entityChanges
-        );
-    }
-
-    private void recordRestoreUndoAction(RestoreUndoAction action, Instant now) {
-        if (action == null || action.isEmpty()) {
-            return;
-        }
-        this.undoRedoHistoryManager.recordAction(
-                action.projectId(),
-                action.dimensionId(),
-                action.actionId(),
-                action.actor(),
-                action.changes(),
-                action.entityChanges(),
-                now
         );
     }
 
@@ -1910,25 +1769,6 @@ public final class RestoreService {
         return RestorePlanMode.BASELINE_CHUNKS;
     }
 
-    private List<ProjectVariant> replaceVariantHead(List<ProjectVariant> variants, String targetVariantId, String targetVersionId) {
-        List<ProjectVariant> updated = new ArrayList<>();
-        for (ProjectVariant variant : variants) {
-            if (!variant.id().equals(targetVariantId)) {
-                updated.add(variant);
-                continue;
-            }
-            updated.add(new ProjectVariant(
-                    variant.id(),
-                    variant.name(),
-                    variant.baseVersionId(),
-                    targetVersionId,
-                    variant.main(),
-                    variant.createdAt()
-            ));
-        }
-        return updated;
-    }
-
     static List<PreparedChunkBatch> collapsePreparedBatches(List<PreparedChunkBatch> batches) {
         return new PreparedChunkBatchCollapser().collapse(batches);
     }
@@ -2050,7 +1890,7 @@ public final class RestoreService {
             entityChanges = entityChanges == null ? List.of() : List.copyOf(entityChanges);
         }
 
-        private boolean isEmpty() {
+        boolean isEmpty() {
             return this.changes.isEmpty() && this.entityChanges.isEmpty();
         }
     }
