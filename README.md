@@ -142,6 +142,7 @@ Restore planning prefers the cheapest valid path:
 - snapshot fallback reconstructs from a checkpoint snapshot plus patch chain
 - partial restore can read only selected chunk frames when a direct patch path exists
 - non-direct partial restore reconstructs finite current and target states from snapshots, baseline chunks, and patches; direct partial restore switches to this target-state path when redstone/mechanism states are involved so writes stay inside the selected mode
+- bounded-project partial restore clips selected-area target-state planning to the project bounds before requiring stored payloads
 - partial restore applies the chosen save state into the world and pending draft without moving the branch head or creating a save
 
 The apply layer chooses the safest fast path per prepared section:

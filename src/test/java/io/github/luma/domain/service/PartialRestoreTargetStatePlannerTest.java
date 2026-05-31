@@ -104,6 +104,31 @@ class PartialRestoreTargetStatePlannerTest {
     }
 
     @Test
+    void selectedAreaClipsTargetStateScopeToBoundedProject() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        BuildProject project = boundedProject();
+        writeSnapshot(layout, "current", Map.of(point(1), "minecraft:gold_block"), List.of());
+        writeSnapshot(layout, "target", Map.of(point(1), "minecraft:diamond_block"), List.of());
+        ProjectVersion current = version("current", "", "current", List.of(), VersionKind.INITIAL);
+        ProjectVersion target = version("target", "", "target", List.of(), VersionKind.INITIAL);
+
+        PartialRestoreTargetStatePlanner.Plan plan = this.planner.plan(
+                layout,
+                project,
+                List.of(current, target),
+                current,
+                target,
+                null,
+                new Bounds3i(point(1), new BlockPoint(20, 64, 0)),
+                PartialRestoreMode.SELECTED_AREA,
+                64,
+                64,
+                noop());
+
+        assertEquals(List.of(point(1)), plan.blockChanges().stream().map(StoredBlockChange::pos).toList());
+    }
+
+    @Test
     void fillsWholeDimensionTargetStateFromBaselineChunks() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW);

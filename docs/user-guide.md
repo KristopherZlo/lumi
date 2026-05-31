@@ -511,6 +511,8 @@ Bounds sources:
 - current Lumi wooden-sword selection;
 - manually entered min/max XYZ bounds.
 
+In legacy bounded projects, Lumi restores only the part of those bounds that overlaps the project. Bounds outside the project are ignored, and a selection with no tracked overlap previews as no changes instead of a broken restore.
+
 Recommended flow:
 
 1. Open the target save.

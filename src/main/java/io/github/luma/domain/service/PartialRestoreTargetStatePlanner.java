@@ -111,13 +111,19 @@ final class PartialRestoreTargetStatePlanner {
     ) throws IOException {
         PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
         if (effectiveMode == PartialRestoreMode.SELECTED_AREA) {
+            Bounds3i projectBounds = project.bounds();
+            Bounds3i limitBounds = project.tracksWholeDimension() ? null : projectBounds;
+            Bounds3i scopedBounds = limitBounds == null ? bounds : intersection(bounds, limitBounds);
+            if (scopedBounds == null) {
+                return emptyScope(bounds, limitBounds, effectiveMode);
+            }
             return new Scope(
                     bounds,
-                    bounds,
+                    limitBounds,
                     effectiveMode,
-                    chunksIntersecting(bounds),
-                    bounds.min().y(),
-                    bounds.max().y()
+                    chunksIntersecting(scopedBounds),
+                    scopedBounds.min().y(),
+                    scopedBounds.max().y()
             );
         }
 
@@ -128,6 +134,29 @@ final class PartialRestoreTargetStatePlanner {
                 ? this.knownWholeDimensionChunks(layout, versions, currentHead, targetVersion)
                 : chunksIntersecting(projectBounds);
         return new Scope(bounds, projectBounds, effectiveMode, chunks, minY, maxY);
+    }
+
+    private static Scope emptyScope(Bounds3i bounds, Bounds3i limitBounds, PartialRestoreMode mode) {
+        return new Scope(bounds, limitBounds, mode, List.of(), 0, -1);
+    }
+
+    private static Bounds3i intersection(Bounds3i left, Bounds3i right) {
+        if (left == null || right == null) {
+            return null;
+        }
+        int minX = Math.max(left.min().x(), right.min().x());
+        int minY = Math.max(left.min().y(), right.min().y());
+        int minZ = Math.max(left.min().z(), right.min().z());
+        int maxX = Math.min(left.max().x(), right.max().x());
+        int maxY = Math.min(left.max().y(), right.max().y());
+        int maxZ = Math.min(left.max().z(), right.max().z());
+        if (minX > maxX || minY > maxY || minZ > maxZ) {
+            return null;
+        }
+        return new Bounds3i(
+                new BlockPoint(minX, minY, minZ),
+                new BlockPoint(maxX, maxY, maxZ)
+        );
     }
 
     private List<ChunkPoint> knownWholeDimensionChunks(
