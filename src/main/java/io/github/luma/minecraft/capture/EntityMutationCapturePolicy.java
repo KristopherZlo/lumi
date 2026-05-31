@@ -47,6 +47,7 @@ public final class EntityMutationCapturePolicy {
             WorldMutationSource.FALLING_BLOCK,
             WorldMutationSource.BLOCK_UPDATE
     );
+    private static final String PRIMED_TNT_ENTITY_TYPE = "minecraft:tnt";
     private final PlacedEntityHistoryPolicy placedEntityHistoryPolicy = new PlacedEntityHistoryPolicy();
 
     public Optional<StoredEntityChange> capture(
@@ -121,7 +122,8 @@ public final class EntityMutationCapturePolicy {
     }
 
     boolean shouldInspectUndoOnlyMutation(WorldMutationSource source, String entityType) {
-        return UNDO_ONLY_ITEM_DROP_SOURCES.contains(source) && "minecraft:item".equals(entityType);
+        return (UNDO_ONLY_ITEM_DROP_SOURCES.contains(source) && "minecraft:item".equals(entityType))
+                || (source == WorldMutationSource.EXPLOSIVE && PRIMED_TNT_ENTITY_TYPE.equals(entityType));
     }
 
     boolean shouldCaptureMutation(WorldMutationSource source, EntityPayload oldValue, EntityPayload newValue) {

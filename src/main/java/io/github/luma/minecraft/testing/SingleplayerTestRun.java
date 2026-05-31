@@ -103,6 +103,7 @@ final class SingleplayerTestRun {
     private BuildProject project;
     private ProjectVariant branch;
     private SingleplayerGameplayRegressionSuite.GameplayRegressionReport gameplayReport;
+    private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport primedTntUndoReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
     private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
     private SingleplayerLargeHistoryScenario largeHistoryScenario;
@@ -209,6 +210,9 @@ final class SingleplayerTestRun {
                 case CHECK_ENTITY_QUICK_ROLLBACK -> this.checkEntityQuickRollback(server);
                 case START_GAMEPLAY_ENTITY_UPDATE_SAVE -> this.startGameplayEntityUpdateSave(server);
                 case CHECK_GAMEPLAY_ENTITY_UPDATE_SAVE -> this.checkGameplayEntityUpdateSave(server);
+                case START_PRIMED_TNT_UNDO_INTERACTION -> this.startPrimedTntUndoInteraction(server);
+                case START_PRIMED_TNT_UNDO -> this.startPrimedTntUndo();
+                case CHECK_PRIMED_TNT_UNDO -> this.checkPrimedTntUndo();
                 case START_EXPLOSION_INTERACTION -> this.startExplosionInteraction(server);
                 case CHECK_EXPLOSION_CAPTURE -> this.checkExplosionCapture(server);
                 case START_EXPLOSION_UNDO -> this.startExplosionUndo();
@@ -741,7 +745,7 @@ final class SingleplayerTestRun {
         Entity entity = this.gameplayEntity();
         if (entity == null) {
             this.recordFailure("Gameplay saved entity is available for quick rollback");
-            this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
+            this.completePhase(server, Phase.START_PRIMED_TNT_UNDO_INTERACTION);
             return;
         }
 
@@ -780,7 +784,7 @@ final class SingleplayerTestRun {
         Entity entity = this.entityById(this.savedGameplayEntityId);
         if (entity == null) {
             this.recordFailure("Gameplay saved entity is available for update save");
-            this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
+            this.completePhase(server, Phase.START_PRIMED_TNT_UNDO_INTERACTION);
             return;
         }
 
@@ -813,7 +817,38 @@ final class SingleplayerTestRun {
             this.check("Gameplay entity update save consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
             this.gameplayEntityUpdateSaveValidated = true;
         }
-        this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
+        this.completePhase(server, Phase.START_PRIMED_TNT_UNDO_INTERACTION);
+    }
+
+    private void startPrimedTntUndoInteraction(MinecraftServer server) {
+        this.primedTntUndoReport = new SingleplayerExplosionRegressionScenario().start(
+                this.level,
+                this.player,
+                this.volume,
+                ACTOR,
+                this.volume.min().offset(12, 0, 2)
+        );
+        this.check(this.primedTntUndoReport.placed(), "Player placed primed-undo TNT through gameMode useItemOn");
+        this.check(this.primedTntUndoReport.ignited(), "Player ignited primed-undo TNT through gameMode useItemOn");
+        this.completePhase(server, Phase.START_PRIMED_TNT_UNDO);
+    }
+
+    private void startPrimedTntUndo() throws Exception {
+        if (!this.waitForUndoRedoStabilization("primed TNT undo")) {
+            return;
+        }
+        this.check(this.primedTntUndoReport != null && this.primedTntUndoReport.primedTntPresent(this.level),
+                "Primed TNT entity exists before fuse-time undo");
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued primed TNT undo operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_PRIMED_TNT_UNDO);
+    }
+
+    private void checkPrimedTntUndo() {
+        this.check(this.primedTntUndoReport != null
+                        && this.primedTntUndoReport.restoredBeforeExplosionUndo(this.level),
+                "Fuse-time TNT undo restored TNT block and removed primed entity");
+        this.completePhase(this.level.getServer(), Phase.START_EXPLOSION_INTERACTION);
     }
 
     private void startExplosionInteraction(MinecraftServer server) {
@@ -913,6 +948,7 @@ final class SingleplayerTestRun {
             this.check(entity == null || entity.isRemoved(),
                     "Full restore removed saved gameplay entity after saved update");
         }
+        this.primedTntUndoReport = null;
         this.explosionReport = null;
         this.check("Gameplay restore consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
@@ -1190,6 +1226,7 @@ final class SingleplayerTestRun {
             }
             this.gameplayReport = null;
         }
+        this.primedTntUndoReport = null;
         this.explosionReport = null;
         if (this.bulkApplyDiagnostics != null) {
             try {
@@ -1446,6 +1483,9 @@ final class SingleplayerTestRun {
         CHECK_ENTITY_QUICK_ROLLBACK("Verify entity quick rollback", "check saved entity state after quick rollback"),
         START_GAMEPLAY_ENTITY_UPDATE_SAVE("Queue entity update save", "save an update to an existing gameplay entity"),
         CHECK_GAMEPLAY_ENTITY_UPDATE_SAVE("Verify entity update save", "check saved entity history before full restore"),
+        START_PRIMED_TNT_UNDO_INTERACTION("Primed TNT interaction", "place and ignite TNT before its fuse completes"),
+        START_PRIMED_TNT_UNDO("Queue primed TNT undo", "undo TNT ignition before the primed entity explodes"),
+        CHECK_PRIMED_TNT_UNDO("Verify primed TNT undo", "check that undo removed the primed entity and restored the block"),
         START_EXPLOSION_INTERACTION("TNT interaction", "place and ignite TNT through player game-mode actions"),
         CHECK_EXPLOSION_CAPTURE("Verify TNT capture", "wait for the controlled explosion and inspect its draft"),
         START_EXPLOSION_UNDO("Queue TNT undo", "undo the controlled explosion through the operation model"),
@@ -1524,6 +1564,7 @@ final class SingleplayerTestRun {
                      START_GAMEPLAY_SAVE, CHECK_GAMEPLAY_SAVE,
                      START_ENTITY_QUICK_ROLLBACK, CHECK_ENTITY_QUICK_ROLLBACK,
                      START_GAMEPLAY_ENTITY_UPDATE_SAVE, CHECK_GAMEPLAY_ENTITY_UPDATE_SAVE,
+                     START_PRIMED_TNT_UNDO_INTERACTION, START_PRIMED_TNT_UNDO, CHECK_PRIMED_TNT_UNDO,
                      START_EXPLOSION_INTERACTION,
                      CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
                      START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,

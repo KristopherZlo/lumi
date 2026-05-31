@@ -115,6 +115,14 @@ class EntityMutationCapturePolicyTest {
         assertFalse(this.policy.captureUndoOnly(WorldMutationSource.PLAYER, null, item).isPresent());
     }
 
+    @Test
+    void primedTntSpawnIsUndoOnlyForExplosiveSources() {
+        EntityPayload primedTnt = entity("minecraft:tnt", "00000000-0000-0000-0000-000000000048", 1.0D);
+
+        assertFalse(this.policy.capture(WorldMutationSource.EXPLOSIVE, null, primedTnt).isPresent());
+        assertTrue(this.policy.captureUndoOnly(WorldMutationSource.EXPLOSIVE, null, primedTnt).isPresent());
+    }
+
     private static EntityPayload entity(String type, String uuid, double x) {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", type);

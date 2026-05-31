@@ -270,7 +270,7 @@ client GameTest profiles set this flag automatically.
 
 `/lumi testing smoke` runs the shorter project smoke path. It validates bootstrap storage, pre-open checkpoint metadata, snapshot content refs, section-indexed patch reads, capture, save/amend, branch/export, partial restore, full restore, integrity, and cleanup.
 
-`/lumi testing singleplayer` runs the broad runtime suite. It covers real save/restore/undo/redo paths, branch/share/archive flows, partial restore, entity history, water/TNT/redstone/piston fixtures, preview fulfillment, integrity, cleanup, and prepared-apply diagnostics.
+`/lumi testing singleplayer` runs the broad runtime suite. It covers real save/restore/undo/redo paths, branch/share/archive flows, partial restore, entity history, fuse-time TNT undo, water/TNT/redstone/piston fixtures, preview fulfillment, integrity, cleanup, and prepared-apply diagnostics.
 
 `/lumi testing player-flow` runs the broad suite from ordinary terrain: it prepares a smooth-stone platform near the player, creates the test project over that prepared area, and verifies restore returns to that platform baseline. It fails on flat chunk generators.
 

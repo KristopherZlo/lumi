@@ -184,7 +184,7 @@ Lumi tracks explicit builder-driven changes in the current workspace:
 - non-player entity spawn, removal, position, and persistent state changes from explicit player actions;
 - supported builder-tool block and entity edits;
 - supported falling-block outcomes inside an active causal envelope;
-- TNT ignition and the resulting TNT damage;
+- TNT ignition, active primed TNT cleanup on undo, and the resulting TNT damage;
 - explosion edits tied to a tracked action;
 - fluid fallout inside an active causal envelope;
 - fire spread and burn-out inside an active causal envelope;
@@ -432,7 +432,7 @@ Undo and redo restore stored block states and captured block-entity payloads, in
 
 Redstone power/source changes queue scoped neighbor updates after stored blocks are written so nearby circuitry can settle. Fluid replay queues bounded vanilla fluid ticks around loaded connected fluid tails while exact replay keeps the stored target cells fixed, so removed water or lava tails do not hang until a nearby block update. Ordinary replay still avoids placement physics and suppresses stale replay callbacks around piston/observer mechanism positions.
 
-Undo also removes item drops caused by the tracked edit, such as:
+Undo also removes active primed TNT from a tracked ignition before it explodes, plus item drops caused by the tracked edit, such as:
 
 - player-killed mob drops;
 - TNT drops;
