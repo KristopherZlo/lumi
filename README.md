@@ -159,7 +159,7 @@ Lumi's important performance work is mostly structural:
 - Chunk and section addressing keeps selection, storage, diff, restore, and overlay work bounded.
 - Section change masks avoid expanding sparse edits into full 4096-cell loops.
 - Direct restores to `Initial` and `WORLD_ROOT` replay sparse exact-root positions and only expand touched redstone/mechanism sections up to a fixed reconciliation cap.
-- Direct restore and quick rollback resolve extra redstone/mechanism halo targets off-thread by exact position instead of decoding broad chunks on the tick-thread apply path.
+- Direct restore and quick rollback resolve extra redstone/mechanism halo targets off-thread by exact position, clipped to project and selected-area bounds, instead of decoding broad chunks on the tick-thread apply path.
 - Patch metadata enables seek-based selected-chunk reads.
 - Section fingerprints let diff skip equal patch sections before loading full state.
 - Block-state palette decode caches avoid parsing identical NBT states repeatedly.

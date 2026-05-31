@@ -100,7 +100,7 @@ Use `src/main/java/io/github/luma/domain/service` for business workflows and pro
 - `RestoreRequestResolver`: target version/variant resolution and imported-package trust gating before restore planning.
 - `RestorePlanBuilder`: checkpoint snapshot, patch metadata chain, and whole-dimension baseline-gap planning for full restore.
 - `RestorePayloadLoader`: version patch metadata lookup plus full/selective block and entity payload reads for restore planning.
-- `QuickRollbackService`: fast dirty-draft rollback to the active head, mechanism halo reconciliation with selected-area clipping, and return-before-restore workflow.
+- `QuickRollbackService`: fast dirty-draft rollback to the active head, mechanism halo reconciliation clipped to project and selected-area bounds, and return-before-restore workflow.
 - `RecoveryService`: recover, discard, persist, and expose interrupted work.
 - `OperationDraftRecoveryService`: promote or merge interrupted save/amend operation drafts back into visible recovery drafts after a crash, world exit, or cancelled operation once no active world operation can still own the isolated draft.
 - `HistoryEditService`: rename saves, soft-delete safe saves, soft-delete inactive branches, and persist history tombstones.

@@ -50,6 +50,8 @@ public final class QuickRollbackService {
     private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final DeferredActionFalloutGuard deferredActionFalloutGuard = DeferredActionFalloutGuard.getInstance();
+    private final RestoreMechanismReconciliationPlanner mechanismReconciliationPlanner =
+            new RestoreMechanismReconciliationPlanner();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
@@ -238,7 +240,12 @@ public final class QuickRollbackService {
             MechanismReplayScope mechanismScope,
             Bounds3i selectedBounds
     ) throws IOException {
-        List<BlockPoint> positions = this.mechanismReconciliationPositions(mechanismScope, selectedBounds);
+        List<BlockPoint> positions = this.mechanismReconciliationPositions(
+                project,
+                mechanismScope,
+                selectedBounds,
+                level
+        );
         if (positions.isEmpty()) {
             return batches == null ? List.of() : batches;
         }
@@ -261,11 +268,28 @@ public final class QuickRollbackService {
         return RestoreService.collapsePreparedBatches(combined);
     }
 
-    List<BlockPoint> mechanismReconciliationPositions(MechanismReplayScope mechanismScope, Bounds3i selectedBounds) {
-        if (mechanismScope == null || mechanismScope.positions().isEmpty()) {
+    List<BlockPoint> mechanismReconciliationPositions(
+            BuildProject project,
+            MechanismReplayScope mechanismScope,
+            Bounds3i selectedBounds,
+            ServerLevel level
+    ) {
+        if (mechanismScope == null || mechanismScope.isEmpty()) {
             return List.of();
         }
-        return mechanismScope.positions().stream()
+        Optional<List<BlockPoint>> positions = this.mechanismReconciliationPlanner.boundedMechanismReplayPositions(
+                project,
+                mechanismScope,
+                level
+        );
+        if (positions.isEmpty()) {
+            LumaMod.LOGGER.info(
+                    "Skipped quick rollback mechanism target-state reconciliation because scope exceeded {} cells",
+                    RestoreMechanismReconciliationPlanner.MAX_MECHANISM_RECONCILIATION_CELLS
+            );
+            return List.of();
+        }
+        return positions.orElseThrow().stream()
                 .filter(position -> selectedBounds == null || selectedBounds.contains(position))
                 .toList();
     }
