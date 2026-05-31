@@ -70,6 +70,7 @@ public final class HistoryCaptureManager {
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
     private final CaptureBaselineCoordinator baselineCoordinator =
             new CaptureBaselineCoordinator(this.stabilizationService, new PersistentBlockStatePolicy());
+    private final SessionBaselineStateResolver sessionBaselineStateResolver = new SessionBaselineStateResolver();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final ActiveSessionRegionPolicy activeSessionRegionPolicy = new ActiveSessionRegionPolicy();
@@ -404,8 +405,12 @@ public final class HistoryCaptureManager {
                     );
                     continue;
                 }
+                StoredBlockChange draftChange =
+                        this.sessionBaselineStateResolver.rebaseToSessionBaseline(session, capturedChange);
                 int pendingBefore = buffer.size();
-                buffer.addChange(capturedChange, now);
+                if (draftChange != null && !draftChange.isNoOp()) {
+                    buffer.addChange(draftChange, now);
+                }
                 this.liveUndoRedoActionRecorder.recordBlockAction(trackedProject, level, capturedChange, now);
                 int pendingAfter = buffer.size();
                 this.historyDebugLog.logCapturedBlock(
