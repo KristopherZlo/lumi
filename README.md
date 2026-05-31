@@ -40,7 +40,7 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 
 - Automatic dimension workspaces and bounded project workspaces.
 - Builder-facing Build History UI with save details, branches, compare, restore, import/export, recovery, cleanup, settings, and deleted-save views.
-- Manual saves, quick saves, amend latest save, restore checkpoints, auto checkpoints before configured large external edits, and semantic save kinds such as `MERGE`, `AUTO_CHECKPOINT`, and `PARTIAL_RESTORE`.
+- Manual saves, quick saves, amend latest save, restore checkpoints, auto checkpoints before configured large external edits, and semantic save kinds such as `MERGE` and `AUTO_CHECKPOINT`.
 - Live undo/redo for recent tracked actions with default `Left Alt+Z` and `Left Alt+Y`; quick rollback with default `R`; quick save with default `Left Alt+S`; hotkey help with default `Left Alt+I`.
 - Runtime wooden-sword region selection for partial restore and selected-area quick rollback.
 - Version compare for saved versions, branches, and the current build, with world overlays for changed blocks.
@@ -142,6 +142,7 @@ Restore planning prefers the cheapest valid path:
 - snapshot fallback reconstructs from a checkpoint snapshot plus patch chain
 - partial restore can read only selected chunk frames when a direct patch path exists
 - non-direct partial restore reconstructs finite current and target states from snapshots, baseline chunks, and patches; direct partial restore switches to this target-state path when redstone/mechanism states are involved so writes stay inside the selected mode
+- partial restore applies the chosen save state into the world and pending draft without moving the branch head or creating a save
 
 The apply layer chooses the safest fast path per prepared section:
 

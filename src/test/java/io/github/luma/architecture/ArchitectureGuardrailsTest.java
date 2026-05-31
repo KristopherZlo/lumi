@@ -131,6 +131,23 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
+    void partialRestoreDoesNotCreateOrPublishSavedVersions() throws IOException {
+        Path restoreService = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java");
+        Path coordinator = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreCompletionCoordinator.java");
+        String restoreSource = Files.readString(restoreService);
+        String coordinatorSource = Files.readString(coordinator);
+
+        assertTrue(
+                !restoreSource.contains("stagePartialRestoreVersion("),
+                "Partial restore should apply target state to the world and draft, not stage a saved version"
+        );
+        assertTrue(
+                !coordinatorSource.contains("publishStagedVersion("),
+                "Partial restore completion must not publish a staged version or move branch head"
+        );
+    }
+
+    @Test
     void restoreEntityStateWorkflowHasDedicatedResolver() throws IOException {
         Path restoreService = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java");
         Path resolver = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreEntityStateResolver.java");

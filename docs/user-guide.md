@@ -36,7 +36,7 @@ Lumi UI actions are intended for the local world owner. Capture and mutating Lum
 | Branch | A separate build direction inside the same workspace |
 | Unsaved work | Tracked edits that are not saved as a save yet |
 | Restore | Apply a save back into the world and move the active branch head |
-| Partial restore | Apply only a selected region from a save, then write a new save |
+| Partial restore | Apply only a selected region from a save as pending unsaved work |
 | See changes | Compare two states and show changed blocks/materials |
 | Recovery | Stored unsaved work from an interrupted previous session |
 | Quick rollback | Remove current unsaved work without moving the saved branch head |
@@ -519,7 +519,7 @@ Recommended flow:
 4. Preview the region.
 5. Apply the partial restore.
 
-Lumi writes the result as a new save on the active branch. It does not move the branch head back to the older save directly.
+Lumi writes the selected target state into the world as pending unsaved work. It does not move the branch head back to the older save and does not create a save until you explicitly save.
 
 The applied partial restore is also undoable with `Left Alt+Z` and redoable with `Left Alt+Y`.
 

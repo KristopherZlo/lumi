@@ -193,42 +193,6 @@ class VersionServiceTest {
     }
 
     @Test
-    void stagePartialRestoreVersionWritesVersionWithoutMovingHead() throws Exception {
-        VersionService service = new VersionService();
-        UUID projectId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("partial-stage.mbp"));
-        BuildProject project = project(projectId);
-        new ProjectRepository().save(layout, project);
-        new VariantRepository().save(layout, List.of(new ProjectVariant("main", "main", "v0001", "v0001", true, instant(0))));
-        new VersionRepository().save(layout, version("v0001", "", "", VersionKind.INITIAL));
-        RecoveryDraft draft = new RecoveryDraft(
-                projectId.toString(),
-                "main",
-                "v0001",
-                "tester",
-                WorldMutationSource.RESTORE,
-                instant(10),
-                instant(20),
-                List.of(change(1, "minecraft:stone", "minecraft:gold_block"))
-        );
-
-        ProjectVersion staged = service.stagePartialRestoreVersion(
-                layout,
-                project,
-                draft,
-                "Partial restore",
-                "tester",
-                (stage, completed, total, detail) -> {
-                }
-        );
-
-        assertEquals(VersionKind.PARTIAL_RESTORE, staged.versionKind());
-        assertEquals(staged, new VersionRepository().load(layout, staged.id()).orElseThrow());
-        assertEquals("v0001", new VariantRepository().loadAll(layout).getFirst().headVersionId());
-        assertEquals("main", new ProjectRepository().load(layout).orElseThrow().activeVariantId());
-    }
-
-    @Test
     void versionsSinceSnapshotTreatsWorldRootAsAnchor() {
         VersionService service = new VersionService();
         List<ProjectVersion> versions = List.of(

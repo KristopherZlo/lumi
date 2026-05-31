@@ -30,7 +30,6 @@ final class RestoreCompletionCoordinator {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
-    private final VersionService versionService = new VersionService();
     private final PartialRestoreDraftRewriter partialRestoreDraftRewriter = new PartialRestoreDraftRewriter();
     private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
 
@@ -41,36 +40,33 @@ final class RestoreCompletionCoordinator {
             RecoveryDraft pendingDraft,
             PartialRestoreRequest request,
             RecoveryDraft partialDraft,
-            ProjectVersion stagedVersion,
             int batchCount
     ) throws IOException {
+        Instant now = Instant.now();
+        RecoveryDraft mergedDraft = this.partialRestoreDraftRewriter.mergeRestoredChanges(
+                pendingDraft,
+                partialDraft,
+                now
+        );
+        RecoveryDraft durableOperationDraft = mergedDraft == null
+                ? this.partialRestoreDraftRewriter.emptyRestoredDraft(pendingDraft, partialDraft, now)
+                : mergedDraft;
+        this.recoveryRepository.saveOperationDraft(layout, durableOperationDraft);
         this.recoveryRepository.savePendingRestoreCompletion(layout, PendingRestoreCompletion.partial(
                 project.id().toString(),
                 partialDraft.variantId(),
-                stagedVersion.id(),
-                Instant.now(),
+                request.targetVersionId(),
+                now,
                 request.bounds(),
                 request.restoreMode()
         ));
-        this.versionService.publishStagedVersion(
-                level,
-                layout,
-                project,
-                stagedVersion,
-                partialDraft,
-                true
-        );
         this.recordPartialRestoreUndoAction(level, project, request, partialDraft);
-        this.partialRestoreDraftRewriter.preserveOutsideRestoredRegion(
-                layout,
-                pendingDraft,
-                request.bounds(),
-                request.restoreMode()
-        );
+        this.partialRestoreDraftRewriter.saveDraftOrDelete(layout, mergedDraft);
+        this.recoveryRepository.deleteOperationDraft(layout);
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                Instant.now(),
+                now,
                 "partial-restore-completed",
-                "Partial restore wrote a new version from selected region",
+                "Partial restore applied target state as pending draft changes",
                 request.targetVersionId(),
                 partialDraft.variantId()
         ));

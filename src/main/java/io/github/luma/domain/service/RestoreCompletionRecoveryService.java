@@ -7,6 +7,8 @@ import io.github.luma.domain.model.PendingRestoreCompletionKind;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -51,12 +53,57 @@ final class RestoreCompletionRecoveryService {
             return;
         }
 
+        if (completion.kind() == PendingRestoreCompletionKind.PARTIAL_RESTORE) {
+            this.completePendingPartialRestore(layout, project, completion, server);
+            return;
+        }
+
         ProjectVersion version = this.versionRepository.load(layout, completion.targetVersionId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Pending restore completion target version is missing: " + completion.targetVersionId()
                 ));
         this.publishHead(layout, project, completion.variantId(), version.id());
-        if (completion.kind() == PendingRestoreCompletionKind.PARTIAL_RESTORE) {
+        this.recoveryRepository.deleteDraft(layout);
+        this.appendJournalIfMissing(
+                layout,
+                "restore-completed",
+                version.id(),
+                completion.variantId(),
+                "Restored project state and reset branch head to version " + version.id()
+        );
+
+        this.recoveryRepository.deletePendingRestoreCompletion(layout);
+        if (server != null) {
+            HistoryCaptureManager.getInstance().invalidateProjectCache(server);
+        }
+    }
+
+    private void completePendingPartialRestore(
+            ProjectLayout layout,
+            BuildProject project,
+            PendingRestoreCompletion completion,
+            MinecraftServer server
+    ) throws IOException {
+        if (this.promotePartialRestoreOperationDraft(layout, project)) {
+            this.appendJournalIfMissing(
+                    layout,
+                    "partial-restore-completed",
+                    completion.targetVersionId(),
+                    completion.variantId(),
+                    "Partial restore applied target state as pending draft changes"
+            );
+            this.recoveryRepository.deletePendingRestoreCompletion(layout);
+            if (server != null) {
+                HistoryCaptureManager.getInstance().invalidateProjectCache(server);
+            }
+            return;
+        }
+
+        ProjectVersion legacyStagedVersion = this.versionRepository.load(layout, completion.targetVersionId())
+                .filter(version -> version.versionKind() == VersionKind.PARTIAL_RESTORE)
+                .orElse(null);
+        if (legacyStagedVersion != null) {
+            this.publishHead(layout, project, completion.variantId(), legacyStagedVersion.id());
             this.partialRestoreDraftRewriter.preserveOutsideRestoredRegion(
                     layout,
                     this.recoveryRepository.loadDraft(layout).orElse(null),
@@ -66,18 +113,9 @@ final class RestoreCompletionRecoveryService {
             this.appendJournalIfMissing(
                     layout,
                     "partial-restore-completed",
-                    version.id(),
+                    legacyStagedVersion.id(),
                     completion.variantId(),
                     "Partial restore wrote a new version from selected region"
-            );
-        } else {
-            this.recoveryRepository.deleteDraft(layout);
-            this.appendJournalIfMissing(
-                    layout,
-                    "restore-completed",
-                    version.id(),
-                    completion.variantId(),
-                    "Restored project state and reset branch head to version " + version.id()
             );
         }
 
@@ -85,6 +123,28 @@ final class RestoreCompletionRecoveryService {
         if (server != null) {
             HistoryCaptureManager.getInstance().invalidateProjectCache(server);
         }
+    }
+
+    private boolean promotePartialRestoreOperationDraft(ProjectLayout layout, BuildProject project) throws IOException {
+        RecoveryDraft operationDraft = this.recoveryRepository.loadOperationDraft(layout).orElse(null);
+        if (operationDraft == null) {
+            return false;
+        }
+        if (!project.id().toString().equals(operationDraft.projectId())) {
+            LumaMod.LOGGER.warn(
+                    "Keeping partial restore operation draft for project {} hidden because it belongs to project id {}",
+                    project.name(),
+                    operationDraft.projectId()
+            );
+            return false;
+        }
+        if (operationDraft.isEmpty()) {
+            this.recoveryRepository.deleteDraft(layout);
+        } else {
+            this.recoveryRepository.saveDraft(layout, operationDraft);
+        }
+        this.recoveryRepository.deleteOperationDraft(layout);
+        return true;
     }
 
     private void publishHead(

@@ -494,7 +494,10 @@ final class SingleplayerTestRun {
 
     private void checkPartialRestore(MinecraftServer server) throws Exception {
         this.checkBlock(this.volume.markerA(), Blocks.STONE, "Partial restore reverted marker A to the saved stone state");
-        this.check("Partial restore wrote version v0005", () -> this.projectService.loadVersions(server, this.project.name()).size() == 5);
+        this.check("Partial restore kept the saved version count unchanged", () ->
+                this.projectService.loadVersions(server, this.project.name()).size() == 4);
+        this.check("Partial restore left the applied region as pending work", () ->
+                this.recoveryService.loadDraft(server, this.project.name()).isPresent());
         this.completePhase(server, Phase.START_RESTORE_INITIAL);
     }
 

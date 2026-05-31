@@ -499,14 +499,6 @@ public final class RestoreService {
         if (partialDraft.draft().isEmpty()) {
             throw new IllegalArgumentException("Partial restore has no changes inside the selected region");
         }
-        ProjectVersion stagedVersion = this.versionService.stagePartialRestoreVersion(
-                layout,
-                project,
-                partialDraft.draft(),
-                this.partialRestoreMessage(request),
-                partialDraft.draft().actor(),
-                progressSinkNoOp()
-        );
         List<PreparedChunkBatch> decodedBatches = this.decodeStoredChanges(
                 level,
                 partialDraft.draft().changes(),
@@ -530,7 +522,6 @@ public final class RestoreService {
                         pendingDraft,
                         request,
                         partialDraft.draft(),
-                        stagedVersion,
                         batches.size()
                 )
         );
@@ -764,18 +755,6 @@ public final class RestoreService {
                 plan.blockChanges().size() + plan.entityChanges().size()
         );
         return new PartialRestoreDraft(RestorePlanMode.TARGET_STATE, draft);
-    }
-
-    private String partialRestoreMessage(PartialRestoreRequest request) {
-        if (request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA) {
-            return "Restore around selection to " + request.targetVersionId();
-        }
-        return "Restore selection from " + request.targetVersionId();
-    }
-
-    private static WorldOperationManager.ProgressSink progressSinkNoOp() {
-        return (stage, completedUnits, totalUnits, detail) -> {
-        };
     }
 
     RestoreUndoAction quickRollbackUndoAction(

@@ -260,7 +260,7 @@ Important fields:
 - `preview`
 - `sourceInfo`
 
-Version manifests stay lightweight. They are written only after referenced patch and snapshot payloads have been written successfully. A `PARTIAL_RESTORE` version may be staged before world mutation: its manifest and patch payload are loadable by id, but it is not the active branch head until the restore apply succeeds and variant metadata is published. If metadata publication is interrupted after apply, `recovery/pending-restore-completion.json` records the remaining publication work.
+Version manifests stay lightweight. They are written only after referenced patch and snapshot payloads have been written successfully. Partial restore no longer writes a version manifest; it applies the chosen save state into the world and pending recovery draft. Legacy histories may still contain `PARTIAL_RESTORE` versions from older builds.
 
 `versions/index.json` is an optional disposable cache for `VersionRepository.loadAll(...)`. It stores version records plus each manifest file's size and modification time. Lumi uses it only when every version manifest matches and no extra version JSON file exists; stale or corrupt indexes are ignored and rebuilt. Deleting `index.json` never changes restore correctness and the file is not a version manifest.
 
@@ -275,7 +275,7 @@ Additional semantic version kinds:
 
 - `MERGE`: a local or imported branch merge written as a normal patch-first save on the active branch
 - `AUTO_CHECKPOINT`: a pending draft saved automatically before a large external edit
-- `PARTIAL_RESTORE`: a selected-region restore written as a new save instead of moving the active branch head; staged before apply and published only after successful apply
+- `PARTIAL_RESTORE`: legacy selected-region restore saves created by older builds; current partial restore keeps the result as pending unsaved work instead of creating this version kind
 
 ### `patches/<patchId>.meta.json`
 
@@ -315,7 +315,7 @@ Current payload characteristics:
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
-Direct partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Entity reads use the old/new chunk index when present so moves across the selection boundary are included from their stored frame chunk. Schema v6/v7 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk or entity index is available. Non-direct partial restore reconstructs finite current and target states from `snapshots/`, `cache/baseline-chunks/`, and patch payloads before writing a normal `PARTIAL_RESTORE` patch; direct partial restore also uses that reconstruction path when selected changes contain redstone/mechanism states so no extra out-of-bounds reconciliation records are written. Missing required payload files are treated as an invalid restore plan.
+Direct partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Entity reads use the old/new chunk index when present so moves across the selection boundary are included from their stored frame chunk. Schema v6/v7 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk or entity index is available. Non-direct partial restore reconstructs finite current and target states from `snapshots/`, `cache/baseline-chunks/`, and patch payloads, then writes the result into the world and recovery draft as pending unsaved work. Direct partial restore also uses that reconstruction path when selected changes contain redstone/mechanism states so no extra out-of-bounds reconciliation records are written. Missing required payload files are treated as an invalid restore plan.
 Patch readers bound NBT lengths, compressed/uncompressed frame lengths, palette counts, entity counts, and selected chunk slices before allocating buffers. A selected chunk slice whose stored frame coordinates or entity coordinates do not match the requested chunk is treated as corrupt storage.
 
 ### `snapshots/<snapshotId>.bin.lz4`
@@ -407,7 +407,7 @@ If a full restore starts with unsaved draft changes, Lumi first writes a `RESTOR
 
 Stores restore metadata publication that must be retried after world apply has already succeeded. It contains the project id, variant id, target version id, completion kind (`FULL_RESTORE` or `PARTIAL_RESTORE`), creation timestamp, and partial restore bounds/mode for partial completions.
 
-Full restore writes this record before publishing variant/project metadata, deleting the recovery draft, and appending the completion journal entry. Partial restore writes the staged version before apply, then writes this record before publishing the staged version as the active head, recording live undo, rewriting the pending draft outside the restored region, and appending the completion journal entry. Idle bootstrap/recovery completes this record only when no Lumi world operation is active.
+Full restore writes this record before publishing variant/project metadata, deleting the recovery draft, and appending the completion journal entry. Partial restore writes a replacement operation draft after apply, then writes this record before replacing the live recovery draft, recording live undo, and appending the completion journal entry. Idle bootstrap/recovery completes this record only when no Lumi world operation is active.
 
 ### `cache/`
 
@@ -434,7 +434,7 @@ Current behavior:
 
 ## Archive format
 
-Version manifests may use `versionKind = PARTIAL_RESTORE` for region-scoped restores, `MERGE` for branch merges, and `AUTO_CHECKPOINT` for pending drafts saved before large external edits. The patch payload uses the normal block/entity-change format; the semantic difference is how the version was produced and how the UI labels it.
+Version manifests may use `versionKind = PARTIAL_RESTORE` for legacy region-scoped restore saves, `MERGE` for branch merges, and `AUTO_CHECKPOINT` for pending drafts saved before large external edits. The patch payload uses the normal block/entity-change format; the semantic difference is how the version was produced and how the UI labels it.
 
 Project import/export uses zip archives stored by default in the game-root `lumi-projects` folder. Each archive contains:
 

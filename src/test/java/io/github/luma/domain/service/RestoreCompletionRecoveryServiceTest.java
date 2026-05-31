@@ -77,13 +77,14 @@ class RestoreCompletionRecoveryServiceTest {
     }
 
     @Test
-    void completesPendingPartialRestoreAndRewritesDraftOutsideSelection() throws Exception {
+    void completesPendingPartialRestoreWithoutPublishingHead() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("project.mbp"));
         BuildProject project = project();
         this.projectRepository.save(layout, project);
         this.variantRepository.save(layout, List.of(new ProjectVariant("main", "main", "v0001", "v0001", true, NOW)));
-        this.versionRepository.save(layout, version("v0002", "main", "v0001", VersionKind.PARTIAL_RESTORE));
+        this.versionRepository.save(layout, version("v0002", "main", "v0001", VersionKind.MANUAL));
         this.recoveryRepository.saveDraft(layout, draft(List.of(change(1), change(20))));
+        this.recoveryRepository.saveOperationDraft(layout, draft(List.of(change(20), change(30))));
         this.recoveryRepository.savePendingRestoreCompletion(layout, PendingRestoreCompletion.partial(
                 project.id().toString(),
                 "main",
@@ -95,10 +96,12 @@ class RestoreCompletionRecoveryServiceTest {
 
         this.service.completePending(layout, project, null);
 
-        assertEquals("v0002", this.variantRepository.loadAll(layout).getFirst().headVersionId());
+        assertEquals("v0001", this.variantRepository.loadAll(layout).getFirst().headVersionId());
         RecoveryDraft remainingDraft = this.recoveryRepository.loadDraft(layout).orElseThrow();
-        assertEquals(1, remainingDraft.changes().size());
+        assertEquals(2, remainingDraft.changes().size());
         assertEquals(new BlockPoint(20, 64, 0), remainingDraft.changes().getFirst().pos());
+        assertEquals(new BlockPoint(30, 64, 0), remainingDraft.changes().get(1).pos());
+        assertTrue(this.recoveryRepository.loadOperationDraft(layout).isEmpty());
         assertTrue(this.recoveryRepository.loadPendingRestoreCompletion(layout).isEmpty());
     }
 

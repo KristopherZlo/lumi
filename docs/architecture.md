@@ -241,10 +241,9 @@ Key differences from full restore:
 - partial restore does not move the active variant head to the old target version
 - `SELECTED_AREA` applies only changes inside the selected bounds; with chunk-addressable patch payloads it reads only chunk frames intersecting those bounds
 - `OUTSIDE_SELECTED_AREA` applies the restore path outside the selected bounds, leaving selected blocks untouched
-- before apply, Lumi stages a new `PARTIAL_RESTORE` version without moving the active variant head
-- after apply, `RestoreCompletionCoordinator` writes a pending restore-completion record, publishes the staged version on the active variant, and records the applied block/entity changes as one live undo/redo action so the player can undo or redo the partial restore without changing the saved branch head
-- pending draft changes in the restored part are folded into that version; pending draft changes outside the restored part are preserved as the recovery draft
-- entity changes are filtered by their old/new entity position and stored alongside block changes in the partial-restore version
+- after apply, `RestoreCompletionCoordinator` writes a short pending completion marker, replaces the live recovery draft with the merged target-state result, and records the applied block/entity changes as one live undo/redo action so the player can undo or redo the partial restore without changing the saved branch head
+- pending draft changes in the restored part are overwritten by the target save state; pending draft changes outside the restored part remain pending unsaved work
+- entity changes are filtered by their old/new entity position and merged into the pending draft alongside block changes
 - non-direct target-state planning is finite: selected-area restore uses selected chunks, while `OUTSIDE_SELECTED_AREA` uses project bounds for bounded projects or tracked whole-dimension chunks for world workspaces
 - missing snapshot, patch, or baseline payloads reject the partial restore before tick-time apply starts
 

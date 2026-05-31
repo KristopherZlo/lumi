@@ -361,31 +361,6 @@ public final class VersionService {
         );
     }
 
-    ProjectVersion stagePartialRestoreVersion(
-            ProjectLayout layout,
-            BuildProject project,
-            RecoveryDraft draft,
-            String message,
-            String author,
-            WorldOperationManager.ProgressSink progressSink
-    ) throws IOException {
-        return this.writeVersion(
-                null,
-                layout,
-                project,
-                draft,
-                message,
-                author,
-                VersionKind.PARTIAL_RESTORE,
-                false,
-                "",
-                progressSink,
-                false,
-                false,
-                null
-        );
-    }
-
     private ProjectVersion writeVersion(
             ServerLevel level,
             ProjectLayout layout,
