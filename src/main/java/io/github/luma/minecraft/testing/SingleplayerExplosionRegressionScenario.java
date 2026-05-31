@@ -25,6 +25,34 @@ final class SingleplayerExplosionRegressionScenario {
         return this.start(level, player, volume, actor, volume.min().offset(8, 0, 2));
     }
 
+    ExplosionRegressionReport startPowered(
+            ServerLevel level,
+            ServerPlayer player,
+            SingleplayerTestVolume volume,
+            String actor,
+            BlockPos support
+    ) {
+        SingleplayerPlayerActionDriver actions = new SingleplayerPlayerActionDriver(level, player);
+        BlockPos tnt = support.above();
+        Set<BlockPos> witnesses = Set.of(
+                tnt.north(),
+                tnt.south(),
+                tnt.east(),
+                tnt.west()
+        );
+
+        this.trackedPlayerAction(actor, () -> {
+            level.setBlock(support, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+            for (BlockPos witness : witnesses) {
+                level.setBlock(witness, Blocks.OAK_PLANKS.defaultBlockState(), 3);
+            }
+        });
+
+        boolean placed = actions.placeAttemptAgainst(support, Direction.UP, Blocks.TNT);
+        ExplosionRegressionReport report = new ExplosionRegressionReport(placed, false, tnt, Set.copyOf(witnesses));
+        return new ExplosionRegressionReport(placed, report.primedTntPresent(level), tnt, Set.copyOf(witnesses));
+    }
+
     ExplosionRegressionReport start(
             ServerLevel level,
             ServerPlayer player,

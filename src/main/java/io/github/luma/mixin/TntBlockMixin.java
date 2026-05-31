@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.world.TntReplayActivationPolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -22,6 +23,10 @@ import org.spongepowered.asm.mixin.Unique;
 @Mixin(TntBlock.class)
 abstract class TntBlockMixin {
 
+    @Unique
+    private static final TntReplayActivationPolicy LUMA_REPLAY_ACTIVATION_POLICY =
+            new TntReplayActivationPolicy();
+
     @WrapMethod(method = "onPlace")
     private void luma$wrapOnPlace(
             BlockState state,
@@ -31,6 +36,9 @@ abstract class TntBlockMixin {
             boolean moved,
             Operation<Void> original
     ) {
+        if (this.luma$shouldSuppressReplayActivation(level)) {
+            return;
+        }
         WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
         try {
             original.call(state, level, pos, oldState, moved);
@@ -49,6 +57,9 @@ abstract class TntBlockMixin {
             boolean movedByPiston,
             Operation<Void> original
     ) {
+        if (this.luma$shouldSuppressReplayActivation(level)) {
+            return;
+        }
         WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
         try {
             original.call(state, level, pos, sourceBlock, orientation, movedByPiston);
@@ -99,6 +110,15 @@ abstract class TntBlockMixin {
         }
 
         return WorldMutationContext.pushSource(WorldMutationSource.EXPLOSIVE);
+    }
+
+    @Unique
+    private boolean luma$shouldSuppressReplayActivation(Level level) {
+        return LUMA_REPLAY_ACTIVATION_POLICY.shouldSuppressActivation(
+                level.isClientSide(),
+                WorldMutationContext.currentSource(),
+                WorldMutationContext.captureSuppressed()
+        );
     }
 
     @Unique

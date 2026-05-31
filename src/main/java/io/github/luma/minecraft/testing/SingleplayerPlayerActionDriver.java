@@ -33,6 +33,10 @@ final class SingleplayerPlayerActionDriver {
         return result.consumesAction() && this.level.getBlockState(expectedPos).is(block);
     }
 
+    boolean placeAttemptAgainst(BlockPos clickedPos, Direction face, Block block) {
+        return this.performUseItemOn(clickedPos, face, new ItemStack(block, 64)).consumesAction();
+    }
+
     boolean useItemOn(BlockPos clickedPos, Direction face, ItemStack stack) {
         return this.performUseItemOn(clickedPos, face, stack).consumesAction();
     }

@@ -104,6 +104,7 @@ final class SingleplayerTestRun {
     private ProjectVariant branch;
     private SingleplayerGameplayRegressionSuite.GameplayRegressionReport gameplayReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport primedTntUndoReport;
+    private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport poweredTntUndoReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
     private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
     private SingleplayerLargeHistoryScenario largeHistoryScenario;
@@ -213,6 +214,9 @@ final class SingleplayerTestRun {
                 case START_PRIMED_TNT_UNDO_INTERACTION -> this.startPrimedTntUndoInteraction(server);
                 case START_PRIMED_TNT_UNDO -> this.startPrimedTntUndo();
                 case CHECK_PRIMED_TNT_UNDO -> this.checkPrimedTntUndo();
+                case START_POWERED_TNT_UNDO_INTERACTION -> this.startPoweredTntUndoInteraction(server);
+                case START_POWERED_TNT_UNDO -> this.startPoweredTntUndo();
+                case CHECK_POWERED_TNT_UNDO -> this.checkPoweredTntUndo();
                 case START_EXPLOSION_INTERACTION -> this.startExplosionInteraction(server);
                 case CHECK_EXPLOSION_CAPTURE -> this.checkExplosionCapture(server);
                 case START_EXPLOSION_UNDO -> this.startExplosionUndo();
@@ -851,6 +855,37 @@ final class SingleplayerTestRun {
         this.check(this.primedTntUndoReport != null
                         && this.primedTntUndoReport.restoredBeforeExplosionUndo(this.level),
                 "Fuse-time TNT undo restored TNT block and removed primed entity");
+        this.completePhase(this.level.getServer(), Phase.START_POWERED_TNT_UNDO_INTERACTION);
+    }
+
+    private void startPoweredTntUndoInteraction(MinecraftServer server) {
+        this.poweredTntUndoReport = new SingleplayerExplosionRegressionScenario().startPowered(
+                this.level,
+                this.player,
+                this.volume,
+                ACTOR,
+                this.volume.min().offset(16, 0, 2)
+        );
+        this.check(this.poweredTntUndoReport.placed(), "Player placed powered TNT through gameMode useItemOn");
+        this.check(this.poweredTntUndoReport.ignited(), "Powered TNT auto-primed through redstone");
+        this.completePhase(server, Phase.START_POWERED_TNT_UNDO);
+    }
+
+    private void startPoweredTntUndo() throws Exception {
+        if (!this.waitForUndoRedoStabilization("powered TNT undo")) {
+            return;
+        }
+        this.check(this.poweredTntUndoReport != null && this.poweredTntUndoReport.primedTntPresent(this.level),
+                "Powered primed TNT entity exists before undo");
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued powered TNT undo operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_POWERED_TNT_UNDO);
+    }
+
+    private void checkPoweredTntUndo() {
+        this.check(this.poweredTntUndoReport != null
+                        && this.poweredTntUndoReport.restoredBeforeExplosionUndo(this.level),
+                "Powered TNT undo restored inert TNT block and removed primed entity");
         this.completePhase(this.level.getServer(), Phase.START_EXPLOSION_INTERACTION);
     }
 
@@ -1489,6 +1524,9 @@ final class SingleplayerTestRun {
         START_PRIMED_TNT_UNDO_INTERACTION("Primed TNT interaction", "place and ignite TNT before its fuse completes"),
         START_PRIMED_TNT_UNDO("Queue primed TNT undo", "undo TNT ignition before the primed entity explodes"),
         CHECK_PRIMED_TNT_UNDO("Verify primed TNT undo", "check that undo removed the primed entity and restored the block"),
+        START_POWERED_TNT_UNDO_INTERACTION("Powered TNT interaction", "place TNT against redstone before its fuse completes"),
+        START_POWERED_TNT_UNDO("Queue powered TNT undo", "undo redstone-primed TNT before the primed entity explodes"),
+        CHECK_POWERED_TNT_UNDO("Verify powered TNT undo", "check that restored TNT is not immediately primed again"),
         START_EXPLOSION_INTERACTION("TNT interaction", "place and ignite TNT through player game-mode actions"),
         CHECK_EXPLOSION_CAPTURE("Verify TNT capture", "wait for the controlled explosion and inspect its draft"),
         START_EXPLOSION_UNDO("Queue TNT undo", "undo the controlled explosion through the operation model"),
@@ -1568,6 +1606,7 @@ final class SingleplayerTestRun {
                      START_ENTITY_QUICK_ROLLBACK, CHECK_ENTITY_QUICK_ROLLBACK,
                      START_GAMEPLAY_ENTITY_UPDATE_SAVE, CHECK_GAMEPLAY_ENTITY_UPDATE_SAVE,
                      START_PRIMED_TNT_UNDO_INTERACTION, START_PRIMED_TNT_UNDO, CHECK_PRIMED_TNT_UNDO,
+                     START_POWERED_TNT_UNDO_INTERACTION, START_POWERED_TNT_UNDO, CHECK_POWERED_TNT_UNDO,
                      START_EXPLOSION_INTERACTION,
                      CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
                      START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,
