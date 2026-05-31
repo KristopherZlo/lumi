@@ -10,6 +10,7 @@ import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PartialRestorePlannerTest {
 
@@ -92,6 +93,29 @@ class PartialRestorePlannerTest {
         assertEquals(1, planned.size());
         assertEquals("minecraft:oak_planks", planned.getFirst().oldValue().blockId());
         assertEquals("minecraft:glass", planned.getFirst().newValue().blockId());
+    }
+
+    @Test
+    void noOpSelectionsProduceEmptyPlans() {
+        Bounds3i bounds = new Bounds3i(new BlockPoint(0, 0, 0), new BlockPoint(5, 5, 5));
+
+        List<StoredBlockChange> selectedAreaPlan = this.planner.plan(
+                List.of(),
+                List.of(change(8, 1, 1, "minecraft:dirt", "minecraft:glass")),
+                List.of(),
+                bounds,
+                PartialRestoreMode.SELECTED_AREA
+        );
+        List<StoredBlockChange> outsideSelectionPlan = this.planner.plan(
+                List.of(),
+                List.of(change(1, 1, 1, "minecraft:stone", "minecraft:oak_planks")),
+                List.of(),
+                bounds,
+                PartialRestoreMode.OUTSIDE_SELECTED_AREA
+        );
+
+        assertTrue(selectedAreaPlan.isEmpty());
+        assertTrue(outsideSelectionPlan.isEmpty());
     }
 
     private static StoredBlockChange change(int x, int y, int z, String oldBlock, String newBlock) {

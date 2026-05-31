@@ -238,14 +238,20 @@ public final class ProjectScreenController {
             return "luma.status.operation_failed";
         }
         try {
-            this.restoreService.partialRestore(
-                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, request.projectName()),
-                    request
-            );
+            var level = ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, request.projectName());
+            var summary = this.restoreService.summarizePartialRestorePlan(level, request);
+            String status = partialRestoreStatus(summary);
+            if (!"luma.status.partial_restore_started".equals(status)) {
+                return status;
+            }
+            this.restoreService.partialRestore(level, request);
             return "luma.status.partial_restore_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Partial restore request rejected for project {}", request.projectName(), exception);
             return "luma.status.world_operation_busy";
+        } catch (IllegalArgumentException exception) {
+            LumaMod.LOGGER.warn("Partial restore request rejected for project {}", request.projectName(), exception);
+            return partialRestoreFailureStatus(exception, request.restoreMode());
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Partial restore request failed for project {}", request == null ? "" : request.projectName(), exception);
             return "luma.status.operation_failed";
@@ -269,6 +275,43 @@ public final class ProjectScreenController {
             );
             return null;
         }
+    }
+
+    static String partialRestoreStatus(io.github.luma.domain.model.PartialRestorePlanSummary summary) {
+        if (summary == null) {
+            return "luma.status.operation_failed";
+        }
+        if (summary.hasChanges()) {
+            return "luma.status.partial_restore_started";
+        }
+        return partialRestoreNoChangesStatus(summary.partialRestoreMode());
+    }
+
+    public static String partialRestorePreviewStatus(io.github.luma.domain.model.PartialRestorePlanSummary summary) {
+        if (summary == null) {
+            return "luma.status.operation_failed";
+        }
+        if (summary.hasChanges()) {
+            return "luma.status.partial_restore_plan_ready";
+        }
+        return partialRestoreNoChangesStatus(summary.partialRestoreMode());
+    }
+
+    private static String partialRestoreFailureStatus(
+            Exception exception,
+            io.github.luma.domain.model.PartialRestoreMode mode
+    ) {
+        String message = exception.getMessage() == null ? "" : exception.getMessage();
+        if (message.contains("no changes inside") || message.contains("no changes outside")) {
+            return partialRestoreNoChangesStatus(mode);
+        }
+        return "luma.status.operation_failed";
+    }
+
+    private static String partialRestoreNoChangesStatus(io.github.luma.domain.model.PartialRestoreMode mode) {
+        return mode == io.github.luma.domain.model.PartialRestoreMode.OUTSIDE_SELECTED_AREA
+                ? "luma.status.partial_restore_no_changes_outside_selection"
+                : "luma.status.partial_restore_no_changes_selected";
     }
 
     public String createVariant(String projectName, String variantName, String fromVersionId) {

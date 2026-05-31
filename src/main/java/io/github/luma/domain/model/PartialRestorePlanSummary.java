@@ -73,4 +73,12 @@ public record PartialRestorePlanSummary(
                 0
         );
     }
+
+    public int totalChanges() {
+        return this.changedBlocks + this.changedEntities;
+    }
+
+    public boolean hasChanges() {
+        return this.totalChanges() > 0;
+    }
 }

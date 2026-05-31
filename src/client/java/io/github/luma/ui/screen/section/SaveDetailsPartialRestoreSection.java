@@ -84,7 +84,7 @@ public final class SaveDetailsPartialRestoreSection {
         );
         applyButton.active(!model.operationActive()
                 && model.form().summary() != null
-                && model.form().summary().changedBlocks() > 0);
+                && model.form().summary().hasChanges());
         actionsRow.child(applyButton);
         section.child(actionsRow);
         return section;

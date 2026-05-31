@@ -730,9 +730,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         @Override
         public void preview(PartialRestoreRequest request) {
             partialRestoreForm.setSummary(controller.partialRestorePlanSummary(request));
-            refresh(partialRestoreForm.summary() == null
-                    ? "luma.status.operation_failed"
-                    : "luma.status.partial_restore_plan_ready");
+            refresh(ProjectScreenController.partialRestorePreviewStatus(partialRestoreForm.summary()));
         }
 
         @Override

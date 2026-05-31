@@ -521,6 +521,8 @@ Recommended flow:
 4. Preview the region.
 5. Apply the partial restore.
 
+Preview and apply checks use the current live pending draft, including edits that have not yet flushed to disk. If the requested selected area, or everything outside that selection, already matches the chosen save, Lumi reports that there is nothing to restore instead of starting a failed world operation.
+
 Lumi writes the selected target state into the world as pending unsaved work. It does not move the branch head back to the older save and does not create a save until you explicitly save.
 
 The applied partial restore is also undoable with `Left Alt+Z` and redoable with `Left Alt+Y`.

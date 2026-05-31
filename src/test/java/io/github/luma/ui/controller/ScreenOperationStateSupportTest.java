@@ -41,6 +41,14 @@ class ScreenOperationStateSupportTest {
                 "luma.status.variant_switched",
                 ScreenOperationStateSupport.normalizeStatusKey("luma.status.variant_switched", null, "luma.status.project_ready")
         );
+        assertEquals(
+                "luma.status.project_ready",
+                ScreenOperationStateSupport.normalizeStatusKey(
+                        "luma.status.partial_restore_started",
+                        null,
+                        "luma.status.project_ready"
+                )
+        );
     }
 
     @Test

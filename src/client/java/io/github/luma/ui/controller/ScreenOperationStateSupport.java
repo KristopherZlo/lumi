@@ -13,7 +13,8 @@ public final class ScreenOperationStateSupport {
             "luma.status.preview_requested",
             "luma.status.recovery_save_started",
             "luma.status.draft_restore_started",
-            "luma.status.merge_started"
+            "luma.status.merge_started",
+            "luma.status.partial_restore_started"
     );
 
     private ScreenOperationStateSupport() {

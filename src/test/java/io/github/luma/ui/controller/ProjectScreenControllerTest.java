@@ -1,5 +1,12 @@
 package io.github.luma.ui.controller;
 
+import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.PartialRestoreMode;
+import io.github.luma.domain.model.PartialRestorePlanSummary;
+import io.github.luma.domain.model.PartialRestoreRegionSource;
+import io.github.luma.domain.model.RestorePlanMode;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -77,6 +84,53 @@ class ProjectScreenControllerTest {
                 ProjectScreenController.mergeFailureStatus(new IllegalArgumentException(
                         "Merge conflicts must be resolved before applying the merge"
                 ))
+        );
+    }
+
+    @Test
+    void partialRestoreStatusReportsSelectedNoOp() {
+        assertEquals(
+                "luma.status.partial_restore_no_changes_selected",
+                ProjectScreenController.partialRestoreStatus(noOpSummary(PartialRestoreMode.SELECTED_AREA))
+        );
+    }
+
+    @Test
+    void partialRestoreStatusReportsOutsideSelectionNoOp() {
+        assertEquals(
+                "luma.status.partial_restore_no_changes_outside_selection",
+                ProjectScreenController.partialRestoreStatus(noOpSummary(PartialRestoreMode.OUTSIDE_SELECTED_AREA))
+        );
+    }
+
+    @Test
+    void partialRestoreStatusReportsStartedWhenSummaryHasChanges() {
+        assertEquals(
+                "luma.status.partial_restore_started",
+                ProjectScreenController.partialRestoreStatus(summary(PartialRestoreMode.SELECTED_AREA, 1, 0))
+        );
+        assertEquals(
+                "luma.status.partial_restore_started",
+                ProjectScreenController.partialRestoreStatus(summary(PartialRestoreMode.OUTSIDE_SELECTED_AREA, 0, 1))
+        );
+    }
+
+    private static PartialRestorePlanSummary noOpSummary(PartialRestoreMode mode) {
+        return summary(mode, 0, 0);
+    }
+
+    private static PartialRestorePlanSummary summary(PartialRestoreMode mode, int changedBlocks, int changedEntities) {
+        return new PartialRestorePlanSummary(
+                RestorePlanMode.NO_OP,
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(1, 65, 1)),
+                mode,
+                PartialRestoreRegionSource.LUMI_REGION,
+                List.of(),
+                "main",
+                "v0001",
+                "v0002",
+                changedBlocks,
+                changedEntities
         );
     }
 }

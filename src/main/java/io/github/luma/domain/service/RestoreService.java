@@ -86,6 +86,8 @@ public final class RestoreService {
     private final VersionService versionService = new VersionService();
     private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
     private final PartialRestoreTargetStatePlanner partialRestoreTargetStatePlanner = new PartialRestoreTargetStatePlanner();
+    private final PartialRestorePendingDraftProvider partialRestorePendingDraftProvider =
+            new PartialRestorePendingDraftProvider();
     private final RestoreCompletionCoordinator completionCoordinator = new RestoreCompletionCoordinator();
     private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
@@ -461,12 +463,7 @@ public final class RestoreService {
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, request.targetVersionId());
         ProjectVariant activeVariant = this.requestResolver.activeVariant(project, variants);
-        Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
-        Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
-                .freezeWorkingDraft(level.getServer(), project.id().toString());
-        Optional<RecoveryDraft> frozenDraft = frozenSession.map(TrackedChangeBuffer::toDraft);
-        RecoveryDraft pendingDraft = frozenDraft
-                .or(() -> persistedDraft)
+        RecoveryDraft pendingDraft = this.partialRestorePendingDraftProvider.freeze(level, layout, project.id().toString())
                 .orElse(null);
 
         LumaMod.LOGGER.info(
@@ -497,7 +494,7 @@ public final class RestoreService {
                 progressSink
         );
         if (partialDraft.draft().isEmpty()) {
-            throw new IllegalArgumentException("Partial restore has no changes inside the selected region");
+            throw new IllegalArgumentException(this.partialRestoreNoChangesMessage(request.restoreMode()));
         }
         List<PreparedChunkBatch> decodedBatches = this.decodeStoredChanges(
                 level,
@@ -539,7 +536,11 @@ public final class RestoreService {
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, request.targetVersionId());
         ProjectVariant activeVariant = this.requestResolver.activeVariant(project, variants);
-        Optional<RecoveryDraft> pendingDraft = this.recoveryRepository.loadDraft(layout);
+        Optional<RecoveryDraft> pendingDraft = this.partialRestorePendingDraftProvider.snapshot(
+                level,
+                layout,
+                project.id().toString()
+        );
 
         PartialRestoreDraft draft = this.buildPartialRestoreDraft(
                 layout,
@@ -568,6 +569,12 @@ public final class RestoreService {
                 draft.draft().changes().size(),
                 draft.draft().entityChanges().size()
         );
+    }
+
+    private String partialRestoreNoChangesMessage(PartialRestoreMode mode) {
+        return mode == PartialRestoreMode.OUTSIDE_SELECTED_AREA
+                ? "Partial restore has no changes outside the selected region"
+                : "Partial restore has no changes inside the selected region";
     }
 
     private void saveRestoreReturnPoint(
