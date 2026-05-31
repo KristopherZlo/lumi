@@ -269,7 +269,7 @@ final class PartialRestoreTargetStatePlanner {
                 .filter(chunk -> !seededChunks.contains(chunk))
                 .toList();
         if (!missing.isEmpty()) {
-            throw new IllegalArgumentException(
+            throw new PartialRestoreTargetStateUnavailableException(
                     "Partial restore target-state plan is missing snapshot or baseline chunks for "
                             + version.id()
                             + ": "

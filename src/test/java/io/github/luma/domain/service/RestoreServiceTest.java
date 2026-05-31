@@ -6,14 +6,18 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ExternalSourceInfo;
-import io.github.luma.domain.model.PreviewInfo;
-import io.github.luma.domain.model.ProjectVariant;
-import io.github.luma.domain.model.ProjectVersion;
-import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.PatchChunkSlice;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchStats;
+import io.github.luma.domain.model.PartialRestoreMode;
+import io.github.luma.domain.model.PartialRestoreRegionSource;
+import io.github.luma.domain.model.PartialRestoreRequest;
+import io.github.luma.domain.model.PreviewInfo;
+import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
@@ -35,6 +39,8 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.SnapshotWriter;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -405,6 +411,65 @@ class RestoreServiceTest {
     }
 
     @Test
+    void partialRestoreFallsBackToPatchReplayWhenMechanismTargetStateLacksSelectedChunk(@TempDir Path tempDir)
+            throws Throwable {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        BlockPoint mechanism = new BlockPoint(1, 64, 1);
+        this.snapshotWriter.writeFile(layout.snapshotFile("snapshot-0001"), snapshotInChunk(new ChunkPoint(1, 0)));
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(new StoredBlockChange(
+                        mechanism,
+                        StatePayload.air(),
+                        new StatePayload(state("minecraft:redstone_wire"), null)
+                )),
+                List.of()
+        ));
+        BuildProject project = BuildProject.create(
+                "project",
+                "minecraft:overworld",
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(15, 64, 15)),
+                new BlockPoint(0, 64, 0),
+                NOW
+        ).withActiveVariantId("main", NOW);
+        ProjectVersion target = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
+        ProjectVersion head = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        ProjectVariant activeVariant = new ProjectVariant("main", "main", "v0001", "v0002", true, NOW);
+        PartialRestoreRequest request = new PartialRestoreRequest(
+                "project",
+                "v0001",
+                new Bounds3i(mechanism, mechanism),
+                PartialRestoreMode.SELECTED_AREA,
+                PartialRestoreRegionSource.MANUAL_BOUNDS,
+                "tester",
+                java.util.Map.of()
+        );
+
+        Object partialDraft = invokeBuildPartialRestoreDraft(
+                service,
+                layout,
+                project,
+                List.of(target, head),
+                List.of(activeVariant),
+                activeVariant,
+                target,
+                null,
+                request
+        );
+        RecoveryDraft draft = (RecoveryDraft) privateRecordAccessor(partialDraft, "draft");
+
+        assertEquals(RestorePlanMode.PATCH_REPLAY, privateRecordAccessor(partialDraft, "mode"));
+        assertEquals(1, draft.changes().size());
+        assertEquals(mechanism, draft.changes().getFirst().pos());
+        assertEquals("minecraft:redstone_wire", draft.changes().getFirst().oldValue().blockId());
+        assertEquals("minecraft:air", draft.changes().getFirst().newValue().blockId());
+    }
+
+    @Test
     void restoreTargetCanUseExplicitBranchWhenHeadVersionBelongsToMain() {
         RestoreRequestResolver resolver = new RestoreRequestResolver();
         ProjectVersion baseVersion = version("v0001", "main", "");
@@ -695,6 +760,59 @@ class RestoreServiceTest {
                 .withActiveVariantId(activeVariantId, NOW);
     }
 
+    private static Object invokeBuildPartialRestoreDraft(
+            RestoreService service,
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVariant activeVariant,
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft,
+            PartialRestoreRequest request
+    ) throws Throwable {
+        Method method = RestoreService.class.getDeclaredMethod(
+                "buildPartialRestoreDraft",
+                ProjectLayout.class,
+                BuildProject.class,
+                List.class,
+                List.class,
+                ProjectVariant.class,
+                ProjectVersion.class,
+                RecoveryDraft.class,
+                PartialRestoreRequest.class,
+                int.class,
+                int.class,
+                io.github.luma.minecraft.world.WorldOperationManager.ProgressSink.class
+        );
+        method.setAccessible(true);
+        try {
+            return method.invoke(
+                    service,
+                    layout,
+                    project,
+                    versions,
+                    variants,
+                    activeVariant,
+                    targetVersion,
+                    pendingDraft,
+                    request,
+                    64,
+                    64,
+                    (io.github.luma.minecraft.world.WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
+                    }
+            );
+        } catch (InvocationTargetException exception) {
+            throw exception.getCause();
+        }
+    }
+
+    private static Object privateRecordAccessor(Object record, String accessor) throws Exception {
+        Method method = record.getClass().getDeclaredMethod(accessor);
+        method.setAccessible(true);
+        return method.invoke(record);
+    }
+
     private static ProjectVersion version(String id, String variantId, String parentVersionId) {
         return version(id, variantId, parentVersionId, "", List.of());
     }
@@ -761,6 +879,23 @@ class RestoreServiceTest {
                         List.of(new SnapshotSectionData(4, List.of(state("minecraft:air")), indexes)),
                         java.util.Map.of(),
                         entities
+                ))
+        );
+    }
+
+    private static SnapshotData snapshotInChunk(ChunkPoint chunk) {
+        short[] indexes = new short[4096];
+        return new SnapshotData(
+                "project",
+                NOW,
+                64,
+                64,
+                List.of(new SnapshotChunkData(
+                        chunk.x(),
+                        chunk.z(),
+                        List.of(new SnapshotSectionData(4, List.of(state("minecraft:air")), indexes)),
+                        java.util.Map.of(),
+                        List.of()
                 ))
         );
     }

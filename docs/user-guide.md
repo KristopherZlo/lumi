@@ -527,7 +527,7 @@ Lumi writes the selected target state into the world as pending unsaved work. It
 
 The applied partial restore is also undoable with `Left Alt+Z` and redoable with `Left Alt+Y`.
 
-Partial restore can target saves without a direct patch replay path from the current branch. In that case Lumi reconstructs current and target state from snapshots, baseline chunks, and patches before applying the selected region. Same-lineage partial restore uses the same target-state planner when the direct patch path contains redstone/mechanism states, so selected-area and everything-except-selection modes keep their write boundaries.
+Partial restore can target saves without a direct patch replay path from the current branch. In that case Lumi reconstructs current and target state from snapshots, baseline chunks, and patches before applying the selected region. Same-lineage partial restore uses the same target-state planner when the direct patch path contains redstone/mechanism states, so selected-area and everything-except-selection modes keep their write boundaries. If that bounded target-state envelope is unavailable because an older save does not contain the selected chunk, Lumi falls back to exact patch replay inside the requested bounds instead of failing the operation.
 
 If stored generator or datapack fingerprints no longer match the world, automatic generator regeneration is blocked and Lumi stays on the safer history/baseline path.
 
