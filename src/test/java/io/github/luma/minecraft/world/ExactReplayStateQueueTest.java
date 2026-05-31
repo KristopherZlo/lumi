@@ -206,6 +206,28 @@ class ExactReplayStateQueueTest {
     }
 
     @Test
+    void tntReplaySuppressesPostReplayActivationCallbacks() {
+        ExactReplayStateQueue queue = new ExactReplayStateQueue();
+        ExactReplayStateGuard guard = new ExactReplayStateGuard();
+        ExactReplayTargetPolicy targetPolicy = new ExactReplayTargetPolicy();
+        BlockPos pos = new BlockPos(1, 64, 1);
+        PreparedBlockPlacement placement = new PreparedBlockPlacement(
+                pos,
+                Blocks.TNT.defaultBlockState(),
+                null
+        );
+
+        queue.record(batch(placement));
+
+        assertEquals(1, queue.pendingCount());
+        assertTrue(queue.hasRecordedPlacements());
+        assertTrue(targetPolicy.requiresFinalReplay(placement));
+        assertTrue(targetPolicy.requiresPostReplayGuard(placement));
+        assertTrue(guard.shouldGuard(placement));
+        assertTrue(guard.callbackSuppressionPositions(placement).contains(pos));
+    }
+
+    @Test
     void nativeSectionReplayHintGuardsAirTargetsWithoutFinalReplay() {
         ExactReplayStateQueue queue = new ExactReplayStateQueue();
         int localIndex = SectionChangeMask.localIndex(1, 2, 3);

@@ -864,7 +864,7 @@ final class SingleplayerTestRun {
                 this.player,
                 this.volume,
                 ACTOR,
-                this.volume.min().offset(16, 0, 2)
+                this.volume.min().offset(14, 0, 2)
         );
         this.check(this.poweredTntUndoReport.placed(), "Player placed powered TNT through gameMode useItemOn");
         this.check(this.poweredTntUndoReport.ignited(), "Powered TNT auto-primed through redstone");

@@ -148,6 +148,52 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
+    void undoRedoSelectionDrainsPendingEntitySpawnsFirst() throws IOException {
+        Path undoRedoService = MAIN_SOURCES.resolve("io/github/luma/domain/service/UndoRedoService.java");
+        String source = Files.readString(undoRedoService);
+
+        String drainCall = "EntityMutationTracker.drainPendingSpawns(level.getServer());";
+        int drainIndex = source.indexOf(drainCall);
+        int selectUndoIndex = source.indexOf("this.historyManager.selectUndo(project.id().toString())");
+        int selectRedoIndex = source.indexOf("this.historyManager.selectRedo(project.id().toString())");
+
+        assertTrue(
+                drainIndex >= 0,
+                "Undo/redo must drain pending entity spawn captures before selecting a live action"
+        );
+        assertTrue(
+                drainIndex < selectUndoIndex && drainIndex < selectRedoIndex,
+                "Undo/redo must not select an action before pending entity spawn captures are attached"
+        );
+    }
+
+    @Test
+    void pendingEntitySpawnQueueKeepsInitialPayloadForImmediateUndo() throws IOException {
+        Path queue = MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/EntitySpawnCaptureQueue.java");
+        Path tracker = MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/EntityMutationTracker.java");
+        String source = Files.readString(queue);
+        String trackerSource = Files.readString(tracker);
+
+        assertTrue(
+                source.contains("EntityPayload initialPayload"),
+                "Pending spawn captures must keep the accepted entity payload for same-tick undo"
+        );
+        assertTrue(
+                source.contains("Entity acceptedEntity"),
+                "Pending spawn captures must keep the accepted entity reference so forced drains record current state"
+        );
+        assertTrue(
+                source.contains("allowInitialPayloadFallback"),
+                "Spawn drain must use the queued payload only for explicit same-tick fallback"
+        );
+        assertTrue(
+                trackerSource.contains("drainPendingSpawns(server, false)")
+                        && trackerSource.contains("drainPendingSpawns(server, true)"),
+                "Normal ticks should wait for stable entity lookup, while undo/redo may force same-tick spawn capture"
+        );
+    }
+
+    @Test
     void restoreEntityStateWorkflowHasDedicatedResolver() throws IOException {
         Path restoreService = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java");
         Path resolver = MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreEntityStateResolver.java");

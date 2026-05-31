@@ -123,6 +123,14 @@ class EntityMutationCapturePolicyTest {
         assertTrue(this.policy.captureUndoOnly(WorldMutationSource.EXPLOSIVE, null, primedTnt).isPresent());
     }
 
+    @Test
+    void primedTntSpawnIsUndoOnlyForRedstoneBlockUpdates() {
+        EntityPayload primedTnt = entity("minecraft:tnt", "00000000-0000-0000-0000-000000000049", 1.0D);
+
+        assertFalse(this.policy.capture(WorldMutationSource.BLOCK_UPDATE, null, primedTnt).isPresent());
+        assertTrue(this.policy.captureUndoOnly(WorldMutationSource.BLOCK_UPDATE, null, primedTnt).isPresent());
+    }
+
     private static EntityPayload entity(String type, String uuid, double x) {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", type);

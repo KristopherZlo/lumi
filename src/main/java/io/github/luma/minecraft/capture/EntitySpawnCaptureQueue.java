@@ -30,23 +30,42 @@ final class EntitySpawnCaptureQueue {
         if (level == null || entity == null || frame == null || entity.getUUID() == null) {
             return;
         }
+        EntityPayload initialPayload = this.snapshotService.capture(level, entity);
+        if (initialPayload == null) {
+            return;
+        }
 
         this.pendingCaptures
                 .computeIfAbsent(level, ignored -> new LinkedHashMap<>())
-                .put(entity.getUUID(), new PendingSpawnCapture(entity.getUUID(), frame, undoOnly, level.getGameTime()));
+                .put(entity.getUUID(), new PendingSpawnCapture(
+                        entity.getUUID(),
+                        entity,
+                        initialPayload,
+                        frame,
+                        undoOnly,
+                        level.getGameTime()
+                ));
     }
 
-    void drain(MinecraftServer server, EntityMutationTracker.EntityChangeRecorder recorder) {
+    void drain(
+            MinecraftServer server,
+            EntityMutationTracker.EntityChangeRecorder recorder,
+            boolean allowInitialPayloadFallback
+    ) {
         if (server == null || recorder == null) {
             return;
         }
 
         for (ServerLevel level : server.getAllLevels()) {
-            this.drain(level, recorder);
+            this.drain(level, recorder, allowInitialPayloadFallback);
         }
     }
 
-    private void drain(ServerLevel level, EntityMutationTracker.EntityChangeRecorder recorder) {
+    private void drain(
+            ServerLevel level,
+            EntityMutationTracker.EntityChangeRecorder recorder,
+            boolean allowInitialPayloadFallback
+    ) {
         List<PendingSpawnCapture> captures = this.pending(level);
         if (captures.isEmpty()) {
             return;
@@ -54,13 +73,7 @@ final class EntitySpawnCaptureQueue {
 
         long now = level.getGameTime();
         for (PendingSpawnCapture capture : captures) {
-            Entity entity = level.getEntity(capture.entityId());
-            if (entity == null || entity.isRemoved()) {
-                this.removeIfExpired(level, capture, now);
-                continue;
-            }
-
-            EntityPayload payload = this.snapshotService.capture(level, entity);
+            EntityPayload payload = this.resolvePayload(level, capture, allowInitialPayloadFallback);
             if (payload == null) {
                 this.removeIfExpired(level, capture, now);
                 continue;
@@ -69,6 +82,26 @@ final class EntitySpawnCaptureQueue {
             recorder.record(level, null, payload, capture.frame(), capture.undoOnly());
             this.remove(level, capture.entityId());
         }
+    }
+
+    private EntityPayload resolvePayload(
+            ServerLevel level,
+            PendingSpawnCapture capture,
+            boolean allowInitialPayloadFallback
+    ) {
+        Entity entity = level.getEntity(capture.entityId());
+        if ((entity == null || entity.isRemoved()) && allowInitialPayloadFallback) {
+            entity = capture.acceptedEntity();
+        }
+        if (entity == null || entity.isRemoved()) {
+            return allowInitialPayloadFallback ? capture.initialPayload() : null;
+        }
+
+        EntityPayload currentPayload = this.snapshotService.capture(level, entity);
+        if (currentPayload != null) {
+            return currentPayload;
+        }
+        return allowInitialPayloadFallback ? capture.initialPayload() : null;
     }
 
     private synchronized List<PendingSpawnCapture> pending(ServerLevel level) {
@@ -98,6 +131,8 @@ final class EntitySpawnCaptureQueue {
 
     private record PendingSpawnCapture(
             UUID entityId,
+            Entity acceptedEntity,
+            EntityPayload initialPayload,
             EntityMutationTracker.CaptureFrame frame,
             boolean undoOnly,
             long queuedAtGameTime

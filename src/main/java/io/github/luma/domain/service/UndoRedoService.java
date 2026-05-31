@@ -10,6 +10,7 @@ import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
+import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
@@ -38,6 +39,7 @@ public final class UndoRedoService {
 
     public OperationHandle undo(ServerLevel level, String projectName) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
+        EntityMutationTracker.drainPendingSpawns(level.getServer());
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
         this.ensureStabilizationReady(level, project);
         UndoRedoActionStack.Selection selection = this.historyManager.selectUndo(project.id().toString());
@@ -49,6 +51,7 @@ public final class UndoRedoService {
 
     public OperationHandle redo(ServerLevel level, String projectName) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
+        EntityMutationTracker.drainPendingSpawns(level.getServer());
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
         this.ensureStabilizationReady(level, project);
         UndoRedoActionStack.Selection selection = this.historyManager.selectRedo(project.id().toString());

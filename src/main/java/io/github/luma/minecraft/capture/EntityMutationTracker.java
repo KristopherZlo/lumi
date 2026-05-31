@@ -111,7 +111,15 @@ public final class EntityMutationTracker {
     }
 
     public static void tick(MinecraftServer server) {
-        SPAWN_CAPTURE_QUEUE.drain(server, EntityMutationTracker::record);
+        drainPendingSpawns(server, false);
+    }
+
+    public static void drainPendingSpawns(MinecraftServer server) {
+        drainPendingSpawns(server, true);
+    }
+
+    private static void drainPendingSpawns(MinecraftServer server, boolean allowInitialPayloadFallback) {
+        SPAWN_CAPTURE_QUEUE.drain(server, EntityMutationTracker::record, allowInitialPayloadFallback);
     }
 
     public static PendingEntityMutation captureRemoval(Entity entity) {
