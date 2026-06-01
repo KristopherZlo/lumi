@@ -417,7 +417,7 @@ class RestoreServiceTest {
     }
 
     @Test
-    void partialRestoreFallsBackToPatchReplayWhenMechanismTargetStateLacksSelectedChunk(@TempDir Path tempDir)
+    void partialRestoreRejectsMechanismPatchReplayWhenTargetStateLacksSelectedChunk(@TempDir Path tempDir)
             throws Throwable {
         RestoreService service = new RestoreService();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
@@ -455,24 +455,21 @@ class RestoreServiceTest {
                 java.util.Map.of()
         );
 
-        Object partialDraft = invokeBuildPartialRestoreDraft(
-                service,
-                layout,
-                project,
-                List.of(target, head),
-                List.of(activeVariant),
-                activeVariant,
-                target,
-                null,
-                request
-        );
-        RecoveryDraft draft = (RecoveryDraft) privateRecordAccessor(partialDraft, "draft");
+        PartialRestoreTargetStateUnavailableException exception = assertThrows(
+                PartialRestoreTargetStateUnavailableException.class,
+                () -> invokeBuildPartialRestoreDraft(
+                        service,
+                        layout,
+                        project,
+                        List.of(target, head),
+                        List.of(activeVariant),
+                        activeVariant,
+                        target,
+                        null,
+                        request
+                ));
 
-        assertEquals(RestorePlanMode.PATCH_REPLAY, privateRecordAccessor(partialDraft, "mode"));
-        assertEquals(1, draft.changes().size());
-        assertEquals(mechanism, draft.changes().getFirst().pos());
-        assertEquals("minecraft:redstone_wire", draft.changes().getFirst().oldValue().blockId());
-        assertEquals("minecraft:air", draft.changes().getFirst().newValue().blockId());
+        assertTrue(exception.getMessage().contains("missing snapshot or baseline chunks"));
     }
 
     @Test

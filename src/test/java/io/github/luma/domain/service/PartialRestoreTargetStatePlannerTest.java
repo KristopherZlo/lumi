@@ -148,6 +148,41 @@ class PartialRestoreTargetStatePlannerTest {
     }
 
     @Test
+    void selectedWholeDimensionTargetStateSkipsUntrackedAdjacentChunks() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW);
+        BlockPoint changed = point(1);
+        this.snapshotWriter.writeFile(
+                this.baselineChunkRepository.filePath(layout, new ChunkPoint(0, 0)),
+                snapshot(Map.of(changed, "minecraft:stone"), List.of()));
+        writePatch(layout, "target-patch", "target",
+                List.of(change(changed, "minecraft:stone", "minecraft:diamond_block")), List.of());
+        writePatch(layout, "current-patch", "current",
+                List.of(change(changed, "minecraft:diamond_block", "minecraft:redstone_wire")), List.of());
+        ProjectVersion root = version("root", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion target = version("target", "root", "", List.of("target-patch"), VersionKind.MANUAL);
+        ProjectVersion current = version("current", "target", "", List.of("current-patch"), VersionKind.MANUAL);
+
+        PartialRestoreTargetStatePlanner.Plan plan = this.planner.plan(
+                layout,
+                project,
+                List.of(root, target, current),
+                current,
+                target,
+                null,
+                new Bounds3i(changed, new BlockPoint(20, 64, 0)),
+                PartialRestoreMode.SELECTED_AREA,
+                64,
+                64,
+                noop());
+
+        assertEquals(1, plan.blockChanges().size());
+        assertEquals(changed, plan.blockChanges().getFirst().pos());
+        assertEquals("minecraft:redstone_wire", plan.blockChanges().getFirst().oldValue().blockId());
+        assertEquals("minecraft:diamond_block", plan.blockChanges().getFirst().newValue().blockId());
+    }
+
+    @Test
     void pendingDraftBecomesCurrentState() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         BuildProject project = boundedProject();
@@ -210,9 +245,9 @@ class PartialRestoreTargetStatePlannerTest {
     }
 
     @Test
-    void rejectsMissingSnapshotOrBaselineTargetState() {
+    void rejectsMissingSnapshotOrBaselineTargetStateForBoundedProject() {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
-        BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW);
+        BuildProject project = boundedProject();
         ProjectVersion root = version("root", "", "", List.of(), VersionKind.WORLD_ROOT);
 
         assertThrows(IllegalArgumentException.class, () -> this.plan(layout, project, List.of(root), root, root));

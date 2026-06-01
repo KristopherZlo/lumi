@@ -695,7 +695,7 @@ public final class RestoreService {
                 );
             } catch (PartialRestoreTargetStateUnavailableException exception) {
                 LumaMod.LOGGER.info(
-                        "Partial restore for project {} to {} could not build target-state plan ({}); falling back to bounded patch replay",
+                        "Partial restore for project {} to {} could not safely build target-state plan ({}); aborting instead of bounded patch replay",
                         project.name(),
                         targetVersion.id(),
                         exception.getMessage()
@@ -703,11 +703,12 @@ public final class RestoreService {
                 LumaDebugLog.log(
                         project,
                         "restore",
-                        "Partial restore for project {} target {} fell back to bounded patch replay after target-state planning was unavailable: {}",
+                        "Partial restore for project {} target {} aborted instead of bounded patch replay after target-state planning was unavailable: {}",
                         project.name(),
                         targetVersion.id(),
                         exception.getMessage()
                 );
+                throw exception;
             }
         }
         int lineageChangeCount = reverseChanges.blockChanges().size()

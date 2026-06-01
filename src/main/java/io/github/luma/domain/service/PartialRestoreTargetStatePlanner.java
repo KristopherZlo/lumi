@@ -87,7 +87,17 @@ final class PartialRestoreTargetStatePlanner {
             throw new IllegalArgumentException("Partial restore target-state planning requires project, versions, and bounds");
         }
 
-        Scope scope = this.scope(layout, project, versions, currentHead, targetVersion, bounds, mode, worldMinY, worldMaxY);
+        Scope scope = this.scope(
+                layout,
+                project,
+                versions,
+                currentHead,
+                targetVersion,
+                pendingDraft,
+                bounds,
+                mode,
+                worldMinY,
+                worldMaxY);
         Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
         progress(progressSink, "Reconstructing current save state");
         VersionState current = this.reconstruct(layout, project, versionMap, currentHead, scope);
@@ -104,6 +114,7 @@ final class PartialRestoreTargetStatePlanner {
             List<ProjectVersion> versions,
             ProjectVersion currentHead,
             ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft,
             Bounds3i bounds,
             PartialRestoreMode mode,
             int worldMinY,
@@ -117,11 +128,21 @@ final class PartialRestoreTargetStatePlanner {
             if (scopedBounds == null) {
                 return emptyScope(bounds, limitBounds, effectiveMode);
             }
+            List<ChunkPoint> selectedChunks = chunksIntersecting(scopedBounds);
+            List<ChunkPoint> scopeChunks = project.tracksWholeDimension()
+                    ? this.selectedKnownWholeDimensionChunks(
+                            layout,
+                            versions,
+                            currentHead,
+                            targetVersion,
+                            pendingDraft,
+                            selectedChunks)
+                    : selectedChunks;
             return new Scope(
                     bounds,
                     limitBounds,
                     effectiveMode,
-                    chunksIntersecting(scopedBounds),
+                    scopeChunks,
                     scopedBounds.min().y(),
                     scopedBounds.max().y()
             );
@@ -172,6 +193,43 @@ final class PartialRestoreTargetStatePlanner {
         return chunks.stream()
                 .sorted(Comparator.comparingInt(ChunkPoint::x).thenComparingInt(ChunkPoint::z))
                 .toList();
+    }
+
+    private List<ChunkPoint> selectedKnownWholeDimensionChunks(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            ProjectVersion currentHead,
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft,
+            List<ChunkPoint> selectedChunks
+    ) throws IOException {
+        LinkedHashSet<ChunkPoint> knownChunks = new LinkedHashSet<>(
+                this.knownWholeDimensionChunks(layout, versions, currentHead, targetVersion));
+        this.addPendingDraftChunks(pendingDraft, knownChunks);
+        return selectedChunks.stream()
+                .filter(knownChunks::contains)
+                .toList();
+    }
+
+    private void addPendingDraftChunks(RecoveryDraft pendingDraft, Set<ChunkPoint> chunks) {
+        if (pendingDraft == null || pendingDraft.isEmpty()) {
+            return;
+        }
+        for (StoredBlockChange change : pendingDraft.changes()) {
+            if (change.pos() != null) {
+                chunks.add(ChunkPoint.from(change.pos()));
+            }
+        }
+        for (StoredEntityChange change : pendingDraft.entityChanges()) {
+            this.addEntityChunk(change.oldValue(), chunks);
+            this.addEntityChunk(change.newValue(), chunks);
+        }
+    }
+
+    private void addEntityChunk(EntityPayload payload, Set<ChunkPoint> chunks) {
+        if (payload != null) {
+            chunks.add(payload.chunk());
+        }
     }
 
     private void addVersionChunks(
