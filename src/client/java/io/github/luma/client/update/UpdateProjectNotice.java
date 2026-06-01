@@ -1,5 +1,7 @@
 package io.github.luma.client.update;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 public record UpdateProjectNotice(
@@ -16,6 +18,17 @@ public record UpdateProjectNotice(
         title = normalize(title);
         summary = normalize(summary);
         downloadUrl = normalize(downloadUrl);
+    }
+
+    public List<String> changeLines() {
+        return Arrays.stream(this.summary.split("\\R"))
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .toList();
+    }
+
+    public int changeCharacterCount() {
+        return this.summary.length();
     }
 
     public static Optional<UpdateProjectNotice> from(Optional<UpdateRelease> promptRelease) {

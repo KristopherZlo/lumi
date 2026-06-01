@@ -24,7 +24,32 @@ class UpdateProjectNoticeTest {
         assertTrue(UpdateProjectNotice.from(Optional.of(release(""))).isEmpty());
     }
 
+    @Test
+    void preservesChangeLinesAndCountsVisibleCharacters() {
+        Optional<UpdateProjectNotice> notice = UpdateProjectNotice.from(Optional.of(release(
+                "https://example.com/lumi.jar",
+                """
+                        Added automatic update checks.
+                        Added world chat download notice.
+
+                        Moved update prompt into a modal.
+                        """
+        )));
+
+        assertTrue(notice.isPresent());
+        assertEquals(List.of(
+                "Added automatic update checks.",
+                "Added world chat download notice.",
+                "Moved update prompt into a modal."
+        ), notice.get().changeLines());
+        assertEquals(99, notice.get().changeCharacterCount());
+    }
+
     private static UpdateRelease release(String downloadUrl) {
+        return release(downloadUrl, "Summary");
+    }
+
+    private static UpdateRelease release(String downloadUrl, String summary) {
         return new UpdateRelease(
                 "0.1.0-alpha.2",
                 100002,
@@ -32,7 +57,7 @@ class UpdateProjectNoticeTest {
                 "fabric",
                 "alpha",
                 "Lumi 0.1.0-alpha.2",
-                "Summary",
+                summary,
                 downloadUrl,
                 "https://example.com/changelog",
                 ""
