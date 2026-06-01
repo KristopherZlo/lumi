@@ -974,6 +974,10 @@ public final class HistoryCaptureManager {
         return this.serverThreadExecutor.call(server, () -> this.hasInterruptedDraftOnServerThread(server, projectId));
     }
 
+    public void markPersistedDraftCurrentRun(MinecraftServer server, String projectId) throws IOException {
+        this.serverThreadExecutor.run(server, () -> this.workingDrafts.markPersistedDraftCurrentRun(projectId));
+    }
+
     private Optional<RecoveryDraft> snapshotDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         CaptureSessionState sessionState = this.workingDrafts.session(projectId);

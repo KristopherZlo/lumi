@@ -62,6 +62,9 @@ final class RestoreCompletionCoordinator {
         ));
         this.recordPartialRestoreUndoAction(level, project, request, partialDraft);
         this.partialRestoreDraftRewriter.saveDraftOrDelete(layout, mergedDraft);
+        if (mergedDraft != null) {
+            HistoryCaptureManager.getInstance().markPersistedDraftCurrentRun(level.getServer(), project.id().toString());
+        }
         this.recoveryRepository.deleteOperationDraft(layout);
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,

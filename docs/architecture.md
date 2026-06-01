@@ -241,7 +241,7 @@ Key differences from full restore:
 - partial restore does not move the active variant head to the old target version
 - `SELECTED_AREA` applies only changes inside the selected bounds; with chunk-addressable patch payloads it reads only chunk frames intersecting those bounds
 - `OUTSIDE_SELECTED_AREA` applies the restore path outside the selected bounds, leaving selected blocks untouched
-- after apply, `RestoreCompletionCoordinator` writes a short pending completion marker, replaces the live recovery draft with the merged target-state result, and records the applied block/entity changes as one live undo/redo action so the player can undo or redo the partial restore without changing the saved branch head
+- after apply, `RestoreCompletionCoordinator` writes a short pending completion marker, replaces the live recovery draft with the merged target-state result, marks that draft as current-run pending work, and records the applied block/entity changes as one live undo/redo action so the player can undo or redo the partial restore without changing the saved branch head
 - pending draft changes in the restored part are overwritten by the target save state; pending draft changes outside the restored part remain pending unsaved work
 - no-op selected-area and outside-selection requests return explicit no-change statuses before starting apply work
 - entity changes are filtered by their old/new entity position and merged into the pending draft alongside block changes

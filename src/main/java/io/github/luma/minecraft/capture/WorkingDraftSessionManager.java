@@ -79,6 +79,10 @@ final class WorkingDraftSessionManager {
         return this.sessionRegistry.activeProjectIds();
     }
 
+    void markPersistedDraftCurrentRun(String projectId) {
+        this.sessionRegistry.markCurrentRunDraft(projectId);
+    }
+
     CaptureSessionDiagnostics diagnosticsForSession(String projectId) {
         return this.diagnosticsRegistry.forSession(projectId);
     }
@@ -362,9 +366,13 @@ final class WorkingDraftSessionManager {
                 "No live working draft for project {}. Loading persisted draft for save/amend.",
                 trackedProject.project().name()
         );
-        return this.recoveryRepository.loadDraft(trackedProject.layout())
+        Optional<TrackedChangeBuffer> persistedDraft = this.recoveryRepository.loadDraft(trackedProject.layout())
                 .map(draft -> TrackedChangeBuffer.fromDraft(UUID.randomUUID().toString(), draft))
                 .filter(buffer -> !buffer.isEmpty());
+        if (persistedDraft.isPresent()) {
+            this.sessionRegistry.clearCurrentRunDraft(projectId);
+        }
+        return persistedDraft;
     }
 
     void discard(String projectId, TrackedProject trackedProject) throws IOException {

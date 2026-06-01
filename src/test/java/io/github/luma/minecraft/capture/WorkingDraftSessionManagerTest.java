@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkingDraftSessionManagerTest {
@@ -84,6 +85,58 @@ class WorkingDraftSessionManagerTest {
         assertEquals("v0002", draft.baseVersionId());
         assertEquals(1, draft.changes().size());
         assertTrue(draft.entityChanges().isEmpty());
+    }
+
+    @Test
+    void currentRunPersistedDraftIsNotClassifiedAsInterrupted() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("current-run-persisted.mbp"));
+        BuildProject project = project();
+        TrackedProject trackedProject = trackedProject(layout, project);
+        RecoveryRepository repository = new RecoveryRepository();
+        repository.saveDraft(layout, new RecoveryDraft(
+                project.id().toString(),
+                "main",
+                "v0001",
+                "Lumi",
+                WorldMutationSource.RESTORE,
+                NOW,
+                NOW,
+                List.of(change("minecraft:stone", "minecraft:gold_block"))
+        ));
+        WorkingDraftSessionManager manager = new WorkingDraftSessionManager();
+
+        assertTrue(manager.hasInterruptedDraft(project.id().toString(), trackedProject));
+
+        manager.markPersistedDraftCurrentRun(project.id().toString());
+
+        assertTrue(manager.snapshotDraft(trackedProject).isPresent());
+        assertTrue(repository.loadDraft(layout).isPresent());
+        assertFalse(manager.hasInterruptedDraft(project.id().toString(), trackedProject));
+    }
+
+    @Test
+    void consumingPersistedCurrentRunDraftClearsCurrentRunSuppression() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("current-run-consumed.mbp"));
+        BuildProject project = project();
+        TrackedProject trackedProject = trackedProject(layout, project);
+        RecoveryRepository repository = new RecoveryRepository();
+        RecoveryDraft draft = new RecoveryDraft(
+                project.id().toString(),
+                "main",
+                "v0001",
+                "Lumi",
+                WorldMutationSource.RESTORE,
+                NOW,
+                NOW,
+                List.of(change("minecraft:stone", "minecraft:gold_block"))
+        );
+        repository.saveDraft(layout, draft);
+        WorkingDraftSessionManager manager = new WorkingDraftSessionManager();
+        manager.markPersistedDraftCurrentRun(project.id().toString());
+
+        assertTrue(manager.consumeAfterReconciliation(project.id().toString(), trackedProject).isPresent());
+        assertTrue(repository.loadDraft(layout).isPresent());
+        assertTrue(manager.hasInterruptedDraft(project.id().toString(), trackedProject));
     }
 
     @Test
