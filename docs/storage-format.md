@@ -187,6 +187,12 @@ Stores focused restore/rollback block apply diagnostics when `-Dlumi.blockApplyL
 
 Rows include preparation, preload ticks, chunk-level set/delete target counts, native/rewrite/direct apply step timings, block-entity and entity tail work, per-apply-tick stop reasons, fallback summaries, and aggregate timing. It deliberately avoids per-block rows so diagnostic logging does not dominate large restores.
 
+### `<game>/logs/lumi-partial-restore.log`
+
+Stores selected-area partial restore diagnostics when `-Dlumi.partialRestoreLog=true` is set. It is intentionally not enabled by `-Dlumi.loadLog=true`.
+
+Rows include selected live block samples, planned old-to-new target changes, out-of-selection target counts, and post-apply mismatches where the live block still differs from the requested target state.
+
 These logs are operational artifacts only. They are not stored in project folders, exported in history packages, or consumed by restore/cleanup workflows.
 
 ### `config/lumi-client.json`

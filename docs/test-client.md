@@ -32,6 +32,8 @@ The test-client Gradle profile always starts with Lumi diagnostics enabled:
 - `-Dlumi.blockApplyLog=true`
 - `-Dlumi.testing.enabled=true`
 
+Selected-area partial restore block-sample diagnostics are intentionally not part of the default profile. Add `-Dlumi.partialRestoreLog=true` for targeted runs that need `logs/lumi-partial-restore.log`.
+
 The default profile does not enable `-Dlumi.externalStackDetection=true`. Keep that fallback off unless a run is specifically diagnosing unsupported builder-tool capture, because explicit WorldEdit/Axiom integrations cover the default tool stack without sampling Java stack frames on ordinary chunk generation and block updates.
 
 Client GameTest and test-client launches also rewrite the run-directory `options.txt` sound categories to `0.0`, enable v-sync, and cap `maxFps` at `120` before startup, so local regression runs stay muted and do not saturate the GPU while idle diagnostics are enabled. The singleplayer GameTest harness anchors the spawned player on a small barrier pad in the current chunk before waiting for render readiness, which prevents the client camera from spending the run in continuous void fall.

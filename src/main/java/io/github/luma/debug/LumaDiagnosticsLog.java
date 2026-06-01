@@ -20,6 +20,13 @@ public final class LumaDiagnosticsLog {
             "lumi.blockApplyLog.path",
             "logs/lumi-block-apply.log"
     );
+    private static final StructuredDiagnosticsLog PARTIAL_RESTORE_LOG = new StructuredDiagnosticsLog(
+            "partial-restore",
+            "lumi.partialRestoreLog",
+            "lumi.partialRestoreLog.path",
+            "logs/lumi-partial-restore.log",
+            false
+    );
 
     private LumaDiagnosticsLog() {
     }
@@ -56,8 +63,21 @@ public final class LumaDiagnosticsLog {
         BLOCK_APPLY_LOG.span("block-apply", name, elapsedNanos, detail);
     }
 
+    public static boolean partialRestoreEnabled() {
+        return PARTIAL_RESTORE_LOG.enabled();
+    }
+
+    public static Path partialRestorePath() {
+        return PARTIAL_RESTORE_LOG.configuredPath();
+    }
+
+    public static void partialRestoreEvent(String name, String detail) {
+        PARTIAL_RESTORE_LOG.event("partial-restore", name, detail);
+    }
+
     public static void close() {
         LIGHT_LOG.close();
         BLOCK_APPLY_LOG.close();
+        PARTIAL_RESTORE_LOG.close();
     }
 }

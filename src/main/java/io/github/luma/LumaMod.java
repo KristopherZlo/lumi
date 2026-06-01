@@ -108,6 +108,10 @@ public final class LumaMod implements ModInitializer {
             LOGGER.info("{} block apply diagnostics are enabled at {}", MOD_NAME, LumaDiagnosticsLog.blockApplyPath());
             LumaDiagnosticsLog.blockApplyEvent("mod-initialized", "path=" + LumaDiagnosticsLog.blockApplyPath());
         }
+        if (LumaDiagnosticsLog.partialRestoreEnabled()) {
+            LOGGER.info("{} partial restore diagnostics are enabled at {}", MOD_NAME, LumaDiagnosticsLog.partialRestorePath());
+            LumaDiagnosticsLog.partialRestoreEvent("mod-initialized", "path=" + LumaDiagnosticsLog.partialRestorePath());
+        }
         StartupProfiler.logElapsed("main.onInitialize", startedAt);
     }
 }

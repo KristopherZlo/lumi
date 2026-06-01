@@ -27,6 +27,7 @@ import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.debug.PartialRestoreDiagnosticsLog;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
@@ -109,6 +110,7 @@ public final class RestoreService {
             this.restorePlanBuilder,
             this.chunkCollector
     );
+    private final PartialRestoreDiagnosticsLog partialRestoreDiagnosticsLog = new PartialRestoreDiagnosticsLog();
     private final BlockTargetStateResolver blockTargetStateResolver = new BlockTargetStateResolver();
     private final RestoreMechanismReconciliationPlanner mechanismReconciliationPlanner =
             new RestoreMechanismReconciliationPlanner();
@@ -440,6 +442,7 @@ public final class RestoreService {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), request.projectName());
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + request.projectName()));
+        this.partialRestoreDiagnosticsLog.logSelectedArea(level, project, request);
 
         return this.worldOperationManager.startPreparedApplyOperation(
                 level,
@@ -493,6 +496,14 @@ public final class RestoreService {
                 level.getMaxY(),
                 progressSink
         );
+        this.partialRestoreDiagnosticsLog.logPlannedDraft(
+                project,
+                activeVariant,
+                targetVersion,
+                request,
+                partialDraft.mode(),
+                partialDraft.draft()
+        );
         if (partialDraft.draft().isEmpty()) {
             throw new IllegalArgumentException(this.partialRestoreNoChangesMessage(request.restoreMode()));
         }
@@ -510,17 +521,30 @@ public final class RestoreService {
         )) {
             batches = this.batchCollapser.collapse(decodedBatches);
         }
+        boolean partialRestoreDiagnostics = this.partialRestoreDiagnosticsLog.enabled(request);
         return new WorldOperationManager.PreparedApplyOperation(
                 batches,
-                () -> this.completionCoordinator.completePartialRestore(
-                        level,
-                        layout,
-                        project,
-                        pendingDraft,
-                        request,
-                        partialDraft.draft(),
-                        batches.size()
-                )
+                () -> {
+                    if (partialRestoreDiagnostics) {
+                        this.partialRestoreDiagnosticsLog.logPostApplyRemaining(
+                                level,
+                                project,
+                                request,
+                                partialDraft.mode(),
+                                partialDraft.draft()
+                        );
+                    }
+                    this.completionCoordinator.completePartialRestore(
+                            level,
+                            layout,
+                            project,
+                            pendingDraft,
+                            request,
+                            partialDraft.draft(),
+                            batches.size()
+                    );
+                },
+                partialRestoreDiagnostics
         );
     }
 

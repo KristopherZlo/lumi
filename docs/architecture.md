@@ -355,6 +355,7 @@ There is also a project-scoped debug layer:
 - `-Dlumi.startupProfile=true` is a separate startup diagnostic flag for idle launch profiling. It logs bootstrap/client initializer timings and aggregate chunk-section ownership counters without turning on full capture debug logs.
 - `-Dlumi.loadLog=true` is a separate runtime load diagnostic flag. It writes `logs/lumi-load.log` with slow spans, cumulative top-cost summaries, server-tick substep timings, save payload/snapshot phases, restore decode phases, prepared-apply tick/preload/finalize slices, and completed world-apply metrics without enabling verbose debug tracing.
 - `-Dlumi.lightLog=true` and `-Dlumi.blockApplyLog=true` write focused operational logs for the automatic `light-refresh` follow-up and high-throughput restore/rollback block apply path. The load log flag enables both focused logs so the test-client profile captures shadow and bottleneck evidence by default without per-block log volume.
+- `-Dlumi.partialRestoreLog=true` writes a separate selected-area partial restore log with selected live samples, planned target changes, and post-apply mismatches. It is intentionally not enabled by the load log because it can include block-position samples from a selected build area.
 
 Logs are part of the support surface. New background or storage work should not be introduced without meaningful logs.
 

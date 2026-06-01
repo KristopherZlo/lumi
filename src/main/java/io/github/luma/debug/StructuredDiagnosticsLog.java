@@ -15,19 +15,31 @@ final class StructuredDiagnosticsLog {
     private final String enabledFlag;
     private final String pathFlag;
     private final String defaultPath;
+    private final boolean enabledByLoadLog;
     private final Object lock = new Object();
     private BufferedWriter writer;
     private boolean sinkFailed;
 
     StructuredDiagnosticsLog(String logName, String enabledFlag, String pathFlag, String defaultPath) {
+        this(logName, enabledFlag, pathFlag, defaultPath, true);
+    }
+
+    StructuredDiagnosticsLog(
+            String logName,
+            String enabledFlag,
+            String pathFlag,
+            String defaultPath,
+            boolean enabledByLoadLog
+    ) {
         this.logName = logName == null || logName.isBlank() ? "diagnostic" : logName;
         this.enabledFlag = enabledFlag;
         this.pathFlag = pathFlag;
         this.defaultPath = defaultPath == null || defaultPath.isBlank() ? "logs/lumi-diagnostic.log" : defaultPath;
+        this.enabledByLoadLog = enabledByLoadLog;
     }
 
     boolean enabled() {
-        return Boolean.getBoolean(this.enabledFlag) || LumaLoadLog.enabled();
+        return Boolean.getBoolean(this.enabledFlag) || (this.enabledByLoadLog && LumaLoadLog.enabled());
     }
 
     Path configuredPath() {

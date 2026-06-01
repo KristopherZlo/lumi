@@ -65,9 +65,10 @@ Lumi is organized around project history for builders: project, version, branch,
 - `src/main/java/io/github/luma/debug/LumaDebugLog.java`: debug logging categories and global/workspace debug checks.
 - `src/main/java/io/github/luma/debug/LumaLoadLog.java`: separate opt-in runtime load log behind `-Dlumi.loadLog=true`, writing slow spans, operation metrics, and top cumulative cost summaries to `logs/lumi-load.log` by default.
 - `src/client/java/io/github/luma/client/diagnostics/*`: test-client client-runtime load logging behind `-Dlumi.clientLoadLog=true`, including CPU/JVM memory/GC/direct-buffer samples, render-frame pressure, OpenGL renderer info, and optional background `nvidia-smi` GPU metrics.
-- `src/main/java/io/github/luma/debug/LumaDiagnosticsLog.java`: focused light/shadow and restore block-apply diagnostic logs behind `-Dlumi.lightLog=true` and `-Dlumi.blockApplyLog=true`.
+- `src/main/java/io/github/luma/debug/LumaDiagnosticsLog.java`: focused light/shadow, restore block-apply, and selected partial-restore diagnostic logs behind `-Dlumi.lightLog=true`, `-Dlumi.blockApplyLog=true`, and `-Dlumi.partialRestoreLog=true`.
 - `src/main/java/io/github/luma/debug/StructuredDiagnosticsLog.java`: shared key-value file sink for focused diagnostic logs.
 - `src/main/java/io/github/luma/minecraft/debug/HistoryDebugLog.java`: focused history capture, undo/redo selection, replay, redstone, and mechanism callback diagnostics for runtime debugging.
+- `src/main/java/io/github/luma/minecraft/debug/PartialRestoreDiagnosticsLog.java`: selected-area partial restore diagnostics that sample selected live blocks, planned target changes, and post-apply mismatches.
 - `src/main/java/io/github/luma/debug/StartupProfiler.java`: startup-only diagnostics behind `-Dlumi.startupProfile=true`.
 
 ## Domain Model
