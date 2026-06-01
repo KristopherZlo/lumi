@@ -318,7 +318,7 @@ Current world-apply runtime types:
 
 ## Update check manifests
 
-The client checks for Lumi releases when the Build History project screen opens. The check is client-only, runs off the render thread, and only prompts for a stable or alpha Fabric release whose `minecraftVersions` contains the installed Minecraft version and whose mod version is newer than the installed Lumi version.
+The client checks for Lumi releases at startup and refreshes the same check when the Build History project screen opens. The check is client-only, runs off the render thread, and only prompts for a stable or alpha Fabric release whose `minecraftVersions` contains the installed Minecraft version and whose mod version is newer than the installed Lumi version. A promptable release is surfaced once per game session in world chat through a clickable `Download` component, and Build History renders a card with `Skip` and `Download` actions instead of replacing the project screen with a modal.
 
 Default sources:
 
@@ -341,7 +341,7 @@ Release maintenance:
 - keep releases for each supported Minecraft version in the manifest instead of pointing players at builds for another game version;
 - point `downloadUrl` and `changelogUrl` at the exact GitHub release tag page, for example `https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.2`, or at a direct release asset URL if the jar should download immediately.
 
-To test an update through GitHub, build a higher local version such as `0.1.0-alpha.2`, create and push tag `v0.1.0-alpha.2`, publish a GitHub release with the jar attached, then commit `updates/lumi-fabric.json` with that same version, a higher `versionCode`, `channel` set to `alpha`, `minecraftVersions` containing `1.21.11`, and URLs pointing at the test release tag. After pulling that manifest into the test client, delete `run/test-client/config/lumi-update-check.json` so the 12-hour cache cannot hide the prompt, launch the test client, enter a world, and open Build History.
+To test an update through GitHub, build a higher local version such as `0.1.0-alpha.2`, create and push tag `v0.1.0-alpha.2`, publish a GitHub release with the jar attached, then commit `updates/lumi-fabric.json` with that same version, a higher `versionCode`, `channel` set to `alpha`, `minecraftVersions` containing `1.21.11`, and URLs pointing at the test release tag or direct jar asset. After pulling that manifest into the test client, delete `run/test-client/config/lumi-update-check.json` so the 12-hour cache cannot hide the prompt, launch the test client, enter a world, confirm the chat notice opens the configured URL from its `Download` text, then open Build History and verify the update card's `Skip` and `Download` actions.
 
 ## Storage references
 

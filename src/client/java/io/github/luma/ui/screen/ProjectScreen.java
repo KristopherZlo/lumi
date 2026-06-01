@@ -1,11 +1,14 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.LumaMod;
 import io.github.luma.client.onboarding.ClientOnboardingService;
 import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.client.onboarding.ClientOnboardingFlowCoordinator;
 import io.github.luma.client.input.LumiShortcutSuppressingScreen;
 import io.github.luma.client.selection.LumiRegionSelectionController;
+import io.github.luma.client.update.UpdateCheckService;
+import io.github.luma.client.update.UpdateProjectNotice;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
@@ -39,6 +42,7 @@ import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,6 +51,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.options.controls.ControlsScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Util;
 
 public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppressingScreen {
 
@@ -57,6 +62,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private final ProjectScreenController actionController = new ProjectScreenController();
     private final BranchCreationDialogStateFactory branchDialogFactory = new BranchCreationDialogStateFactory();
     private final ScreenRouter router = new ScreenRouter();
+    private final UpdateCheckService updateCheckService = UpdateCheckService.getInstance();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ProjectScreenSections sections = new ProjectScreenSections(this.actionController, new SectionActions());
     private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.actionController, new BranchDialogActions());
@@ -154,6 +160,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         if (this.shouldShowStatusBanner()) {
             window.content().child(LumaUi.statusBanner(this.bannerText()));
         }
+        this.updateNotice().ifPresent(notice -> window.content().child(this.updateCard(notice)));
 
         ProjectScreenSections.Model model = this.sectionModel();
         FlowLayout confirmation = this.sections.initialRestoreConfirmationSection(model);
@@ -238,6 +245,10 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         return this.parent;
     }
 
+    public void refreshUpdateNotice() {
+        this.refresh(this.statusKey);
+    }
+
     private ProjectScreenSections.Model sectionModel() {
         return new ProjectScreenSections.Model(
                 this.projectName,
@@ -253,6 +264,47 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
 
     private BranchCreationDialogState branchDialogState() {
         return this.branchDialogFactory.create(this.state, this.pendingBranchBaseVersionId, this.branchName);
+    }
+
+    private Optional<UpdateProjectNotice> updateNotice() {
+        return UpdateProjectNotice.from(this.updateCheckService.promptRelease());
+    }
+
+    private FlowLayout updateCard(UpdateProjectNotice notice) {
+        FlowLayout card = LumaUi.panel(Sizing.fill(100), Sizing.content());
+        card.child(LumaUi.value(Component.translatable("luma.update.card_title", notice.version())));
+        if (!notice.title().isBlank()) {
+            card.child(LumaUi.accent(Component.literal(notice.title())));
+        }
+        card.child(LumaUi.caption(Component.translatable("luma.update.card_body", notice.minecraftVersion())));
+        if (!notice.summary().isBlank()) {
+            card.child(LumaUi.statusBanner(Component.literal(notice.summary())));
+        }
+
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(LumaUi.button(Component.translatable("luma.action.skip"), button -> this.skipUpdate(notice)));
+        actions.child(LumaUi.primaryButton(
+                Component.translatable("luma.action.download_update"),
+                button -> this.downloadUpdate(notice)
+        ));
+        card.child(actions);
+        return card;
+    }
+
+    private void skipUpdate(UpdateProjectNotice notice) {
+        this.updateCheckService.dismissVersion(notice.version());
+        this.refresh(this.statusKey);
+    }
+
+    private void downloadUpdate(UpdateProjectNotice notice) {
+        try {
+            Util.getPlatform().openUri(URI.create(notice.downloadUrl()));
+        } catch (IllegalArgumentException exception) {
+            LumaMod.LOGGER.warn("Failed to open Lumi update download URL {}", notice.downloadUrl(), exception);
+        } finally {
+            this.updateCheckService.snoozeVersion(notice.version());
+            this.refresh(this.statusKey);
+        }
     }
 
     private void createBranch(BranchCreationDialogState dialog) {

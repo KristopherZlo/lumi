@@ -1,6 +1,6 @@
 package io.github.luma.client.update;
 
-import io.github.luma.ui.screen.UpdateAvailableScreen;
+import io.github.luma.ui.screen.ProjectScreen;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -23,25 +23,11 @@ public final class UpdatePromptCoordinator {
         }
 
         client.setScreen(projectScreen);
-        if (this.showPromptIfAvailable(client, projectScreen)) {
-            this.updateCheckService.requestCheckIfStale();
-            return;
-        }
-
         CompletableFuture<UpdateCheckResult> check = this.updateCheckService.requestCheckIfStale();
         check.thenRun(() -> client.execute(() -> {
-            if (client.screen == projectScreen) {
-                this.showPromptIfAvailable(client, projectScreen);
+            if (client.screen == projectScreen && projectScreen instanceof ProjectScreen screen) {
+                screen.refreshUpdateNotice();
             }
         }));
-    }
-
-    private boolean showPromptIfAvailable(Minecraft client, Screen parent) {
-        return this.updateCheckService.promptRelease()
-                .map(release -> {
-                    client.setScreen(new UpdateAvailableScreen(parent, release, this.updateCheckService));
-                    return true;
-                })
-                .orElse(false);
     }
 }

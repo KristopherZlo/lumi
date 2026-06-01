@@ -21,6 +21,8 @@ import io.github.luma.client.onboarding.ClientOnboardingFlowCoordinator;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.client.selection.LumiRegionSelectionTeachingController;
+import io.github.luma.client.update.MinecraftUpdateNoticeSink;
+import io.github.luma.client.update.UpdateWorldJoinNotifier;
 import io.github.luma.debug.StartupProfiler;
 import io.github.luma.ui.controller.AsyncCompareCache;
 import io.github.luma.ui.controller.ClientWorkspaceOpenService;
@@ -72,6 +74,7 @@ public final class LumaClient implements ClientModInitializer {
     private final LumiShortcutScreenPolicy shortcutScreenPolicy = new LumiShortcutScreenPolicy();
     private final LumiRegionSelectionTeachingController selectionTeachingController = new LumiRegionSelectionTeachingController();
     private final ClientWorkspaceOpenService workspaceOpenService = new ClientWorkspaceOpenService();
+    private final UpdateWorldJoinNotifier updateWorldJoinNotifier = new UpdateWorldJoinNotifier();
     private final boolean clientRuntimeLoadSamplingEnabled = ClientRuntimeLoadSampler.configuredEnabled();
     private boolean worldActive;
 
@@ -164,6 +167,7 @@ public final class LumaClient implements ClientModInitializer {
                 new LumaClientCommands(this.workspaceOpenService).register(dispatcher));
         OverlayDiagnostics.getInstance().clientRenderCallbacksRegistered("END_MAIN");
         StartupProfiler.logElapsed("client.fabric-events", eventRegistrationStartedAt);
+        this.updateWorldJoinNotifier.requestStartupCheck();
         long hudStartedAt = StartupProfiler.start();
         WorkspaceHudCoordinator.getInstance().registerHud();
         CompareOverlayHotkeyHud.registerHud();
@@ -180,6 +184,9 @@ public final class LumaClient implements ClientModInitializer {
         boolean activeWorldNow = client != null && client.level != null;
         if (this.worldActive && !activeWorldNow) {
             this.clearWorldClientState();
+        }
+        if (!this.worldActive && activeWorldNow) {
+            this.updateWorldJoinNotifier.notifyAfterWorldJoin(new MinecraftUpdateNoticeSink(client));
         }
         this.worldActive = activeWorldNow;
 

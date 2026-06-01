@@ -16,7 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 import net.fabricmc.loader.api.FabricLoader;
 
-public final class UpdateCheckService {
+public final class UpdateCheckService implements UpdatePromptSource {
 
     private static final String PRIMARY_URL_PROPERTY = "lumi.update.primaryUrl";
     private static final String FALLBACK_URL_PROPERTY = "lumi.update.fallbackUrl";
