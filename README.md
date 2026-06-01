@@ -310,6 +310,7 @@ Useful JVM flags:
 `-Dlumi.loadLog=true` writes `logs/lumi-load.log` and also enables focused light and block-apply logs. Start with `type="summary"` rows, then inspect `type="span"` and `type="operation-metrics"` rows for expensive areas.
 
 `-Dlumi.partialRestoreLog=true` writes `logs/lumi-partial-restore.log` only for `Only selected area` partial restores. It records the selected live blocks before restore, the planned target changes, and post-apply targets that still differ from the requested state.
+When launching through `scripts/run-test-client.ps1`, pass this as a JVM flag after the wrapper parameters, for example `.\scripts\run-test-client.ps1 -Dlumi.partialRestoreLog=true`, or use `-JvmArgs` for multiple flags.
 
 `-Dlumi.clientLoadLog=true` writes `logs/lumi-client-load.log` from the client process with CPU, heap/direct-buffer memory, GC, frame-pressure, OpenGL renderer, and optional `nvidia-smi` GPU utilization/memory samples. The test-client and client GameTest profiles enable it automatically.
 

@@ -32,7 +32,12 @@ The test-client Gradle profile always starts with Lumi diagnostics enabled:
 - `-Dlumi.blockApplyLog=true`
 - `-Dlumi.testing.enabled=true`
 
-Selected-area partial restore block-sample diagnostics are intentionally not part of the default profile. Add `-Dlumi.partialRestoreLog=true` for targeted runs that need `logs/lumi-partial-restore.log`.
+Selected-area partial restore block-sample diagnostics are intentionally not part of the default profile. Add `-Dlumi.partialRestoreLog=true` for targeted runs that need `logs/lumi-partial-restore.log`. The wrapper accepts bare `-D...` JVM flags after its own parameters and also supports the explicit `-JvmArgs` parameter:
+
+```powershell
+.\scripts\run-test-client.ps1 -JavaHome "C:\Program Files\Eclipse Adoptium\jdk-21.0.6.7-hotspot" -Dlumi.partialRestoreLog=true
+.\scripts\run-test-client.ps1 -JvmArgs '-Dlumi.partialRestoreLog=true','-Dlumi.partialRestoreLog.maxSelectedCells=50000'
+```
 
 The default profile does not enable `-Dlumi.externalStackDetection=true`. Keep that fallback off unless a run is specifically diagnosing unsupported builder-tool capture, because explicit WorldEdit/Axiom integrations cover the default tool stack without sampling Java stack frames on ordinary chunk generation and block updates.
 
