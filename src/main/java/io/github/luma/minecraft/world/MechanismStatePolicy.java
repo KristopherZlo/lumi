@@ -131,7 +131,8 @@ public final class MechanismStatePolicy {
 
     private boolean isRedstoneMechanism(BlockState state) {
         return state != null
-                && (state.is(Blocks.REDSTONE_WIRE)
+                && (this.signalRelevant(state)
+                || state.is(Blocks.REDSTONE_WIRE)
                 || state.is(Blocks.REDSTONE_TORCH)
                 || state.is(Blocks.REDSTONE_WALL_TORCH)
                 || state.is(Blocks.REPEATER)

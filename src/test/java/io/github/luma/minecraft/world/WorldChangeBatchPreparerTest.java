@@ -303,6 +303,32 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void analyzedPrepareCollectsMechanismScopeForRedstonePowerBlocks() throws Exception {
+        BlockPoint pos = new BlockPoint(2, 64, 3);
+
+        PreparedWorldChangeBatches analyzed = this.preparer.prepareAnalyzed(
+                null,
+                List.of(new StoredBlockChange(
+                        pos,
+                        payload(Blocks.REDSTONE_BLOCK.defaultBlockState()),
+                        payload(Blocks.AIR.defaultBlockState())
+                )),
+                List.of(),
+                true
+        );
+
+        assertEquals(1, analyzed.batches().size());
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(pos));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 63, 3)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 65, 3)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(3, 64, 3)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(1, 64, 3)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 64, 4)));
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 64, 2)));
+        assertTrue(analyzed.mechanismReplayScope().sections().contains(new ChunkSectionPoint(0, 0, 4)));
+    }
+
+    @Test
     void analyzedPrepareLeavesOrdinaryChangesOutOfMechanismScope() throws Exception {
         PreparedWorldChangeBatches analyzed = this.preparer.prepareAnalyzed(
                 null,

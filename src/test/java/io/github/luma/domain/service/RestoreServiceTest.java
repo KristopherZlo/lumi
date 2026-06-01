@@ -406,7 +406,13 @@ class RestoreServiceTest {
         RestoreMechanismReconciliationPlanner planner = new RestoreMechanismReconciliationPlanner();
 
         assertTrue(planner.containsMechanismState(List.of(change(1, "minecraft:redstone_wire", "minecraft:air"))));
+        assertTrue(planner.containsMechanismState(List.of(change(1, "minecraft:redstone_block", "minecraft:air"))));
         assertTrue(planner.containsMechanismState(List.of(change(1, "minecraft:stone", "minecraft:comparator"))));
+        assertTrue(planner.containsMechanismState(List.of(change(
+                1,
+                state("minecraft:powered_rail", "powered", "false"),
+                state("minecraft:powered_rail", "powered", "true")
+        ))));
         assertFalse(planner.containsMechanismState(List.of(change(1, "minecraft:dirt", "minecraft:stone"))));
     }
 
@@ -860,9 +866,25 @@ class RestoreServiceTest {
         );
     }
 
+    private static StoredBlockChange change(int x, CompoundTag oldState, CompoundTag newState) {
+        return new StoredBlockChange(
+                new BlockPoint(x, 64, 1),
+                new StatePayload(oldState, null),
+                new StatePayload(newState, null)
+        );
+    }
+
     private static CompoundTag state(String blockId) {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", blockId);
+        return tag;
+    }
+
+    private static CompoundTag state(String blockId, String propertyName, String propertyValue) {
+        CompoundTag tag = state(blockId);
+        CompoundTag properties = new CompoundTag();
+        properties.putString(propertyName, propertyValue);
+        tag.put("Properties", properties);
         return tag;
     }
 

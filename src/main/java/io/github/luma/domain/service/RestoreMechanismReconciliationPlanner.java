@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -25,6 +26,7 @@ final class RestoreMechanismReconciliationPlanner {
             "minecraft:redstone_wire",
             "minecraft:redstone_torch",
             "minecraft:redstone_wall_torch",
+            "minecraft:redstone_block",
             "minecraft:repeater",
             "minecraft:comparator",
             "minecraft:redstone_lamp",
@@ -39,6 +41,18 @@ final class RestoreMechanismReconciliationPlanner {
             "minecraft:tripwire",
             "minecraft:tripwire_hook",
             "minecraft:target"
+    );
+    private static final Set<String> MECHANISM_PROPERTY_NAMES = Set.of(
+            "attached",
+            "enabled",
+            "extended",
+            "in_wall",
+            "lit",
+            "locked",
+            "open",
+            "power",
+            "powered",
+            "triggered"
     );
 
     Optional<List<BlockPoint>> boundedExactRootReplayPositions(
@@ -114,21 +128,38 @@ final class RestoreMechanismReconciliationPlanner {
 
     boolean containsMechanismState(List<StoredBlockChange> changes) {
         for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
-            if (this.isMechanismBlockId(change.oldValue()) || this.isMechanismBlockId(change.newValue())) {
+            if (this.isMechanismPayload(change.oldValue()) || this.isMechanismPayload(change.newValue())) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean isMechanismBlockId(StatePayload payload) {
+    private boolean isMechanismPayload(StatePayload payload) {
         if (payload == null || payload.blockId() == null) {
             return false;
         }
         String blockId = payload.blockId().toLowerCase(Locale.ROOT);
         return MECHANISM_BLOCK_IDS.contains(blockId)
                 || blockId.endsWith("_button")
-                || blockId.endsWith("_pressure_plate");
+                || blockId.endsWith("_pressure_plate")
+                || this.hasMechanismStateProperty(payload);
+    }
+
+    private boolean hasMechanismStateProperty(StatePayload payload) {
+        if (payload.stateTag() == null) {
+            return false;
+        }
+        Optional<CompoundTag> properties = payload.stateTag().getCompound("Properties");
+        if (properties.isEmpty()) {
+            return false;
+        }
+        for (String propertyName : properties.orElseThrow().keySet()) {
+            if (MECHANISM_PROPERTY_NAMES.contains(propertyName.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean insideMechanismReconciliationBounds(

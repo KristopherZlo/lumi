@@ -24,6 +24,7 @@ class MechanismStatePolicyTest {
         assertTrue(this.policy.isMechanismRelevant(Blocks.REDSTONE_WIRE.defaultBlockState()));
         assertTrue(this.policy.isMechanismRelevant(Blocks.REDSTONE_TORCH.defaultBlockState()));
         assertTrue(this.policy.isMechanismRelevant(Blocks.REDSTONE_WALL_TORCH.defaultBlockState()));
+        assertTrue(this.policy.isMechanismRelevant(Blocks.REDSTONE_BLOCK.defaultBlockState()));
         assertTrue(this.policy.isMechanismRelevant(Blocks.REPEATER.defaultBlockState()));
         assertTrue(this.policy.isMechanismRelevant(Blocks.COMPARATOR.defaultBlockState()));
         assertTrue(this.policy.isMechanismRelevant(Blocks.REDSTONE_LAMP.defaultBlockState()));

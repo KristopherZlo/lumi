@@ -353,7 +353,7 @@ Restore path:
 - Lumi first tries direct patch replay.
 - For another branch, Lumi can plan from the current live branch through a shared saved ancestor.
 - Direct restores to `Initial` or `WORLD_ROOT` finish by replaying the saved root state for chunks touched by the rollback, so branch switches back to a root save do not rely only on reverse patches.
-- When direct replay touches redstone or mechanisms, Lumi also resolves a bounded target-state envelope off-thread. This lets restore clear stale dust, torches, repeaters, comparators, lamps, observers, dispensers, droppers, pistons, and controls without turning the operation into a full-world restore.
+- When direct replay touches redstone or mechanisms, Lumi also resolves a bounded target-state envelope off-thread. This lets restore clear stale dust, torches, repeaters, comparators, lamps, observers, dispensers, droppers, pistons, redstone power blocks, signal-output blocks, and controls without turning the operation into a full-world restore.
 - If that mechanism envelope is too large, Lumi skips direct replay and uses the existing snapshot/patch-chain restore path instead of silently slowing the operation.
 - If direct replay is not valid, Lumi falls back to checkpoint snapshot plus patch chain.
 - If required payloads are missing or corrupt, restore is rejected before the world changes.
