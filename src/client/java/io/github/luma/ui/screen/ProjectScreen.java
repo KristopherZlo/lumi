@@ -15,6 +15,7 @@ import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ContextualHelpPresenter;
@@ -31,6 +32,8 @@ import io.github.luma.ui.onboarding.OnboardingSpotlightOverlay;
 import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.screen.section.BranchCreationDialogView;
 import io.github.luma.ui.screen.section.ProjectScreenSections;
+import io.github.luma.ui.screen.section.RestoreConfirmationDialogView;
+import io.github.luma.ui.screen.section.UpdateNoticeDialogView;
 import io.github.luma.ui.state.BranchCreationDialogState;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -66,6 +69,8 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ProjectScreenSections sections = new ProjectScreenSections(this.actionController, new SectionActions());
     private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.actionController, new BranchDialogActions());
+    private final RestoreConfirmationDialogView restoreDialogView = new RestoreConfirmationDialogView(new RestoreDialogActions());
+    private final UpdateNoticeDialogView updateDialogView = new UpdateNoticeDialogView(new UpdateDialogActions());
     private final ClientOnboardingService onboardingService;
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private OnboardingTour onboardingTour;
@@ -160,13 +165,8 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         if (this.shouldShowStatusBanner()) {
             window.content().child(LumaUi.statusBanner(this.bannerText()));
         }
-        this.updateNotice().ifPresent(notice -> window.content().child(this.updateCard(notice)));
 
         ProjectScreenSections.Model model = this.sectionModel();
-        FlowLayout confirmation = this.sections.initialRestoreConfirmationSection(model);
-        if (confirmation != null) {
-            window.content().child(confirmation);
-        }
 
         FlowLayout body = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(body);
@@ -201,6 +201,12 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                     this.width,
                     branchDialog,
                     this.shouldShowStatusBanner() ? this.bannerText() : null
+            )));
+        } else if (this.onboardingTour == null && !this.pendingRestoreVersionId.isBlank()) {
+            this.restoreDialogModel(model).ifPresent(dialog -> stack.child(this.restoreDialogView.overlay(dialog)));
+        } else if (this.onboardingTour == null) {
+            this.updateNotice().ifPresent(notice -> stack.child(this.updateDialogView.overlay(
+                    new UpdateNoticeDialogView.Model(this.width, notice)
             )));
         }
 
@@ -270,25 +276,33 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         return UpdateProjectNotice.from(this.updateCheckService.promptRelease());
     }
 
-    private FlowLayout updateCard(UpdateProjectNotice notice) {
-        FlowLayout card = LumaUi.panel(Sizing.fill(100), Sizing.content());
-        card.child(LumaUi.value(Component.translatable("luma.update.card_title", notice.version())));
-        if (!notice.title().isBlank()) {
-            card.child(LumaUi.accent(Component.literal(notice.title())));
-        }
-        card.child(LumaUi.caption(Component.translatable("luma.update.card_body", notice.minecraftVersion())));
-        if (!notice.summary().isBlank()) {
-            card.child(LumaUi.statusBanner(Component.literal(notice.summary())));
+    private Optional<RestoreConfirmationDialogView.Model> restoreDialogModel(ProjectScreenSections.Model model) {
+        if (model.pendingRestoreVersionId().isBlank()) {
+            return Optional.empty();
         }
 
-        FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.button(Component.translatable("luma.action.skip"), button -> this.skipUpdate(notice)));
-        actions.child(LumaUi.primaryButton(
-                Component.translatable("luma.action.download_update"),
-                button -> this.downloadUpdate(notice)
+        ProjectVersion version = ProjectUiSupport.versionFor(model.state().versions(), model.pendingRestoreVersionId());
+        ProjectVariant variant = ProjectUiSupport.variantFor(model.state().variants(), model.pendingRestoreVariantId());
+        if (version == null || variant == null) {
+            this.clearPendingRestore();
+            return Optional.empty();
+        }
+
+        boolean operationActive = model.state().operationSnapshot() != null && !model.state().operationSnapshot().terminal();
+        return Optional.of(new RestoreConfirmationDialogView.Model(
+                this.width,
+                Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
+                Component.translatable("luma.restore.confirm_help"),
+                Component.translatable(
+                        "luma.restore.confirm_target",
+                        ProjectUiSupport.displayVariantName(variant),
+                        ProjectUiSupport.displayMessage(version)
+                ),
+                model.state().project().settings().safetySnapshotBeforeRestore(),
+                version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
+                model.lumiSelection().isPresent(),
+                operationActive
         ));
-        card.child(actions);
-        return card;
     }
 
     private void skipUpdate(UpdateProjectNotice notice) {
@@ -327,6 +341,81 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         this.pendingBranchBaseVersionId = "";
         this.branchName = "";
         this.refresh("luma.status.project_ready");
+    }
+
+    private Optional<ProjectVersion> pendingRestoreVersion() {
+        if (this.pendingRestoreVersionId.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(ProjectUiSupport.versionFor(this.state.versions(), this.pendingRestoreVersionId));
+    }
+
+    private Optional<ProjectVariant> pendingRestoreVariant(ProjectVersion version) {
+        if (version == null || this.pendingRestoreVariantId.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(ProjectUiSupport.variantFor(this.state.variants(), this.pendingRestoreVariantId));
+    }
+
+    private void confirmPendingRestore() {
+        Optional<ProjectVersion> version = this.pendingRestoreVersion();
+        Optional<ProjectVariant> variant = version.flatMap(this::pendingRestoreVariant);
+        if (version.isEmpty() || variant.isEmpty()) {
+            this.clearPendingRestore();
+            this.refresh("luma.status.operation_failed");
+            return;
+        }
+        this.clearPendingRestore();
+        this.executeRestore(variant.get(), version.get());
+    }
+
+    private void confirmPendingSelectedRestore(PartialRestoreMode mode) {
+        Optional<ProjectVersion> version = this.pendingRestoreVersion();
+        Optional<Bounds3i> bounds = this.selectedLumiBounds();
+        if (version.isEmpty() || bounds.isEmpty()) {
+            this.clearPendingRestore();
+            this.refresh("luma.status.operation_failed");
+            return;
+        }
+        this.clearPendingRestore();
+        this.executeSelectedRestore(version.get(), mode, bounds.get());
+    }
+
+    private final class RestoreDialogActions implements RestoreConfirmationDialogView.Actions {
+
+        @Override
+        public void cancel() {
+            clearPendingRestore();
+            refresh("luma.status.project_ready");
+        }
+
+        @Override
+        public void restoreWhole() {
+            confirmPendingRestore();
+        }
+
+        @Override
+        public void restoreSelectedArea() {
+            confirmPendingSelectedRestore(PartialRestoreMode.SELECTED_AREA);
+        }
+
+        @Override
+        public void restoreOutsideSelection() {
+            confirmPendingSelectedRestore(PartialRestoreMode.OUTSIDE_SELECTED_AREA);
+        }
+    }
+
+    private final class UpdateDialogActions implements UpdateNoticeDialogView.Actions {
+
+        @Override
+        public void skip() {
+            updateNotice().ifPresent(ProjectScreen.this::skipUpdate);
+        }
+
+        @Override
+        public void download() {
+            updateNotice().ifPresent(ProjectScreen.this::downloadUpdate);
+        }
     }
 
     private final class BranchDialogActions implements BranchCreationDialogView.Actions {
@@ -569,27 +658,5 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             refresh("luma.status.restore_confirmation_required");
         }
 
-        @Override
-        public void cancelRestore() {
-            clearPendingRestore();
-            refresh("luma.status.project_ready");
-        }
-
-        @Override
-        public void confirmRestore(ProjectVariant variant, ProjectVersion version) {
-            clearPendingRestore();
-            executeRestore(variant, version);
-        }
-
-        @Override
-        public void confirmSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds) {
-            clearPendingRestore();
-            executeSelectedRestore(version, mode, bounds);
-        }
-
-        @Override
-        public void clearPendingRestore() {
-            ProjectScreen.this.clearPendingRestore();
-        }
     }
 }

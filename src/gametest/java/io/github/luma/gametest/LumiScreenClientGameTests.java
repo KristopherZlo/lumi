@@ -22,6 +22,7 @@ import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.screen.CleanupScreen;
 import io.github.luma.ui.screen.CreateProjectScreen;
 import io.github.luma.ui.screen.section.ProjectScreenSections;
+import io.github.luma.ui.screen.section.RestoreConfirmationDialogView;
 import io.github.luma.ui.screen.section.SaveDetailsPartialRestoreSection;
 import io.github.luma.ui.state.PartialRestoreFormState;
 import io.github.luma.ui.state.ProjectHomeViewState;
@@ -44,6 +45,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import org.lwjgl.glfw.GLFW;
 
@@ -106,26 +108,27 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         this.assertInactive(busy, "luma.action.return_before_restore");
         this.assertActive(busy, "luma.action.see_changes");
 
-        Bounds3i selection = bounds(2, 64, 2, 4, 66, 4);
-        FlowLayout restore = sections.initialRestoreConfirmationSection(this.projectModel(
-                PendingChangeSummary.empty(),
-                null,
+        RecordingRestoreActions restoreActions = new RecordingRestoreActions();
+        RestoreConfirmationDialogView restoreDialog = new RestoreConfirmationDialogView(restoreActions);
+        FlowLayout restore = restoreDialog.overlay(new RestoreConfirmationDialogView.Model(
+                960,
+                Component.translatable("luma.restore.confirm_title"),
+                Component.translatable("luma.restore.confirm_help"),
+                Component.translatable("luma.restore.confirm_target", "main", "v0001"),
                 false,
-                "main",
-                "v0001",
-                Optional.of(selection)
+                false,
+                true,
+                false
         ));
         this.assertActive(restore, "luma.action.restore_whole_save");
         this.assertActive(restore, "luma.action.restore_only_selected_area");
         this.assertActive(restore, "luma.action.restore_everything_except_selection");
         this.press(restore, "luma.action.restore_only_selected_area");
-        this.assertEquals("confirmSelectedRestore", actions.lastAction, "selected restore action");
-        this.assertEquals(PartialRestoreMode.SELECTED_AREA, actions.partialRestoreMode, "selected restore mode");
-        this.assertEquals(selection, actions.partialRestoreBounds, "selected restore bounds");
+        this.assertEquals("restoreSelectedArea", restoreActions.lastAction, "selected restore action");
         this.press(restore, "luma.action.restore_everything_except_selection");
-        this.assertEquals(PartialRestoreMode.OUTSIDE_SELECTED_AREA, actions.partialRestoreMode, "outside restore mode");
+        this.assertEquals("restoreOutsideSelection", restoreActions.lastAction, "outside restore action");
         this.press(restore, "luma.action.cancel");
-        this.assertEquals("cancelRestore", actions.lastAction, "cancel restore action");
+        this.assertEquals("cancel", restoreActions.lastAction, "cancel restore action");
     }
 
     private void verifyPartialRestoreActions() {
@@ -433,8 +436,6 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
     private static final class RecordingProjectActions implements ProjectScreenSections.Actions {
         private String lastAction = "";
         private String leftReference = "";
-        private PartialRestoreMode partialRestoreMode;
-        private Bounds3i partialRestoreBounds;
 
         @Override
         public void openSave() {
@@ -491,27 +492,29 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         public void requestRestore(ProjectVariant variant, ProjectVersion version) {
             this.lastAction = "requestRestore";
         }
+    }
+
+    private static final class RecordingRestoreActions implements RestoreConfirmationDialogView.Actions {
+        private String lastAction = "";
 
         @Override
-        public void cancelRestore() {
-            this.lastAction = "cancelRestore";
+        public void cancel() {
+            this.lastAction = "cancel";
         }
 
         @Override
-        public void confirmRestore(ProjectVariant variant, ProjectVersion version) {
-            this.lastAction = "confirmRestore";
+        public void restoreWhole() {
+            this.lastAction = "restoreWhole";
         }
 
         @Override
-        public void confirmSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds) {
-            this.lastAction = "confirmSelectedRestore";
-            this.partialRestoreMode = mode;
-            this.partialRestoreBounds = bounds;
+        public void restoreSelectedArea() {
+            this.lastAction = "restoreSelectedArea";
         }
 
         @Override
-        public void clearPendingRestore() {
-            this.lastAction = "clearPendingRestore";
+        public void restoreOutsideSelection() {
+            this.lastAction = "restoreOutsideSelection";
         }
     }
 

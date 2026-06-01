@@ -7,14 +7,15 @@ import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.controller.RecoveryScreenController;
 import io.github.luma.ui.navigation.ScreenRouter;
+import io.github.luma.ui.screen.section.ConfirmationDialogView;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -28,6 +29,8 @@ public final class RecoveryScreen extends LumaScreen {
     private final RecoveryScreenController controller = new RecoveryScreenController();
     private final ScreenRouter router = new ScreenRouter();
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
+    private final ConfirmationDialogView restoreDialogView = new ConfirmationDialogView(new RestoreDialogActions());
+    private final ConfirmationDialogView deleteDialogView = new ConfirmationDialogView(new DeleteDialogActions());
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.recovery_ready";
     private boolean showDetails = false;
@@ -55,8 +58,11 @@ public final class RecoveryScreen extends LumaScreen {
         root.padding(Insets.of(10));
         root.gap(0);
 
+        StackLayout stack = UIContainers.stack(Sizing.fill(100), Sizing.fill(100));
+        root.child(stack);
+
         FlowLayout frame = LumaUi.screenFrame();
-        root.child(frame);
+        stack.child(frame);
 
         FlowLayout header = LumaUi.actionRow();
         header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
@@ -93,15 +99,15 @@ public final class RecoveryScreen extends LumaScreen {
                 .addHint(body, ClientContextualHelpHint.RECOVERY);
         body.child(this.summarySection(summaryState));
         body.child(this.saveSection(summaryState));
-        if (this.confirmRestore) {
-            body.child(this.restoreConfirmationSection());
-        }
-        if (this.confirmDelete) {
-            body.child(this.deleteConfirmationSection());
-        }
         body.child(this.actionSection());
         body.child(this.detailsSection(summaryState));
         body.child(LumaUi.bottomSpacer());
+
+        if (this.confirmRestore) {
+            stack.child(this.restoreDialogView.overlay(this.restoreDialogModel()));
+        } else if (this.confirmDelete) {
+            stack.child(this.deleteDialogView.overlay(this.deleteDialogModel()));
+        }
     }
 
     @Override
@@ -174,41 +180,26 @@ public final class RecoveryScreen extends LumaScreen {
         return section;
     }
 
-    private FlowLayout restoreConfirmationSection() {
-        FlowLayout section = LumaUi.sectionCard(
+    private ConfirmationDialogView.Model restoreDialogModel() {
+        return new ConfirmationDialogView.Model(
+                this.width,
                 Component.translatable("luma.recovery.restore_confirm_title"),
-                Component.translatable("luma.recovery.restore_confirm_help")
+                Component.translatable("luma.recovery.restore_confirm_help"),
+                null,
+                Component.translatable("luma.action.recovery_restore"),
+                false
         );
-        FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.primaryButton(Component.translatable("luma.action.recovery_restore"), button -> {
-            this.status = this.controller.restoreDraft(this.projectName);
-            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
-        }));
-        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
-            this.confirmRestore = false;
-            this.rebuild();
-        }));
-        section.child(actions);
-        return section;
     }
 
-    private FlowLayout deleteConfirmationSection() {
-        FlowLayout section = LumaUi.sectionCard(
+    private ConfirmationDialogView.Model deleteDialogModel() {
+        return new ConfirmationDialogView.Model(
+                this.width,
                 Component.translatable("luma.recovery.delete_confirm_title"),
-                Component.translatable("luma.recovery.delete_confirm_help")
+                Component.translatable("luma.recovery.delete_confirm_help"),
+                Component.translatable("luma.recovery.delete_confirm_warning"),
+                Component.translatable("luma.action.delete"),
+                false
         );
-        section.child(LumaUi.danger(Component.translatable("luma.recovery.delete_confirm_warning")));
-        FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.primaryButton(Component.translatable("luma.action.delete"), button -> {
-            this.status = this.controller.discardDraft(this.projectName);
-            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, this.status);
-        }));
-        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
-            this.confirmDelete = false;
-            this.rebuild();
-        }));
-        section.child(actions);
-        return section;
     }
 
     private FlowLayout detailsSection(io.github.luma.domain.model.RecoveryDraftSummary summaryState) {
@@ -244,5 +235,35 @@ public final class RecoveryScreen extends LumaScreen {
 
     private void rebuild() {
         this.rebuildPreservingScroll(() -> this.bodyScroll);
+    }
+
+    private final class RestoreDialogActions implements ConfirmationDialogView.Actions {
+
+        @Override
+        public void confirm() {
+            status = controller.restoreDraft(projectName);
+            router.openProjectIgnoringRecovery(parent, projectName, status);
+        }
+
+        @Override
+        public void cancel() {
+            confirmRestore = false;
+            rebuild();
+        }
+    }
+
+    private final class DeleteDialogActions implements ConfirmationDialogView.Actions {
+
+        @Override
+        public void confirm() {
+            status = controller.discardDraft(projectName);
+            router.openProjectIgnoringRecovery(parent, projectName, status);
+        }
+
+        @Override
+        public void cancel() {
+            confirmDelete = false;
+            rebuild();
+        }
     }
 }

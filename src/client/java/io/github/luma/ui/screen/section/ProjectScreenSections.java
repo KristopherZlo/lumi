@@ -1,11 +1,9 @@
 package io.github.luma.ui.screen.section;
 
 import io.github.luma.domain.model.Bounds3i;
-import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
-import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.ProjectUiSupport;
@@ -196,68 +194,6 @@ public final class ProjectScreenSections {
         return section;
     }
 
-    public FlowLayout initialRestoreConfirmationSection(Model model) {
-        if (model.pendingRestoreVersionId().isBlank()) {
-            return null;
-        }
-
-        ProjectVersion version = ProjectUiSupport.versionFor(model.state().versions(), model.pendingRestoreVersionId());
-        ProjectVariant variant = ProjectUiSupport.variantFor(model.state().variants(), model.pendingRestoreVariantId());
-        if (version == null || variant == null) {
-            this.actions.clearPendingRestore();
-            return null;
-        }
-
-        boolean rootRestore = version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT;
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
-                Component.translatable("luma.restore.confirm_help")
-        );
-        if (model.state().project().settings().safetySnapshotBeforeRestore()) {
-            section.child(LumaUi.caption(Component.translatable("luma.restore.confirm_safety")));
-        }
-        if (rootRestore) {
-            section.child(LumaUi.danger(Component.translatable("luma.restore.initial_confirm_warning")));
-        }
-        if (model.lumiSelection().isPresent()) {
-            section.child(LumaUi.caption(Component.translatable("luma.restore.selection_choice_help")));
-        }
-        section.child(LumaUi.caption(Component.translatable(
-                "luma.restore.confirm_target",
-                ProjectUiSupport.displayVariantName(variant),
-                ProjectUiSupport.displayMessage(version)
-        )));
-
-        FlowLayout restoreActions = LumaUi.actionRow();
-        restoreActions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.actions.cancelRestore()));
-        ButtonComponent confirmButton = LumaUi.primaryButton(
-                Component.translatable(model.lumiSelection().isPresent() ? "luma.action.restore_whole_save" : "luma.action.restore"),
-                button -> this.actions.confirmRestore(variant, version)
-        );
-        confirmButton.active(model.state().operationSnapshot() == null || model.state().operationSnapshot().terminal());
-        restoreActions.child(confirmButton);
-        section.child(restoreActions);
-        if (model.lumiSelection().isPresent()) {
-            Bounds3i selectedBounds = model.lumiSelection().get();
-            FlowLayout partialActions = LumaUi.actionRow();
-            ButtonComponent selectedOnly = LumaUi.button(
-                    Component.translatable("luma.action.restore_only_selected_area"),
-                    button -> this.actions.confirmSelectedRestore(version, PartialRestoreMode.SELECTED_AREA, selectedBounds)
-            );
-            selectedOnly.active(model.state().operationSnapshot() == null || model.state().operationSnapshot().terminal());
-            partialActions.child(selectedOnly);
-
-            ButtonComponent outsideOnly = LumaUi.button(
-                    Component.translatable("luma.action.restore_everything_except_selection"),
-                    button -> this.actions.confirmSelectedRestore(version, PartialRestoreMode.OUTSIDE_SELECTED_AREA, selectedBounds)
-            );
-            outsideOnly.active(model.state().operationSnapshot() == null || model.state().operationSnapshot().terminal());
-            partialActions.child(outsideOnly);
-            section.child(partialActions);
-        }
-        return section;
-    }
-
     private FlowLayout operationSection(Model model) {
         var operation = model.state().operationSnapshot();
         FlowLayout section = LumaUi.insetSection(
@@ -419,13 +355,5 @@ public final class ProjectScreenSections {
         void toggleAllSaves();
 
         void requestRestore(ProjectVariant variant, ProjectVersion version);
-
-        void cancelRestore();
-
-        void confirmRestore(ProjectVariant variant, ProjectVersion version);
-
-        void confirmSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds);
-
-        void clearPendingRestore();
     }
 }

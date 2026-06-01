@@ -20,6 +20,8 @@ import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.screen.section.BranchCreationDialogView;
+import io.github.luma.ui.screen.section.ConfirmationDialogView;
+import io.github.luma.ui.screen.section.RestoreConfirmationDialogView;
 import io.github.luma.ui.screen.section.SaveDetailsPartialRestoreSection;
 import io.github.luma.ui.state.BranchCreationDialogState;
 import io.github.luma.ui.state.PartialRestoreFormState;
@@ -52,6 +54,8 @@ public final class SaveDetailsScreen extends LumaScreen {
     private final ProjectScreenController controller = new ProjectScreenController();
     private final BranchCreationDialogStateFactory branchDialogFactory = new BranchCreationDialogStateFactory();
     private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.controller, new BranchDialogActions());
+    private final RestoreConfirmationDialogView restoreDialogView = new RestoreConfirmationDialogView(new RestoreDialogActions());
+    private final ConfirmationDialogView deleteDialogView = new ConfirmationDialogView(new DeleteDialogActions());
     private final ScreenRouter router = new ScreenRouter();
     private final PartialRestoreFormState partialRestoreForm = new PartialRestoreFormState();
     private final SaveDetailsPartialRestoreSection partialRestoreSections = new SaveDetailsPartialRestoreSection(new PartialRestoreActions());
@@ -128,10 +132,6 @@ public final class SaveDetailsScreen extends LumaScreen {
             frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
         }
 
-        if (this.pendingRestoreConfirmation) {
-            frame.child(this.restoreConfirmationSection(version, versionVariant, operationActive));
-        }
-
         FlowLayout body = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(body);
         frame.child(this.bodyScroll);
@@ -156,6 +156,10 @@ public final class SaveDetailsScreen extends LumaScreen {
                     branchDialog,
                     this.shouldShowStatusBanner() ? Component.translatable(this.state.status()) : null
             )));
+        } else if (this.pendingRestoreConfirmation && version != null && versionVariant != null) {
+            stack.child(this.restoreDialogView.overlay(this.restoreDialogModel(version, versionVariant, operationActive)));
+        } else if (this.pendingDeleteConfirmation && version != null) {
+            stack.child(this.deleteDialogView.overlay(this.deleteDialogModel(version, operationActive)));
         }
     }
 
@@ -376,10 +380,6 @@ public final class SaveDetailsScreen extends LumaScreen {
         FlowLayout expanded = LumaUi.revealGroup();
         this.ensureRenameMessage(version);
         expanded.child(this.renameSection(version, operationActive));
-        if (this.pendingDeleteConfirmation) {
-            expanded.child(this.deleteConfirmationSection(version, operationActive));
-        }
-
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent replaceButton = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> this.router.openSave(
                 this,
@@ -449,32 +449,6 @@ public final class SaveDetailsScreen extends LumaScreen {
         return section;
     }
 
-    private FlowLayout deleteConfirmationSection(ProjectVersion version, boolean operationActive) {
-        FlowLayout section = LumaUi.insetSection(
-                Component.translatable("luma.save_details.delete_title"),
-                Component.translatable("luma.save_details.delete_help")
-        );
-        section.child(LumaUi.danger(Component.translatable("luma.save_details.delete_warning")));
-        FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
-            this.pendingDeleteConfirmation = false;
-            this.refresh("luma.status.project_ready");
-        }));
-        ButtonComponent confirmButton = LumaUi.primaryButton(Component.translatable("luma.action.delete_save"), button -> {
-            this.pendingDeleteConfirmation = false;
-            String result = this.controller.deleteVersion(this.projectName, version.id());
-            if ("luma.status.version_deleted".equals(result)) {
-                this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
-                return;
-            }
-            this.refresh(result);
-        });
-        confirmButton.active(this.canDeleteVersion(version) && !operationActive);
-        actions.child(confirmButton);
-        section.child(actions);
-        return section;
-    }
-
     private void ensureRenameMessage(ProjectVersion version) {
         if (version == null) {
             return;
@@ -537,60 +511,36 @@ public final class SaveDetailsScreen extends LumaScreen {
         return section;
     }
 
-    private FlowLayout restoreConfirmationSection(ProjectVersion version, ProjectVariant versionVariant, boolean operationActive) {
-        boolean rootRestore = version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT;
-        FlowLayout section = LumaUi.sectionCard(
+    private RestoreConfirmationDialogView.Model restoreDialogModel(
+            ProjectVersion version,
+            ProjectVariant versionVariant,
+            boolean operationActive
+    ) {
+        return new RestoreConfirmationDialogView.Model(
+                this.width,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
-                Component.translatable("luma.restore.confirm_help")
+                Component.translatable("luma.restore.confirm_help"),
+                Component.translatable(
+                        "luma.restore.confirm_target",
+                        ProjectUiSupport.displayVariantName(versionVariant),
+                        ProjectUiSupport.displayMessage(version)
+                ),
+                this.state.project().settings().safetySnapshotBeforeRestore(),
+                version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
+                this.selectedLumiBounds().isPresent(),
+                operationActive
         );
-        if (this.state.project().settings().safetySnapshotBeforeRestore()) {
-            section.child(LumaUi.caption(Component.translatable("luma.restore.confirm_safety")));
-        }
-        if (rootRestore) {
-            section.child(LumaUi.danger(Component.translatable("luma.restore.initial_confirm_warning")));
-        }
-        java.util.Optional<Bounds3i> lumiSelection = this.selectedLumiBounds();
-        if (lumiSelection.isPresent()) {
-            section.child(LumaUi.caption(Component.translatable("luma.restore.selection_choice_help")));
-        }
-        section.child(LumaUi.caption(Component.translatable(
-                "luma.restore.confirm_target",
-                ProjectUiSupport.displayVariantName(versionVariant),
-                ProjectUiSupport.displayMessage(version)
-        )));
+    }
 
-        FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
-            this.pendingRestoreConfirmation = false;
-            this.rebuild();
-        }));
-        ButtonComponent confirmButton = LumaUi.primaryButton(Component.translatable(
-                lumiSelection.isPresent() ? "luma.action.restore_whole_save" : "luma.action.restore"
-        ), button -> {
-            this.pendingRestoreConfirmation = false;
-            this.executeRestore(version, versionVariant);
-        });
-        confirmButton.active(!operationActive);
-        actions.child(confirmButton);
-        section.child(actions);
-        if (lumiSelection.isPresent()) {
-            FlowLayout partialActions = LumaUi.actionRow();
-            ButtonComponent selectedOnly = LumaUi.button(
-                    Component.translatable("luma.action.restore_only_selected_area"),
-                    button -> this.executeSelectedRestore(version, PartialRestoreMode.SELECTED_AREA, lumiSelection.get())
-            );
-            selectedOnly.active(!operationActive);
-            partialActions.child(selectedOnly);
-
-            ButtonComponent outsideOnly = LumaUi.button(
-                    Component.translatable("luma.action.restore_everything_except_selection"),
-                    button -> this.executeSelectedRestore(version, PartialRestoreMode.OUTSIDE_SELECTED_AREA, lumiSelection.get())
-            );
-            outsideOnly.active(!operationActive);
-            partialActions.child(outsideOnly);
-            section.child(partialActions);
-        }
-        return section;
+    private ConfirmationDialogView.Model deleteDialogModel(ProjectVersion version, boolean operationActive) {
+        return new ConfirmationDialogView.Model(
+                this.width,
+                Component.translatable("luma.save_details.delete_title"),
+                Component.translatable("luma.save_details.delete_help"),
+                Component.translatable("luma.save_details.delete_warning"),
+                Component.translatable("luma.action.delete_save"),
+                !this.canDeleteVersion(version) || operationActive
+        );
     }
 
     private void restoreVersion(ProjectVersion version, ProjectVariant versionVariant) {
@@ -722,6 +672,69 @@ public final class SaveDetailsScreen extends LumaScreen {
         @Override
         public void cancel() {
             closeBranchDialog();
+        }
+    }
+
+    private final class RestoreDialogActions implements RestoreConfirmationDialogView.Actions {
+
+        @Override
+        public void cancel() {
+            pendingRestoreConfirmation = false;
+            rebuild();
+        }
+
+        @Override
+        public void restoreWhole() {
+            ProjectVersion version = state.selectedVersion();
+            ProjectVariant versionVariant = version == null
+                    ? null
+                    : ProjectUiSupport.variantFor(state.variants(), version.variantId());
+            pendingRestoreConfirmation = false;
+            executeRestore(version, versionVariant);
+        }
+
+        @Override
+        public void restoreSelectedArea() {
+            pendingRestoreConfirmation = false;
+            selectedLumiBounds().ifPresentOrElse(
+                    bounds -> executeSelectedRestore(state.selectedVersion(), PartialRestoreMode.SELECTED_AREA, bounds),
+                    () -> refresh("luma.status.operation_failed")
+            );
+        }
+
+        @Override
+        public void restoreOutsideSelection() {
+            pendingRestoreConfirmation = false;
+            selectedLumiBounds().ifPresentOrElse(
+                    bounds -> executeSelectedRestore(state.selectedVersion(), PartialRestoreMode.OUTSIDE_SELECTED_AREA, bounds),
+                    () -> refresh("luma.status.operation_failed")
+            );
+        }
+    }
+
+    private final class DeleteDialogActions implements ConfirmationDialogView.Actions {
+
+        @Override
+        public void confirm() {
+            ProjectVersion version = state.selectedVersion();
+            if (version == null) {
+                pendingDeleteConfirmation = false;
+                refresh("luma.status.operation_failed");
+                return;
+            }
+            pendingDeleteConfirmation = false;
+            String result = controller.deleteVersion(projectName, version.id());
+            if ("luma.status.version_deleted".equals(result)) {
+                router.openProjectIgnoringRecovery(parent, projectName, result);
+                return;
+            }
+            refresh(result);
+        }
+
+        @Override
+        public void cancel() {
+            pendingDeleteConfirmation = false;
+            refresh("luma.status.project_ready");
         }
     }
 
