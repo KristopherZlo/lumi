@@ -82,6 +82,21 @@ class UpdateChatMessageFactoryTest {
         assertEquals(URI.create("https://example.com/lumi/releases/tag/v0.1.0-alpha.2"), download.uri());
     }
 
+    @Test
+    void chatMessageTreatsPlainLinesAfterChangelogHeadingAsBulletedListItems() {
+        Component message = new UpdateChatMessageFactory().create(release(
+                "https://example.com/lumi/releases/tag/v0.1.0-alpha.2",
+                "Ignored title",
+                "Update test changes:\nStartup check now runs without local override flags.\nWorld chat shows one clickable update notice per version."
+        ));
+
+        String text = message.getString();
+
+        assertTrue(text.contains("Update test changes:"));
+        assertTrue(text.contains("\u2022 Startup check now runs without local override flags."));
+        assertTrue(text.contains("\u2022 World chat shows one clickable update notice per version."));
+    }
+
     private static UpdateRelease release(String downloadUrl) {
         return release(downloadUrl, "Lumi 0.1.0-alpha.2", "Summary");
     }

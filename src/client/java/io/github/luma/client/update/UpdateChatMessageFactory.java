@@ -1,6 +1,7 @@
 package io.github.luma.client.update;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -40,14 +41,21 @@ public final class UpdateChatMessageFactory {
         if (summary == null || summary.isBlank()) {
             return List.of();
         }
-        return Arrays.stream(summary.split("\\R"))
-                .map(String::trim)
-                .filter(line -> !line.isBlank())
-                .map(this::formatChangelogLine)
-                .toList();
+        List<String> lines = new ArrayList<>();
+        boolean plainLinesAreListItems = false;
+        for (String rawLine : Arrays.asList(summary.split("\\R"))) {
+            String line = rawLine.trim();
+            if (line.isBlank()) {
+                plainLinesAreListItems = false;
+                continue;
+            }
+            lines.add(this.formatChangelogLine(line, plainLinesAreListItems));
+            plainLinesAreListItems = line.endsWith(":") || plainLinesAreListItems;
+        }
+        return lines;
     }
 
-    private String formatChangelogLine(String line) {
+    private String formatChangelogLine(String line, boolean plainLineIsListItem) {
         String normalized = line.trim();
         if (normalized.startsWith(BULLET)) {
             return BULLET + " " + normalized.substring(1).trim();
@@ -58,6 +66,9 @@ public final class UpdateChatMessageFactory {
         Matcher numbered = NUMBERED_LIST_ITEM.matcher(normalized);
         if (numbered.matches()) {
             return BULLET + " " + numbered.group(1).trim();
+        }
+        if (plainLineIsListItem && !normalized.endsWith(":")) {
+            return BULLET + " " + normalized;
         }
         return normalized;
     }

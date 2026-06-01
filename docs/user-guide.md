@@ -60,7 +60,7 @@ Lumi checks for mod updates when the client starts and refreshes the cached chec
 
 The normal source is the Lumi website manifest. If that source cannot be loaded, Lumi tries the GitHub fallback manifest from the public repository.
 
-After you enter a world, Lumi sends one chat notice per available version. The first line is aqua with `Lumi` bolded, the changelog header and changelog lines are gray, list-style changelog lines are normalized to `•` bullets, the red bug-report line opens GitHub issues through `[Github]`, and `[Download] (click)` opens the GitHub release page from the manifest.
+After you enter a world, Lumi sends one chat notice per available version. The first line is aqua with `Lumi` bolded, the changelog header and changelog lines are gray, list-style changelog lines are normalized to `•` bullets, including plain lines that follow a summary heading ending in `:`, the red bug-report line opens GitHub issues through `[Github]`, and `[Download] (click)` opens the GitHub release page from the manifest.
 
 Build History shows the same update as a modal with `Skip` and `Download`: `Skip` hides that version permanently, while `Download` opens the release page and hides the modal until the game restarts. Multi-line change notes from the manifest are shown as separate lines with a character count. More has a bottom `Check updates` button that runs a fresh compatible-version check and opens either the update modal or a small modal saying the installed Lumi build is already the latest compatible version.
 
