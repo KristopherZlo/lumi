@@ -86,6 +86,8 @@ Run server GameTests:
 .\scripts\run-test-client.ps1 -GradleTasks runGameTest
 ```
 
+The Gradle build prepares `build/run/gameTest/eula.txt` before `runGameTest` so server GameTests can run non-interactively from a clean runtime directory.
+
 Run client GameTests:
 
 ```powershell
