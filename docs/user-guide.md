@@ -56,13 +56,13 @@ Lumi UI actions are intended for the local world owner. Capture and mutating Lum
 
 ## Update Notices
 
-Lumi checks for mod updates when the client starts and refreshes the same cached check when Build History opens. It only prompts for a newer Lumi release that supports the Minecraft version you are currently running.
+Lumi checks for mod updates when the client starts and refreshes the cached check when Build History opens. Startup performs a fresh manifest check so newly published release notes replace older cached prompt text when the network is available. Lumi only prompts for a newer release that supports the Minecraft version you are currently running.
 
 The normal source is the Lumi website manifest. If that source cannot be loaded, Lumi tries the GitHub fallback manifest from the public repository.
 
-After you enter a world, Lumi sends one chat notice per available version. The `Download` text in that message opens the GitHub release page from the manifest. Build History shows the same update as a modal with `Skip` and `Download`: `Skip` hides that version permanently, while `Download` opens the release page and hides the modal until the game restarts. Multi-line change notes from the manifest are shown as separate lines with a character count.
+After you enter a world, Lumi sends one chat notice per available version. The notice includes the release title and manifest summary with preserved line breaks, and the `Download` text opens the GitHub release page from the manifest. Build History shows the same update as a modal with `Skip` and `Download`: `Skip` hides that version permanently, while `Download` opens the release page and hides the modal until the game restarts. Multi-line change notes from the manifest are shown as separate lines with a character count.
 
-The check is cached for about 12 hours so opening the menu repeatedly does not keep hitting the network.
+Between startup checks, the result is cached for about 12 hours so opening the menu repeatedly does not keep hitting the network.
 
 ## Projects Screen
 
@@ -149,6 +149,8 @@ All keybinds are remappable in Minecraft `Controls` under `Lumi`.
 The Lumi action button defaults to `Left Alt`. Changing it changes quick save, undo, redo, preview, compare x-ray, and wooden-sword selection modifier behavior.
 
 While undo or redo chords are active, Lumi suppresses normal use/attack input. The shortcut will not also click the lever, button, block, or item you are looking at.
+
+The wooden-sword selector and compare highlight use compact in-world shortcut hints. Pressing `H` hides both the compare highlight and its shortcut hint; pressing `H` again shows both when compare data is still available.
 
 ## HUD And Operation Feedback
 

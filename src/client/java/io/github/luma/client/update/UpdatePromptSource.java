@@ -7,5 +7,7 @@ interface UpdatePromptSource {
 
     CompletableFuture<UpdateCheckResult> requestCheckIfStale();
 
+    CompletableFuture<UpdateCheckResult> requestCheckNow();
+
     Optional<UpdateRelease> promptRelease();
 }

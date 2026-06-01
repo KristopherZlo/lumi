@@ -74,6 +74,28 @@ class UpdateCheckServiceTest {
         assertEquals("", repository.state.dismissedVersion());
     }
 
+    @Test
+    void requestCheckNowIgnoresFreshCache() {
+        InMemoryStateRepository repository = new InMemoryStateRepository();
+        repository.state = UpdateCheckState.empty().withChecked(
+                Instant.parse("2026-05-16T10:00:00Z"),
+                UpdateCheckResult.noneAvailable()
+        );
+        UpdateCheckService service = new UpdateCheckService(
+                () -> new SourcedUpdateManifest("github", manifest("0.1.0-alpha.2")),
+                new UpdateCandidateSelector(),
+                repository,
+                () -> new InstalledModInfo("0.1.0-alpha.1", "1.21.11", "fabric"),
+                Clock.fixed(Instant.parse("2026-05-16T10:30:00Z"), ZoneOffset.UTC)
+        );
+
+        service.requestCheckNow().join();
+
+        assertTrue(service.promptRelease().isPresent());
+        assertEquals("0.1.0-alpha.2", service.promptRelease().orElseThrow().version());
+        assertEquals(Instant.parse("2026-05-16T10:30:00Z"), repository.state.lastCheckedAt());
+    }
+
     private static UpdateManifest manifest(String version) {
         return new UpdateManifest(1, "lumi", List.of(release(version)));
     }

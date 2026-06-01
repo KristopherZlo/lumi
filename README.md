@@ -46,7 +46,7 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 - Version compare for saved versions, branches, and the current build, with world overlays for changed blocks.
 - Full restore, quick rollback, return-before-restore, and partial restore in `Only selected area` or `Everything except selection` mode.
 - Branch creation, branch switching, local branch merge, variant import/export, full project archives, imported review projects, and safety checks for imported executable world-state data.
-- Same-Minecraft-version update checks at client startup, with a clickable in-world chat notice after world entry and a Build History update modal backed by the Lumi website plus GitHub raw manifest fallback.
+- Same-Minecraft-version update checks at client startup, with a clickable in-world chat notice that includes release notes after world entry and a Build History update modal backed by the Lumi website plus GitHub raw manifest fallback.
 - Crash recovery through durable working drafts, write-ahead log compaction, operation-draft isolation, recovery journals, and restore return points.
 - Capture of non-player entity spawn/remove/update with persistent NBT payloads for supported builder-facing entities.
 - Pre-Lumi world checkpoint gate with visible progress and an opt-in vanilla Edit World restore action for worlds that capture compressed pre-Lumi chunk payloads.
@@ -318,7 +318,7 @@ High-volume capture skip diagnostics are sampled and then summarized per project
 
 `-Dlumi.externalStackDetection=true` enables the conservative fallback that samples Java stack frames to recognize unsupported builder tools. Leave it disabled during normal play and broad test-client runs; explicit WorldEdit/FAWE/Axiom integrations do not require it.
 
-Update checks run on client startup and are reused by the world-entry chat notice and Build History update modal. They can be overridden for local testing with:
+Update checks run on client startup, refresh cached release metadata when the network is available, and are reused by the world-entry chat notice and Build History update modal. They can be overridden for local testing with:
 
 ```text
 -Dlumi.update.primaryUrl=<manifest-url>

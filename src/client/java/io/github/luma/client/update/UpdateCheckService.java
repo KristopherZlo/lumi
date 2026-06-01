@@ -91,14 +91,25 @@ public final class UpdateCheckService implements UpdatePromptSource {
         if (Boolean.getBoolean(DISABLED_PROPERTY)) {
             return CompletableFuture.completedFuture(UpdateCheckResult.unavailable("disabled"));
         }
+        if (this.inFlight != null && !this.inFlight.isDone()) {
+            return this.inFlight;
+        }
         Instant now = this.clock.instant();
         if (!this.state.shouldCheck(now, this.checkInterval)) {
             return CompletableFuture.completedFuture(this.cachedResult());
         }
+
+        this.inFlight = CompletableFuture.supplyAsync(this::checkNow, this.executor);
+        return this.inFlight;
+    }
+
+    public synchronized CompletableFuture<UpdateCheckResult> requestCheckNow() {
+        if (Boolean.getBoolean(DISABLED_PROPERTY)) {
+            return CompletableFuture.completedFuture(UpdateCheckResult.unavailable("disabled"));
+        }
         if (this.inFlight != null && !this.inFlight.isDone()) {
             return this.inFlight;
         }
-
         this.inFlight = CompletableFuture.supplyAsync(this::checkNow, this.executor);
         return this.inFlight;
     }

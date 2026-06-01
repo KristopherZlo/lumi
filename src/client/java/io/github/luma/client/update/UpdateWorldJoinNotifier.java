@@ -18,7 +18,7 @@ public final class UpdateWorldJoinNotifier {
 
     public void requestStartupCheck() {
         if (this.updatePromptSource != null) {
-            this.updatePromptSource.requestCheckIfStale();
+            this.updatePromptSource.requestCheckNow();
         }
     }
 

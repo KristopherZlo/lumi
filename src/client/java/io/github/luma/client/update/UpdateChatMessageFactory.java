@@ -11,10 +11,18 @@ import net.minecraft.network.chat.MutableComponent;
 public final class UpdateChatMessageFactory {
 
     public Component create(UpdateRelease release) {
-        MutableComponent message = Component.translatable("luma.update.chat_available", release.version())
-                .append(" ");
-        this.downloadUri(release).ifPresent(uri -> message.append(this.downloadLink(uri)));
+        MutableComponent message = Component.translatable("luma.update.chat_available", release.version());
+        this.appendLine(message, release.title());
+        this.appendLine(message, release.summary());
+        this.downloadUri(release).ifPresent(uri -> message.append("\n").append(this.downloadLink(uri)));
         return message;
+    }
+
+    private void appendLine(MutableComponent message, String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        message.append("\n").append(Component.literal(text.trim()));
     }
 
     private MutableComponent downloadLink(URI uri) {

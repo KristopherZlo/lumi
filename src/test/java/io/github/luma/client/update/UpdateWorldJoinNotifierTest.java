@@ -18,7 +18,8 @@ class UpdateWorldJoinNotifierTest {
 
         notifier.requestStartupCheck();
 
-        assertEquals(1, source.requestCount);
+        assertEquals(1, source.forcedRequestCount);
+        assertEquals(0, source.requestCount);
     }
 
     @Test
@@ -85,10 +86,17 @@ class UpdateWorldJoinNotifierTest {
         private CompletableFuture<UpdateCheckResult> requestFuture =
                 CompletableFuture.completedFuture(UpdateCheckResult.noneAvailable());
         private int requestCount;
+        private int forcedRequestCount;
 
         @Override
         public CompletableFuture<UpdateCheckResult> requestCheckIfStale() {
             this.requestCount++;
+            return this.requestFuture;
+        }
+
+        @Override
+        public CompletableFuture<UpdateCheckResult> requestCheckNow() {
+            this.forcedRequestCount++;
             return this.requestFuture;
         }
 

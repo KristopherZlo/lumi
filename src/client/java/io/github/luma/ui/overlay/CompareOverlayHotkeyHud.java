@@ -17,10 +17,10 @@ public final class CompareOverlayHotkeyHud {
             LumaMod.MOD_ID,
             "compare_overlay_hotkeys"
     );
-    private static final int CARD_WIDTH = 180;
-    private static final int CARD_HEIGHT = 68;
-    private static final int MARGIN = 8;
-    private static final int ROW_GAP = 22;
+    private static final int CARD_WIDTH = 150;
+    private static final int CARD_HEIGHT = 29;
+    private static final int MARGIN = 6;
+    private static final int ITEM_GAP = 10;
 
     private CompareOverlayHotkeyHud() {
     }
@@ -34,7 +34,17 @@ public final class CompareOverlayHotkeyHud {
     }
 
     public static int reservedBottomHeight() {
-        return shouldRender(Minecraft.getInstance()) ? CARD_HEIGHT + MARGIN : 0;
+        Minecraft client = Minecraft.getInstance();
+        return reservedBottomHeightForState(
+                client != null && client.options != null && client.options.hideGui,
+                CompareOverlayRenderer.hasData(),
+                CompareOverlayRenderer.visible(),
+                CompareOverlayRenderer.changedBlockCount()
+        );
+    }
+
+    static int reservedBottomHeightForState(boolean hudHidden, boolean hasData, boolean visible, int changedBlockCount) {
+        return shouldRenderForState(hudHidden, hasData, visible, changedBlockCount) ? CARD_HEIGHT + MARGIN : 0;
     }
 
     private static void render(GuiGraphics graphics, net.minecraft.client.DeltaTracker tickCounter) {
@@ -47,37 +57,56 @@ public final class CompareOverlayHotkeyHud {
         int y = Math.max(MARGIN, graphics.guiHeight() - CARD_HEIGHT - MARGIN);
 
         RoundedHudRenderer.card(graphics, x, y, CARD_WIDTH, CARD_HEIGHT);
-        graphics.drawString(font, Component.literal("Compare Overlay"), x + 10, y + 7, RoundedHudRenderer.TEXT, false);
-
-        int rowY = y + 25;
-        shortcutRow(graphics, font, x + 10, rowY, null, LumiClientKeyBindings.key(LumiClientKeyBindings.Role.COMPARE), "H", "Show/Hide");
-        shortcutRow(graphics, font, x + 10, rowY + ROW_GAP, "Hold", LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION), "Alt", "X-Ray");
+        int cursor = x + 7;
+        int rowY = y + 7;
+        cursor += shortcutItem(
+                graphics,
+                font,
+                cursor,
+                rowY,
+                LumiClientKeyBindings.key(LumiClientKeyBindings.Role.COMPARE),
+                "H",
+                "Toggle"
+        ) + ITEM_GAP;
+        shortcutItem(
+                graphics,
+                font,
+                cursor,
+                rowY,
+                LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION),
+                "Alt",
+                "X-Ray"
+        );
     }
 
     private static boolean shouldRender(Minecraft client) {
         return client != null
                 && client.options != null
-                && !client.options.hideGui
-                && CompareOverlayRenderer.hasData()
-                && CompareOverlayRenderer.changedBlockCount() > 0;
+                && shouldRenderForState(
+                        client.options.hideGui,
+                        CompareOverlayRenderer.hasData(),
+                        CompareOverlayRenderer.visible(),
+                        CompareOverlayRenderer.changedBlockCount()
+                );
     }
 
-    private static void shortcutRow(
+    static boolean shouldRenderForState(boolean hudHidden, boolean hasData, boolean visible, int changedBlockCount) {
+        return !hudHidden && hasData && visible && changedBlockCount > 0;
+    }
+
+    private static int shortcutItem(
             GuiGraphics graphics,
             Font font,
             int x,
             int y,
-            String prefix,
             KeyMapping key,
             String fallback,
             String action
     ) {
-        int cursor = x;
-        if (prefix != null && !prefix.isBlank()) {
-            cursor += RoundedHudRenderer.textChip(graphics, prefix, cursor, y, true) + 2;
-        }
-        cursor += RoundedHudRenderer.key(graphics, key, cursor, y, fallback, true);
-        int textX = cursor + 4;
-        graphics.drawString(font, Component.literal(": " + action), textX, y + 6, RoundedHudRenderer.MUTED, false);
+        int keyWidth = RoundedHudRenderer.key(graphics, key, x, y, fallback, true);
+        int textX = x + keyWidth + 3;
+        String label = action == null ? "" : action;
+        graphics.drawString(font, Component.literal(label), textX, y + 3, RoundedHudRenderer.MUTED, false);
+        return keyWidth + 3 + font.width(label);
     }
 }

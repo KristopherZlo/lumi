@@ -32,6 +32,9 @@ public final class RoundedHudRenderer {
     }
 
     public static int keyWidth(KeyMapping key, String fallback, boolean compact) {
+        if (compact) {
+            return textChipWidth(keyLabel(key, fallback), true);
+        }
         return KeyGlyphResolver.resolve(key)
                 .map(KeyGlyph::frameWidth)
                 .orElseGet(() -> textChipWidth(fallback, compact));
@@ -42,6 +45,9 @@ public final class RoundedHudRenderer {
     }
 
     public static int key(GuiGraphics graphics, KeyMapping key, int x, int y, String fallback, boolean compact) {
+        if (compact) {
+            return textChip(graphics, keyLabel(key, fallback), x, y, true);
+        }
         return KeyGlyphResolver.resolve(key)
                 .map(glyph -> {
                     graphics.blit(
@@ -69,7 +75,7 @@ public final class RoundedHudRenderer {
 
     public static int textChipWidth(String text, boolean compact) {
         Font font = Minecraft.getInstance().font;
-        return Math.max(compact ? 17 : 19, font.width(text) + (compact ? 8 : 10));
+        return Math.max(compact ? 13 : 19, font.width(text) + (compact ? 6 : 10));
     }
 
     public static int textChip(GuiGraphics graphics, String text, int x, int y) {
@@ -79,10 +85,26 @@ public final class RoundedHudRenderer {
     public static int textChip(GuiGraphics graphics, String text, int x, int y, boolean compact) {
         Font font = Minecraft.getInstance().font;
         int width = textChipWidth(text, compact);
-        int height = 21;
+        int height = compact ? 15 : 21;
         roundedRect(graphics, x, y, width, height, CHIP_RADIUS, CHIP_FILL, CHIP_BORDER);
-        graphics.drawString(font, text, x + ((width - font.width(text)) / 2), y + 6, TEXT, false);
+        graphics.drawString(font, text, x + ((width - font.width(text)) / 2), y + (compact ? 3 : 6), TEXT, false);
         return width;
+    }
+
+    private static String keyLabel(KeyMapping key, String fallback) {
+        String resolvedFallback = fallback == null || fallback.isBlank() ? "?" : fallback.trim();
+        if (key == null || key.isUnbound()) {
+            return resolvedFallback;
+        }
+        String label = key.getTranslatedKeyMessage().getString();
+        if (label == null || label.isBlank() || label.startsWith("key.")) {
+            return resolvedFallback;
+        }
+        return label
+                .replace("Left ", "")
+                .replace("Right ", "")
+                .replace("Mouse Button ", "M")
+                .trim();
     }
 
     public static void roundedRect(GuiGraphics graphics, int x, int y, int width, int height, int radius, int fill, int border) {

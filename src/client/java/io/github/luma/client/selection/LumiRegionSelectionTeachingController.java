@@ -115,28 +115,40 @@ public final class LumiRegionSelectionTeachingController {
 
         Font font = client.font;
         List<Row> rows = List.of(
-                new Row(List.of("LMB"), "First corner"),
-                new Row(List.of("RMB"), "Second corner"),
-                new Row(List.of("ACTION", "RMB"), "Clear"),
-                new Row(List.of("ACTION", "Scroll"), "Mode")
+                new Row(List.of(
+                        new Shortcut(List.of("LMB"), "First"),
+                        new Shortcut(List.of("RMB"), "Second")
+                )),
+                new Row(List.of(
+                        new Shortcut(List.of("ACTION", "RMB"), "Clear"),
+                        new Shortcut(List.of("ACTION", "Scroll"), "Mode")
+                ))
         );
-        int lineHeight = 23;
+        int lineHeight = 18;
         int width = rows.stream()
                 .mapToInt(row -> this.rowWidth(font, row))
                 .max()
-                .orElse(1) + 20;
+                .orElse(1) + 14;
         int height = (rows.size() * lineHeight) + 10;
         int x = 8;
         int y = Math.max(8, graphics.guiHeight() - height - 8 - CompareOverlayHotkeyHud.reservedBottomHeight());
 
         RoundedHudRenderer.card(graphics, x, y, width, height);
         for (int index = 0; index < rows.size(); index++) {
-            this.drawRow(graphics, font, rows.get(index), x + 10, y + 5 + (index * lineHeight));
+            this.drawRow(graphics, font, rows.get(index), x + 7, y + 5 + (index * lineHeight));
         }
     }
 
     private int rowWidth(Font font, Row row) {
-        return this.keyGroupWidth(row.keys()) + 6 + font.width(row.text());
+        int width = 0;
+        for (int index = 0; index < row.shortcuts().size(); index++) {
+            if (index > 0) {
+                width += 10;
+            }
+            Shortcut shortcut = row.shortcuts().get(index);
+            width += this.keyGroupWidth(shortcut.keys()) + 3 + font.width(shortcut.text());
+        }
+        return width;
     }
 
     private int keyGroupWidth(List<String> keys) {
@@ -155,22 +167,32 @@ public final class LumiRegionSelectionTeachingController {
 
     private void drawRow(GuiGraphics graphics, Font font, Row row, int x, int y) {
         int cursor = x;
-        for (int index = 0; index < row.keys().size(); index++) {
-            if (index > 0) {
-                cursor += 3;
+        for (int shortcutIndex = 0; shortcutIndex < row.shortcuts().size(); shortcutIndex++) {
+            if (shortcutIndex > 0) {
+                cursor += 10;
             }
-            String key = row.keys().get(index);
-            cursor += "ACTION".equals(key)
-                    ? RoundedHudRenderer.key(graphics, this.cachedActionKey, cursor, y, "Alt", true)
-                    : RoundedHudRenderer.textChip(graphics, key, cursor, y, true);
+            Shortcut shortcut = row.shortcuts().get(shortcutIndex);
+            for (int keyIndex = 0; keyIndex < shortcut.keys().size(); keyIndex++) {
+                if (keyIndex > 0) {
+                    cursor += 2;
+                }
+                String key = shortcut.keys().get(keyIndex);
+                cursor += "ACTION".equals(key)
+                        ? RoundedHudRenderer.key(graphics, this.cachedActionKey, cursor, y, "Alt", true)
+                        : RoundedHudRenderer.textChip(graphics, key, cursor, y, true);
+            }
+            graphics.drawString(font, Component.literal(shortcut.text()), cursor + 3, y + 3, RoundedHudRenderer.MUTED, false);
+            cursor += 3 + font.width(shortcut.text());
         }
-        graphics.drawString(font, Component.literal(": " + row.text()), cursor + 4, y + 6, RoundedHudRenderer.MUTED, false);
     }
 
     private KeyMapping actionKey() {
         return LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
     }
 
-    private record Row(List<String> keys, String text) {
+    private record Row(List<Shortcut> shortcuts) {
+    }
+
+    private record Shortcut(List<String> keys, String text) {
     }
 }
