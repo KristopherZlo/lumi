@@ -3,18 +3,18 @@
   "modId": "lumi",
   "versions": [
     {
-      "version": "0.1.0-alpha",
-      "versionCode": 100001,
+      "version": "0.1.0-alpha.2",
+      "versionCode": 100002,
       "minecraftVersions": [
         "1.21.11"
       ],
       "loader": "fabric",
       "channel": "alpha",
-      "title": "Lumi alpha 0.1.0",
-      "summary": "Initial alpha release metadata.",
-      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha",
-      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha",
-      "sha256": ""
+      "title": "Lumi alpha 0.1.0 updater test",
+      "summary": "Updater test release for validating default GitHub update checks.",
+      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases/download/v0.1.0-alpha.2-updater-test/lumi-0.1.0-alpha.2.jar",
+      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.2-updater-test",
+      "sha256": "A24843BE0D2192FF1E0E04318E6311589183005D63DAF27EC119725555C0C35D"
     }
   ]
 }
