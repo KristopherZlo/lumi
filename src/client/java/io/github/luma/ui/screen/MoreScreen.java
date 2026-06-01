@@ -1,7 +1,11 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.LumaMod;
 import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
+import io.github.luma.client.update.ManualUpdateCheckController;
+import io.github.luma.client.update.UpdateCheckService;
+import io.github.luma.client.update.UpdateProjectNotice;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaUi;
@@ -14,17 +18,22 @@ import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
+import io.github.luma.ui.screen.section.InfoDialogView;
+import io.github.luma.ui.screen.section.UpdateNoticeDialogView;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
+import java.net.URI;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Util;
 
 public final class MoreScreen extends LumaScreen {
 
@@ -35,9 +44,15 @@ public final class MoreScreen extends LumaScreen {
     private final ProjectHomeScreenController controller = new ProjectHomeScreenController();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
+    private final UpdateCheckService updateCheckService = UpdateCheckService.getInstance();
+    private final ManualUpdateCheckController updateCheckController = new ManualUpdateCheckController(this.updateCheckService);
+    private final UpdateNoticeDialogView updateNoticeDialogView = new UpdateNoticeDialogView(new UpdateDialogActions());
+    private final InfoDialogView infoDialogView = new InfoDialogView(new InfoDialogActions());
     private ProjectHomeViewState state;
     private List<ProjectVersion> deletedVersions = List.of();
     private MoreTab activeTab = MoreTab.PROJECT_TOOLS;
+    private boolean updateCheckInProgress = false;
+    private ManualUpdateCheckController.Result updateCheckResult;
 
     public MoreScreen(Screen parent, String projectName) {
         super(Component.translatable("luma.screen.more.title"));
@@ -69,13 +84,16 @@ public final class MoreScreen extends LumaScreen {
             return;
         }
 
+        StackLayout stack = UIContainers.stack(Sizing.fill(100), Sizing.fill(100));
+        root.child(stack);
+
         ProjectWindowLayout window = ProjectWindowLayout.forProject(
                 this.width,
                 Component.translatable("luma.screen.more.title"),
                 this.state.project(),
                 this.state.variants()
         );
-        root.child(window.root());
+        stack.child(window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.MORE);
         window.content().child(LumaUi.caption(Component.translatable("luma.more.help")));
         FlowLayout body = LumaUi.screenBody();
@@ -98,7 +116,10 @@ public final class MoreScreen extends LumaScreen {
         } else {
             body.child(this.deletedSavesSection());
         }
+        body.child(this.updateCheckSection());
         body.child(LumaUi.bottomSpacer());
+
+        this.updateOverlay().ifPresent(stack::child);
     }
 
     @Override
@@ -242,10 +263,116 @@ public final class MoreScreen extends LumaScreen {
         return section;
     }
 
+    private FlowLayout updateCheckSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.more.updates_title"),
+                Component.translatable("luma.more.updates_help")
+        );
+        FlowLayout actions = LumaUi.actionRow();
+        ButtonComponent check = LumaUi.button(
+                Component.translatable(this.updateCheckInProgress
+                        ? "luma.action.checking_updates"
+                        : "luma.action.check_updates"),
+                button -> this.requestManualUpdateCheck()
+        );
+        check.active(!this.updateCheckInProgress);
+        actions.child(check);
+        section.child(actions);
+        return section;
+    }
+
+    private java.util.Optional<FlowLayout> updateOverlay() {
+        if (this.updateCheckResult == null) {
+            return java.util.Optional.empty();
+        }
+        if (this.updateCheckResult.status() == ManualUpdateCheckController.Status.UPDATE_AVAILABLE
+                && this.updateCheckResult.notice().isPresent()) {
+            return java.util.Optional.of(this.updateNoticeDialogView.overlay(new UpdateNoticeDialogView.Model(
+                    this.width,
+                    this.updateCheckResult.notice().orElseThrow()
+            )));
+        }
+        if (this.updateCheckResult.status() == ManualUpdateCheckController.Status.UP_TO_DATE) {
+            return java.util.Optional.of(this.infoDialogView.overlay(new InfoDialogView.Model(
+                    this.width,
+                    Component.translatable("luma.update.up_to_date_title"),
+                    Component.translatable("luma.update.up_to_date_body"),
+                    Component.translatable("luma.action.ok")
+            )));
+        }
+        return java.util.Optional.of(this.infoDialogView.overlay(new InfoDialogView.Model(
+                this.width,
+                Component.translatable("luma.update.check_failed_title"),
+                Component.translatable("luma.update.check_failed_body"),
+                Component.translatable("luma.action.ok")
+        )));
+    }
+
+    private void requestManualUpdateCheck() {
+        if (this.updateCheckInProgress) {
+            return;
+        }
+        this.updateCheckInProgress = true;
+        this.updateCheckResult = null;
+        this.rebuild();
+        this.updateCheckController.checkNow().thenAccept(result -> this.client.execute(() -> {
+            if (this.client.screen != this) {
+                return;
+            }
+            this.updateCheckInProgress = false;
+            this.updateCheckResult = result;
+            this.rebuild();
+        }));
+    }
+
+    private java.util.Optional<UpdateProjectNotice> currentUpdateNotice() {
+        return this.updateCheckResult == null ? java.util.Optional.empty() : this.updateCheckResult.notice();
+    }
+
+    private void skipUpdate(UpdateProjectNotice notice) {
+        this.updateCheckService.dismissVersion(notice.version());
+        this.updateCheckResult = null;
+        this.rebuild();
+    }
+
+    private void downloadUpdate(UpdateProjectNotice notice) {
+        try {
+            Util.getPlatform().openUri(URI.create(notice.downloadUrl()));
+        } catch (IllegalArgumentException exception) {
+            LumaMod.LOGGER.warn("Failed to open Lumi update download URL {}", notice.downloadUrl(), exception);
+        } finally {
+            this.updateCheckService.snoozeVersion(notice.version());
+            this.updateCheckResult = null;
+            this.rebuild();
+        }
+    }
+
     private void rebuild() {
         this.uiAdapter.rootComponent.clearChildren();
         this.build(this.uiAdapter.rootComponent);
         this.uiAdapter.inflateAndMount();
+    }
+
+    private final class UpdateDialogActions implements UpdateNoticeDialogView.Actions {
+
+        @Override
+        public void skip() {
+            currentUpdateNotice().ifPresent(MoreScreen.this::skipUpdate);
+        }
+
+        @Override
+        public void download() {
+            currentUpdateNotice().ifPresent(MoreScreen.this::downloadUpdate);
+        }
+    }
+
+    private final class InfoDialogActions implements InfoDialogView.Actions {
+
+        @Override
+        public void close() {
+            updateCheckResult = null;
+            rebuild();
+        }
     }
 
     private enum MoreTab {

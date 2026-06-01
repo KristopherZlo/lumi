@@ -54,7 +54,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditSessionBridge`, `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
 | Commands and runtime tests | `LumaCommands`, `LumaTestingCommands`, `RuntimeTestingHooks`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, `SingleplayerBulkApplyDiagnostics`, `LumiBackupStressClientScenario`, `LumiTestFailpoints`, scripts under `scripts/` | `/lumi testing ...` requires `-Dlumi.testing.enabled=true` or `LUMI_TESTING_ENABLED=true`; `LUMI_SINGLEPLAYER_TEST_MODE=backup-stress`, `docs/commands.md`, `docs/test-client.md` |
 | Client navigation and screen behavior | `ScreenRouter`, the route screen, route controller, route view state | `LumaScreen`, `ProjectWindowLayout`, `ProjectSidebarNavigation`, section builders | UI controller tests, `LumiScreenClientGameTests`, `docs/development.md` |
-| Client update notices | `UpdateCheckService`, `UpdateWorldJoinNotifier`, `UpdatePromptCoordinator` | `HttpUpdateSource`, `UpdateSourceChain`, `UpdateCandidateSelector`, `UpdateChatMessageFactory`, `ProjectScreen`, `UpdateNoticeDialogView`, `updates/lumi-fabric.json` | `src/test/java/io/github/luma/client/update`, `LanguageFilesTest`, `docs/user-guide.md`, `docs/development.md` |
+| Client update notices | `UpdateCheckService`, `UpdateWorldJoinNotifier`, `UpdatePromptCoordinator`, `ManualUpdateCheckController` | `HttpUpdateSource`, `UpdateSourceChain`, `UpdateCandidateSelector`, `UpdateChatMessageFactory`, `ProjectScreen`, `MoreScreen`, `UpdateNoticeDialogView`, `InfoDialogView`, `updates/lumi-fabric.json` | `src/test/java/io/github/luma/client/update`, `LanguageFilesTest`, `docs/user-guide.md`, `docs/development.md` |
 
 ## Bootstrap And Global Entry Points
 
@@ -265,7 +265,7 @@ Use `src/client/java/io/github/luma` for client-only UI, key input, previews, ov
 - Branches: `VariantsScreen`, `VariantsScreenController`, `VariantsViewState`.
 - Import/export/share: `ShareScreen`, `ShareScreenController`, `ShareViewState`, `MergePreviewCache`, `MergePreviewKey`, `MergePreviewStatus`, `ShareMergeReviewSection`.
 - Recovery: `RecoveryScreen`, `RecoveryScreenController`.
-- Settings/more/tools: `SettingsScreen`, `SettingsScreenController`, `MoreScreen`, `CleanupScreen`, `CleanupScreenController`, `DiagnosticsScreen`, `ProjectAdvancedViewState`, `PartialRestoreFormState`. More includes Project tools and Deleted saves tabs.
+- Settings/more/tools: `SettingsScreen`, `SettingsScreenController`, `MoreScreen`, `CleanupScreen`, `CleanupScreenController`, `DiagnosticsScreen`, `ProjectAdvancedViewState`, `PartialRestoreFormState`, `ManualUpdateCheckController`. More includes Project tools, Deleted saves tabs, and the manual update check modal flow.
 - Operation polling helpers: `OperationSnapshotViewService`, `ScreenOperationStateSupport`, `WorkspaceHudController`.
 
 ### Overlays, Input, Preview, Graphs

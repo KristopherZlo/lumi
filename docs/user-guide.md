@@ -50,7 +50,7 @@ Lumi UI actions are intended for the local world owner. Capture and mutating Lum
 - If interrupted recovered work exists, Lumi opens `Recovered work` first.
 - If onboarding has not been completed for this installation, Lumi opens onboarding before the normal workspace.
 - If another Lumi world operation is active, screens show operation progress and block conflicting mutation actions.
-- If a newer Lumi version is available for the same Minecraft version, Lumi writes a clickable download notice in chat after world entry and shows an update modal in Build History.
+- If a newer Lumi version is available for the same Minecraft version, Lumi writes a clickable download notice in chat after world entry and shows update modals in Build History and More.
 
 `Esc` closes the current Lumi screen. Detail screens return to their parent. Top-level workspace screens close the Lumi UI.
 
@@ -60,7 +60,9 @@ Lumi checks for mod updates when the client starts and refreshes the cached chec
 
 The normal source is the Lumi website manifest. If that source cannot be loaded, Lumi tries the GitHub fallback manifest from the public repository.
 
-After you enter a world, Lumi sends one chat notice per available version. The notice includes the release title and manifest summary with preserved line breaks, and the `Download` text opens the GitHub release page from the manifest. Build History shows the same update as a modal with `Skip` and `Download`: `Skip` hides that version permanently, while `Download` opens the release page and hides the modal until the game restarts. Multi-line change notes from the manifest are shown as separate lines with a character count.
+After you enter a world, Lumi sends one chat notice per available version. The first line is aqua with `Lumi` bolded, the changelog header and changelog lines are gray, list-style changelog lines are normalized to `•` bullets, the red bug-report line opens GitHub issues through `[Github]`, and `[Download] (click)` opens the GitHub release page from the manifest.
+
+Build History shows the same update as a modal with `Skip` and `Download`: `Skip` hides that version permanently, while `Download` opens the release page and hides the modal until the game restarts. Multi-line change notes from the manifest are shown as separate lines with a character count. More has a bottom `Check updates` button that runs a fresh compatible-version check and opens either the update modal or a small modal saying the installed Lumi build is already the latest compatible version.
 
 Between startup checks, the result is cached for about 12 hours so opening the menu repeatedly does not keep hitting the network.
 
@@ -706,6 +708,8 @@ Project tools include:
 - `Manual highlight`: choose raw save/branch/current references for highlighting;
 - `History graph`: visual graph of saves and branch heads;
 - `Raw references`: project name, active branch id, and recent save ids for support/debug.
+
+The bottom `Check updates` action performs an immediate GitHub-backed compatibility check. If a newer compatible Lumi release is found, it opens the update modal; otherwise it confirms that the installed Lumi version is the latest compatible build.
 
 Deleted saves shows soft-deleted saves that remain on disk. It shows the save title, author/time, save kind, and raw save id.
 
