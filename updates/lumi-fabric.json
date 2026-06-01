@@ -12,8 +12,8 @@
       "channel": "alpha",
       "title": "Lumi alpha 0.1.0",
       "summary": "Initial alpha release metadata.",
-      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases",
-      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases",
+      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha",
+      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha",
       "sha256": ""
     }
   ]

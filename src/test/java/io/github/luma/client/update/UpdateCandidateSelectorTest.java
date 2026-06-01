@@ -59,6 +59,21 @@ class UpdateCandidateSelectorTest {
         assertEquals("0.1.0", result.release().version());
     }
 
+    @Test
+    void selectsAlphaChannelReleaseForAlphaLine() {
+        UpdateManifest manifest = new UpdateManifest(1, "lumi", List.of(
+                release("0.1.0-alpha.2", 100002, List.of("1.21.11"), "fabric", "alpha")
+        ));
+
+        UpdateCheckResult result = this.selector.select(
+                manifest,
+                new InstalledModInfo("0.1.0-alpha", "1.21.11", "fabric")
+        );
+
+        assertTrue(result.available());
+        assertEquals("0.1.0-alpha.2", result.release().version());
+    }
+
     private static UpdateRelease release(String version, int versionCode, List<String> minecraftVersions) {
         return release(version, versionCode, minecraftVersions, "fabric", "stable");
     }

@@ -40,8 +40,10 @@ public record UpdateRelease(
         return this.loader.isBlank() || this.loader.equalsIgnoreCase(normalized);
     }
 
-    boolean isStableChannel() {
-        return this.channel.isBlank() || this.channel.equalsIgnoreCase("stable");
+    boolean isPromptableChannel() {
+        return this.channel.isBlank()
+                || this.channel.equalsIgnoreCase("stable")
+                || this.channel.equalsIgnoreCase("alpha");
     }
 
     private static String normalize(String value) {

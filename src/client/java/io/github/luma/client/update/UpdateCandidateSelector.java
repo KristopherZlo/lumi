@@ -14,7 +14,7 @@ public final class UpdateCandidateSelector {
                 .filter(release -> release != null)
                 .filter(release -> release.supportsMinecraft(installed.minecraftVersion()))
                 .filter(release -> release.supportsLoader(installed.loader()))
-                .filter(UpdateRelease::isStableChannel)
+                .filter(UpdateRelease::isPromptableChannel)
                 .filter(release -> this.versionComparator.compare(release.version(), installed.modVersion()) > 0)
                 .max(Comparator.comparing(UpdateRelease::version, this.versionComparator::compare))
                 .map(UpdateCheckResult::available)
