@@ -31,6 +31,7 @@ import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
@@ -94,6 +95,7 @@ final class SingleplayerTestRun {
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final SingleplayerPerformanceMonitor performanceMonitor = new SingleplayerPerformanceMonitor();
 
     private Phase phase;
@@ -105,6 +107,7 @@ final class SingleplayerTestRun {
     private SingleplayerGameplayRegressionSuite.GameplayRegressionReport gameplayReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport primedTntUndoReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport poweredTntUndoReport;
+    private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport chainedTntReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
     private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
     private SingleplayerLargeHistoryScenario largeHistoryScenario;
@@ -217,6 +220,10 @@ final class SingleplayerTestRun {
                 case START_POWERED_TNT_UNDO_INTERACTION -> this.startPoweredTntUndoInteraction(server);
                 case START_POWERED_TNT_UNDO -> this.startPoweredTntUndo();
                 case CHECK_POWERED_TNT_UNDO -> this.checkPoweredTntUndo();
+                case START_CHAINED_TNT_INTERACTION -> this.startChainedTntInteraction(server);
+                case CHECK_CHAINED_TNT_CAPTURE -> this.checkChainedTntCapture(server);
+                case START_CHAINED_TNT_UNDO -> this.startChainedTntUndo();
+                case CHECK_CHAINED_TNT_UNDO -> this.checkChainedTntUndo();
                 case START_EXPLOSION_INTERACTION -> this.startExplosionInteraction(server);
                 case CHECK_EXPLOSION_CAPTURE -> this.checkExplosionCapture(server);
                 case START_EXPLOSION_UNDO -> this.startExplosionUndo();
@@ -886,6 +893,63 @@ final class SingleplayerTestRun {
         this.check(this.poweredTntUndoReport != null
                         && this.poweredTntUndoReport.restoredBeforeExplosionUndo(this.level),
                 "Powered TNT undo restored inert TNT block and removed primed entity");
+        this.completePhase(this.level.getServer(), Phase.START_CHAINED_TNT_INTERACTION);
+    }
+
+    private void startChainedTntInteraction(MinecraftServer server) {
+        this.explosionWaitTicks = 0;
+        this.chainedTntReport = new SingleplayerExplosionRegressionScenario().startPoweredChain(
+                this.level,
+                this.player,
+                this.volume,
+                ACTOR,
+                this.volume.min().offset(4, 0, 10)
+        );
+        this.check(this.chainedTntReport.placed(), "Player placed redstone-chain TNT through gameMode useItemOn");
+        this.check(this.chainedTntReport.ignited(), "Redstone-chain TNT auto-primed through redstone");
+        this.completePhase(server, Phase.CHECK_CHAINED_TNT_CAPTURE);
+    }
+
+    private void checkChainedTntCapture(MinecraftServer server) throws Exception {
+        if (this.chainedTntReport != null && !this.chainedTntReport.exploded(this.level)) {
+            if (++this.explosionWaitTicks < EXPLOSION_WAIT_TIMEOUT_TICKS) {
+                return;
+            }
+        }
+        this.check(this.chainedTntReport != null && this.chainedTntReport.exploded(this.level),
+                "Redstone TNT chain exploded through the fixture");
+        if (!this.waitForUndoRedoStabilization("redstone TNT chain capture")) {
+            return;
+        }
+
+        var latestUndoAction = this.undoRedoHistoryManager.recentUndoActions(this.project.id().toString(), 1)
+                .stream()
+                .findFirst()
+                .orElse(null);
+        this.check(latestUndoAction != null, "Redstone TNT chain has a live undo action");
+        if (latestUndoAction != null && this.chainedTntReport != null) {
+            Set<BlockPoint> capturedBlocks = new HashSet<>();
+            for (var change : latestUndoAction.undoChanges()) {
+                capturedBlocks.add(change.pos());
+            }
+            this.check(capturedBlocks.containsAll(this.chainedTntReport.expectedUndoRedoBlocks()),
+                    "Redstone TNT chain live undo action owns every primed and witness block");
+        }
+        this.completePhase(server, Phase.START_CHAINED_TNT_UNDO);
+    }
+
+    private void startChainedTntUndo() throws Exception {
+        if (!this.waitForUndoRedoStabilization("redstone TNT chain undo")) {
+            return;
+        }
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued redstone TNT chain undo operation " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_CHAINED_TNT_UNDO);
+    }
+
+    private void checkChainedTntUndo() {
+        this.check(this.chainedTntReport != null && this.chainedTntReport.restoredAfterUndo(this.level),
+                "Redstone TNT chain undo restored all TNT and blast witness blocks as one action");
         this.completePhase(this.level.getServer(), Phase.START_EXPLOSION_INTERACTION);
     }
 
@@ -1527,6 +1591,10 @@ final class SingleplayerTestRun {
         START_POWERED_TNT_UNDO_INTERACTION("Powered TNT interaction", "place TNT against redstone before its fuse completes"),
         START_POWERED_TNT_UNDO("Queue powered TNT undo", "undo redstone-primed TNT before the primed entity explodes"),
         CHECK_POWERED_TNT_UNDO("Verify powered TNT undo", "check that restored TNT is not immediately primed again"),
+        START_CHAINED_TNT_INTERACTION("Redstone TNT chain", "place TNT on redstone and let it ignite a TNT chain"),
+        CHECK_CHAINED_TNT_CAPTURE("Verify TNT chain capture", "check that one live undo action owns the full chain"),
+        START_CHAINED_TNT_UNDO("Queue TNT chain undo", "undo the redstone TNT chain through the operation model"),
+        CHECK_CHAINED_TNT_UNDO("Verify TNT chain undo", "check that all TNT chain blocks and witnesses were restored"),
         START_EXPLOSION_INTERACTION("TNT interaction", "place and ignite TNT through player game-mode actions"),
         CHECK_EXPLOSION_CAPTURE("Verify TNT capture", "wait for the controlled explosion and inspect its draft"),
         START_EXPLOSION_UNDO("Queue TNT undo", "undo the controlled explosion through the operation model"),
@@ -1607,6 +1675,8 @@ final class SingleplayerTestRun {
                      START_GAMEPLAY_ENTITY_UPDATE_SAVE, CHECK_GAMEPLAY_ENTITY_UPDATE_SAVE,
                      START_PRIMED_TNT_UNDO_INTERACTION, START_PRIMED_TNT_UNDO, CHECK_PRIMED_TNT_UNDO,
                      START_POWERED_TNT_UNDO_INTERACTION, START_POWERED_TNT_UNDO, CHECK_POWERED_TNT_UNDO,
+                     START_CHAINED_TNT_INTERACTION, CHECK_CHAINED_TNT_CAPTURE,
+                     START_CHAINED_TNT_UNDO, CHECK_CHAINED_TNT_UNDO,
                      START_EXPLOSION_INTERACTION,
                      CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
                      START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,

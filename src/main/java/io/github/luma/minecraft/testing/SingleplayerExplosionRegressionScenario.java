@@ -53,6 +53,52 @@ final class SingleplayerExplosionRegressionScenario {
         return new ExplosionRegressionReport(placed, report.primedTntPresent(level), tnt, Set.copyOf(witnesses));
     }
 
+    ExplosionRegressionReport startPoweredChain(
+            ServerLevel level,
+            ServerPlayer player,
+            SingleplayerTestVolume volume,
+            String actor,
+            BlockPos support
+    ) {
+        SingleplayerPlayerActionDriver actions = new SingleplayerPlayerActionDriver(level, player);
+        BlockPos firstTnt = support.above();
+        BlockPos secondTnt = firstTnt.east();
+        BlockPos thirdTnt = secondTnt.east();
+        Set<BlockPos> tntBlocks = Set.of(firstTnt, secondTnt, thirdTnt);
+        Set<BlockPos> witnesses = Set.of(
+                firstTnt.south(),
+                secondTnt.south(),
+                thirdTnt.south(),
+                thirdTnt.east(),
+                secondTnt.north()
+        );
+
+        this.trackedPlayerAction(actor, () -> {
+            level.setBlock(support, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+            level.setBlock(secondTnt, Blocks.TNT.defaultBlockState(), 3);
+            level.setBlock(thirdTnt, Blocks.TNT.defaultBlockState(), 3);
+            for (BlockPos witness : witnesses) {
+                level.setBlock(witness, Blocks.OAK_PLANKS.defaultBlockState(), 3);
+            }
+        });
+
+        boolean placed = actions.placeAttemptAgainst(support, Direction.UP, Blocks.TNT);
+        ExplosionRegressionReport report = new ExplosionRegressionReport(
+                placed,
+                false,
+                firstTnt,
+                Set.copyOf(tntBlocks),
+                Set.copyOf(witnesses)
+        );
+        return new ExplosionRegressionReport(
+                placed,
+                report.primedTntPresent(level),
+                firstTnt,
+                Set.copyOf(tntBlocks),
+                Set.copyOf(witnesses)
+        );
+    }
+
     ExplosionRegressionReport start(
             ServerLevel level,
             ServerPlayer player,
@@ -94,12 +140,24 @@ final class SingleplayerExplosionRegressionScenario {
             boolean placed,
             boolean ignited,
             BlockPos tntPos,
+            Set<BlockPos> tntBlocks,
             Set<BlockPos> witnessBlocks
     ) {
 
+        ExplosionRegressionReport(boolean placed, boolean ignited, BlockPos tntPos, Set<BlockPos> witnessBlocks) {
+            this(placed, ignited, tntPos, Set.of(tntPos), witnessBlocks);
+        }
+
+        ExplosionRegressionReport {
+            tntBlocks = tntBlocks == null ? Set.of(tntPos) : Set.copyOf(tntBlocks);
+            witnessBlocks = witnessBlocks == null ? Set.of() : Set.copyOf(witnessBlocks);
+        }
+
         Set<BlockPoint> expectedUndoRedoBlocks() {
             LinkedHashSet<BlockPoint> blocks = new LinkedHashSet<>();
-            blocks.add(BlockPoint.from(this.tntPos));
+            for (BlockPos tntBlock : this.tntBlocks) {
+                blocks.add(BlockPoint.from(tntBlock));
+            }
             for (BlockPos witness : this.witnessBlocks) {
                 blocks.add(BlockPoint.from(witness));
             }
@@ -107,17 +165,18 @@ final class SingleplayerExplosionRegressionScenario {
         }
 
         boolean exploded(ServerLevel level) {
-            return level.getBlockState(this.tntPos).isAir()
-                    && this.witnessBlocks.stream().anyMatch(pos -> level.getBlockState(pos).isAir());
+            return this.tntBlocks.stream().allMatch(pos -> level.getBlockState(pos).isAir())
+                    && this.witnessBlocks.stream().anyMatch(pos -> level.getBlockState(pos).isAir())
+                    && !this.primedTntPresent(level);
         }
 
         boolean restoredAfterUndo(ServerLevel level) {
-            return level.getBlockState(this.tntPos).is(Blocks.TNT)
+            return this.tntBlocks.stream().allMatch(pos -> level.getBlockState(pos).is(Blocks.TNT))
                     && this.witnessBlocks.stream().allMatch(pos -> level.getBlockState(pos).is(Blocks.OAK_PLANKS));
         }
 
         boolean removedAfterRedo(ServerLevel level) {
-            return level.getBlockState(this.tntPos).isAir()
+            return this.tntBlocks.stream().allMatch(pos -> level.getBlockState(pos).isAir())
                     && this.witnessBlocks.stream().anyMatch(pos -> level.getBlockState(pos).isAir());
         }
 
@@ -127,7 +186,7 @@ final class SingleplayerExplosionRegressionScenario {
         }
 
         boolean restoredBeforeExplosionUndo(ServerLevel level) {
-            return level.getBlockState(this.tntPos).is(Blocks.TNT)
+            return this.tntBlocks.stream().allMatch(pos -> level.getBlockState(pos).is(Blocks.TNT))
                     && !this.primedTntPresent(level)
                     && this.witnessBlocks.stream().allMatch(pos -> level.getBlockState(pos).is(Blocks.OAK_PLANKS));
         }

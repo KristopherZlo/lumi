@@ -6,12 +6,14 @@ import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.TntReplayActivationPolicy;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.TntBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -98,6 +100,24 @@ abstract class TntBlockMixin {
         WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
         try {
             original.call(level, state, hitResult, projectile);
+        } finally {
+            this.luma$closeSource(frame);
+        }
+    }
+
+    @WrapMethod(method = "wasExploded")
+    private void luma$wrapWasExploded(
+            ServerLevel level,
+            BlockPos pos,
+            Explosion explosion,
+            Operation<Void> original
+    ) {
+        if (this.luma$shouldSuppressReplayActivation(level)) {
+            return;
+        }
+        WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
+        try {
+            original.call(level, pos, explosion);
         } finally {
             this.luma$closeSource(frame);
         }
