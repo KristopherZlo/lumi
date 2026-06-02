@@ -89,8 +89,16 @@ final class WorldApplyNoOpPruner {
 
         LumiSectionBuffer.Builder builder = LumiSectionBuffer.builder(section.sectionY());
         int[] keptCells = {0};
+        boolean[] adjustedCells = {false};
         section.buffer().changedCells().forEachSetCell(localIndex -> {
-            PreparedBlockPlacement placement = this.placement(section, localIndex);
+            PreparedBlockPlacement originalPlacement = this.placement(section, localIndex);
+            PreparedBlockPlacement placement = this.withLiveFluidReplayHint(
+                    originalPlacement,
+                    this.currentState(liveSection, originalPlacement.pos())
+            );
+            if (placement != originalPlacement) {
+                adjustedCells[0] = true;
+            }
             if (!this.shouldKeep(level, liveSection, placement, updatedPositions)) {
                 return;
             }
@@ -105,7 +113,7 @@ final class WorldApplyNoOpPruner {
         if (keptCells[0] <= 0) {
             return;
         }
-        if (keptCells[0] == section.changedCellCount()) {
+        if (keptCells[0] == section.changedCellCount() && !adjustedCells[0]) {
             nativeSections.put(section.sectionY(), section);
             return;
         }
@@ -144,9 +152,13 @@ final class WorldApplyNoOpPruner {
             return;
         }
         for (PreparedBlockPlacement placement : section.placements()) {
-            if (this.shouldKeep(level, liveSection, placement, updatedPositions)) {
+            PreparedBlockPlacement adjustedPlacement = this.withLiveFluidReplayHint(
+                    placement,
+                    this.currentState(liveSection, placement.pos())
+            );
+            if (this.shouldKeep(level, liveSection, adjustedPlacement, updatedPositions)) {
                 sparsePlacements.computeIfAbsent(section.sectionY(), ignored -> new ArrayList<>())
-                        .add(placement);
+                        .add(adjustedPlacement);
             }
         }
     }
@@ -261,7 +273,7 @@ final class WorldApplyNoOpPruner {
                 placement.blockEntityTag()
         );
         BlockPos pos = placement.pos();
-        BlockState currentState = section.getBlockState(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15);
+        BlockState currentState = this.currentState(section, pos);
         return this.updateDecider.requiresUpdate(
                 level,
                 pos,
@@ -291,6 +303,36 @@ final class WorldApplyNoOpPruner {
                 || (pos.getX() & 15) == 15
                 || (pos.getZ() & 15) == 0
                 || (pos.getZ() & 15) == 15);
+    }
+
+    PreparedBlockPlacement withLiveFluidReplayHint(PreparedBlockPlacement placement, BlockState currentState) {
+        if (placement == null || placement.pos() == null || placement.state() == null || currentState == null) {
+            return placement;
+        }
+        if (currentState.getFluidState().isEmpty() || !placement.state().getFluidState().isEmpty()) {
+            return placement;
+        }
+
+        PreparedBlockPlacement.ReplayHint replayHint = PreparedBlockPlacement.ReplayHint.merge(
+                placement.replayHint(),
+                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_FLUID
+        );
+        if (replayHint == placement.replayHint()) {
+            return placement;
+        }
+        return new PreparedBlockPlacement(
+                placement.pos(),
+                placement.state(),
+                placement.blockEntityTag(),
+                replayHint
+        );
+    }
+
+    private BlockState currentState(LevelChunkSection section, BlockPos pos) {
+        if (section == null || pos == null) {
+            return null;
+        }
+        return section.getBlockState(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15);
     }
 
     private PreparedBlockPlacement placement(PreparedSectionApplyBatch section, int localIndex) {
