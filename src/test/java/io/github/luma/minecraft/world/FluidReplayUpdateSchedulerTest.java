@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -181,5 +182,59 @@ class FluidReplayUpdateSchedulerTest {
         assertTrue(positions.contains(orphanedTailEnd));
         assertFalse(positions.contains(savedSource));
         assertFalse(positions.contains(savedFlow));
+    }
+
+    @Test
+    void cleanupSkipsOrphanedTailWhenTraversalHitsWalkLimit() {
+        BlockPos restoredTarget = new BlockPos(0, 64, 0);
+        PreparedBlockPlacement replayedDryTarget = new PreparedBlockPlacement(
+                restoredTarget,
+                Blocks.GRASS_BLOCK.defaultBlockState(),
+                null,
+                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_FLUID
+        );
+        Map<BlockPos, FluidState> fluids = new HashMap<>();
+        for (int offset = 1; offset <= 34; offset += 1) {
+            fluids.put(restoredTarget.east(offset), flowingWater(7));
+        }
+
+        Set<BlockPos> positions = this.scheduler.collectFluidTailCleanupPositions(
+                List.of(replayedDryTarget),
+                pos -> fluids.getOrDefault(pos, Blocks.AIR.defaultBlockState().getFluidState()),
+                ignored -> true
+        );
+
+        assertTrue(positions.isEmpty());
+    }
+
+    @Test
+    void cleanupSkipsOrphanedTailWhenTraversalHitsUnloadedFluid() {
+        BlockPos restoredTarget = new BlockPos(0, 64, 0);
+        BlockPos loadedTail = restoredTarget.east();
+        BlockPos loadedTailEnd = restoredTarget.east(2);
+        BlockPos unloadedContinuation = restoredTarget.east(3);
+        PreparedBlockPlacement replayedDryTarget = new PreparedBlockPlacement(
+                restoredTarget,
+                Blocks.GRASS_BLOCK.defaultBlockState(),
+                null,
+                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_FLUID
+        );
+        Map<BlockPos, FluidState> fluids = Map.of(
+                loadedTail, flowingWater(6),
+                loadedTailEnd, flowingWater(7),
+                unloadedContinuation, flowingWater(7)
+        );
+
+        Set<BlockPos> positions = this.scheduler.collectFluidTailCleanupPositions(
+                List.of(replayedDryTarget),
+                pos -> fluids.getOrDefault(pos, Blocks.AIR.defaultBlockState().getFluidState()),
+                pos -> !pos.equals(unloadedContinuation)
+        );
+
+        assertTrue(positions.isEmpty());
+    }
+
+    private static FluidState flowingWater(int level) {
+        return Fluids.FLOWING_WATER.defaultFluidState().setValue(FlowingFluid.LEVEL, level);
     }
 }

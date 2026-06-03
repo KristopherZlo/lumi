@@ -434,7 +434,7 @@ Rules:
 
 Undo and redo restore stored block states and captured block-entity payloads, including container item counts, with side-effect-suppressed placement flags.
 
-Redstone power/source changes queue scoped neighbor updates after stored blocks are written so nearby circuitry can settle. Fluid replay queues bounded vanilla fluid ticks around loaded connected fluid tails while exact replay keeps the stored target cells fixed; Alt+Z clears live flowing fluid from the restored cells and from orphaned downstream tails cut off by those restored cells, but does not erase source-connected older water-filled cells from earlier digs or saved source water/lava. Ordinary replay still avoids placement physics and suppresses stale replay callbacks around piston/observer mechanism positions.
+Redstone power/source changes queue scoped neighbor updates after stored blocks are written so nearby circuitry can settle. Fluid replay queues bounded vanilla fluid ticks around loaded connected fluid tails while exact replay keeps the stored target cells fixed; Alt+Z clears live flowing fluid from the restored cells and from fully inspected orphaned downstream tails cut off by those restored cells, but does not erase source-connected older water-filled cells from earlier digs, unknown unloaded tails, or saved source water/lava. Ordinary replay still avoids placement physics and suppresses stale replay callbacks around piston/observer mechanism positions.
 
 Undo also removes active primed TNT from a tracked ignition or redstone activation before it explodes, plus item drops caused by the tracked edit, such as:
 

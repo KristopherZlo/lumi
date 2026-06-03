@@ -114,7 +114,7 @@ final class FluidReplayUpdateScheduler {
                 savedFluidBarriers,
                 visited
         );
-        if (component.touchesSourceOrSavedFluid()) {
+        if (!component.cleanupSafe()) {
             return;
         }
         for (BlockPos pos : component.nonSourcePositions()) {
@@ -135,7 +135,6 @@ final class FluidReplayUpdateScheduler {
     ) {
         LinkedHashSet<BlockPos> nonSourcePositions = new LinkedHashSet<>();
         ArrayDeque<SearchNode> queue = new ArrayDeque<>();
-        boolean touchesSourceOrSavedFluid = false;
         this.addFluidComponentNode(seed, 0, fluidLookup, loaded, traversalBarriers, visited, queue);
 
         while (!queue.isEmpty()) {
@@ -145,20 +144,25 @@ final class FluidReplayUpdateScheduler {
                 continue;
             }
             if (fluidState.isSource()) {
-                touchesSourceOrSavedFluid = true;
-            } else {
-                nonSourcePositions.add(node.pos());
+                return FluidComponent.unsafe();
             }
+            nonSourcePositions.add(node.pos());
             if (node.distance() >= MAX_FLUID_WALK_DISTANCE) {
+                if (this.hasUnknownFluidContinuation(node.pos(), fluidLookup, loaded, traversalBarriers, savedFluidBarriers)) {
+                    return FluidComponent.unsafe();
+                }
                 continue;
             }
             for (Direction direction : Direction.values()) {
                 BlockPos next = node.pos().relative(direction);
                 if (this.isBarrier(next, traversalBarriers)) {
                     if (this.isBarrier(next, savedFluidBarriers)) {
-                        touchesSourceOrSavedFluid = true;
+                        return FluidComponent.unsafe();
                     }
                     continue;
+                }
+                if (!loaded.test(next)) {
+                    return FluidComponent.unsafe();
                 }
                 this.addFluidComponentNode(
                         next,
@@ -171,7 +175,33 @@ final class FluidReplayUpdateScheduler {
                 );
             }
         }
-        return new FluidComponent(Set.copyOf(nonSourcePositions), touchesSourceOrSavedFluid);
+        return FluidComponent.safe(Set.copyOf(nonSourcePositions));
+    }
+
+    private boolean hasUnknownFluidContinuation(
+            BlockPos pos,
+            Function<BlockPos, FluidState> fluidLookup,
+            Predicate<BlockPos> loaded,
+            Set<BlockPos> traversalBarriers,
+            Set<BlockPos> savedFluidBarriers
+    ) {
+        for (Direction direction : Direction.values()) {
+            BlockPos next = pos.relative(direction);
+            if (this.isBarrier(next, traversalBarriers)) {
+                if (this.isBarrier(next, savedFluidBarriers)) {
+                    return true;
+                }
+                continue;
+            }
+            if (!loaded.test(next)) {
+                return true;
+            }
+            FluidState fluidState = fluidLookup.apply(next);
+            if (fluidState != null && !fluidState.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void addFluidComponentNode(
@@ -329,6 +359,14 @@ final class FluidReplayUpdateScheduler {
     private record SearchNode(BlockPos pos, int distance) {
     }
 
-    private record FluidComponent(Set<BlockPos> nonSourcePositions, boolean touchesSourceOrSavedFluid) {
+    private record FluidComponent(Set<BlockPos> nonSourcePositions, boolean cleanupSafe) {
+
+        private static FluidComponent safe(Set<BlockPos> nonSourcePositions) {
+            return new FluidComponent(nonSourcePositions, true);
+        }
+
+        private static FluidComponent unsafe() {
+            return new FluidComponent(Set.of(), false);
+        }
     }
 }
