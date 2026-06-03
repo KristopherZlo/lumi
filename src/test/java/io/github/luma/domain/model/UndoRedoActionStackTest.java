@@ -236,6 +236,66 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void causalFluidDoesNotUseAppliedStateFromAnotherDimension() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("nether-place", "Alex", "project", "minecraft:the_nether",
+                change(1, "minecraft:netherrack", "minecraft:redstone_torch"), NOW);
+        stack.recordChange("overworld-release", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
+
+        stack.recordCausalChange(
+                "overworld-release",
+                change(1, "minecraft:grass_block", "minecraft:water"),
+                NOW.plusSeconds(2)
+        );
+
+        StoredBlockChange floodedGap = changeAt(stack.selectUndo().action(), 1);
+        assertEquals("minecraft:grass_block", floodedGap.oldValue().blockId());
+        assertEquals("minecraft:water", floodedGap.newValue().blockId());
+    }
+
+    @Test
+    void causalBatchDoesNotUseAppliedStateFromAnotherDimension() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("nether-place", "Alex", "project", "minecraft:the_nether",
+                change(1, "minecraft:netherrack", "minecraft:redstone_torch"), NOW);
+        stack.recordChange("overworld-release", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
+
+        stack.recordCausalAction(
+                "overworld-release",
+                List.of(change(1, "minecraft:grass_block", "minecraft:water")),
+                List.of(),
+                NOW.plusSeconds(2)
+        );
+
+        StoredBlockChange floodedGap = changeAt(stack.selectUndo().action(), 1);
+        assertEquals("minecraft:grass_block", floodedGap.oldValue().blockId());
+        assertEquals("minecraft:water", floodedGap.newValue().blockId());
+    }
+
+    @Test
+    void relatedFluidDoesNotUseAppliedStateFromAnotherDimension() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("nether-place", "Alex", "project", "minecraft:the_nether",
+                change(1, "minecraft:netherrack", "minecraft:redstone_torch"), NOW);
+        stack.recordChange("overworld-release", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
+
+        stack.recordRelatedChange(
+                "minecraft:overworld",
+                change(1, "minecraft:grass_block", "minecraft:water"),
+                NOW.plusSeconds(2),
+                java.time.Duration.ofSeconds(10),
+                1
+        );
+
+        StoredBlockChange floodedGap = changeAt(stack.selectUndo().action(), 1);
+        assertEquals("minecraft:grass_block", floodedGap.oldValue().blockId());
+        assertEquals("minecraft:water", floodedGap.newValue().blockId());
+    }
+
+    @Test
     void causalHiddenChangesStayInUndoRedoPayload() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("place-water", "Alex", "project", "minecraft:overworld",

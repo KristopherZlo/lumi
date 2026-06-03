@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Bounded runtime undo/redo stack for one project.
@@ -58,7 +59,7 @@ public final class UndoRedoActionStack {
             int chunkRadius
     ) {
         UndoRedoAction action = this.undoStack.peekFirst();
-        StoredBlockChange recordableChange = this.withAppliedOldValue(change);
+        StoredBlockChange recordableChange = this.withAppliedOldValue(dimensionId, change);
         if (action == null || !action.canAbsorbRelatedChange(dimensionId, recordableChange, now, maxIdle, chunkRadius)) {
             return this.revision;
         }
@@ -80,7 +81,7 @@ public final class UndoRedoActionStack {
             return this.revision;
         }
 
-        StoredBlockChange recordableChange = this.withAppliedOldValue(change);
+        StoredBlockChange recordableChange = this.withAppliedOldValue(action.dimensionId(), change);
         if (recordableChange == null || recordableChange.isNoOp()) {
             return this.revision;
         }
@@ -384,7 +385,7 @@ public final class UndoRedoActionStack {
         int before = action.size();
         boolean recorded = false;
         for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
-            StoredBlockChange recordableChange = this.withAppliedOldValue(change);
+            StoredBlockChange recordableChange = this.withAppliedOldValue(action.dimensionId(), change);
             if (recordableChange == null || recordableChange.isNoOp()) {
                 continue;
             }
@@ -427,22 +428,25 @@ public final class UndoRedoActionStack {
         return this.revision;
     }
 
-    private StoredBlockChange withAppliedOldValue(StoredBlockChange change) {
+    private StoredBlockChange withAppliedOldValue(String dimensionId, StoredBlockChange change) {
         if (change == null || change.pos() == null) {
             return change;
         }
-        StatePayload appliedState = this.appliedStateAt(change.pos());
+        StatePayload appliedState = this.appliedStateAt(dimensionId, change.pos());
         if (appliedState == null) {
             return change;
         }
         return change.withOldValue(appliedState);
     }
 
-    private StatePayload appliedStateAt(BlockPoint pos) {
+    private StatePayload appliedStateAt(String dimensionId, BlockPoint pos) {
         if (pos == null) {
             return null;
         }
         for (UndoRedoAction action : this.undoStack) {
+            if (!Objects.equals(action.dimensionId(), dimensionId)) {
+                continue;
+            }
             StoredBlockChange existing = action.blockChangeAt(pos);
             if (existing != null) {
                 return existing.newValue();
