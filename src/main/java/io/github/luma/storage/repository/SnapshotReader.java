@@ -98,6 +98,14 @@ public final class SnapshotReader {
         );
     }
 
+    boolean hasReadableHeader(Path snapshotFile) {
+        try {
+            return this.isAddressableSnapshot(snapshotFile) || this.hasReadableLegacyHeader(snapshotFile);
+        } catch (IOException exception) {
+            return false;
+        }
+    }
+
     private SnapshotData readAddressableFile(Path snapshotFile, Collection<ChunkPoint> chunks) throws IOException {
         Set<ChunkPoint> requested = chunks == null ? null : new HashSet<>(chunks);
         try (RandomAccessFile input = new RandomAccessFile(snapshotFile.toFile(), "r")) {
@@ -328,6 +336,16 @@ public final class SnapshotReader {
 
             LumaMod.LOGGER.info("Loaded snapshot {} with {} chunks", snapshotFile.getFileName(), chunks.size());
             return new SnapshotData(projectId, createdAt, minY, maxY, chunks);
+        }
+    }
+
+    private boolean hasReadableLegacyHeader(Path snapshotFile) throws IOException {
+        try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
+                new BufferedInputStream(Files.newInputStream(snapshotFile))
+        ))) {
+            int magic = input.readInt();
+            int version = input.readInt();
+            return magic == MAGIC && isSupportedLegacyVersion(version);
         }
     }
 

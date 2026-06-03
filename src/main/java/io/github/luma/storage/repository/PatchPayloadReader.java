@@ -95,13 +95,21 @@ final class PatchPayloadReader {
         }
     }
 
+    boolean hasReadablePayloadHeader(Path dataFile) {
+        try {
+            return this.isChunkAddressablePayload(dataFile) || this.hasReadableLegacyPayloadHeader(dataFile);
+        } catch (IOException exception) {
+            return false;
+        }
+    }
+
     private PatchWorldChanges loadLegacyWorldChanges(Path dataFile, PatchMetadata metadata) throws IOException {
         try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
                 new BufferedInputStream(Files.newInputStream(dataFile))
         ))) {
             int magic = input.readInt();
             int version = input.readInt();
-            if (magic != PatchDataRepository.PAYLOAD_MAGIC || (version != 3 && version != 4 && version != 5)) {
+            if (magic != PatchDataRepository.PAYLOAD_MAGIC || !isSupportedLegacyVersion(version)) {
                 throw new IOException("Unsupported patch payload format for " + metadata.id());
             }
 
@@ -115,6 +123,16 @@ final class PatchPayloadReader {
                 BackgroundThrottle.pauseEvery(index + 1, 8, 250_000L);
             }
             return new PatchWorldChanges(changes, entityChanges);
+        }
+    }
+
+    private boolean hasReadableLegacyPayloadHeader(Path dataFile) throws IOException {
+        try (DataInputStream input = new DataInputStream(new LZ4FrameInputStream(
+                new BufferedInputStream(Files.newInputStream(dataFile))
+        ))) {
+            int magic = input.readInt();
+            int version = input.readInt();
+            return magic == PatchDataRepository.PAYLOAD_MAGIC && isSupportedLegacyVersion(version);
         }
     }
 
@@ -196,6 +214,10 @@ final class PatchPayloadReader {
             throw new IOException("Unsupported patch payload format for " + dataFile.getFileName());
         }
         return version;
+    }
+
+    private static boolean isSupportedLegacyVersion(int version) {
+        return version == 3 || version == 4 || version == 5;
     }
 
     private PatchWorldChanges readChunkFrame(DataInputStream input, int version) throws IOException {

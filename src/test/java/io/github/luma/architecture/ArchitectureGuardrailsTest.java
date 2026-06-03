@@ -101,16 +101,20 @@ class ArchitectureGuardrailsTest {
 
     @Test
     void projectIntegrityServiceDoesNotParseStoragePayloadHeaders() throws IOException {
-        Path service = MAIN_SOURCES.resolve("io/github/luma/domain/service/ProjectIntegrityService.java");
-        String source = Files.readString(service);
+        assertSourceExcludes(
+                MAIN_SOURCES.resolve("io/github/luma/domain/service/ProjectIntegrityService.java"),
+                "ProjectIntegrityService must delegate raw storage layout and payload header parsing to storage repositories",
+                "DataInputStream", "LZ4FrameInputStream", "PATCH_MAGIC", "SNAPSHOT_MAGIC", "Files."
+        );
+    }
 
-        assertTrue(
-                !source.contains("DataInputStream")
-                        && !source.contains("LZ4FrameInputStream")
-                        && !source.contains("PATCH_MAGIC")
-                        && !source.contains("SNAPSHOT_MAGIC")
-                        && !source.contains("Files."),
-                "ProjectIntegrityService must delegate raw storage layout and payload header parsing to storage repositories"
+    @Test
+    void projectIntegrityRepositoryReusesStoragePayloadReadersForHeaderChecks() throws IOException {
+        assertSourceIncludesAndExcludes(
+                MAIN_SOURCES.resolve("io/github/luma/storage/repository/ProjectIntegrityRepository.java"),
+                "ProjectIntegrityRepository should reuse storage readers instead of duplicating payload header parsers",
+                List.of("PatchPayloadReader", "SnapshotReader"),
+                List.of("DataInputStream", "LZ4FrameInputStream", "PATCH_MAGIC", "SNAPSHOT_MAGIC")
         );
     }
 
@@ -126,15 +130,10 @@ class ArchitectureGuardrailsTest {
 
     @Test
     void projectScreenControllerDoesNotReachIntoPreviewStorageLayout() throws IOException {
-        Path controller = CLIENT_SOURCES.resolve("io/github/luma/ui/controller/ProjectScreenController.java");
-        String source = Files.readString(controller);
-
-        assertTrue(
-                !source.contains("previewFile(")
-                        && !source.contains("previewRequestFile(")
-                        && !source.contains("java.nio.file.Files")
-                        && !source.contains("Files.exists("),
-                "ProjectScreenController must use services for preview paths and request state"
+        assertSourceExcludes(
+                CLIENT_SOURCES.resolve("io/github/luma/ui/controller/ProjectScreenController.java"),
+                "ProjectScreenController must use services for preview paths and request state",
+                "previewFile(", "previewRequestFile(", "java.nio.file.Files", "Files.exists("
         );
     }
 
@@ -359,6 +358,32 @@ class ArchitectureGuardrailsTest {
             }
         }
         return false;
+    }
+
+    private static void assertSourceExcludes(Path path, String message, String... forbiddenPatterns) throws IOException {
+        String source = Files.readString(path);
+        List<String> offenders = Stream.of(forbiddenPatterns)
+                .filter(source::contains)
+                .toList();
+
+        assertTrue(offenders.isEmpty(), message + ": " + offenders);
+    }
+
+    private static void assertSourceIncludesAndExcludes(
+            Path path,
+            String message,
+            List<String> requiredPatterns,
+            List<String> forbiddenPatterns
+    ) throws IOException {
+        String source = Files.readString(path);
+        List<String> missing = requiredPatterns.stream()
+                .filter(pattern -> !source.contains(pattern))
+                .toList();
+        List<String> offenders = forbiddenPatterns.stream()
+                .filter(source::contains)
+                .toList();
+
+        assertTrue(missing.isEmpty() && offenders.isEmpty(), message + "; missing=" + missing + ", offenders=" + offenders);
     }
 
     private static boolean isAllowedClientStorageAdapter(Path path) {
