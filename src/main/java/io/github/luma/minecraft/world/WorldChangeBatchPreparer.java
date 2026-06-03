@@ -32,6 +32,7 @@ public final class WorldChangeBatchPreparer {
     private final PistonMechanismPlacementExpander pistonMechanismPlacementExpander = new PistonMechanismPlacementExpander();
     private final SectionApplySafetyClassifier sectionApplySafetyClassifier = new SectionApplySafetyClassifier();
     private static final MechanismStatePolicy MECHANISM_STATE_POLICY = new MechanismStatePolicy();
+    private static final FluidSensitiveBlockReplayPolicy FLUID_REPLAY_POLICY = new FluidSensitiveBlockReplayPolicy();
     private final Supplier<BlockStateDecoder> blockStateDecoderFactory;
 
     public WorldChangeBatchPreparer() {
@@ -525,7 +526,8 @@ public final class WorldChangeBatchPreparer {
     }
 
     private static boolean isFluidRelated(BlockState state) {
-        return state != null && !state.getFluidState().isEmpty();
+        return state != null && (!state.getFluidState().isEmpty()
+                || FLUID_REPLAY_POLICY.requiresFluidReplayGuard(state));
     }
 
     private static boolean isMechanismRelated(BlockState state) {

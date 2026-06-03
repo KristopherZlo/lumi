@@ -252,7 +252,7 @@ class WorldChangeBatchPreparerTest {
 
         assertTrue(hint.forcesFinalReplay());
         assertTrue(hint.suppressesPostReplayMechanism());
-        assertFalse(hint.suppressesPostReplayFluid());
+        assertTrue(hint.suppressesPostReplayFluid());
     }
 
     @Test
@@ -263,7 +263,7 @@ class WorldChangeBatchPreparerTest {
         );
 
         assertTrue(hint.suppressesPostReplayMechanism());
-        assertFalse(hint.suppressesPostReplayFluid());
+        assertTrue(hint.suppressesPostReplayFluid());
     }
 
     @Test
@@ -276,6 +276,41 @@ class WorldChangeBatchPreparerTest {
         assertFalse(hint.forcesFinalReplay());
         assertFalse(hint.suppressesPostReplayMechanism());
         assertFalse(hint.suppressesPostReplayFluid());
+    }
+
+    @Test
+    void waterWashableDryBlocksSuppressFluidReplay() {
+        List<BlockState> washableStates = List.of(
+                Blocks.TORCH.defaultBlockState(),
+                Blocks.POPPY.defaultBlockState(),
+                Blocks.OAK_SAPLING.defaultBlockState(),
+                Blocks.SNOW.defaultBlockState(),
+                Blocks.WHITE_CARPET.defaultBlockState(),
+                Blocks.REDSTONE_WIRE.defaultBlockState(),
+                Blocks.REPEATER.defaultBlockState(),
+                Blocks.COBWEB.defaultBlockState(),
+                Blocks.BAMBOO_SAPLING.defaultBlockState(),
+                Blocks.END_ROD.defaultBlockState(),
+                Blocks.SKELETON_SKULL.defaultBlockState(),
+                Blocks.FLOWER_POT.defaultBlockState()
+        );
+
+        for (BlockState washableState : washableStates) {
+            assertTrue(
+                    WorldChangeBatchPreparer.replayHintFor(
+                            washableState,
+                            Blocks.AIR.defaultBlockState()
+                    ).suppressesPostReplayFluid(),
+                    "removing " + washableState
+            );
+            assertTrue(
+                    WorldChangeBatchPreparer.replayHintFor(
+                            Blocks.AIR.defaultBlockState(),
+                            washableState
+                    ).suppressesPostReplayFluid(),
+                    "restoring " + washableState
+            );
+        }
     }
 
     @Test
