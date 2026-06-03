@@ -94,6 +94,7 @@ final class SingleplayerGameplayRegressionSuite {
             Map<BlockPoint, Map<String, String>> expectedDraftProperties,
             Set<BlockPoint> latestUndoRedoBlocks,
             List<ReplayBlockExpectation> latestReplayBlocks,
+            List<UndoOnlyBlockExpectation> latestUndoOnlyBlocks,
             int expectedEntityChanges,
             Set<String> expectedEntityIds,
             Map<String, BlockPoint> expectedEntityPositions,
@@ -113,6 +114,9 @@ final class SingleplayerGameplayRegressionSuite {
     }
 
     record ReplayBlockExpectation(BlockPoint pos, Block undoBlock, Block redoBlock) {
+    }
+
+    record UndoOnlyBlockExpectation(BlockPoint pos, Block undoBlock) {
     }
 
     record GameplayCheck(String label, boolean passed) {
@@ -151,6 +155,7 @@ final class SingleplayerGameplayRegressionSuite {
         private final Map<BlockPoint, Map<String, String>> expectedDraftProperties = new LinkedHashMap<>();
         private final Set<BlockPoint> latestUndoRedoBlocks = new LinkedHashSet<>();
         private final List<ReplayBlockExpectation> latestReplayBlocks = new ArrayList<>();
+        private final List<UndoOnlyBlockExpectation> latestUndoOnlyBlocks = new ArrayList<>();
         private final Set<String> expectedEntityIds = new LinkedHashSet<>();
         private final Map<String, BlockPoint> expectedEntityPositions = new LinkedHashMap<>();
         private final List<Entity> spawnedEntities = new ArrayList<>();
@@ -209,6 +214,7 @@ final class SingleplayerGameplayRegressionSuite {
         private void beginLatestUndoRedoAction() {
             this.latestUndoRedoBlocks.clear();
             this.latestReplayBlocks.clear();
+            this.latestUndoOnlyBlocks.clear();
         }
 
         private void expectLatestReplayBlock(BlockPos pos, Block undoBlock, Block redoBlock) {
@@ -222,6 +228,10 @@ final class SingleplayerGameplayRegressionSuite {
             if (expectDraft) {
                 this.expectDraftBlock(pos);
             }
+        }
+
+        private void expectLatestUndoOnlyBlock(BlockPos pos, Block undoBlock) {
+            this.latestUndoOnlyBlocks.add(new UndoOnlyBlockExpectation(BlockPoint.from(pos), undoBlock));
         }
 
         private void expectEntityChange(Entity entity) {
@@ -249,6 +259,7 @@ final class SingleplayerGameplayRegressionSuite {
                     this.expectedDraftProperties(),
                     Set.copyOf(this.latestUndoRedoBlocks),
                     List.copyOf(this.latestReplayBlocks),
+                    List.copyOf(this.latestUndoOnlyBlocks),
                     this.expectedEntityChanges,
                     Set.copyOf(this.expectedEntityIds),
                     Map.copyOf(this.expectedEntityPositions),
@@ -682,10 +693,12 @@ final class SingleplayerGameplayRegressionSuite {
             BlockPos source = context.volume.min().offset(10, 2, 12);
             BlockPos gateway = source.east();
             List<BlockPos> preCutGaps = List.of(source.east(2), source.east(3), source.east(4));
+            BlockPos liveOnlyTail = source.east(5);
             List<BlockPos> channel = new ArrayList<>();
             channel.add(source);
             channel.add(gateway);
             channel.addAll(preCutGaps);
+            channel.add(liveOnlyTail);
 
             BlockPos sequentialSource = context.volume.min().offset(10, 4, 7);
             List<BlockPos> sequentialDigs = List.of(
@@ -697,7 +710,7 @@ final class SingleplayerGameplayRegressionSuite {
             sequentialChannel.add(sequentialSource);
             sequentialChannel.addAll(sequentialDigs);
 
-            this.loadFixture(context, channel);
+            this.loadFixture(context, channel, Set.of(liveOnlyTail, liveOnlyTail.east()));
             this.loadFixture(context, sequentialChannel);
             for (BlockPos gap : preCutGaps) {
                 context.trackedPlayerAction(() ->
@@ -706,6 +719,11 @@ final class SingleplayerGameplayRegressionSuite {
                         "gameplay pre-cut water gap stayed dry at " + gap.toShortString());
                 context.expectDraftBlock(gap);
             }
+            try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression()) {
+                context.level.setBlock(liveOnlyTail, Blocks.AIR.defaultBlockState(), 3);
+            }
+            context.checks.check(context.level.getBlockState(liveOnlyTail).isAir(),
+                    "gameplay live-only water tail gap stayed dry before latest release");
             for (BlockPos dig : sequentialDigs.subList(0, sequentialDigs.size() - 1)) {
                 context.trackedPlayerAction(() -> {
                     context.level.setBlock(dig, Blocks.AIR.defaultBlockState(), 3);
@@ -729,6 +747,10 @@ final class SingleplayerGameplayRegressionSuite {
                     context.level.setBlock(sequentialDigs.getLast(), flowingWater(), 3);
                 });
             });
+            try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression()) {
+                WorldMutationContext.runWithSource(WorldMutationSource.FLUID, () ->
+                        context.level.setBlock(liveOnlyTail, flowingWater(), 3));
+            }
 
             context.checks.check(context.level.getFluidState(gateway).isSource(),
                     "gameplay released generated water through latest gateway");
@@ -739,14 +761,25 @@ final class SingleplayerGameplayRegressionSuite {
                     "gameplay released water flooded only existing pre-cut gaps");
             context.checks.check(context.level.getBlockState(sequentialDigs.getLast()).is(Blocks.WATER),
                     "gameplay latest sequential water dig filled final cell");
+            context.checks.check(context.level.getBlockState(liveOnlyTail).is(Blocks.WATER),
+                    "gameplay live-only water tail flowed beyond captured latest payload");
             context.expectLatestReplayBlock(gateway, Blocks.GRASS_BLOCK, Blocks.WATER);
             preCutGaps.forEach(gap -> context.expectLatestReplayBlock(gap, Blocks.AIR, Blocks.WATER));
+            context.expectLatestUndoOnlyBlock(liveOnlyTail, Blocks.AIR);
             sequentialDigs.subList(0, sequentialDigs.size() - 1)
                     .forEach(dig -> context.expectLatestReplayBlock(dig, Blocks.WATER, Blocks.WATER, false));
             context.expectLatestReplayBlock(sequentialDigs.getLast(), Blocks.GRASS_BLOCK, Blocks.WATER);
         }
 
         private void loadFixture(GameplayScenarioContext context, List<BlockPos> channel) {
+            this.loadFixture(context, channel, Set.of());
+        }
+
+        private void loadFixture(
+                GameplayScenarioContext context,
+                List<BlockPos> channel,
+                Set<BlockPos> excludedDraftBlocks
+        ) {
             Set<BlockPos> containment = new LinkedHashSet<>();
             context.trackedPlayerAction(() -> {
                 for (BlockPos pos : channel) {
@@ -762,8 +795,12 @@ final class SingleplayerGameplayRegressionSuite {
                 }
                 context.level.setBlock(channel.getFirst(), Blocks.WATER.defaultBlockState(), 3);
             });
-            channel.forEach(context::expectDraftBlock);
-            containment.forEach(context::expectDraftBlock);
+            channel.stream()
+                    .filter(pos -> !excludedDraftBlocks.contains(pos))
+                    .forEach(context::expectDraftBlock);
+            containment.stream()
+                    .filter(pos -> !excludedDraftBlocks.contains(pos))
+                    .forEach(context::expectDraftBlock);
         }
 
         private BlockState flowingWater() {

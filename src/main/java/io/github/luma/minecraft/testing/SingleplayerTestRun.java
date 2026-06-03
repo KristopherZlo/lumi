@@ -667,6 +667,14 @@ final class SingleplayerTestRun {
                                 + this.format(expectedBlock.pos().toBlockPos())
                 );
             }
+            for (var expectedBlock : this.gameplayReport.latestUndoOnlyBlocks()) {
+                this.checkBlock(
+                        expectedBlock.pos().toBlockPos(),
+                        expectedBlock.undoBlock(),
+                        "Gameplay undo cleaned live-only tail block "
+                                + this.format(expectedBlock.pos().toBlockPos())
+                );
+            }
         }
         this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_REDO);
     }

@@ -96,7 +96,7 @@ class FluidReplayUpdateSchedulerTest {
         );
 
         assertTrue(positions.contains(target));
-        assertFalse(positions.contains(adjacentTail));
+        assertTrue(positions.contains(adjacentTail));
         assertFalse(positions.contains(sourceNeighbor));
     }
 
@@ -127,6 +127,7 @@ class FluidReplayUpdateSchedulerTest {
     void cleanupDoesNotWalkIntoFluidOwnedByEarlierActions() {
         BlockPos latestTarget = new BlockPos(0, 64, 0);
         BlockPos earlierTail = latestTarget.west();
+        BlockPos savedSource = earlierTail.west();
         PreparedBlockPlacement replayedDryTarget = new PreparedBlockPlacement(
                 latestTarget,
                 Blocks.GRASS_BLOCK.defaultBlockState(),
@@ -135,7 +136,8 @@ class FluidReplayUpdateSchedulerTest {
         );
         Map<BlockPos, FluidState> fluids = Map.of(
                 latestTarget, Fluids.FLOWING_WATER.defaultFluidState().setValue(FlowingFluid.LEVEL, 7),
-                earlierTail, Fluids.FLOWING_WATER.defaultFluidState().setValue(FlowingFluid.LEVEL, 6)
+                earlierTail, Fluids.FLOWING_WATER.defaultFluidState().setValue(FlowingFluid.LEVEL, 6),
+                savedSource, Fluids.WATER.defaultFluidState()
         );
 
         Set<BlockPos> positions = this.scheduler.collectFluidTailCleanupPositions(
@@ -146,5 +148,38 @@ class FluidReplayUpdateSchedulerTest {
 
         assertTrue(positions.contains(latestTarget));
         assertFalse(positions.contains(earlierTail));
+        assertFalse(positions.contains(savedSource));
+    }
+
+    @Test
+    void cleanupCollectsOrphanedFlowingTailAfterDryTargetWasRestored() {
+        BlockPos restoredTarget = new BlockPos(0, 64, 0);
+        BlockPos savedSource = restoredTarget.west(2);
+        BlockPos savedFlow = restoredTarget.west();
+        BlockPos orphanedTail = restoredTarget.east();
+        BlockPos orphanedTailEnd = restoredTarget.east(2);
+        PreparedBlockPlacement replayedDryTarget = new PreparedBlockPlacement(
+                restoredTarget,
+                Blocks.GRASS_BLOCK.defaultBlockState(),
+                null,
+                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_FLUID
+        );
+        Map<BlockPos, FluidState> fluids = Map.of(
+                savedSource, Fluids.WATER.defaultFluidState(),
+                savedFlow, Fluids.FLOWING_WATER.defaultFluidState().setValue(FlowingFluid.LEVEL, 2),
+                orphanedTail, Fluids.FLOWING_WATER.defaultFluidState().setValue(FlowingFluid.LEVEL, 6),
+                orphanedTailEnd, Fluids.FLOWING_WATER.defaultFluidState().setValue(FlowingFluid.LEVEL, 7)
+        );
+
+        Set<BlockPos> positions = this.scheduler.collectFluidTailCleanupPositions(
+                List.of(replayedDryTarget),
+                pos -> fluids.getOrDefault(pos, Blocks.AIR.defaultBlockState().getFluidState()),
+                ignored -> true
+        );
+
+        assertTrue(positions.contains(orphanedTail));
+        assertTrue(positions.contains(orphanedTailEnd));
+        assertFalse(positions.contains(savedSource));
+        assertFalse(positions.contains(savedFlow));
     }
 }
