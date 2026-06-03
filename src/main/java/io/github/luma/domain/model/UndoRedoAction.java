@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
-import net.minecraft.core.BlockPos;
 
 /**
  * One temporal player action that can be applied backward or forward.
@@ -20,7 +19,7 @@ public final class UndoRedoAction {
     private final String dimensionId;
     private final Instant startedAt;
     private Instant updatedAt;
-    private final LinkedHashMap<Long, StoredBlockChange> changes = new LinkedHashMap<>();
+    private final LinkedHashMap<BlockPoint, StoredBlockChange> changes = new LinkedHashMap<>();
     private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
 
     public UndoRedoAction(
@@ -159,7 +158,7 @@ public final class UndoRedoAction {
     }
 
     StoredBlockChange blockChangeAt(BlockPoint pos) {
-        return pos == null ? null : this.changes.get(BlockPos.asLong(pos.x(), pos.y(), pos.z()));
+        return pos == null ? null : this.changes.get(pos);
     }
 
     public List<StoredBlockChange> undoChanges() {
@@ -218,7 +217,7 @@ public final class UndoRedoAction {
         return this.updatedAt;
     }
 
-    private static long key(StoredBlockChange change) {
-        return BlockPos.asLong(change.pos().x(), change.pos().y(), change.pos().z());
+    private static BlockPoint key(StoredBlockChange change) {
+        return change.pos();
     }
 }

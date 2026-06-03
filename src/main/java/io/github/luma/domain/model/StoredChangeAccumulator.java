@@ -3,14 +3,13 @@ package io.github.luma.domain.model;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
-import net.minecraft.core.BlockPos;
 
 /**
  * Collapses persisted world changes while preserving first-old/latest-new semantics.
  */
 public final class StoredChangeAccumulator {
 
-    private final LinkedHashMap<Long, StoredBlockChange> blockChanges = new LinkedHashMap<>();
+    private final LinkedHashMap<BlockPoint, StoredBlockChange> blockChanges = new LinkedHashMap<>();
     private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
 
     public void addBlockChange(StoredBlockChange change) {
@@ -21,11 +20,11 @@ public final class StoredChangeAccumulator {
         mergeEntityChange(this.entityChanges, change);
     }
 
-    static void mergeBlockChange(LinkedHashMap<Long, StoredBlockChange> target, StoredBlockChange change) {
+    static void mergeBlockChange(LinkedHashMap<BlockPoint, StoredBlockChange> target, StoredBlockChange change) {
         if (target == null || change == null) {
             return;
         }
-        long key = BlockPos.asLong(change.pos().x(), change.pos().y(), change.pos().z());
+        BlockPoint key = change.pos();
         StoredBlockChange current = target.get(key);
         StoredBlockChange merged = current == null
                 ? change

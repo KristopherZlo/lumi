@@ -13,7 +13,7 @@ import net.minecraft.world.level.block.state.BlockState;
 /**
  * Mutable in-memory accumulator for pending tracked edits.
  *
- * <p>The buffer is keyed by packed block position so repeated edits to the same
+ * <p>The buffer is keyed by block position so repeated edits to the same
  * block collapse into one logical change. The first observed old state is
  * preserved, the latest new state wins, and no-op changes are removed.
  */
@@ -29,7 +29,7 @@ public final class TrackedChangeBuffer {
     private final WorldMutationSource mutationSource;
     private final Instant startedAt;
     private Instant updatedAt;
-    private final LinkedHashMap<Long, StoredBlockChange> changes = new LinkedHashMap<>();
+    private final LinkedHashMap<BlockPoint, StoredBlockChange> changes = new LinkedHashMap<>();
     private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
 
     public TrackedChangeBuffer(
@@ -206,8 +206,8 @@ public final class TrackedChangeBuffer {
 
     public int contentFingerprint() {
         int result = 1;
-        for (Map.Entry<Long, StoredBlockChange> entry : this.changes.entrySet()) {
-            result = (31 * result) + Long.hashCode(entry.getKey());
+        for (Map.Entry<BlockPoint, StoredBlockChange> entry : this.changes.entrySet()) {
+            result = (31 * result) + entry.getKey().hashCode();
             result = (31 * result) + entry.getValue().hashCode();
         }
         for (Map.Entry<String, StoredEntityChange> entry : this.entityChanges.entrySet()) {
@@ -221,7 +221,7 @@ public final class TrackedChangeBuffer {
         return List.copyOf(this.changes.values());
     }
 
-    public Map<Long, StoredBlockChange> rawChanges() {
+    public Map<BlockPoint, StoredBlockChange> rawChanges() {
         return Map.copyOf(this.changes);
     }
 

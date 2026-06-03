@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
@@ -39,10 +40,10 @@ class ArchitectureGuardrailsTest {
     @Test
     void hotPathClassesDoNotGrowBeforeTheyAreSplit() throws IOException {
         Map<Path, Integer> limits = Map.of(
-                MAIN_SOURCES.resolve("io/github/luma/minecraft/world/WorldOperationManager.java"), 1960,
-                MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 1720,
-                MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/HistoryCaptureManager.java"), 1815,
-                MAIN_SOURCES.resolve("io/github/luma/storage/repository/PatchDataRepository.java"), 215
+                MAIN_SOURCES.resolve("io/github/luma/minecraft/world/WorldOperationManager.java"), 1946,
+                MAIN_SOURCES.resolve("io/github/luma/domain/service/RestoreService.java"), 1663,
+                MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/HistoryCaptureManager.java"), 1810,
+                MAIN_SOURCES.resolve("io/github/luma/storage/repository/PatchDataRepository.java"), 178
         );
 
         List<String> offenders = limits.entrySet().stream()
@@ -99,6 +100,21 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
+    void projectIntegrityServiceDoesNotParseStoragePayloadHeaders() throws IOException {
+        Path service = MAIN_SOURCES.resolve("io/github/luma/domain/service/ProjectIntegrityService.java");
+        String source = Files.readString(service);
+
+        assertTrue(
+                !source.contains("DataInputStream")
+                        && !source.contains("LZ4FrameInputStream")
+                        && !source.contains("PATCH_MAGIC")
+                        && !source.contains("SNAPSHOT_MAGIC")
+                        && !source.contains("Files."),
+                "ProjectIntegrityService must delegate raw storage layout and payload header parsing to storage repositories"
+        );
+    }
+
+    @Test
     void clientCodeDoesNotImportStorageRepositoriesDirectly() throws IOException {
         List<Path> offenders = javaFiles(CLIENT_SOURCES.resolve("io/github/luma")).stream()
                 .filter(path -> importsAny(path, "io.github.luma.storage.repository"))
@@ -106,6 +122,43 @@ class ArchitectureGuardrailsTest {
                 .toList();
 
         assertTrue(offenders.isEmpty(), "Client code must reach storage through controllers/services: " + offenders);
+    }
+
+    @Test
+    void projectScreenControllerDoesNotReachIntoPreviewStorageLayout() throws IOException {
+        Path controller = CLIENT_SOURCES.resolve("io/github/luma/ui/controller/ProjectScreenController.java");
+        String source = Files.readString(controller);
+
+        assertTrue(
+                !source.contains("previewFile(")
+                        && !source.contains("previewRequestFile(")
+                        && !source.contains("java.nio.file.Files")
+                        && !source.contains("Files.exists("),
+                "ProjectScreenController must use services for preview paths and request state"
+        );
+    }
+
+    @Test
+    void domainModelDoesNotAddMinecraftImportsBeyondLegacyPayloadTypes() throws IOException {
+        Set<String> allowed = Set.of(
+                "src/main/java/io/github/luma/domain/model/BlockPoint.java",
+                "src/main/java/io/github/luma/domain/model/Bounds3i.java",
+                "src/main/java/io/github/luma/domain/model/ChunkPoint.java",
+                "src/main/java/io/github/luma/domain/model/ChunkSnapshotPayload.java",
+                "src/main/java/io/github/luma/domain/model/ChunkSectionSnapshotPayload.java",
+                "src/main/java/io/github/luma/domain/model/EntityPayload.java",
+                "src/main/java/io/github/luma/domain/model/PatchSectionFrame.java",
+                "src/main/java/io/github/luma/domain/model/SnapshotChunkData.java",
+                "src/main/java/io/github/luma/domain/model/SnapshotSectionData.java",
+                "src/main/java/io/github/luma/domain/model/StatePayload.java",
+                "src/main/java/io/github/luma/domain/model/TrackedChangeBuffer.java"
+        );
+        List<Path> offenders = javaFiles(MAIN_SOURCES.resolve("io/github/luma/domain/model")).stream()
+                .filter(path -> importsAny(path, "net.minecraft"))
+                .filter(path -> !allowed.contains(normalize(path)))
+                .toList();
+
+        assertTrue(offenders.isEmpty(), "Do not add Minecraft imports to domain model beyond documented legacy payload types: " + offenders);
     }
 
     @Test
@@ -311,6 +364,10 @@ class ArchitectureGuardrailsTest {
     private static boolean isAllowedClientStorageAdapter(Path path) {
         String normalized = path.toString().replace('\\', '/');
         return normalized.endsWith("src/client/java/io/github/luma/client/preview/PreviewCaptureCoordinator.java");
+    }
+
+    private static String normalize(Path path) {
+        return path.toString().replace('\\', '/');
     }
 
     private static long lineCount(Path path) {
