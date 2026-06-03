@@ -55,7 +55,8 @@ final class SingleplayerGameplayRegressionSuite {
             new ItemEntityScenario(),
             new EntitySpawnScenario(),
             new WaterBridgeScenario(),
-            new MechanismAndWaterUndoRedoScenario()
+            new MechanismAndWaterUndoRedoScenario(),
+            new PreCutWaterReleaseUndoRedoScenario()
     );
 
     GameplayRegressionReport run(
@@ -668,6 +669,70 @@ final class SingleplayerGameplayRegressionSuite {
             context.expectDraftBlock(home);
             context.expectDraftBlock(torchSupport);
             waterContainment.forEach(context::expectDraftBlock);
+        }
+    }
+
+    private static final class PreCutWaterReleaseUndoRedoScenario implements GameplayScenario {
+
+        @Override
+        public void run(GameplayScenarioContext context) {
+            BlockPos source = context.volume.min().offset(10, 2, 12);
+            BlockPos gateway = source.east();
+            List<BlockPos> preCutGaps = List.of(source.east(2), source.east(3), source.east(4));
+            List<BlockPos> channel = new ArrayList<>();
+            channel.add(source);
+            channel.add(gateway);
+            channel.addAll(preCutGaps);
+
+            this.loadFixture(context, channel);
+            for (BlockPos gap : preCutGaps) {
+                context.trackedPlayerAction(() ->
+                        context.level.setBlock(gap, Blocks.AIR.defaultBlockState(), 3));
+                context.checks.check(context.level.getBlockState(gap).isAir(),
+                        "gameplay pre-cut water gap stayed dry at " + gap.toShortString());
+                context.expectDraftBlock(gap);
+            }
+
+            context.beginLatestUndoRedoAction();
+            context.trackedPlayerAction(() -> {
+                context.level.setBlock(gateway, Blocks.AIR.defaultBlockState(), 3);
+                WorldMutationContext.runWithSource(WorldMutationSource.FLUID, () -> {
+                    context.level.setBlock(gateway, Blocks.WATER.defaultBlockState(), 3);
+                    for (BlockPos gap : preCutGaps) {
+                        context.level.setBlock(gap, Blocks.WATER.defaultBlockState(), 3);
+                    }
+                });
+            });
+
+            context.checks.check(context.level.getFluidState(gateway).isSource(),
+                    "gameplay released generated water through latest gateway");
+            long floodedPreCuts = preCutGaps.stream()
+                    .filter(pos -> context.level.getBlockState(pos).is(Blocks.WATER))
+                    .count();
+            context.checks.check(floodedPreCuts == preCutGaps.size(),
+                    "gameplay released water flooded only existing pre-cut gaps");
+            context.expectLatestReplayBlock(gateway, Blocks.GRASS_BLOCK, Blocks.WATER);
+            preCutGaps.forEach(gap -> context.expectLatestReplayBlock(gap, Blocks.AIR, Blocks.WATER));
+        }
+
+        private void loadFixture(GameplayScenarioContext context, List<BlockPos> channel) {
+            Set<BlockPos> containment = new LinkedHashSet<>();
+            context.trackedPlayerAction(() -> {
+                for (BlockPos pos : channel) {
+                    containment.add(pos.below());
+                    containment.add(pos.north());
+                    containment.add(pos.south());
+                    context.level.setBlock(pos, Blocks.GRASS_BLOCK.defaultBlockState(), 3);
+                }
+                containment.add(channel.getFirst().west());
+                containment.add(channel.getLast().east());
+                for (BlockPos pos : containment) {
+                    context.level.setBlock(pos, Blocks.STONE.defaultBlockState(), 3);
+                }
+                context.level.setBlock(channel.getFirst(), Blocks.WATER.defaultBlockState(), 3);
+            });
+            channel.forEach(context::expectDraftBlock);
+            containment.forEach(context::expectDraftBlock);
         }
     }
 }

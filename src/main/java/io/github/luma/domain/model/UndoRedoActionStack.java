@@ -58,11 +58,12 @@ public final class UndoRedoActionStack {
             int chunkRadius
     ) {
         UndoRedoAction action = this.undoStack.peekFirst();
-        if (action == null || !action.canAbsorbRelatedChange(dimensionId, change, now, maxIdle, chunkRadius)) {
+        StoredBlockChange recordableChange = this.withAppliedOldValue(change);
+        if (action == null || !action.canAbsorbRelatedChange(dimensionId, recordableChange, now, maxIdle, chunkRadius)) {
             return this.revision;
         }
 
-        return this.recordIntoAction(action, change, now, false);
+        return this.recordIntoAction(action, recordableChange, now, false);
     }
 
     public long recordCausalChange(
@@ -70,7 +71,7 @@ public final class UndoRedoActionStack {
             StoredBlockChange change,
             Instant now
     ) {
-        if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
+        if (actionId == null || actionId.isBlank() || change == null) {
             return this.revision;
         }
 
@@ -79,7 +80,11 @@ public final class UndoRedoActionStack {
             return this.revision;
         }
 
-        return this.recordIntoAction(action, change, now, false);
+        StoredBlockChange recordableChange = this.withAppliedOldValue(change);
+        if (recordableChange == null || recordableChange.isNoOp()) {
+            return this.revision;
+        }
+        return this.recordIntoAction(action, recordableChange, now, false);
     }
 
     public long recordRelatedEntityChange(
@@ -198,7 +203,7 @@ public final class UndoRedoActionStack {
             return this.revision;
         }
 
-        return this.recordIntoExistingAction(action, changes, entityChanges, now, false);
+        return this.recordSecondaryIntoExistingAction(action, changes, entityChanges, now);
     }
 
     public Selection selectUndo() {
@@ -370,6 +375,38 @@ public final class UndoRedoActionStack {
         return this.revision;
     }
 
+    private long recordSecondaryIntoExistingAction(
+            UndoRedoAction action,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            Instant now
+    ) {
+        int before = action.size();
+        boolean recorded = false;
+        for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
+            StoredBlockChange recordableChange = this.withAppliedOldValue(change);
+            if (recordableChange == null || recordableChange.isNoOp()) {
+                continue;
+            }
+            action.recordChange(recordableChange, now);
+            recorded = true;
+        }
+        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
+            if (change == null || change.isNoOp()) {
+                continue;
+            }
+            action.recordEntityChange(change, now);
+            recorded = true;
+        }
+        if (action.isEmpty()) {
+            this.undoStack.remove(action);
+        }
+        if (recorded || before != action.size()) {
+            this.revision += 1;
+        }
+        return this.revision;
+    }
+
     private long recordEntityIntoAction(
             UndoRedoAction action,
             StoredEntityChange change,
@@ -388,6 +425,30 @@ public final class UndoRedoActionStack {
             this.revision += 1;
         }
         return this.revision;
+    }
+
+    private StoredBlockChange withAppliedOldValue(StoredBlockChange change) {
+        if (change == null || change.pos() == null) {
+            return change;
+        }
+        StatePayload appliedState = this.appliedStateAt(change.pos());
+        if (appliedState == null) {
+            return change;
+        }
+        return change.withOldValue(appliedState);
+    }
+
+    private StatePayload appliedStateAt(BlockPoint pos) {
+        if (pos == null) {
+            return null;
+        }
+        for (UndoRedoAction action : this.undoStack) {
+            StoredBlockChange existing = action.blockChangeAt(pos);
+            if (existing != null) {
+                return existing.newValue();
+            }
+        }
+        return null;
     }
 
     private boolean selectionCanComplete(Deque<UndoRedoAction> stack, Selection selection) {

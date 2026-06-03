@@ -158,6 +158,10 @@ public final class UndoRedoAction {
         return List.copyOf(this.changes.values());
     }
 
+    StoredBlockChange blockChangeAt(BlockPoint pos) {
+        return pos == null ? null : this.changes.get(BlockPos.asLong(pos.x(), pos.y(), pos.z()));
+    }
+
     public List<StoredBlockChange> undoChanges() {
         List<StoredBlockChange> ordered = new ArrayList<>(this.changes.values());
         Collections.reverse(ordered);

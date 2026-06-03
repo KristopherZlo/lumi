@@ -172,6 +172,70 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void causalFluidUsesLatestAppliedStateFromOlderAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("pre-cut-gap", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:grass_block", "minecraft:air"), NOW);
+        stack.recordChange("release-water", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
+
+        stack.recordCausalChange(
+                "release-water",
+                change(1, "minecraft:grass_block", "minecraft:water"),
+                NOW.plusSeconds(2)
+        );
+
+        UndoRedoAction action = stack.selectUndo().action();
+        StoredBlockChange floodedGap = changeAt(action, 1);
+        assertEquals("minecraft:air", floodedGap.oldValue().blockId());
+        assertEquals("minecraft:water", floodedGap.newValue().blockId());
+        StoredBlockChange gateway = changeAt(action, 2);
+        assertEquals("minecraft:grass_block", gateway.oldValue().blockId());
+        assertEquals("minecraft:air", gateway.newValue().blockId());
+    }
+
+    @Test
+    void causalFluidRestoresBlockPlacedByOlderAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("place-torch", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:air", "minecraft:redstone_torch"), NOW);
+        stack.recordChange("release-water", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
+
+        stack.recordCausalAction(
+                "release-water",
+                List.of(change(1, "minecraft:air", "minecraft:water")),
+                List.of(),
+                NOW.plusSeconds(2)
+        );
+
+        StoredBlockChange brokenTorch = changeAt(stack.selectUndo().action(), 1);
+        assertEquals("minecraft:redstone_torch", brokenTorch.oldValue().blockId());
+        assertEquals("minecraft:water", brokenTorch.newValue().blockId());
+    }
+
+    @Test
+    void relatedFluidUsesLatestAppliedStateFromOlderAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("pre-cut-gap", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:grass_block", "minecraft:air"), NOW);
+        stack.recordChange("release-water", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
+
+        stack.recordRelatedChange(
+                "minecraft:overworld",
+                change(1, "minecraft:grass_block", "minecraft:water"),
+                NOW.plusSeconds(2),
+                java.time.Duration.ofSeconds(10),
+                1
+        );
+
+        StoredBlockChange floodedGap = changeAt(stack.selectUndo().action(), 1);
+        assertEquals("minecraft:air", floodedGap.oldValue().blockId());
+        assertEquals("minecraft:water", floodedGap.newValue().blockId());
+    }
+
+    @Test
     void causalHiddenChangesStayInUndoRedoPayload() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("place-water", "Alex", "project", "minecraft:overworld",
@@ -503,6 +567,13 @@ class UndoRedoActionStackTest {
                 new StatePayload(state(newBlock), null),
                 hidden
         );
+    }
+
+    private static StoredBlockChange changeAt(UndoRedoAction action, int x) {
+        return action.redoChanges().stream()
+                .filter(change -> change.pos().x() == x)
+                .findFirst()
+                .orElseThrow();
     }
 
     private static CompoundTag state(String blockId) {
