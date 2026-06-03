@@ -50,21 +50,18 @@ final class FluidReplayUpdateScheduler {
             Function<BlockPos, FluidState> fluidLookup,
             Predicate<BlockPos> loaded
     ) {
-        Set<BlockPos> candidates = this.collectFluidPositions(
-                placements,
-                this::isFluidRemovalTarget,
-                fluidLookup,
-                loaded
-        );
-        if (candidates.isEmpty()) {
+        if (placements == null || placements.isEmpty() || fluidLookup == null || loaded == null) {
             return Set.of();
         }
 
         LinkedHashSet<BlockPos> cleanup = new LinkedHashSet<>();
-        for (BlockPos pos : candidates) {
-            FluidState fluidState = fluidLookup.apply(pos);
+        for (PreparedBlockPlacement placement : placements) {
+            if (!this.isFluidRemovalTarget(placement) || !loaded.test(placement.pos())) {
+                continue;
+            }
+            FluidState fluidState = fluidLookup.apply(placement.pos());
             if (fluidState != null && !fluidState.isEmpty() && !fluidState.isSource()) {
-                cleanup.add(pos.immutable());
+                cleanup.add(placement.pos().immutable());
             }
         }
         return Set.copyOf(cleanup);

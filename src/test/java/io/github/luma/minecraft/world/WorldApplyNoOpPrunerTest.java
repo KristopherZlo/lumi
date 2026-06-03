@@ -153,7 +153,7 @@ class WorldApplyNoOpPrunerTest {
     }
 
     @Test
-    void promotedLiveFluidPlacementSeedsBoundedTailCleanup() {
+    void promotedLiveFluidPlacementSeedsActionScopedTailCleanup() {
         BlockPos restored = new BlockPos(4, 64, 4);
         BlockPos source = restored.north();
         BlockPos tail = restored.south();
@@ -174,7 +174,7 @@ class WorldApplyNoOpPrunerTest {
         );
 
         assertTrue(cleanup.contains(restored));
-        assertTrue(cleanup.contains(tail));
+        assertFalse(cleanup.contains(tail));
         assertFalse(cleanup.contains(source));
     }
 

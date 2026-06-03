@@ -32,9 +32,12 @@ import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonHeadBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.PistonType;
+import net.minecraft.world.level.material.FlowingFluid;
+import net.minecraft.world.level.material.Fluids;
 
 /**
  * Real integrated-world gameplay actions used by the Lumi runtime suite.
@@ -684,7 +687,18 @@ final class SingleplayerGameplayRegressionSuite {
             channel.add(gateway);
             channel.addAll(preCutGaps);
 
+            BlockPos sequentialSource = context.volume.min().offset(10, 4, 7);
+            List<BlockPos> sequentialDigs = List.of(
+                    sequentialSource.east(),
+                    sequentialSource.east(2),
+                    sequentialSource.east(3)
+            );
+            List<BlockPos> sequentialChannel = new ArrayList<>();
+            sequentialChannel.add(sequentialSource);
+            sequentialChannel.addAll(sequentialDigs);
+
             this.loadFixture(context, channel);
+            this.loadFixture(context, sequentialChannel);
             for (BlockPos gap : preCutGaps) {
                 context.trackedPlayerAction(() ->
                         context.level.setBlock(gap, Blocks.AIR.defaultBlockState(), 3));
@@ -692,15 +706,27 @@ final class SingleplayerGameplayRegressionSuite {
                         "gameplay pre-cut water gap stayed dry at " + gap.toShortString());
                 context.expectDraftBlock(gap);
             }
+            for (BlockPos dig : sequentialDigs.subList(0, sequentialDigs.size() - 1)) {
+                context.trackedPlayerAction(() -> {
+                    context.level.setBlock(dig, Blocks.AIR.defaultBlockState(), 3);
+                    WorldMutationContext.runWithSource(WorldMutationSource.FLUID, () ->
+                            context.level.setBlock(dig, flowingWater(), 3));
+                });
+                context.checks.check(context.level.getBlockState(dig).is(Blocks.WATER),
+                        "gameplay sequential water dig filled older cell at " + dig.toShortString());
+                context.expectDraftBlock(dig);
+            }
 
             context.beginLatestUndoRedoAction();
             context.trackedPlayerAction(() -> {
                 context.level.setBlock(gateway, Blocks.AIR.defaultBlockState(), 3);
+                context.level.setBlock(sequentialDigs.getLast(), Blocks.AIR.defaultBlockState(), 3);
                 WorldMutationContext.runWithSource(WorldMutationSource.FLUID, () -> {
                     context.level.setBlock(gateway, Blocks.WATER.defaultBlockState(), 3);
                     for (BlockPos gap : preCutGaps) {
                         context.level.setBlock(gap, Blocks.WATER.defaultBlockState(), 3);
                     }
+                    context.level.setBlock(sequentialDigs.getLast(), flowingWater(), 3);
                 });
             });
 
@@ -711,8 +737,13 @@ final class SingleplayerGameplayRegressionSuite {
                     .count();
             context.checks.check(floodedPreCuts == preCutGaps.size(),
                     "gameplay released water flooded only existing pre-cut gaps");
+            context.checks.check(context.level.getBlockState(sequentialDigs.getLast()).is(Blocks.WATER),
+                    "gameplay latest sequential water dig filled final cell");
             context.expectLatestReplayBlock(gateway, Blocks.GRASS_BLOCK, Blocks.WATER);
             preCutGaps.forEach(gap -> context.expectLatestReplayBlock(gap, Blocks.AIR, Blocks.WATER));
+            sequentialDigs.subList(0, sequentialDigs.size() - 1)
+                    .forEach(dig -> context.expectLatestReplayBlock(dig, Blocks.WATER, Blocks.WATER, false));
+            context.expectLatestReplayBlock(sequentialDigs.getLast(), Blocks.GRASS_BLOCK, Blocks.WATER);
         }
 
         private void loadFixture(GameplayScenarioContext context, List<BlockPos> channel) {
@@ -733,6 +764,12 @@ final class SingleplayerGameplayRegressionSuite {
             });
             channel.forEach(context::expectDraftBlock);
             containment.forEach(context::expectDraftBlock);
+        }
+
+        private BlockState flowingWater() {
+            return Fluids.FLOWING_WATER.defaultFluidState()
+                    .setValue(FlowingFluid.LEVEL, 7)
+                    .createLegacyBlock();
         }
     }
 }
