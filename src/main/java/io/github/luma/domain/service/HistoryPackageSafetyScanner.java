@@ -1,5 +1,6 @@
 package io.github.luma.domain.service;
 
+import io.github.luma.LumaMod;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.HistoryPackageSafetyReport;
 import io.github.luma.domain.model.PatchWorldChanges;
@@ -21,7 +22,6 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 
 /**
@@ -52,9 +52,15 @@ public final class HistoryPackageSafetyScanner {
     private final PatchMetaRepository patchMetaRepository;
     private final PatchDataRepository patchDataRepository;
     private final SnapshotReader snapshotReader;
+    private final HistoryPayloadTypeRegistry typeRegistry;
 
     public HistoryPackageSafetyScanner() {
-        this(new PatchMetaRepository(), new PatchDataRepository(), new SnapshotReader());
+        this(
+                new PatchMetaRepository(),
+                new PatchDataRepository(),
+                new SnapshotReader(),
+                new MinecraftHistoryPayloadTypeRegistry()
+        );
     }
 
     HistoryPackageSafetyScanner(
@@ -62,9 +68,19 @@ public final class HistoryPackageSafetyScanner {
             PatchDataRepository patchDataRepository,
             SnapshotReader snapshotReader
     ) {
+        this(patchMetaRepository, patchDataRepository, snapshotReader, new MinecraftHistoryPayloadTypeRegistry());
+    }
+
+    HistoryPackageSafetyScanner(
+            PatchMetaRepository patchMetaRepository,
+            PatchDataRepository patchDataRepository,
+            SnapshotReader snapshotReader,
+            HistoryPayloadTypeRegistry typeRegistry
+    ) {
         this.patchMetaRepository = patchMetaRepository;
         this.patchDataRepository = patchDataRepository;
         this.snapshotReader = snapshotReader;
+        this.typeRegistry = typeRegistry;
     }
 
     public HistoryPackageSafetyReport scanMergePlan(VariantMergePlan plan) {
@@ -212,28 +228,20 @@ public final class HistoryPackageSafetyScanner {
 
     private boolean knownBlockEntityId(String id) {
         try {
-            for (var blockEntityType : BuiltInRegistries.BLOCK_ENTITY_TYPE) {
-                if (id.equals(BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntityType).toString())) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) {
-            return id.startsWith("minecraft:");
+            return this.typeRegistry.knownBlockEntityId(id);
+        } catch (RuntimeException | LinkageError exception) {
+            LumaMod.LOGGER.warn("History package block entity registry lookup failed for {}", id, exception);
+            return false;
         }
-        return false;
     }
 
     private boolean knownEntityId(String id) {
         try {
-            for (var entityType : BuiltInRegistries.ENTITY_TYPE) {
-                if (id.equals(BuiltInRegistries.ENTITY_TYPE.getKey(entityType).toString())) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) {
-            return id.startsWith("minecraft:");
+            return this.typeRegistry.knownEntityId(id);
+        } catch (RuntimeException | LinkageError exception) {
+            LumaMod.LOGGER.warn("History package entity registry lookup failed for {}", id, exception);
+            return false;
         }
-        return false;
     }
 
     private static final class SafetyAccumulator {
