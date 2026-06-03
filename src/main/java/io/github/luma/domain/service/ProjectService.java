@@ -73,6 +73,14 @@ public final class ProjectService {
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
     }
 
+    public Path previewPath(MinecraftServer server, String projectName, String versionId) throws IOException {
+        return this.resolveLayout(server, projectName).previewFile(versionId);
+    }
+
+    public boolean previewQueued(MinecraftServer server, String projectName, String versionId) throws IOException {
+        return this.previewCaptureRequestService.isQueued(this.resolveLayout(server, projectName), versionId);
+    }
+
     public Optional<BuildProject> findWorldProject(ServerLevel level) throws IOException {
         String dimensionId = level.dimension().identifier().toString();
         return this.projectRepository.loadAll(this.projectsRoot(level.getServer())).stream()

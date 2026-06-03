@@ -34,6 +34,13 @@ public final class PreviewCaptureRequestService {
         this.repository.delete(layout, versionId);
     }
 
+    public boolean isQueued(ProjectLayout layout, String versionId) throws IOException {
+        if (layout == null || versionId == null || versionId.isBlank()) {
+            return false;
+        }
+        return this.repository.load(layout, versionId).isPresent();
+    }
+
     public boolean shouldAttempt(PreviewCaptureRequest request, Instant now) {
         return request != null && request.dueAt(now);
     }

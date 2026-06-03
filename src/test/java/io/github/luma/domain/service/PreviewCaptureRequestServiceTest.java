@@ -28,6 +28,8 @@ class PreviewCaptureRequestServiceTest {
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("tower.mbp"));
         this.projectRepository.initializeLayout(layout);
 
+        assertFalse(this.service.isQueued(layout, "v0001"));
+
         this.service.queue(
                 layout,
                 "v0001",
@@ -41,10 +43,12 @@ class PreviewCaptureRequestServiceTest {
         assertTrue(request.requestedAt() != null);
         assertEquals(0, request.attempts());
         assertTrue(this.service.shouldAttempt(request, Instant.now()));
+        assertTrue(this.service.isQueued(layout, "v0001"));
 
         this.service.clear(layout, "v0001");
 
         assertFalse(this.repository.load(layout, "v0001").isPresent());
+        assertFalse(this.service.isQueued(layout, "v0001"));
     }
 
     @Test

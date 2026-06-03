@@ -501,7 +501,7 @@ public final class ProjectScreenController {
     public String resolvePreviewPath(String projectName, String versionId) {
         try {
             var server = ClientProjectAccess.requireSingleplayerServer(this.client);
-            return this.projectService.resolveLayout(server, projectName).previewFile(versionId).toString();
+            return this.projectService.previewPath(server, projectName, versionId).toString();
         } catch (Exception exception) {
             return "";
         }
@@ -513,7 +513,7 @@ public final class ProjectScreenController {
         }
         try {
             var server = ClientProjectAccess.requireSingleplayerServer(this.client);
-            return java.nio.file.Files.exists(this.projectService.resolveLayout(server, projectName).previewRequestFile(versionId));
+            return this.projectService.previewQueued(server, projectName, versionId);
         } catch (Exception exception) {
             return false;
         }
