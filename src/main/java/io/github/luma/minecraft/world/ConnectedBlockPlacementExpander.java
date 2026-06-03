@@ -29,7 +29,7 @@ public final class ConnectedBlockPlacementExpander {
         LinkedHashMap<Long, PreparedBlockPlacement> explicitPlacements = this.indexPlacements(placements);
         LinkedHashMap<Long, PreparedBlockPlacement> expandedPlacements = new LinkedHashMap<>(explicitPlacements);
         for (PreparedBlockPlacement placement : explicitPlacements.values()) {
-            this.addIfAbsent(expandedPlacements, explicitPlacements, this.targetCompanion(placement));
+            this.addIfAbsentOrMergeHint(expandedPlacements, explicitPlacements, this.targetCompanion(placement));
         }
         return ordered(expandedPlacements.values().stream().toList());
     }
@@ -50,13 +50,17 @@ public final class ConnectedBlockPlacementExpander {
             }
             PreparedBlockPlacement targetCompanion = this.targetCompanion(change.placement());
             if (targetCompanion != null) {
-                this.addIfAbsent(expandedPlacements, explicitPlacements, targetCompanion);
+                this.addIfAbsentOrMergeHint(expandedPlacements, explicitPlacements, targetCompanion);
                 continue;
             }
-            this.addIfAbsent(
+            this.addIfAbsentOrMergeHint(
                     expandedPlacements,
                     explicitPlacements,
-                    this.sourceRemovalCompanion(change.placement().pos(), change.sourceState())
+                    this.sourceRemovalCompanion(
+                            change.placement().pos(),
+                            change.sourceState(),
+                            change.placement().replayHint()
+                    )
             );
         }
         return ordered(expandedPlacements.values().stream().toList());
@@ -93,7 +97,7 @@ public final class ConnectedBlockPlacementExpander {
         return indexed;
     }
 
-    private void addIfAbsent(
+    private void addIfAbsentOrMergeHint(
             LinkedHashMap<Long, PreparedBlockPlacement> expandedPlacements,
             LinkedHashMap<Long, PreparedBlockPlacement> explicitPlacements,
             PreparedBlockPlacement placement
@@ -102,6 +106,22 @@ public final class ConnectedBlockPlacementExpander {
             return;
         }
         long key = packed(placement.pos());
+        PreparedBlockPlacement existing = expandedPlacements.get(key);
+        if (existing != null) {
+            PreparedBlockPlacement.ReplayHint mergedHint = PreparedBlockPlacement.ReplayHint.merge(
+                    existing.replayHint(),
+                    placement.replayHint()
+            );
+            if (mergedHint != existing.replayHint()) {
+                expandedPlacements.put(key, new PreparedBlockPlacement(
+                        existing.pos(),
+                        existing.state(),
+                        existing.blockEntityTag(),
+                        mergedHint
+                ));
+            }
+            return;
+        }
         if (!explicitPlacements.containsKey(key)) {
             expandedPlacements.putIfAbsent(key, placement);
         }
@@ -116,10 +136,19 @@ public final class ConnectedBlockPlacementExpander {
         if (companion == null) {
             return null;
         }
-        return new PreparedBlockPlacement(companion.pos(), companion.state(), null);
+        return new PreparedBlockPlacement(
+                companion.pos(),
+                companion.state(),
+                null,
+                placement.replayHint()
+        );
     }
 
-    private PreparedBlockPlacement sourceRemovalCompanion(BlockPos pos, BlockState sourceState) {
+    private PreparedBlockPlacement sourceRemovalCompanion(
+            BlockPos pos,
+            BlockState sourceState,
+            PreparedBlockPlacement.ReplayHint replayHint
+    ) {
         if (pos == null || sourceState == null || sourceState.isAir()) {
             return null;
         }
@@ -128,7 +157,12 @@ public final class ConnectedBlockPlacementExpander {
         if (companion == null) {
             return null;
         }
-        return new PreparedBlockPlacement(companion.pos(), Blocks.AIR.defaultBlockState(), null);
+        return new PreparedBlockPlacement(
+                companion.pos(),
+                Blocks.AIR.defaultBlockState(),
+                null,
+                replayHint
+        );
     }
 
     private CompanionPlacement connectedCompanion(BlockPos pos, BlockState state) {

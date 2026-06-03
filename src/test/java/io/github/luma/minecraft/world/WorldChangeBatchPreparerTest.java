@@ -21,9 +21,11 @@ import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonHeadBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -274,6 +276,42 @@ class WorldChangeBatchPreparerTest {
         assertFalse(hint.forcesFinalReplay());
         assertFalse(hint.suppressesPostReplayMechanism());
         assertFalse(hint.suppressesPostReplayFluid());
+    }
+
+    @Test
+    void undoRedoWaterBrokenDoublePlantGuardsBothHalvesAgainstFluidReplay() throws Exception {
+        BlockPos lower = new BlockPos(1, 64, 1);
+        BlockState lowerPlant = Blocks.SUNFLOWER.defaultBlockState()
+                .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.LOWER);
+        BlockState upperPlant = Blocks.SUNFLOWER.defaultBlockState()
+                .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER);
+
+        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+                null,
+                List.of(
+                        new StoredBlockChange(
+                                BlockPoint.from(lower),
+                                payload(lowerPlant),
+                                payload(Blocks.WATER.defaultBlockState()),
+                                true
+                        ),
+                        new StoredBlockChange(
+                                BlockPoint.from(lower.above()),
+                                payload(upperPlant),
+                                payload(Blocks.AIR.defaultBlockState()),
+                                true
+                        )
+                ),
+                List.of(),
+                false,
+                null
+        );
+
+        PreparedBlockPlacement lowerPlacement = placementAt(batches.getFirst(), lower);
+        PreparedBlockPlacement upperPlacement = placementAt(batches.getFirst(), lower.above());
+
+        assertTrue(lowerPlacement.replayHint().suppressesPostReplayFluid());
+        assertTrue(upperPlacement.replayHint().suppressesPostReplayFluid());
     }
 
     @Test
@@ -600,21 +638,30 @@ class WorldChangeBatchPreparerTest {
     }
 
     private static net.minecraft.world.level.block.state.BlockState stateAt(PreparedChunkBatch batch, BlockPos pos) {
-        net.minecraft.world.level.block.state.BlockState resolved = null;
+        PreparedBlockPlacement placement = placementAt(batch, pos);
+        return placement == null ? null : placement.state();
+    }
+
+    private static PreparedBlockPlacement placementAt(PreparedChunkBatch batch, BlockPos pos) {
+        PreparedBlockPlacement resolved = null;
         for (PreparedSectionApplyBatch section : batch.nativeSections()) {
             if (section.sectionY() != Math.floorDiv(pos.getY(), 16)) {
                 continue;
             }
-            net.minecraft.world.level.block.state.BlockState state = section.buffer().targetStateAt(
-                    SectionChangeMask.localIndex(pos.getX(), pos.getY(), pos.getZ())
-            );
+            int localIndex = SectionChangeMask.localIndex(pos.getX(), pos.getY(), pos.getZ());
+            net.minecraft.world.level.block.state.BlockState state = section.buffer().targetStateAt(localIndex);
             if (state != null) {
-                resolved = state;
+                resolved = new PreparedBlockPlacement(
+                        pos,
+                        state,
+                        section.buffer().blockEntityPlan().tagAt(localIndex),
+                        section.buffer().replayHintAt(localIndex)
+                );
             }
         }
         for (PreparedBlockPlacement placement : batch.placements()) {
             if (placement.pos().equals(pos)) {
-                resolved = placement.state();
+                resolved = placement;
             }
         }
         return resolved;
