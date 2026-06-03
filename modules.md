@@ -49,7 +49,7 @@ Lumi is organized around project history for builders: project, version, branch,
 | Compare and material summaries | `DiffService`, `MaterialDeltaService` | `CompareScreenController`, `AsyncCompareCache`, `CompareOverlayPreparationService`, `CompareOverlayCoordinator`, `CompareOverlayRenderer`, `CompareOverlaySpatialIndex`, `OverlayMeshBatch`, `OverlayMeshBuffer`, `CompareOverlaySurfaceResolver` | `DiffServiceTest`, `AsyncCompareCacheTest`, compare overlay tests |
 | Preview generation | `PreviewCaptureRequestService`, `PreviewService`, `PreviewCaptureCoordinator` | `PreviewBoundsResolver`, `TexturedPreviewCaptureService`, `PreviewRenderMeshBuilder`, `PreviewImageCropper` | `PreviewServiceTest`, `PreviewCaptureRequestRepositoryTest`, preview tests |
 | Recovery UI and recovery actions | `RecoveryService`, `RecoveryScreenController` | `OperationDraftRecoveryService`, `RecoveryRepository`, `CapturePersistenceCoordinator`, `ScreenOperationStateSupport` | `OperationDraftRecoveryServiceTest`, `RecoveryRepositoryTest`, recovery model tests |
-| Cleanup and integrity | `ProjectCleanupService`, `ProjectIntegrityService` | `ProjectCleanupRepository`, `CleanupScreenController`, `ProjectRepository` | `ProjectCleanupRepositoryTest`, `ProjectArchiveRepositoryTest` |
+| Cleanup and integrity | `ProjectCleanupService`, `ProjectIntegrityService` | `ProjectCleanupRepository`, `ProjectIntegrityRepository`, `CleanupScreenController`, `ProjectRepository` | `ProjectCleanupRepositoryTest`, `ProjectIntegrityServiceTest`, `ProjectArchiveRepositoryTest` |
 | Storage format or path changes | `ProjectLayout`, exact repository class | `StorageIo`, `GsonProvider`, matching domain model record | `ProjectLayoutTest`, repository tests, `docs/storage-format.md` |
 | Optional builder tool integration and auto checkpoints | `ExternalToolIntegrationRegistry`, `OptionalIntegrationBootstrap`, `AutoCheckpointService`, `AutoCheckpointCommandClassifier` | `WorldEditSessionBridge`, `WorldEditEditSessionTracker`, Axiom classes, integration mixins, `ServerGamePacketListenerMixin` | integration tests, `AutoCheckpointCommandClassifierTest`, `docs/architecture.md` |
 | Commands and runtime tests | `LumaCommands`, `LumaTestingCommands`, `RuntimeTestingHooks`, `LumaClientCommands`, `SingleplayerTestingService` | `ClientWorkspaceOpenService`, `SingleplayerGameplayRegressionSuite`, `SingleplayerBulkApplyDiagnostics`, `LumiBackupStressClientScenario`, `LumiTestFailpoints`, scripts under `scripts/` | `/lumi testing ...` requires `-Dlumi.testing.enabled=true` or `LUMI_TESTING_ENABLED=true`; `LUMI_SINGLEPLAYER_TEST_MODE=backup-stress`, `docs/commands.md`, `docs/test-client.md` |
@@ -73,7 +73,7 @@ Lumi is organized around project history for builders: project, version, branch,
 
 ## Domain Model
 
-Use `src/main/java/io/github/luma/domain/model` for value objects, persisted records, summaries, and focused mutable runtime state. Do not add Minecraft APIs, file I/O, UI state, or broad orchestration here.
+Use `src/main/java/io/github/luma/domain/model` for value objects, persisted records, summaries, and focused mutable runtime state. Do not add Minecraft APIs, file I/O, UI state, or broad orchestration here. Existing Minecraft/NBT imports in payload and coordinate records are legacy adapter seams; do not expand that allowlist when adding new model code.
 
 - Project identity/settings: `BuildProject`, `ProjectSettings`, `ProjectVariant`, `ProjectVersion`, `VersionKind`, `WorldOriginInfo`, `WorldInitialBackupManifest`.
 - Coordinates/bounds/chunks: `BlockPoint`, `Bounds3i`, `ChunkPoint`, `ChunkSectionPoint`, `ChunkDelta`, `SectionChangeMask`.
@@ -114,7 +114,7 @@ Use `src/main/java/io/github/luma/domain/service` for business workflows and pro
 - `HistoryShareService`: variant package export/import/delete/list flow for `lumi-projects`.
 - `ProjectArchiveService`: full project archive import/export.
 - `ProjectCleanupService`: conservative cleanup candidate calculation.
-- `ProjectIntegrityService`: storage consistency validation.
+- `ProjectIntegrityService`: storage consistency validation orchestration; raw file existence, payload magic/version checks, and compressed header parsing live in `ProjectIntegrityRepository`.
 - `PreviewCaptureRequestService`: durable request queue for client-side preview capture.
 - `PreviewService`: legacy/simple preview sampling and PNG writing.
 - `PreviewBoundsResolver`: changed-region bounds for previews, filtered through builder-visible changes.

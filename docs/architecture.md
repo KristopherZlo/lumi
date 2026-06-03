@@ -52,9 +52,9 @@ Key services:
 - `VersionLineageService`: centralizes reachable-version filtering, common ancestor lookup, ancestor checks, and ancestor-to-head path resolution used by restore, diff, and merge workflows
 - `PreviewCaptureRequestService`: queue preview capture jobs without blocking save durability
 - `PreviewCaptureRequestRepository`: persist preview capture requests so the server can queue work and the client can render later
-- `ProjectIntegrityService`: validate storage consistency
+- `ProjectIntegrityService`: orchestrate storage consistency validation while `ProjectIntegrityRepository` owns raw file existence, payload magic/version checks, and compressed header parsing
 
-These services should express product rules, not raw Minecraft side effects or raw file layouts.
+These services should express product rules, not raw Minecraft side effects or raw file layouts. Raw storage-format inspection belongs in storage repositories, even when a domain service exposes the workflow.
 
 ### Minecraft adapter layer
 
@@ -383,6 +383,7 @@ When extending history or storage behavior, update both tests and documentation 
 ## Extension rules
 
 - Keep domain services narrow and explicit. If a class starts owning more than one reason to change, split it.
+- Treat existing Minecraft/NBT imports in domain model payload and coordinate records as legacy exceptions; new domain model code should not add Minecraft API dependencies.
 - Add new repository types instead of growing one repository into a mixed metadata and payload god object.
 - Prefer immutable records for persisted state and summaries.
 - Restrict mutable state to clearly bounded runtime coordinators such as capture buffers or active operations.
