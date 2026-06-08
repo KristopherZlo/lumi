@@ -5,6 +5,7 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
+import io.github.luma.telemetry.TelemetryService;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -346,6 +347,7 @@ public final class CompareOverlayRenderer {
                     exception.getMessage()
             );
             ACTIVE_STATE.compareAndSet(state, state.withVisible(false));
+            TelemetryService.getInstance().recordRenderOverlayDisabled("compare", exception);
             LumaMod.LOGGER.warn("Disabled compare overlay after a render pipeline failure", exception);
         }
     }

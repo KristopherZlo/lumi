@@ -18,17 +18,20 @@ import io.github.luma.client.input.QuickRollbackKeyController;
 import io.github.luma.client.input.UndoRedoKeyChordTracker;
 import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.client.onboarding.ClientOnboardingFlowCoordinator;
+import io.github.luma.client.telemetry.TelemetryNoticeController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.client.selection.LumiRegionSelectionTeachingController;
 import io.github.luma.client.update.MinecraftUpdateNoticeSink;
 import io.github.luma.client.update.UpdateWorldJoinNotifier;
 import io.github.luma.debug.StartupProfiler;
+import io.github.luma.telemetry.TelemetryService;
 import io.github.luma.ui.controller.AsyncCompareCache;
 import io.github.luma.ui.controller.ClientWorkspaceOpenService;
 import io.github.luma.ui.preview.ProjectPreviewTextureCache;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.overlay.CompareOverlayHotkeyHud;
@@ -75,6 +78,7 @@ public final class LumaClient implements ClientModInitializer {
     private final LumiRegionSelectionTeachingController selectionTeachingController = new LumiRegionSelectionTeachingController();
     private final ClientWorkspaceOpenService workspaceOpenService = new ClientWorkspaceOpenService();
     private final UpdateWorldJoinNotifier updateWorldJoinNotifier = new UpdateWorldJoinNotifier();
+    private final TelemetryNoticeController telemetryNoticeController = new TelemetryNoticeController();
     private final boolean clientRuntimeLoadSamplingEnabled = ClientRuntimeLoadSampler.configuredEnabled();
     private boolean worldActive;
 
@@ -85,6 +89,8 @@ public final class LumaClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         long startedAt = StartupProfiler.start();
+        TelemetryService.getInstance().enableClientRuntime();
+        this.installCrashHandler();
         long keyBindingsStartedAt = StartupProfiler.start();
         this.openDashboardKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 OPEN_DASHBOARD_KEY,
@@ -187,6 +193,7 @@ public final class LumaClient implements ClientModInitializer {
         }
         if (!this.worldActive && activeWorldNow) {
             this.updateWorldJoinNotifier.notifyAfterWorldJoin(new MinecraftUpdateNoticeSink(client));
+            this.showTelemetryNotice(client);
         }
         this.worldActive = activeWorldNow;
 
@@ -296,6 +303,24 @@ public final class LumaClient implements ClientModInitializer {
         if (worldInputActive && openDashboardClicked) {
             this.workspaceOpenService.openCurrentWorkspace(client, client.screen);
         }
+    }
+
+    private void installCrashHandler() {
+        Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+            TelemetryService.getInstance().recordClientCrashCandidate(throwable);
+            if (previous != null) {
+                previous.uncaughtException(thread, throwable);
+            }
+        });
+    }
+
+    private void showTelemetryNotice(Minecraft client) {
+        if (client == null || client.gui == null || !this.telemetryNoticeController.shouldShowNotice()) {
+            return;
+        }
+        client.gui.setOverlayMessage(Component.translatable("luma.telemetry.notice"), false);
+        this.telemetryNoticeController.acknowledgeNotice();
     }
 
     private void clearWorldClientState() {

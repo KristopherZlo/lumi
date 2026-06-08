@@ -6,6 +6,7 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuilderChangeSurfacePolicy;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.UndoRedoAction;
+import io.github.luma.telemetry.TelemetryService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -218,6 +219,7 @@ public final class RecentChangesOverlayRenderer {
             if (ACTIVE_STATE.compareAndSet(state, null)) {
                 state.close();
             }
+            TelemetryService.getInstance().recordRenderOverlayDisabled("recent", exception);
             LumaMod.LOGGER.warn("Disabled recent changes overlay after a render pipeline failure", exception);
         }
     }

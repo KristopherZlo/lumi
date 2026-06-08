@@ -11,6 +11,7 @@ import io.github.luma.domain.service.VariantMergeService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.minecraft.world.WorldOperationManager;
+import io.github.luma.telemetry.TelemetryService;
 import io.github.luma.ui.state.SaveDetailsViewState;
 import io.github.luma.ui.state.SaveViewState;
 import java.time.Duration;
@@ -153,9 +154,11 @@ public final class ProjectScreenController {
             return "luma.status.save_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Save request rejected for project {}", projectName, exception);
+            this.reportRejectedAction("save", "luma.status.world_operation_busy", exception);
             return "luma.status.world_operation_busy";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Save request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
             return "luma.status.operation_failed";
         }
     }
@@ -171,9 +174,11 @@ public final class ProjectScreenController {
             return "luma.status.amend_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Amend request rejected for project {}", projectName, exception);
+            this.reportRejectedAction("amend", "luma.status.world_operation_busy", exception);
             return "luma.status.world_operation_busy";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Amend request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
             return "luma.status.operation_failed";
         }
     }
@@ -188,9 +193,11 @@ public final class ProjectScreenController {
             return "luma.status.restore_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Restore request rejected for project {}", projectName, exception);
+            this.reportRejectedAction("restore", "luma.status.world_operation_busy", exception);
             return "luma.status.world_operation_busy";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Restore request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
             return "luma.status.operation_failed";
         }
     }
@@ -204,12 +211,15 @@ public final class ProjectScreenController {
             return "luma.status.quick_rollback_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Quick rollback request rejected for project {}", projectName, exception);
+            this.reportRejectedAction("quick_rollback", "luma.status.world_operation_busy", exception);
             return "luma.status.world_operation_busy";
         } catch (IllegalArgumentException exception) {
             LumaMod.LOGGER.warn("Quick rollback unavailable for project {}", projectName, exception);
+            this.reportRejectedAction("quick_rollback", "luma.status.quick_rollback_unavailable", exception);
             return "luma.status.quick_rollback_unavailable";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Quick rollback request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
             return "luma.status.operation_failed";
         }
     }
@@ -223,12 +233,15 @@ public final class ProjectScreenController {
             return "luma.status.return_before_restore_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Return-before-restore request rejected for project {}", projectName, exception);
+            this.reportRejectedAction("return_before_restore", "luma.status.world_operation_busy", exception);
             return "luma.status.world_operation_busy";
         } catch (IllegalArgumentException exception) {
             LumaMod.LOGGER.warn("Return-before-restore unavailable for project {}", projectName, exception);
+            this.reportRejectedAction("return_before_restore", "luma.status.return_before_restore_unavailable", exception);
             return "luma.status.return_before_restore_unavailable";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Return-before-restore request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
             return "luma.status.operation_failed";
         }
     }
@@ -248,12 +261,15 @@ public final class ProjectScreenController {
             return "luma.status.partial_restore_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Partial restore request rejected for project {}", request.projectName(), exception);
+            this.reportRejectedAction("partial_restore", "luma.status.world_operation_busy", exception);
             return "luma.status.world_operation_busy";
         } catch (IllegalArgumentException exception) {
             LumaMod.LOGGER.warn("Partial restore request rejected for project {}", request.projectName(), exception);
+            this.reportRejectedAction("partial_restore", partialRestoreFailureStatus(exception, request.restoreMode()), exception);
             return partialRestoreFailureStatus(exception, request.restoreMode());
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Partial restore request failed for project {}", request == null ? "" : request.projectName(), exception);
+            this.reportFailedAction(exception);
             return "luma.status.operation_failed";
         }
     }
@@ -325,6 +341,7 @@ public final class ProjectScreenController {
             return "luma.status.variant_created";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Create variant request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
             return variantFailureStatus(exception);
         }
     }
@@ -339,6 +356,7 @@ public final class ProjectScreenController {
             return "luma.status.variant_switched";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Switch variant request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
             return variantFailureStatus(exception);
         }
     }
@@ -353,6 +371,7 @@ public final class ProjectScreenController {
             return "luma.status.variant_deleted";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Delete variant request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
             return historyEditFailureStatus(exception);
         }
     }
@@ -369,12 +388,15 @@ public final class ProjectScreenController {
             return "luma.status.merge_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Local merge rejected for project {}", projectName, exception);
+            this.reportRejectedAction("merge_variant", "luma.status.world_operation_busy", exception);
             return "luma.status.world_operation_busy";
         } catch (IllegalArgumentException exception) {
             LumaMod.LOGGER.warn("Local merge blocked for project {}", projectName, exception);
+            this.reportRejectedAction("merge_variant", mergeFailureStatus(exception), exception);
             return mergeFailureStatus(exception);
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Local merge failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
             return "luma.status.operation_failed";
         }
     }
@@ -390,6 +412,7 @@ public final class ProjectScreenController {
             return "luma.status.version_renamed";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Rename version request failed for project {} version {}", projectName, versionId, exception);
+            this.reportFailedAction(exception);
             return historyEditFailureStatus(exception);
         }
     }
@@ -404,6 +427,7 @@ public final class ProjectScreenController {
             return "luma.status.version_deleted";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Delete version request failed for project {} version {}", projectName, versionId, exception);
+            this.reportFailedAction(exception);
             return historyEditFailureStatus(exception);
         }
     }
@@ -484,6 +508,14 @@ public final class ProjectScreenController {
         return "luma.status.operation_failed";
     }
 
+    private void reportRejectedAction(String action, String statusKey, Exception exception) {
+        TelemetryService.getInstance().recordOperationRejected(action, statusKey, exception);
+    }
+
+    private void reportFailedAction(Exception exception) {
+        TelemetryService.getInstance().recordOperationFailed(null, null, exception);
+    }
+
     public String refreshPreview(String projectName, String versionId) {
         try {
             this.versionService.refreshPreview(
@@ -494,6 +526,7 @@ public final class ProjectScreenController {
             return "luma.status.preview_requested";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Preview refresh failed for project {} version {}", projectName, versionId, exception);
+            this.reportFailedAction(exception);
             return "luma.status.operation_failed";
         }
     }

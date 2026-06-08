@@ -6,6 +6,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.VersionService;
+import io.github.luma.telemetry.TelemetryService;
 import java.io.IOException;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
@@ -38,9 +39,11 @@ public final class RecoveryScreenController {
             return "luma.status.draft_restore_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Recovery draft restore rejected for project {}", projectName, exception);
+            TelemetryService.getInstance().recordOperationRejected("recovery_restore", "luma.status.world_operation_busy", exception);
             return "luma.status.world_operation_busy";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Recovery draft restore failed for project {}", projectName, exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             return "luma.status.operation_failed";
         }
     }
@@ -57,9 +60,11 @@ public final class RecoveryScreenController {
             return "luma.status.recovery_save_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Recovery draft save rejected for project {}", projectName, exception);
+            TelemetryService.getInstance().recordOperationRejected("recovery_save", "luma.status.world_operation_busy", exception);
             return "luma.status.world_operation_busy";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Recovery draft save failed for project {}", projectName, exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             return "luma.status.operation_failed";
         }
     }
@@ -70,6 +75,7 @@ public final class RecoveryScreenController {
             return "luma.status.draft_discarded";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Discard draft failed for project {}", projectName, exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             return "luma.status.operation_failed";
         }
     }

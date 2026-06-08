@@ -3,6 +3,7 @@ package io.github.luma.minecraft.world;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDiagnosticsLog;
 import io.github.luma.debug.LumaLoadLog;
+import io.github.luma.telemetry.TelemetryService;
 import java.time.Duration;
 import net.minecraft.server.MinecraftServer;
 
@@ -45,6 +46,11 @@ final class WorldOperationShutdownHandler {
         }
         if (!active.snapshot().terminal()) {
             active.fail(new IllegalStateException("Server stopped before world operation completed"));
+            TelemetryService.getInstance().recordOperationFailed(
+                    active.handle(),
+                    active.snapshot(),
+                    new IllegalStateException("Server stopped before world operation completed")
+            );
         }
         this.lifecycle.remember(serverKey, active)
                 .ifPresent(metrics -> LumaLoadLog.operationMetrics(active.handle(), metrics));
@@ -92,6 +98,7 @@ final class WorldOperationShutdownHandler {
                 }
             } catch (Exception exception) {
                 operation.fail(exception);
+                TelemetryService.getInstance().recordOperationFailed(operation.handle(), operation.snapshot(), exception);
                 this.operationCompleter.complete(server, operation);
                 LumaMod.LOGGER.warn(
                         "Light refresh operation {} failed during server shutdown drain",

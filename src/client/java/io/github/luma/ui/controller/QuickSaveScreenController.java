@@ -4,6 +4,7 @@ import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.VersionService;
+import io.github.luma.telemetry.TelemetryService;
 import java.io.IOException;
 import java.util.Locale;
 import net.minecraft.client.Minecraft;
@@ -35,14 +36,20 @@ public final class QuickSaveScreenController {
             return "luma.status.save_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Quick save request rejected", exception);
-            return this.illegalStateStatus(exception);
+            return this.rejected("quick_save", this.illegalStateStatus(exception), exception);
         } catch (IllegalArgumentException exception) {
             LumaMod.LOGGER.warn("Quick save request rejected", exception);
-            return this.illegalArgumentStatus(exception);
+            return this.rejected("quick_save", this.illegalArgumentStatus(exception), exception);
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Quick save request failed", exception);
+            TelemetryService.getInstance().recordOperationRejected("quick_save", "luma.status.operation_failed", exception);
             return "luma.status.operation_failed";
         }
+    }
+
+    private String rejected(String action, String statusKey, Exception exception) {
+        TelemetryService.getInstance().recordOperationRejected(action, statusKey, exception);
+        return statusKey;
     }
 
     private String illegalStateStatus(IllegalStateException exception) {

@@ -2,6 +2,7 @@ package io.github.luma.minecraft.world;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaLoadLog;
+import io.github.luma.telemetry.TelemetryService;
 import java.util.function.BiConsumer;
 import net.minecraft.server.MinecraftServer;
 
@@ -37,6 +38,14 @@ final class WorldOperationTickRunner {
             }
             long elapsedNanos = System.nanoTime() - startedAt;
             operation.recordAdvanceCost(elapsedNanos, budget.maxNanos());
+            if (elapsedNanos > Math.max(50_000_000L, budget.maxNanos() * 2L)) {
+                TelemetryService.getInstance().recordPerformanceOutlier(
+                        operation.handle().label(),
+                        elapsedNanos,
+                        budget.maxNanos(),
+                        operation.snapshot().stage().name()
+                );
+            }
             LumaLoadLog.record(
                     "world-op-tick",
                     operation.handle().label() + ".advance",
@@ -47,6 +56,7 @@ final class WorldOperationTickRunner {
             );
         } catch (Exception exception) {
             operation.fail(exception);
+            TelemetryService.getInstance().recordOperationFailed(operation.handle(), operation.snapshot(), exception);
             completionHandler.accept(server, operation);
             LumaMod.LOGGER.warn("World operation {} failed", operation.handle().label(), exception);
         }

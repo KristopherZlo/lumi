@@ -6,6 +6,7 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.telemetry.TelemetryService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -158,6 +159,7 @@ public final class PendingChangesOverlayRenderer {
             if (ACTIVE_STATE.compareAndSet(state, null)) {
                 state.close();
             }
+            TelemetryService.getInstance().recordRenderOverlayDisabled("pending", exception);
             LumaMod.LOGGER.warn("Disabled pending changes overlay after a render pipeline failure", exception);
         }
     }

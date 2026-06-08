@@ -20,6 +20,7 @@ import io.github.luma.domain.service.HistoryShareService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.domain.service.VariantMergeService;
+import io.github.luma.telemetry.TelemetryService;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.ShareViewState;
 import java.nio.file.Path;
@@ -84,6 +85,7 @@ public final class ShareScreenController {
             return result;
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Variant package export failed for project {} variant {}", projectName, variantId, exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             this.captureValidationMessage(exception);
             return null;
         }
@@ -97,6 +99,7 @@ public final class ShareScreenController {
             return result;
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Variant package import failed for project {}", projectName, exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             this.captureValidationMessage(exception);
             return null;
         }
@@ -110,6 +113,7 @@ public final class ShareScreenController {
             return "luma.status.imported_package_deleted";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Imported package delete failed for project {} package {}", targetProjectName, importedProjectName, exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             this.captureValidationMessage(exception);
             return "luma.status.operation_failed";
         }
@@ -170,16 +174,19 @@ public final class ShareScreenController {
             return "luma.status.merge_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Merge start rejected for project {}", request.targetProjectName(), exception);
+            TelemetryService.getInstance().recordOperationRejected("merge_start", "luma.status.world_operation_busy", exception);
             this.captureValidationMessage(exception);
             return "luma.status.world_operation_busy";
         } catch (IllegalArgumentException exception) {
             LumaMod.LOGGER.warn("Merge start blocked for project {}", request.targetProjectName(), exception);
+            TelemetryService.getInstance().recordOperationRejected("merge_start", "luma.status.merge_no_changes", exception);
             this.captureValidationMessage(exception);
             return exception.getMessage() != null && exception.getMessage().contains("does not add any new changes")
                     ? "luma.status.merge_no_changes"
                     : "luma.status.merge_conflicts_found";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Merge start failed for project {}", request.targetProjectName(), exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             this.captureValidationMessage(exception);
             return "luma.status.operation_failed";
         }
@@ -197,6 +204,7 @@ public final class ShareScreenController {
             return "luma.status.compare_overlay_enabled";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Conflict overlay failed for {}:{}", sourceProjectName, sourceVariantId, exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             this.captureValidationMessage(exception);
             return "luma.status.compare_failed";
         }
@@ -214,6 +222,7 @@ public final class ShareScreenController {
             return "luma.status.compare_overlay_enabled";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Conflict overlay failed for {}:{}", sourceProjectName, sourceVariantId, exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             this.captureValidationMessage(exception);
             return "luma.status.compare_failed";
         }
@@ -232,6 +241,7 @@ public final class ShareScreenController {
             return "luma.status.package_folder_opened";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Opening package folder failed", exception);
+            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
             this.captureValidationMessage(exception);
             return "luma.status.operation_failed";
         }
