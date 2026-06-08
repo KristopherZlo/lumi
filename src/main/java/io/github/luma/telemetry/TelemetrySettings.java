@@ -19,9 +19,13 @@ public record TelemetrySettings(
     private static final Duration INSTALLATION_ID_ROTATION = Duration.ofDays(30);
 
     public static TelemetrySettings defaults(String endpointUrl, Supplier<String> installationIds) {
+        return defaults(endpointUrl, true, installationIds);
+    }
+
+    public static TelemetrySettings defaults(String endpointUrl, boolean enabled, Supplier<String> installationIds) {
         return new TelemetrySettings(
                 CURRENT_SCHEMA_VERSION,
-                true,
+                enabled,
                 0,
                 endpointUrl,
                 nextInstallationId(installationIds),

@@ -1,6 +1,7 @@
 package io.github.luma.telemetry;
 
 import io.github.luma.LumaMod;
+import io.github.luma.minecraft.testing.RuntimeTestingConfig;
 import io.github.luma.storage.GsonProvider;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -17,18 +18,32 @@ public final class TelemetrySettingsRepository {
     private final Path file;
     private final String defaultEndpointUrl;
     private final Supplier<String> installationIds;
+    private final boolean testEnvironment;
 
     public TelemetrySettingsRepository(String defaultEndpointUrl, Supplier<String> installationIds) {
-        this(FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME), defaultEndpointUrl, installationIds);
+        this(
+                FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME),
+                defaultEndpointUrl,
+                installationIds,
+                RuntimeTestingConfig.load().enabled()
+        );
     }
 
     public TelemetrySettingsRepository(Path file, String defaultEndpointUrl, Supplier<String> installationIds) {
+        this(file, defaultEndpointUrl, installationIds, false);
+    }
+
+    TelemetrySettingsRepository(Path file, String defaultEndpointUrl, Supplier<String> installationIds, boolean testEnvironment) {
         this.file = file;
         this.defaultEndpointUrl = defaultEndpointUrl;
         this.installationIds = installationIds;
+        this.testEnvironment = testEnvironment;
     }
 
     public TelemetrySettings load() {
+        if (this.testEnvironment) {
+            return TelemetrySettings.defaults("", false, this.installationIds);
+        }
         if (this.file == null || !Files.exists(this.file)) {
             return TelemetrySettings.defaults(this.defaultEndpointUrl, this.installationIds);
         }
@@ -44,7 +59,7 @@ public final class TelemetrySettingsRepository {
     }
 
     public void save(TelemetrySettings settings) {
-        if (this.file == null) {
+        if (this.testEnvironment || this.file == null) {
             return;
         }
         try {

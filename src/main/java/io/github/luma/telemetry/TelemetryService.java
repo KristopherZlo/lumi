@@ -3,6 +3,7 @@ package io.github.luma.telemetry;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationSnapshot;
+import io.github.luma.minecraft.testing.RuntimeTestingConfig;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -30,9 +31,12 @@ public final class TelemetryService {
     private final Supplier<Instant> clock;
     private final Supplier<String> installationIds;
     private final int batchSize;
+    private final boolean transportEnabled;
     private TelemetrySettings settings;
     private List<TelemetryEvent> queue;
     private boolean clientRuntimeEnabled;
+    private TelemetrySendResult lastSendResult = TelemetrySendResult.success(0);
+    private Instant lastSendAt;
 
     public static TelemetryService getInstance() {
         return Holder.INSTANCE;
@@ -55,11 +59,15 @@ public final class TelemetryService {
                 TelemetryService::randomInstallationId,
                 DEFAULT_BATCH_SIZE,
                 true,
+                true,
                 settings
         );
     }
 
     public void enableClientRuntime() {
+        if (!this.transportEnabled) {
+            return;
+        }
         synchronized (this.lock) {
             this.clientRuntimeEnabled = true;
             this.rotateSettingsIfNeeded();
@@ -79,38 +87,55 @@ public final class TelemetryService {
         }
     }
 
+    public String lastSendSummary() {
+        synchronized (this.lock) {
+            if (this.lastSendAt == null) {
+                return "never sent";
+            }
+            String status = this.lastSendResult.success() ? "ok" : "failed";
+            String detail = this.lastSendResult.detail().isBlank() ? "" : " " + this.lastSendResult.detail();
+            return status + " @" + this.lastSendAt + detail;
+        }
+    }
+
     public void setEnabled(boolean enabled) {
-        this.schedule(() -> {
-            synchronized (this.lock) {
-                this.settings = this.settings.withEnabled(enabled);
-                this.saveSettings();
-                if (!enabled) {
-                    this.queue = List.of();
-                    this.spoolRepository.clear();
-                }
-            }
-        });
-    }
-
-    public void markNoticeSeen() {
-        this.schedule(() -> {
-            synchronized (this.lock) {
-                this.settings = this.settings.withNoticeSeen();
-                this.saveSettings();
-            }
-        });
-    }
-
-    public void clearLocalQueue() {
-        this.schedule(() -> {
-            synchronized (this.lock) {
+        if (!this.transportEnabled) {
+            return;
+        }
+        synchronized (this.lock) {
+            this.settings = this.settings.withEnabled(enabled);
+            this.saveSettings();
+            if (!enabled) {
                 this.queue = List.of();
                 this.spoolRepository.clear();
             }
-        });
+        }
+    }
+
+    public void markNoticeSeen() {
+        if (!this.transportEnabled) {
+            return;
+        }
+        synchronized (this.lock) {
+            this.settings = this.settings.withNoticeSeen();
+            this.saveSettings();
+        }
+    }
+
+    public void clearLocalQueue() {
+        if (!this.transportEnabled) {
+            return;
+        }
+        synchronized (this.lock) {
+            this.queue = List.of();
+            this.spoolRepository.clear();
+        }
     }
 
     public void recordOperationRejected(String action, String statusKey, Throwable failure) {
+        if (!this.transportEnabled) {
+            return;
+        }
         this.schedule(() -> this.record(TelemetryEventType.OPERATION_REJECTED, failure, Map.of(
                 "action", safe(action),
                 "statusKey", safe(statusKey),
@@ -119,6 +144,9 @@ public final class TelemetryService {
     }
 
     public void recordOperationFailed(OperationHandle handle, OperationSnapshot snapshot, Throwable failure) {
+        if (!this.transportEnabled) {
+            return;
+        }
         this.schedule(() -> {
             Map<String, String> payload = new LinkedHashMap<>();
             payload.put("operation", safe(handle == null ? "" : handle.label()));
@@ -138,12 +166,18 @@ public final class TelemetryService {
     }
 
     public void recordClientCrashCandidate(Throwable failure) {
+        if (!this.transportEnabled) {
+            return;
+        }
         this.schedule(() -> this.record(TelemetryEventType.CLIENT_CRASH_CANDIDATE, failure, Map.of(
                 "failure", this.sanitizer.sanitizeText(failureMessage(failure))
         )));
     }
 
     public void recordRenderOverlayDisabled(String overlayName, Throwable failure) {
+        if (!this.transportEnabled) {
+            return;
+        }
         this.schedule(() -> this.record(TelemetryEventType.RENDER_OVERLAY_DISABLED, failure, Map.of(
                 "overlay", safe(overlayName),
                 "failure", this.sanitizer.sanitizeText(failureMessage(failure))
@@ -151,6 +185,9 @@ public final class TelemetryService {
     }
 
     public void recordPerformanceOutlier(String operationLabel, long elapsedNanos, long budgetNanos, String stage) {
+        if (!this.transportEnabled) {
+            return;
+        }
         this.schedule(() -> this.record(TelemetryEventType.PERFORMANCE_OUTLIER, null, Map.of(
                 "operation", safe(operationLabel),
                 "stage", safe(stage),
@@ -160,10 +197,16 @@ public final class TelemetryService {
     }
 
     public void flushAsync() {
+        if (!this.transportEnabled) {
+            return;
+        }
         this.schedule(this::flushCurrent);
     }
 
     public void flushNow() {
+        if (!this.transportEnabled) {
+            return;
+        }
         this.flushCurrent();
     }
 
@@ -176,6 +219,7 @@ public final class TelemetryService {
             Supplier<Instant> clock,
             Supplier<String> installationIds,
             int batchSize,
+            boolean transportEnabled,
             boolean clientRuntimeEnabled,
             TelemetrySettings initialSettings
     ) {
@@ -187,16 +231,33 @@ public final class TelemetryService {
         this.clock = clock;
         this.installationIds = installationIds;
         this.batchSize = Math.max(1, batchSize);
+        this.transportEnabled = transportEnabled;
         this.clientRuntimeEnabled = clientRuntimeEnabled;
         this.settings = initialSettings == null ? settingsRepository.load() : initialSettings;
-        this.queue = this.spoolRepository.load();
+        this.queue = this.transportEnabled ? this.spoolRepository.load() : List.of();
     }
 
     private static TelemetryService createDefault() {
         Supplier<String> ids = TelemetryService::randomInstallationId;
+        boolean transportEnabled = !RuntimeTestingConfig.load().enabled();
+        TelemetrySettingsRepository settingsRepository;
+        TelemetrySpoolRepository spoolRepository;
+        if (transportEnabled) {
+            try {
+                settingsRepository = new TelemetrySettingsRepository(DEFAULT_ENDPOINT_URL, ids);
+                spoolRepository = new TelemetrySpoolRepository(DEFAULT_SPOOL_CAPACITY);
+            } catch (RuntimeException exception) {
+                transportEnabled = false;
+                settingsRepository = new TelemetrySettingsRepository(null, "", ids, true);
+                spoolRepository = new TelemetrySpoolRepository(null, DEFAULT_SPOOL_CAPACITY);
+            }
+        } else {
+            settingsRepository = new TelemetrySettingsRepository(null, "", ids, true);
+            spoolRepository = new TelemetrySpoolRepository(null, DEFAULT_SPOOL_CAPACITY);
+        }
         return new TelemetryService(
-                new TelemetrySettingsRepository(DEFAULT_ENDPOINT_URL, ids),
-                new TelemetrySpoolRepository(DEFAULT_SPOOL_CAPACITY),
+                settingsRepository,
+                spoolRepository,
                 new TelemetryEnvironmentProvider.Fabric(),
                 new TelemetrySender(new JavaNetTelemetryHttpTransport(Duration.ofSeconds(3)), Duration.ofSeconds(3)),
                 Executors.newSingleThreadExecutor(runnable -> {
@@ -207,6 +268,7 @@ public final class TelemetryService {
                 Instant::now,
                 ids,
                 DEFAULT_BATCH_SIZE,
+                transportEnabled,
                 false,
                 null
         );
@@ -223,7 +285,7 @@ public final class TelemetryService {
 
     private void record(TelemetryEventType type, Throwable failure, Map<String, String> payload) {
         synchronized (this.lock) {
-            if (!this.clientRuntimeEnabled || !this.settings.enabled()) {
+            if (!this.transportEnabled || !this.clientRuntimeEnabled || !this.settings.enabled()) {
                 this.queue = List.of();
                 this.spoolRepository.clear();
                 return;
@@ -250,7 +312,7 @@ public final class TelemetryService {
         List<TelemetryEvent> batch;
         TelemetrySettings currentSettings;
         synchronized (this.lock) {
-            if (!this.clientRuntimeEnabled || !this.settings.enabled()) {
+            if (!this.transportEnabled || !this.clientRuntimeEnabled || !this.settings.enabled()) {
                 this.queue = List.of();
                 this.spoolRepository.clear();
                 return;
@@ -264,6 +326,8 @@ public final class TelemetryService {
 
         TelemetrySendResult result = this.sender.send(currentSettings.endpointUrl(), batch);
         synchronized (this.lock) {
+            this.lastSendResult = result;
+            this.lastSendAt = this.clock.get();
             if (!result.success()) {
                 this.spoolRepository.save(this.queue);
                 return;
