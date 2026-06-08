@@ -21,9 +21,6 @@ public final class PatchDataRepository {
     static final int PAYLOAD_MAGIC = 0x4C504154;
     private static final int VERSION = 9;
     static final int CURRENT_PAYLOAD_VERSION = VERSION;
-    static final int HIDDEN_MASK_PAYLOAD_VERSION = 8;
-    static final int CHUNK_ADDRESSABLE_PAYLOAD_VERSION = 6;
-    static final int SECTION_FRAME_PAYLOAD_VERSION = 7;
     private final PatchEntityChunkIndexLookup entityIndexLookup = new PatchEntityChunkIndexLookup();
     private final PatchSectionFrameCodec sectionFrameCodec = new PatchSectionFrameCodec();
     private final PatchPayloadWriter payloadWriter = new PatchPayloadWriter();

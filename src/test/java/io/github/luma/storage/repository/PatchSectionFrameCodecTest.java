@@ -49,8 +49,8 @@ class PatchSectionFrameCodecTest {
 
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
             int sectionCount = input.readInt();
-            PatchSectionFrame first = this.codec.readSectionFrame(0, 0, input, PatchDataRepository.CURRENT_PAYLOAD_VERSION);
-            PatchSectionFrame second = this.codec.readSectionFrame(0, 0, input, PatchDataRepository.CURRENT_PAYLOAD_VERSION);
+            PatchSectionFrame first = this.codec.readSectionFrame(0, 0, input);
+            PatchSectionFrame second = this.codec.readSectionFrame(0, 0, input);
 
             assertEquals(2, sectionCount);
             assertEquals(4, first.sectionY());
@@ -61,7 +61,7 @@ class PatchSectionFrameCodecTest {
     }
 
     @Test
-    void groupsLegacyPointChangesIntoSectionFrames() throws Exception {
+    void groupsStoredPointChangesIntoSectionFrames() throws Exception {
         List<StoredBlockChange> changes = List.of(
                 change(1, 64, "minecraft:stone", "minecraft:gold_block", false),
                 change(2, 80, "minecraft:dirt", "minecraft:diamond_block", true)

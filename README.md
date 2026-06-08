@@ -138,7 +138,7 @@ Inside a patch chunk, block changes are grouped by 16x16x16 chunk section:
 
 Snapshots use chunk-addressable LZ4 frames as well. The server thread copies compact Minecraft section palette data, and storage serialization happens later.
 
-See [docs/storage-format.md](docs/storage-format.md) for the full layout and compatibility notes.
+See [docs/storage-format.md](docs/storage-format.md) for the full layout and current format guarantees.
 
 ## Restore And Apply
 

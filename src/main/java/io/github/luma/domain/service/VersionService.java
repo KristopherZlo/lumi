@@ -544,12 +544,12 @@ public final class VersionService {
                 parentVersionId == null ? "" : parentVersionId,
                 snapshotId,
                 List.of(patchMetadata.id()),
-                project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind,
+                versionKind,
                 author,
-                this.resolveMessage(message, project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind),
+                this.resolveMessage(message, versionKind),
                 stats,
                 PreviewInfo.none(),
-                this.resolveSourceInfo(project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind),
+                this.resolveSourceInfo(versionKind),
                 now
         );
 
@@ -825,7 +825,6 @@ public final class VersionService {
         return switch (versionKind) {
             case WORLD_ROOT -> "World root";
             case RECOVERY -> "Recovered draft";
-            case LEGACY -> "Migrated legacy save";
             case RESTORE -> "Restore safety checkpoint";
             case PARTIAL_RESTORE -> "Partial restore";
             case MERGE -> "Merged branches";
@@ -869,7 +868,7 @@ public final class VersionService {
                     false,
                     Map.of()
             );
-            case INITIAL, MANUAL, LEGACY -> ExternalSourceInfo.manual();
+            case INITIAL, MANUAL -> ExternalSourceInfo.manual();
         };
     }
 
@@ -877,7 +876,6 @@ public final class VersionService {
         return switch (versionKind) {
             case WORLD_ROOT -> "Created workspace root version";
             case RECOVERY -> "Saved recovery draft as a new version";
-            case LEGACY -> "Saved a new version while migrating a legacy snapshot project";
             case RESTORE -> "Saved restore checkpoint version";
             case PARTIAL_RESTORE -> "Saved partial restore as a new version";
             case MERGE -> "Saved branch merge as a new version";

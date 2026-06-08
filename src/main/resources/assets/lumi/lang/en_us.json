@@ -282,7 +282,6 @@
   "luma.history.card_manual_summary": "Saved by hand so you can return to it.",
   "luma.history.card_recovery_summary": "Recovered from interrupted play so work would not be lost.",
   "luma.history.card_restore_summary": "Created around a restore so you can safely move backward.",
-  "luma.history.card_legacy_summary": "Imported from an older Lumi history format.",
   "luma.history.no_preview": "No preview",
   "luma.history.empty_branch": "This branch does not have saves matching the current filter.",
 
@@ -294,7 +293,6 @@
   "luma.version_kind.partial_restore": "Partial restore",
   "luma.version_kind.merge": "Branch merge",
   "luma.version_kind.auto_checkpoint": "Auto checkpoint",
-  "luma.version_kind.legacy": "Legacy migration",
 
   "luma.variant.active_current": "Current branch: %s",
   "luma.variant.name_input": "Branch name",
@@ -308,7 +306,6 @@
   "luma.variant.creation_hint": "Name a branch. Leave the base blank to start from the current latest save%s",
   "luma.variant.active_badge": "Active",
 
-  "luma.log.legacy_notice": "This project was loaded from the legacy snapshot-only format.",
   "luma.log.empty": "No recovery or restore events recorded yet.",
   "luma.log.entry_header": "%s | %s",
   "luma.log.entry_message": "%s",

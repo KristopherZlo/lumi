@@ -295,7 +295,7 @@ Important fields:
 - `preview`
 - `sourceInfo`
 
-Version manifests stay lightweight. They are written only after referenced patch and snapshot payloads have been written successfully. Partial restore no longer writes a version manifest; it applies the chosen save state into the world and pending recovery draft. Legacy histories may still contain `PARTIAL_RESTORE` versions from older builds.
+Version manifests stay lightweight. They are written only after referenced patch and snapshot payloads have been written successfully. Partial restore no longer writes a version manifest; it applies the chosen save state into the world and pending recovery draft. Manifests that omit `versionKind` are normalized to `MANUAL`; `LEGACY` is not a current semantic version kind. Legacy histories may still contain `PARTIAL_RESTORE` versions from older builds.
 
 `versions/index.json` is an optional disposable cache for `VersionRepository.loadAll(...)`. It stores version records plus each manifest file's size and modification time. Lumi uses it only when every version manifest matches and no extra version JSON file exists; stale or corrupt indexes are ignored and rebuilt. Deleting `index.json` never changes restore correctness and the file is not a version manifest.
 
@@ -330,27 +330,26 @@ Metadata reads must not require deserializing the full payload. The chunk index 
 
 ### `patches/<patchId>.bin.lz4`
 
-Patch payloads are the primary history format for tracked saves. New payloads use binary schema v9. The filename suffix remains `.bin.lz4`, but v7+ is not one monolithic LZ4 frame. It is a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames. The chunk offsets and lengths in `PatchChunkSlice` are physical file offsets for those frames, so readers can seek directly to selected chunks.
+Patch payloads are the primary history format for tracked saves. Current payloads use binary schema v9. The filename suffix remains `.bin.lz4`, but the file is not one monolithic LZ4 frame. It is a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames. The chunk offsets and lengths in `PatchChunkSlice` are physical file offsets for those frames, so readers can seek directly to selected chunks.
 
 Current payload characteristics:
 
-- chunk-addressable per-chunk LZ4 frames for schema v7, v8, and v9
+- chunk-addressable per-chunk LZ4 frames for schema v9
 - chunk-sorted records
 - chunk -> section frames with a 4096-cell changed mask
 - schema v9 chunk metadata carries per-section fingerprints with `xxHash64` for fast comparisons and `SHA-256` for durable content identity
 - section-local old/new palettes for block states
 - section-local old/new palettes for block entity payloads
 - mask-order state and block-entity ids so restore can build `LumiSectionBuffer` batches without first materializing a flat per-block list
-- schema v8+ writes a section-local hidden-change mask after the state/entity id arrays. Hidden changes are durable and replayable, but builder-facing stats, diffs, overlays, and preview bounds ignore them. Older v7 section frames and v6 point frames load with all block changes visible.
+- schema v9 writes a section-local hidden-change mask after the state/entity id arrays. Hidden changes are durable and replayable, but builder-facing stats, diffs, overlays, and preview bounds ignore them.
 - per-chunk entity diff records with entity id, entity type, nullable old full-NBT payload, and nullable new full-NBT payload for non-player entity spawn/remove/update, including position and the saved entity NBT as captured by Minecraft; tick fields such as item age, motion, and pickup delay are not stripped before storage
-- block-only saves write empty entity sections, and schema v3/v4 patch payloads still load as block-only/entity-empty payloads
-- schema v3-v5 legacy payloads still load from the older single LZ4 stream format
+- block-only saves write empty entity sections
 - first-old / last-new semantics preserved by `TrackedChangeBuffer` before persistence
 - settled redstone and mechanism state is stored with the normal block-state NBT already present in patch palettes. Lever/button `powered`, wire `power`, redstone block placement, rail/detector `powered`, lamp `lit`, openable `open`, repeater/comparator properties, piston base `extended`, settled `piston_head`, and moved blocks are schema-compatible state deltas; no schema bump is needed because these properties already fit the existing block-state tag payload. Stabilization waits a short tick window after the last causal redstone or piston mutation and requeues dirty chunks that still contain `moving_piston` before writing dirty-chunk deltas, so the storage layer receives settled cells instead of the in-flight piston animation. Apply preparation may synthesize missing settled piston head/removal companions from a recorded piston base for replay safety, may recover a retracted base when a raw undo target still references a transient moving-piston base, and may replace normalized transient air at the expected head position when an extended base requires it, but storage still contains ordinary per-position old/new state tags. Runtime replay queues vanilla neighbor updates from redstone power/source transitions after stored blocks have been applied; it does not add storage records for pulses or update events. Restore and quick rollback mechanism reconciliation is computed from existing snapshot, baseline, and patch payloads during off-thread preparation and is not persisted as a new schema field. Only short-lived `moving_piston` animation state is normalized to air before new patch payloads are written
 
 `PatchMetaRepository` reads `*.meta.json`, while `PatchDataRepository` reads and writes `*.bin.lz4`.
 Patch repositories expose persisted block/entity changes only. Minecraft-layer preparers convert those records into apply batches after the payload has been read off-thread.
-Direct partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Entity reads use the old/new chunk index when present so moves across the selection boundary are included from their stored frame chunk. Schema v6/v7 chunk-addressable payloads and legacy v3-v5 payloads remain compatible, but selected-region reads must still scan and filter the legacy stream when no chunk or entity index is available. Non-direct partial restore reconstructs finite current and target states from `snapshots/`, `cache/baseline-chunks/`, and patch payloads, then writes the result into the world and recovery draft as pending unsaved work. Direct partial restore also uses that reconstruction path when selected changes contain redstone/mechanism states so no extra out-of-bounds reconciliation records are written. Missing required payload files are treated as an invalid restore plan.
+Direct partial restore uses the metadata chunk index to load only chunk frames that intersect the selected bounds. Entity reads use the old/new chunk index when present so moves across the selection boundary are included from their stored frame chunk. Non-direct partial restore reconstructs finite current and target states from `snapshots/`, `cache/baseline-chunks/`, and patch payloads, then writes the result into the world and recovery draft as pending unsaved work. Direct partial restore also uses that reconstruction path when selected changes contain redstone/mechanism states so no extra out-of-bounds reconciliation records are written. Missing required payload files are treated as an invalid restore plan. Patch payload schemas older than v9 are rejected as unsupported alpha storage.
 Patch readers bound NBT lengths, compressed/uncompressed frame lengths, palette counts, entity counts, and selected chunk slices before allocating buffers. A selected chunk slice whose stored frame coordinates or entity coordinates do not match the requested chunk is treated as corrupt storage.
 
 ### `snapshots/<snapshotId>.bin.lz4`
@@ -359,16 +358,15 @@ Checkpoint snapshots store a full project-area block state for reconstruction an
 
 Current snapshot characteristics:
 
-- schema v7 uses a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames; schema v6 keeps the same chunk-addressable layout without section content references and remains readable
+- schema v7 uses a small uncompressed Lumi header followed by independently compressed per-chunk LZ4 frames
 - each v7 chunk frame header includes section fingerprints, optional section `ContentRef` entries, entity count, compressed length, and uncompressed length so selected reads can skip unrelated chunks without decompression
-- prepared snapshot and baseline writes store immutable section payloads in `cache/content/<sha>.bin.lz4` and wire those refs into the frame index; the chunk frame still embeds the section payload so older v6-era read paths can be migrated safely
+- prepared snapshot and baseline writes store immutable section payloads in `cache/content/<sha>.bin.lz4` and wire those refs into the frame index; the chunk frame still embeds the section payload for self-contained current reads
 - chunk -> section -> palette structure
 - only non-empty sections are stored
 - block entities are kept in a sparse side table keyed by local block index
-- schema v5 writes per-chunk non-player entity snapshots with position and persistent state; schema v3/v4 snapshots still load as block-only snapshots
 - `moving_piston` states are normalized to air during new snapshot capture, but dirty redstone/piston stabilization first checks live chunks for `moving_piston` and delays reconciliation while that transient state is present. Settled `piston_head` states and piston bases, including `extended=true`, are stored as normal block states. Snapshot restore applies the stored section state directly; it does not replay piston events or derive piston bases from head-only states, and replay completion is still derived from explicit piston bases instead of schema-specific storage records
-- restore planning can list v6 snapshot chunks by scanning frame headers without materializing `SnapshotData` or deserializing block/entity tags
-- selected snapshot reads can materialize only requested chunk frames; legacy v3-v5 snapshots still require stream filtering after decompression
+- restore planning can list v7 snapshot chunks by scanning frame headers without materializing `SnapshotData` or deserializing block/entity tags
+- selected snapshot reads can materialize only requested chunk frames
 - live chunk capture is performed on the Minecraft server thread into immutable compact payloads; snapshot storage only serializes and reads those prepared payloads
 - snapshot readers return persisted payloads, while Minecraft-layer preparers convert them into apply batches off the tick-thread path
 - snapshot readers bound chunk, section, palette, palette-index, block-entity, entity, and NBT lengths before allocating arrays; impossible palette indexes are rejected as corrupt storage
@@ -376,7 +374,6 @@ Current snapshot characteristics:
 They are currently created:
 
 - for the initial version
-- for legacy migration saves
 - every configured snapshot interval
 - when the configured changed-volume threshold is exceeded for bounded projects
 
@@ -457,15 +454,17 @@ Other cache files are treated as disposable cleanup candidates.
 
 Reserved for future coordination and lock files.
 
-## Legacy handling
+## Alpha storage compatibility
 
-The current code keeps legacy snapshot-only projects readable at the project/version metadata level.
+Current readers intentionally support only the writer formats used by this build: patch payload schema v9 and snapshot payload schema v7.
 
 Current behavior:
 
-- legacy projects can be loaded
-- the first new save after loading legacy data writes a patch-era version on top of that project
-- no compatibility layer is provided for older development-era patch or recovery payload formats
+- patch payload schemas v3-v8 are rejected before payload decoding
+- snapshot payload schemas v3-v6 are rejected before chunk decoding
+- manifests without `versionKind` normalize to `MANUAL`
+- `VersionKind.LEGACY` and legacy migration labels are no longer part of the runtime model
+- recovery draft compatibility is documented separately under `recovery/draft.bin.lz4`
 
 ## Archive format
 

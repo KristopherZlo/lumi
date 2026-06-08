@@ -41,14 +41,13 @@ final class VersionSnapshotPlanner {
             ChangeStats stats,
             VersionKind versionKind
     ) throws IOException {
-        VersionKind effectiveKind = project.isLegacySnapshotProject() ? VersionKind.LEGACY : versionKind;
-        if (effectiveKind == VersionKind.INITIAL || effectiveKind == VersionKind.LEGACY) {
+        if (versionKind == VersionKind.INITIAL) {
             LumaDebugLog.log(
                     project,
                     "save",
                     "Snapshot required for project {} because version kind is {}",
                     project.name(),
-                    effectiveKind
+                    versionKind
             );
             return true;
         }

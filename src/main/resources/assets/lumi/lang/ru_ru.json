@@ -300,7 +300,6 @@
   "luma.history.card_manual_summary": "Сохранено вручную, чтобы к этому можно было вернуться.",
   "luma.history.card_recovery_summary": "Сохранено после сбоя, чтобы работа не потерялась.",
   "luma.history.card_restore_summary": "Создано рядом с откатом, чтобы можно было безопасно вернуться назад.",
-  "luma.history.card_legacy_summary": "Импортировано из более старого формата истории Lumi.",
   "luma.history.no_preview": "Нет превью",
   "luma.history.empty_branch": "В этом бренче нет сохранений под текущий фильтр.",
 
@@ -310,7 +309,6 @@
   "luma.version_kind.recovery": "Восстановление",
   "luma.version_kind.restore": "Восстановленное сохранение",
   "luma.version_kind.partial_restore": "Восстановление выбранной области",
-  "luma.version_kind.legacy": "Миграция legacy",
 
   "luma.version_kind.merge": "Мердж бренчей",
   "luma.version_kind.auto_checkpoint": "Авточекпоинт",
@@ -326,7 +324,6 @@
   "luma.variant.creation_hint": "Назови бренч. Если базу не указывать, он начнётся от текущего сохранения%s",
   "luma.variant.active_badge": "Активна",
 
-  "luma.log.legacy_notice": "Этот проект загружен из старого формата только со snapshot.",
   "luma.log.empty": "Событий восстановления и отката пока нет.",
   "luma.log.entry_header": "%s | %s",
   "luma.log.entry_message": "%s",

@@ -119,7 +119,7 @@ public final class VersionRepository {
                         : version.patchIds().stream()
                                 .map(patchId -> StoragePathPolicy.requireStorageId(patchId, "patch id"))
                                 .toList(),
-                version.versionKind() == null ? VersionKind.LEGACY : version.versionKind(),
+                version.versionKind() == null ? VersionKind.MANUAL : version.versionKind(),
                 version.author() == null ? "" : version.author(),
                 version.message() == null ? "" : version.message(),
                 version.stats() == null ? ChangeStats.empty() : version.stats(),

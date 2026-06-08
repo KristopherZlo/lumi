@@ -8,6 +8,7 @@ import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
 import io.github.luma.storage.ProjectLayout;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.file.Path;
 import java.nio.file.Files;
@@ -261,7 +262,7 @@ class SnapshotStorageTest {
     }
 
     @Test
-    void readsVersionFourSnapshotsAsBlockOnly() throws Exception {
+    void rejectsPreCurrentSnapshotFormats() throws Exception {
         Path file = this.tempDir.resolve("legacy-v4.bin.lz4");
         try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(
                 new BufferedOutputStream(Files.newOutputStream(file))
@@ -281,21 +282,16 @@ class SnapshotStorageTest {
             StorageIo.writeCompound(data, entity("minecraft:item", "00000000-0000-0000-0000-000000000003").copyTag());
         }
 
-        SnapshotData restored = this.reader.readFile(file);
-
-        assertEquals(1, restored.chunks().size());
-        assertEquals(List.of(), restored.chunks().getFirst().entitySnapshots());
-        assertEquals(List.of(new io.github.luma.domain.model.ChunkPoint(7, 8)), this.reader.loadChunks(file));
+        assertThrows(java.io.IOException.class, () -> this.reader.readFile(file));
+        assertThrows(java.io.IOException.class, () -> this.reader.loadChunks(file));
     }
 
     @Test
     void rejectsImpossibleSnapshotChunkCount() throws Exception {
         Path file = this.tempDir.resolve("bad-chunk-count.bin.lz4");
-        try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(
-                new BufferedOutputStream(Files.newOutputStream(file))
-        ))) {
+        try (DataOutputStream data = new DataOutputStream(Files.newOutputStream(file))) {
             data.writeInt(SNAPSHOT_MAGIC);
-            data.writeInt(5);
+            data.writeInt(7);
             data.writeUTF("project");
             data.writeLong(Instant.parse("2026-04-20T10:00:00Z").toEpochMilli());
             data.writeInt(0);
@@ -309,11 +305,11 @@ class SnapshotStorageTest {
     @Test
     void rejectsImpossibleSnapshotPaletteIndexes() throws Exception {
         Path file = this.tempDir.resolve("bad-palette-indexes.bin.lz4");
-        try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(
-                new BufferedOutputStream(Files.newOutputStream(file))
-        ))) {
+        byte[] chunk = this.corruptPaletteChunk();
+        byte[] compressedChunk = this.compressFrame(chunk);
+        try (DataOutputStream data = new DataOutputStream(Files.newOutputStream(file))) {
             data.writeInt(SNAPSHOT_MAGIC);
-            data.writeInt(5);
+            data.writeInt(7);
             data.writeUTF("project");
             data.writeLong(Instant.parse("2026-04-20T10:00:00Z").toEpochMilli());
             data.writeInt(0);
@@ -321,13 +317,11 @@ class SnapshotStorageTest {
             data.writeInt(1);
             data.writeInt(0);
             data.writeInt(0);
-            data.writeInt(1);
             data.writeInt(0);
             data.writeInt(0);
-            data.writeInt(1);
-            StorageIo.writeCompound(data, state("minecraft:stone"));
-            data.writeInt(1);
-            data.writeShort(1);
+            data.writeInt(chunk.length);
+            data.writeInt(compressedChunk.length);
+            data.write(compressedChunk);
         }
 
         assertThrows(java.io.IOException.class, () -> this.reader.readFile(file));
@@ -368,5 +362,30 @@ class SnapshotStorageTest {
             }
         }
         return packed;
+    }
+
+    private byte[] corruptPaletteChunk() throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream data = new DataOutputStream(bytes)) {
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(1);
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(1);
+            StorageIo.writeCompound(data, state("minecraft:stone"));
+            data.writeInt(1);
+            data.writeShort(1);
+            data.writeInt(0);
+        }
+        return bytes.toByteArray();
+    }
+
+    private byte[] compressFrame(byte[] frame) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (LZ4FrameOutputStream output = new LZ4FrameOutputStream(bytes)) {
+            output.write(frame);
+        }
+        return bytes.toByteArray();
     }
 }

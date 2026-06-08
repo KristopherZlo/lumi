@@ -13,6 +13,7 @@ import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.storage.ProjectLayout;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -262,6 +263,24 @@ class PatchDataRepositoryTest {
     }
 
     @Test
+    void rejectsPreCurrentPatchPayloadVersions() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        Path dataFile = layout.patchDataFile("pre-current-payload");
+        Files.createDirectories(dataFile.getParent());
+        List<StoredBlockChange> changes = List.of(new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:stone", null),
+                payload("minecraft:gold_block", null)
+        ));
+        this.writePreCurrentPatchPayload(dataFile, changes);
+
+        assertThrows(IOException.class, () -> this.repository.loadWorldChanges(
+                layout,
+                metadata("pre-current-payload", List.of(new PatchChunkSlice(0, 0, 1, 12L, 1)))
+        ));
+    }
+
+    @Test
     void indexesEntityChangesByOldAndNewChunkForSelectiveReads() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         String entityId = "00000000-0000-0000-0000-000000000032";
@@ -311,8 +330,10 @@ class PatchDataRepositoryTest {
         Files.createDirectories(dataFile.getParent());
         try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(dataFile))) {
             output.writeInt(0x4C504154);
-            output.writeInt(7);
+            output.writeInt(PatchDataRepository.CURRENT_PAYLOAD_VERSION);
             output.writeInt(1);
+            output.writeInt(0);
+            output.writeInt(0);
             output.writeInt(0);
             output.writeInt(0);
             output.writeInt(-1);
@@ -331,8 +352,10 @@ class PatchDataRepositoryTest {
         Files.createDirectories(dataFile.getParent());
         try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(dataFile))) {
             output.writeInt(0x4C504154);
-            output.writeInt(7);
+            output.writeInt(PatchDataRepository.CURRENT_PAYLOAD_VERSION);
             output.writeInt(1);
+            output.writeInt(0);
+            output.writeInt(0);
             output.writeInt(0);
             output.writeInt(0);
             output.writeInt(frame.length);
@@ -449,6 +472,30 @@ class PatchDataRepositoryTest {
             output.writeInt(0);
         }
         return bytes.toByteArray();
+    }
+
+    private void writePreCurrentPatchPayload(Path dataFile, List<StoredBlockChange> changes) throws IOException {
+        PatchSectionFrameCodec codec = new PatchSectionFrameCodec();
+        ByteArrayOutputStream frameBytes = new ByteArrayOutputStream();
+        try (DataOutputStream frame = new DataOutputStream(frameBytes)) {
+            frame.writeInt(0);
+            frame.writeInt(0);
+            frame.writeInt(changes.size());
+            codec.writeSectionFrames(frame, changes);
+            frame.writeInt(0);
+        }
+        byte[] frame = frameBytes.toByteArray();
+        byte[] compressedFrame = this.compressFrame(frame);
+        try (DataOutputStream output = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(dataFile)))) {
+            output.writeInt(0x4C504154);
+            output.writeInt(8);
+            output.writeInt(1);
+            output.writeInt(0);
+            output.writeInt(0);
+            output.writeInt(frame.length);
+            output.writeInt(compressedFrame.length);
+            output.write(compressedFrame);
+        }
     }
 
     private byte[] compressFrame(byte[] frame) throws IOException {

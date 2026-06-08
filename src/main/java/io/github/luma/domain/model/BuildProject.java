@@ -66,10 +66,6 @@ public record BuildProject(
         );
     }
 
-    public boolean isLegacySnapshotProject() {
-        return this.schemaVersion <= 0;
-    }
-
     public boolean tracksWholeDimension() {
         return this.bounds == null;
     }

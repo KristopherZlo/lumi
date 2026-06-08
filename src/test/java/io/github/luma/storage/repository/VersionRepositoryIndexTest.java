@@ -74,6 +74,20 @@ class VersionRepositoryIndexTest {
         assertTrue(this.repository.loadAll(layout).isEmpty());
     }
 
+    @Test
+    void missingVersionKindNormalizesToManual() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Missing Kind");
+        Files.createDirectories(layout.versionsDir());
+        String json = GsonProvider.gson()
+                .toJson(version("v0001", "Missing kind", 0))
+                .replace(",\"versionKind\":\"MANUAL\"", "");
+        Files.writeString(layout.versionFile("v0001"), json, StandardCharsets.UTF_8);
+
+        ProjectVersion loaded = this.repository.load(layout, "v0001").orElseThrow();
+
+        assertEquals(VersionKind.MANUAL, loaded.versionKind());
+    }
+
     private static ProjectVersion version(String id, String message, int offsetSeconds) {
         return new ProjectVersion(
                 id,

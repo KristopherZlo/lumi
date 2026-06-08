@@ -66,7 +66,7 @@ final class PatchSectionFrameCodec {
         }
     }
 
-    PatchSectionFrame readSectionFrame(int chunkX, int chunkZ, DataInputStream input, int version) throws IOException {
+    PatchSectionFrame readSectionFrame(int chunkX, int chunkZ, DataInputStream input) throws IOException {
         int sectionY = input.readInt();
         long[] mask = new long[SectionChangeMask.WORD_COUNT];
         for (int index = 0; index < mask.length; index++) {
@@ -88,10 +88,8 @@ final class PatchSectionFrameCodec {
             newBlockEntityIds[index] = input.readInt();
         }
         long[] hiddenMask = new long[SectionChangeMask.WORD_COUNT];
-        if (version >= PatchDataRepository.HIDDEN_MASK_PAYLOAD_VERSION) {
-            for (int index = 0; index < hiddenMask.length; index++) {
-                hiddenMask[index] = input.readLong();
-            }
+        for (int index = 0; index < hiddenMask.length; index++) {
+            hiddenMask[index] = input.readLong();
         }
         return new PatchSectionFrame(
                 chunkX,

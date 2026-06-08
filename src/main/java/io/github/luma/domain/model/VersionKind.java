@@ -8,6 +8,5 @@ public enum VersionKind {
     RESTORE,
     PARTIAL_RESTORE,
     MERGE,
-    AUTO_CHECKPOINT,
-    LEGACY
+    AUTO_CHECKPOINT
 }

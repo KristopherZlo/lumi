@@ -101,7 +101,7 @@ Expected practices:
 - validate corrupt storage paths with bounded reads when changing binary repositories; negative or oversized lengths must fail before large allocation
 - prefer regression tests for any bug fixed from a real log or reproduction
 - when changing Gradle launch or packaging behavior, verify the relevant run/build task path directly and document any automated cleanup or cache assumptions
-- when changing world apply performance, verify dense section-native paths, sparse fallback paths, and storage compatibility in the same review
+- when changing world apply performance, verify dense section-native paths, sparse fallback paths, and current storage-format reads in the same review
 - before alpha release, run `.\scripts\run-alpha-release-check.ps1`; it combines the coverage ratchet, GameTests, focused runtime modes, runtime-load comparison, and crash harness
 - update `config/coverage-baseline.properties` only after reviewing the JaCoCo report and accepting the new coverage level
 
