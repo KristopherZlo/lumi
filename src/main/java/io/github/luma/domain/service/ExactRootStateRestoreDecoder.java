@@ -43,7 +43,7 @@ final class ExactRootStateRestoreDecoder {
             ProjectLayout layout,
             ServerLevel level,
             ProjectVersion targetVersion,
-            RestoreService.ExactRootStateRestorePlan plan,
+            ExactRootStateRestorePlan plan,
             List<BlockPoint> positions,
             int completedSources,
             int totalSources,

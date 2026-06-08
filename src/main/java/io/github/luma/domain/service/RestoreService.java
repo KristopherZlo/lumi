@@ -76,8 +76,6 @@ public final class RestoreService {
     private final VersionRepository versionRepository = new VersionRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
-    private final RestoreBaselineRequirementValidator baselineRequirementValidator =
-            new RestoreBaselineRequirementValidator(this.baselineChunkRepository);
     private final SnapshotReader snapshotReader = new SnapshotReader();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final RestoreChunkCollector chunkCollector = new RestoreChunkCollector(this.patchMetaRepository);
@@ -119,6 +117,10 @@ public final class RestoreService {
             this.snapshotReader,
             this.chunkCollector,
             this.snapshotBatchPreparer
+    );
+    private final ExactRootStateRestorePlanner exactRootStateRestorePlanner = new ExactRootStateRestorePlanner(
+            this.baselineChunkRepository,
+            this.chunkCollector
     );
 
     /**
@@ -911,7 +913,7 @@ public final class RestoreService {
                 .orElseThrow(() -> new IllegalArgumentException("Active variant is missing for " + project.name()));
         String headVersionId = activeVariant.headVersionId();
         ExactRootStateRestorePlan exactRootStatePlan =
-                this.exactRootStateRestorePlan(layout, targetVersion, pendingDraft, directPlan);
+                this.exactRootStateRestorePlanner.plan(layout, targetVersion, pendingDraft, directPlan);
 
         int totalSources = directPlan.stepCount()
                 + (pendingDraft != null && !pendingDraft.isEmpty() ? 1 : 0)
@@ -1115,65 +1117,6 @@ public final class RestoreService {
                 versions,
                 targetVersionId,
                 chunks
-        );
-    }
-
-    ExactRootStateRestorePlan exactRootStateRestorePlan(
-            ProjectLayout layout,
-            ProjectVersion targetVersion,
-            RecoveryDraft pendingDraft,
-            DirectRestorePatchPlan directPlan
-    ) throws IOException {
-        if (!this.shouldAppendExactRootState(targetVersion, pendingDraft, directPlan)) {
-            return ExactRootStateRestorePlan.none();
-        }
-        List<ChunkPoint> affectedChunks = this.exactRootStateChunks(layout, pendingDraft, directPlan);
-        if (affectedChunks.isEmpty()) {
-            return ExactRootStateRestorePlan.none();
-        }
-        if (targetVersion.versionKind() == VersionKind.WORLD_ROOT) {
-            List<ChunkPoint> baselineChunks = this.baselineRequirementValidator.requirePresent(
-                    layout,
-                    affectedChunks,
-                    "exact world-root restore plan"
-            );
-            return ExactRootStateRestorePlan.worldRoot(baselineChunks);
-        }
-        return ExactRootStateRestorePlan.initialSnapshot(affectedChunks);
-    }
-
-    boolean shouldAppendExactRootState(
-            ProjectVersion targetVersion,
-            RecoveryDraft pendingDraft,
-            DirectRestorePatchPlan directPlan
-    ) {
-        if (targetVersion == null) {
-            return false;
-        }
-        boolean hasPendingDraft = pendingDraft != null && !pendingDraft.isEmpty();
-        boolean hasPatchReplay = directPlan != null && directPlan.stepCount() > 0;
-        if (!hasPendingDraft && !hasPatchReplay) {
-            return false;
-        }
-        if (targetVersion.versionKind() == VersionKind.WORLD_ROOT) {
-            return true;
-        }
-        return targetVersion.versionKind() == VersionKind.INITIAL
-                && targetVersion.snapshotId() != null
-                && !targetVersion.snapshotId().isBlank();
-    }
-
-    private List<ChunkPoint> exactRootStateChunks(
-            ProjectLayout layout,
-            RecoveryDraft pendingDraft,
-            DirectRestorePatchPlan directPlan
-    ) throws IOException {
-        List<ProjectVersion> replayVersions = directPlan == null
-                ? List.of()
-                : directPlan.allVersions();
-        return this.chunkCollector.mergeChunks(
-                this.chunkCollector.touchedChunksForVersions(layout, replayVersions),
-                this.chunkCollector.touchedChunksForDraft(pendingDraft)
         );
     }
 
@@ -1519,29 +1462,6 @@ public final class RestoreService {
             }
         }
         return total;
-    }
-
-    record ExactRootStateRestorePlan(boolean append, List<ChunkPoint> chunks) {
-
-        private static ExactRootStateRestorePlan none() {
-            return new ExactRootStateRestorePlan(false, List.of());
-        }
-
-        private static ExactRootStateRestorePlan initialSnapshot(List<ChunkPoint> chunks) {
-            return new ExactRootStateRestorePlan(true, chunks);
-        }
-
-        private static ExactRootStateRestorePlan worldRoot(List<ChunkPoint> chunks) {
-            return new ExactRootStateRestorePlan(true, chunks);
-        }
-
-        private int sourceCount() {
-            return this.append && !this.chunks.isEmpty() ? 1 : 0;
-        }
-
-        ExactRootStateRestorePlan {
-            chunks = chunks == null ? List.of() : List.copyOf(chunks);
-        }
     }
 
     private record PartialRestoreDraft(RestorePlanMode mode, RecoveryDraft draft) {

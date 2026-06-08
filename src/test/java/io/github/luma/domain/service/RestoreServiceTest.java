@@ -116,89 +116,6 @@ class RestoreServiceTest {
     }
 
     @Test
-    void exactInitialStateIsAppendedForDirectRollbackToInitial() {
-        RestoreService service = new RestoreService();
-        ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
-        ProjectVersion head = version("v0002", "main", "v0001");
-        DirectRestorePatchPlan plan = new DirectRestorePatchPlan(List.of(head), List.of());
-
-        assertTrue(service.shouldAppendExactRootState(initial, null, plan));
-    }
-
-    @Test
-    void exactWorldRootStateIsAppendedForDirectRollbackToWorldRoot() {
-        RestoreService service = new RestoreService();
-        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
-        ProjectVersion head = version("v0002", "main", "v0001");
-        DirectRestorePatchPlan plan = new DirectRestorePatchPlan(List.of(head), List.of());
-
-        assertTrue(service.shouldAppendExactRootState(root, null, plan));
-    }
-
-    @Test
-    void exactRootStateIsSkippedForCleanNoOpInitialRestore() {
-        RestoreService service = new RestoreService();
-        ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
-
-        assertFalse(service.shouldAppendExactRootState(initial, null, new DirectRestorePatchPlan(List.of(), List.of())));
-    }
-
-    @Test
-    void exactInitialStatePlanUsesOnlyReplayAndPendingChunks(@TempDir Path tempDir) throws Exception {
-        RestoreService service = new RestoreService();
-        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
-        ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
-        ProjectVersion head = version("v0002", "main", "v0001", "", List.of("patch-0002"));
-        this.savePatchMetadata(
-                layout,
-                "patch-0002",
-                "v0002",
-                List.of(new ChunkPoint(0, 0), new ChunkPoint(3, 1))
-        );
-
-        RestoreService.ExactRootStateRestorePlan plan = service.exactRootStateRestorePlan(
-                layout,
-                initial,
-                draftInChunks(List.of(new ChunkPoint(7, 2))),
-                new DirectRestorePatchPlan(List.of(head), List.of())
-        );
-
-        assertTrue(plan.append());
-        assertEquals(
-                List.of(new ChunkPoint(0, 0), new ChunkPoint(3, 1), new ChunkPoint(7, 2)),
-                plan.chunks()
-        );
-    }
-
-    @Test
-    void exactWorldRootStatePlanUsesOnlyAffectedBaselineChunks(@TempDir Path tempDir) throws Exception {
-        RestoreService service = new RestoreService();
-        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
-        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
-        ProjectVersion head = version("v0002", "main", "v0001", "", List.of("patch-0002"));
-        this.savePatchMetadata(
-                layout,
-                "patch-0002",
-                "v0002",
-                List.of(new ChunkPoint(0, 0), new ChunkPoint(3, 1))
-        );
-        createBaselineFile(layout, new ChunkPoint(0, 0));
-        createBaselineFile(layout, new ChunkPoint(3, 1));
-        createBaselineFile(layout, new ChunkPoint(7, 2));
-        createBaselineFile(layout, new ChunkPoint(9, 9));
-
-        RestoreService.ExactRootStateRestorePlan plan = service.exactRootStateRestorePlan(
-                layout,
-                root,
-                draftInChunks(List.of(new ChunkPoint(7, 2))),
-                new DirectRestorePatchPlan(List.of(head), List.of())
-        );
-
-        assertTrue(plan.append());
-        assertEquals(List.of(new ChunkPoint(0, 0), new ChunkPoint(3, 1), new ChunkPoint(7, 2)), plan.chunks());
-    }
-
-    @Test
     void exactRootPositionCollectionIncludesNativeSectionCells() {
         RestoreService service = new RestoreService();
         LumiSectionBuffer buffer = LumiSectionBuffer.builder(4)
@@ -540,28 +457,6 @@ class RestoreServiceTest {
 
         assertEquals(2, chunks.size());
         assertTrue(chunks.containsAll(List.of(mainChunk, branchChunk)));
-    }
-
-    @Test
-    void exactRootStatePlanFailsWhenAffectedWorldRootChunkHasNoBaseline(@TempDir Path tempDir) throws Exception {
-        RestoreService service = new RestoreService();
-        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
-        ChunkPoint missingChunk = new ChunkPoint(2, 0);
-        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
-        ProjectVersion head = version("v0002", "main", "v0001", "", List.of("patch-0002"));
-        this.savePatchMetadata(layout, "patch-0002", "v0002", List.of(missingChunk));
-        RecoveryDraft pendingDraft = null;
-        DirectRestorePatchPlan directPlan = new DirectRestorePatchPlan(List.of(head), List.of());
-
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> service.exactRootStateRestorePlan(
-                layout,
-                root,
-                pendingDraft,
-                directPlan
-        ));
-
-        assertTrue(exception.getMessage().contains("Missing baseline chunks"));
-        assertTrue(exception.getMessage().contains("2:0"));
     }
 
     @Test
