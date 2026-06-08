@@ -59,7 +59,6 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -114,83 +113,6 @@ class RestoreServiceTest {
 
         assertEquals(1, collapsed.size());
         assertEquals(1, collapsed.getFirst().entityBatch().entitiesToSpawn().size());
-    }
-
-    @Test
-    void directRestoreAcceptsSharedAncestorFromBranchBase() {
-        RestoreService service = new RestoreService();
-        List<ProjectVersion> versions = List.of(
-                version("v0001", "main", ""),
-                version("v0002", "main", "v0001"),
-                version("v0003", "main", "v0001"),
-                version("v0004", "feature", "v0003")
-        );
-        List<ProjectVariant> variants = List.of(
-                new ProjectVariant("main", "main", "v0001", "v0003", true, NOW),
-                new ProjectVariant("feature", "feature", "v0003", "v0004", false, NOW)
-        );
-
-        List<ProjectVersion> direct = service.directRestorePatchVersions(
-                project("feature"),
-                versions,
-                variants,
-                versions.get(2)
-        );
-
-        assertNotNull(direct);
-        assertEquals(List.of("v0004"), direct.stream().map(ProjectVersion::id).toList());
-    }
-
-    @Test
-    void directRestoreRejectsDetachedTargetOutsideActiveLineage() {
-        RestoreService service = new RestoreService();
-        List<ProjectVersion> versions = List.of(
-                version("v0001", "main", ""),
-                version("v0002", "main", "v0001"),
-                version("v0003", "main", "v0001"),
-                version("v0004", "feature", "v0003")
-        );
-        List<ProjectVariant> variants = List.of(
-                new ProjectVariant("main", "main", "v0001", "v0003", true, NOW),
-                new ProjectVariant("feature", "feature", "v0003", "v0004", false, NOW)
-        );
-
-        List<ProjectVersion> direct = service.directRestorePatchVersions(
-                project("feature"),
-                versions,
-                variants,
-                versions.get(1)
-        );
-
-        assertNull(direct);
-    }
-
-    @Test
-    void directRestorePlanSupportsDivergentBranchHeadThroughCommonAncestor() {
-        RestoreService service = new RestoreService();
-        List<ProjectVersion> versions = List.of(
-                version("v0001", "main", ""),
-                version("v0002", "main", "v0001"),
-                version("v0003", "feature", "v0001"),
-                version("v0004", "feature", "v0003")
-        );
-        List<ProjectVariant> variants = List.of(
-                new ProjectVariant("main", "main", "v0001", "v0002", true, NOW),
-                new ProjectVariant("feature", "feature", "v0001", "v0004", false, NOW)
-        );
-
-        DirectRestorePatchPlan plan = service.directRestorePatchPlan(
-                project("main"),
-                versions,
-                variants,
-                versions.get(3)
-        );
-
-        assertNotNull(plan);
-        assertEquals(List.of("v0002"), plan.reverseVersions().stream().map(ProjectVersion::id).toList());
-        assertEquals(List.of("v0003", "v0004"), plan.forwardVersions().stream().map(ProjectVersion::id).toList());
-        assertNull(service.directRestorePatchVersions(project("main"), versions, variants, versions.get(3)));
-        assertNull(service.applicableDirectRestorePatchPlan(project("main"), versions, variants, versions.get(3)));
     }
 
     @Test
@@ -604,7 +526,7 @@ class RestoreServiceTest {
                 new ProjectVariant("feature", "feature", "v0001", "v0003", false, NOW)
         );
 
-        DirectRestorePatchPlan plan = service.directRestorePatchPlan(project, versions, variants, versions.get(1));
+        DirectRestorePatchPlan plan = new DirectRestorePatchPlanner().plan(project, versions, variants, versions.get(1));
         List<ChunkPoint> chunks = new WorldRootRestoreBaselineScope(
                 new RestorePlanBuilder(),
                 new RestoreChunkCollector(this.patchMetaRepository)
