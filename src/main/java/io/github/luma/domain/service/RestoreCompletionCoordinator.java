@@ -92,7 +92,7 @@ final class RestoreCompletionCoordinator {
             ProjectVariant targetVariant,
             ProjectVersion version,
             int batchCount,
-            RestoreService.RestoreUndoAction restoreUndoAction
+            RestoreUndoAction restoreUndoAction
     ) throws IOException {
         Instant now = Instant.now();
         this.recoveryRepository.savePendingRestoreCompletion(layout, PendingRestoreCompletion.full(
@@ -155,7 +155,7 @@ final class RestoreCompletionCoordinator {
         );
     }
 
-    private void recordRestoreUndoAction(RestoreService.RestoreUndoAction action, Instant now) {
+    private void recordRestoreUndoAction(RestoreUndoAction action, Instant now) {
         if (action == null || action.isEmpty()) {
             return;
         }

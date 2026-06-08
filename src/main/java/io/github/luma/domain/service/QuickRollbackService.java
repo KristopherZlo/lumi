@@ -58,13 +58,14 @@ public final class QuickRollbackService {
             new RestoreMechanismReconciliationPlanner();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final BlockTargetStateResolver blockTargetStateResolver = new BlockTargetStateResolver();
+    private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
     private final RestoreEntityStateResolver entityStateResolver = new RestoreEntityStateResolver(
             new RestoreChunkCollector(new PatchMetaRepository()),
             new BaselineChunkRepository(),
             new SnapshotReader(),
             new RestorePayloadLoader(),
             new RestorePlanBuilder(),
-            new PreparedChunkBatchCollapser()
+            this.batchCollapser
     );
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
@@ -278,7 +279,7 @@ public final class QuickRollbackService {
                 targetStates,
                 PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY_AND_SUPPRESS_POST_REPLAY_MECHANISM
         ));
-        return RestoreService.collapsePreparedBatches(combined);
+        return this.batchCollapser.collapse(combined);
     }
 
     List<BlockPoint> mechanismReconciliationPositions(

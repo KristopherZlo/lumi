@@ -61,7 +61,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -79,7 +78,7 @@ class RestoreServiceTest {
     }
 
     @Test
-    void collapsePreparedBatchesKeepsOnlyLastPlacementPerBlock() {
+    void preparedBatchCollapserKeepsOnlyLastPlacementPerBlock() {
         PreparedChunkBatch first = new PreparedChunkBatch(
                 new ChunkPoint(0, 0),
                 List.of(
@@ -94,7 +93,7 @@ class RestoreServiceTest {
                 )
         );
 
-        List<PreparedChunkBatch> collapsed = RestoreService.collapsePreparedBatches(List.of(first, second));
+        List<PreparedChunkBatch> collapsed = new PreparedChunkBatchCollapser().collapse(List.of(first, second));
 
         assertEquals(1, collapsed.size());
         assertEquals(2, collapsed.getFirst().placements().size());
@@ -102,7 +101,7 @@ class RestoreServiceTest {
     }
 
     @Test
-    void collapsePreparedBatchesKeepsEntityOnlyBatches() {
+    void preparedBatchCollapserKeepsEntityOnlyBatches() {
         CompoundTag entity = new CompoundTag();
         entity.putString("id", "minecraft:block_display");
         entity.putString("UUID", "00000000-0000-0000-0000-000000000050");
@@ -112,7 +111,7 @@ class RestoreServiceTest {
                 new EntityBatch(List.of(entity), List.of(), List.of())
         );
 
-        List<PreparedChunkBatch> collapsed = RestoreService.collapsePreparedBatches(List.of(batch));
+        List<PreparedChunkBatch> collapsed = new PreparedChunkBatchCollapser().collapse(List.of(batch));
 
         assertEquals(1, collapsed.size());
         assertEquals(1, collapsed.getFirst().entityBatch().entitiesToSpawn().size());
@@ -326,35 +325,6 @@ class RestoreServiceTest {
         ProjectVariant target = resolver.restoreTargetVariant(variants, baseVersion, "feature");
 
         assertEquals("feature", target.id());
-    }
-
-    @Test
-    void quickRollbackUndoActionReappliesPreRestoreDraftState() {
-        RestoreService service = new RestoreService();
-        RecoveryDraft draft = new RecoveryDraft(
-                "project",
-                "main",
-                "v0002",
-                "Alex",
-                WorldMutationSource.PLAYER,
-                NOW,
-                NOW,
-                List.of(change(1, "minecraft:stone", "minecraft:glass"))
-        );
-
-        RestoreService.RestoreUndoAction action = service.quickRollbackUndoAction(
-                "project",
-                "minecraft:overworld",
-                "v0002",
-                draft
-        );
-
-        assertNotNull(action);
-        assertEquals("Lumi quick rollback", action.actor());
-        assertEquals("project", action.projectId());
-        assertEquals("minecraft:overworld", action.dimensionId());
-        assertEquals("minecraft:glass", action.changes().getFirst().oldValue().blockId());
-        assertEquals("minecraft:stone", action.changes().getFirst().newValue().blockId());
     }
 
     @Test

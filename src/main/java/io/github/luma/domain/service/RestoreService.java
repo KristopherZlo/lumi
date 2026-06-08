@@ -53,7 +53,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -126,6 +125,7 @@ public final class RestoreService {
             this.snapshotReader,
             this.baselineChunkRepository
     );
+    private final RestoreUndoActionFactory restoreUndoActionFactory = new RestoreUndoActionFactory();
 
     /**
      * Starts a restore operation for the given project and target version.
@@ -308,7 +308,7 @@ public final class RestoreService {
         }
         this.saveRestoreReturnPoint(layout, project, activeVariant, returnVersionId, version);
         RestoreUndoAction restoreUndoAction = recordUndoRedoAction
-                ? this.quickRollbackUndoAction(
+                ? this.restoreUndoActionFactory.quickRollbackUndoAction(
                         project.id().toString(),
                         level.dimension().identifier().toString(),
                         version.id(),
@@ -812,38 +812,6 @@ public final class RestoreService {
         return new PartialRestoreDraft(RestorePlanMode.TARGET_STATE, draft);
     }
 
-    RestoreUndoAction quickRollbackUndoAction(
-            String projectId,
-            String dimensionId,
-            String targetVersionId,
-            RecoveryDraft pendingDraft
-    ) {
-        if (pendingDraft == null || pendingDraft.isEmpty()) {
-            return null;
-        }
-        List<StoredBlockChange> changes = pendingDraft.changes().stream()
-                .map(RestoreService::inverse)
-                .toList();
-        List<StoredEntityChange> entityChanges = pendingDraft.entityChanges().stream()
-                .map(StoredEntityChange::inverse)
-                .toList();
-        if (changes.isEmpty() && entityChanges.isEmpty()) {
-            return null;
-        }
-        return new RestoreUndoAction(
-                "quick-rollback-" + targetVersionId + "-" + UUID.randomUUID(),
-                "Lumi quick rollback",
-                projectId,
-                dimensionId,
-                changes,
-                entityChanges
-        );
-    }
-
-    private static StoredBlockChange inverse(StoredBlockChange change) {
-        return change.inverse();
-    }
-
     private List<PreparedChunkBatch> decodeWorldRootRestore(
             ProjectLayout layout,
             io.github.luma.domain.model.BuildProject project,
@@ -1333,10 +1301,6 @@ public final class RestoreService {
         return RestorePlanMode.BASELINE_CHUNKS;
     }
 
-    static List<PreparedChunkBatch> collapsePreparedBatches(List<PreparedChunkBatch> batches) {
-        return new PreparedChunkBatchCollapser().collapse(batches);
-    }
-
     private List<StoredEntityChange> planPartialEntityChanges(
             List<StoredEntityChange> pendingChanges,
             List<StoredEntityChange> reverseLineageChanges,
@@ -1415,25 +1379,6 @@ public final class RestoreService {
     }
 
     private record PartialRestoreDraft(RestorePlanMode mode, RecoveryDraft draft) {
-    }
-
-    record RestoreUndoAction(
-            String actionId,
-            String actor,
-            String projectId,
-            String dimensionId,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges
-    ) {
-
-        RestoreUndoAction {
-            changes = changes == null ? List.of() : List.copyOf(changes);
-            entityChanges = entityChanges == null ? List.of() : List.copyOf(entityChanges);
-        }
-
-        boolean isEmpty() {
-            return this.changes.isEmpty() && this.entityChanges.isEmpty();
-        }
     }
 
 }
