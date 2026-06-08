@@ -18,6 +18,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestorePlanMode;
+import io.github.luma.domain.model.SectionChangeMask;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
@@ -31,13 +32,15 @@ import io.github.luma.minecraft.world.LumiSectionBuffer;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.minecraft.world.PreparedSectionApplyBatch;
 import io.github.luma.minecraft.world.SectionApplyPath;
 import io.github.luma.minecraft.world.SectionApplySafetyProfile;
-import io.github.luma.domain.model.SectionChangeMask;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
+import io.github.luma.storage.repository.SnapshotReader;
 import io.github.luma.storage.repository.SnapshotWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -117,7 +120,7 @@ class RestoreServiceTest {
 
     @Test
     void exactRootPositionCollectionIncludesNativeSectionCells() {
-        RestoreService service = new RestoreService();
+        RestoreChunkCollector collector = new RestoreChunkCollector(this.patchMetaRepository);
         LumiSectionBuffer buffer = LumiSectionBuffer.builder(4)
                 .set(SectionChangeMask.localIndex(1, 2, 3), Blocks.STONE.defaultBlockState(), null)
                 .set(SectionChangeMask.localIndex(2, 2, 3), Blocks.GOLD_BLOCK.defaultBlockState(), null)
@@ -140,7 +143,7 @@ class RestoreServiceTest {
                 EntityBatch.empty()
         );
 
-        List<BlockPoint> positions = service.blockPositions(List.of(batch));
+        List<BlockPoint> positions = collector.blockPositions(List.of(batch));
 
         assertEquals(2, positions.size());
         assertEquals(new BlockPoint(33, 66, -13), positions.getFirst());
@@ -207,7 +210,7 @@ class RestoreServiceTest {
 
     @Test
     void targetBlockStatesResolveSnapshotAndPatchChain(@TempDir Path tempDir) throws Exception {
-        RestoreService service = new RestoreService();
+        BlockTargetStateResolver resolver = new BlockTargetStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
         BlockPoint pos = new BlockPoint(1, 64, 1);
         this.snapshotWriter.writeFile(
@@ -229,7 +232,7 @@ class RestoreServiceTest {
         ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
         ProjectVersion target = version("v0002", "main", "v0001", "", List.of("patch-0002"));
 
-        var states = service.targetBlockStates(
+        var states = resolver.resolve(
                 layout,
                 project("main"),
                 List.of(initial, target),
@@ -356,7 +359,7 @@ class RestoreServiceTest {
 
     @Test
     void pendingEntityRollbackToDraftBaseSkipsSnapshotLookupForWorldRootLineage(@TempDir Path tempDir) throws Exception {
-        RestoreService service = new RestoreService();
+        RestoreEntityStateResolver resolver = this.entityStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
         String entityId = "00000000-0000-0000-0000-000000000070";
         ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
@@ -378,7 +381,7 @@ class RestoreServiceTest {
                 ))
         );
 
-        RecoveryDraft aligned = service.alignPendingEntityRollbackWithTarget(layout, List.of(root, target), target, draft);
+        RecoveryDraft aligned = resolver.alignPendingEntityRollbackWithTarget(layout, List.of(root, target), target, draft);
 
         assertEquals(1.0D, x(aligned.entityChanges().getFirst().oldValue()));
         assertEquals(2.0D, x(aligned.entityChanges().getFirst().newValue()));
@@ -386,7 +389,7 @@ class RestoreServiceTest {
 
     @Test
     void pendingEntityRollbackCanResolveTargetStateFromWorldRootPatchChain(@TempDir Path tempDir) throws Exception {
-        RestoreService service = new RestoreService();
+        RestoreEntityStateResolver resolver = this.entityStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
         String entityId = "00000000-0000-0000-0000-000000000071";
         EntityPayload targetEntity = entity(entityId, 1.0D);
@@ -417,7 +420,7 @@ class RestoreServiceTest {
                 ))
         );
 
-        RecoveryDraft aligned = service.alignPendingEntityRollbackWithTarget(layout, List.of(root, target), target, draft);
+        RecoveryDraft aligned = resolver.alignPendingEntityRollbackWithTarget(layout, List.of(root, target), target, draft);
 
         assertEquals(1.0D, x(aligned.entityChanges().getFirst().oldValue()));
         assertEquals(3.0D, x(aligned.entityChanges().getFirst().newValue()));
@@ -460,31 +463,6 @@ class RestoreServiceTest {
     }
 
     @Test
-    void initialRestoreSummaryUsesSnapshotChunksInsteadOfBaselineChunks(@TempDir Path tempDir) throws Exception {
-        RestoreService service = new RestoreService();
-        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
-        this.snapshotWriter.writeFile(layout.snapshotFile("snapshot-0001"), new SnapshotData(
-                "project",
-                NOW,
-                64,
-                79,
-                List.of(new SnapshotChunkData(
-                        3,
-                        1,
-                        List.of(new SnapshotSectionData(4, List.of(state("minecraft:air")), new short[4096])),
-                        java.util.Map.of(),
-                        List.of()
-                ))
-        ));
-        createBaselineFile(layout, new ChunkPoint(9, 9));
-        ProjectVersion initial = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
-
-        List<ChunkPoint> chunks = service.rootLikeSummaryChunks(layout, initial);
-
-        assertEquals(List.of(new ChunkPoint(3, 1)), chunks);
-    }
-
-    @Test
     void targetStateResolverFailsWhenWorldRootPositionHasNoBaseline(@TempDir Path tempDir) {
         BlockTargetStateResolver resolver = new BlockTargetStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
@@ -504,7 +482,7 @@ class RestoreServiceTest {
 
     @Test
     void authoritativeEntityReplacementKeepsEmptyTargetChunkAuthoritative(@TempDir Path tempDir) throws Exception {
-        RestoreService service = new RestoreService();
+        RestoreEntityStateResolver resolver = this.entityStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
         String entityId = "00000000-0000-0000-0000-000000000060";
         EntityPayload entity = entity(entityId, 1.0D);
@@ -522,7 +500,7 @@ class RestoreServiceTest {
                 version("v0002", "main", "v0001", "", List.of("patch-0002"))
         );
 
-        List<PreparedChunkBatch> batches = service.authoritativeEntityReplacementBatches(
+        List<PreparedChunkBatch> batches = resolver.authoritativeEntityReplacementBatches(
                 layout,
                 versions,
                 "v0002",
@@ -537,7 +515,7 @@ class RestoreServiceTest {
 
     @Test
     void authoritativeEntityReplacementRemovesEntityMovedOutOfSelectedChunk(@TempDir Path tempDir) throws Exception {
-        RestoreService service = new RestoreService();
+        RestoreEntityStateResolver resolver = this.entityStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
         String entityId = "00000000-0000-0000-0000-000000000061";
         EntityPayload inSelectedChunk = entity(entityId, 1.0D);
@@ -556,7 +534,7 @@ class RestoreServiceTest {
                 version("v0002", "main", "v0001", "", List.of("patch-0002"))
         );
 
-        List<PreparedChunkBatch> batches = service.authoritativeEntityReplacementBatches(
+        List<PreparedChunkBatch> batches = resolver.authoritativeEntityReplacementBatches(
                 layout,
                 versions,
                 "v0002",
@@ -578,6 +556,17 @@ class RestoreServiceTest {
                         NOW
                 )
                 .withActiveVariantId(activeVariantId, NOW);
+    }
+
+    private RestoreEntityStateResolver entityStateResolver() {
+        return new RestoreEntityStateResolver(
+                new RestoreChunkCollector(this.patchMetaRepository),
+                new BaselineChunkRepository(),
+                new SnapshotReader(),
+                new RestorePayloadLoader(),
+                new RestorePlanBuilder(),
+                new PreparedChunkBatchCollapser()
+        );
     }
 
     private static Object invokeBuildPartialRestoreDraft(

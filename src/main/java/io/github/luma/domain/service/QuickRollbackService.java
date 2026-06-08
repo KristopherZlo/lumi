@@ -19,12 +19,16 @@ import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
+import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.minecraft.world.PreparedWorldChangeBatches;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.BaselineChunkRepository;
+import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
+import io.github.luma.storage.repository.SnapshotReader;
 import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.io.IOException;
@@ -53,6 +57,15 @@ public final class QuickRollbackService {
     private final RestoreMechanismReconciliationPlanner mechanismReconciliationPlanner =
             new RestoreMechanismReconciliationPlanner();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
+    private final BlockTargetStateResolver blockTargetStateResolver = new BlockTargetStateResolver();
+    private final RestoreEntityStateResolver entityStateResolver = new RestoreEntityStateResolver(
+            new RestoreChunkCollector(new PatchMetaRepository()),
+            new BaselineChunkRepository(),
+            new SnapshotReader(),
+            new RestorePayloadLoader(),
+            new RestorePlanBuilder(),
+            new PreparedChunkBatchCollapser()
+    );
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     public OperationHandle quickRollback(ServerLevel level, String projectName) throws IOException {
@@ -150,7 +163,7 @@ public final class QuickRollbackService {
                             selectedBounds
                     );
                     if (selectedBounds == null) {
-                        batches = this.restoreService.withAuthoritativeEntityReplacementBatches(
+                        batches = this.entityStateResolver.withAuthoritativeEntityReplacementBatches(
                                 layout,
                                 versions,
                                 activeVariant.headVersionId(),
@@ -249,7 +262,7 @@ public final class QuickRollbackService {
         if (positions.isEmpty()) {
             return batches == null ? List.of() : batches;
         }
-        Map<BlockPoint, io.github.luma.domain.model.StatePayload> targetStates = this.restoreService.targetBlockStates(
+        Map<BlockPoint, io.github.luma.domain.model.StatePayload> targetStates = this.blockTargetStateResolver.resolve(
                 layout,
                 project,
                 versions,

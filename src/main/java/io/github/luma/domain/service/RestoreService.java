@@ -122,6 +122,10 @@ public final class RestoreService {
             this.baselineChunkRepository,
             this.chunkCollector
     );
+    private final RootLikeRestoreChunkResolver rootLikeRestoreChunkResolver = new RootLikeRestoreChunkResolver(
+            this.snapshotReader,
+            this.baselineChunkRepository
+    );
 
     /**
      * Starts a restore operation for the given project and target version.
@@ -413,7 +417,7 @@ public final class RestoreService {
         if (targetVersion.versionKind() == VersionKind.WORLD_ROOT || targetVersion.versionKind() == VersionKind.INITIAL) {
             return new RestorePlanSummary(
                     this.worldRootFallbackMode(level, project),
-                    this.chunkCollector.mergeChunks(this.rootLikeSummaryChunks(layout, targetVersion), pendingChunks),
+                    this.chunkCollector.mergeChunks(this.rootLikeRestoreChunkResolver.resolve(layout, targetVersion), pendingChunks),
                     targetVersion.variantId(),
                     baseVersionId,
                     targetVersion.id()
@@ -923,7 +927,7 @@ public final class RestoreService {
         MechanismReplayScope.Builder mechanismScope = MechanismReplayScope.builder();
 
         if (pendingDraft != null && !pendingDraft.isEmpty()) {
-            RecoveryDraft rollbackDraft = this.alignPendingEntityRollbackWithTarget(
+            RecoveryDraft rollbackDraft = this.entityStateResolver.alignPendingEntityRollbackWithTarget(
                     layout,
                     versions,
                     targetVersion,
@@ -988,7 +992,7 @@ public final class RestoreService {
         Optional<List<BlockPoint>> exactRootPositions = this.mechanismReconciliationPlanner.boundedExactRootReplayPositions(
                 project,
                 resolvedMechanismScope,
-                this.blockPositions(batches),
+                this.chunkCollector.blockPositions(batches),
                 level
         );
         if (exactRootPositions.isEmpty()) {
@@ -1036,7 +1040,7 @@ public final class RestoreService {
                 );
                 return Optional.empty();
             }
-            Map<BlockPoint, StatePayload> targetStates = this.targetBlockStates(
+            Map<BlockPoint, StatePayload> targetStates = this.blockTargetStateResolver.resolve(
                     layout,
                     project,
                     versions,
@@ -1078,21 +1082,7 @@ public final class RestoreService {
         return Optional.of(collapsed);
     }
 
-    RecoveryDraft alignPendingEntityRollbackWithTarget(
-            ProjectLayout layout,
-            List<ProjectVersion> versions,
-            ProjectVersion targetVersion,
-            RecoveryDraft pendingDraft
-    ) throws IOException {
-        return this.entityStateResolver.alignPendingEntityRollbackWithTarget(
-                layout,
-                versions,
-                targetVersion,
-                pendingDraft
-        );
-    }
-
-    List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatches(
+    private List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatches(
             ProjectLayout layout,
             List<ProjectVersion> versions,
             String targetVersionId,
@@ -1103,20 +1093,6 @@ public final class RestoreService {
                 versions,
                 targetVersionId,
                 batches
-        );
-    }
-
-    List<PreparedChunkBatch> authoritativeEntityReplacementBatches(
-            ProjectLayout layout,
-            List<ProjectVersion> versions,
-            String targetVersionId,
-            List<ChunkPoint> chunks
-    ) throws IOException {
-        return this.entityStateResolver.authoritativeEntityReplacementBatches(
-                layout,
-                versions,
-                targetVersionId,
-                chunks
         );
     }
 
@@ -1343,34 +1319,8 @@ public final class RestoreService {
         return chunk.x() + ":" + chunk.z();
     }
 
-    List<BlockPoint> blockPositions(List<PreparedChunkBatch> batches) {
-        return this.chunkCollector.blockPositions(batches);
-    }
-
-    Map<BlockPoint, StatePayload> targetBlockStates(
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            List<ProjectVersion> versions,
-            ProjectVersion targetVersion,
-            List<BlockPoint> positions
-    ) throws IOException {
-        return this.blockTargetStateResolver.resolve(layout, project, versions, targetVersion, positions);
-    }
-
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {
         return this.chunkCollector.touchedChunksForPlan(plan.baselineGaps(), plan.patchChain());
-    }
-
-    List<ChunkPoint> rootLikeSummaryChunks(ProjectLayout layout, ProjectVersion targetVersion) throws IOException {
-        if (targetVersion != null
-                && targetVersion.versionKind() == VersionKind.INITIAL
-                && targetVersion.snapshotId() != null
-                && !targetVersion.snapshotId().isBlank()) {
-            return this.snapshotReader.loadChunks(layout.snapshotFile(targetVersion.snapshotId())).stream()
-                    .map(chunk -> new ChunkPoint(chunk.x(), chunk.z()))
-                    .toList();
-        }
-        return this.baselineChunkRepository.listChunks(layout);
     }
 
     private RestorePlanMode worldRootFallbackMode(ServerLevel level, io.github.luma.domain.model.BuildProject project) throws IOException {
