@@ -9,6 +9,9 @@ test('returns json problem response when repository insert fails', { timeout: 2_
       async insertEvents() {
         throw new Error('database unavailable');
       },
+      async deleteEventsBefore() {
+        return undefined;
+      },
     },
     rateLimiter: null,
     maxRequestBytes: 4096,
@@ -64,6 +67,24 @@ test('rejects oversized request bodies at the server boundary', async () => {
   }
 });
 
+test('starts and stops retention scheduler with server lifecycle', async () => {
+  const retentionScheduler = new FakeRetentionScheduler();
+  const server = createTelemetryServer({
+    repository: new FakeRepository(),
+    rateLimiter: null,
+    retentionScheduler,
+  });
+
+  try {
+    await listen(server);
+    assert.equal(retentionScheduler.startCount, 1);
+  } finally {
+    await close(server);
+  }
+
+  assert.equal(retentionScheduler.stopCount, 1);
+});
+
 function post(server, body) {
   return new Promise((resolve, reject) => {
     server.listen(0, '127.0.0.1', () => {
@@ -73,6 +94,7 @@ function post(server, body) {
         port: address.port,
         path: '/v1/events/batch',
         method: 'POST',
+        agent: false,
         headers: {
           'content-type': 'application/json',
           'content-length': Buffer.byteLength(body),
@@ -98,6 +120,17 @@ function post(server, body) {
   });
 }
 
+function listen(server) {
+  return new Promise((resolve, reject) => {
+    server.listen(0, '127.0.0.1', resolve);
+    server.on('error', reject);
+  });
+}
+
+function close(server) {
+  return new Promise(resolve => server.close(resolve));
+}
+
 class FakeRepository {
   constructor() {
     this.insertCount = 0;
@@ -105,5 +138,24 @@ class FakeRepository {
 
   async insertEvents() {
     this.insertCount += 1;
+  }
+
+  async deleteEventsBefore() {
+    return undefined;
+  }
+}
+
+class FakeRetentionScheduler {
+  constructor() {
+    this.startCount = 0;
+    this.stopCount = 0;
+  }
+
+  start() {
+    this.startCount += 1;
+  }
+
+  stop() {
+    this.stopCount += 1;
   }
 }

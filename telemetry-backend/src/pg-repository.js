@@ -30,6 +30,10 @@ export class PgTelemetryRepository {
         received_at TIMESTAMPTZ NOT NULL
       )
     `);
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS telemetry_events_received_at_idx
+      ON telemetry_events (received_at)
+    `);
     this.schemaReady = true;
   }
 
