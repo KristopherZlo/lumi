@@ -7,9 +7,7 @@ import io.github.luma.minecraft.testing.RuntimeTestingConfig;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -24,9 +22,9 @@ public final class TelemetryService {
     private final Object lock = new Object();
     private final TelemetrySettingsRepository settingsRepository;
     private final TelemetrySpoolRepository spoolRepository;
-    private final TelemetryEnvironmentProvider environmentProvider;
     private final TelemetryBatchSender sender;
-    private final TelemetrySanitizer sanitizer = new TelemetrySanitizer();
+    private final TelemetryEventFactory eventFactory;
+    private final TelemetryEndpointPolicy endpointPolicy = new TelemetryEndpointPolicy();
     private final Executor executor;
     private final Supplier<Instant> clock;
     private final Supplier<String> installationIds;
@@ -136,64 +134,36 @@ public final class TelemetryService {
         if (!this.transportEnabled) {
             return;
         }
-        this.schedule(() -> this.record(TelemetryEventType.OPERATION_REJECTED, failure, Map.of(
-                "action", safe(action),
-                "statusKey", safe(statusKey),
-                "failure", this.sanitizer.sanitizeText(failureMessage(failure))
-        )));
+        this.schedule(() -> this.record(settings -> this.eventFactory.operationRejected(settings, action, statusKey, failure)));
     }
 
     public void recordOperationFailed(OperationHandle handle, OperationSnapshot snapshot, Throwable failure) {
         if (!this.transportEnabled) {
             return;
         }
-        this.schedule(() -> {
-            Map<String, String> payload = new LinkedHashMap<>();
-            payload.put("operation", safe(handle == null ? "" : handle.label()));
-            payload.put("stage", safe(snapshot == null || snapshot.stage() == null ? "" : snapshot.stage().name()));
-            payload.put("detail", this.sanitizer.sanitizeText(snapshot == null ? "" : snapshot.detail()));
-            if (snapshot != null && snapshot.progress() != null) {
-                payload.put("completedUnits", Integer.toString(snapshot.progress().completedUnits()));
-                payload.put("totalUnits", Integer.toString(snapshot.progress().totalUnits()));
-                payload.put("unitLabel", safe(snapshot.progress().unitLabel()));
-            }
-            if (handle != null && handle.startedAt() != null) {
-                payload.put("durationMs", Long.toString(Math.max(0L, Duration.between(handle.startedAt(), this.clock.get()).toMillis())));
-            }
-            payload.put("failure", this.sanitizer.sanitizeText(failureMessage(failure)));
-            this.record(TelemetryEventType.OPERATION_FAILED, failure, payload);
-        });
+        this.schedule(() -> this.record(settings -> this.eventFactory.operationFailed(settings, handle, snapshot, failure)));
     }
 
     public void recordClientCrashCandidate(Throwable failure) {
         if (!this.transportEnabled) {
             return;
         }
-        this.schedule(() -> this.record(TelemetryEventType.CLIENT_CRASH_CANDIDATE, failure, Map.of(
-                "failure", this.sanitizer.sanitizeText(failureMessage(failure))
-        )));
+        this.schedule(() -> this.record(settings -> this.eventFactory.clientCrashCandidate(settings, failure)));
     }
 
     public void recordRenderOverlayDisabled(String overlayName, Throwable failure) {
         if (!this.transportEnabled) {
             return;
         }
-        this.schedule(() -> this.record(TelemetryEventType.RENDER_OVERLAY_DISABLED, failure, Map.of(
-                "overlay", safe(overlayName),
-                "failure", this.sanitizer.sanitizeText(failureMessage(failure))
-        )));
+        this.schedule(() -> this.record(settings -> this.eventFactory.renderOverlayDisabled(settings, overlayName, failure)));
     }
 
     public void recordPerformanceOutlier(String operationLabel, long elapsedNanos, long budgetNanos, String stage) {
         if (!this.transportEnabled) {
             return;
         }
-        this.schedule(() -> this.record(TelemetryEventType.PERFORMANCE_OUTLIER, null, Map.of(
-                "operation", safe(operationLabel),
-                "stage", safe(stage),
-                "elapsedMicros", Long.toString(Math.max(0L, elapsedNanos / 1_000L)),
-                "budgetMicros", Long.toString(Math.max(0L, budgetNanos / 1_000L))
-        )));
+        this.schedule(() -> this.record(settings ->
+                this.eventFactory.performanceOutlier(settings, operationLabel, elapsedNanos, budgetNanos, stage)));
     }
 
     public void flushAsync() {
@@ -225,8 +195,8 @@ public final class TelemetryService {
     ) {
         this.settingsRepository = settingsRepository;
         this.spoolRepository = spoolRepository;
-        this.environmentProvider = environmentProvider;
         this.sender = sender;
+        this.eventFactory = new TelemetryEventFactory(environmentProvider, clock);
         this.executor = executor;
         this.clock = clock;
         this.installationIds = installationIds;
@@ -283,25 +253,19 @@ public final class TelemetryService {
         private static final TelemetryService INSTANCE = createDefault();
     }
 
-    private void record(TelemetryEventType type, Throwable failure, Map<String, String> payload) {
+    private void record(TelemetryEventBuilder eventBuilder) {
         synchronized (this.lock) {
-            if (!this.transportEnabled || !this.clientRuntimeEnabled || !this.settings.enabled()) {
-                this.queue = List.of();
-                this.spoolRepository.clear();
+            if (!this.readyToSendLocked()) {
+                this.clearLocalQueueLocked();
                 return;
             }
             this.rotateSettingsIfNeeded();
+            if (!this.endpointPolicy.sendable(this.settings.endpointUrl())) {
+                this.clearLocalQueueLocked();
+                return;
+            }
             List<TelemetryEvent> updated = new ArrayList<>(this.queue);
-            updated.add(new TelemetryEvent(
-                    UUID.randomUUID().toString(),
-                    TelemetryEvent.SCHEMA_VERSION,
-                    type,
-                    this.clock.get(),
-                    this.settings.installationId(),
-                    this.environmentProvider.current(),
-                    this.fingerprint(type, failure, payload),
-                    payload
-            ));
+            updated.add(eventBuilder.create(this.settings));
             this.queue = List.copyOf(updated);
             this.spoolRepository.save(this.queue);
         }
@@ -312,9 +276,13 @@ public final class TelemetryService {
         List<TelemetryEvent> batch;
         TelemetrySettings currentSettings;
         synchronized (this.lock) {
-            if (!this.transportEnabled || !this.clientRuntimeEnabled || !this.settings.enabled()) {
-                this.queue = List.of();
-                this.spoolRepository.clear();
+            if (!this.readyToSendLocked()) {
+                this.clearLocalQueueLocked();
+                return;
+            }
+            this.rotateSettingsIfNeeded();
+            if (!this.endpointPolicy.sendable(this.settings.endpointUrl())) {
+                this.clearLocalQueueLocked();
                 return;
             }
             if (this.queue.isEmpty()) {
@@ -354,35 +322,13 @@ public final class TelemetryService {
         }
     }
 
-    private String fingerprint(TelemetryEventType type, Throwable failure, Map<String, String> payload) {
-        String source = type.name() + ":" + (failure == null ? "" : failure.getClass().getName()) + ":" + firstLumiFrame(failure);
-        if (failure == null && payload != null) {
-            source = source + ":" + payload;
-        }
-        return Integer.toHexString(source.hashCode());
+    private boolean readyToSendLocked() {
+        return this.transportEnabled && this.clientRuntimeEnabled && this.settings.enabled();
     }
 
-    private static String firstLumiFrame(Throwable failure) {
-        if (failure == null) {
-            return "";
-        }
-        for (StackTraceElement element : failure.getStackTrace()) {
-            if (element.getClassName().startsWith("io.github.luma")) {
-                return element.getClassName() + "#" + element.getMethodName();
-            }
-        }
-        return "";
-    }
-
-    private static String failureMessage(Throwable failure) {
-        if (failure == null) {
-            return "";
-        }
-        return failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
-    }
-
-    private static String safe(String value) {
-        return value == null ? "" : value;
+    private void clearLocalQueueLocked() {
+        this.queue = List.of();
+        this.spoolRepository.clear();
     }
 
     private void schedule(Runnable task) {
@@ -391,5 +337,11 @@ public final class TelemetryService {
         } catch (RuntimeException exception) {
             LumaMod.LOGGER.warn("Lumi telemetry task was rejected", exception);
         }
+    }
+
+    @FunctionalInterface
+    private interface TelemetryEventBuilder {
+
+        TelemetryEvent create(TelemetrySettings settings);
     }
 }

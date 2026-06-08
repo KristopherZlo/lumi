@@ -1,8 +1,13 @@
 package io.github.luma.telemetry;
 
+import io.github.luma.domain.model.OperationHandle;
+import io.github.luma.domain.model.OperationProgress;
+import io.github.luma.domain.model.OperationSnapshot;
+import io.github.luma.domain.model.OperationStage;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -42,24 +47,126 @@ class TelemetryServiceTest {
     }
 
     @Test
-    void enabledTelemetryQueuesSanitizedRejectedAction() {
+    void enabledTelemetryQueuesAllowlistedRejectedAction() {
         TelemetrySpoolRepository spool = new TelemetrySpoolRepository(this.tempDir.resolve("telemetry-spool.json"), 10);
         TelemetryService service = TelemetryService.testing(
-                TelemetrySettings.defaults("https://telemetry.example.test/v1/events/batch", () -> "install-a"),
+                TelemetrySettings.defaults("https://telemetry.lumimod.dev/v1/events/batch", () -> "install-a"),
                 spool,
                 new TelemetryEnvironmentProvider.Static(new TelemetryEnvironment("lumi", "mc", "loader", "java", "os", "arch", List.of())),
                 Runnable::run,
                 (endpoint, events) -> TelemetrySendResult.failure("offline")
         );
 
-        service.recordOperationRejected("save", "luma.status.operation_failed", new IllegalStateException("C:\\Users\\Alex\\world"));
+        service.recordOperationRejected(
+                "save",
+                "luma.status.operation_failed",
+                new IllegalStateException("Project metadata is missing for Castle World")
+        );
         service.flushNow();
 
         List<TelemetryEvent> events = spool.load();
         assertEquals(1, events.size());
         assertEquals(TelemetryEventType.OPERATION_REJECTED, events.getFirst().type());
-        assertEquals("save", events.getFirst().payload().get("action"));
-        assertEquals("<path>", events.getFirst().payload().get("failure"));
+        Map<String, String> payload = events.getFirst().payload();
+        assertEquals("save", payload.get("action"));
+        assertEquals("luma.status.operation_failed", payload.get("statusKey"));
+        assertEquals("java.lang.IllegalStateException", payload.get("failureClass"));
+        assertFalse(payload.containsKey("failure"));
+        assertFalse(payloadText(events.getFirst()).contains("Castle World"));
+    }
+
+    @Test
+    void operationFailurePayloadOmitsSnapshotDetailsAndThrowableMessages() {
+        TelemetrySpoolRepository spool = new TelemetrySpoolRepository(this.tempDir.resolve("telemetry-spool.json"), 10);
+        TelemetryService service = TelemetryService.testing(
+                TelemetrySettings.defaults("https://telemetry.lumimod.dev/v1/events/batch", () -> "install-a"),
+                spool,
+                new TelemetryEnvironmentProvider.Static(new TelemetryEnvironment("lumi", "mc", "loader", "java", "os", "arch", List.of())),
+                Runnable::run,
+                (endpoint, events) -> TelemetrySendResult.failure("offline")
+        );
+        OperationHandle handle = new OperationHandle(
+                "patch-abc123",
+                "project-castle-world",
+                "restore-version",
+                Instant.parse("2026-06-08T08:00:00Z"),
+                false
+        );
+        OperationSnapshot snapshot = new OperationSnapshot(
+                handle,
+                OperationStage.APPLYING,
+                new OperationProgress(12, 42, "chunks"),
+                "Applying patch abc123 to Castle World at chunk 12:-4 with snapshot snap-456",
+                Instant.parse("2026-06-08T08:00:05Z")
+        );
+
+        service.recordOperationFailed(
+                handle,
+                snapshot,
+                new IllegalStateException("Failed block write at x=12 y=64 z=-4 in C:\\Users\\Alex\\Castle World")
+        );
+        service.flushNow();
+
+        List<TelemetryEvent> events = spool.load();
+        assertEquals(1, events.size());
+        assertEquals(TelemetryEventType.OPERATION_FAILED, events.getFirst().type());
+        Map<String, String> payload = events.getFirst().payload();
+        assertEquals("restore-version", payload.get("operation"));
+        assertEquals("APPLYING", payload.get("stage"));
+        assertEquals("12", payload.get("completedUnits"));
+        assertEquals("42", payload.get("totalUnits"));
+        assertEquals("chunks", payload.get("unitLabel"));
+        assertEquals("java.lang.IllegalStateException", payload.get("failureClass"));
+        assertFalse(payload.containsKey("detail"));
+        assertFalse(payload.containsKey("failure"));
+
+        String payloadText = payloadText(events.getFirst());
+        assertFalse(payloadText.contains("Castle World"));
+        assertFalse(payloadText.contains("12:-4"));
+        assertFalse(payloadText.contains("abc123"));
+        assertFalse(payloadText.contains("snap-456"));
+        assertFalse(payloadText.contains("C:\\Users"));
+        assertFalse(payloadText.contains("x=12"));
+    }
+
+    @Test
+    void placeholderEndpointDropsEventsWithoutSending() {
+        TelemetrySpoolRepository spool = new TelemetrySpoolRepository(this.tempDir.resolve("telemetry-spool.json"), 10);
+        CountingSender sender = new CountingSender(TelemetrySendResult.success(1));
+        TelemetryService service = TelemetryService.testing(
+                TelemetrySettings.defaults(TelemetryService.DEFAULT_ENDPOINT_URL, () -> "install-a"),
+                spool,
+                new TelemetryEnvironmentProvider.Static(new TelemetryEnvironment("lumi", "mc", "loader", "java", "os", "arch", List.of())),
+                Runnable::run,
+                sender
+        );
+
+        service.recordPerformanceOutlier("restore-version", 100_000L, 10_000L, "APPLYING");
+        service.flushNow();
+
+        assertEquals(0, sender.calls());
+        assertEquals(0, service.pendingEventCount());
+        assertTrue(spool.load().isEmpty());
+    }
+
+    @Test
+    void nonHttpsEndpointDropsEventsWithoutSending() {
+        TelemetrySpoolRepository spool = new TelemetrySpoolRepository(this.tempDir.resolve("telemetry-spool.json"), 10);
+        CountingSender sender = new CountingSender(TelemetrySendResult.success(1));
+        TelemetryService service = TelemetryService.testing(
+                TelemetrySettings.defaults("http://telemetry.lumimod.dev/v1/events/batch", () -> "install-a"),
+                spool,
+                new TelemetryEnvironmentProvider.Static(new TelemetryEnvironment("lumi", "mc", "loader", "java", "os", "arch", List.of())),
+                Runnable::run,
+                sender
+        );
+
+        service.recordPerformanceOutlier("restore-version", 100_000L, 10_000L, "APPLYING");
+        service.flushNow();
+
+        assertEquals(0, sender.calls());
+        assertEquals(0, service.pendingEventCount());
+        assertTrue(spool.load().isEmpty());
     }
 
     private static TelemetryEvent event(String id) {
@@ -73,5 +180,29 @@ class TelemetryServiceTest {
                 "fingerprint-" + id,
                 java.util.Map.of("statusKey", "luma.status.operation_failed")
         );
+    }
+
+    private static String payloadText(TelemetryEvent event) {
+        return String.join("\n", event.payload().values());
+    }
+
+    private static final class CountingSender implements TelemetryBatchSender {
+
+        private final TelemetrySendResult result;
+        private int calls;
+
+        private CountingSender(TelemetrySendResult result) {
+            this.result = result;
+        }
+
+        @Override
+        public TelemetrySendResult send(String endpointUrl, List<TelemetryEvent> events) {
+            this.calls++;
+            return this.result;
+        }
+
+        private int calls() {
+            return this.calls;
+        }
     }
 }
