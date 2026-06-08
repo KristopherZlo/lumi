@@ -963,5 +963,13 @@
   "luma.selection.hud_primary": "LMB - first corner",
   "luma.selection.hud_secondary": "RMB - second corner",
   "luma.selection.hud_clear": "%s + RMB - deselect",
-  "luma.selection.hud_mode": "%s + scroll - selection mode"
+  "luma.selection.hud_mode": "%s + scroll - selection mode",
+  "luma.settings.telemetry_title": "Diagnostic telemetry",
+  "luma.settings.telemetry_help": "Send technical crash, failure, rejection, and severe performance diagnostics to help fix Lumi.",
+  "luma.settings.telemetry_enabled": "Send diagnostic telemetry",
+  "luma.settings.telemetry_enabled_help": "Lumi sends only technical diagnostics, not screen views, clicks, world names, coordinates, seed, raw logs, or raw NBT. You can turn this off at any time.",
+  "luma.settings.telemetry_pending": "Pending telemetry events: %s",
+  "luma.settings.telemetry_last_send": "Last telemetry send: %s",
+  "luma.settings.telemetry_clear_queue": "Clear local telemetry queue",
+  "luma.telemetry.notice": "Lumi sends diagnostic telemetry to help fix crashes and failed operations. You can disable it in settings."
 }

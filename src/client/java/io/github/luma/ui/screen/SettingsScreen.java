@@ -2,7 +2,9 @@ package io.github.luma.ui.screen;
 
 import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
+import io.github.luma.client.telemetry.TelemetrySettingsPanelController;
 import io.github.luma.domain.model.ProjectSettings;
+import io.github.luma.telemetry.TelemetryService;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
@@ -29,6 +31,7 @@ public final class SettingsScreen extends LumaScreen {
     private final SettingsScreenController controller = new SettingsScreenController();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
+    private final TelemetrySettingsPanelController telemetryController = new TelemetrySettingsPanelController();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.settings_ready";
     private boolean loaded = false;
@@ -113,6 +116,7 @@ public final class SettingsScreen extends LumaScreen {
         body.child(this.storageSection());
         body.child(this.performanceSection());
         body.child(this.debugSection());
+        body.child(this.telemetrySection());
         body.child(LumaUi.bottomSpacer());
     }
 
@@ -223,6 +227,26 @@ public final class SettingsScreen extends LumaScreen {
         return section;
     }
 
+    private FlowLayout telemetrySection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.settings.telemetry_title"),
+                Component.translatable("luma.settings.telemetry_help")
+        );
+        section.child(this.fieldWithError(
+                Component.translatable("luma.settings.telemetry_enabled"),
+                Component.translatable("luma.settings.telemetry_enabled_help"),
+                this.toggleControlNoSave(this.telemetryEnabled(), value -> this.telemetryController.setEnabled(value)),
+                ""
+        ));
+        section.child(LumaUi.caption(Component.translatable("luma.settings.telemetry_pending", this.telemetryController.pendingEventCount())));
+        section.child(LumaUi.caption(Component.translatable("luma.settings.telemetry_last_send", this.telemetryController.lastSendSummary())));
+        section.child(LumaUi.button(Component.translatable("luma.settings.telemetry_clear_queue"), button -> {
+            this.telemetryController.clearLocalQueue();
+            this.rebuild();
+        }));
+        return section;
+    }
+
     private FlowLayout fieldWithError(
             Component label,
             Component help,
@@ -247,6 +271,23 @@ public final class SettingsScreen extends LumaScreen {
             this.autoSave();
         });
         return checkbox;
+    }
+
+    private io.wispforest.owo.ui.core.UIComponent toggleControlNoSave(
+            boolean value,
+            java.util.function.Consumer<Boolean> onToggle
+    ) {
+        var checkbox = UIComponents.checkbox(Component.literal(""));
+        checkbox.checked(value);
+        checkbox.onChanged(checked -> {
+            onToggle.accept(checked);
+            this.rebuild();
+        });
+        return checkbox;
+    }
+
+    private boolean telemetryEnabled() {
+        return TelemetryService.getInstance().settings().enabled();
     }
 
     private io.wispforest.owo.ui.component.TextBoxComponent numberInput(
