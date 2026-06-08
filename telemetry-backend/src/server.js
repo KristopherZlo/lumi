@@ -1,5 +1,10 @@
 import http from 'node:http';
-import { DEFAULT_RATE_LIMIT_MAX_REQUESTS, DEFAULT_RATE_LIMIT_WINDOW_MS } from './constants.js';
+import {
+  DEFAULT_RATE_LIMIT_MAX_KEYS,
+  DEFAULT_RATE_LIMIT_MAX_REQUESTS,
+  DEFAULT_RATE_LIMIT_WINDOW_MS,
+  MAX_REQUEST_BYTES,
+} from './constants.js';
 import { RateLimiter } from './rate-limiter.js';
 import { TelemetryIngestService } from './service.js';
 import { PgTelemetryRepository } from './pg-repository.js';
@@ -9,9 +14,10 @@ export function createTelemetryServer({
   rateLimiter = new RateLimiter({
     windowMs: DEFAULT_RATE_LIMIT_WINDOW_MS,
     maxRequests: DEFAULT_RATE_LIMIT_MAX_REQUESTS,
+    maxKeys: DEFAULT_RATE_LIMIT_MAX_KEYS,
   }),
   now = () => new Date(),
-  maxRequestBytes,
+  maxRequestBytes = MAX_REQUEST_BYTES,
 } = {}) {
   const service = new TelemetryIngestService({ repository, rateLimiter, now, maxRequestBytes });
 
@@ -22,18 +28,47 @@ export function createTelemetryServer({
       return;
     }
 
-    const chunks = [];
-    for await (const chunk of req) {
-      chunks.push(Buffer.from(chunk));
+    try {
+      const body = await readRequestBody(req, maxRequestBytes);
+      if (!body.ok) {
+        writeJson(res, body.status, { error: body.error });
+        return;
+      }
+      const result = await service.handleBatch({
+        body: body.value,
+        ip: req.socket.remoteAddress ?? '',
+      });
+      res.writeHead(result.status, { 'content-type': 'application/json' });
+      res.end(result.body);
+    } catch (error) {
+      writeJson(res, 500, { error: 'internal_error' });
     }
-    const body = Buffer.concat(chunks).toString('utf8');
-    const result = await service.handleBatch({
-      body,
-      ip: req.socket.remoteAddress ?? '',
-    });
-    res.writeHead(result.status, { 'content-type': 'application/json' });
-    res.end(result.body);
   });
+}
+
+async function readRequestBody(req, maxRequestBytes) {
+  const contentLength = Number(req.headers['content-length'] ?? '0');
+  if (Number.isFinite(contentLength) && contentLength > maxRequestBytes) {
+    req.resume();
+    return { ok: false, status: 413, error: 'payload_too_large' };
+  }
+
+  const chunks = [];
+  let totalBytes = 0;
+  for await (const chunk of req) {
+    totalBytes += chunk.length;
+    if (totalBytes > maxRequestBytes) {
+      req.destroy();
+      return { ok: false, status: 413, error: 'payload_too_large' };
+    }
+    chunks.push(Buffer.from(chunk));
+  }
+  return { ok: true, value: Buffer.concat(chunks, totalBytes).toString('utf8') };
+}
+
+function writeJson(res, status, body) {
+  res.writeHead(status, { 'content-type': 'application/json' });
+  res.end(JSON.stringify(body));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

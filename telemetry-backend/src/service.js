@@ -20,13 +20,13 @@ export class TelemetryIngestService {
       return this.problem(413, 'payload_too_large');
     }
 
+    if (this.rateLimiter && !this.rateLimiter.allow(`ip:${ip}`)) {
+      return this.problem(429, 'rate_limited');
+    }
+
     const parsed = parseBatch(body ?? '');
     if (!parsed.ok) {
       return this.problem(parsed.status, parsed.error);
-    }
-
-    if (this.rateLimiter && !this.rateLimiter.allow(`ip:${ip}`)) {
-      return this.problem(429, 'rate_limited');
     }
 
     const events = parsed.batch.events.map(event => sanitizeEvent({

@@ -52,6 +52,35 @@ test('rejects invalid schema and oversized payloads', async () => {
   assert.equal(JSON.parse(oversized.body).error, 'payload_too_large');
 });
 
+test('rejects non-object events before storage', async () => {
+  const repository = new FakeRepository();
+  const service = new TelemetryIngestService({ repository, rateLimiter: null, maxRequestBytes: 4096 });
+
+  const result = await service.handleBatch({
+    ip: '127.0.0.1',
+    body: JSON.stringify({ schemaVersion: 1, events: [null] }),
+  });
+
+  assert.equal(result.status, 400);
+  assert.equal(JSON.parse(result.body).error, 'invalid_event');
+  assert.equal(repository.events.length, 0);
+});
+
+test('rate limits malformed request floods before parsing', async () => {
+  const repository = new FakeRepository();
+  const service = new TelemetryIngestService({
+    repository,
+    rateLimiter: new RateLimiter({ windowMs: 1_000, maxRequests: 0, now: () => 0 }),
+    maxRequestBytes: 4096,
+  });
+
+  const result = await service.handleBatch({ ip: '127.0.0.1', body: '{not-json' });
+
+  assert.equal(result.status, 429);
+  assert.equal(JSON.parse(result.body).error, 'rate_limited');
+  assert.equal(repository.events.length, 0);
+});
+
 class FakeRepository {
   constructor() {
     this.events = [];
