@@ -46,10 +46,12 @@ Run the telemetry backend tests:
 
 ```powershell
 cd telemetry-backend
-node --test
+npm test
 ```
 
-The backend package is a small Node service, so install its dependencies with `npm install` before starting `npm start` locally.
+The backend package is a small Node service, so install its dependencies with `npm install` before starting `npm start` locally. `npm start` runs the ingest server, starts telemetry retention immediately, schedules it daily, and stops that scheduler when the server closes. Set `DATABASE_URL` for Postgres-backed local runs.
+
+Telemetry backend tests should cover rate limiting before JSON parsing, streamed request-size rejection before repository access, deterministic validation failures for malformed event/environment/payload objects, bounded rate-limiter key growth, repository-error JSON `500` handling, and retention scheduler start/stop behavior. Java telemetry tests should cover the opt-out default, allowlisted payload construction, omission of exception messages and operation details, and the guard that drops events for placeholder or non-HTTPS endpoints.
 
 Run the unit coverage ratchet:
 

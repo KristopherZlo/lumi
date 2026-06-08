@@ -59,13 +59,14 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 Lumi includes opt-out diagnostic telemetry for technical failure analysis.
 
 - Enabled by default under the Lumi privacy notice and first-run notice
-- Collects crashes, operation failures, rejected Lumi actions, sanitized edge-case errors, and severe performance outliers
-- Does not collect usernames, UUIDs, world names, project names, seed, coordinates, raw logs, raw file paths, or raw NBT
+- Collects crash candidates, operation failures, rejected Lumi actions, overlay disablements, and severe performance outliers as allowlisted technical fields
+- Payloads are limited to stable fields such as event type, action/status keys, operation label/stage/progress/duration, failure class, first Lumi stack frame, overlay name, and performance counters
+- Does not collect usernames, UUIDs, world names, project names, seed, coordinates, exception messages, operation details, raw logs, raw file paths, or raw NBT
 - Can be disabled in Settings at any time
 - Uses a rotating installation id and keeps raw server-side events for 90 days
 - Receives transport IP for rate limiting only; IP is not stored in event rows
 
-The client telemetry queue is local and bounded, and the ingest backend lives in `telemetry-backend/`.
+The client telemetry queue is local and bounded. Blank, placeholder `.example`, and non-HTTPS endpoints are treated as non-sendable, so they do not attempt network sends or accumulate retry events. The ingest backend lives in `telemetry-backend/`; it bounds streamed request bodies, rate-limits before JSON parsing, validates event shapes before storage, and runs retention on startup and daily.
 
 ## Architecture
 

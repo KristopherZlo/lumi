@@ -1,6 +1,5 @@
 import { MAX_REQUEST_BYTES, TELEMETRY_SCHEMA_VERSION } from './constants.js';
 import { parseBatch } from './validation.js';
-import { sanitizeEvent } from './sanitizer.js';
 
 export class TelemetryIngestService {
   constructor({
@@ -29,7 +28,7 @@ export class TelemetryIngestService {
       return this.problem(parsed.status, parsed.error);
     }
 
-    const events = parsed.batch.events.map(event => sanitizeEvent({
+    const events = parsed.batch.events.map(event => ({
       ...event,
       schemaVersion: TELEMETRY_SCHEMA_VERSION,
       receivedAt: this.now().toISOString(),

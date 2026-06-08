@@ -1,5 +1,41 @@
 import { MAX_BATCH_EVENTS, MAX_EVENT_STRING_BYTES, TELEMETRY_SCHEMA_VERSION } from './constants.js';
 
+const EVENT_KEYS = new Set([
+  'id',
+  'schemaVersion',
+  'type',
+  'occurredAt',
+  'installationId',
+  'environment',
+  'fingerprint',
+  'payload',
+]);
+const ENVIRONMENT_KEYS = new Set([
+  'lumiVersion',
+  'minecraftVersion',
+  'fabricLoaderVersion',
+  'javaVersion',
+  'osFamily',
+  'osArch',
+  'mods',
+]);
+const MOD_KEYS = new Set(['id', 'version']);
+const PAYLOAD_KEYS = new Set([
+  'action',
+  'statusKey',
+  'operation',
+  'stage',
+  'completedUnits',
+  'totalUnits',
+  'unitLabel',
+  'durationMs',
+  'failureClass',
+  'failureFrame',
+  'overlay',
+  'elapsedMicros',
+  'budgetMicros',
+]);
+
 export function parseBatch(body) {
   let parsed;
   try {
@@ -27,19 +63,73 @@ function validateEvent(event) {
   if (!plainObject(event)) {
     return invalid('invalid_event');
   }
-  if (event.environment !== undefined && !plainObject(event.environment)) {
-    return invalid('invalid_environment');
+  if (!allowedKeys(event, EVENT_KEYS) || !validEventFieldTypes(event)) {
+    return invalid('invalid_event');
   }
-  if (event.environment?.mods !== undefined && !Array.isArray(event.environment.mods)) {
-    return invalid('invalid_environment');
+
+  const environment = validateEnvironment(event.environment);
+  if (!environment.ok) {
+    return environment;
   }
-  if (event.payload !== undefined && !plainObject(event.payload)) {
-    return invalid('invalid_payload');
+  const payload = validatePayload(event.payload);
+  if (!payload.ok) {
+    return payload;
   }
+
   if (!validJsonShape(event, 0)) {
     return invalid('invalid_event');
   }
   return { ok: true };
+}
+
+function validateEnvironment(environment) {
+  if (environment === undefined) {
+    return { ok: true };
+  }
+  if (!plainObject(environment) || !allowedKeys(environment, ENVIRONMENT_KEYS)) {
+    return invalid('invalid_environment');
+  }
+  for (const [key, value] of Object.entries(environment)) {
+    if (key === 'mods') {
+      if (!Array.isArray(value) || !value.every(validModInfo)) {
+        return invalid('invalid_environment');
+      }
+    } else if (typeof value !== 'string') {
+      return invalid('invalid_environment');
+    }
+  }
+  return { ok: true };
+}
+
+function validatePayload(payload) {
+  if (payload === undefined) {
+    return { ok: true };
+  }
+  if (!plainObject(payload) || !allowedKeys(payload, PAYLOAD_KEYS)) {
+    return invalid('invalid_payload');
+  }
+  if (!Object.values(payload).every(value => typeof value === 'string')) {
+    return invalid('invalid_payload');
+  }
+  return { ok: true };
+}
+
+function validModInfo(mod) {
+  return plainObject(mod)
+    && allowedKeys(mod, MOD_KEYS)
+    && Object.values(mod).every(value => typeof value === 'string');
+}
+
+function validEventFieldTypes(event) {
+  if (event.schemaVersion !== undefined && typeof event.schemaVersion !== 'number') {
+    return false;
+  }
+  for (const key of ['id', 'type', 'occurredAt', 'installationId', 'fingerprint']) {
+    if (event[key] !== undefined && typeof event[key] !== 'string') {
+      return false;
+    }
+  }
+  return true;
 }
 
 function validJsonShape(value, depth) {
@@ -61,6 +151,10 @@ function validJsonShape(value, depth) {
 
 function plainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function allowedKeys(value, allowed) {
+  return Object.keys(value).every(key => allowed.has(key));
 }
 
 function invalid(error) {

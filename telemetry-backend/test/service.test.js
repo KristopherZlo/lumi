@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { TelemetryIngestService } from '../src/service.js';
 import { RateLimiter } from '../src/rate-limiter.js';
 
-test('accepts a valid batch and sanitizes stored events', async () => {
+test('accepts a valid batch and stores allowlisted events', async () => {
   const repository = new FakeRepository();
   const service = new TelemetryIngestService({
     repository,
@@ -24,7 +24,12 @@ test('accepts a valid batch and sanitizes stored events', async () => {
           installationId: 'install-a',
           environment: { lumiVersion: '1', minecraftVersion: '2', fabricLoaderVersion: '3', javaVersion: '4', osFamily: 'windows', osArch: 'x64', mods: [] },
           fingerprint: 'fp-a',
-          payload: { failure: 'C:\\Users\\Alex\\world' },
+          payload: {
+            operation: 'restore-version',
+            stage: 'APPLYING',
+            failureClass: 'java.lang.IllegalStateException',
+            failureFrame: 'io.github.luma.telemetry.TelemetryService#recordOperationFailed',
+          },
         },
       ],
     }),
@@ -32,7 +37,12 @@ test('accepts a valid batch and sanitizes stored events', async () => {
 
   assert.equal(result.status, 202);
   assert.equal(repository.events.length, 1);
-  assert.equal(repository.events[0].payload.failure, '<path>');
+  assert.deepEqual(repository.events[0].payload, {
+    operation: 'restore-version',
+    stage: 'APPLYING',
+    failureClass: 'java.lang.IllegalStateException',
+    failureFrame: 'io.github.luma.telemetry.TelemetryService#recordOperationFailed',
+  });
   assert.equal(repository.lastIp, null);
 });
 
@@ -63,6 +73,33 @@ test('rejects non-object events before storage', async () => {
 
   assert.equal(result.status, 400);
   assert.equal(JSON.parse(result.body).error, 'invalid_event');
+  assert.equal(repository.events.length, 0);
+});
+
+test('rejects payload fields outside the telemetry allowlist before storage', async () => {
+  const repository = new FakeRepository();
+  const service = new TelemetryIngestService({ repository, rateLimiter: null, maxRequestBytes: 4096 });
+
+  const result = await service.handleBatch({
+    ip: '127.0.0.1',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      events: [
+        {
+          id: 'event-a',
+          type: 'operation_failed',
+          occurredAt: '2026-06-08T00:00:00Z',
+          installationId: 'install-a',
+          environment: { lumiVersion: '1', minecraftVersion: '2', fabricLoaderVersion: '3', javaVersion: '4', osFamily: 'windows', osArch: 'x64', mods: [] },
+          fingerprint: 'fp-a',
+          payload: { failure: 'C:\\Users\\Alex\\Castle World' },
+        },
+      ],
+    }),
+  });
+
+  assert.equal(result.status, 400);
+  assert.equal(JSON.parse(result.body).error, 'invalid_payload');
   assert.equal(repository.events.length, 0);
 });
 

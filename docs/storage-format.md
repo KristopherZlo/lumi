@@ -224,12 +224,15 @@ Stores installation-level diagnostic telemetry settings. It is global client con
 - `rotatedAt`
 
 The installation id is random and rotates every 30 days. The default telemetry transport is disabled in test-mode launches, and test mode treats telemetry settings as transient so it does not read or overwrite the normal player config file.
+Blank endpoints, placeholder/example hosts under `.example`, malformed URLs, and non-HTTPS URLs are treated as non-sendable. In that state Lumi clears the local telemetry queue instead of attempting network sends or retaining retry events.
 
 ### `config/lumi-telemetry-spool.json`
 
-Stores a bounded local queue of sanitized telemetry events while the client is offline or a send fails. The queue drops oldest events when it reaches capacity and can be cleared from Settings.
+Stores a bounded local queue of allowlisted telemetry events while the client is offline or a send fails. The queue drops oldest events when it reaches capacity and can be cleared from Settings.
 
-Queued events are technical diagnostics only. They must not contain usernames, UUIDs, world names, project names, seed, coordinates, raw logs, raw file paths, raw NBT, block/entity payloads, screen views, clicks, navigation paths, or normal successful actions.
+Queued events are technical diagnostics only. Event payloads are limited to stable technical fields: event type, action/status keys, operation label, operation stage, completed/total unit counters, unit label, duration, failure class, first Lumi stack frame, overlay name, elapsed time, and budget time. They must not contain usernames, UUIDs, world names, project names, seed, coordinates, exception messages, operation details, raw logs, raw file paths, raw NBT, block/entity payloads, screen views, clicks, navigation paths, or normal successful actions.
+
+The telemetry backend stores event rows in Postgres with the JSON environment, allowlisted payload, fingerprint, installation id, and `received_at` timestamp. It does not store request IP addresses in event rows; IP addresses are used only as in-memory rate-limiter keys. The backend indexes `received_at` for retention deletes and schedules the 90-day retention job once on server start and then daily until server close.
 
 ### `project.json`
 

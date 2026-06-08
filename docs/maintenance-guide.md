@@ -129,11 +129,15 @@ For runtime cost work, prefer the separate `-Dlumi.loadLog=true` load log over b
 
 Diagnostic telemetry is support data, not behavioral analytics. Keep it opt-out, technical-only, and bounded.
 
-- Collect crash candidates, operation failures, rejected Lumi actions, sanitized edge-case errors, and severe performance outliers
-- Never collect usernames, UUIDs, world names, project names, seed, coordinates, raw logs, raw file paths, or raw NBT
+- Collect crash candidates, operation failures, rejected Lumi actions, overlay disablements, and severe performance outliers only as allowlisted technical fields
+- Never collect usernames, UUIDs, world names, project names, seed, coordinates, exception messages, operation details, raw logs, raw file paths, or raw NBT
+- Keep payload construction in `TelemetryEventFactory`; `TelemetryService` should coordinate lifecycle, settings, queueing, and flushes rather than assembling ad hoc event maps
+- Treat blank, placeholder `.example`, malformed, and non-HTTPS endpoints as non-sendable before queueing or sending
 - Keep the local queue bounded and drop oldest events when it fills
 - Disable the default transport in test-mode launches
 - Retain raw server-side events for 90 days and do not persist request IPs in event rows
+- Keep backend request limits streaming-safe, rate-limit before JSON parsing, validate event/environment/payload shapes before repository writes, and keep rate-limiter key growth bounded
+- Run backend retention once on server start and then daily, and stop the scheduler when the server closes
 - Treat telemetry send failures as non-fatal; log them locally and keep gameplay unaffected
 
 ## History tombstones and recovery
