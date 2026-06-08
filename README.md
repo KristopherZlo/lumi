@@ -54,6 +54,19 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 - Client-side textured isometric previews that skip hidden internal faces, plus large-diff overlays prepared away from the render thread.
 - Runtime diagnostics, load logs, block-apply logs, light-refresh logs, smoke tests, and a broad singleplayer regression suite.
 
+## Diagnostic Telemetry
+
+Lumi includes opt-out diagnostic telemetry for technical failure analysis.
+
+- Enabled by default under the Lumi privacy notice and first-run notice
+- Collects crashes, operation failures, rejected Lumi actions, sanitized edge-case errors, and severe performance outliers
+- Does not collect usernames, UUIDs, world names, project names, seed, coordinates, raw logs, raw file paths, or raw NBT
+- Can be disabled in Settings at any time
+- Uses a rotating installation id and keeps raw server-side events for 90 days
+- Receives transport IP for rate limiting only; IP is not stored in event rows
+
+The client telemetry queue is local and bounded, and the ingest backend lives in `telemetry-backend/`.
+
 ## Architecture
 
 Lumi keeps product rules away from Minecraft mutation and storage details.

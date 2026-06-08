@@ -682,8 +682,11 @@ Sections:
 | Storage | `Full-save volume threshold` | Create a full storage copy when changed volume is large enough |
 | Performance | `Idle timeout (seconds)` | Close active tracked edit sessions after this idle time |
 | Debug | `Debug logging` | Write detailed runtime logs for this workspace |
+| Diagnostic telemetry | `Send diagnostic telemetry` | Send technical crash, failure, rejection, and severe performance diagnostics |
 
 Numeric settings must be greater than zero. Invalid values show inline validation and are not saved.
+
+Diagnostic telemetry is enabled by default under the Lumi privacy notice and can be disabled here at any time. It does not collect usernames, UUIDs, world names, project names, seed, coordinates, raw logs, raw file paths, raw NBT, screen views, clicks, navigation paths, or normal successful actions. Raw server-side diagnostic events are retained for 90 days; the server receives IP at the transport layer for rate limiting but does not store IP in event rows.
 
 Project archive controls are not part of Settings. Use `Import / Export`.
 

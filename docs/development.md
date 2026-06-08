@@ -32,6 +32,7 @@ Run the dedicated test client profile:
 ```
 
 The test client starts with `-Dlumi.debug=true`, `-Dlumi.startupProfile=true`, and `-Dlumi.loadLog=true` so runtime behavior, startup timings, and load spans are available immediately.
+The test profile also keeps diagnostic telemetry local-only by disabling the default ingest transport while the `lumi.testing.enabled` flag is active.
 
 See [test-client.md](test-client.md) for details.
 
@@ -40,6 +41,15 @@ Run the automated test suite:
 ```powershell
 .\gradlew.bat test
 ```
+
+Run the telemetry backend tests:
+
+```powershell
+cd telemetry-backend
+node --test
+```
+
+The backend package is a small Node service, so install its dependencies with `npm install` before starting `npm start` locally.
 
 Run the unit coverage ratchet:
 

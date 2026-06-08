@@ -60,6 +60,13 @@ Client-only onboarding state is stored at:
 <game>/config/lumi-client.json
 ```
 
+Client diagnostic telemetry settings and the bounded local queue are stored at:
+
+```text
+<game>/config/lumi-telemetry.json
+<game>/config/lumi-telemetry-spool.json
+```
+
 Example:
 
 ```text
@@ -204,6 +211,25 @@ Stores installation-level client UI state that is not part of any project and is
 - `dismissedContextualHintIds`
 
 Schema v2 adds the dismissed contextual hint id set. v1 files are normalized to v2 with the completed onboarding version preserved and no dismissed hints. Missing or malformed files are treated as incomplete onboarding and do not block project loading.
+
+### `config/lumi-telemetry.json`
+
+Stores installation-level diagnostic telemetry settings. It is global client configuration, not project history, and is not exported with history packages.
+
+- `schemaVersion`
+- `enabled`
+- `noticeSeenVersion`
+- `endpointUrl`
+- `installationId`
+- `rotatedAt`
+
+The installation id is random and rotates every 30 days. The default telemetry transport is disabled in test-mode launches, and test mode treats telemetry settings as transient so it does not read or overwrite the normal player config file.
+
+### `config/lumi-telemetry-spool.json`
+
+Stores a bounded local queue of sanitized telemetry events while the client is offline or a send fails. The queue drops oldest events when it reaches capacity and can be cleared from Settings.
+
+Queued events are technical diagnostics only. They must not contain usernames, UUIDs, world names, project names, seed, coordinates, raw logs, raw file paths, raw NBT, block/entity payloads, screen views, clicks, navigation paths, or normal successful actions.
 
 ### `project.json`
 

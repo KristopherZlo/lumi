@@ -125,6 +125,17 @@ Avoid noisy per-block logs. Favor stage, count, and context-rich summaries.
 
 For runtime cost work, prefer the separate `-Dlumi.loadLog=true` load log over broad debug tracing. It keeps load diagnostics in `logs/lumi-load.log` with top cumulative spans and completed apply metrics, while normal debug logs remain focused on behavior and failure diagnosis.
 
+## Diagnostic telemetry
+
+Diagnostic telemetry is support data, not behavioral analytics. Keep it opt-out, technical-only, and bounded.
+
+- Collect crash candidates, operation failures, rejected Lumi actions, sanitized edge-case errors, and severe performance outliers
+- Never collect usernames, UUIDs, world names, project names, seed, coordinates, raw logs, raw file paths, or raw NBT
+- Keep the local queue bounded and drop oldest events when it fills
+- Disable the default transport in test-mode launches
+- Retain raw server-side events for 90 days and do not persist request IPs in event rows
+- Treat telemetry send failures as non-fatal; log them locally and keep gameplay unaffected
+
 ## History tombstones and recovery
 
 Soft deletion is visibility metadata, not physical cleanup. `history-tombstones.json` hides selected version and branch ids from normal UI and lineage, while version manifests, patches, snapshots, previews, and baseline chunks stay in place. Maintenance tooling must not treat tombstoned payloads as orphaned solely because they are hidden.
