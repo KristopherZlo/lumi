@@ -27,17 +27,20 @@ replay_pid*
 Thumbs.db
 Desktop.ini
 
-# Local notes and AI instruction files
+# Markdown policy: keep only public docs tracked.
 *.md
 **/*.md
 !README.md
+!modrinth.md
+!docs/
 !docs/*.md
 !docs/**/*.md
-modrinth.md
 
+# Local notes and AI instruction files
 AGENTS.md
-docs/commit-policy.md
-docs/maintenance-guide.md
+modules.md
+idea.md
+lumi-player-training-uiux.md
 CLAUDE.md
 GEMINI.md
 COPILOT.md
