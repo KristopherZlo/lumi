@@ -270,11 +270,23 @@ class ArchitectureGuardrailsTest {
     @Test
     void productionBootstrapDoesNotReferenceRuntimeTestRunnerDirectly() throws IOException {
         Path bootstrap = MAIN_SOURCES.resolve("io/github/luma/LumaMod.java");
+        Path runtimeHarnessPackage = MAIN_SOURCES.resolve("io/github/luma/minecraft/testing");
         String source = Files.readString(bootstrap);
+        List<Path> runtimeHarnessSources = javaFiles(runtimeHarnessPackage).stream()
+                .filter(path -> !normalize(path).endsWith(
+                        "src/main/java/io/github/luma/minecraft/testing/RuntimeTestingConfig.java"
+                ))
+                .toList();
 
         assertTrue(
-                !source.contains("SingleplayerTestingService"),
-                "LumaMod must use RuntimeTestingHooks instead of ticking the runtime test runner directly"
+                !source.contains("SingleplayerTestingService") && !source.contains("RuntimeTestingHooks"),
+                "LumaMod must not carry runtime testing hooks into the gameplay bootstrap"
+        );
+        assertTrue(
+                runtimeHarnessSources.isEmpty(),
+                "Runtime regression harness belongs in GameTest/support source sets, not main gameplay sources; "
+                        + "only the production testing flag gate may remain in main: "
+                        + runtimeHarnessSources
         );
     }
 

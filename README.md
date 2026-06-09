@@ -269,28 +269,19 @@ Run the alpha release gate wrapper:
 
 The wrapper runs the unit coverage ratchet, server/client GameTests, focused structure/external-tool/crash-safety runtime modes, runtime load comparison, and crash harness. For local iteration, `-SkipRuntimeLoad` and `-SkipCrashHarness` can shorten the run.
 
-## Runtime Testing
+## Runtime Regression Profiles
 
-Runtime testing commands are hidden in normal builds and launches. Start the
-game with `-Dlumi.testing.enabled=true` or `LUMI_TESTING_ENABLED=true` to expose
-them in a singleplayer world with cheats enabled. The Gradle test-client and
-client GameTest profiles set this flag automatically.
+Lumi's runtime regression coverage runs through Gradle profiles and GameTests, not through `/lumi` commands. The default test-client profile enables `-Dlumi.testing.enabled=true` so the runtime environment stays in test mode, and the client GameTest runner drives the singleplayer smoke suite directly.
 
-```mcfunction
-/lumi testing smoke
-/lumi testing singleplayer
-/lumi testing player-flow
-/lumi testing crash-safety
-/lumi testing external-tools
-```
+Use these entry points for runtime coverage:
 
-`/lumi testing smoke` runs the shorter project smoke path. It validates bootstrap storage, pre-open checkpoint metadata, snapshot content refs, section-indexed patch reads, capture, save/amend, branch/export, partial restore, full restore, integrity, and cleanup.
+- `.\scripts\run-test-client.ps1`
+- `.\gradlew.bat runClientGameTest`
+- `.\gradlew.bat runHistoryJourneyClientGameTest`
 
-`/lumi testing singleplayer` runs the broad runtime suite. It covers real save/restore/undo/redo paths, branch/share/archive flows, partial restore, entity history, fuse-time and redstone-powered TNT undo, water/TNT/redstone/piston fixtures, preview fulfillment, integrity, cleanup, and prepared-apply diagnostics.
+`runClientGameTest` runs the shorter singleplayer smoke path by default. It validates bootstrap storage, pre-open checkpoint metadata, snapshot content refs, section-indexed patch reads, capture, save/amend, branch/export, partial restore, full restore, integrity, and cleanup.
 
-`/lumi testing player-flow` runs the broad suite from ordinary terrain: it prepares a smooth-stone platform near the player, creates the test project over that prepared area, and verifies restore returns to that platform baseline. It fails on flat chunk generators.
-
-`/lumi testing crash-safety` runs the restart-focused smoke path used by the crash harness, and `/lumi testing external-tools` adds focused WorldEdit/Axiom-source capture checks.
+`LUMI_SINGLEPLAYER_TEST_MODE` selects focused modes such as `full`, `player-flow`, `structure-fixtures`, `crash-safety`, `external-tools`, and `backup-stress` for the client GameTest profile.
 
 Coverage is ratcheted with JaCoCo through:
 
@@ -348,7 +339,7 @@ Current scope:
 
 - singleplayer and integrated-server first
 - dedicated-server mutation actions behind access control
-- menu-first product flow, with commands limited to diagnostics/help plus opt-in runtime testing
+- menu-first product flow, with commands limited to diagnostics/help and runtime testing kept in GameTest profiles
 - project, version, branch, compare, restore, partial restore, recovery, cleanup, import/export, and merge workflows
 - optional capture support for supported external builder tools
 

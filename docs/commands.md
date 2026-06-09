@@ -1,13 +1,10 @@
 # Commands
 
-Commands are diagnostics and local testing tools. Lumi project creation, save, restore, branches, recovery, share, merge, import/export, cleanup, settings, and compare workflows remain UI-first for normal use.
+Commands are diagnostic tools. Lumi project creation, save, restore, branches, recovery, share, merge, import/export, cleanup, settings, and compare workflows remain UI-first for normal use.
 
 All `/lumi` commands require an operator-level player permission set. In singleplayer, that means cheats must be enabled for the world.
 
-Runtime testing commands are opt-in. By default `/lumi testing ...` is not registered
-and the runtime test runner does not tick in ordinary gameplay. Start with
-`-Dlumi.testing.enabled=true` or `LUMI_TESTING_ENABLED=true` to expose these
-commands; Gradle test-client and client GameTest runs enable the flag automatically.
+Runtime regression coverage does not live under `/lumi` commands. Use the Gradle test-client and GameTest profiles for the integrated singleplayer harness.
 
 The onboarding replay command is client-side and is intentionally separate from `/lumi`, so it does not conflict with the server diagnostic command tree.
 
@@ -41,42 +38,9 @@ Shows:
 - the number of Lumi projects in the current world and their active branch ids
 - the active or most recent Lumi world operation, including operation id, label, stage, progress, and detail text when available
 
-## Singleplayer Testing
+## Runtime Regression Profiles
 
-Requires `lumi.testing.enabled`.
-
-```mcfunction
-/lumi testing singleplayer
-/lumi testing smoke
-/lumi testing player-flow
-/lumi testing structures
-/lumi testing crash-safety
-/lumi testing external-tools
-```
-
-Runs an integrated-server regression suite against the real in-world Lumi services. The command is singleplayer-only and refuses to start while another Lumi world operation is active. Most modes reserve a small empty air volume above the player's current chunk; `player-flow` instead starts near normal terrain, prepares a build platform, and snapshots that prepared platform as the initial project state.
-
-`/lumi testing smoke` runs the shorter project smoke path. It creates a temporary bounded project, verifies world bootstrap storage, the pre-open checkpoint manifest and opt-in backup budget, snapshot section content refs, section-indexed patch reads, capture, pending diff, undo/redo, save, amend, branching, export, partial restore, full restore, integrity, and cleanup. It stops before gameplay, large-history, bulk-apply, and structure-fixture diagnostics.
-
-`/lumi testing player-flow` is the player-journey mode for ordinary non-flat worlds. It finds the terrain surface near the player, clears a `16x12x16` work volume, lays a smooth-stone platform, teleports the player onto it, creates a temporary project over that prepared area, then runs the full `singleplayer` workflow from capture through commits, branch work, partial/full restore, gameplay, entities, TNT, performance, large-history, and bulk-apply diagnostics. It fails the run if the world uses a flat chunk generator.
-
-`/lumi testing structures` runs only the structure fixture diagnostics. It creates the same temporary bounded project, then skips the broader save, restore, gameplay, bulk apply, and performance phases. Generated redstone fixtures cover dust line, torch inverter, repeater lock, comparator mode, observer pulse, dispenser trigger, and observer/sticky-piston rollback smoke checks as strict rollback checks, while saved `.nbt` fixtures verify player interaction and undo/redo operation flow and log dynamic redstone/entity snapshot drift instead of treating vanilla post-operation ticking as a failure. This keeps the default client GameTest focused on UI, overlay, storage, gameplay, large-history, and bulk-apply coverage while the alpha release wrapper still runs the fixture diagnostics as a separate focused mode.
-
-`/lumi testing crash-safety` runs the restart-focused project smoke path used by the crash harness. It covers project creation, capture, undo/redo, save, amend, branch save, partial restore, full restore, recovery-draft cleanup, and integrity checks without continuing into the long gameplay and bulk diagnostics.
-
-The client-only backup stress path is launched with `LUMI_SINGLEPLAYER_TEST_MODE=backup-stress` and `runClientGameTest`, not from an in-world command, because it must close, reopen, and offline-restore the singleplayer save. It writes 100k blocks across 400 chunks twice, measures each world exit, times the pre-open backup gate, creates a Lumi world workspace, commits the second 100k-block change set to history, restores the raw backup, and verifies the restored world state.
-
-`/lumi testing external-tools` runs the normal project smoke path and then records focused WorldEdit- and Axiom-sourced edits through the external capture context before saving and inspecting that patch. Large persisted and bulk-apply stress still live in the full `singleplayer` suite.
-
-The suite shows phase progress in chat, records every check as pass/fail, and keeps running after failed checks when the next workflow can still be exercised. Hard workflow errors are logged, then the runner skips to the next safe phase or cleanup.
-
-The suite creates a temporary bounded project, then exercises project creation, initial snapshots, capture, recovery draft summaries, current diff, material delta, live undo/redo, save, amend, branch creation/switching, branch save, version compare, project export, branch export, partial restore, full restore, integrity inspection, and cleanup inspection. Its gameplay pass includes a closed redstone loop, non-player entity position/state capture, quick rollback of a saved entity update, and full restore after a saved entity update. It also checks a lightweight performance budget so undo/redo and restore operations remain scoped instead of replaying broad world data, and so the suite does not introduce large synchronous tick slices.
-
-After the normal workflow budget checks, the command runs a large storage-backed history diagnostic. It captures about 262k placed blocks into a real main-branch save, captures a divergent 65k-block branch save, restores the main save, restores the branch head, and verifies both the restored blocks and the active branch metadata. This covers large persisted save files, branch divergence, and restore behavior through the same storage and world-operation services used by the UI.
-
-The command then runs bulk apply diagnostics. These prepare and apply three large block batches: a dense rewrite-friendly `64x64x64` case, a same-sized block-entity fallback case, and a sparse direct-section case with about 250k changed cells spread across high-altitude chunks. The diagnostics preflight target cells for air before writing; a scenario is skipped instead of overwriting existing player blocks when any target cell is occupied. The test log records save/restore/fill/delete durations, work units, and fast-apply counters such as rewrite/native/direct/fallback sections, packets, light checks, apply ticks, work-per-tick counters, light-drain ticks/duration, and fallback reasons. It also logs per-gameplay-scenario timings so the performance budget can identify the slow interaction. It removes test blocks and archives the temporary project when the run finishes or fails.
-
-The `structures` mode discovers every saved `.nbt` fixture bundled under `data/lumi/structure/testing`, plus generated redstone control fixtures. Each saved fixture must mark the intended interaction control with a button or lever placed on `blue_concrete`; other buttons and levers inside the mechanism are ignored. For each marked control, the runner reloads the fixture from a clean baseline and repeats the same exact snapshot cycle after waiting `1`, `10`, `20`, and `40` ticks from the control press. Each cycle records the loaded fixture snapshot, presses the control through normal server-side player interaction, records the changed snapshot after that delay, queues the same Lumi undo operation used by Alt+Z, and verifies the whole reserved volume returned to the loaded snapshot as soon as undo completes. It then queues the same Lumi redo operation used by Alt+Y and immediately verifies the volume returned to the changed snapshot. Comparisons include block states, block entity NBT such as inventory item counts, and non-player entity snapshots. Generated fixtures exercise dust line, torch inverter, repeater lock, comparator mode, observer pulse, dispenser trigger, and observer/sticky-piston rollback cases. The generated piston fixtures additionally assert that rollback leaves sticky pistons retracted, returns moved observers, clears pushed observer cells, avoids duplicate observers, and leaves no stray `piston_head` or `moving_piston` blocks. Generated observer fixtures treat only `observer.powered` as transient where the pulse can settle on a different tick phase after rollback; block identity, facing, position, count, and surrounding mechanism structure remain strict checks.
+The client GameTest and test-client profiles run the integrated singleplayer harness directly. They are not exposed as in-world `/lumi` commands.
 
 Each run writes a detailed log to:
 
@@ -96,5 +60,6 @@ The following workflows intentionally no longer have `/lumi` commands:
 - archive import/export
 - cleanup apply
 - share/merge
+- runtime regression suites
 
 Keeping these workflows in the UI preserves confirmation screens, previews, operation progress, conflict review, and cancellation boundaries.

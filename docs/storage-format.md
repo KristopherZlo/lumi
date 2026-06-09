@@ -156,7 +156,7 @@ The vanilla Edit World restore action uses the completed manifest and the stored
 
 ### `test-logs/singleplayer-<timestamp>.log`
 
-Stores the detailed report for `/lumi testing singleplayer`.
+Stores detailed reports for the GameTest runtime regression suite.
 
 Each log includes:
 

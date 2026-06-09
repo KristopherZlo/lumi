@@ -1,7 +1,6 @@
 package io.github.luma.minecraft.testing;
 
 import io.github.luma.minecraft.world.WorldOperationManager;
-import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -27,61 +26,27 @@ public final class SingleplayerTestingService {
         return INSTANCE;
     }
 
-    public synchronized int start(CommandSourceStack source) throws Exception {
-        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException());
-    }
-
-    public synchronized int start(MinecraftServer server, ServerLevel level, ServerPlayer player) throws Exception {
+    public synchronized int start(MinecraftServer server, ServerLevel level, ServerPlayer player) {
         return this.start(server, level, player, SingleplayerTestMode.FULL);
     }
 
-    public synchronized int startSmoke(CommandSourceStack source) throws Exception {
-        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
-                SingleplayerTestMode.SMOKE);
-    }
-
-    public synchronized int startSmoke(MinecraftServer server, ServerLevel level, ServerPlayer player)
-            throws Exception {
+    public synchronized int startSmoke(MinecraftServer server, ServerLevel level, ServerPlayer player) {
         return this.start(server, level, player, SingleplayerTestMode.SMOKE);
     }
 
-    public synchronized int startPlayerFlow(CommandSourceStack source) throws Exception {
-        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
-                SingleplayerTestMode.PLAYER_FLOW);
-    }
-
-    public synchronized int startPlayerFlow(MinecraftServer server, ServerLevel level, ServerPlayer player)
-            throws Exception {
+    public synchronized int startPlayerFlow(MinecraftServer server, ServerLevel level, ServerPlayer player) {
         return this.start(server, level, player, SingleplayerTestMode.PLAYER_FLOW);
     }
 
-    public synchronized int startStructureFixtures(CommandSourceStack source) throws Exception {
-        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
-                SingleplayerTestMode.STRUCTURE_FIXTURES);
-    }
-
-    public synchronized int startStructureFixtures(MinecraftServer server, ServerLevel level, ServerPlayer player)
-            throws Exception {
+    public synchronized int startStructureFixtures(MinecraftServer server, ServerLevel level, ServerPlayer player) {
         return this.start(server, level, player, SingleplayerTestMode.STRUCTURE_FIXTURES);
     }
 
-    public synchronized int startCrashSafety(CommandSourceStack source) throws Exception {
-        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
-                SingleplayerTestMode.CRASH_SAFETY);
-    }
-
-    public synchronized int startCrashSafety(MinecraftServer server, ServerLevel level, ServerPlayer player)
-            throws Exception {
+    public synchronized int startCrashSafety(MinecraftServer server, ServerLevel level, ServerPlayer player) {
         return this.start(server, level, player, SingleplayerTestMode.CRASH_SAFETY);
     }
 
-    public synchronized int startExternalTools(CommandSourceStack source) throws Exception {
-        return this.start(source.getServer(), source.getLevel(), source.getPlayerOrException(),
-                SingleplayerTestMode.EXTERNAL_TOOLS);
-    }
-
-    public synchronized int startExternalTools(MinecraftServer server, ServerLevel level, ServerPlayer player)
-            throws Exception {
+    public synchronized int startExternalTools(MinecraftServer server, ServerLevel level, ServerPlayer player) {
         return this.start(server, level, player, SingleplayerTestMode.EXTERNAL_TOOLS);
     }
 
@@ -90,9 +55,9 @@ public final class SingleplayerTestingService {
             ServerLevel level,
             ServerPlayer player,
             SingleplayerTestMode mode
-    ) throws Exception {
+    ) {
         if (server.isDedicatedServer()) {
-            throw new IllegalStateException("/lumi testing singleplayer can only run in an integrated singleplayer world");
+            throw new IllegalStateException("The Lumi runtime regression suite can only run in an integrated singleplayer world");
         }
         if (this.activeRun != null) {
             throw new IllegalStateException("A Lumi singleplayer test run is already active");

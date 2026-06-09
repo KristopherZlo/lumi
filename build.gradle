@@ -33,6 +33,7 @@ repositories {
 sourceSets.create('baselineGametest')
 sourceSets.create('idleGametest')
 sourceSets.create('baselineIdleGametest')
+sourceSets.create('runtimeGametestSupport')
 sourceSets.create('historyJourneyGametest')
 
 def lumiStartupProfileEnabled = providers.gradleProperty('lumi.startupProfile')
@@ -140,6 +141,18 @@ tasks.named('runGameTest').configure {
 }
 
 sourceSets {
+    runtimeGametestSupport {
+        compileClasspath += sourceSets.main.output
+        compileClasspath += sourceSets.main.compileClasspath
+        runtimeClasspath += output
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+
+    gametest {
+        compileClasspath += sourceSets.runtimeGametestSupport.output
+        runtimeClasspath += sourceSets.runtimeGametestSupport.output
+    }
+
     baselineGametest {
         compileClasspath += sourceSets.main.compileClasspath
         compileClasspath += sourceSets.client.compileClasspath
@@ -167,17 +180,21 @@ sourceSets {
     }
 
     historyJourneyGametest {
+        compileClasspath += sourceSets.runtimeGametestSupport.output
         compileClasspath += sourceSets.main.output
         compileClasspath += sourceSets.client.output
         compileClasspath += sourceSets.main.compileClasspath
         compileClasspath += sourceSets.client.compileClasspath
         runtimeClasspath += output
+        runtimeClasspath += sourceSets.runtimeGametestSupport.output
         runtimeClasspath += sourceSets.main.runtimeClasspath
         runtimeClasspath += sourceSets.client.runtimeClasspath
     }
 
     test {
+        compileClasspath += sourceSets.runtimeGametestSupport.output
         compileClasspath += sourceSets.client.output
+        runtimeClasspath += sourceSets.runtimeGametestSupport.output
         runtimeClasspath += sourceSets.client.output
     }
 }

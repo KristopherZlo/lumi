@@ -819,52 +819,13 @@ Shows:
 - active or most recent Lumi world operation;
 - operation id, label, stage, progress, and detail text when available.
 
-### Singleplayer Runtime Tests
+### Runtime Regression Suites
 
-Runtime testing commands are hidden unless the game is started with
-`-Dlumi.testing.enabled=true` or `LUMI_TESTING_ENABLED=true`.
+Runtime regression coverage is not exposed as player commands. Use the dedicated development profiles from [Test Client Profile](test-client.md); ordinary gameplay only exposes diagnostics/help commands.
 
-```mcfunction
-/lumi testing singleplayer
-/lumi testing smoke
-/lumi testing structures
-```
+`runClientGameTest` drives the singleplayer runtime harness from the GameTest source set. The default smoke mode exercises project creation, bootstrap storage, snapshots, capture, pending diff, undo/redo, save/amend, branch/export, partial restore, full restore, integrity, cleanup, and a final smoke screenshot through real services.
 
-These commands are for validation, not normal play.
-
-They are singleplayer-only, require operator-level permission, refuse to start while another Lumi world operation is active, and need a small empty air volume above the player's current chunk.
-
-`/lumi testing singleplayer` exercises real in-world Lumi services:
-
-- project creation;
-- world bootstrap storage;
-- initial snapshots;
-- snapshot section content refs;
-- capture;
-- recovery draft summaries;
-- current diff;
-- material delta;
-- live undo/redo;
-- save and amend;
-- branch creation/switching;
-- branch save;
-- version compare;
-- project and branch export;
-- partial restore;
-- full restore;
-- integrity inspection;
-- cleanup inspection;
-- gameplay scenarios;
-- performance budgets;
-- large persisted history diagnostics;
-- bulk apply diagnostics;
-- structure-fixture diagnostics.
-
-`/lumi testing smoke` runs the shorter project smoke path. It covers world bootstrap, the pre-open checkpoint manifest and opt-in backup budget, snapshot content refs, section-indexed patch reads, capture, pending diff, undo/redo, save/amend, branch save/export, partial restore, full restore, integrity, cleanup, and then stops before gameplay, large-history, bulk-apply, and structure-fixture diagnostics.
-
-`/lumi testing structures` runs only the structure fixture diagnostics and skips the broader save/restore/gameplay/bulk phases. Generated redstone fixtures cover dust line, torch inverter, repeater lock, comparator mode, observer pulse, dispenser trigger, and observer/sticky-piston rollback smoke checks as strict rollback checks; saved `.nbt` fixtures verify interaction and undo/redo operation flow while logging dynamic redstone/entity snapshot drift as diagnostics.
-
-`LUMI_SINGLEPLAYER_TEST_MODE=backup-stress` with `runClientGameTest` runs the client-only pre-open backup stress path. It creates a save, removes Lumi's fresh-world marker, writes 100k blocks across 400 chunks, measures world exit, opens through the real backup gate with a 1024 MiB backup budget, creates a Lumi world workspace, writes another 100k-block builder action, commits that change set to Lumi history, measures exit again, restores the raw pre-Lumi backup offline, reopens, and verifies all 100k positions.
+Set `LUMI_SINGLEPLAYER_TEST_MODE=full`, `player-flow`, `structure-fixtures`, `external-tools`, `crash-safety`, or `backup-stress` before `runClientGameTest` for broader or focused coverage. `full` adds gameplay, performance, large-history, bulk apply, TNT/fluid/entity, and structure-fixture diagnostics. `structure-fixtures` runs the saved/generated redstone fixture checks only. `backup-stress` runs the client-only pre-open backup stress path.
 
 Test logs are written under:
 
