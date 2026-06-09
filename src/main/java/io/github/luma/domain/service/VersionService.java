@@ -546,10 +546,55 @@ public final class VersionService {
                 List.of(patchMetadata.id()),
                 versionKind,
                 author,
-                this.resolveMessage(message, versionKind),
+                message != null && !message.isBlank()
+                        ? message
+                        : switch (versionKind) {
+                            case WORLD_ROOT -> "World root";
+                            case RECOVERY -> "Recovered draft";
+                            case RESTORE -> "Restore safety checkpoint";
+                            case PARTIAL_RESTORE -> "Partial restore";
+                            case MERGE -> "Merged branches";
+                            case AUTO_CHECKPOINT -> "Auto checkpoint";
+                            case INITIAL, MANUAL -> "Saved version";
+                        },
                 stats,
                 PreviewInfo.none(),
-                this.resolveSourceInfo(versionKind),
+                switch (versionKind) {
+                    case WORLD_ROOT -> ExternalSourceInfo.manual();
+                    case RECOVERY -> ExternalSourceInfo.recovery();
+                    case RESTORE -> ExternalSourceInfo.restore();
+                    case PARTIAL_RESTORE -> ExternalSourceInfo.external(
+                            "SYSTEM",
+                            "partial-restore",
+                            "Partial Restore",
+                            "",
+                            null,
+                            false,
+                            false,
+                            Map.of()
+                    );
+                    case MERGE -> ExternalSourceInfo.external(
+                            "SYSTEM",
+                            "merge",
+                            "Branch Merge",
+                            "",
+                            null,
+                            false,
+                            false,
+                            Map.of()
+                    );
+                    case AUTO_CHECKPOINT -> ExternalSourceInfo.external(
+                            "SYSTEM",
+                            "auto-checkpoint",
+                            "Auto Checkpoint",
+                            "",
+                            null,
+                            false,
+                            false,
+                            Map.of()
+                    );
+                    case INITIAL, MANUAL -> ExternalSourceInfo.manual();
+                },
                 now
         );
 
@@ -593,30 +638,6 @@ public final class VersionService {
         return version;
     }
 
-    void publishStagedVersion(
-            ServerLevel level,
-            ProjectLayout layout,
-            BuildProject project,
-            ProjectVersion version,
-            RecoveryDraft draftForPreview,
-            boolean schedulePreview
-    ) throws IOException {
-        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
-        ProjectVariant activeVariant = variants.stream()
-                .filter(variant -> variant.id().equals(version.variantId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Variant is missing for staged version " + version.variantId()));
-        this.publishVersionMetadata(layout, project, variants, activeVariant, version, Instant.now());
-        if (level != null) {
-            HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
-        }
-        if (schedulePreview && project.settings().previewGenerationEnabled() && level != null) {
-            List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-            Bounds3i bounds = this.previewBoundsResolver.resolve(layout, project, versions, version, draftForPreview, level);
-            this.previewCaptureRequestService.queue(layout, version.id(), project.dimensionId(), bounds);
-        }
-    }
-
     private void publishVersionMetadata(
             ProjectLayout layout,
             BuildProject project,
@@ -626,19 +647,33 @@ public final class VersionService {
             Instant now
     ) throws IOException {
         LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
-        this.variantRepository.save(layout, this.replaceVariant(variants, new ProjectVariant(
-                activeVariant.id(),
-                activeVariant.name(),
-                activeVariant.baseVersionId(),
-                version.id(),
-                activeVariant.main(),
-                activeVariant.createdAt()
-        )));
+        List<ProjectVariant> updatedVariants = new ArrayList<>();
+        for (ProjectVariant variant : variants) {
+            updatedVariants.add(variant.id().equals(activeVariant.id())
+                    ? new ProjectVariant(
+                            activeVariant.id(),
+                            activeVariant.name(),
+                            activeVariant.baseVersionId(),
+                            version.id(),
+                            activeVariant.main(),
+                            activeVariant.createdAt()
+                    )
+                    : variant);
+        }
+        this.variantRepository.save(layout, updatedVariants);
         this.projectRepository.save(layout, project.withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION).withUpdatedAt(now));
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,
                 "version-saved",
-                this.resolveJournalMessage(version.versionKind()),
+                switch (version.versionKind()) {
+                    case WORLD_ROOT -> "Created workspace root version";
+                    case RECOVERY -> "Saved recovery draft as a new version";
+                    case RESTORE -> "Saved restore checkpoint version";
+                    case PARTIAL_RESTORE -> "Saved partial restore as a new version";
+                    case MERGE -> "Saved branch merge as a new version";
+                    case AUTO_CHECKPOINT -> "Saved automatic checkpoint before a large edit";
+                    case INITIAL, MANUAL -> "Saved version from tracked changes";
+                },
                 version.id(),
                 activeVariant.id()
         ));
@@ -703,7 +738,22 @@ public final class VersionService {
                     timing
             );
             long sectionStartedAt = System.nanoTime();
-            this.rebaseConsumedWorkingDraft(level, project, rebaseFromVersionId, version.id());
+            try {
+                HistoryCaptureManager.getInstance().rebaseWorkingDraftBase(
+                        level.getServer(),
+                        project.id().toString(),
+                        rebaseFromVersionId,
+                        version.id()
+                );
+            } catch (IOException exception) {
+                LumaMod.LOGGER.warn(
+                        "Saved version {} for project {}, but failed to rebase the active working draft from {}",
+                        version.id(),
+                        project.name(),
+                        rebaseFromVersionId,
+                        exception
+                );
+            }
             recordTiming(timing, VersionSaveTiming.REBASE_WORKING_DRAFT, sectionStartedAt);
             sectionStartedAt = System.nanoTime();
             this.recoveryRepository.deleteOperationDraft(layout);
@@ -711,30 +761,6 @@ public final class VersionService {
             return version;
         } finally {
             recordTiming(timing, VersionSaveTiming.BACKGROUND_TOTAL, backgroundStartedAt);
-        }
-    }
-
-    private void rebaseConsumedWorkingDraft(
-            ServerLevel level,
-            BuildProject project,
-            String previousHeadVersionId,
-            String newHeadVersionId
-    ) {
-        try {
-            HistoryCaptureManager.getInstance().rebaseWorkingDraftBase(
-                    level.getServer(),
-                    project.id().toString(),
-                    previousHeadVersionId,
-                    newHeadVersionId
-            );
-        } catch (IOException exception) {
-            LumaMod.LOGGER.warn(
-                    "Saved version {} for project {}, but failed to rebase the active working draft from {}",
-                    newHeadVersionId,
-                    project.name(),
-                    previousHeadVersionId,
-                    exception
-            );
         }
     }
 
@@ -807,81 +833,6 @@ public final class VersionService {
 
     int versionsSinceSnapshot(List<ProjectVersion> versions, String headVersionId) {
         return this.snapshotPlanner.versionsSinceSnapshot(versions, headVersionId);
-    }
-
-    private List<ProjectVariant> replaceVariant(List<ProjectVariant> variants, ProjectVariant updatedVariant) {
-        List<ProjectVariant> result = new ArrayList<>();
-        for (ProjectVariant variant : variants) {
-            result.add(variant.id().equals(updatedVariant.id()) ? updatedVariant : variant);
-        }
-        return result;
-    }
-
-    private String resolveMessage(String message, VersionKind versionKind) {
-        if (message != null && !message.isBlank()) {
-            return message;
-        }
-
-        return switch (versionKind) {
-            case WORLD_ROOT -> "World root";
-            case RECOVERY -> "Recovered draft";
-            case RESTORE -> "Restore safety checkpoint";
-            case PARTIAL_RESTORE -> "Partial restore";
-            case MERGE -> "Merged branches";
-            case AUTO_CHECKPOINT -> "Auto checkpoint";
-            case INITIAL, MANUAL -> "Saved version";
-        };
-    }
-
-    private ExternalSourceInfo resolveSourceInfo(VersionKind versionKind) {
-        return switch (versionKind) {
-            case WORLD_ROOT -> ExternalSourceInfo.manual();
-            case RECOVERY -> ExternalSourceInfo.recovery();
-            case RESTORE -> ExternalSourceInfo.restore();
-            case PARTIAL_RESTORE -> ExternalSourceInfo.external(
-                    "SYSTEM",
-                    "partial-restore",
-                    "Partial Restore",
-                    "",
-                    null,
-                    false,
-                    false,
-                    Map.of()
-            );
-            case MERGE -> ExternalSourceInfo.external(
-                    "SYSTEM",
-                    "merge",
-                    "Branch Merge",
-                    "",
-                    null,
-                    false,
-                    false,
-                    Map.of()
-            );
-            case AUTO_CHECKPOINT -> ExternalSourceInfo.external(
-                    "SYSTEM",
-                    "auto-checkpoint",
-                    "Auto Checkpoint",
-                    "",
-                    null,
-                    false,
-                    false,
-                    Map.of()
-            );
-            case INITIAL, MANUAL -> ExternalSourceInfo.manual();
-        };
-    }
-
-    private String resolveJournalMessage(VersionKind versionKind) {
-        return switch (versionKind) {
-            case WORLD_ROOT -> "Created workspace root version";
-            case RECOVERY -> "Saved recovery draft as a new version";
-            case RESTORE -> "Saved restore checkpoint version";
-            case PARTIAL_RESTORE -> "Saved partial restore as a new version";
-            case MERGE -> "Saved branch merge as a new version";
-            case AUTO_CHECKPOINT -> "Saved automatic checkpoint before a large edit";
-            case INITIAL, MANUAL -> "Saved version from tracked changes";
-        };
     }
 
     private static void recordTiming(VersionSaveTimingBuilder timing, String phase, long startedAtNanos) {

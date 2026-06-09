@@ -423,7 +423,7 @@ public final class HistoryCaptureManager {
                         pendingBefore,
                         pendingAfter
                 );
-                CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
+                CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
                 diagnostics.record(
                         source,
                         pos,
@@ -669,7 +669,7 @@ public final class HistoryCaptureManager {
         buffer.addChange(capturedChange, now);
         liveUndoProjects.putIfAbsent(projectId, trackedProject);
         liveUndoChanges.computeIfAbsent(projectId, ignored -> new ArrayList<>()).add(capturedChange);
-        CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
+        CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
         diagnostics.record(
                 source,
                 input.pos(),
@@ -778,7 +778,7 @@ public final class HistoryCaptureManager {
                 buffer.addEntityChange(capturedChange, now);
                 this.liveUndoRedoActionRecorder.recordEntityAction(trackedProject, level, capturedChange, now, actionStartedAt);
                 int pendingAfter = buffer.size();
-                this.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
+                this.workingDrafts.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
                 LumaDebugLog.log(
                         trackedProject.project(),
                         "capture",
@@ -793,7 +793,7 @@ public final class HistoryCaptureManager {
                 this.diagnosticsLogger.logBufferProgress(
                         trackedProject.project(),
                         buffer,
-                        this.diagnosticsForSession(projectId)
+                        this.workingDrafts.diagnosticsForSession(projectId)
                 );
                 if (buffer.isEmpty()) {
                     this.workingDrafts.discardIfEmpty(trackedProject, "after entity capture");
@@ -1010,10 +1010,6 @@ public final class HistoryCaptureManager {
         return this.serverThreadExecutor.call(server, () -> this.freezeWorkingDraftOnServerThread(server, projectId));
     }
 
-    public Optional<TrackedChangeBuffer> freezeSession(MinecraftServer server, String projectId) throws IOException {
-        return this.freezeWorkingDraft(server, projectId);
-    }
-
     public Optional<TrackedChangeBuffer> freezeWorkingDraftForRecovery(
             MinecraftServer server,
             String projectId
@@ -1042,38 +1038,6 @@ public final class HistoryCaptureManager {
         return this.workingDrafts.freezeForRecoveryAfterReconciliation(projectId, trackedProject);
     }
 
-    private void freezeIdleWorkingDraft(MinecraftServer server, String projectId) throws IOException {
-        this.serverThreadExecutor.run(server, () -> this.freezeIdleWorkingDraftOnServerThread(server, projectId));
-    }
-
-    private void freezeIdleWorkingDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
-        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
-        CaptureSessionState sessionState = this.workingDrafts.session(projectId);
-        if (trackedProject != null && sessionState != null) {
-            this.reconcileSession(server, trackedProject, sessionState, true);
-        }
-        this.workingDrafts.freezeIdleAfterReconciliation(projectId, trackedProject);
-    }
-
-    private Optional<TrackedChangeBuffer> freezeWorkingDraftForShutdownOnServerThread(
-            MinecraftServer server,
-            String projectId
-    ) throws IOException {
-        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
-        CaptureSessionState sessionState = this.workingDrafts.session(projectId);
-        if (trackedProject != null && sessionState != null) {
-            this.reconcileSession(server, trackedProject, sessionState, false);
-            if (sessionState.hasPendingReconciliation()) {
-                LumaMod.LOGGER.info(
-                        "Skipped final shutdown stabilization for project {} with {} pending dirty chunks",
-                        trackedProject.project().name(),
-                        sessionState.pendingReconcileChunks().size()
-                );
-            }
-        }
-        return this.workingDrafts.freezeForShutdownAfterReconciliation(projectId, trackedProject);
-    }
-
     /**
      * Removes and returns the active working draft for save operations.
      *
@@ -1083,10 +1047,6 @@ public final class HistoryCaptureManager {
      */
     public Optional<TrackedChangeBuffer> consumeWorkingDraft(MinecraftServer server, String projectId) throws IOException {
         return this.serverThreadExecutor.call(server, () -> this.consumeWorkingDraftOnServerThread(server, projectId));
-    }
-
-    public Optional<TrackedChangeBuffer> consumeSession(MinecraftServer server, String projectId) throws IOException {
-        return this.consumeWorkingDraft(server, projectId);
     }
 
     private Optional<TrackedChangeBuffer> consumeWorkingDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
@@ -1099,12 +1059,10 @@ public final class HistoryCaptureManager {
     }
 
     public void discardSession(MinecraftServer server, String projectId) throws IOException {
-        this.serverThreadExecutor.run(server, () -> this.discardSessionOnServerThread(server, projectId));
-    }
-
-    private void discardSessionOnServerThread(MinecraftServer server, String projectId) throws IOException {
-        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
-        this.workingDrafts.discard(projectId, trackedProject);
+        this.serverThreadExecutor.run(server, () -> {
+            TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+            this.workingDrafts.discard(projectId, trackedProject);
+        });
     }
 
     public void rebaseWorkingDraftBase(
@@ -1206,7 +1164,14 @@ public final class HistoryCaptureManager {
 
         for (String projectId : sessionsToFinalize) {
             try {
-                this.freezeIdleWorkingDraft(server, projectId);
+                this.serverThreadExecutor.run(server, () -> {
+                    TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+                    CaptureSessionState sessionState = this.workingDrafts.session(projectId);
+                    if (trackedProject != null && sessionState != null) {
+                        this.reconcileSession(server, trackedProject, sessionState, true);
+                    }
+                    this.workingDrafts.freezeIdleAfterReconciliation(projectId, trackedProject);
+                });
             } catch (IOException exception) {
                 LumaMod.LOGGER.warn("Failed to finalize idle session for {}", projectId, exception);
             }
@@ -1216,10 +1181,21 @@ public final class HistoryCaptureManager {
     public void flushAll(MinecraftServer server) {
         for (String projectId : this.workingDrafts.activeProjectIds()) {
             try {
-                this.serverThreadExecutor.call(
-                        server,
-                        () -> this.freezeWorkingDraftForShutdownOnServerThread(server, projectId)
-                );
+                this.serverThreadExecutor.call(server, () -> {
+                    TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+                    CaptureSessionState sessionState = this.workingDrafts.session(projectId);
+                    if (trackedProject != null && sessionState != null) {
+                        this.reconcileSession(server, trackedProject, sessionState, false);
+                        if (sessionState.hasPendingReconciliation()) {
+                            LumaMod.LOGGER.info(
+                                    "Skipped final shutdown stabilization for project {} with {} pending dirty chunks",
+                                    trackedProject.project().name(),
+                                    sessionState.pendingReconcileChunks().size()
+                            );
+                        }
+                    }
+                    return this.workingDrafts.freezeForShutdownAfterReconciliation(projectId, trackedProject);
+                });
             } catch (IOException exception) {
                 LumaMod.LOGGER.warn("Failed to flush session for {}", projectId, exception);
             }
@@ -1608,14 +1584,6 @@ public final class HistoryCaptureManager {
         return false;
     }
 
-    private CaptureSessionDiagnostics diagnosticsForSession(String projectId) {
-        return this.workingDrafts.diagnosticsForSession(projectId);
-    }
-
-    private void clearSessionDiagnostics(String projectId) {
-        this.workingDrafts.clearSessionDiagnostics(projectId);
-    }
-
     private void recordDeferredBlockMutation(
             TrackedProject trackedProject,
             ServerLevel level,
@@ -1652,7 +1620,7 @@ public final class HistoryCaptureManager {
                 level.getGameTime()
         );
         this.workingDrafts.markDirty(projectId);
-        CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
+        CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
         diagnostics.record(
                 source,
                 pos,

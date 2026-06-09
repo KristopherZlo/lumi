@@ -306,7 +306,23 @@ public final class RestoreService {
             );
             returnVersionId = checkpoint.id();
         }
-        this.saveRestoreReturnPoint(layout, project, activeVariant, returnVersionId, version);
+        if (returnVersionId != null && !returnVersionId.isBlank()) {
+            RestoreReturnPoint point = new RestoreReturnPoint(
+                    project.id().toString(),
+                    activeVariant.id(),
+                    returnVersionId,
+                    Instant.now(),
+                    version.id()
+            );
+            this.recoveryRepository.saveRestoreReturnPoint(layout, point);
+            this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                    point.createdAt(),
+                    "restore-return-point-saved",
+                    "Saved return point before restore",
+                    point.versionId(),
+                    point.variantId()
+            ));
+        }
         RestoreUndoAction restoreUndoAction = recordUndoRedoAction
                 ? this.restoreUndoActionFactory.quickRollbackUndoAction(
                         project.id().toString(),
@@ -511,7 +527,9 @@ public final class RestoreService {
                 partialDraft.draft()
         );
         if (partialDraft.draft().isEmpty()) {
-            throw new IllegalArgumentException(this.partialRestoreNoChangesMessage(request.restoreMode()));
+            throw new IllegalArgumentException(request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA
+                    ? "Partial restore has no changes outside the selected region"
+                    : "Partial restore has no changes inside the selected region");
         }
         List<PreparedChunkBatch> decodedBatches = this.decodeStoredChanges(
                 level,
@@ -599,39 +617,6 @@ public final class RestoreService {
                 draft.draft().changes().size(),
                 draft.draft().entityChanges().size()
         );
-    }
-
-    private String partialRestoreNoChangesMessage(PartialRestoreMode mode) {
-        return mode == PartialRestoreMode.OUTSIDE_SELECTED_AREA
-                ? "Partial restore has no changes outside the selected region"
-                : "Partial restore has no changes inside the selected region";
-    }
-
-    private void saveRestoreReturnPoint(
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            ProjectVariant activeVariant,
-            String returnVersionId,
-            ProjectVersion restoreTarget
-    ) throws IOException {
-        if (returnVersionId == null || returnVersionId.isBlank()) {
-            return;
-        }
-        RestoreReturnPoint point = new RestoreReturnPoint(
-                project.id().toString(),
-                activeVariant.id(),
-                returnVersionId,
-                Instant.now(),
-                restoreTarget.id()
-        );
-        this.recoveryRepository.saveRestoreReturnPoint(layout, point);
-        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                point.createdAt(),
-                "restore-return-point-saved",
-                "Saved return point before restore",
-                point.versionId(),
-                point.variantId()
-        ));
     }
 
     private PartialRestoreDraft buildPartialRestoreDraft(
