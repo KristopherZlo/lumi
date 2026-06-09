@@ -29,6 +29,7 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import static io.github.luma.minecraft.world.WorldChangeBatchPreparer.ProgressListener.NO_OP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -51,7 +52,9 @@ class WorldChangeBatchPreparerTest {
                 null,
                 List.of(),
                 List.of(new StoredEntityChange(entityId, "minecraft:block_display", null, entity(entityId, 32.0D))),
-                true
+                true,
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, batches.size());
@@ -68,7 +71,9 @@ class WorldChangeBatchPreparerTest {
                 null,
                 List.of(),
                 List.of(new StoredEntityChange(entityId, "minecraft:block_display", null, entity(entityId, 1.0D))),
-                false
+                false,
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, batches.size());
@@ -84,7 +89,7 @@ class WorldChangeBatchPreparerTest {
                 List.of(),
                 List.of(new StoredEntityChange(entityId, "minecraft:block_display", null, entity(entityId, 32.0D))),
                 true,
-                WorldChangeBatchPreparer.ProgressListener.NO_OP,
+                NO_OP,
                 EntityApplyMode.REPLACE_PLACED_IN_CHUNK
         );
 
@@ -106,7 +111,8 @@ class WorldChangeBatchPreparerTest {
                         entity(entityId, 2.0D)
                 )),
                 false,
-                null
+                null,
+                EntityApplyMode.DELTA
         );
 
         EntityBatch entityBatch = batches.getFirst().entityBatch();
@@ -182,7 +188,14 @@ class WorldChangeBatchPreparerTest {
                 ))
                 .toList();
 
-        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(null, changes, List.of(), true, null);
+        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+                null,
+                changes,
+                List.of(),
+                true,
+                null,
+                EntityApplyMode.DELTA
+        );
 
         assertEquals(1, batches.size());
         assertEquals(0, batches.getFirst().placements().size());
@@ -217,7 +230,8 @@ class WorldChangeBatchPreparerTest {
                 null,
                 new PatchSectionWorldChanges(List.of(frame), List.of()),
                 true,
-                null
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, batches.size());
@@ -339,7 +353,8 @@ class WorldChangeBatchPreparerTest {
                 ),
                 List.of(),
                 false,
-                null
+                null,
+                EntityApplyMode.DELTA
         );
 
         PreparedBlockPlacement lowerPlacement = placementAt(batches.getFirst(), lower);
@@ -361,7 +376,9 @@ class WorldChangeBatchPreparerTest {
                         payload(Blocks.AIR.defaultBlockState())
                 )),
                 List.of(),
-                true
+                true,
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, analyzed.batches().size());
@@ -387,7 +404,9 @@ class WorldChangeBatchPreparerTest {
                         payload(Blocks.AIR.defaultBlockState())
                 )),
                 List.of(),
-                true
+                true,
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, analyzed.batches().size());
@@ -411,7 +430,9 @@ class WorldChangeBatchPreparerTest {
                         payload(Blocks.STONE.defaultBlockState())
                 )),
                 List.of(),
-                true
+                true,
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, analyzed.batches().size());
@@ -451,7 +472,9 @@ class WorldChangeBatchPreparerTest {
                         payload(extended)
                 )),
                 List.of(),
-                true
+                true,
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, batches.size());
@@ -482,7 +505,9 @@ class WorldChangeBatchPreparerTest {
                         )
                 ),
                 List.of(),
-                true
+                true,
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, batches.size());
@@ -506,7 +531,9 @@ class WorldChangeBatchPreparerTest {
                         payload(retracted)
                 )),
                 List.of(),
-                true
+                true,
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, batches.size());
@@ -531,7 +558,8 @@ class WorldChangeBatchPreparerTest {
                 )),
                 List.of(),
                 false,
-                null
+                null,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, batches.size());
@@ -565,7 +593,8 @@ class WorldChangeBatchPreparerTest {
                 null,
                 new PatchSectionWorldChanges(List.of(frame), List.of()),
                 true,
-                null
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, batches.size());
@@ -601,7 +630,8 @@ class WorldChangeBatchPreparerTest {
                 null,
                 new PatchSectionWorldChanges(List.of(frame), List.of()),
                 false,
-                null
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, batches.size());
@@ -642,7 +672,8 @@ class WorldChangeBatchPreparerTest {
                 null,
                 new PatchSectionWorldChanges(List.of(frame), List.of()),
                 true,
-                null
+                NO_OP,
+                EntityApplyMode.DELTA
         );
 
         assertEquals(1, decoder.callsFor("minecraft:stone"));

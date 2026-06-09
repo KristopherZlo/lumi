@@ -27,6 +27,7 @@ import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.world.EntityApplyMode;
 import io.github.luma.minecraft.debug.PartialRestoreDiagnosticsLog;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
@@ -1114,11 +1115,13 @@ public final class RestoreService {
                     "RestoreService.decodePlan.patch",
                     "patch=" + patch.id()
             )) {
-                batches.addAll(this.batchPreparer.prepareNewValues(
+                batches.addAll(this.batchPreparer.prepare(
                         level,
                         this.patchDataRepository.loadSectionWorldChanges(layout, patch),
+                        true,
                         (completed, total) -> {
-                        }
+                        },
+                        EntityApplyMode.DELTA
                 ));
             }
             completedSources += 1;
@@ -1186,7 +1189,8 @@ public final class RestoreService {
                         changes,
                         applyNewValues,
                         (completed, total) -> {
-                        }
+                        },
+                        EntityApplyMode.DELTA
                 );
                 batches.addAll(analyzed.batches());
                 mechanismScope.addAll(analyzed.mechanismReplayScope());
@@ -1253,7 +1257,9 @@ public final class RestoreService {
                     level,
                     changes,
                     entityChanges,
-                    applyNewValues
+                    applyNewValues,
+                    WorldChangeBatchPreparer.ProgressListener.NO_OP,
+                    EntityApplyMode.DELTA
             );
             batches = analyzed.batches();
             LumaDebugLog.log(

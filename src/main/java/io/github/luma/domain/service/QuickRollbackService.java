@@ -16,6 +16,7 @@ import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
+import io.github.luma.minecraft.world.EntityApplyMode;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
@@ -146,7 +147,8 @@ public final class QuickRollbackService {
                                     completed,
                                     total,
                                     "Decoded quick rollback"
-                            )
+                            ),
+                            EntityApplyMode.DELTA
                     );
                     List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
                     ProjectVersion activeHead = versions.stream()

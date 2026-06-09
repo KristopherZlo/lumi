@@ -14,6 +14,7 @@ import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
+import io.github.luma.minecraft.world.EntityApplyMode;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -118,7 +119,8 @@ public final class UndoRedoService {
                                     completed,
                                     total,
                                     "Decoded " + direction.label()
-                            )
+                            ),
+                            EntityApplyMode.DELTA
                     );
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,

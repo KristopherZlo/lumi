@@ -6,7 +6,6 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.PatchSectionFrame;
 import io.github.luma.domain.model.PatchSectionWorldChanges;
-import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
@@ -45,42 +44,6 @@ public final class WorldChangeBatchPreparer {
 
     private WorldChangeBatchPreparer(Supplier<BlockStateDecoder> blockStateDecoderFactory) {
         this.blockStateDecoderFactory = blockStateDecoderFactory;
-    }
-
-    public List<PreparedChunkBatch> prepareNewValues(ServerLevel level, PatchWorldChanges changes) throws IOException {
-        return this.prepare(level, changes.blockChanges(), changes.entityChanges(), true, ProgressListener.NO_OP);
-    }
-
-    public List<PreparedChunkBatch> prepareNewValues(
-            ServerLevel level,
-            PatchWorldChanges changes,
-            EntityApplyMode entityApplyMode
-    ) throws IOException {
-        return this.prepare(
-                level,
-                changes.blockChanges(),
-                changes.entityChanges(),
-                true,
-                ProgressListener.NO_OP,
-                entityApplyMode
-        );
-    }
-
-    public List<PreparedChunkBatch> prepareNewValues(
-            ServerLevel level,
-            PatchSectionWorldChanges changes,
-            ProgressListener progressListener
-    ) throws IOException {
-        return this.prepare(level, changes, true, progressListener);
-    }
-
-    public List<PreparedChunkBatch> prepareNewValues(
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            ProgressListener progressListener
-    ) throws IOException {
-        return this.prepare(level, changes, entityChanges, true, progressListener);
     }
 
     public List<PreparedChunkBatch> prepareTargetStates(
@@ -128,25 +91,6 @@ public final class WorldChangeBatchPreparer {
             ServerLevel level,
             List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges,
-            boolean applyNewValues
-    ) throws IOException {
-        return this.prepare(level, changes, entityChanges, applyNewValues, ProgressListener.NO_OP);
-    }
-
-    public List<PreparedChunkBatch> prepare(
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            boolean applyNewValues,
-            ProgressListener progressListener
-    ) throws IOException {
-        return this.prepare(level, changes, entityChanges, applyNewValues, progressListener, EntityApplyMode.DELTA);
-    }
-
-    public List<PreparedChunkBatch> prepare(
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
             boolean applyNewValues,
             ProgressListener progressListener,
             EntityApplyMode entityApplyMode
@@ -159,25 +103,6 @@ public final class WorldChangeBatchPreparer {
                 progressListener,
                 entityApplyMode
         ).batches();
-    }
-
-    public PreparedWorldChangeBatches prepareAnalyzed(
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            boolean applyNewValues
-    ) throws IOException {
-        return this.prepareAnalyzed(level, changes, entityChanges, applyNewValues, ProgressListener.NO_OP);
-    }
-
-    public PreparedWorldChangeBatches prepareAnalyzed(
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            boolean applyNewValues,
-            ProgressListener progressListener
-    ) throws IOException {
-        return this.prepareAnalyzed(level, changes, entityChanges, applyNewValues, progressListener, EntityApplyMode.DELTA);
     }
 
     public PreparedWorldChangeBatches prepareAnalyzed(
@@ -244,23 +169,6 @@ public final class WorldChangeBatchPreparer {
             List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges,
             boolean applyNewValues,
-            ProgressListener progressListener
-    ) throws IOException {
-        return this.prepareUndoRedo(
-                level,
-                changes,
-                entityChanges,
-                applyNewValues,
-                progressListener,
-                EntityApplyMode.DELTA
-        );
-    }
-
-    public List<PreparedChunkBatch> prepareUndoRedo(
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            boolean applyNewValues,
             ProgressListener progressListener,
             EntityApplyMode entityApplyMode
     ) throws IOException {
@@ -282,23 +190,6 @@ public final class WorldChangeBatchPreparer {
         return analyzed == null
                 ? this.prepare(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode)
                 : analyzed.batches();
-    }
-
-    public PreparedWorldChangeBatches prepareUndoRedoAnalyzed(
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            boolean applyNewValues,
-            ProgressListener progressListener
-    ) throws IOException {
-        return this.prepareUndoRedoAnalyzed(
-                level,
-                changes,
-                entityChanges,
-                applyNewValues,
-                progressListener,
-                EntityApplyMode.DELTA
-        );
     }
 
     public PreparedWorldChangeBatches prepareUndoRedoAnalyzed(
@@ -333,28 +224,10 @@ public final class WorldChangeBatchPreparer {
             ServerLevel level,
             PatchSectionWorldChanges changes,
             boolean applyNewValues,
-            ProgressListener progressListener
-    ) throws IOException {
-        return this.prepare(level, changes, applyNewValues, progressListener, EntityApplyMode.DELTA);
-    }
-
-    public List<PreparedChunkBatch> prepare(
-            ServerLevel level,
-            PatchSectionWorldChanges changes,
-            boolean applyNewValues,
             ProgressListener progressListener,
             EntityApplyMode entityApplyMode
     ) throws IOException {
         return this.prepareAnalyzed(level, changes, applyNewValues, progressListener, entityApplyMode).batches();
-    }
-
-    public PreparedWorldChangeBatches prepareAnalyzed(
-            ServerLevel level,
-            PatchSectionWorldChanges changes,
-            boolean applyNewValues,
-            ProgressListener progressListener
-    ) throws IOException {
-        return this.prepareAnalyzed(level, changes, applyNewValues, progressListener, EntityApplyMode.DELTA);
     }
 
     public PreparedWorldChangeBatches prepareAnalyzed(

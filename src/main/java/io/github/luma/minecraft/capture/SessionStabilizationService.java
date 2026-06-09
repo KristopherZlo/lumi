@@ -40,14 +40,6 @@ public final class SessionStabilizationService {
     public ReconciliationResult stabilizePendingChunks(
             ServerLevel level,
             BuildProject project,
-            CaptureSessionState session
-    ) {
-        return this.stabilizePendingChunks(level, project, session, false);
-    }
-
-    public ReconciliationResult stabilizePendingChunks(
-            ServerLevel level,
-            BuildProject project,
             CaptureSessionState session,
             boolean requireLoadedChunks
     ) {

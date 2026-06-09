@@ -121,11 +121,6 @@ public final class CompareOverlayRenderer {
         closePrevious(state);
     }
 
-    public static boolean active() {
-        OverlayState state = ACTIVE_STATE.get();
-        return state != null && state.visible();
-    }
-
     public static boolean hasData() {
         return ACTIVE_STATE.get() != null;
     }
@@ -141,7 +136,8 @@ public final class CompareOverlayRenderer {
     }
 
     public static boolean visible() {
-        return active();
+        OverlayState state = ACTIVE_STATE.get();
+        return state != null && state.visible();
     }
 
     public static boolean shouldPrepareInBackground(List<DiffBlockEntry> changedBlocks) {

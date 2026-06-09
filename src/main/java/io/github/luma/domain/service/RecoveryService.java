@@ -13,6 +13,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.world.EntityApplyMode;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -200,11 +201,13 @@ public final class RecoveryService {
     ) throws IOException {
         List<StoredBlockChange> changes = draft.changes();
         List<StoredEntityChange> entityChanges = draft.entityChanges();
-        List<PreparedChunkBatch> batches = this.batchPreparer.prepareNewValues(
+        List<PreparedChunkBatch> batches = this.batchPreparer.prepare(
                 level,
                 changes,
                 entityChanges,
-                (completed, total) -> progressSink.update(OperationStage.PREPARING, completed, total, "Decoded recovery draft")
+                true,
+                (completed, total) -> progressSink.update(OperationStage.PREPARING, completed, total, "Decoded recovery draft"),
+                EntityApplyMode.DELTA
         );
         LumaDebugLog.log(
                 "recovery",
