@@ -213,9 +213,9 @@ Hard runtime rule: JSON parsing, LZ4 decompression, and block-state decoding mus
 5. Use `R` for quick rollback of unsaved work, or selected-area rollback when a Lumi region selection is active.
 6. Use `Left Alt+S` for quick save.
 7. Use `Save build` for the full save screen.
-8. Open a save to restore, compare, rename, soft-delete, branch, or partially restore from it.
+8. Open a save to restore, compare, rename, soft-delete, create a variant, or partially restore from it.
 9. Hold a wooden sword in a Lumi workspace to create runtime selection bounds for partial restore.
-10. Use `Branches` for alternate directions and `Import / Export` for portable history packages.
+10. Use `Variants` for alternate directions and `Import / Export` for portable history packages.
 
 Keybindings are remappable in Minecraft controls. The Lumi action button defaults to `Left Alt`; changing it changes the default Lumi chords.
 

@@ -229,7 +229,7 @@ It answers:
 - how to save now;
 - how to compare changes;
 - how to open recent saves;
-- where branches and less common tools live.
+- where variants and less common tools live.
 
 The primary action is `Save build`.
 
@@ -239,7 +239,7 @@ Secondary actions include:
 - `Quick rollback`;
 - `Return before restore`, only when a restore return point exists.
 
-Recent saves show the selected branch. Each card shows:
+Recent saves show the selected variant. Each compact card shows:
 
 - save name;
 - author/time;
@@ -248,11 +248,11 @@ Recent saves show the selected branch. Each card shows:
 - current-head badge when applicable;
 - `Open`;
 - `Restore this save`;
-- `Create branch`.
+- `Create variant`.
 
-`Create branch` opens a small dialog on Build History. The dialog asks for the branch name and shows a compact preview of the save the new branch will start from. It creates the branch metadata in place; it does not move you to the `Branches` screen.
+`Create variant` opens a small dialog on Build History. The dialog asks for the variant name and shows a compact preview of the save the new variant will start from. It creates the variant metadata in place; it does not move you to the `Variants` screen.
 
-Use the branch picker above recent saves to switch to another branch and restore that branch head into the world. Use `Show older saves` when the branch has more saves than the initial recent list.
+Use the variant picker above recent saves to switch to another variant and restore that variant head into the world. Use `Show older saves` when the variant has more saves than the initial recent list.
 
 If a preview PNG is still being generated, the preview card shows the centered loading animation instead of the no-preview text.
 
@@ -590,35 +590,35 @@ When enabled, Lumi can save pending work before:
 
 If there is no draft, the current branch head is already the checkpoint and Lumi does nothing.
 
-## Branches
+## Variants
 
-Branches are separate build directions inside one workspace.
+Variants are separate build directions inside one workspace.
 
-Use `Branches` to:
+Use `Variants` to:
 
-- see the active branch;
-- create a new branch from the current build;
-- switch the active branch;
-- open saves for one branch;
-- compare a branch against the current build;
-- merge another local branch into the current branch;
-- delete inactive branches.
+- see the active variant;
+- create a new variant from the current build;
+- switch the active variant;
+- open saves for one variant;
+- compare a variant against the current build;
+- merge another local variant into the current variant;
+- delete inactive variants.
 
-Creating a branch from the `Branches` tab starts from the active branch head. Creating a branch from a specific save is faster from Build History or Save details, where the save card opens an in-place dialog with the source-save preview. Branch creation only adds a new branch head from the selected save or active branch head. It does not consume, discard, or freeze unsaved recovery draft edits.
+Creating a variant from the `Variants` tab starts from the active variant head. Creating a variant from a specific save is faster from Build History or Save details, where the save card opens an in-place dialog with the source-save preview. Variant creation only adds a new head from the selected save or active variant head. It does not consume, discard, or freeze unsaved recovery draft edits.
 
-Branch names stay as written. Lumi generates stable internal ids when names normalize to the same value.
+Variant names stay as written. Lumi generates stable internal ids when names normalize to the same value.
 
-Switching branches restores that branch head into the map.
+Switching variants restores that variant head into the map.
 
 Rules:
 
-- the branch pointer changes after restore apply completes;
+- the variant pointer changes after restore apply completes;
 - if recovery is pending, save or discard it before switching;
-- future saves continue from the switched branch head;
-- `main` and the active branch cannot be deleted;
-- deleting a branch is a soft delete and does not remove saved files.
+- future saves continue from the switched variant head;
+- `main` and the active variant cannot be deleted;
+- deleting a variant is a soft delete and does not remove saved files.
 
-`Merge into current branch` compares the selected branch against the active branch, applies the resolved result to the world, and writes a new merge save on the active branch. The source branch is unchanged.
+`Merge into current variant` compares the selected variant against the active variant, applies the resolved result to the world, and writes a new merge save on the active variant. The source variant is unchanged.
 
 ## Import / Export
 
