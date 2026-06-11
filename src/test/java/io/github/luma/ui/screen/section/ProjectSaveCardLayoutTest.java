@@ -15,6 +15,11 @@ class ProjectSaveCardLayoutTest {
     }
 
     @Test
+    void defaultMinecraftWindowUsesInlineActions() {
+        assertEquals(ProjectSaveCardLayout.Placement.INLINE_RIGHT, ProjectSaveCardLayout.placementFor(854));
+    }
+
+    @Test
     void narrowScreensKeepActionsBelowContent() {
         assertEquals(ProjectSaveCardLayout.Placement.STACKED_BELOW, ProjectSaveCardLayout.placementFor(720));
     }

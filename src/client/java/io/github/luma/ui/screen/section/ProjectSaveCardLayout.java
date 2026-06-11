@@ -4,7 +4,7 @@ import java.util.List;
 
 final class ProjectSaveCardLayout {
 
-    private static final int WIDE_LAYOUT_MIN_WIDTH = 860;
+    private static final int WIDE_LAYOUT_MIN_WIDTH = 800;
 
     private ProjectSaveCardLayout() {
     }
