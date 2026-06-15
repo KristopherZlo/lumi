@@ -959,14 +959,6 @@ public final class RestoreService {
                         RestoreMechanismReconciliationPlanner.MAX_MECHANISM_RECONCILIATION_CELLS,
                         exactRootSelection.positions().size()
                 );
-                LumaDebugLog.log(
-                        project,
-                        "restore",
-                        "Direct restore for project {} target {} continued with {} exact root positions after mechanism reconciliation overflow",
-                        project.name(),
-                        targetVersion.id(),
-                        exactRootSelection.positions().size()
-                );
             }
             List<PreparedChunkBatch> exactRootBatches = this.exactRootStateRestoreDecoder.decode(
                     layout,
