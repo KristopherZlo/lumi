@@ -29,6 +29,7 @@ class LanguageFilesTest {
     );
     private static final Pattern FORMAT_TOKEN = Pattern.compile("%(?:\\d+\\$)?[sd]|%%");
     private static final Pattern BACKTICK_TOKEN = Pattern.compile("`[^`]*`");
+    private static final Pattern USER_FACING_VARIANT_TERM = Pattern.compile("\\bvariants?\\b", Pattern.CASE_INSENSITIVE);
 
     @Test
     void shippedLanguagesContainAllEnglishKeys() throws IOException {
@@ -66,6 +67,22 @@ class LanguageFilesTest {
                 );
             }
         }
+    }
+
+    @Test
+    void englishLanguageUsesBranchTerminologyInUserFacingText() throws IOException {
+        Map<String, String> english = readLanguageFile("en_us.json");
+
+        List<String> variantValues = english.entrySet().stream()
+                .filter(entry -> USER_FACING_VARIANT_TERM.matcher(entry.getValue()).find())
+                .map(entry -> entry.getKey() + " = " + entry.getValue())
+                .sorted()
+                .toList();
+
+        Assertions.assertTrue(
+                variantValues.isEmpty(),
+                "English UI text should use branch wording instead of variant: " + variantValues
+        );
     }
 
     private static Map<String, String> readLanguageFile(String fileName) throws IOException {

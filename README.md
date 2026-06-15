@@ -28,7 +28,7 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 | --- | --- | --- |
 | `Project` | A tracked build area or whole dimension workspace | `project.json`, `ProjectService` |
 | `Version` | A saved history node with message, stats, payload refs, and optional preview | `versions/*.json`, `VersionService` |
-| `Variant` | A branch-like head pointer for alternate build directions | `variants.json`, `VariantService` |
+| `Branch` | A head pointer for an alternate build direction, stored internally as a variant record | `variants.json`, `VariantService` |
 | `Patch` | A compact per-version block/entity delta | `patches/*.meta.json`, `patches/*.bin.lz4` |
 | `Snapshot` | A checkpoint full-state anchor used by restore planning | `snapshots/*.bin.lz4` |
 | `Recovery draft` | Crash-safe unsaved working state | `recovery/draft.*`, `RecoveryService` |
@@ -45,7 +45,7 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 - Runtime wooden-sword region selection for partial restore and selected-area quick rollback.
 - Version compare for saved versions, branches, and the current build, with world overlays for changed blocks.
 - Full restore, quick rollback, return-before-restore, and partial restore in `Only selected area` or `Everything except selection` mode.
-- Branch creation, branch switching, local branch merge, variant import/export, full project archives, imported review projects, and safety checks for imported executable world-state data.
+- Branch creation, branch switching, local branch merge, branch import/export, full project archives, imported review projects, and safety checks for imported executable world-state data.
 - Same-Minecraft-version update checks at client startup, with a styled clickable in-world chat notice, GitHub issue/report and release-page links, plus Build History and More update modals backed by the Lumi website plus GitHub raw manifest fallback.
 - Crash recovery through durable working drafts, write-ahead log compaction, operation-draft isolation, recovery journals, and restore return points.
 - Capture of non-player entity spawn/remove/update with persistent NBT payloads for supported builder-facing entities.
@@ -213,9 +213,9 @@ Hard runtime rule: JSON parsing, LZ4 decompression, and block-state decoding mus
 5. Use `R` for quick rollback of unsaved work, or selected-area rollback when a Lumi region selection is active.
 6. Use `Left Alt+S` for quick save.
 7. Use `Save build` for the full save screen.
-8. Open a save to restore, compare, rename, soft-delete, create a variant, or partially restore from it.
+8. Open a save to restore, compare, rename, soft-delete, create a branch, or partially restore from it.
 9. Hold a wooden sword in a Lumi workspace to create runtime selection bounds for partial restore.
-10. Use `Variants` for alternate directions and `Import / Export` for portable history packages.
+10. Use `Branches` for alternate directions and `Import / Export` for portable history packages.
 
 Keybindings are remappable in Minecraft controls. The Lumi action button defaults to `Left Alt`; changing it changes the default Lumi chords.
 

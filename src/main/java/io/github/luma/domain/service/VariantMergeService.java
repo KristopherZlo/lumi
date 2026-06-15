@@ -61,7 +61,6 @@ public final class VariantMergeService {
     private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
     private final VersionLineageService lineageService = new VersionLineageService();
     private final HistoryPackageSafetyScanner safetyScanner = new HistoryPackageSafetyScanner();
-    private final MergeConflictZoneBuilder conflictZoneBuilder = new MergeConflictZoneBuilder();
 
     public VariantMergePlan previewLocalMerge(
             MinecraftServer server,
@@ -395,7 +394,6 @@ public final class VariantMergeService {
         );
 
         List<StoredBlockChange> mergeChanges = new ArrayList<>();
-        LinkedHashMap<BlockPoint, StoredBlockChange> conflictChanges = new LinkedHashMap<>();
         LinkedHashSet<BlockPoint> allPositions = new LinkedHashSet<>();
         allPositions.addAll(targetStates.keySet());
         allPositions.addAll(sourceStates.keySet());
@@ -403,13 +401,8 @@ public final class VariantMergeService {
             StatePayload ancestorState = this.resolveAncestorState(pos, targetStates, sourceStates);
             StatePayload targetFinal = targetStates.containsKey(pos) ? targetStates.get(pos).finalState() : ancestorState;
             StatePayload sourceFinal = sourceStates.containsKey(pos) ? sourceStates.get(pos).finalState() : ancestorState;
-            boolean targetChanged = !this.statesEqual(ancestorState, targetFinal);
             boolean sourceChanged = !this.statesEqual(ancestorState, sourceFinal);
             if (!sourceChanged) {
-                continue;
-            }
-            if (targetChanged && !this.statesEqual(targetFinal, sourceFinal)) {
-                conflictChanges.put(pos, new StoredBlockChange(pos, targetFinal, sourceFinal));
                 continue;
             }
             if (!this.statesEqual(targetFinal, sourceFinal)) {
@@ -430,7 +423,7 @@ public final class VariantMergeService {
                 targetStates.size(),
                 List.copyOf(mergeChanges),
                 mergeEntityChanges,
-                this.conflictZoneBuilder.build(conflictChanges.values()),
+                List.of(),
                 HistoryPackageSafetyReport.clean()
         );
         if (targetLayout.root().toAbsolutePath().normalize().equals(sourceLayout.root().toAbsolutePath().normalize())) {
@@ -554,13 +547,9 @@ public final class VariantMergeService {
             EntityPayload ancestorState = this.resolveAncestorEntityState(entityId, targetStates, sourceStates);
             EntityPayload targetFinal = targetStates.containsKey(entityId) ? targetStates.get(entityId).finalState() : ancestorState;
             EntityPayload sourceFinal = sourceStates.containsKey(entityId) ? sourceStates.get(entityId).finalState() : ancestorState;
-            boolean targetChanged = !Objects.equals(ancestorState, targetFinal);
             boolean sourceChanged = !Objects.equals(ancestorState, sourceFinal);
             if (!sourceChanged) {
                 continue;
-            }
-            if (targetChanged && !Objects.equals(targetFinal, sourceFinal)) {
-                throw new IllegalArgumentException("Imported variant has entity conflicts that cannot be resolved yet");
             }
             if (!Objects.equals(targetFinal, sourceFinal)) {
                 String entityType = sourceStates.containsKey(entityId)

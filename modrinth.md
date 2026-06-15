@@ -91,7 +91,7 @@ Want to test a roof shape, palette swap, redstone layout, or alternate facade wi
 
 ![AI placeholder showing Lumi branch and recovery UI panels](docs/modrinth-assets/branches-recovery-placeholder.png)
 
-- Create branch-like variants for alternate ideas.
+- Create branches for alternate build directions.
 - Switch between build directions.
 - Merge local branch work back into the current branch.
 - Export and import portable history packages.

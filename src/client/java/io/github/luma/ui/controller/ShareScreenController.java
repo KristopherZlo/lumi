@@ -1,19 +1,14 @@
 package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
-import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
-import io.github.luma.domain.model.ChangeType;
-import io.github.luma.domain.model.DiffBlockEntry;
 import io.github.luma.domain.model.HistoryPackageImportResult;
 import io.github.luma.domain.model.HistoryPackageFileSummary;
 import io.github.luma.domain.model.ImportedHistoryProjectSummary;
-import io.github.luma.domain.model.MergeConflictZone;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.ProjectArchiveExportResult;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
-import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.VariantMergeApplyRequest;
 import io.github.luma.domain.model.VariantMergePlan;
 import io.github.luma.domain.service.HistoryShareService;
@@ -192,42 +187,6 @@ public final class ShareScreenController {
         }
     }
 
-    public String showConflictZoneOverlay(
-            String sourceProjectName,
-            String sourceVariantId,
-            String targetVariantId,
-            MergeConflictZone zone
-    ) {
-        try {
-            this.actions.showConflictZoneOverlay(sourceProjectName, sourceVariantId, targetVariantId, zone);
-            this.clearValidationMessage();
-            return "luma.status.compare_overlay_enabled";
-        } catch (Exception exception) {
-            LumaMod.LOGGER.warn("Conflict overlay failed for {}:{}", sourceProjectName, sourceVariantId, exception);
-            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
-            this.captureValidationMessage(exception);
-            return "luma.status.compare_failed";
-        }
-    }
-
-    public String showConflictZonesOverlay(
-            String sourceProjectName,
-            String sourceVariantId,
-            String targetVariantId,
-            VariantMergePlan plan
-    ) {
-        try {
-            this.actions.showConflictZonesOverlay(sourceProjectName, sourceVariantId, targetVariantId, plan.conflictZones());
-            this.clearValidationMessage();
-            return "luma.status.compare_overlay_enabled";
-        } catch (Exception exception) {
-            LumaMod.LOGGER.warn("Conflict overlay failed for {}:{}", sourceProjectName, sourceVariantId, exception);
-            TelemetryService.getInstance().recordOperationFailed(null, null, exception);
-            this.captureValidationMessage(exception);
-            return "luma.status.compare_failed";
-        }
-    }
-
     public String clearConflictZoneOverlay() {
         CompareOverlayRenderer.clear();
         this.clearValidationMessage();
@@ -313,19 +272,6 @@ public final class ShareScreenController {
 
         void startMerge(VariantMergeApplyRequest request) throws Exception;
 
-        void showConflictZoneOverlay(
-                String sourceProjectName,
-                String sourceVariantId,
-                String targetVariantId,
-                MergeConflictZone zone
-        );
-
-        void showConflictZonesOverlay(
-                String sourceProjectName,
-                String sourceVariantId,
-                String targetVariantId,
-                List<MergeConflictZone> zones
-        );
     }
 
     private static final class ServiceQuery implements Query {
@@ -431,62 +377,6 @@ public final class ShareScreenController {
         @Override
         public void startMerge(VariantMergeApplyRequest request) throws Exception {
             this.variantMergeService.startMerge(this.level(request.targetProjectName()), request, this.client.getUser().getName());
-        }
-
-        @Override
-        public void showConflictZoneOverlay(
-                String sourceProjectName,
-                String sourceVariantId,
-                String targetVariantId,
-                MergeConflictZone zone
-        ) {
-            this.showConflictZonesOverlay(
-                    sourceProjectName + ":" + zone.id(),
-                    sourceVariantId,
-                    targetVariantId,
-                    List.of(zone)
-            );
-        }
-
-        @Override
-        public void showConflictZonesOverlay(
-                String sourceProjectName,
-                String sourceVariantId,
-                String targetVariantId,
-                List<MergeConflictZone> zones
-        ) {
-            CompareOverlayRenderer.show(
-                    sourceProjectName + ":" + sourceVariantId,
-                    "local:" + targetVariantId,
-                    zones.stream()
-                            .flatMap(zone -> zone.importedChanges().stream())
-                            .map(this::diffEntry)
-                            .toList(),
-                    false
-            );
-        }
-
-        private DiffBlockEntry diffEntry(io.github.luma.domain.model.StoredBlockChange change) {
-            StatePayload leftState = change.oldValue();
-            StatePayload rightState = change.newValue();
-            ChangeType type;
-            if (leftState == null && rightState != null) {
-                type = ChangeType.ADDED;
-            } else if (leftState != null && rightState == null) {
-                type = ChangeType.REMOVED;
-            } else {
-                type = ChangeType.CHANGED;
-            }
-            return new DiffBlockEntry(
-                    new BlockPoint(change.pos().x(), change.pos().y(), change.pos().z()),
-                    this.stateString(leftState),
-                    this.stateString(rightState),
-                    type
-            );
-        }
-
-        private String stateString(StatePayload state) {
-            return state == null ? "" : state.toStateSnbt();
         }
 
         private MinecraftServer server() {

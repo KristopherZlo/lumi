@@ -5,9 +5,6 @@ import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.model.HistoryPackageImportResult;
 import io.github.luma.domain.model.HistoryPackageFileSummary;
 import io.github.luma.domain.model.ImportedHistoryProjectSummary;
-import io.github.luma.domain.model.MergeConflictResolution;
-import io.github.luma.domain.model.MergeConflictZone;
-import io.github.luma.domain.model.MergeConflictZoneResolution;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.VariantMergeApplyRequest;
 import io.github.luma.domain.model.VariantMergePlan;
@@ -35,9 +32,7 @@ import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
 import java.nio.file.Path;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -65,7 +60,6 @@ public final class ShareScreen extends LumaScreen {
     private String lastImportedProjectName = "";
     private String validationMessage = "";
     private VariantMergePlan mergePlan = null;
-    private final Map<String, MergeConflictResolution> conflictResolutions = new LinkedHashMap<>();
     private TextBoxComponent importArchiveInput;
     private boolean includePreviews = false;
     private boolean mergePreviewPending = false;
@@ -279,7 +273,6 @@ public final class ShareScreen extends LumaScreen {
             this.selectedImportedProjectName = importedProject.projectName();
             this.selectedImportedVariantId = importedProject.variantId();
             this.selectedImportedVariantName = importedProject.variantName();
-            this.conflictResolutions.clear();
             this.trustedPackageConfirmed = false;
             this.refreshMergePreview();
         });
@@ -308,7 +301,6 @@ public final class ShareScreen extends LumaScreen {
                 this.selectedTargetVariantId,
                 this.selectedImportedVariantId,
                 this.selectedImportedVariantName,
-                this.conflictResolutions,
                 this.operationActive(),
                 this.trustedPackageConfirmed
         );
@@ -425,7 +417,6 @@ public final class ShareScreen extends LumaScreen {
         this.selectedImportedProjectName = result.importedProjectName();
         this.selectedImportedVariantId = result.importedVariantId();
         this.selectedImportedVariantName = result.importedVariantName();
-        this.conflictResolutions.clear();
         this.trustedPackageConfirmed = false;
         if (this.selectedTargetVariantId.isBlank() && this.state.project() != null) {
             this.selectedTargetVariantId = this.state.project().activeVariantId();
@@ -452,7 +443,6 @@ public final class ShareScreen extends LumaScreen {
             this.selectedImportedVariantName = "";
             this.mergePlan = null;
             this.mergePreviewPending = false;
-            this.conflictResolutions.clear();
             this.trustedPackageConfirmed = false;
             this.controller.clearConflictZoneOverlay();
         }
@@ -512,10 +502,7 @@ public final class ShareScreen extends LumaScreen {
         if (plan == null) {
             return "luma.status.operation_failed";
         }
-        if (plan.hasConflicts()) {
-            return "luma.status.merge_conflicts_found";
-        }
-        if (plan.mergeChanges().isEmpty()) {
+        if (plan.mergeChangeCount() == 0) {
             return "luma.status.merge_no_changes";
         }
         return "luma.status.merge_preview_ready";
@@ -536,7 +523,6 @@ public final class ShareScreen extends LumaScreen {
             this.selectedImportedVariantId = "";
             this.selectedImportedVariantName = "";
             this.mergePlan = null;
-            this.conflictResolutions.clear();
             this.trustedPackageConfirmed = false;
         }
     }
@@ -562,21 +548,8 @@ public final class ShareScreen extends LumaScreen {
         @Override
         public void selectTargetVariant(String variantId) {
             selectedTargetVariantId = variantId;
-            conflictResolutions.clear();
             trustedPackageConfirmed = false;
             refreshMergePreview();
-        }
-
-        @Override
-        public void showAllConflicts(VariantMergePlan mergePlan) {
-            String statusKey = controller.showConflictZonesOverlay(
-                    selectedImportedProjectName,
-                    selectedImportedVariantId,
-                    selectedTargetVariantId,
-                    mergePlan
-            );
-            validationMessage = controller.lastValidationMessage();
-            refresh(statusKey);
         }
 
         @Override
@@ -587,43 +560,19 @@ public final class ShareScreen extends LumaScreen {
         }
 
         @Override
-        public void setZoneResolution(String zoneId, MergeConflictResolution resolution) {
-            conflictResolutions.put(zoneId, resolution);
-            refresh("luma.status.merge_conflicts_found");
-        }
-
-        @Override
-        public void clearZoneResolution(String zoneId) {
-            conflictResolutions.remove(zoneId);
-            refresh("luma.status.merge_conflicts_found");
-        }
-
-        @Override
         public void setTrustedPackageConfirmed(boolean trusted) {
             trustedPackageConfirmed = trusted;
             refresh("luma.status.merge_preview_ready");
         }
 
         @Override
-        public void showZoneHighlight(MergeConflictZone zone) {
-            String statusKey = controller.showConflictZoneOverlay(
-                    selectedImportedProjectName,
-                    selectedImportedVariantId,
-                    selectedTargetVariantId,
-                    zone
-            );
-            validationMessage = controller.lastValidationMessage();
-            refresh(statusKey);
-        }
-
-        @Override
-        public void applyMerge(List<MergeConflictZoneResolution> resolutions) {
+        public void applyMerge() {
             String statusKey = controller.startMerge(new VariantMergeApplyRequest(
                     projectName,
                     selectedImportedProjectName,
                     selectedImportedVariantId,
                     selectedTargetVariantId,
-                    resolutions,
+                    List.of(),
                     trustedPackageConfirmed
             ));
             validationMessage = controller.lastValidationMessage();

@@ -242,7 +242,7 @@ Stores the project metadata, including:
 - project id and name
 - tracked bounds
 - dimension id
-- active and main variant ids
+- active and main branch ids, stored in the legacy variant id fields
 - timestamps
 - project settings:
   - `autoVersionsEnabled`
@@ -262,10 +262,10 @@ Older project files may omit `autoCheckpointEnabled`; Lumi treats the missing va
 
 ### `variants.json`
 
-Stores the full variant list. Each variant keeps its own head version id and base version id.
-Variant ids are generated from the branch name and receive numeric suffixes when distinct names normalize to the same id.
+Stores the full branch list. The file name and record fields retain the internal variant naming for storage compatibility. Each branch keeps its own head version id and base version id.
+Internal variant ids are generated from the branch name and receive numeric suffixes when distinct names normalize to the same id.
 
-Restore and amend workflows move variant heads by rewriting this file. Older detached version files are left on disk for safety even when they are no longer reachable from a live variant head.
+Restore and amend workflows move branch heads by rewriting this file. Older detached version files are left on disk for safety even when they are no longer reachable from a live branch head.
 The client history view still lists those detached versions after a restore-style reset.
 
 ### `history-tombstones.json`
@@ -276,7 +276,7 @@ Important fields:
 
 - schema version
 - tombstoned version ids
-- tombstoned variant ids
+- tombstoned branch ids, stored as internal variant ids
 - updated timestamp
 
 Soft delete never removes version manifests, patch payloads, snapshots, previews, baseline chunks, or archive files. `ProjectService` and history screens filter tombstoned versions and branches from normal workflows while leaving the underlying files available for diagnostics or future cleanup tooling.
@@ -431,15 +431,15 @@ Stores recovery, restore, migration, and other workflow events shown in the Log 
 
 ### `recovery/last-restore-return.json`
 
-Stores the local return-before-restore pointer written before each full restore. It contains the project id, variant id, version id to restore back to, creation timestamp, and the restore target version id that caused the pointer to be written.
+Stores the local return-before-restore pointer written before each full restore. It contains the project id, branch id stored as a variant id, version id to restore back to, creation timestamp, and the restore target version id that caused the pointer to be written.
 
-If a full restore starts with unsaved draft changes, Lumi first writes a `RESTORE` checkpoint and stores that checkpoint id as the return target. If the draft is clean, Lumi stores the current active branch head id. This file is local operational recovery state and is not included in project or variant archives.
+If a full restore starts with unsaved draft changes, Lumi first writes a `RESTORE` checkpoint and stores that checkpoint id as the return target. If the draft is clean, Lumi stores the current active branch head id. This file is local operational recovery state and is not included in project or branch archives.
 
 ### `recovery/pending-restore-completion.json`
 
-Stores restore metadata publication that must be retried after world apply has already succeeded. It contains the project id, variant id, target version id, completion kind (`FULL_RESTORE` or `PARTIAL_RESTORE`), creation timestamp, and partial restore bounds/mode for partial completions.
+Stores restore metadata publication that must be retried after world apply has already succeeded. It contains the project id, branch id stored as a variant id, target version id, completion kind (`FULL_RESTORE` or `PARTIAL_RESTORE`), creation timestamp, and partial restore bounds/mode for partial completions.
 
-Full restore writes this record before publishing variant/project metadata, deleting the recovery draft, and appending the completion journal entry. Partial restore writes a replacement operation draft after apply, then writes this record before replacing the live recovery draft, recording live undo, and appending the completion journal entry. Idle bootstrap/recovery completes this record only when no Lumi world operation is active.
+Full restore writes this record before publishing branch/project metadata, deleting the recovery draft, and appending the completion journal entry. Partial restore writes a replacement operation draft after apply, then writes this record before replacing the live recovery draft, recording live undo, and appending the completion journal entry. Idle bootstrap/recovery completes this record only when no Lumi world operation is active.
 
 ### `cache/`
 
@@ -483,10 +483,10 @@ Project import/export uses zip archives stored by default in the game-root `lumi
 - optional `project/previews/*`
 - optional `project/recovery/journal.json`
 
-The archive manifest now carries a scope descriptor. Full-project archives keep `scope = PROJECT`. Variant share packages keep `scope = VARIANT` plus the selected variant id, name, base version id, and head version id.
+The archive manifest now carries a scope descriptor. Full-project archives keep `scope = PROJECT`. Branch share packages keep `scope = VARIANT` plus the selected branch's internal variant id, name, base version id, and head version id.
 The manifest also records whether preview PNGs were included. Import / Export exposes that as a UI toggle; disabling it keeps the package focused on durable history payloads.
 
-Variant share packages still use the same zip format, but they only include the selected variant lineage and the payloads that lineage references. On import, Lumi rewrites the imported project metadata so the review project exposes just that imported variant as its active line.
+Branch share packages still use the same zip format, but they only include the selected branch lineage and the payloads that lineage references. On import, Lumi rewrites the imported project metadata so the review project exposes just that imported branch as its active line.
 Deleting an imported review package from Import / Export removes that review project folder after Lumi verifies it has the same project id as the current target project.
 
 Recovery draft payloads and pending restore completion records are intentionally excluded from archives, so export/import remains focused on stable project history rather than live unsaved or local operational state.

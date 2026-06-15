@@ -6,8 +6,6 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.ExternalSourceInfo;
-import io.github.luma.domain.model.MergeConflictResolution;
-import io.github.luma.domain.model.MergeConflictZoneResolution;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.StatePayload;
@@ -25,7 +23,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.Assertions;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
@@ -101,7 +98,7 @@ class VariantMergeServiceTest {
     }
 
     @Test
-    void planMergeReportsBlockConflictsWhenBothVariantsChangeTheSamePosition() throws Exception {
+    void planMergeAppliesIncomingBlockChangesOverCurrentBranch() throws Exception {
         UUID projectId = UUID.fromString("33333333-3333-3333-3333-333333333333");
         ProjectLayout targetLayout = this.seedTargetProject(this.tempDir.resolve("tower-conflict.mbp"), projectId, true);
         ProjectLayout sourceLayout = this.seedSourceProject(this.tempDir.resolve("tower-conflict-shared.mbp"), projectId, true);
@@ -117,16 +114,16 @@ class VariantMergeServiceTest {
                 "roof-pass"
         );
 
-        assertTrue(plan.hasConflicts());
-        assertEquals(1, plan.conflictZones().size());
-        assertEquals(1, plan.conflictPositions().size());
-        assertEquals(new BlockPoint(4, 65, 4), plan.conflictZones().getFirst().positions().getFirst());
-        assertEquals(1, plan.conflictChunkCount());
-        assertTrue(plan.mergeChanges().isEmpty());
+        assertFalse(plan.hasConflicts());
+        assertEquals(1, plan.mergeBlockCount());
+        StoredBlockChange change = plan.mergeChanges().getFirst();
+        assertEquals(new BlockPoint(4, 65, 4), change.pos());
+        assertEquals("minecraft:stone", change.oldValue().blockId());
+        assertEquals("minecraft:glass", change.newValue().blockId());
     }
 
     @Test
-    void planMergeGroupsNeighboringConflictChunksIntoStableZones() throws Exception {
+    void planMergeOverlaysEveryIncomingSamePositionChangeWithoutZones() throws Exception {
         UUID projectId = UUID.fromString("44444444-4444-4444-4444-444444444444");
         ProjectLayout targetLayout = this.seedProject(layout(this.tempDir.resolve("tower-zones.mbp")), projectId, "Tower", List.of(
                 new ProjectVariant("main", "main", "v0001", "v0002", true, instant(0))
@@ -158,17 +155,21 @@ class VariantMergeServiceTest {
                 "roof-pass"
         );
 
-        assertEquals(2, plan.conflictZones().size());
-        assertEquals(2, plan.conflictZones().getFirst().chunkCount());
-        assertEquals(2, plan.conflictZones().getFirst().blockCount());
-        assertEquals(new BlockPoint(4, 65, 4), plan.conflictZones().getFirst().bounds().min());
-        assertEquals(new BlockPoint(20, 65, 4), plan.conflictZones().getFirst().bounds().max());
-        assertEquals(1, plan.conflictZones().get(1).chunkCount());
-        assertEquals(new BlockPoint(80, 65, 80), plan.conflictZones().get(1).positions().getFirst());
+        assertFalse(plan.hasConflicts());
+        assertEquals(0, plan.conflictChunkCount());
+        assertEquals(List.of(
+                new BlockPoint(4, 65, 4),
+                new BlockPoint(20, 65, 4),
+                new BlockPoint(80, 65, 80)
+        ), plan.mergeChanges().stream().map(StoredBlockChange::pos).toList());
+        assertTrue(plan.mergeChanges().stream().allMatch(change ->
+                "minecraft:stone".equals(change.oldValue().blockId())
+                        && "minecraft:glass".equals(change.newValue().blockId())
+        ));
     }
 
     @Test
-    void resolveMergeChangesUsesConflictResolutionsPerZone() throws Exception {
+    void resolveMergeChangesDoesNotRequireConflictResolutions() throws Exception {
         UUID projectId = UUID.fromString("55555555-5555-5555-5555-555555555555");
         ProjectLayout targetLayout = this.seedTargetProject(this.tempDir.resolve("tower-resolve.mbp"), projectId, false);
         ProjectLayout sourceLayout = this.seedProject(layout(this.tempDir.resolve("tower-resolve-shared.mbp")), projectId, "Tower Shared", List.of(
@@ -194,15 +195,9 @@ class VariantMergeServiceTest {
                 "roof-pass"
         );
 
-        assertEquals(1, plan.mergeChanges().size());
-        assertEquals(1, plan.conflictZones().size());
-        assertEquals(1, this.variantMergeService.resolveMergeChanges(plan, List.of(
-                new MergeConflictZoneResolution(plan.conflictZones().getFirst().id(), MergeConflictResolution.KEEP_LOCAL)
-        )).size());
-        assertEquals(2, this.variantMergeService.resolveMergeChanges(plan, List.of(
-                new MergeConflictZoneResolution(plan.conflictZones().getFirst().id(), MergeConflictResolution.USE_IMPORTED)
-        )).size());
-        Assertions.assertThrows(IllegalArgumentException.class, () -> this.variantMergeService.resolveMergeChanges(plan, List.of()));
+        assertFalse(plan.hasConflicts());
+        assertEquals(2, plan.mergeChanges().size());
+        assertEquals(plan.mergeChanges(), this.variantMergeService.resolveMergeChanges(plan, List.of()));
     }
 
     @Test
@@ -264,7 +259,7 @@ class VariantMergeServiceTest {
     }
 
     @Test
-    void planMergeRejectsUnresolvableEntityConflicts() throws Exception {
+    void planMergeAppliesIncomingEntityChangesOverCurrentBranch() throws Exception {
         UUID projectId = UUID.fromString("77777777-7777-7777-7777-777777777777");
         ProjectLayout targetLayout = this.seedProject(layout(this.tempDir.resolve("tower-entity-conflict.mbp")), projectId, "Tower", List.of(
                 new ProjectVariant("main", "main", "v0001", "v0002", true, instant(0))
@@ -282,14 +277,21 @@ class VariantMergeServiceTest {
                 new StoredEntityChange(entityId, "minecraft:block_display", entity(entityId, 1.0D), entity(entityId, 3.0D))
         ));
 
-        Assertions.assertThrows(IllegalArgumentException.class, () -> this.variantMergeService.planMerge(
+        VariantMergePlan plan = this.variantMergeService.planMerge(
                 targetLayout,
                 this.projectRepository.load(targetLayout).orElseThrow(),
                 "main",
                 sourceLayout,
                 this.projectRepository.load(sourceLayout).orElseThrow(),
                 "roof-pass"
-        ));
+        );
+
+        assertFalse(plan.hasConflicts());
+        assertEquals(1, plan.mergeEntityCount());
+        StoredEntityChange change = plan.mergeEntityChanges().getFirst();
+        assertEquals(entityId, change.entityId());
+        assertEquals(2, change.oldValue().blockPos().getX());
+        assertEquals(3, change.newValue().blockPos().getX());
     }
 
     private ProjectLayout seedTargetProject(Path root, UUID projectId, boolean conflict) throws Exception {

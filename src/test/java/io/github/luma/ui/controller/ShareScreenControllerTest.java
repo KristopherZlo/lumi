@@ -160,14 +160,6 @@ class ShareScreenControllerTest {
         @Override
         public void startMerge(VariantMergeApplyRequest request) {
         }
-
-        @Override
-        public void showConflictZoneOverlay(String sourceProjectName, String sourceVariantId, String targetVariantId, io.github.luma.domain.model.MergeConflictZone zone) {
-        }
-
-        @Override
-        public void showConflictZonesOverlay(String sourceProjectName, String sourceVariantId, String targetVariantId, List<io.github.luma.domain.model.MergeConflictZone> zones) {
-        }
     }
 
     private static ProjectVersion version(String id, long offsetSeconds) {

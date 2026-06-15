@@ -62,4 +62,4 @@ The following workflows intentionally no longer have `/lumi` commands:
 - share/merge
 - runtime regression suites
 
-Keeping these workflows in the UI preserves confirmation screens, previews, operation progress, conflict review, and cancellation boundaries.
+Keeping these workflows in the UI preserves confirmation screens, previews, operation progress, imported-package trust checks, and cancellation boundaries.

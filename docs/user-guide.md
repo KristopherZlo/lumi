@@ -229,7 +229,7 @@ It answers:
 - how to save now;
 - how to compare changes;
 - how to open recent saves;
-- where variants and less common tools live.
+- where branches and less common tools live.
 
 The primary action is `Save build`.
 
@@ -239,7 +239,7 @@ Secondary actions include:
 - `Quick rollback`;
 - `Return before restore`, only when a restore return point exists.
 
-Recent saves show the selected variant. Each compact card shows:
+Recent saves show the selected branch. Each compact card shows:
 
 - save name;
 - author/time;
@@ -248,11 +248,11 @@ Recent saves show the selected variant. Each compact card shows:
 - current-head badge when applicable;
 - `Open`;
 - `Restore this save`;
-- `Create variant`.
+- `Create branch`.
 
-`Create variant` opens a small dialog on Build History. The dialog asks for the variant name and shows a compact preview of the save the new variant will start from. It creates the variant metadata in place; it does not move you to the `Variants` screen.
+`Create branch` opens a small dialog on Build History. The dialog asks for the branch name and shows a compact preview of the save the new branch will start from. It creates the branch metadata in place; it does not move you to the `Branches` screen.
 
-Use the variant picker above recent saves to switch to another variant and restore that variant head into the world. Use `Show older saves` when the variant has more saves than the initial recent list.
+Use the branch picker above recent saves to switch to another branch and restore that branch head into the world. Use `Show older saves` when the branch has more saves than the initial recent list.
 
 If a preview PNG is still being generated, the preview card shows the centered loading animation instead of the no-preview text.
 
@@ -590,35 +590,35 @@ When enabled, Lumi can save pending work before:
 
 If there is no draft, the current branch head is already the checkpoint and Lumi does nothing.
 
-## Variants
+## Branches
 
-Variants are separate build directions inside one workspace.
+Branches are separate build directions inside one workspace.
 
-Use `Variants` to:
+Use `Branches` to:
 
-- see the active variant;
-- create a new variant from the current build;
-- switch the active variant;
-- open saves for one variant;
-- compare a variant against the current build;
-- merge another local variant into the current variant;
-- delete inactive variants.
+- see the active branch;
+- create a new branch from the current build;
+- switch the active branch;
+- open saves for one branch;
+- compare a branch against the current build;
+- merge another local branch into the current branch;
+- delete inactive branches.
 
-Creating a variant from the `Variants` tab starts from the active variant head. Creating a variant from a specific save is faster from Build History or Save details, where the save card opens an in-place dialog with the source-save preview. Variant creation only adds a new head from the selected save or active variant head. It does not consume, discard, or freeze unsaved recovery draft edits.
+Creating a branch from the `Branches` tab starts from the active branch head. Creating a branch from a specific save is faster from Build History or Save details, where the save card opens an in-place dialog with the source-save preview. Branch creation only adds a new head from the selected save or active branch head. It does not consume, discard, or freeze unsaved recovery draft edits.
 
-Variant names stay as written. Lumi generates stable internal ids when names normalize to the same value.
+Branch names stay as written. Lumi generates stable internal ids when names normalize to the same value.
 
-Switching variants restores that variant head into the map.
+Switching branches restores that branch head into the map.
 
 Rules:
 
-- the variant pointer changes after restore apply completes;
+- the branch pointer changes after restore apply completes;
 - if recovery is pending, save or discard it before switching;
-- future saves continue from the switched variant head;
-- `main` and the active variant cannot be deleted;
-- deleting a variant is a soft delete and does not remove saved files.
+- future saves continue from the switched branch head;
+- `main` and the active branch cannot be deleted;
+- deleting a branch is a soft delete and does not remove saved files.
 
-`Merge into current variant` compares the selected variant against the active variant, applies the resolved result to the world, and writes a new merge save on the active variant. The source variant is unchanged.
+`Merge into current branch` compares the selected branch against the active branch, applies incoming changes over the current branch, and writes a new merge save on the active branch. When both branches changed the same block or entity, the incoming branch state wins. The source branch is unchanged.
 
 ## Import / Export
 
@@ -650,19 +650,16 @@ Combine review:
 
 - runs in the background;
 - is cached for the selected imported package and target branch;
-- groups same-area changes into review zones;
-- avoids one long raw block list.
+- summarizes incoming block and entity changes;
+- highlights the affected areas without requiring manual resolution choices.
 
-For each same-area zone, choose:
+Merge behavior is intentionally simple:
 
-- keep mine;
-- use imported;
-- skip for now;
-- show that zone in world.
+- if only the incoming branch changed an object, Lumi applies that change;
+- if both branches changed the same block or entity, the incoming branch state replaces the current branch state;
+- the source branch or imported review package is unchanged.
 
-You can also show all same-area zones at once.
-
-`Apply combine` is enabled only when every same-area zone has a decision and the result would import at least one change.
+`Apply combine` is enabled when the incoming branch would apply at least one block or entity change.
 
 Failed imports, incompatible packages, rejected combines, and package validation problems are shown on the screen.
 
@@ -846,7 +843,7 @@ The following workflows intentionally do not have `/lumi` commands:
 - cleanup apply;
 - share/merge.
 
-Keeping these workflows in the UI preserves confirmation screens, previews, operation progress, conflict review, and cancellation boundaries.
+Keeping these workflows in the UI preserves confirmation screens, previews, operation progress, imported-package trust checks, and cancellation boundaries.
 
 ## Storage Path
 
@@ -953,7 +950,6 @@ If restore is blocked:
 If import/combine is blocked:
 
 - check the validation message on `Import / Export`;
-- decide every same-area conflict zone;
 - confirm the combine would import at least one change;
 - verify the package belongs to a compatible project lineage.
 
