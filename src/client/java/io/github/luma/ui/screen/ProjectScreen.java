@@ -634,12 +634,11 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
 
         @Override
         public void selectVariant(String variantId) {
-            String result = actionController.switchVariant(projectName, variantId);
-            if ("luma.status.variant_switched".equals(result)) {
+            if (ProjectUiSupport.variantFor(state.variants(), variantId) != null) {
                 selectedVariantId = variantId;
                 showAllSaves = false;
             }
-            refresh(result, false);
+            refresh("luma.status.project_ready", false);
         }
 
         @Override

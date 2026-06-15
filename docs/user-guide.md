@@ -252,7 +252,7 @@ Recent saves show the selected branch. Each compact card shows:
 
 `Create branch` opens a small dialog on Build History. The dialog asks for the branch name and shows a compact preview of the save the new branch will start from. It creates the branch metadata in place; it does not move you to the `Branches` screen.
 
-Use the branch picker above recent saves to switch to another branch and restore that branch head into the world. Use `Show older saves` when the branch has more saves than the initial recent list.
+Use the branch picker above recent saves to view saves from another branch without changing the active branch or restoring that branch head into the world. Use `Show older saves` when the branch has more saves than the initial recent list. Open `Branches` when you want to switch the active branch.
 
 If a preview PNG is still being generated, the preview card shows the centered loading animation instead of the no-preview text.
 
