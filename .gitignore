@@ -37,6 +37,9 @@ Desktop.ini
 !docs/**/*.md
 
 # Local notes and AI instruction files
+.superpowers/
+.codex/
+.claude/
 AGENTS.md
 modules.md
 idea.md
