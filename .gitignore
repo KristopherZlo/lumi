@@ -32,14 +32,12 @@ Desktop.ini
 **/*.md
 !README.md
 !modrinth.md
-!docs/
-!docs/*.md
-!docs/**/*.md
 
 # Local notes and AI instruction files
 .superpowers/
 .codex/
 .claude/
+docs/
 AGENTS.md
 modules.md
 idea.md
