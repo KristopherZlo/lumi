@@ -25,6 +25,7 @@ import io.github.luma.client.selection.LumiRegionSelectionTeachingController;
 import io.github.luma.client.update.MinecraftUpdateNoticeSink;
 import io.github.luma.client.update.UpdateWorldJoinNotifier;
 import io.github.luma.debug.StartupProfiler;
+import io.github.luma.debug.TesterDiagnosticsMode;
 import io.github.luma.telemetry.TelemetryService;
 import io.github.luma.ui.controller.AsyncCompareCache;
 import io.github.luma.ui.controller.ClientWorkspaceOpenService;
@@ -79,7 +80,7 @@ public final class LumaClient implements ClientModInitializer {
     private final ClientWorkspaceOpenService workspaceOpenService = new ClientWorkspaceOpenService();
     private final UpdateWorldJoinNotifier updateWorldJoinNotifier = new UpdateWorldJoinNotifier();
     private final TelemetryNoticeController telemetryNoticeController = new TelemetryNoticeController();
-    private final boolean clientRuntimeLoadSamplingEnabled = ClientRuntimeLoadSampler.configuredEnabled();
+    private final boolean clientRuntimeLoadSamplingEnabled = this.configureClientRuntimeLoadSampling();
     private boolean worldActive;
 
     static {
@@ -313,6 +314,11 @@ public final class LumaClient implements ClientModInitializer {
                 previous.uncaughtException(thread, throwable);
             }
         });
+    }
+
+    private boolean configureClientRuntimeLoadSampling() {
+        TesterDiagnosticsMode.applyDefaults();
+        return ClientRuntimeLoadSampler.configuredEnabled();
     }
 
     private void showTelemetryNotice(Minecraft client) {

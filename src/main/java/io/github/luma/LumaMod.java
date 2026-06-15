@@ -4,6 +4,7 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.debug.LumaDiagnosticsLog;
 import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.debug.StartupProfiler;
+import io.github.luma.debug.TesterDiagnosticsMode;
 import io.github.luma.integration.OptionalIntegrationBootstrap;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
@@ -37,6 +38,7 @@ public final class LumaMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        boolean testerDiagnosticsEnabled = TesterDiagnosticsMode.applyDefaults();
         long startedAt = StartupProfiler.start();
         long integrationsStartedAt = StartupProfiler.start();
         this.optionalIntegrations.initialize();
@@ -89,6 +91,9 @@ public final class LumaMod implements ModInitializer {
         LOGGER.info("{} bootstrap initialized", MOD_NAME);
         if (LumaDebugLog.globalEnabled()) {
             LOGGER.info("{} global debug logging is enabled via -Dlumi.debug=true", MOD_NAME);
+        }
+        if (testerDiagnosticsEnabled) {
+            LOGGER.info("{} tester diagnostics are enabled", MOD_NAME);
         }
         if (LumaLoadLog.enabled()) {
             LOGGER.info("{} load logging is enabled at {}", MOD_NAME, LumaLoadLog.configuredPath());
