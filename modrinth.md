@@ -20,7 +20,7 @@ Lumi gives Minecraft builders project-style history: save versions, compare chan
 
 **Status:** Alpha. Keep normal world backups.
 
-![AI placeholder showing the Lumi Build History UI over a Minecraft-style build](docs/modrinth-assets/hero-build-history.png)
+![Lumi Build History UI over a Minecraft-style build](docs/modrinth-assets/hero-build-history.png)
 
 ![Decorative Lumi section divider with a dark voxel timeline style](docs/modrinth-assets/section-divider.png)
 
@@ -63,7 +63,7 @@ Turn a dimension or build area into a Lumi project. Save named versions as your 
 
 Lumi helps you inspect progress before you commit to a restore or merge.
 
-![AI placeholder showing a Lumi compare overlay highlighting changed blocks](docs/modrinth-assets/compare-overlay-placeholder.png)
+![Lumi compare overlay highlighting changed blocks](docs/modrinth-assets/compare-overlay-placeholder.png)
 
 - Compare a save with its parent.
 - Compare two saves.
@@ -76,7 +76,7 @@ Lumi helps you inspect progress before you commit to a restore or merge.
 
 Mistakes happen. Lumi gives you several ways back.
 
-![AI placeholder showing Lumi undo and redo restoring a Minecraft-style build edit](docs/modrinth-assets/undo-redo-placeholder.png)
+![Lumi undo and redo restoring a Minecraft-style build edit](docs/modrinth-assets/undo-redo-placeholder.png)
 
 - Restore a full saved version.
 - Quick rollback unsaved work to the active save.
@@ -89,7 +89,7 @@ Mistakes happen. Lumi gives you several ways back.
 
 Want to test a roof shape, palette swap, redstone layout, or alternate facade without losing the stable version? Branch it.
 
-![AI placeholder showing Lumi branch and recovery UI panels](docs/modrinth-assets/branches-recovery-placeholder.png)
+![Lumi branch and recovery UI panels](docs/modrinth-assets/branches-recovery-placeholder.png)
 
 - Create branches for alternate build directions.
 - Switch between build directions.
@@ -149,7 +149,7 @@ All keybinds can be changed in Minecraft `Controls` -> `Lumi`.
 
 Use a wooden sword as Lumi's selection tool.
 
-![AI placeholder showing Lumi partial restore region selection around part of a build](docs/modrinth-assets/partial-restore-placeholder.png)
+![Lumi partial restore region selection around part of a build](docs/modrinth-assets/partial-restore-placeholder.png)
 
 | Input | Action |
 | --- | --- |

@@ -17,6 +17,7 @@ import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -114,6 +115,14 @@ record StructureFixtureSnapshot(
         return ComparisonPolicy.ignoringObserverPoweredAt(positions);
     }
 
+    static ComparisonPolicy ignoringRedstoneTorchLitAt(Collection<BlockPos> positions) {
+        return ComparisonPolicy.ignoringRedstoneTorchLitAt(positions);
+    }
+
+    static ComparisonPolicy ignoringRedstoneLampLitAt(Collection<BlockPos> positions) {
+        return ComparisonPolicy.ignoringRedstoneLampLitAt(positions);
+    }
+
     private boolean blocksMatch(StructureFixtureSnapshot other, ComparisonPolicy comparisonPolicy) {
         ComparisonPolicy effectivePolicy = comparisonPolicy == null
                 ? ComparisonPolicy.exact()
@@ -173,18 +182,18 @@ record StructureFixtureSnapshot(
     static final class ComparisonPolicy {
 
         private static final ComparisonPolicy EXACT = new ComparisonPolicy(Set.of());
-        private final Set<BlockPos> observerPoweredPhasePositions;
+        private final Set<IgnoredBlockProperty> ignoredPhaseProperties;
 
-        private ComparisonPolicy(Collection<BlockPos> observerPoweredPhasePositions) {
-            LinkedHashSet<BlockPos> immutablePositions = new LinkedHashSet<>();
-            if (observerPoweredPhasePositions != null) {
-                for (BlockPos pos : observerPoweredPhasePositions) {
-                    if (pos != null) {
-                        immutablePositions.add(pos.immutable());
+        private ComparisonPolicy(Collection<IgnoredBlockProperty> ignoredPhaseProperties) {
+            LinkedHashSet<IgnoredBlockProperty> copiedProperties = new LinkedHashSet<>();
+            if (ignoredPhaseProperties != null) {
+                for (IgnoredBlockProperty property : ignoredPhaseProperties) {
+                    if (property != null) {
+                        copiedProperties.add(property);
                     }
                 }
             }
-            this.observerPoweredPhasePositions = Set.copyOf(immutablePositions);
+            this.ignoredPhaseProperties = Set.copyOf(copiedProperties);
         }
 
         static ComparisonPolicy exact() {
@@ -192,21 +201,77 @@ record StructureFixtureSnapshot(
         }
 
         static ComparisonPolicy ignoringObserverPoweredAt(Collection<BlockPos> positions) {
+            return EXACT.withObserverPoweredAt(positions);
+        }
+
+        static ComparisonPolicy ignoringRedstoneTorchLitAt(Collection<BlockPos> positions) {
+            return EXACT.withRedstoneTorchLitAt(positions);
+        }
+
+        static ComparisonPolicy ignoringRedstoneLampLitAt(Collection<BlockPos> positions) {
+            return EXACT.withRedstoneLampLitAt(positions);
+        }
+
+        ComparisonPolicy withObserverPoweredAt(Collection<BlockPos> positions) {
+            return this.withBlockPropertyAt(positions, Blocks.OBSERVER, "powered");
+        }
+
+        ComparisonPolicy withRedstoneTorchLitAt(Collection<BlockPos> positions) {
+            return this.withBlockPropertyAt(positions, Blocks.REDSTONE_TORCH, "lit");
+        }
+
+        ComparisonPolicy withRedstoneLampLitAt(Collection<BlockPos> positions) {
+            return this.withBlockPropertyAt(positions, Blocks.REDSTONE_LAMP, "lit");
+        }
+
+        private ComparisonPolicy withBlockPropertyAt(
+                Collection<BlockPos> positions,
+                Block block,
+                String propertyName
+        ) {
             if (positions == null || positions.isEmpty()) {
-                return EXACT;
+                return this;
             }
-            return new ComparisonPolicy(positions);
+
+            LinkedHashSet<IgnoredBlockProperty> combined = new LinkedHashSet<>(this.ignoredPhaseProperties);
+            for (BlockPos pos : positions) {
+                if (pos != null) {
+                    combined.add(new IgnoredBlockProperty(pos, block, propertyName));
+                }
+            }
+            if (combined.equals(this.ignoredPhaseProperties)) {
+                return this;
+            }
+            return new ComparisonPolicy(combined);
         }
 
         private boolean equivalent(BlockPos pos, BlockSnapshot expected, BlockSnapshot actual) {
             if (Objects.equals(expected, actual)) {
                 return true;
             }
-            return this.observerPoweredPhasePositions.contains(pos)
-                    && expected != null
-                    && actual != null
-                    && expected.blockEntitySnbt().equals(actual.blockEntitySnbt())
-                    && expected.differsOnlyByObserverPowered(actual);
+            if (expected == null || actual == null || !expected.blockEntitySnbt().equals(actual.blockEntitySnbt())) {
+                return false;
+            }
+            for (IgnoredBlockProperty property : this.ignoredPhaseProperties) {
+                if (property.matches(pos, expected, actual)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    private record IgnoredBlockProperty(BlockPos pos, Block block, String propertyName) {
+
+        IgnoredBlockProperty {
+            pos = Objects.requireNonNull(pos, "pos").immutable();
+            block = Objects.requireNonNull(block, "block");
+            propertyName = Objects.requireNonNull(propertyName, "propertyName");
+        }
+
+        private boolean matches(BlockPos candidate, BlockSnapshot expected, BlockSnapshot actual) {
+            return this.pos.equals(candidate)
+                    && expected.differsOnlyByBlockProperty(actual, this.block, this.propertyName);
         }
     }
 
@@ -219,13 +284,17 @@ record StructureFixtureSnapshot(
             return new BlockSnapshot(state, snbt(NbtUtils.writeBlockState(state)), snbt(blockEntityTag));
         }
 
-        private boolean differsOnlyByObserverPowered(BlockSnapshot other) {
+        private boolean differsOnlyByBlockProperty(
+                BlockSnapshot other,
+                Block block,
+                String ignoredPropertyName
+        ) {
             if (this.state == null || other == null || other.state == null
-                    || !this.state.is(Blocks.OBSERVER) || !other.state.is(Blocks.OBSERVER)
+                    || !this.state.is(block) || !other.state.is(block)
                     || this.state.getBlock() != other.state.getBlock()) {
                 return false;
             }
-            return this.differsOnlyByProperty(other.state, "powered");
+            return this.differsOnlyByProperty(other.state, ignoredPropertyName);
         }
 
         private boolean differsOnlyByProperty(BlockState otherState, String ignoredPropertyName) {

@@ -88,20 +88,26 @@ final class GeneratedRedstoneStructureFixtures {
         });
     }
 
-    static StructureFixtureSnapshot.ComparisonPolicy undoComparisonPolicy(
+    static StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy(
             String name,
             SingleplayerTestVolume volume
     ) {
+        StructureFixtureSnapshot.ComparisonPolicy policy = StructureFixtureSnapshot.exactComparison();
+        if (TORCH_INVERTER.equals(name)) {
+            return policy.withRedstoneTorchLitAt(List.of(torchInverterBlockPos(volume).above()));
+        }
         if (CLOSED_OBSERVER_PISTON.equals(name)) {
-            return StructureFixtureSnapshot.ignoringObserverPoweredAt(List.of(
+            return policy.withObserverPoweredAt(List.of(
                     closedObserverPistonObserverHomePos(volume),
                     closedObserverPistonPairedObserverPos(volume)
             ));
         }
         if (OBSERVER_PULSE.equals(name)) {
-            return StructureFixtureSnapshot.ignoringObserverPoweredAt(List.of(observerPulseObserverPos(volume)));
+            return policy
+                    .withObserverPoweredAt(List.of(observerPulseObserverPos(volume)))
+                    .withRedstoneLampLitAt(List.of(observerPulseObserverPos(volume).east()));
         }
-        return StructureFixtureSnapshot.exactComparison();
+        return policy;
     }
 
     static void verifyUndoSmoke(

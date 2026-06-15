@@ -10,11 +10,11 @@
       ],
       "loader": "fabric",
       "channel": "alpha",
-      "title": "Lumi alpha 0.1.0 updater test",
-      "summary": "Update test changes:\nStartup check now runs without local override flags.\nWorld chat shows one clickable update notice per version.\nBuild History opens the updater as a modal dialog.\nRestore confirmations are moving to modal dialogs over the current screen.",
-      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.2-updater-test",
-      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.2-updater-test",
-      "sha256": "A24843BE0D2192FF1E0E04318E6311589183005D63DAF27EC119725555C0C35D"
+      "title": "Lumi alpha 0.1.0-alpha.2",
+      "summary": "Alpha 0.1.0-alpha.2 changes:\nStartup update checks run without local override flags.\nWorld chat shows one clickable update notice per version.\nBuild History opens the updater as a modal dialog.\nRestore confirmations are moving to modal dialogs over the current screen.",
+      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.2",
+      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.2",
+      "sha256": "1BFC8743A3D92AB6CA4011BDEA28C553169AB36D05384A9B9D643D790415ADA7"
     }
   ]
 }

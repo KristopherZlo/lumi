@@ -5,6 +5,9 @@
   "name": "Lumi Game Tests",
   "environment": "*",
   "entrypoints": {
+    "main": [
+      "io.github.luma.gametest.LumiGameTestRuntimeHooks"
+    ],
     "fabric-gametest": [
       "io.github.luma.gametest.LumiGameTests"
     ],

@@ -364,7 +364,7 @@ final class SingleplayerStructureFixtureScenario {
 
     private OperationHandle verifyUndoAndQueueRedo(List<String> messages) {
         StructureFixtureSnapshot restored = StructureFixtureSnapshot.capture(this.level, this.volume);
-        StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy = this.undoComparisonPolicy();
+        StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy = this.comparisonPolicy();
         boolean matches = this.baseline.matches(restored, comparisonPolicy);
         if (this.requiresExactSnapshots()) {
             this.record(matches, this.currentFixture.name() + " " + this.currentControl.label()
@@ -410,18 +410,19 @@ final class SingleplayerStructureFixtureScenario {
 
     private void verifyRedo(List<String> messages) {
         StructureFixtureSnapshot redone = StructureFixtureSnapshot.capture(this.level, this.volume);
-        boolean matches = this.changedSnapshot != null && this.changedSnapshot.matches(redone);
+        StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy = this.comparisonPolicy();
+        boolean matches = this.changedSnapshot != null && this.changedSnapshot.matches(redone, comparisonPolicy);
         if (this.requiresExactSnapshots()) {
             this.record(matches, this.currentFixture.name() + " " + this.currentControl.label()
                     + " returned exactly to the " + this.currentWaitTicks
                     + "-tick changed snapshot immediately after redo"
-                    + (matches ? "" : ": " + this.redoDiff(redone)));
+                    + (matches ? "" : ": " + this.redoDiff(redone, comparisonPolicy)));
         } else {
             this.record(true, this.currentFixture.name() + " " + this.currentControl.label()
                     + " completed redo operation for " + this.currentWaitTicks + "-tick saved fixture case");
             if (!matches) {
                 messages.add("Saved structure fixture " + this.currentFixture.name()
-                        + " redo differed from exact dynamic snapshot: " + this.redoDiff(redone));
+                        + " redo differed from exact dynamic snapshot: " + this.redoDiff(redone, comparisonPolicy));
             }
         }
         messages.add("Verified redo for " + this.currentFixture.name() + " "
@@ -430,17 +431,20 @@ final class SingleplayerStructureFixtureScenario {
         this.stage = Stage.LOAD_CONTROL_CASE;
     }
 
-    private StructureFixtureSnapshot.ComparisonPolicy undoComparisonPolicy() {
+    private StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy() {
         return this.isGeneratedFixture(this.currentFixture)
-                ? GeneratedRedstoneStructureFixtures.undoComparisonPolicy(this.currentFixture.name(), this.volume)
+                ? GeneratedRedstoneStructureFixtures.comparisonPolicy(this.currentFixture.name(), this.volume)
                 : StructureFixtureSnapshot.exactComparison();
     }
 
-    private String redoDiff(StructureFixtureSnapshot redone) {
+    private String redoDiff(
+            StructureFixtureSnapshot redone,
+            StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy
+    ) {
         if (this.changedSnapshot == null) {
             return "missing changed snapshot";
         }
-        return this.changedSnapshot.diff(redone);
+        return this.changedSnapshot.diff(redone, comparisonPolicy);
     }
 
     private void advanceCase() {
