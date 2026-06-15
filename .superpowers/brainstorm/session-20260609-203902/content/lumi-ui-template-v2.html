@@ -1,0 +1,1350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lumi UI Template v2</title>
+  <style>
+    :root {
+      --bg: #202020;
+      --ink: #111111;
+      --ink-2: #161616;
+      --ink-3: #1d1d1d;
+      --stone: #2e2e2e;
+      --stone-2: #3f3f3f;
+      --line: #666666;
+      --line-soft: #383838;
+      --text: #e7e7e7;
+      --muted: #b6b6b6;
+      --dim: #7a7a7a;
+      --accent: #3f6fa7;
+      --accent-2: #264f7e;
+      --green: #4f8f4f;
+      --red: #9c3d36;
+      --red-2: #642722;
+      --font: "Cascadia Mono", "Consolas", "Bahnschrift", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      letter-spacing: 0;
+    }
+
+    body {
+      min-width: 320px;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      color: inherit;
+      border-radius: 0;
+    }
+
+    .screen {
+      width: min(1180px, 100%);
+      height: min(720px, calc(100vh - 36px));
+      min-height: 590px;
+      border: 2px solid #050505;
+      background: var(--ink);
+      display: grid;
+      grid-template-rows: 42px 104px minmax(0, 1fr) 34px;
+      overflow: hidden;
+    }
+
+    .window-bar {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 0 10px;
+      border-bottom: 2px solid #050505;
+      background: #262626;
+    }
+
+    .mark {
+      width: 25px;
+      height: 25px;
+      border: 1px solid #9a9a9a;
+      color: #efefef;
+      display: grid;
+      place-items: center;
+      font-size: 17px;
+      font-weight: 900;
+      background: #3a3a3a;
+    }
+
+    .window-title {
+      min-width: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    .window-title strong {
+      font-size: 15px;
+      font-weight: 780;
+      white-space: nowrap;
+    }
+
+    .window-title span {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .window-controls {
+      display: flex;
+      gap: 4px;
+    }
+
+    .window-dot {
+      width: 27px;
+      height: 24px;
+      border: 1px solid var(--line-soft);
+      background: #333333;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+    }
+
+    .command-deck {
+      display: grid;
+      grid-template-columns: auto 1fr 310px;
+      gap: 14px;
+      align-items: stretch;
+      padding: 12px 14px;
+      border-bottom: 2px solid #050505;
+      background: #181818;
+    }
+
+    .primary-actions {
+      display: grid;
+      grid-template-columns: repeat(4, 74px);
+      gap: 8px;
+    }
+
+    .action {
+      border: 1px solid var(--line);
+      background: #2c2c2c;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      position: relative;
+      color: var(--muted);
+      min-width: 0;
+    }
+
+    .action svg {
+      width: 28px;
+      height: 28px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .action.primary {
+      color: #ffffff;
+      border-color: var(--accent);
+      background: var(--accent-2);
+    }
+
+    .action:focus-visible,
+    .action:hover {
+      outline: none;
+      border-color: #9eb7d6;
+      color: var(--text);
+      background: #3a3a3a;
+    }
+
+    .action:disabled {
+      cursor: not-allowed;
+      color: #646464;
+      border-color: #2c2c2c;
+      background: #181818;
+    }
+
+    .action::after {
+      content: attr(data-key);
+      position: absolute;
+      right: 5px;
+      bottom: 4px;
+      color: var(--dim);
+      font-size: 10px;
+    }
+
+    .search-block {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) 128px 118px 46px;
+      gap: 8px;
+      align-content: start;
+      border-left: 1px solid var(--line-soft);
+      padding-left: 14px;
+    }
+
+    .field,
+    .select {
+      height: 42px;
+      border: 1px solid var(--line-soft);
+      background: #0f0f0f;
+      color: var(--text);
+      border-radius: 0;
+      min-width: 0;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .field:focus,
+    .select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .select {
+      color: var(--muted);
+    }
+
+    .status-panel {
+      border: 1px solid var(--line-soft);
+      background: #202020;
+      display: grid;
+      grid-template-columns: 1fr 42px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .status-copy {
+      padding: 0 12px;
+      min-width: 0;
+    }
+
+    .status-copy strong {
+      display: block;
+      color: #dcdcdc;
+      font-size: 13px;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .status-copy span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .icon-button {
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--line-soft);
+      background: #2a2a2a;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .icon-button svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .icon-button:hover,
+    .icon-button:focus-visible {
+      outline: none;
+      border-color: #9eb7d6;
+      color: var(--text);
+    }
+
+    .primary-action {
+      border-color: var(--accent);
+      color: #ffffff;
+      background: var(--accent-2);
+    }
+
+    .primary-action:hover,
+    .primary-action:focus-visible {
+      border-color: #9eb7d6;
+      color: var(--text);
+      background: #3a3a3a;
+    }
+
+    .workbench {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 250px minmax(360px, 1fr) 390px;
+      border-bottom: 2px solid #050505;
+    }
+
+    .branches {
+      min-width: 0;
+      border-right: 2px solid #050505;
+      background: #171717;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .section-title {
+      height: 36px;
+      border-bottom: 1px solid var(--line-soft);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      color: #d6d6d6;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .section-title svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .branch-list {
+      padding: 10px;
+      overflow: auto;
+    }
+
+    .branch-row {
+      width: 100%;
+      height: 40px;
+      border: 1px solid transparent;
+      background: transparent;
+      display: grid;
+      grid-template-columns: 22px 1fr auto;
+      align-items: center;
+      gap: 8px;
+      padding: 0 8px;
+      margin-bottom: 5px;
+      color: var(--muted);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .branch-row svg {
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .branch-row strong {
+      color: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .branch-row span {
+      color: var(--dim);
+      font-size: 11px;
+    }
+
+    .branch-row.active {
+      color: var(--text);
+      background: #1e3d63;
+      border-color: var(--accent);
+    }
+
+    .branch-row:hover {
+      border-color: var(--line);
+    }
+
+    .side-tools {
+      border-top: 1px solid var(--line-soft);
+      padding: 10px;
+    }
+
+    .tool-row {
+      width: 100%;
+      height: 34px;
+      border: 1px solid var(--line-soft);
+      background: #202020;
+      color: var(--muted);
+      display: grid;
+      grid-template-columns: 26px 1fr;
+      gap: 8px;
+      align-items: center;
+      padding: 0 8px;
+      margin-bottom: 5px;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .tool-row svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .tool-row span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 11px;
+    }
+
+    .tool-row:hover {
+      color: var(--text);
+      border-color: var(--accent);
+    }
+
+    .timeline-panel {
+      min-width: 0;
+      background: #111111;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      position: relative;
+    }
+
+    .timeline-head {
+      height: 36px;
+      border-bottom: 1px solid var(--line-soft);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      padding: 0 12px;
+      background: #171717;
+    }
+
+    .timeline-head strong {
+      color: #d6d6d6;
+      font-size: 12px;
+    }
+
+    .timeline-head span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .timeline {
+      min-height: 0;
+      overflow: auto;
+      padding: 22px 26px 30px 76px;
+      position: relative;
+    }
+
+    .axis {
+      position: absolute;
+      top: 16px;
+      bottom: 22px;
+      left: 56px;
+      width: 3px;
+      background: #5f5f5f;
+    }
+
+    .commit {
+      width: 100%;
+      min-height: 76px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: inherit;
+      display: grid;
+      grid-template-columns: 68px 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 8px 8px 16px;
+      margin-bottom: 13px;
+      position: relative;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .commit::before {
+      content: "";
+      position: absolute;
+      left: -25px;
+      top: 31px;
+      width: 13px;
+      height: 13px;
+      background: #d0d0d0;
+      border: 2px solid #202020;
+      z-index: 1;
+    }
+
+    .commit::after {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 38px;
+      width: 14px;
+      height: 2px;
+      background: #5f5f5f;
+    }
+
+    .commit.branch-node::before {
+      background: #16263a;
+      border-color: var(--accent);
+    }
+
+    .commit.selected {
+      border-color: var(--accent);
+      background: #1a2636;
+    }
+
+    .commit.selected::before {
+      background: #d0d0d0;
+      border-color: var(--accent);
+    }
+
+    .commit:hover {
+      background: #1c1c1c;
+      border-color: var(--line);
+    }
+
+    .mini-preview {
+      width: 64px;
+      height: 52px;
+      border: 1px solid var(--line);
+      background: #202020;
+      color: var(--dim);
+      display: grid;
+      place-items: center;
+      font-size: 9px;
+      line-height: 1.1;
+      text-align: center;
+      padding: 4px;
+      text-transform: uppercase;
+    }
+
+    .commit-main {
+      min-width: 0;
+    }
+
+    .commit-title {
+      margin: 0 0 4px;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 780;
+      line-height: 1.15;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .commit-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .commit-id {
+      color: var(--dim);
+      font-size: 11px;
+      line-height: 1.35;
+      white-space: nowrap;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      background: #202020;
+      color: var(--muted);
+      min-width: 38px;
+      text-align: center;
+      padding: 3px 5px;
+      font-size: 10px;
+    }
+
+    .tag.gold {
+      color: #ffffff;
+      border-color: var(--accent);
+      background: var(--accent-2);
+    }
+
+    .tag.branch {
+      color: #d8e7fa;
+      border-color: var(--accent);
+      background: #16263a;
+    }
+
+    .inspector {
+      min-width: 0;
+      border-left: 2px solid #050505;
+      background: #171717;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .inspector-head {
+      min-height: 70px;
+      border-bottom: 1px solid var(--line-soft);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: start;
+      padding: 12px;
+    }
+
+    .inspector-head h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      line-height: 1.15;
+      font-weight: 820;
+      color: var(--text);
+    }
+
+    .inspector-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .copy-id {
+      height: 28px;
+      border: 1px solid var(--accent);
+      background: #1e3d63;
+      color: #ffffff;
+      padding: 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    .copy-id svg {
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .inspector-scroll {
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+    }
+
+    .blueprint {
+      height: 216px;
+      border: 1px solid var(--line);
+      background: #101010;
+      display: grid;
+      place-items: center;
+      color: var(--dim);
+      font-size: 12px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .inspector-section {
+      border: 1px solid var(--line-soft);
+      margin-bottom: 10px;
+    }
+
+    .inspector-section > strong {
+      height: 30px;
+      border-bottom: 1px solid var(--line-soft);
+      display: flex;
+      align-items: center;
+      padding: 0 9px;
+      color: #d6d6d6;
+      font-size: 11px;
+    }
+
+    .message {
+      margin: 0;
+      padding: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .meta-cell {
+      min-height: 34px;
+      border-right: 1px solid var(--line-soft);
+      border-bottom: 1px solid var(--line-soft);
+      padding: 7px 9px;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .meta-cell:nth-child(2n) {
+      border-right: 0;
+    }
+
+    .meta-cell:nth-last-child(-n + 2) {
+      border-bottom: 0;
+    }
+
+    .meta-cell b {
+      color: var(--text);
+      font-weight: 680;
+    }
+
+    .inspector-actions {
+      border-top: 1px solid var(--line-soft);
+      padding: 9px 12px;
+      display: grid;
+      grid-template-columns: repeat(6, 42px) 1fr 42px;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .danger {
+      border-color: var(--red-2);
+      color: #e4a095;
+      background: #311615;
+    }
+
+    .danger:hover,
+    .danger:focus-visible {
+      border-color: var(--red);
+      color: #ffd5cf;
+    }
+
+    .drawer {
+      position: fixed;
+      right: 24px;
+      top: 24px;
+      bottom: 24px;
+      width: min(320px, calc(100vw - 48px));
+      height: auto;
+      border: 2px solid #050505;
+      background: #171717;
+      z-index: 5;
+      display: none;
+      grid-template-rows: 42px 1fr;
+    }
+
+    .drawer.open {
+      display: grid;
+    }
+
+    .drawer-head {
+      border-bottom: 1px solid var(--line-soft);
+      display: grid;
+      grid-template-columns: 1fr 42px;
+      align-items: center;
+      padding-left: 12px;
+      color: #d6d6d6;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .drawer-body {
+      padding: 10px;
+      overflow: auto;
+    }
+
+    .confirm-layer {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: grid;
+      place-items: center;
+      z-index: 8;
+      padding: 18px;
+    }
+
+    .confirm-layer[hidden] {
+      display: none;
+    }
+
+    .confirm {
+      width: min(390px, 100%);
+      border: 2px solid #050505;
+      background: #171717;
+    }
+
+    .confirm-head {
+      height: 42px;
+      display: grid;
+      grid-template-columns: 1fr 42px;
+      align-items: center;
+      border-bottom: 1px solid var(--line-soft);
+      padding-left: 12px;
+      color: #d6d6d6;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .confirm-body {
+      padding: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .confirm-actions {
+      border-top: 1px solid var(--line-soft);
+      padding: 9px 12px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .status-line {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 0 12px;
+      background: #202020;
+      color: var(--muted);
+      font-size: 11px;
+      min-width: 0;
+    }
+
+    .status-line span {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .keys {
+      display: flex;
+      gap: 12px;
+      color: var(--dim);
+      white-space: nowrap;
+    }
+
+    @media (max-width: 980px) {
+      body {
+        padding: 10px;
+      }
+
+      .screen {
+        height: calc(100vh - 20px);
+        min-height: 640px;
+        grid-template-rows: 42px auto minmax(0, 1fr) 34px;
+      }
+
+      .command-deck {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .primary-actions {
+        grid-template-columns: repeat(4, minmax(54px, 1fr));
+      }
+
+      .search-block {
+        border-left: 0;
+        padding-left: 0;
+        grid-template-columns: minmax(0, 1fr) 42px;
+      }
+
+      .search-block .select {
+        display: none;
+      }
+
+      .status-panel {
+        display: none;
+      }
+
+      .workbench {
+        grid-template-columns: 52px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) 290px;
+      }
+
+      .branches {
+        grid-row: 1 / 3;
+      }
+
+      .branches .section-title,
+      .branch-row strong,
+      .branch-row span,
+      .side-tools span {
+        display: none;
+      }
+
+      .branch-list,
+      .side-tools {
+        padding: 5px;
+      }
+
+      .branch-row,
+      .tool-row {
+        width: 40px;
+        grid-template-columns: 1fr;
+        place-items: center;
+        padding: 0;
+      }
+
+      .timeline-panel {
+        border-right: 0;
+      }
+
+      .timeline {
+        padding-left: 58px;
+      }
+
+      .axis {
+        left: 40px;
+      }
+
+      .commit::before {
+        left: -23px;
+      }
+
+      .inspector {
+        grid-column: 2;
+        border-left: 0;
+        border-top: 2px solid #050505;
+      }
+
+      .blueprint {
+        height: 130px;
+      }
+
+      .meta-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .meta-cell,
+      .meta-cell:nth-child(2n) {
+        border-right: 0;
+      }
+
+      .inspector-actions {
+        grid-template-columns: repeat(6, 42px) 1fr 42px;
+        overflow: auto;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .screen {
+        min-height: 620px;
+      }
+
+      .window-title span,
+      .keys {
+        display: none;
+      }
+
+      .commit {
+        grid-template-columns: 52px 1fr;
+      }
+
+      .commit .tag {
+        display: none;
+      }
+
+      .mini-preview {
+        width: 50px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" focusable="false">
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7H7v7"/><path d="M7 3v5h8"/></symbol>
+    <symbol id="i-restore" viewBox="0 0 24 24"><path d="M3 8V3h5"/><path d="M3.05 13A9 9 0 1 0 5.7 6.7L3 8"/></symbol>
+    <symbol id="i-branch" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 24 24"><rect x="3" y="5" width="7" height="14"/><rect x="14" y="5" width="7" height="14"/><path d="M7 9h0"/><path d="M17 15h0"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+    <symbol id="i-delete" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v2"/><path d="M19 6l-1 14c-.1 1.1-1 2-2 2H8c-1.1 0-1.9-.9-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></symbol>
+    <symbol id="i-rename" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7"/><path d="M18.4 2.6a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></symbol>
+    <symbol id="i-parent" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v1a8 8 0 0 0 8 8h1"/></symbol>
+    <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.2-3.2a6 6 0 0 1-7.8 7.8L6.5 20.5a2.1 2.1 0 0 1-3-3l6.6-6.6a6 6 0 0 1 7.8-7.8z"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></symbol>
+    <symbol id="i-import" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-clean" viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M8 21V9l8-4v16"/><path d="M8 13h8"/><path d="M8 17h8"/></symbol>
+    <symbol id="i-diag" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-update" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1-1.5 1.5-2.3 2.1-.5.4-.6.8-.6 1.4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  </svg>
+
+  <div class="screen">
+    <header class="window-bar">
+      <div class="mark">L</div>
+      <div class="window-title">
+        <strong>Lumi</strong>
+        <span>Overworld / castle_project / main</span>
+      </div>
+      <div class="window-controls" aria-hidden="true">
+        <div class="window-dot">-</div>
+        <div class="window-dot">□</div>
+        <div class="window-dot">x</div>
+      </div>
+    </header>
+
+    <section class="command-deck" aria-label="Primary actions">
+      <div class="primary-actions">
+        <button class="action primary" data-key="S" title="Save current" aria-label="Save current">
+          <svg><use href="#i-save"></use></svg>
+        </button>
+        <button class="action" id="restoreTop" data-key="R" title="Restore selected" aria-label="Restore selected">
+          <svg><use href="#i-restore"></use></svg>
+        </button>
+        <button class="action" data-key="B" title="Create branch from selected" aria-label="Create branch from selected">
+          <svg><use href="#i-branch"></use></svg>
+        </button>
+        <button class="action" data-key="C" title="Compare selected with current" aria-label="Compare selected with current">
+          <svg><use href="#i-compare"></use></svg>
+        </button>
+      </div>
+
+      <div class="search-block">
+        <input class="field" id="search" type="search" placeholder="Search commits" aria-label="Search commits">
+        <select class="select" id="branchFilter" aria-label="Branch filter">
+          <option value="all">All branches</option>
+          <option value="main">main</option>
+          <option value="castle-wing">castle-wing</option>
+          <option value="tower-experiment">tower-experiment</option>
+        </select>
+        <select class="select" id="stateFilter" aria-label="Status filter">
+          <option value="all">All states</option>
+          <option value="head">Heads</option>
+          <option value="selected">Selected</option>
+        </select>
+        <button class="icon-button" title="Filter" aria-label="Filter">
+          <svg><use href="#i-filter"></use></svg>
+        </button>
+      </div>
+
+      <div class="status-panel">
+        <div class="status-copy">
+          <strong>Working tree has 3 changes</strong>
+          <span>12 commits across 3 branches</span>
+        </div>
+        <button class="icon-button" title="Open utilities" aria-label="Open utilities" id="openDrawer">
+          <svg><use href="#i-tools"></use></svg>
+        </button>
+      </div>
+    </section>
+
+    <main class="workbench">
+      <aside class="branches" aria-label="Branches and secondary tools">
+        <div class="section-title">
+          <svg><use href="#i-branch"></use></svg>
+          <span>Branches</span>
+        </div>
+        <div class="branch-list">
+          <button class="branch-row active" data-branch="main" title="main branch">
+            <svg><use href="#i-branch"></use></svg><strong>main</strong><span>8</span>
+          </button>
+          <button class="branch-row" data-branch="castle-wing" title="castle-wing branch">
+            <svg><use href="#i-branch"></use></svg><strong>castle-wing</strong><span>3</span>
+          </button>
+          <button class="branch-row" data-branch="tower-experiment" title="tower-experiment branch">
+            <svg><use href="#i-branch"></use></svg><strong>tower-experiment</strong><span>2</span>
+          </button>
+        </div>
+        <div class="side-tools">
+          <button class="tool-row" title="Import package"><svg><use href="#i-import"></use></svg><span>Import</span></button>
+          <button class="tool-row" title="Export package"><svg><use href="#i-export"></use></svg><span>Export</span></button>
+          <button class="tool-row danger-action" title="Cleanup requires inspection"><svg><use href="#i-clean"></use></svg><span>Cleanup</span></button>
+          <button class="tool-row" title="Diagnostics"><svg><use href="#i-diag"></use></svg><span>Diagnostics</span></button>
+        </div>
+      </aside>
+
+      <section class="timeline-panel" aria-label="Build timeline">
+        <div class="timeline-head">
+          <strong>Timeline</strong>
+          <span id="timelineCount">12 commits</span>
+        </div>
+        <div class="timeline" id="timeline">
+          <div class="axis" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <aside class="inspector" aria-label="Selected commit details">
+        <div class="inspector-head">
+          <div>
+            <h2 id="detailTitle">Courtyard Base</h2>
+            <p id="detailMeta">main / 1d ago / 421 changed blocks</p>
+          </div>
+          <button class="copy-id" title="Copy commit id" aria-label="Copy commit id">
+            <span id="detailId">b1c7f2a</span>
+            <svg width="14" height="14"><use href="#i-copy"></use></svg>
+          </button>
+        </div>
+
+        <div class="inspector-scroll">
+          <div class="blueprint" role="img" aria-label="No preview">No preview</div>
+
+          <div class="inspector-section">
+            <strong>Commit message</strong>
+            <p class="message" id="detailMessage">Established courtyard footprint and foundation walls.</p>
+          </div>
+
+          <div class="inspector-section">
+            <strong>Metadata</strong>
+            <div class="meta-grid">
+              <div class="meta-cell"><b>World</b> castle_project</div>
+              <div class="meta-cell"><b>Chunks</b> <span id="metaChunks">842</span></div>
+              <div class="meta-cell"><b>Author</b> Builder</div>
+              <div class="meta-cell"><b>Size</b> <span id="metaSize">38.2 MB</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="inspector-actions">
+          <button class="icon-button primary-action" title="Restore this save" aria-label="Restore this save"><svg><use href="#i-restore"></use></svg></button>
+          <button class="icon-button" title="Compare with current" aria-label="Compare with current"><svg><use href="#i-compare"></use></svg></button>
+          <button class="icon-button" title="Compare with parent" aria-label="Compare with parent"><svg><use href="#i-parent"></use></svg></button>
+          <button class="icon-button" title="Create branch" aria-label="Create branch"><svg><use href="#i-branch"></use></svg></button>
+          <button class="icon-button" title="Rename save" aria-label="Rename save"><svg><use href="#i-rename"></use></svg></button>
+          <button class="icon-button" title="Raw references" aria-label="Raw references"><svg><use href="#i-more"></use></svg></button>
+          <span></span>
+          <button class="icon-button danger danger-action" title="Delete commit" aria-label="Delete commit"><svg><use href="#i-delete"></use></svg></button>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="status-line">
+      <span id="status">Ready. Selecting a commit changes preview only; restore requires confirmation.</span>
+      <div class="keys"><span>[LMB] Select</span><span>[C] Compare</span><span>[R] Restore</span><span>[S] Save</span></div>
+    </footer>
+  </div>
+
+  <aside class="drawer" id="drawer" aria-label="Utility drawer">
+    <div class="drawer-head">
+      <span>Utilities</span>
+      <button class="icon-button" id="closeDrawer" title="Close utilities" aria-label="Close utilities"><svg><use href="#i-close"></use></svg></button>
+    </div>
+    <div class="drawer-body">
+      <button class="tool-row" title="Export package"><svg><use href="#i-export"></use></svg><span>Export package</span></button>
+      <button class="tool-row" title="Import package"><svg><use href="#i-import"></use></svg><span>Import package</span></button>
+      <button class="tool-row danger-action" title="Cleanup requires inspection"><svg><use href="#i-clean"></use></svg><span>Cleanup</span></button>
+      <button class="tool-row" title="Diagnostics"><svg><use href="#i-diag"></use></svg><span>Diagnostics</span></button>
+      <button class="tool-row" title="Updates"><svg><use href="#i-update"></use></svg><span>Updates</span></button>
+      <button class="tool-row" title="Deleted saves"><svg><use href="#i-delete"></use></svg><span>Deleted saves</span></button>
+      <button class="tool-row" title="Raw references"><svg><use href="#i-more"></use></svg><span>Raw references</span></button>
+      <button class="tool-row" title="Replay onboarding"><svg><use href="#i-help"></use></svg><span>Onboarding replay</span></button>
+    </div>
+  </aside>
+
+  <div class="confirm-layer" id="confirmLayer" hidden>
+    <div class="confirm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="confirm-head">
+        <span id="confirmTitle">Confirm restore</span>
+        <button class="icon-button" id="closeConfirm" title="Cancel" aria-label="Cancel"><svg><use href="#i-close"></use></svg></button>
+      </div>
+      <div class="confirm-body" id="confirmText"></div>
+      <div class="confirm-actions">
+        <button class="icon-button" id="cancelConfirm" title="Cancel" aria-label="Cancel"><svg><use href="#i-close"></use></svg></button>
+        <button class="icon-button primary-action" id="acceptConfirm" title="Confirm" aria-label="Confirm"><svg><use href="#i-restore"></use></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const commits = [
+      { id: "a8f39e1", title: "Great Hall Roof", branch: "main", time: "2m ago", blocks: 76, chunks: 8, size: "42.1 MB", head: true, message: "Raised the roofline and closed the hall silhouette." },
+      { id: "e3b40a7", title: "Window Detailing", branch: "main", time: "1h ago", blocks: 118, chunks: 9, size: "41.7 MB", head: false, message: "Added narrow window cuts and side trim." },
+      { id: "c4d8e91", title: "Wall Trim Update", branch: "main", time: "5h ago", blocks: 203, chunks: 11, size: "40.5 MB", head: false, message: "Rebalanced wall depth and corner supports." },
+      { id: "b1c7f2a", title: "Courtyard Base", branch: "main", time: "1d ago", blocks: 421, chunks: 14, size: "38.2 MB", head: false, message: "Established courtyard footprint and foundation walls." },
+      { id: "d3e9a11", title: "Tower Floor 2", branch: "tower-experiment", time: "20h ago", blocks: 264, chunks: 12, size: "36.8 MB", head: true, message: "Forked a taller tower profile from the courtyard state." },
+      { id: "e5f1b44", title: "Tower Floor 1", branch: "tower-experiment", time: "2d ago", blocks: 198, chunks: 10, size: "34.9 MB", head: false, message: "Started tower experiment with a smaller footprint." },
+      { id: "f7c2d31", title: "Castle Wing Sketch", branch: "castle-wing", time: "3d ago", blocks: 312, chunks: 16, size: "35.4 MB", head: true, message: "Blocked a side wing without touching the main hall." }
+    ];
+
+    let selectedId = "b1c7f2a";
+    const timeline = document.getElementById("timeline");
+    const search = document.getElementById("search");
+    const branchFilter = document.getElementById("branchFilter");
+    const stateFilter = document.getElementById("stateFilter");
+    const status = document.getElementById("status");
+    const confirmLayer = document.getElementById("confirmLayer");
+    const confirmTitle = document.getElementById("confirmTitle");
+    const confirmText = document.getElementById("confirmText");
+    const drawer = document.getElementById("drawer");
+
+    function selectedCommit() {
+      return commits.find(commit => commit.id === selectedId);
+    }
+
+    function commitVisible(commit) {
+      const query = search.value.trim().toLowerCase();
+      if (query && !(commit.title + " " + commit.id + " " + commit.branch).toLowerCase().includes(query)) return false;
+      if (branchFilter.value !== "all" && commit.branch !== branchFilter.value) return false;
+      if (stateFilter.value === "head" && !commit.head) return false;
+      if (stateFilter.value === "selected" && commit.id !== selectedId) return false;
+      return true;
+    }
+
+    function syncBranchRows() {
+      for (const row of document.querySelectorAll(".branch-row")) {
+        row.classList.toggle("active", row.dataset.branch === branchFilter.value);
+      }
+    }
+
+    function renderTimeline() {
+      timeline.querySelectorAll(".commit").forEach(node => node.remove());
+      syncBranchRows();
+      const visible = commits.filter(commitVisible);
+      document.getElementById("timelineCount").textContent = visible.length + " visible";
+      if (visible.length && !visible.some(commit => commit.id === selectedId)) {
+        selectedId = visible[0].id;
+        updateDetail(visible[0], false);
+      }
+      if (!visible.length) {
+        const empty = document.createElement("button");
+        empty.className = "commit";
+        empty.type = "button";
+        empty.disabled = true;
+        empty.innerHTML = '<div class="mini-preview" aria-label="No preview">No preview</div><div class="commit-main"><p class="commit-title">No matching commits</p><div class="commit-meta">Change search or filters</div></div>';
+        timeline.appendChild(empty);
+        return;
+      }
+
+      for (const commit of visible) {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "commit" + (commit.id === selectedId ? " selected" : "") + (commit.branch !== "main" ? " branch-node" : "");
+        item.setAttribute("aria-label", "Select " + commit.title);
+        item.innerHTML = `
+          <div class="mini-preview" aria-label="No preview">No preview</div>
+          <div class="commit-main">
+            <p class="commit-title">${commit.title}</p>
+            <div class="commit-meta">${commit.time} / ${commit.branch} / ${commit.blocks} blocks</div>
+            <div class="commit-id">${commit.id}</div>
+          </div>
+          <div class="tag ${commit.head ? "gold" : commit.branch !== "main" ? "branch" : ""}">${commit.head ? "HEAD" : commit.chunks + "c"}</div>
+        `;
+        item.addEventListener("click", () => selectCommit(commit.id));
+        timeline.appendChild(item);
+      }
+    }
+
+    function updateDetail(commit, announce) {
+      document.getElementById("detailTitle").textContent = commit.title;
+      document.getElementById("detailMeta").textContent = `${commit.branch} / ${commit.time} / ${commit.blocks} changed blocks`;
+      document.getElementById("detailId").textContent = commit.id;
+      document.getElementById("detailMessage").textContent = commit.message;
+      document.getElementById("metaChunks").textContent = commit.chunks * 64;
+      document.getElementById("metaSize").textContent = commit.size;
+      if (announce) {
+        status.textContent = `Selected ${commit.title}. Preview only; restore still requires confirmation.`;
+      }
+    }
+
+    function selectCommit(id) {
+      selectedId = id;
+      updateDetail(selectedCommit(), true);
+      renderTimeline();
+    }
+
+    function openConfirm(title, text) {
+      confirmTitle.textContent = title;
+      confirmText.textContent = text;
+      confirmLayer.hidden = false;
+    }
+
+    function closeConfirm() {
+      confirmLayer.hidden = true;
+    }
+
+    function routeAction(label) {
+      const commit = selectedCommit();
+      if (label.includes("Restore")) {
+        openConfirm("Confirm restore", `${commit.title} will be restored after a safety save boundary. This mockup does not mutate the world.`);
+        return;
+      }
+      if (label.includes("Delete")) {
+        openConfirm("Confirm delete", `${commit.title} moves to Deleted Saves after confirmation.`);
+        return;
+      }
+      if (label.includes("Cleanup")) {
+        openConfirm("Inspect cleanup", "Cleanup starts with an inspection list before any files are removed.");
+        return;
+      }
+      status.textContent = label + " / " + commit.title;
+    }
+
+    document.getElementById("openDrawer").addEventListener("click", () => drawer.classList.add("open"));
+    document.getElementById("closeDrawer").addEventListener("click", () => drawer.classList.remove("open"));
+    document.getElementById("closeConfirm").addEventListener("click", closeConfirm);
+    document.getElementById("cancelConfirm").addEventListener("click", closeConfirm);
+    document.getElementById("acceptConfirm").addEventListener("click", () => {
+      status.textContent = confirmTitle.textContent + " accepted in mock state only.";
+      closeConfirm();
+    });
+
+    for (const control of [search, branchFilter, stateFilter]) {
+      control.addEventListener("input", renderTimeline);
+      control.addEventListener("change", renderTimeline);
+    }
+
+    for (const row of document.querySelectorAll(".branch-row")) {
+      row.addEventListener("click", () => {
+        branchFilter.value = row.dataset.branch;
+        status.textContent = "Branch filter: " + row.dataset.branch;
+        renderTimeline();
+      });
+    }
+
+    for (const button of document.querySelectorAll("button[title]")) {
+      button.addEventListener("mouseenter", () => {
+        status.textContent = button.getAttribute("title");
+      });
+      button.addEventListener("click", () => {
+        if (button.closest(".commit") || button.classList.contains("branch-row")) return;
+        if (["openDrawer", "closeDrawer", "closeConfirm", "cancelConfirm", "acceptConfirm"].includes(button.id)) return;
+        routeAction(button.getAttribute("title"));
+      });
+    }
+
+    renderTimeline();
+  </script>
+</body>
+</html>

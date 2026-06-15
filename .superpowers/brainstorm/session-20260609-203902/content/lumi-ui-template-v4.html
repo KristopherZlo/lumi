@@ -1,0 +1,1413 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lumi Builder UI v4</title>
+  <style>
+    :root {
+      --page: #10100e;
+      --shell: #11100e;
+      --bar: #272523;
+      --panel: rgba(18, 16, 14, 0.78);
+      --panel-2: #3E3937;
+      --panel-3: #484240;
+      --line: #141210;
+      --line-soft: #5a5652;
+      --rim-hi: #9b958d;
+      --rim-low: #1a1715;
+      --text: #f6f6f6;
+      --muted: #c9c9c9;
+      --dim: #9c9c9c;
+      --accent: #4d8a57;
+      --accent-hi: #76b981;
+      --ok: #5f9b66;
+      --text-shadow: 0 -2px 0 #2d2a28;
+      --pixel: 4px;
+      --button-fill: #3E3937;
+      --button-depth: 8px;
+      --button-edge-light: #66615F;
+      --button-edge-dark: #514D4B;
+      --button-depth-color: #252525;
+      --button-shadow:
+        inset 4px 4px 0 0 var(--button-edge-light),
+        inset -4px -4px 0 0 var(--button-edge-dark),
+        0 var(--button-depth) 0 0 var(--button-depth-color);
+      --inset-shadow:
+        inset 4px 4px 0 0 var(--button-edge-light),
+        inset -4px -4px 0 0 var(--button-edge-dark);
+      --hover-fill: #484240;
+      --hover-edge-light: #756f6a;
+      --hover-edge-dark: #5a5552;
+      --hover-depth-color: #302d2b;
+      --hover-shadow:
+        inset 4px 4px 0 0 var(--hover-edge-light),
+        inset -4px -4px 0 0 var(--hover-edge-dark),
+        0 var(--button-depth) 0 0 var(--hover-depth-color);
+      --selected-fill: #405a7e;
+      --selected-edge-light: #6f88ad;
+      --selected-edge-dark: #344b6d;
+      --selected-depth-color: #26394f;
+      --selected-shadow:
+        inset 4px 4px 0 0 var(--selected-edge-light),
+        inset -4px -4px 0 0 var(--selected-edge-dark),
+        0 var(--button-depth) 0 0 var(--selected-depth-color);
+      --primary-fill: #4d8a57;
+      --primary-edge-light: #76b981;
+      --primary-edge-dark: #3f7248;
+      --primary-depth-color: #315d39;
+      --primary-shadow:
+        inset 4px 4px 0 0 var(--primary-edge-light),
+        inset -4px -4px 0 0 var(--primary-edge-dark),
+        0 var(--button-depth) 0 0 var(--primary-depth-color);
+      --primary-inset-shadow:
+        inset 4px 4px 0 0 var(--primary-edge-light),
+        inset -4px -4px 0 0 var(--primary-edge-dark);
+      --danger-fill: #473836;
+      --danger-edge-light: #705955;
+      --danger-edge-dark: #3b302e;
+      --danger-depth-color: #2b2422;
+      --danger-shadow:
+        inset 4px 4px 0 0 var(--danger-edge-light),
+        inset -4px -4px 0 0 var(--danger-edge-dark),
+        0 var(--button-depth) 0 0 var(--danger-depth-color);
+      --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='20' viewBox='0 0 24 20' shape-rendering='crispEdges'%3E%3Cg fill='%232d2a28'%3E%3Crect x='2' y='1' width='4' height='4'/%3E%3Crect x='6' y='5' width='4' height='4'/%3E%3Crect x='10' y='9' width='4' height='4'/%3E%3Crect x='14' y='5' width='4' height='4'/%3E%3Crect x='18' y='1' width='4' height='4'/%3E%3C/g%3E%3Cg fill='%23eeeeee'%3E%3Crect x='2' y='4' width='4' height='4'/%3E%3Crect x='6' y='8' width='4' height='4'/%3E%3Crect x='10' y='12' width='4' height='4'/%3E%3Crect x='14' y='8' width='4' height='4'/%3E%3Crect x='18' y='4' width='4' height='4'/%3E%3C/g%3E%3C/svg%3E");
+      --input-fill: var(--button-fill);
+      --section-fill: var(--button-fill);
+      --row-fill: var(--button-fill);
+      --font: "Minecraft", "Cascadia Mono", "Consolas", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      background: var(--page);
+      color: var(--text);
+      font-family: var(--font);
+      font-weight: 400;
+      letter-spacing: 0;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      overflow: hidden;
+      text-shadow: var(--text-shadow);
+    }
+
+    strong,
+    b {
+      font-weight: 400;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border-radius: 0;
+    }
+
+    .app {
+      width: min(1120px, calc(100vw - 32px));
+      height: min(704px, calc(100vh - 32px));
+      min-width: 860px;
+      min-height: 580px;
+      position: relative;
+      z-index: 1;
+      border: var(--pixel) solid #24211f;
+      background: rgba(16, 15, 13, 0.82);
+      display: grid;
+      grid-template-rows: 42px 76px minmax(0, 1fr) 40px;
+      overflow: hidden;
+    }
+
+    .titlebar {
+      min-width: 0;
+      background: #13110f;
+      border-bottom: var(--pixel) solid #393532;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) auto;
+      align-items: center;
+    }
+
+    .brand {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      border-right: var(--pixel) solid var(--line);
+      background: #3a3a3a;
+      font-size: 20px;
+      font-weight: 400;
+    }
+
+    .title-copy {
+      min-width: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 0 10px;
+      overflow: hidden;
+    }
+
+    .title-copy strong {
+      font-size: 16px;
+      white-space: nowrap;
+    }
+
+    .title-copy span {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .window-buttons {
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(3, 40px);
+    }
+
+    .window-buttons span {
+      border-left: var(--pixel) solid var(--line);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .toolbar {
+      min-width: 0;
+      background: rgba(18, 16, 14, 0.72);
+      border-bottom: var(--pixel) solid var(--line);
+      display: grid;
+      grid-template-columns: 228px minmax(0, 1fr) 180px;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 10px;
+    }
+
+    .top-actions {
+      display: grid;
+      grid-template-columns: repeat(4, 50px);
+      gap: 8px;
+    }
+
+    .icon-btn,
+    .mode-btn,
+    .row-btn,
+    .build-select,
+    .row-action-btn,
+    .tool-row {
+      cursor: pointer;
+      border-radius: 0;
+      position: relative;
+      overflow: visible;
+    }
+
+    .icon-btn {
+      width: 50px;
+      height: 50px;
+      border: none;
+      background: var(--button-fill);
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      padding: 0;
+      margin-bottom: var(--button-depth);
+      box-shadow: var(--button-shadow);
+    }
+
+    .icon-btn.primary {
+      background: var(--primary-fill);
+      color: #ffffff;
+      box-shadow: var(--primary-shadow);
+    }
+
+    .icon-btn.danger {
+      background: var(--danger-fill);
+      color: var(--muted);
+      box-shadow: var(--danger-shadow);
+    }
+
+    .icon-btn:hover,
+    .icon-btn:focus-visible,
+    .mode-btn:hover,
+    .mode-btn:focus-visible,
+    .row-btn:hover,
+    .row-btn:focus-visible,
+    .tool-row:hover,
+    .tool-row:focus-visible {
+      outline: none;
+      color: #ffffff;
+      background: var(--hover-fill);
+      box-shadow: var(--hover-shadow);
+    }
+
+    .icon-btn.primary:hover,
+    .icon-btn.primary:focus-visible {
+      background: var(--primary-fill);
+      box-shadow: var(--primary-shadow);
+    }
+
+    .icon-btn.danger:hover,
+    .icon-btn.danger:focus-visible {
+      background: var(--danger-fill);
+      box-shadow: var(--danger-shadow);
+    }
+
+    .icon-btn svg,
+    .mode-btn svg,
+    .row-btn svg,
+    .row-action-btn svg,
+    .tool-row svg,
+    .panel-title svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+      stroke: none;
+      shape-rendering: crispEdges;
+    }
+
+    .filters {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 150px 132px;
+      gap: 8px;
+    }
+
+    .field,
+    .select {
+      min-width: 0;
+      height: 50px;
+      border: none;
+      background: var(--input-fill);
+      color: var(--text);
+      padding: 0 9px;
+      font-size: 14px;
+      border-radius: 0;
+      margin-bottom: var(--button-depth);
+      box-shadow: var(--button-shadow);
+    }
+
+    .select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      padding-right: 44px;
+      background-color: var(--input-fill);
+      background-image: var(--select-arrow);
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 24px 20px;
+    }
+
+    .select::-ms-expand {
+      display: none;
+    }
+
+    .field:focus,
+    .select:focus {
+      outline: none;
+    }
+
+    .quick-state {
+      position: relative;
+      overflow: hidden;
+      height: 50px;
+      min-width: 0;
+      border: none;
+      background: var(--button-fill);
+      padding: 6px 10px;
+      display: grid;
+      align-content: center;
+      margin-bottom: var(--button-depth);
+      box-shadow: var(--button-shadow);
+    }
+
+    .quick-state strong,
+    .quick-state span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1.25;
+    }
+
+    .quick-state strong {
+      color: #ffffff;
+      font-size: 13px;
+    }
+
+    .quick-state span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .workspace {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 172px minmax(0, 1fr) 370px;
+      overflow: hidden;
+    }
+
+    .left,
+    .main,
+    .side {
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .left {
+      background: rgba(18, 16, 14, 0.72);
+      border-right: var(--pixel) solid var(--line);
+      padding: 8px;
+      display: grid;
+      grid-template-rows: repeat(3, calc(56px + var(--button-depth))) minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .mode-btn {
+      width: 100%;
+      min-width: 0;
+      height: 56px;
+      border: none;
+      background: var(--button-fill);
+      color: var(--muted);
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      padding: 0 8px;
+      text-align: left;
+      margin-bottom: var(--button-depth);
+      box-shadow: var(--button-shadow);
+    }
+
+    .mode-btn span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 400;
+    }
+
+    .mode-btn.active {
+      color: #ffffff;
+      background: var(--selected-fill);
+      box-shadow: var(--selected-shadow);
+    }
+
+    .main {
+      background: rgba(18, 16, 14, 0.84);
+      display: grid;
+      grid-template-rows: 40px minmax(0, 1fr);
+    }
+
+    .list,
+    .panel-body {
+      scrollbar-width: thin;
+      scrollbar-color: var(--rim-hi) var(--line);
+      scrollbar-gutter: stable;
+    }
+
+    .list::-webkit-scrollbar,
+    .panel-body::-webkit-scrollbar {
+      width: 14px;
+      height: 14px;
+    }
+
+    .list::-webkit-scrollbar-track,
+    .panel-body::-webkit-scrollbar-track {
+      background: var(--line);
+      border-left: var(--pixel) solid #26221f;
+    }
+
+    .list::-webkit-scrollbar-thumb,
+    .panel-body::-webkit-scrollbar-thumb {
+      background: var(--panel-2);
+      border: none;
+      box-shadow: var(--inset-shadow);
+    }
+
+    .list::-webkit-scrollbar-thumb:hover,
+    .panel-body::-webkit-scrollbar-thumb:hover {
+      background: var(--panel-3);
+      box-shadow: var(--inset-shadow);
+    }
+
+    .list-head {
+      border-bottom: var(--pixel) solid var(--line);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      background: #13110f;
+    }
+
+    .list-head strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+    }
+
+    .list-head span {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .list {
+      min-height: 0;
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .build-card {
+      width: 100%;
+      min-width: 0;
+      min-height: 76px;
+      border: none;
+      background: var(--row-fill);
+      color: inherit;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 168px;
+      margin: 0 0 16px;
+      box-shadow: var(--button-shadow);
+    }
+
+    .build-card.selected {
+      background: var(--selected-fill);
+      box-shadow: var(--selected-shadow);
+    }
+
+    .build-card.current {
+      color: #ffffff;
+      background: var(--primary-fill);
+      box-shadow: var(--primary-shadow);
+    }
+
+    .build-select {
+      width: 100%;
+      min-width: 0;
+      min-height: 76px;
+      border: none;
+      background: transparent;
+      color: inherit;
+      display: grid;
+      grid-template-columns: 128px minmax(0, 1fr);
+      gap: 10px;
+      align-items: stretch;
+      padding: var(--pixel) 10px var(--pixel) var(--pixel);
+      text-align: left;
+    }
+
+    .build-select:hover,
+    .build-select:focus-visible {
+      outline: none;
+      color: #ffffff;
+    }
+
+    .preview-slot,
+    .empty-preview {
+      border: none;
+      background: #302c29;
+      color: var(--dim);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      text-transform: uppercase;
+      line-height: 1.15;
+      box-shadow: none;
+    }
+
+    .preview-slot {
+      width: 128px;
+      min-height: 68px;
+      height: 100%;
+      overflow: hidden;
+      font-size: 11px;
+    }
+
+    .row-actions {
+      min-width: 0;
+      min-height: 76px;
+      display: grid;
+      grid-template-columns: repeat(3, 56px);
+    }
+
+    .row-action-btn {
+      min-width: 0;
+      width: 56px;
+      height: 100%;
+      border: none;
+      border-left: var(--pixel) solid rgba(20, 18, 16, 0.52);
+      background: transparent;
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 0;
+    }
+
+    .row-action-btn:hover,
+    .row-action-btn:focus-visible {
+      outline: none;
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
+    }
+
+    .row-btn {
+      width: 100%;
+      min-width: 0;
+      min-height: 92px;
+      border: none;
+      background: var(--row-fill);
+      color: inherit;
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr) 82px;
+      gap: 12px;
+      align-items: center;
+      padding: 10px;
+      margin: 0 0 16px;
+      text-align: left;
+      box-shadow: var(--button-shadow);
+    }
+
+    .row-btn.selected {
+      background: var(--selected-fill);
+      box-shadow: var(--selected-shadow);
+    }
+
+    .row-btn.current {
+      color: #ffffff;
+      background: var(--primary-fill);
+      box-shadow: var(--primary-shadow);
+    }
+
+    .big-preview {
+      border: none;
+      background: var(--button-fill);
+      color: var(--dim);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      text-transform: uppercase;
+      line-height: 1.15;
+      margin-bottom: var(--button-depth);
+      box-shadow: var(--button-shadow);
+    }
+
+    .empty-preview {
+      width: 92px;
+      height: 62px;
+      padding: 4px;
+      font-size: 11px;
+    }
+
+    .row-copy {
+      min-width: 0;
+    }
+
+    .build-select .row-copy {
+      align-self: center;
+    }
+
+    .row-copy strong,
+    .row-copy span {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1.3;
+    }
+
+    .row-copy strong {
+      color: var(--text);
+      font-size: 15px;
+      margin-bottom: 3px;
+    }
+
+    .row-copy span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .badge {
+      min-width: 0;
+      min-height: 26px;
+      border: none;
+      color: var(--muted);
+      background: var(--button-fill);
+      display: grid;
+      place-items: center;
+      padding: 0 5px;
+      font-size: 11px;
+      white-space: nowrap;
+      box-shadow: var(--inset-shadow);
+    }
+
+    .badge.current {
+      color: #ffffff;
+      background: var(--primary-fill);
+      box-shadow: var(--primary-inset-shadow);
+    }
+
+    .side {
+      border-left: var(--pixel) solid var(--line);
+      background: rgba(18, 16, 14, 0.72);
+      display: grid;
+      grid-template-rows: 40px minmax(0, 1fr) auto;
+    }
+
+    .panel-title {
+      border-bottom: var(--pixel) solid var(--line);
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 0 9px;
+      background: #13110f;
+      color: var(--text);
+    }
+
+    .panel-title strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+    }
+
+    .panel-title span {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .panel-body {
+      min-height: 0;
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .big-preview {
+      height: 160px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .section {
+      position: relative;
+      overflow: hidden;
+      border: none;
+      background: var(--section-fill);
+      margin-bottom: 16px;
+      box-shadow: var(--button-shadow);
+    }
+
+    .section-title {
+      height: 34px;
+      border-bottom: var(--pixel) solid var(--line);
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 400;
+    }
+
+    .section-body {
+      padding: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-top: var(--pixel) solid var(--line);
+      margin-top: 8px;
+    }
+
+    .info-grid div {
+      min-width: 0;
+      border-right: var(--pixel) solid var(--line);
+      border-bottom: var(--pixel) solid var(--line);
+      padding: 7px 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .info-grid div:nth-child(2n) {
+      border-right: 0;
+    }
+
+    .info-grid div:nth-last-child(-n + 2) {
+      border-bottom: 0;
+    }
+
+    .info-grid b {
+      color: var(--text);
+    }
+
+    .panel-actions {
+      border-top: var(--pixel) solid var(--line);
+      padding: 7px 8px;
+      display: grid;
+      grid-template-columns: repeat(2, 50px) minmax(0, 1fr);
+      gap: 6px;
+      align-items: center;
+    }
+
+    .tool-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .tool-row {
+      width: 100%;
+      min-width: 0;
+      min-height: 44px;
+      border: none;
+      background: var(--button-fill);
+      color: var(--muted);
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      padding: 0 8px;
+      text-align: left;
+      margin-bottom: var(--button-depth);
+      box-shadow: var(--button-shadow);
+    }
+
+    .tool-row span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+
+    .help {
+      min-width: 0;
+      border-top: var(--pixel) solid #5f5952;
+      background: #13110f;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .help strong,
+    .help span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .help strong {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .help .keys {
+      display: flex;
+      gap: 10px;
+      color: var(--dim);
+      white-space: nowrap;
+    }
+
+    .modal-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: none;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.42);
+    }
+
+    .modal-layer.open {
+      display: grid;
+    }
+
+    .modal-box {
+      width: min(430px, calc(100% - 48px));
+      border: none;
+      background: var(--button-fill);
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+      box-shadow: var(--button-shadow);
+    }
+
+    .modal-box strong {
+      font-size: 17px;
+      color: #ffffff;
+    }
+
+    .modal-box p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .modal-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 50px 50px;
+      gap: 8px;
+      justify-items: end;
+    }
+
+    .modal-layer.notice .modal-actions {
+      grid-template-columns: minmax(0, 1fr) 50px;
+    }
+
+    .modal-layer.notice [data-modal-action="cancel"] {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        place-items: start;
+        overflow: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Pixel icon sprite follows the 24x24 Pixelarticons-style grid for offline mockup use. -->
+  <svg width="0" height="0" aria-hidden="true" focusable="false">
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M4 3h13v2h2v16H4V3Zm3 2v6h9V5h-2v4H9V5H7Zm1 10v4h8v-4H8Z"/></symbol>
+    <symbol id="i-restore" viewBox="0 0 24 24"><path d="M5 5h6v3H9v2h7v2H7V9H5V5Zm11 0h3v3h-3V5Zm2 5h2v7h-2v-7Zm-9 7h9v2H9v-2Zm-4-3h4v4H5v-4Z"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M4 10h2V8h12v2h2v4h-2v2H6v-2H4v-4Zm6 0v4h4v-4h-4Z"/></symbol>
+    <symbol id="i-compare" viewBox="0 0 24 24"><path d="M5 4h6v3H8v10h3v3H5v-3h2V7H5V4Zm8 0h6v3h-2v10h2v3h-6v-3h3V7h-3V4Z"/></symbol>
+    <symbol id="i-branch" viewBox="0 0 24 24"><path d="M5 4h5v5H8v4h8V9h-2V4h5v5h-2v6H8v2h2v5H5v-5h2V9H5V4Z"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18h-2v-2h-2v-2h-4v2H8v2H6V3Zm3 3v8h6V6H9Z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h7v2h11v11H3V6Zm2 4v7h14v-7H5Z"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><path d="M4 10h4v4H4v-4Zm6 0h4v4h-4v-4Zm6 0h4v4h-4v-4Z"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M16 3h3v2h2v3h-2v2h-2V8h-3V6h2V3ZM6 14h2v2h2v2h2v2H4v-8h2v2Zm3-1 5-5 2 2-5 5H9v-2Z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M8 3h8v2h5v3H3V5h5V3Zm-2 7h12v11H6V10Zm3 2v7h2v-7H9Zm4 0v7h2v-7h-2Z"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M11 3h2v2h2v2h2v2h-4v6h-2V9H7V7h2V5h2V3ZM4 15h3v3h10v-3h3v6H4v-6Z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M11 3h2v8h4v2h-2v2h-2v2h-2v-2H9v-2H7v-2h4V3ZM4 15h3v3h10v-3h3v6H4v-6Z"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 11h5V7h3v10h2V9h3v2h5v3h-7v4h-3V8H9v6H3v-3Z"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M6 4h10v2h2v2h2v8h-2v2h-2v2H7v-2h8v-2h2V9h-2V7H8v3h3v3H5V6h1V4Zm5 5h3v4h3v3h-6V9Z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4h4v2h3v2h3v2h3v4h-3v2h-3v2h-3v2H6V4Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M19 5h3v3h-3v2h-2v2h-2v2h-2v2h-2v2H8v-2H6v-2H4v-3h3v2h2v2h2v-2h2v-2h2V9h2V7h2V5Z"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M5 4h4v3h2v2h2V7h2V4h4v4h-3v2h-2v4h2v2h3v4h-4v-3h-2v-2h-2v2H9v3H5v-4h3v-2h2v-4H8V8H5V4Z"/></symbol>
+  </svg>
+
+  <div class="app">
+    <header class="titlebar">
+      <div class="brand">L</div>
+      <div class="title-copy">
+        <strong>Saved Builds</strong>
+        <span>Castle World / Overworld</span>
+      </div>
+      <div class="window-buttons" aria-hidden="true"><span>-</span><span>□</span><span>x</span></div>
+    </header>
+
+    <section class="toolbar" aria-label="Main actions">
+      <div class="top-actions">
+        <button class="icon-btn primary" title="Save Build" aria-label="Save Build" data-action="save" data-help="Save Build: keep a safe copy of what you built right now."><svg><use href="#i-save"></use></svg></button>
+        <button class="icon-btn" title="Restore Build" aria-label="Restore Build" data-action="restore" data-help="Restore Build: put the selected saved build back into the world after confirmation."><svg><use href="#i-restore"></use></svg></button>
+        <button class="icon-btn" title="Changes" aria-label="Changes" data-action="changes" data-help="Changes: show what changed between this saved build and your current world."><svg><use href="#i-eye"></use></svg></button>
+        <button class="icon-btn" title="New Branch" aria-label="New Branch" data-action="branch" data-help="New Branch: try a different direction without losing this build."><svg><use href="#i-branch"></use></svg></button>
+      </div>
+      <div class="filters">
+        <input class="field" id="search" type="search" placeholder="Search saved builds" aria-label="Search saved builds">
+        <select class="select" id="branchFilter" aria-label="Branch filter">
+          <option value="all">All branches</option>
+          <option value="Main Build">Main Build</option>
+          <option value="Castle Wing">Castle Wing</option>
+          <option value="Tower Tryout">Tower Tryout</option>
+        </select>
+        <select class="select" id="stateFilter" aria-label="Saved build filter">
+          <option value="all">All saves</option>
+          <option value="current">Current</option>
+          <option value="selected">Selected</option>
+        </select>
+      </div>
+      <div class="quick-state">
+        <strong>3 unsaved changes</strong>
+        <span>Last save: 2 minutes ago</span>
+      </div>
+    </section>
+
+    <main class="workspace">
+      <nav class="left" aria-label="Lumi sections">
+        <button class="mode-btn active" data-mode="builds" title="Saved Builds" aria-label="Saved Builds" data-help="Saved Builds: all safe copies of your build."><svg><use href="#i-bookmark"></use></svg><span>Saved Builds</span></button>
+        <button class="mode-btn" data-mode="branches" title="Branches" aria-label="Branches" data-help="Branches: separate directions for the same build."><svg><use href="#i-branch"></use></svg><span>Branches</span></button>
+        <button class="mode-btn" data-mode="more" title="More" aria-label="More" data-help="More: import, export, cleanup, diagnostics, and advanced tools."><svg><use href="#i-more"></use></svg><span>More</span></button>
+      </nav>
+
+      <section class="main" aria-label="Saved builds list">
+        <div class="list-head">
+          <strong id="listTitle">Saved Builds</strong>
+          <span id="listCount">0 shown</span>
+        </div>
+        <div class="list" id="mainList"></div>
+      </section>
+
+      <aside class="side" aria-label="Selected panel">
+        <div class="panel-title">
+          <svg id="panelIcon"><use href="#i-bookmark"></use></svg>
+          <strong id="panelTitle">Courtyard Base</strong>
+          <span id="panelNote">Saved Build</span>
+        </div>
+        <div class="panel-body" id="panelBody"></div>
+        <div class="panel-actions" id="panelActions"></div>
+      </aside>
+    </main>
+
+    <footer class="help">
+      <div>
+        <strong id="helpTitle">Ready</strong>
+        <span id="helpText">Pick a saved build, or press Save Build to make a safe copy.</span>
+      </div>
+      <div class="keys"><span>S Save</span><span>R Restore</span><span>B Branch</span></div>
+    </footer>
+
+    <div class="modal-layer" id="modalLayer" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-box">
+        <strong id="modalTitle">Confirm action</strong>
+        <p id="modalText">This action needs confirmation.</p>
+        <div class="modal-actions">
+          <span></span>
+          <button class="icon-btn" title="Cancel" aria-label="Cancel" data-modal-action="cancel" data-help="Cancel: close this message."><svg><use href="#i-x"></use></svg></button>
+          <button class="icon-btn primary" title="Confirm" aria-label="Confirm" data-modal-action="confirm" data-help="Confirm: run the selected mockup action."><svg><use href="#i-check"></use></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const builds = [
+      { id: "b6", name: "Great Hall Roof", branch: "Main Build", time: "2 minutes ago", status: "Current", current: true, note: "Your newest safe copy." },
+      { id: "b5", name: "Window Details", branch: "Main Build", time: "1 hour ago", status: "Saved", current: false, note: "Windows and trim before the roof change." },
+      { id: "b4", name: "Courtyard Base", branch: "Main Build", time: "Yesterday", status: "Saved", current: false, note: "Foundation walls and courtyard footprint." },
+      { id: "b3", name: "Castle Wing Sketch", branch: "Castle Wing", time: "2 days ago", status: "Branch", current: false, note: "A side wing branch kept separate from the main build." },
+      { id: "b2", name: "Tower Tryout", branch: "Tower Tryout", time: "3 days ago", status: "Branch", current: false, note: "A taller tower shape to compare later." }
+    ];
+
+    let branches = [
+      { id: "i1", name: "Main Build", count: 3, active: true, note: "The build you are working on now." },
+      { id: "i2", name: "Castle Wing", count: 1, active: false, note: "Try a side wing without changing the main build." },
+      { id: "i3", name: "Tower Tryout", count: 1, active: false, note: "A taller tower experiment." }
+    ];
+
+    let selectedBuildId = "b6";
+    let activeMode = "builds";
+    let pendingAction = "";
+    let modalMode = "notice";
+    let nextBuildNumber = 7;
+    let nextBranchNumber = 4;
+
+    const mainList = document.getElementById("mainList");
+    const listTitle = document.getElementById("listTitle");
+    const listCount = document.getElementById("listCount");
+    const panelIcon = document.getElementById("panelIcon").querySelector("use");
+    const panelTitle = document.getElementById("panelTitle");
+    const panelNote = document.getElementById("panelNote");
+    const panelBody = document.getElementById("panelBody");
+    const panelActions = document.getElementById("panelActions");
+    const modalLayer = document.getElementById("modalLayer");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalText = document.getElementById("modalText");
+    const helpTitle = document.getElementById("helpTitle");
+    const helpText = document.getElementById("helpText");
+    const search = document.getElementById("search");
+    const branchFilter = document.getElementById("branchFilter");
+    const stateFilter = document.getElementById("stateFilter");
+
+    function selectedBuild() {
+      return builds.find(build => build.id === selectedBuildId) || builds[0];
+    }
+
+    function setHelp(title, text) {
+      helpTitle.textContent = title;
+      helpText.textContent = text;
+    }
+
+    function buildMatches(build) {
+      const query = search.value.trim().toLowerCase();
+      if (query && !(build.name + " " + build.branch + " " + build.time).toLowerCase().includes(query)) return false;
+      if (branchFilter.value !== "all" && build.branch !== branchFilter.value) return false;
+      if (stateFilter.value === "current" && !build.current) return false;
+      if (stateFilter.value === "selected" && build.id !== selectedBuildId) return false;
+      return true;
+    }
+
+    function syncModes() {
+      document.querySelectorAll(".mode-btn").forEach(button => {
+        button.classList.toggle("active", button.dataset.mode === activeMode);
+      });
+    }
+
+    function renderList() {
+      syncModes();
+      mainList.innerHTML = "";
+
+      if (activeMode === "branches") {
+        renderBranchesList();
+        return;
+      }
+
+      listTitle.textContent = "Saved Builds";
+      const visible = builds.filter(buildMatches);
+      if (visible.length && !visible.some(build => build.id === selectedBuildId)) {
+        selectedBuildId = visible[0].id;
+        if (activeMode !== "more") {
+          renderBuildPanel(visible[0]);
+        }
+      }
+      listCount.textContent = visible.length + " shown";
+
+      if (!visible.length) {
+        mainList.innerHTML = '<div class="section"><div class="section-body">No saved builds match this search.</div></div>';
+        return;
+      }
+
+      for (const build of visible) {
+        const card = document.createElement("div");
+        card.className = "build-card" + (build.id === selectedBuildId ? " selected" : "") + (build.current ? " current" : "");
+        card.innerHTML = `
+          <button class="build-select" type="button" aria-label="Select ${build.name}">
+            <div class="preview-slot">No preview</div>
+            <div class="row-copy">
+              <strong>${build.name}</strong>
+              <span>${build.time} / ${build.branch}</span>
+              <span>${build.note}</span>
+            </div>
+          </button>
+          <div class="row-actions" aria-label="${build.name} actions">
+            <button class="row-action-btn" type="button" title="Restore" aria-label="Restore ${build.name}" data-row-action="restore" data-help="Restore: put this saved build back into the world after confirmation."><svg><use href="#i-restore"></use></svg></button>
+            <button class="row-action-btn" type="button" title="Compare" aria-label="Compare ${build.name}" data-row-action="changes" data-help="Compare: show what changed between this saved build and your current world."><svg><use href="#i-compare"></use></svg></button>
+            <button class="row-action-btn" type="button" title="Branch" aria-label="Branch from ${build.name}" data-row-action="branch" data-help="Branch: try a different direction from this saved build."><svg><use href="#i-branch"></use></svg></button>
+          </div>
+        `;
+
+        const selectBuild = () => {
+          selectedBuildId = build.id;
+          activeMode = "builds";
+          renderBuildPanel(build);
+          renderList();
+          setHelp("Selected", build.name + " is selected. Restore still asks first.");
+        };
+
+        card.querySelector(".build-select").addEventListener("click", selectBuild);
+        card.querySelectorAll("[data-row-action]").forEach(button => {
+          button.addEventListener("mouseenter", () => setHelp(button.title, button.dataset.help || button.title));
+          button.addEventListener("focus", () => setHelp(button.title, button.dataset.help || button.title));
+          button.addEventListener("click", () => {
+            selectedBuildId = build.id;
+            activeMode = "builds";
+            renderBuildPanel(build);
+            renderList();
+            runAction(button.dataset.rowAction, button.title || button.textContent.trim());
+          });
+        });
+        mainList.appendChild(card);
+      }
+    }
+
+    function renderBranchesList() {
+      listTitle.textContent = "Branches";
+      listCount.textContent = branches.length + " branches";
+      for (const branch of branches) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "row-btn" + (branch.active ? " selected current" : "");
+        row.setAttribute("aria-label", "Open " + branch.name);
+        row.innerHTML = `
+          <div class="empty-preview">No preview</div>
+          <div class="row-copy">
+            <strong>${branch.name}</strong>
+            <span>${branch.count} saved build${branch.count === 1 ? "" : "s"}</span>
+            <span>${branch.note}</span>
+          </div>
+          <div class="badge ${branch.active ? "current" : ""}">${branch.active ? "Current" : "Branch"}</div>
+        `;
+        row.addEventListener("click", () => {
+          branches = branches.map(item => ({ ...item, active: item.id === branch.id }));
+          renderBranchPanel(branch);
+          renderList();
+          setHelp("Branch", branch.name + " is selected.");
+        });
+        mainList.appendChild(row);
+      }
+      renderBranchPanel(branches.find(branch => branch.active) || branches[0]);
+    }
+
+    function renderBuildPanel(build) {
+      panelIcon.setAttribute("href", "#i-bookmark");
+      panelTitle.textContent = build.name;
+      panelNote.textContent = "Saved Build";
+      panelBody.innerHTML = `
+        <div class="big-preview">No preview</div>
+        <div class="section">
+          <div class="section-title">This saved build</div>
+          <div class="section-body">
+            ${build.note}
+            <div class="info-grid">
+              <div><b>Saved</b> ${build.time}</div>
+              <div><b>Branch</b> ${build.branch}</div>
+              <div><b>Status</b> ${build.status}</div>
+              <div><b>Preview</b> Missing</div>
+            </div>
+          </div>
+        </div>
+      `;
+      panelActions.innerHTML = `
+        <button class="icon-btn" title="Rename" aria-label="Rename" data-action="rename" data-help="Rename: give this saved build a clearer name."><svg><use href="#i-edit"></use></svg></button>
+        <button class="icon-btn danger" title="Delete" aria-label="Delete" data-action="delete" data-help="Delete: move this saved build to deleted saves after confirmation."><svg><use href="#i-trash"></use></svg></button>
+        <span></span>
+      `;
+      bindDynamicButtons();
+    }
+
+    function renderBranchPanel(branch) {
+      panelIcon.setAttribute("href", "#i-branch");
+      panelTitle.textContent = branch.name;
+      panelNote.textContent = "Branch";
+      panelBody.innerHTML = `
+        <div class="big-preview">No preview</div>
+        <div class="section">
+          <div class="section-title">Branch</div>
+          <div class="section-body">
+            ${branch.note}
+            <div class="info-grid">
+              <div><b>Saved Builds</b> ${branch.count}</div>
+              <div><b>Status</b> ${branch.active ? "Current" : "Saved"}</div>
+            </div>
+          </div>
+        </div>
+      `;
+      panelActions.innerHTML = `
+        <button class="icon-btn" title="Merge Branch" aria-label="Merge Branch" data-action="merge" data-help="Merge Branch: bring this branch back into the current build path."><svg><use href="#i-branch"></use></svg></button>
+        <button class="icon-btn danger" title="Delete Branch" aria-label="Delete Branch" data-action="delete-branch" data-help="Delete Branch: remove this branch after confirmation."><svg><use href="#i-trash"></use></svg></button>
+        <span></span>
+      `;
+      bindDynamicButtons();
+    }
+
+    function renderMorePanel() {
+      panelIcon.setAttribute("href", "#i-more");
+      panelTitle.textContent = "More";
+      panelNote.textContent = "Tools";
+      panelBody.innerHTML = `
+        <div class="section">
+          <div class="section-title">Tools</div>
+          <div class="section-body">
+            <div class="tool-list">
+              <button class="tool-row" title="Import" aria-label="Import" data-action="import" data-help="Import: bring saved builds from a package."><svg><use href="#i-download"></use></svg><span>Import</span></button>
+              <button class="tool-row" title="Export" aria-label="Export" data-action="export" data-help="Export: share saved builds as a package."><svg><use href="#i-upload"></use></svg><span>Export</span></button>
+              <button class="tool-row" title="Cleanup" aria-label="Cleanup" data-action="cleanup" data-help="Cleanup: inspect unused data before removing anything."><svg><use href="#i-trash"></use></svg><span>Cleanup</span></button>
+              <button class="tool-row" title="Diagnostics" aria-label="Diagnostics" data-action="diagnostics" data-help="Diagnostics: check Lumi health and logs."><svg><use href="#i-activity"></use></svg><span>Diagnostics</span></button>
+              <button class="tool-row" title="Updates" aria-label="Updates" data-action="updates" data-help="Updates: check whether Lumi has a newer release."><svg><use href="#i-download"></use></svg><span>Updates</span></button>
+              <button class="tool-row" title="Deleted Saves" aria-label="Deleted Saves" data-action="deleted" data-help="Deleted Saves: inspect saves that can still be recovered."><svg><use href="#i-history"></use></svg><span>Deleted Saves</span></button>
+              <button class="tool-row" title="Raw references" aria-label="Raw references" data-action="raw" data-help="Raw references: advanced technical identifiers."><svg><use href="#i-more"></use></svg><span>Raw references</span></button>
+              <button class="tool-row" title="Replay onboarding" aria-label="Replay onboarding" data-action="onboarding" data-help="Replay onboarding: show the Lumi tutorial again."><svg><use href="#i-play"></use></svg><span>Replay onboarding</span></button>
+            </div>
+          </div>
+        </div>
+      `;
+      panelActions.innerHTML = "";
+      bindDynamicButtons();
+    }
+
+    function openModal(title, text, mode, actionLabel) {
+      modalMode = mode;
+      pendingAction = actionLabel || title;
+      modalTitle.textContent = title;
+      modalText.textContent = text;
+      modalLayer.className = "modal-layer open " + mode;
+    }
+
+    function closeModal() {
+      modalLayer.className = "modal-layer";
+    }
+
+    function openNotice(title, text) {
+      openModal(title, text, "notice", title);
+      setHelp(title, text);
+    }
+
+    function openConfirm(label) {
+      const name = selectedBuild().name;
+      openModal(label, label + " for " + name + "? This mockup asks first so the world does not change by accident.", "confirm", label);
+      setHelp(label, "This action needs confirmation.");
+    }
+
+    function saveBuild() {
+      const branch = branches.find(item => item.active)?.name || "Main Build";
+      builds.unshift({
+        id: "b" + nextBuildNumber,
+        name: "Saved Build " + nextBuildNumber,
+        branch,
+        time: "Just now",
+        status: "Current",
+        current: true,
+        note: "New safe copy of the current world."
+      });
+      for (let i = 1; i < builds.length; i++) {
+        builds[i].current = false;
+        if (builds[i].status === "Current") builds[i].status = "Saved";
+      }
+      selectedBuildId = "b" + nextBuildNumber;
+      nextBuildNumber++;
+      activeMode = "builds";
+      branchFilter.value = "all";
+      stateFilter.value = "all";
+      renderBuildPanel(selectedBuild());
+      renderList();
+      openNotice("Build saved", "A new saved build was added to the top.");
+    }
+
+    function newBranch() {
+      const name = "New Branch " + nextBranchNumber;
+      branches = branches.map(item => ({ ...item, active: false }));
+      branches.push({ id: "i" + nextBranchNumber, name, count: 0, active: true, note: "A new branch for a different direction." });
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      branchFilter.appendChild(option);
+      nextBranchNumber++;
+      activeMode = "branches";
+      renderList();
+      openNotice("Branch created", name + " was added under Branches.");
+    }
+
+    function showChanges() {
+      const build = selectedBuild();
+      panelIcon.setAttribute("href", "#i-eye");
+      panelTitle.textContent = "Changes";
+      panelNote.textContent = build.name;
+      panelBody.innerHTML = `
+        <div class="big-preview">No preview</div>
+        <div class="section">
+          <div class="section-title">Changes</div>
+          <div class="section-body">This mockup would open the in-world change highlight for ${build.name}.</div>
+        </div>
+      `;
+      panelActions.innerHTML = `
+        <button class="icon-btn" title="Back to Saved Build" aria-label="Back to Saved Build" data-action="back" data-help="Back: return to the selected saved build."><svg><use href="#i-bookmark"></use></svg></button>
+        <span></span>
+      `;
+      bindDynamicButtons();
+      setHelp("Changes", "Showing where the selected saved build differs from now.");
+    }
+
+    function runAction(action, title) {
+      if (action === "save") {
+        saveBuild();
+        return;
+      }
+      if (action === "branch") {
+        newBranch();
+        return;
+      }
+      if (action === "changes") {
+        showChanges();
+        return;
+      }
+      if (action === "restore" || action === "delete" || action === "cleanup" || action === "delete-branch") {
+        openConfirm(title);
+        return;
+      }
+      if (action === "merge") {
+        openNotice("Merge Branch", "This mockup would open the branch merge flow.");
+        return;
+      }
+      if (action === "rename") {
+        openNotice("Rename", "This mockup would open a rename prompt.");
+        return;
+      }
+      if (action === "import" || action === "export" || action === "diagnostics" || action === "updates" || action === "deleted" || action === "raw" || action === "onboarding") {
+        openNotice(title, title + " would open from here.");
+        return;
+      }
+      if (action === "back") {
+        renderBuildPanel(selectedBuild());
+        setHelp("Saved Build", selectedBuild().name + " is selected.");
+        return;
+      }
+      setHelp(title, title + " selected.");
+    }
+
+    document.querySelectorAll("[data-modal-action]").forEach(button => {
+      button.addEventListener("mouseenter", () => setHelp(button.title, button.dataset.help || button.title));
+      button.addEventListener("focus", () => setHelp(button.title, button.dataset.help || button.title));
+      button.addEventListener("click", () => {
+        if (button.dataset.modalAction === "cancel") {
+          closeModal();
+          setHelp("Cancelled", "Nothing changed.");
+          return;
+        }
+        closeModal();
+        if (modalMode === "confirm") {
+          openNotice("Confirmed", pendingAction + " was confirmed in mock state only.");
+        }
+      });
+    });
+
+    function bindDynamicButtons() {
+      document.querySelectorAll("[data-action]").forEach(button => {
+        if (button.dataset.bound === "true") return;
+        button.dataset.bound = "true";
+        button.addEventListener("mouseenter", () => setHelp(button.title, button.dataset.help || button.title));
+        button.addEventListener("focus", () => setHelp(button.title, button.dataset.help || button.title));
+        button.addEventListener("click", () => runAction(button.dataset.action, button.title || button.textContent.trim()));
+      });
+    }
+
+    document.querySelectorAll(".mode-btn").forEach(button => {
+      button.addEventListener("mouseenter", () => setHelp(button.title, button.dataset.help || button.title));
+      button.addEventListener("focus", () => setHelp(button.title, button.dataset.help || button.title));
+      button.addEventListener("click", () => {
+        activeMode = button.dataset.mode;
+        if (activeMode === "more") {
+          renderList();
+          renderMorePanel();
+          setHelp("More", "Advanced tools are shown on the right.");
+          return;
+        }
+        renderList();
+        if (activeMode === "builds") renderBuildPanel(selectedBuild());
+      });
+    });
+
+    [search, branchFilter, stateFilter].forEach(control => {
+      control.addEventListener("input", renderList);
+      control.addEventListener("change", renderList);
+    });
+
+    renderBuildPanel(selectedBuild());
+    bindDynamicButtons();
+    renderList();
+  </script>
+</body>
+</html>

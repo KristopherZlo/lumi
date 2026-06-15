@@ -1,0 +1,88 @@
+<h2>What should the U screen feel like first?</h2>
+<p class="subtitle">Pick the direction that best matches a Minecraft player who does not know Git. This is about structure, not final colors.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="border:1px solid #d0d7de;border-radius:8px;overflow:hidden;background:#0f1419;color:#e6edf3;font-family:system-ui,sans-serif">
+        <div style="padding:10px 12px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center">
+          <strong style="font-size:14px">Castle build</strong>
+          <span style="font-size:11px;color:#8b949e">Place: Overworld</span>
+        </div>
+        <div style="padding:12px;display:grid;gap:10px">
+          <div style="padding:10px;border:1px solid #3fb950;border-radius:6px;background:#13231a">
+            <strong>12 block changes waiting</strong>
+            <div style="font-size:12px;color:#b7c3ce">Save this moment when you want a safe return point.</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="padding:10px;border-radius:6px;background:#238636;text-align:center">Save build</div>
+            <div style="padding:10px;border-radius:6px;background:#30363d;text-align:center">See changes</div>
+          </div>
+          <div style="display:grid;gap:6px">
+            <div style="height:34px;border-radius:5px;background:#21262d;padding:8px;font-size:12px">Recent save: Roof shape</div>
+            <div style="height:34px;border-radius:5px;background:#21262d;padding:8px;font-size:12px">Recent save: Window trim</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Current Build First</h3>
+      <p>Compact status, two obvious next actions, then recent saved moments. Best for players who open U to decide what to do now.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="border:1px solid #d0d7de;border-radius:8px;overflow:hidden;background:#0f1419;color:#e6edf3;font-family:system-ui,sans-serif">
+        <div style="padding:10px 12px;border-bottom:1px solid #30363d;display:flex;gap:8px">
+          <span style="padding:6px 8px;border-radius:5px;background:#238636">Save build</span>
+          <span style="padding:6px 8px;border-radius:5px;background:#30363d">Compare</span>
+          <span style="padding:6px 8px;border-radius:5px;background:#30363d">Restore</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 180px;min-height:190px">
+          <div style="padding:10px;display:grid;gap:8px">
+            <div style="padding:10px;border-radius:6px;background:#238636">Current: Great Hall Roof</div>
+            <div style="padding:10px;border-radius:6px;background:#21262d">Saved: Window Details</div>
+            <div style="padding:10px;border-radius:6px;background:#21262d">Saved: Courtyard Base</div>
+            <div style="padding:10px;border-radius:6px;background:#21262d">Saved: Tower Tryout</div>
+          </div>
+          <div style="border-left:1px solid #30363d;padding:10px;font-size:12px;color:#b7c3ce">
+            <strong style="color:#e6edf3">Selected save</strong>
+            <p>Preview and restore details live here.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Saved Moments First</h3>
+      <p>The history list is the main screen, with actions attached to the selected save. Best for players who think in checkpoints.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="border:1px solid #d0d7de;border-radius:8px;overflow:hidden;background:#0f1419;color:#e6edf3;font-family:system-ui,sans-serif">
+        <div style="display:grid;grid-template-columns:128px 1fr;min-height:230px">
+          <div style="border-right:1px solid #30363d;padding:10px;display:grid;gap:8px;align-content:start">
+            <div style="padding:9px;border-radius:6px;background:#238636">Build</div>
+            <div style="padding:9px;border-radius:6px;background:#30363d">Saves</div>
+            <div style="padding:9px;border-radius:6px;background:#30363d">Variants</div>
+            <div style="padding:9px;border-radius:6px;background:#30363d">More</div>
+          </div>
+          <div style="padding:12px;display:grid;grid-template-columns:1fr 160px;gap:10px">
+            <div style="display:grid;gap:8px">
+              <div style="padding:10px;border-radius:6px;background:#13231a">Current build status</div>
+              <div style="padding:10px;border-radius:6px;background:#21262d">Recent saves list</div>
+              <div style="padding:10px;border-radius:6px;background:#21262d">Variant picker</div>
+            </div>
+            <div style="padding:10px;border-radius:6px;background:#161b22;font-size:12px;color:#b7c3ce">Details panel</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Tool Window</h3>
+      <p>More like a small app: side navigation, list, details. Strong for power users, but less compact and more technical.</p>
+    </div>
+  </div>
+</div>
