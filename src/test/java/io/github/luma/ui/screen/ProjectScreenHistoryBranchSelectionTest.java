@@ -68,4 +68,21 @@ class ProjectScreenHistoryBranchSelectionTest {
                 "Save details branch-from-save should not use metadata-only branch creation"
         );
     }
+
+    @Test
+    void historyRestoreUsesTheSelectedBranchTarget() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java"));
+        int methodIndex = source.indexOf("    private void executeRestore(ProjectVariant variant, ProjectVersion version) {");
+        int nextMethodIndex = source.indexOf("    private void executeSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds) {", methodIndex);
+
+        assertTrue(methodIndex >= 0, "ProjectScreen should keep a restore execution action");
+        assertTrue(nextMethodIndex > methodIndex, "The restore execution action should be bounded by the next method");
+
+        String methodBody = source.substring(methodIndex, nextMethodIndex);
+
+        assertTrue(
+                methodBody.contains("restoreVersion(this.projectName, version.id(), variant.id())"),
+                "Build History restore should preserve the branch whose history card started the restore"
+        );
+    }
 }

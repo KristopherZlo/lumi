@@ -194,12 +194,17 @@ public final class ProjectScreenController {
     }
 
     public String restoreVersion(String projectName, String versionId) {
+        return this.restoreVersion(projectName, versionId, "");
+    }
+
+    public String restoreVersion(String projectName, String versionId, String targetVariantId) {
         try {
-            this.restoreService.restore(
-                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
-                    projectName,
-                    versionId
-            );
+            var level = ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName);
+            if (targetVariantId == null || targetVariantId.isBlank()) {
+                this.restoreService.restore(level, projectName, versionId);
+            } else {
+                this.restoreService.restoreToVariant(level, projectName, versionId, targetVariantId);
+            }
             return "luma.status.restore_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Restore request rejected for project {}", projectName, exception);

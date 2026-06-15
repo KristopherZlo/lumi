@@ -449,7 +449,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             return;
         }
 
-        this.refresh(this.actionController.restoreVersion(this.projectName, version.id()));
+        this.refresh(this.actionController.restoreVersion(this.projectName, version.id(), variant.id()));
     }
 
     private void executeSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds) {

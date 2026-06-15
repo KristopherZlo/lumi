@@ -31,6 +31,7 @@ public final class ProjectScreenSections {
     private final ProjectScreenController previewController;
     private final Actions actions;
     private final ProjectSaveCardView saveCardView;
+    private final BranchHistoryVersions branchHistoryVersions = new BranchHistoryVersions();
     private OnboardingTour.SpotlightTarget onboardingSpotlightTarget = OnboardingTour.SpotlightTarget.NONE;
     private ButtonComponent onboardingSaveButton;
     private ButtonComponent onboardingChangesButton;
@@ -156,7 +157,9 @@ public final class ProjectScreenSections {
 
     public FlowLayout historySection(Model model) {
         ProjectVariant selectedVariant = this.selectedVariant(model);
-        List<ProjectVersion> versions = selectedVariant == null ? List.of() : this.variantVersions(model, selectedVariant.id());
+        List<BranchHistoryVersions.Entry> entries = selectedVariant == null
+                ? List.of()
+                : this.branchHistoryVersions.forVariant(model.state().versions(), model.state().variants(), selectedVariant);
 
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.build.recent_saves_title"),
@@ -167,7 +170,7 @@ public final class ProjectScreenSections {
             section.child(picker);
         }
 
-        if (versions.isEmpty()) {
+        if (entries.isEmpty()) {
             FlowLayout empty = LumaUi.emptyState(
                     Component.translatable("luma.build.no_saves_title"),
                     Component.translatable("luma.build.no_saves_help")
@@ -184,12 +187,12 @@ public final class ProjectScreenSections {
             return section;
         }
 
-        int limit = model.showAllSaves() ? versions.size() : Math.min(RECENT_SAVE_LIMIT, versions.size());
+        int limit = model.showAllSaves() ? entries.size() : Math.min(RECENT_SAVE_LIMIT, entries.size());
         for (int index = 0; index < limit; index++) {
-            section.child(this.saveCard(model, versions.get(index)));
+            section.child(this.saveCard(model, entries.get(index)));
         }
 
-        if (versions.size() > RECENT_SAVE_LIMIT) {
+        if (entries.size() > RECENT_SAVE_LIMIT) {
             FlowLayout historyActions = LumaUi.actionRow();
             historyActions.child(LumaUi.button(Component.translatable(
                     model.showAllSaves() ? "luma.action.show_recent_saves" : "luma.action.show_older_saves"
@@ -235,15 +238,13 @@ public final class ProjectScreenSections {
         return picker;
     }
 
-    private FlowLayout saveCard(Model model, ProjectVersion version) {
-        ProjectVariant versionVariant = ProjectUiSupport.variantFor(model.state().variants(), version.variantId());
-        boolean current = ProjectUiSupport.isVariantHead(model.state().variants(), version);
+    private FlowLayout saveCard(Model model, BranchHistoryVersions.Entry entry) {
         boolean operationActive = model.state().operationSnapshot() != null && !model.state().operationSnapshot().terminal();
         return this.saveCardView.render(new ProjectSaveCardView.Model(
                 model.projectName(),
-                version,
-                versionVariant,
-                current,
+                entry.version(),
+                entry.variant(),
+                entry.current(),
                 operationActive,
                 model.width()
         ));
@@ -269,15 +270,6 @@ public final class ProjectScreenSections {
                 .sorted(Comparator
                         .comparing((ProjectVariant variant) -> !variant.id().equals(model.state().project().activeVariantId()))
                         .thenComparing(ProjectVariant::createdAt))
-                .toList();
-    }
-
-    private List<ProjectVersion> variantVersions(Model model, String variantId) {
-        return model.state().versions().stream()
-                .filter(version -> variantId.equals(version.variantId()))
-                .sorted(Comparator
-                        .comparing((ProjectVersion version) -> !ProjectUiSupport.isVariantHead(model.state().variants(), version))
-                        .thenComparing(ProjectVersion::createdAt, Comparator.reverseOrder()))
                 .toList();
     }
 
