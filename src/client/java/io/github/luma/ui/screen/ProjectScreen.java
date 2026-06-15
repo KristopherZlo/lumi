@@ -16,12 +16,13 @@ import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
-import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.controller.BranchCreationDialogStateFactory;
+import io.github.luma.ui.controller.BranchCreationResult;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
@@ -325,16 +326,17 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         if (!dialog.canCreate()) {
             return;
         }
-        String result = this.actionController.createVariant(
+        BranchCreationResult result = this.actionController.createAndSwitchVariant(
                 this.projectName,
                 this.branchName.trim(),
                 dialog.baseVersion().id()
         );
-        if ("luma.status.variant_created".equals(result)) {
+        if (result.switched()) {
+            this.selectedVariantId = result.variantId();
             this.pendingBranchBaseVersionId = "";
             this.branchName = "";
         }
-        this.refresh(result);
+        this.refresh(result.statusKey());
     }
 
     private void closeBranchDialog() {

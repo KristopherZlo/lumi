@@ -1,15 +1,16 @@
 package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
+import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.service.ChangeStatsFactory;
+import io.github.luma.domain.service.HistoryEditService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
-import io.github.luma.domain.service.HistoryEditService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VariantMergeService;
 import io.github.luma.domain.service.VersionService;
-import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.telemetry.TelemetryService;
 import io.github.luma.ui.state.SaveDetailsViewState;
@@ -33,6 +34,15 @@ public final class ProjectScreenController {
     private final VariantMergeService variantMergeService = new VariantMergeService();
     private final RecoveryService recoveryService = new RecoveryService();
     private final SaveDetailsStateFactory saveDetailsStateFactory = new SaveDetailsStateFactory();
+    private final BranchCreationWorkflow branchCreationWorkflow;
+
+    public ProjectScreenController() {
+        this.branchCreationWorkflow = new BranchCreationWorkflow(this::createBranchVariant, this::switchBranchVariant);
+    }
+
+    ProjectScreenController(BranchCreationWorkflow branchCreationWorkflow) {
+        this.branchCreationWorkflow = branchCreationWorkflow;
+    }
 
     public SaveViewState loadSaveState(String projectName, String status) {
         if (!this.client.hasSingleplayerServer()) {
@@ -332,12 +342,7 @@ public final class ProjectScreenController {
 
     public String createVariant(String projectName, String variantName, String fromVersionId) {
         try {
-            this.variantService.createVariant(
-                    ClientProjectAccess.requireSingleplayerServer(this.client),
-                    projectName,
-                    variantName,
-                    fromVersionId
-            );
+            this.createBranchVariant(projectName, variantName, fromVersionId);
             return "luma.status.variant_created";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Create variant request failed for project {}", projectName, exception);
@@ -346,19 +351,43 @@ public final class ProjectScreenController {
         }
     }
 
+    public BranchCreationResult createAndSwitchVariant(String projectName, String variantName, String fromVersionId) {
+        try {
+            ProjectVariant created = this.branchCreationWorkflow.createAndSwitch(projectName, variantName, fromVersionId);
+            return new BranchCreationResult("luma.status.variant_switched", created.id());
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Create and switch variant request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
+            return BranchCreationResult.status(variantFailureStatus(exception));
+        }
+    }
+
     public String switchVariant(String projectName, String variantId) {
         try {
-            this.variantService.switchVariant(
-                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
-                    projectName,
-                    variantId
-            );
+            this.switchBranchVariant(projectName, variantId);
             return "luma.status.variant_switched";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Switch variant request failed for project {}", projectName, exception);
             this.reportFailedAction(exception);
             return variantFailureStatus(exception);
         }
+    }
+
+    private ProjectVariant createBranchVariant(String projectName, String variantName, String fromVersionId) throws Exception {
+        return this.variantService.createVariant(
+                ClientProjectAccess.requireSingleplayerServer(this.client),
+                projectName,
+                variantName,
+                fromVersionId
+        );
+    }
+
+    private void switchBranchVariant(String projectName, String variantId) throws Exception {
+        this.variantService.switchVariant(
+                ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
+                projectName,
+                variantId
+        );
     }
 
     public String deleteVariant(String projectName, String variantId) {

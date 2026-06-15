@@ -16,6 +16,7 @@ import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.BranchCreationDialogStateFactory;
+import io.github.luma.ui.controller.BranchCreationResult;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
@@ -479,16 +480,18 @@ public final class SaveDetailsScreen extends LumaScreen {
         if (!dialog.canCreate()) {
             return;
         }
-        String result = this.controller.createVariant(
+        BranchCreationResult result = this.controller.createAndSwitchVariant(
                 this.projectName,
                 this.branchName.trim(),
                 dialog.baseVersion().id()
         );
-        if ("luma.status.variant_created".equals(result)) {
+        if (result.switched()) {
             this.pendingBranchBaseVersionId = "";
             this.branchName = "";
+            this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result.variantId(), result.statusKey());
+            return;
         }
-        this.refresh(result);
+        this.refresh(result.statusKey());
     }
 
     private void closeBranchDialog() {
