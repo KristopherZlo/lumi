@@ -61,22 +61,40 @@ final class RestoreMechanismReconciliationPlanner {
             List<BlockPoint> existingPositions,
             ServerLevel level
     ) {
+        RestoreMechanismReplaySelection selection = this.selectExactRootReplayPositions(
+                project,
+                mechanismScope,
+                existingPositions,
+                level
+        );
+        if (selection.truncatedMechanismScope()) {
+            return Optional.empty();
+        }
+        return Optional.of(selection.positions());
+    }
+
+    RestoreMechanismReplaySelection selectExactRootReplayPositions(
+            io.github.luma.domain.model.BuildProject project,
+            MechanismReplayScope mechanismScope,
+            List<BlockPoint> existingPositions,
+            ServerLevel level
+    ) {
         LinkedHashMap<String, BlockPoint> selected = new LinkedHashMap<>();
         for (BlockPoint position : existingPositions == null ? List.<BlockPoint>of() : existingPositions) {
             selected.putIfAbsent(positionKey(position), position);
         }
         if (mechanismScope == null || mechanismScope.isEmpty()) {
-            return Optional.of(List.copyOf(selected.values()));
+            return new RestoreMechanismReplaySelection(List.copyOf(selected.values()), false);
         }
         Optional<List<BlockPoint>> mechanismPositions =
                 this.boundedMechanismReplayPositions(project, mechanismScope, level);
         if (mechanismPositions.isEmpty()) {
-            return Optional.empty();
+            return new RestoreMechanismReplaySelection(List.copyOf(selected.values()), true);
         }
         for (BlockPoint position : mechanismPositions.orElseThrow()) {
             selected.putIfAbsent(positionKey(position), position);
         }
-        return Optional.of(List.copyOf(selected.values()));
+        return new RestoreMechanismReplaySelection(List.copyOf(selected.values()), false);
     }
 
     Optional<List<BlockPoint>> boundedMechanismReplayPositions(
@@ -179,5 +197,12 @@ final class RestoreMechanismReconciliationPlanner {
 
     private static String positionKey(BlockPoint position) {
         return position.x() + ":" + position.y() + ":" + position.z();
+    }
+}
+
+record RestoreMechanismReplaySelection(List<BlockPoint> positions, boolean truncatedMechanismScope) {
+
+    RestoreMechanismReplaySelection {
+        positions = positions == null ? List.of() : List.copyOf(positions);
     }
 }

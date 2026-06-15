@@ -208,6 +208,27 @@ class RestoreServiceTest {
     }
 
     @Test
+    void exactRootReplaySelectionKeepsChangedPositionsWhenMechanismScopeIsTooLarge() {
+        RestoreMechanismReconciliationPlanner planner = new RestoreMechanismReconciliationPlanner();
+        BlockPoint changedPosition = new BlockPoint(2, 64, 3);
+        List<io.github.luma.domain.model.ChunkSectionPoint> sections = java.util.stream.IntStream
+                .range(0, 17)
+                .mapToObj(index -> new io.github.luma.domain.model.ChunkSectionPoint(index, 0, 4))
+                .toList();
+        MechanismReplayScope scope = new MechanismReplayScope(List.of(), sections);
+
+        RestoreMechanismReplaySelection selection = planner.selectExactRootReplayPositions(
+                BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW),
+                scope,
+                List.of(changedPosition),
+                null
+        );
+
+        assertEquals(List.of(changedPosition), selection.positions());
+        assertTrue(selection.truncatedMechanismScope());
+    }
+
+    @Test
     void targetBlockStatesResolveSnapshotAndPatchChain(@TempDir Path tempDir) throws Exception {
         BlockTargetStateResolver resolver = new BlockTargetStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));

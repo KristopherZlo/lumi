@@ -943,35 +943,37 @@ public final class RestoreService {
         }
 
         MechanismReplayScope resolvedMechanismScope = mechanismScope.build();
-        Optional<List<BlockPoint>> exactRootPositions = this.mechanismReconciliationPlanner.boundedExactRootReplayPositions(
-                project,
-                resolvedMechanismScope,
-                this.chunkCollector.blockPositions(batches),
-                level
-        );
-        if (exactRootPositions.isEmpty()) {
-            LumaMod.LOGGER.info(
-                    "Direct restore for project {} to {} skipped because mechanism reconciliation scope exceeded {} cells",
-                    project.name(),
-                    targetVersion.id(),
-                    RestoreMechanismReconciliationPlanner.MAX_MECHANISM_RECONCILIATION_CELLS
-            );
-            LumaDebugLog.log(
-                    project,
-                    "restore",
-                    "Direct restore skipped for project {} target {} due to large mechanism reconciliation scope",
-                    project.name(),
-                    targetVersion.id()
-            );
-            return Optional.empty();
-        }
         if (exactRootStatePlan.append()) {
+            RestoreMechanismReplaySelection exactRootSelection =
+                    this.mechanismReconciliationPlanner.selectExactRootReplayPositions(
+                            project,
+                            resolvedMechanismScope,
+                            this.chunkCollector.blockPositions(batches),
+                            level
+                    );
+            if (exactRootSelection.truncatedMechanismScope()) {
+                LumaMod.LOGGER.warn(
+                        "Direct restore for project {} to {} skipped expanded mechanism reconciliation because scope exceeded {} cells; replaying {} changed root positions",
+                        project.name(),
+                        targetVersion.id(),
+                        RestoreMechanismReconciliationPlanner.MAX_MECHANISM_RECONCILIATION_CELLS,
+                        exactRootSelection.positions().size()
+                );
+                LumaDebugLog.log(
+                        project,
+                        "restore",
+                        "Direct restore for project {} target {} continued with {} exact root positions after mechanism reconciliation overflow",
+                        project.name(),
+                        targetVersion.id(),
+                        exactRootSelection.positions().size()
+                );
+            }
             List<PreparedChunkBatch> exactRootBatches = this.exactRootStateRestoreDecoder.decode(
                     layout,
                     level,
                     targetVersion,
                     exactRootStatePlan,
-                    exactRootPositions.orElseThrow(),
+                    exactRootSelection.positions(),
                     completedSources,
                     Math.max(1, totalSources),
                     progressSink
