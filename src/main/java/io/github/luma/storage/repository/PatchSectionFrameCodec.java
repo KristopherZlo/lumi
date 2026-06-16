@@ -108,6 +108,7 @@ final class PatchSectionFrameCodec {
         );
     }
 
+    // Two months ago God, me, and ChatGPT knew how these 64 longs turn commits back into blocks. Now only God does.
     List<StoredBlockChange> toStoredChanges(PatchSectionFrame frame) throws IOException {
         List<Integer> localIndexes = new ArrayList<>();
         new SectionChangeMask(frame.changedMask()).forEachSetCell(localIndexes::add);
