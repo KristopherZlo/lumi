@@ -3,7 +3,6 @@ package io.github.luma.minecraft.world;
 import io.github.luma.domain.model.SectionChangeMask;
 
 import io.github.luma.domain.model.OperationHandle;
-import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -11,7 +10,6 @@ import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -24,15 +22,22 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 final class ExactReplayStateQueue {
 
-    private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
-    private final BlockPlacementUpdateDecider updateDecider = new BlockPlacementUpdateDecider();
-    private final WorldApplyBlockUpdatePolicy updatePolicy = new WorldApplyBlockUpdatePolicy();
-    private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
+    private final SafeExactReplayStateApplier exactReplayStateApplier;
     private final ExactReplayTargetPolicy targetPolicy = new ExactReplayTargetPolicy();
     private final Map<Long, PreparedBlockPlacement> pending = new LinkedHashMap<>();
     private final Map<Long, PreparedBlockPlacement> recordedPlacements = new LinkedHashMap<>();
     private Iterator<Map.Entry<Long, PreparedBlockPlacement>> drainIterator;
     private boolean drainPrepared = false;
+
+    ExactReplayStateQueue() {
+        this(new SafeExactReplayStateApplier());
+    }
+
+    ExactReplayStateQueue(SafeExactReplayStateApplier exactReplayStateApplier) {
+        this.exactReplayStateApplier = exactReplayStateApplier == null
+                ? new SafeExactReplayStateApplier()
+                : exactReplayStateApplier;
+    }
 
     void record(ChunkBatch batch) {
         if (batch == null) {
@@ -74,7 +79,7 @@ final class ExactReplayStateQueue {
         int applied = 0;
         while (this.hasPending() && applied < maxBlocks && System.nanoTime() < deadlineNanos) {
             PreparedBlockPlacement placement = this.drainIterator.next().getValue();
-            this.applyExact(level, placement, handle);
+            this.exactReplayStateApplier.apply(level, placement, handle, "final-pass");
             this.drainIterator.remove();
             applied += 1;
         }
@@ -139,36 +144,6 @@ final class ExactReplayStateQueue {
         } else {
             this.recordedPlacements.remove(immutablePos.asLong());
         }
-    }
-
-    private void applyExact(ServerLevel level, PreparedBlockPlacement placement, OperationHandle handle) {
-        PersistentBlockStatePolicy.PersistentBlockState target = this.blockStatePolicy.normalize(
-                placement.state(),
-                placement.blockEntityTag()
-        );
-        BlockPos pos = placement.pos();
-        BlockState currentState = level.getBlockState(pos);
-        BlockState targetState = target.state();
-        CompoundTag targetBlockEntityTag = target.blockEntityTag();
-        if (!this.updateDecider.requiresUpdate(level, pos, currentState, targetState, targetBlockEntityTag)) {
-            this.historyDebugLog.logExactReplay(handle, level, "final-pass", pos, currentState, targetState, false);
-            return;
-        }
-
-        level.removeBlockEntity(pos);
-        level.setBlock(pos, targetState, this.updatePolicy.placementFlags(targetState));
-        if (targetBlockEntityTag != null) {
-            BlockEntity blockEntity = BlockEntity.loadStatic(
-                    pos,
-                    targetState,
-                    targetBlockEntityTag.copy(),
-                    level.registryAccess()
-            );
-            if (blockEntity != null) {
-                level.setBlockEntity(blockEntity);
-            }
-        }
-        this.historyDebugLog.logExactReplay(handle, level, "final-pass", pos, currentState, targetState, true);
     }
 
     private void prepareDrainPlacements() {

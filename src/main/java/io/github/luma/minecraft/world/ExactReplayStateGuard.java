@@ -13,11 +13,9 @@ import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -30,14 +28,22 @@ public final class ExactReplayStateGuard {
     private static final int MAX_IMMEDIATE_FLUID_TAIL_REASSERTIONS = 512;
     private static final ExactReplayStateGuard INSTANCE = new ExactReplayStateGuard();
 
-    private final PersistentBlockStatePolicy blockStatePolicy = new PersistentBlockStatePolicy();
     private final ExactReplayGuardBlockPolicy guardBlockPolicy = new ExactReplayGuardBlockPolicy();
-    private final BlockPlacementUpdateDecider updateDecider = new BlockPlacementUpdateDecider();
-    private final WorldApplyBlockUpdatePolicy updatePolicy = new WorldApplyBlockUpdatePolicy();
     private final WorldReplayTickSuppression replaySuppression = WorldReplayTickSuppression.getInstance();
     private final FluidReplayUpdateScheduler fluidReplayUpdateScheduler = new FluidReplayUpdateScheduler();
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
+    private final SafeExactReplayStateApplier exactReplayStateApplier;
     private final Map<ServerLevel, GuardedWorld> guardedWorlds = new IdentityHashMap<>();
+
+    ExactReplayStateGuard() {
+        this(new SafeExactReplayStateApplier());
+    }
+
+    ExactReplayStateGuard(SafeExactReplayStateApplier exactReplayStateApplier) {
+        this.exactReplayStateApplier = exactReplayStateApplier == null
+                ? new SafeExactReplayStateApplier()
+                : exactReplayStateApplier;
+    }
 
     public static ExactReplayStateGuard getInstance() {
         return INSTANCE;
@@ -136,7 +142,11 @@ public final class ExactReplayStateGuard {
     }
 
     private void tick(ServerLevel level) {
-        List<PreparedBlockPlacement> placements = this.nextPlacements(level);
+        GuardedWorld guardedWorld = this.guardedWorld(level);
+        if (guardedWorld == null) {
+            return;
+        }
+        List<PreparedBlockPlacement> placements = this.nextPlacements(level, guardedWorld);
         if (placements.isEmpty()) {
             return;
         }
@@ -148,27 +158,42 @@ public final class ExactReplayStateGuard {
                         WorldMutationContext.pushCaptureSuppression()
         ) {
             for (PreparedBlockPlacement placement : placements) {
-                this.applyExact(level, placement);
+                SafeExactReplayStateApplier.ApplyResult result = this.applyExact(level, placement);
+                if (result.quarantined()) {
+                    guardedWorld.remove(placement.pos());
+                }
             }
         }
+        this.removeEmptyGuardedWorld(level, guardedWorld);
     }
 
-    private synchronized List<PreparedBlockPlacement> nextPlacements(ServerLevel level) {
+    private synchronized GuardedWorld guardedWorld(ServerLevel level) {
         if (level == null) {
-            return List.of();
+            return null;
         }
-
         GuardedWorld guardedWorld = this.guardedWorlds.get(level);
         if (guardedWorld == null) {
-            return List.of();
+            return null;
         }
-
         guardedWorld.removeExpired(level.getGameTime());
         if (guardedWorld.isEmpty()) {
             this.guardedWorlds.remove(level);
+            return null;
+        }
+        return guardedWorld;
+    }
+
+    private List<PreparedBlockPlacement> nextPlacements(ServerLevel level, GuardedWorld guardedWorld) {
+        if (level == null || guardedWorld == null) {
             return List.of();
         }
         return guardedWorld.nextPlacements(MAX_REASSERTIONS_PER_TICK);
+    }
+
+    private synchronized void removeEmptyGuardedWorld(ServerLevel level, GuardedWorld guardedWorld) {
+        if (level != null && guardedWorld != null && guardedWorld.isEmpty()) {
+            this.guardedWorlds.remove(level);
+        }
     }
 
     private boolean shouldGuard(BlockState state) {
@@ -235,48 +260,33 @@ public final class ExactReplayStateGuard {
         try (
                 WorldMutationContext.SourceFrame ignoredSource =
                         WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
-                WorldMutationContext.SuppressionFrame ignoredSuppression =
-                        WorldMutationContext.pushCaptureSuppression()
+            WorldMutationContext.SuppressionFrame ignoredSuppression =
+                    WorldMutationContext.pushCaptureSuppression()
         ) {
             for (int index = 0; index < limit; index += 1) {
-                this.applyExact(level, placements.get(index), "guard-fluid-tail");
+                SafeExactReplayStateApplier.ApplyResult result =
+                        this.applyExact(level, placements.get(index), "guard-fluid-tail");
+                if (result.quarantined()) {
+                    GuardedWorld guardedWorld = this.guardedWorld(level);
+                    if (guardedWorld != null) {
+                        guardedWorld.remove(placements.get(index).pos());
+                        this.removeEmptyGuardedWorld(level, guardedWorld);
+                    }
+                }
             }
         }
     }
 
-    private boolean applyExact(ServerLevel level, PreparedBlockPlacement placement) {
+    private SafeExactReplayStateApplier.ApplyResult applyExact(ServerLevel level, PreparedBlockPlacement placement) {
         return this.applyExact(level, placement, "guard-tick");
     }
 
-    private boolean applyExact(ServerLevel level, PreparedBlockPlacement placement, String phase) {
-        PersistentBlockStatePolicy.PersistentBlockState target = this.blockStatePolicy.normalize(
-                placement.state(),
-                placement.blockEntityTag()
-        );
-        BlockPos pos = placement.pos();
-        BlockState currentState = level.getBlockState(pos);
-        BlockState targetState = target.state();
-        CompoundTag targetBlockEntityTag = target.blockEntityTag();
-        if (!this.updateDecider.requiresUpdate(level, pos, currentState, targetState, targetBlockEntityTag)) {
-            this.historyDebugLog.logExactReplay(null, level, phase, pos, currentState, targetState, false);
-            return false;
-        }
-
-        level.removeBlockEntity(pos);
-        level.setBlock(pos, targetState, this.updatePolicy.placementFlags(targetState));
-        if (targetBlockEntityTag != null) {
-            BlockEntity blockEntity = BlockEntity.loadStatic(
-                    pos,
-                    targetState,
-                    targetBlockEntityTag.copy(),
-                    level.registryAccess()
-            );
-            if (blockEntity != null) {
-                level.setBlockEntity(blockEntity);
-            }
-        }
-        this.historyDebugLog.logExactReplay(null, level, phase, pos, currentState, targetState, true);
-        return true;
+    private SafeExactReplayStateApplier.ApplyResult applyExact(
+            ServerLevel level,
+            PreparedBlockPlacement placement,
+            String phase
+    ) {
+        return this.exactReplayStateApplier.apply(level, placement, null, phase);
     }
 
     private PreparedBlockPlacement copy(PreparedBlockPlacement placement) {
@@ -328,6 +338,16 @@ public final class ExactReplayStateGuard {
 
         boolean isEmpty() {
             return this.placements.isEmpty();
+        }
+
+        void remove(BlockPos pos) {
+            if (pos == null) {
+                return;
+            }
+            this.placements.remove(pos.asLong());
+            if (this.cursor >= this.placements.size()) {
+                this.cursor = 0;
+            }
         }
     }
 

@@ -170,7 +170,11 @@ public final class WorldOperationManager {
      * budget for the current tick.
      */
     public void tick(MinecraftServer server) {
-        ExactReplayStateGuard.getInstance().tick(server);
+        WorldOperationSafetyBoundary.run(
+                "exact-replay-guard",
+                "server-tick",
+                () -> ExactReplayStateGuard.getInstance().tick(server)
+        );
 
         ActiveOperation operation;
         synchronized (this) {
@@ -1569,7 +1573,8 @@ public final class WorldOperationManager {
                         this.currentBatch.chunk(),
                         this.currentBatch.entityBatch(),
                         this.entityIndex,
-                        Math.min(maxBlocks, maxEntityOperations)
+                        Math.min(maxBlocks, maxEntityOperations),
+                        this.applyMetrics
                 );
                 this.entityIndex += processed;
                 if (this.entityIndex >= entityOperationCount) {

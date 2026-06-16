@@ -28,6 +28,7 @@ final class WorldApplyMetrics {
     private int verificationMismatched;
     private int verificationRepaired;
     private int verificationSkipped;
+    private int applyFailures;
     private int applyTicks;
     private int workTicks;
     private int maxWorkPerTick;
@@ -109,6 +110,10 @@ final class WorldApplyMetrics {
         this.verificationMismatched += Math.max(0, result.mismatched());
         this.verificationRepaired += Math.max(0, result.repaired());
         this.verificationSkipped += Math.max(0, result.skipped());
+    }
+
+    void recordApplyFailure() {
+        this.applyFailures += 1;
     }
 
     void recordApplyTick(int workUnits) {
@@ -222,6 +227,7 @@ final class WorldApplyMetrics {
                 + ", verificationMismatched=" + this.verificationMismatched
                 + ", verificationRepaired=" + this.verificationRepaired
                 + ", verificationSkipped=" + this.verificationSkipped
+                + ", applyFailures=" + this.applyFailures
                 + ", applyTicks=" + this.applyTicks
                 + ", workTicks=" + this.workTicks
                 + ", avgWorkPerTick=" + this.avgWorkPerTick()

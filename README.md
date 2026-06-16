@@ -177,6 +177,7 @@ Lumi's important performance work is mostly structural:
 - Section change masks avoid expanding sparse edits into full 4096-cell loops.
 - Direct restores to `Initial` and `WORLD_ROOT` replay sparse exact-root positions and only expand touched redstone/mechanism sections up to a fixed reconciliation cap; if that expansion is too large, Lumi keeps the sparse changed-position restore instead of decoding whole baseline chunks.
 - Direct restore and quick rollback resolve extra signal-source redstone/mechanism halo targets off-thread by exact position, clipped to project and selected-area bounds, instead of decoding broad chunks on the tick-thread apply path. If extra mechanism target-state reconciliation exceeds its cap, direct restore skips only that extra reconciliation and keeps sparse patch replay instead of falling back to a broad baseline plan.
+- World apply, exact replay, and post-replay guard paths treat recoverable `Exception`/`RuntimeException` failures as operation data, not client-fatal errors. Corrupt block-entity/entity tail payloads are skipped with bounded summaries, exact replay targets are quarantined after repeated failures, and operation metrics include `applyFailures`.
 - Patch metadata enables seek-based selected-chunk reads.
 - Section fingerprints let diff skip equal patch sections before loading full state.
 - Block-state palette decode caches avoid parsing identical NBT states repeatedly.

@@ -234,7 +234,11 @@ public final class BlockChangeApplier {
         int blockEntityPackets = 0;
         for (int index = startIndex; index < endIndex; index++) {
             Map.Entry<BlockPos, CompoundTag> entry = blockEntities.get(index);
-            blockEntityPackets += applyBlockEntityAndReport(level, entry.getKey(), entry.getValue());
+            try {
+                blockEntityPackets += applyBlockEntityAndReport(level, entry.getKey(), entry.getValue());
+            } catch (Exception exception) {
+                recordApplyFailure(metrics, "block-entity-tail", entry.getKey(), exception);
+            }
         }
         if (metrics != null) {
             metrics.record(BlockCommitResult.blockEntityPackets(blockEntityPackets));
@@ -260,6 +264,16 @@ public final class BlockChangeApplier {
             EntityBatch entityBatch,
             int startIndex,
             int maxEntities) {
+        return applyEntityBatch(level, chunk, entityBatch, startIndex, maxEntities, null);
+    }
+
+    static int applyEntityBatch(
+            ServerLevel level,
+            ChunkPoint chunk,
+            EntityBatch entityBatch,
+            int startIndex,
+            int maxEntities,
+            WorldApplyMetrics metrics) {
         if (entityBatch == null || entityBatch.isEmpty() || maxEntities <= 0
                 || startIndex >= entityOperationCount(entityBatch)) {
             return 0;
@@ -270,26 +284,30 @@ public final class BlockChangeApplier {
         int removalCount = entityBatch.entityIdsToRemove().size();
         int updateCount = entityBatch.entitiesToUpdate().size();
         for (int index = startIndex; index < endIndex; index++) {
-            if (entityBatch.replacePlacedEntities() && index == 0) {
-                removeExtraEntities(level, chunk, entityBatch);
-                continue;
-            }
+            try {
+                if (entityBatch.replacePlacedEntities() && index == 0) {
+                    removeExtraEntities(level, chunk, entityBatch);
+                    continue;
+                }
 
-            int entityIndex = index - (entityBatch.replacePlacedEntities() ? 1 : 0);
-            if (entityIndex < removalCount) {
-                removeEntity(level, entityBatch.entityIdsToRemove().get(entityIndex));
-                continue;
-            }
+                int entityIndex = index - (entityBatch.replacePlacedEntities() ? 1 : 0);
+                if (entityIndex < removalCount) {
+                    removeEntity(level, entityBatch.entityIdsToRemove().get(entityIndex));
+                    continue;
+                }
 
-            int updateIndex = entityIndex - removalCount;
-            if (updateIndex < updateCount) {
-                CompoundTag entityTag = entityBatch.entitiesToUpdate().get(updateIndex);
-                spawnEntity(level, entityTag);
-                continue;
-            }
+                int updateIndex = entityIndex - removalCount;
+                if (updateIndex < updateCount) {
+                    CompoundTag entityTag = entityBatch.entitiesToUpdate().get(updateIndex);
+                    spawnEntity(level, entityTag);
+                    continue;
+                }
 
-            int spawnIndex = updateIndex - updateCount;
-            spawnEntity(level, entityBatch.entitiesToSpawn().get(spawnIndex));
+                int spawnIndex = updateIndex - updateCount;
+                spawnEntity(level, entityBatch.entitiesToSpawn().get(spawnIndex));
+            } catch (Exception exception) {
+                recordApplyFailure(metrics, "entity-tail", null, exception);
+            }
         }
         return endIndex - startIndex;
     }
@@ -384,6 +402,17 @@ public final class BlockChangeApplier {
             BlockState targetState,
             CompoundTag targetBlockEntityTag) {
         return UPDATE_DECIDER.requiresUpdate(level, pos, currentState, targetState, targetBlockEntityTag);
+    }
+
+    private static void recordApplyFailure(
+            WorldApplyMetrics metrics,
+            String phase,
+            BlockPos pos,
+            Exception exception) {
+        if (metrics != null) {
+            metrics.recordApplyFailure();
+        }
+        WorldApplyExceptionLogger.record(phase, pos, exception);
     }
 
     private static void removeEntity(ServerLevel level, String entityId) {
