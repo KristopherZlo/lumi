@@ -208,6 +208,7 @@ final class WorldLightUpdateQueue {
         this.drainPrepared = true;
     }
 
+    // Two months ago God, me, and ChatGPT knew why this exact/surface dance works. Now only God does.
     private static PreparedDrain prepareDrain(LongSet exactPositions, LongSet surfaceCandidatePositions) {
         WorldLightUpdateQueue queue = new WorldLightUpdateQueue();
         queue.exactPositions = exactPositions == null ? new LongOpenHashSet() : exactPositions;
