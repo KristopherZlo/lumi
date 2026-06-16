@@ -70,7 +70,7 @@ public final class HistoryCaptureManager {
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
     private final CaptureBaselineCoordinator baselineCoordinator =
             new CaptureBaselineCoordinator(this.stabilizationService, new PersistentBlockStatePolicy());
-    private final SessionBaselineStateResolver sessionBaselineStateResolver = new SessionBaselineStateResolver();
+    private final SessionDraftBlockChangeRecorder draftBlockChangeRecorder = new SessionDraftBlockChangeRecorder();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final ActiveSessionRegionPolicy activeSessionRegionPolicy = new ActiveSessionRegionPolicy();
@@ -405,14 +405,9 @@ public final class HistoryCaptureManager {
                     );
                     continue;
                 }
-                StoredBlockChange draftChange =
-                        this.sessionBaselineStateResolver.rebaseToSessionBaseline(session, capturedChange);
-                int pendingBefore = buffer.size();
-                if (draftChange != null && !draftChange.isNoOp()) {
-                    buffer.addChange(draftChange, now);
-                }
+                SessionDraftBlockChangeRecorder.Result draftRecord =
+                        this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
                 this.liveUndoRedoActionRecorder.recordBlockAction(trackedProject, level, capturedChange, now);
-                int pendingAfter = buffer.size();
                 this.historyDebugLog.logCapturedBlock(
                         trackedProject.project(),
                         "direct",
@@ -420,8 +415,8 @@ public final class HistoryCaptureManager {
                         pos,
                         mutation.oldState(),
                         mutation.newState(),
-                        pendingBefore,
-                        pendingAfter
+                        draftRecord.pendingBefore(),
+                        draftRecord.pendingAfter()
                 );
                 CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
                 diagnostics.record(
@@ -436,8 +431,8 @@ public final class HistoryCaptureManager {
                         trackedProject.project(),
                         buffer,
                         diagnostics,
-                        pendingBefore,
-                        pendingAfter
+                        draftRecord.pendingBefore(),
+                        draftRecord.pendingAfter()
                 );
                 LumaDebugLog.log(
                         trackedProject.project(),
@@ -664,9 +659,9 @@ public final class HistoryCaptureManager {
             return;
         }
 
-        int pendingBefore = buffer.size();
         StoredBlockChange capturedChange = mutation.change();
-        buffer.addChange(capturedChange, now);
+        SessionDraftBlockChangeRecorder.Result draftRecord =
+                this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
         liveUndoProjects.putIfAbsent(projectId, trackedProject);
         liveUndoChanges.computeIfAbsent(projectId, ignored -> new ArrayList<>()).add(capturedChange);
         CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
@@ -682,8 +677,8 @@ public final class HistoryCaptureManager {
                 trackedProject.project(),
                 buffer,
                 diagnostics,
-                pendingBefore,
-                buffer.size()
+                draftRecord.pendingBefore(),
+                draftRecord.pendingAfter()
         );
         if (buffer.isEmpty()) {
             this.workingDrafts.discardIfEmpty(trackedProject, "after bulk block capture");

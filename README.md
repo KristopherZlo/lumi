@@ -101,6 +101,7 @@ For file-level navigation, start with [modules.md](modules.md). It maps each wor
 Important capture rules:
 
 - Internal restore, recovery, merge, and undo/redo application is suppressed so Lumi does not capture its own replay as new user work.
+- Direct and integrated bulk tool captures write pending drafts against the captured session baseline, not against intermediate live states produced earlier in the same unsaved edit.
 - Moving piston animation state is transient. Lumi waits for dirty chunks to settle instead of persisting `moving_piston` as final build state.
 - Delayed vanilla block events, scheduled ticks, and moving piston block entities can carry the original action id forward. Mechanism propagation depth is bounded so clocks cannot keep extending one action forever.
 - Ambient changes without a causal builder action are rejected. Causal secondary fallout can be stored hidden so restore/undo/redo can replay it without adding builder-facing noise.
