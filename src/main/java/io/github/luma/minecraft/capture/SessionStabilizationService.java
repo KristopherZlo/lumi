@@ -387,7 +387,7 @@ public final class SessionStabilizationService {
             List<StoredBlockChange> persistentDeltaChanges,
             Map<ChunkPoint, ChunkSnapshotPayload> liveChunks
     ) {
-        if (currentChanges == null || currentChanges.isEmpty() || liveChunks == null || liveChunks.isEmpty()) {
+        if (currentChanges == null || currentChanges.isEmpty()) {
             return List.of();
         }
 
@@ -397,11 +397,19 @@ public final class SessionStabilizationService {
                 : persistentDeltaChanges) {
             deltaPositions.add(deltaChange.pos());
         }
+        boolean canReadLiveState = liveChunks != null && !liveChunks.isEmpty();
+        if (!canReadLiveState && deltaPositions.isEmpty()) {
+            return List.of();
+        }
 
         List<StoredBlockChange> preserved = new ArrayList<>();
         Map<ChunkPoint, Map<Integer, ChunkSectionSnapshotPayload>> liveSectionIndexes = new HashMap<>();
         for (StoredBlockChange currentChange : currentChanges) {
             if (deltaPositions.contains(currentChange.pos())) {
+                preserved.add(currentChange);
+                continue;
+            }
+            if (!canReadLiveState) {
                 continue;
             }
             StatePayload livePayload = this.livePayload(currentChange.pos(), liveChunks, liveSectionIndexes);

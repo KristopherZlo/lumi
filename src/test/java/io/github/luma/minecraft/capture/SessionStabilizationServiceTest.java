@@ -398,6 +398,37 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void stabilizationCompositionPreservesDirectCaptureBaselineWhenDeltaReplacesSamePosition() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint pos = new BlockPoint(2, 64, 1);
+        StoredBlockChange directPlacement = new StoredBlockChange(
+                pos,
+                payload("minecraft:air"),
+                payload("minecraft:short_grass")
+        );
+        StoredBlockChange settledDelta = new StoredBlockChange(
+                pos,
+                payload("minecraft:stone"),
+                payload("minecraft:tall_grass")
+        );
+
+        List<StoredBlockChange> composedChanges = service.composeStabilizedChanges(
+                List.of(),
+                List.of(directPlacement),
+                List.of(settledDelta),
+                Map.of(ChunkPoint.from(pos), chunkWithStates(
+                        stateTag("minecraft:stone"),
+                        Map.of(pos, stateTag("minecraft:tall_grass"))
+                ))
+        );
+
+        assertEquals(1, composedChanges.size());
+        assertEquals(pos, composedChanges.getFirst().pos());
+        assertEquals("minecraft:air", composedChanges.getFirst().oldValue().blockId());
+        assertEquals("minecraft:tall_grass", composedChanges.getFirst().newValue().blockId());
+    }
+
+    @Test
     void stabilizationCompositionDropsCurrentChangeWhenLiveStateReturnedToBaseline() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange movedSource = new StoredBlockChange(
