@@ -8,6 +8,7 @@ import net.minecraft.world.level.block.state.properties.Property;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,6 +43,17 @@ class PersistentBlockStatePolicyTest {
         BlockState onLever = withProperty(Blocks.LEVER.defaultBlockState(), "powered", true);
 
         assertFalse(this.policy.normalizeState(offLever).equals(this.policy.normalizeState(onLever)));
+    }
+
+    @Test
+    void dropsBlockEntityTagWhenNormalizedStateCannotHostIt() {
+        net.minecraft.nbt.CompoundTag chestTag = new net.minecraft.nbt.CompoundTag();
+        chestTag.putString("id", "minecraft:chest");
+
+        PersistentBlockStatePolicy.PersistentBlockState normalized =
+                this.policy.normalize(Blocks.STONE.defaultBlockState(), chestTag);
+
+        assertNull(normalized.blockEntityTag());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

@@ -12,7 +12,7 @@ public final class PersistentBlockStatePolicy {
 
     public PersistentBlockState normalize(BlockState state, CompoundTag blockEntityTag) {
         BlockState normalizedState = this.normalizeState(state);
-        CompoundTag normalizedBlockEntity = normalizedState.isAir() || blockEntityTag == null
+        CompoundTag normalizedBlockEntity = !normalizedState.hasBlockEntity() || blockEntityTag == null
                 ? null
                 : blockEntityTag.copy();
         return new PersistentBlockState(normalizedState, normalizedBlockEntity);

@@ -980,33 +980,33 @@ public final class RestoreService {
                     level
             );
             if (mechanismPositions.isEmpty()) {
-                LumaMod.LOGGER.info(
-                        "Direct restore for project {} to {} skipped because mechanism target-state scope exceeded {} cells",
+                LumaMod.LOGGER.warn(
+                        "Direct restore for project {} to {} skipped mechanism target-state reconciliation because scope exceeded {} cells; replaying sparse patch changes only",
                         project.name(),
                         targetVersion.id(),
                         RestoreMechanismReconciliationPlanner.MAX_MECHANISM_RECONCILIATION_CELLS
                 );
-                return Optional.empty();
-            }
-            Map<BlockPoint, StatePayload> targetStates = this.blockTargetStateResolver.resolve(
-                    layout,
-                    project,
-                    versions,
-                    targetVersion,
-                    mechanismPositions.orElseThrow()
-            );
-            if (!targetStates.isEmpty()) {
-                batches.addAll(this.batchPreparer.prepareTargetStates(
-                        level,
-                        targetStates,
-                        PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY_AND_SUPPRESS_POST_REPLAY_MECHANISM
-                ));
-                progressSink.update(
-                        OperationStage.PREPARING,
-                        completedSources,
-                        Math.max(1, totalSources),
-                        "Decoded mechanism target-state reconciliation"
+            } else {
+                Map<BlockPoint, StatePayload> targetStates = this.blockTargetStateResolver.resolve(
+                        layout,
+                        project,
+                        versions,
+                        targetVersion,
+                        mechanismPositions.orElseThrow()
                 );
+                if (!targetStates.isEmpty()) {
+                    batches.addAll(this.batchPreparer.prepareTargetStates(
+                            level,
+                            targetStates,
+                            PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY_AND_SUPPRESS_POST_REPLAY_MECHANISM
+                    ));
+                    progressSink.update(
+                            OperationStage.PREPARING,
+                            completedSources,
+                            Math.max(1, totalSources),
+                            "Decoded mechanism target-state reconciliation"
+                    );
+                }
             }
         }
 

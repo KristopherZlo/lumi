@@ -36,6 +36,7 @@ import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.minecraft.world.PreparedSectionApplyBatch;
 import io.github.luma.minecraft.world.SectionApplyPath;
 import io.github.luma.minecraft.world.SectionApplySafetyProfile;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchDataRepository;
@@ -48,6 +49,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -226,6 +228,44 @@ class RestoreServiceTest {
 
         assertEquals(List.of(changedPosition), selection.positions());
         assertTrue(selection.truncatedMechanismScope());
+    }
+
+    @Test
+    void directForwardRestoreStaysSparseWhenMechanismTargetScopeIsTooLarge(@TempDir Path tempDir)
+            throws Throwable {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        List<StoredBlockChange> changes = java.util.stream.IntStream.range(0, 17)
+                .mapToObj(index -> new StoredBlockChange(
+                        new BlockPoint(index << 4, 64, 0),
+                        StatePayload.air(),
+                        new StatePayload(state("minecraft:redstone_wire"), null)
+                ))
+                .toList();
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                changes,
+                List.of()
+        ));
+        BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW)
+                .withActiveVariantId("main", NOW);
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion target = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        ProjectVariant activeVariant = new ProjectVariant("main", "main", "v0001", "v0001", true, NOW);
+
+        Optional<List<PreparedChunkBatch>> decoded = invokeTryDecodeDirectRestore(
+                service,
+                layout,
+                project,
+                List.of(root, target),
+                List.of(activeVariant),
+                target
+        );
+
+        assertTrue(decoded.isPresent());
     }
 
     @Test
@@ -600,6 +640,45 @@ class RestoreServiceTest {
                     64,
                     64,
                     (io.github.luma.minecraft.world.WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
+                    }
+            );
+        } catch (InvocationTargetException exception) {
+            throw exception.getCause();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<List<PreparedChunkBatch>> invokeTryDecodeDirectRestore(
+            RestoreService service,
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVersion targetVersion
+    ) throws Throwable {
+        Method method = RestoreService.class.getDeclaredMethod(
+                "tryDecodeDirectRestore",
+                ProjectLayout.class,
+                io.github.luma.domain.model.BuildProject.class,
+                List.class,
+                List.class,
+                ProjectVersion.class,
+                RecoveryDraft.class,
+                net.minecraft.server.level.ServerLevel.class,
+                WorldOperationManager.ProgressSink.class
+        );
+        method.setAccessible(true);
+        try {
+            return (Optional<List<PreparedChunkBatch>>) method.invoke(
+                    service,
+                    layout,
+                    project,
+                    versions,
+                    variants,
+                    targetVersion,
+                    null,
+                    null,
+                    (WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
                     }
             );
         } catch (InvocationTargetException exception) {
