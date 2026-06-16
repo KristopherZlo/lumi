@@ -104,6 +104,7 @@ Important capture rules:
 - Direct and integrated bulk tool captures write pending drafts against the captured session baseline, not against intermediate live states produced earlier in the same unsaved edit.
 - Dirty-chunk stabilization may replace the latest settled target state for a touched cell, but it must preserve the first session-baseline old state already captured for that cell.
 - External bulk-tool buffers that do not include block-entity payloads are treated as state-only updates; missing NBT is not persisted as a block-entity deletion unless the block state actually changes.
+- Axiom block-buffer capture suppresses direct-section fallback only after the bulk buffer was successfully captured. If the bulk extractor cannot inspect the buffer, direct-section fallback stays enabled so the edit can still be tracked by the lower-level hook.
 - Moving piston animation state is transient. Lumi waits for dirty chunks to settle instead of persisting `moving_piston` as final build state.
 - Delayed vanilla block events, scheduled ticks, and moving piston block entities can carry the original action id forward. Mechanism propagation depth is bounded so clocks cannot keep extending one action forever.
 - Ambient changes without a causal builder action are rejected. Causal secondary fallout can be stored hidden so restore/undo/redo can replay it without adding builder-facing noise.
@@ -326,7 +327,7 @@ When launching through `scripts/run-test-client.ps1`, pass this as a JVM flag af
 
 `-Dlumi.clientLoadLog=true` writes `logs/lumi-client-load.log` from the client process with CPU, heap/direct-buffer memory, GC, frame-pressure, OpenGL renderer, and optional `nvidia-smi` GPU utilization/memory samples. The test-client and client GameTest profiles enable it automatically.
 
-High-volume capture skip diagnostics are sampled and then summarized per project, source, and reason so debug mode does not turn ambient world ticks into sustained disk and CPU load.
+High-volume capture skip diagnostics, including bulk builder-tool capture skips, are sampled and then summarized per project, source, and reason so debug mode does not turn ambient world ticks into sustained disk and CPU load.
 
 `-Dlumi.externalStackDetection=true` enables the conservative fallback that samples Java stack frames to recognize unsupported builder tools. Leave it disabled during normal play and broad test-client runs; explicit WorldEdit/FAWE/Axiom integrations do not require it.
 

@@ -579,6 +579,13 @@ public final class HistoryCaptureManager {
                         activeSessionRegion,
                         actionId(deferredActionContext)
                 )) {
+            this.diagnosticsLogger.logSkippedCapture(
+                    trackedProject,
+                    source,
+                    input.pos(),
+                    "missing-causal-action",
+                    "no causal action is active"
+            );
             return;
         }
         if (!this.canCaptureIntoSession(trackedProject, level, source, input.pos())) {
@@ -616,6 +623,13 @@ public final class HistoryCaptureManager {
         TrackedChangeBuffer buffer = this.getOrCreateWorkingDraft(trackedProject, source, now);
         CaptureSessionState session = this.workingDrafts.session(projectId);
         if (session == null || mutation == null) {
+            this.diagnosticsLogger.logSkippedCapture(
+                    trackedProject,
+                    source,
+                    input.pos(),
+                    "missing-session-or-mutation",
+                    "capture session or captured mutation was unavailable"
+            );
             return;
         }
         if (!session.isRootChunk(chunk)) {
@@ -639,6 +653,13 @@ public final class HistoryCaptureManager {
             session.addRootChunk(chunk);
         } else if (usesDeferredStabilization) {
             if (!this.activeSessionRegionPolicy.contains(level, session, chunk)) {
+                this.diagnosticsLogger.logSkippedCapture(
+                        trackedProject,
+                        source,
+                        input.pos(),
+                        "outside-active-session-region",
+                        "chunk " + chunk.x() + ":" + chunk.z() + " is outside the active session region"
+                );
                 return;
             }
             this.baselineCoordinator.captureSessionChunkBaseline(
@@ -685,6 +706,7 @@ public final class HistoryCaptureManager {
         } else {
             this.workingDrafts.markDirty(projectId);
         }
+        this.diagnosticsLogger.logBufferProgress(trackedProject.project(), buffer, diagnostics);
     }
 
     public void recordEntityChange(

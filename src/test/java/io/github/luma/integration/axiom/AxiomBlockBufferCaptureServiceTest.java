@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AxiomBlockBufferCaptureServiceTest {
@@ -34,6 +35,16 @@ class AxiomBlockBufferCaptureServiceTest {
         method.setAccessible(true);
 
         assertTrue((boolean) method.invoke(service, chestState, chestTag(), mutation));
+    }
+
+    @Test
+    void emptyBulkCaptureDoesNotSuppressDirectSectionFallback() {
+        AxiomBlockBufferCaptureService service = new AxiomBlockBufferCaptureService(new AxiomBlockBufferExtractor());
+
+        AxiomBlockBufferCaptureService.CaptureAttempt attempt = service.captureBeforeApply(null, null, null);
+
+        assertFalse(attempt.captured());
+        assertFalse(attempt.suppressDirectSectionFallback());
     }
 
     private static CompoundTag chestTag() {

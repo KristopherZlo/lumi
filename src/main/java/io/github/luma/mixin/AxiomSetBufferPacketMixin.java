@@ -28,23 +28,33 @@ abstract class AxiomSetBufferPacketMixin {
             @Coerce Object player,
             Operation<Void> original
     ) {
-        WorldMutationCaptureGuard.CaptureBoundary directSectionSuppression =
-                WorldMutationCaptureGuard.pushDirectSectionCaptureSuppression();
+        WorldMutationCaptureGuard.CaptureBoundary directSectionSuppression = null;
         WorldMutationContext.SuppressionFrame nativeReplaySuppression = null;
         boolean nativeUndoRedoReplay = AxiomNativeUndoRedoGuard.consumeExpectedNativeReplay();
         try {
             if (nativeUndoRedoReplay) {
                 nativeReplaySuppression = WorldMutationContext.pushCaptureSuppression();
+                directSectionSuppression = WorldMutationCaptureGuard.pushDirectSectionCaptureSuppression();
             } else if (level instanceof ServerLevel serverLevel) {
                 ServerPlayer serverPlayer = player instanceof ServerPlayer typedPlayer ? typedPlayer : null;
-                AxiomBlockBufferCaptureService.getInstance().captureBeforeApply(blockBuffer, serverLevel, serverPlayer);
+                AxiomBlockBufferCaptureService.CaptureAttempt captureAttempt =
+                        AxiomBlockBufferCaptureService.getInstance().captureBeforeApply(
+                                blockBuffer,
+                                serverLevel,
+                                serverPlayer
+                        );
+                if (captureAttempt.suppressDirectSectionFallback()) {
+                    directSectionSuppression = WorldMutationCaptureGuard.pushDirectSectionCaptureSuppression();
+                }
             }
             original.call(blockBuffer, level, changedRegion, player);
         } finally {
             if (nativeReplaySuppression != null) {
                 nativeReplaySuppression.close();
             }
-            directSectionSuppression.close();
+            if (directSectionSuppression != null) {
+                directSectionSuppression.close();
+            }
         }
     }
 }

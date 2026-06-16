@@ -1,5 +1,6 @@
 package io.github.luma.integration.axiom;
 
+import io.github.luma.LumaMod;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.AutoCheckpointService;
@@ -34,37 +35,55 @@ public final class AxiomBlockBufferCaptureService {
         this.extractor = extractor;
     }
 
-    public void captureBeforeApply(Object blockBuffer, ServerLevel level, ServerPlayer player) {
+    public CaptureAttempt captureBeforeApply(Object blockBuffer, ServerLevel level, ServerPlayer player) {
         if (blockBuffer == null || level == null) {
-            return;
+            return CaptureAttempt.noBulkCapture("missing-context", 0, 0);
         }
 
-        List<AxiomBlockMutation> mutations = this.extractor.extract(blockBuffer);
-        if (mutations.isEmpty()) {
-            return;
+        List<AxiomBlockMutation> mutations;
+        try {
+            mutations = this.extractor.extract(blockBuffer);
+        } catch (RuntimeException | LinkageError exception) {
+            LumaMod.LOGGER.warn("Failed to inspect Axiom block buffer before apply; direct section capture remains enabled", exception);
+            return CaptureAttempt.failed("extractor-failed", 0, 0);
         }
-        List<HistoryCaptureManager.BlockChangeInput> inputs = this.captureInputs(level, mutations);
+        if (mutations.isEmpty()) {
+            return CaptureAttempt.noBulkCapture("empty-buffer", 0, 0);
+        }
+        List<HistoryCaptureManager.BlockChangeInput> inputs;
+        try {
+            inputs = this.captureInputs(level, mutations);
+        } catch (RuntimeException | LinkageError exception) {
+            LumaMod.LOGGER.warn("Failed to prepare Axiom block buffer capture inputs; direct section capture remains enabled", exception);
+            return CaptureAttempt.failed("input-capture-failed", mutations.size(), 0);
+        }
         if (inputs.isEmpty()) {
-            return;
+            return CaptureAttempt.noBulkCapture("no-capturable-changes", mutations.size(), 0);
         }
 
         String actor = this.actorName(player);
         String actionId = "axiom-buffer-" + UUID.randomUUID();
         boolean accessAllowed = this.accessAllowed(level, player);
-        AutoCheckpointService.getInstance().checkpointBeforeExternalOperation(
-                level,
-                WorldMutationSource.AXIOM,
-                actor,
-                actionId,
-                accessAllowed
-        );
-        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
-                WorldMutationSource.AXIOM,
-                actor,
-                actionId,
-                accessAllowed
-        )) {
-            HistoryCaptureManager.getInstance().recordBlockChanges(level, inputs);
+        try {
+            AutoCheckpointService.getInstance().checkpointBeforeExternalOperation(
+                    level,
+                    WorldMutationSource.AXIOM,
+                    actor,
+                    actionId,
+                    accessAllowed
+            );
+            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                    WorldMutationSource.AXIOM,
+                    actor,
+                    actionId,
+                    accessAllowed
+            )) {
+                HistoryCaptureManager.getInstance().recordBlockChanges(level, inputs);
+            }
+            return CaptureAttempt.captured(mutations.size(), inputs.size());
+        } catch (RuntimeException | LinkageError exception) {
+            LumaMod.LOGGER.warn("Failed to record Axiom block buffer before apply; direct section capture remains enabled", exception);
+            return CaptureAttempt.failed("recording-failed", mutations.size(), inputs.size());
         }
     }
 
@@ -127,5 +146,29 @@ public final class AxiomBlockBufferCaptureService {
             return true;
         }
         return LumaAccessControl.getInstance().canUse(player);
+    }
+
+    public record CaptureAttempt(
+            boolean captured,
+            String reason,
+            int extractedMutations,
+            int capturedInputs
+    ) {
+
+        public boolean suppressDirectSectionFallback() {
+            return this.captured;
+        }
+
+        static CaptureAttempt captured(int extractedMutations, int capturedInputs) {
+            return new CaptureAttempt(true, "captured", extractedMutations, capturedInputs);
+        }
+
+        static CaptureAttempt noBulkCapture(String reason, int extractedMutations, int capturedInputs) {
+            return new CaptureAttempt(false, reason, extractedMutations, capturedInputs);
+        }
+
+        static CaptureAttempt failed(String reason, int extractedMutations, int capturedInputs) {
+            return new CaptureAttempt(false, reason, extractedMutations, capturedInputs);
+        }
     }
 }
