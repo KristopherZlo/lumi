@@ -7,6 +7,7 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -99,10 +100,11 @@ public final class AxiomBlockBufferCaptureService {
             CompoundTag oldBlockEntity,
             AxiomBlockMutation mutation
     ) {
-        return oldState != null
-                && oldState.equals(mutation.newState())
-                && oldBlockEntity == null
-                && mutation.newBlockEntity() == null;
+        if (oldState == null || mutation == null || !oldState.equals(mutation.newState())) {
+            return false;
+        }
+        return mutation.newBlockEntity() == null
+                || Objects.equals(oldBlockEntity, mutation.newBlockEntity());
     }
 
     private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos, BlockState state) {
