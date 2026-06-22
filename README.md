@@ -38,7 +38,7 @@ The mod is singleplayer-first. Lumi capture and mutating actions activate only w
 
 ## Current Capabilities
 
-- Automatic dimension workspaces and bounded project workspaces.
+- Automatic dimension workspaces for vanilla builder edits and bounded project workspaces.
 - Builder-facing Build History UI with save details, branches, compare, restore, import/export, recovery, cleanup, settings, and deleted-save views.
 - Manual saves, quick saves, amend latest save, restore checkpoints, auto checkpoints before configured large external edits, and semantic save kinds such as `MERGE` and `AUTO_CHECKPOINT`.
 - Live undo/redo for recent tracked actions with default `Left Alt+Z` and `Left Alt+Y`; quick rollback with default `R`; quick save with default `Left Alt+S`; hotkey help with default `Left Alt+I`.
@@ -104,7 +104,8 @@ Important capture rules:
 - Direct and integrated bulk tool captures write pending drafts against the captured session baseline, not against intermediate live states produced earlier in the same unsaved edit.
 - Dirty-chunk stabilization may replace the latest settled target state for a touched cell, but it must preserve the first session-baseline old state already captured for that cell.
 - External bulk-tool buffers that do not include block-entity payloads are treated as state-only updates; missing NBT is not persisted as a block-entity deletion unless the block state actually changes.
-- Axiom block-buffer capture suppresses direct-section fallback only after the bulk buffer was successfully captured. If the bulk extractor cannot inspect the buffer, direct-section fallback stays enabled so the edit can still be tracked by the lower-level hook.
+- Axiom block-buffer capture keeps direct-section fallback enabled during normal apply, then records only post-apply buffer cells whose live world state reached the intended target.
+- Before save/freeze turns a working draft into version data, loaded pending block/entity entries are reconciled against the live world so native tool undo/delete cannot leave stale spawned blocks or entities in the commit.
 - Moving piston animation state is transient. Lumi waits for dirty chunks to settle instead of persisting `moving_piston` as final build state.
 - Delayed vanilla block events, scheduled ticks, and moving piston block entities can carry the original action id forward. Mechanism propagation depth is bounded so clocks cannot keep extending one action forever.
 - Ambient changes without a causal builder action are rejected. Causal secondary fallout can be stored hidden so restore/undo/redo can replay it without adding builder-facing noise.

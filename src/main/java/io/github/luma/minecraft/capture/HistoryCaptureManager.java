@@ -9,6 +9,7 @@ import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -28,10 +29,13 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -72,6 +76,8 @@ public final class HistoryCaptureManager {
             new CaptureBaselineCoordinator(this.stabilizationService, new PersistentBlockStatePolicy());
     private final SessionDraftBlockChangeRecorder draftBlockChangeRecorder = new SessionDraftBlockChangeRecorder();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
+    private final EntitySnapshotService entitySnapshotService = new EntitySnapshotService();
+    private final WorkingDraftLiveStateReconciler liveStateReconciler = new WorkingDraftLiveStateReconciler();
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final ActiveSessionRegionPolicy activeSessionRegionPolicy = new ActiveSessionRegionPolicy();
     private long idleFlushTicker;
@@ -1697,14 +1703,134 @@ public final class HistoryCaptureManager {
             );
         }
 
-        if (result.inFlight() || result.chunkCount() <= 0) {
+        if (finalDrain && session.hasPendingReconciliation()) {
+            LumaMod.LOGGER.info(
+                    "Skipped final stabilization for project {} with {} pending dirty chunks",
+                    trackedProject.project().name(),
+                    session.pendingReconcileChunks().size()
+            );
+        }
+        if (result.inFlight()) {
             return;
         }
         String projectId = trackedProject.project().id().toString();
-        this.diagnosticsLogger.logReconciliation(trackedProject, result);
-        this.liveUndoRedoActionRecorder.recordReconciledChanges(trackedProject, level, result, Instant.now());
+        boolean liveReconciled = finalDrain
+                && this.reconcileWorkingDraftAgainstLiveWorld(level, trackedProject, session, Instant.now());
+        if (result.chunkCount() > 0) {
+            this.diagnosticsLogger.logReconciliation(trackedProject, result);
+            this.liveUndoRedoActionRecorder.recordReconciledChanges(trackedProject, level, result, Instant.now());
+        }
         if (session.buffer().isEmpty()) {
             this.workingDrafts.discardIfEmpty(trackedProject, "after reconciliation");
+        } else if (liveReconciled) {
+            this.workingDrafts.markDirty(projectId);
+        }
+    }
+
+    private boolean reconcileWorkingDraftAgainstLiveWorld(
+            ServerLevel level,
+            TrackedProject trackedProject,
+            CaptureSessionState session,
+            Instant now
+    ) {
+        if (level == null || trackedProject == null || session == null || session.buffer().isEmpty()) {
+            return false;
+        }
+        boolean blocksChanged = this.reconcileWorkingDraftBlocksAgainstLiveWorld(level, session, now);
+        boolean entitiesChanged = this.reconcileWorkingDraftEntitiesAgainstLiveWorld(level, session, now);
+        boolean changed = blocksChanged || entitiesChanged;
+        if (changed) {
+            LumaMod.LOGGER.info(
+                    "Reconciled working draft for project {} against live world; pending={}",
+                    trackedProject.project().name(),
+                    session.buffer().size()
+            );
+        }
+        return changed;
+    }
+
+    private boolean reconcileWorkingDraftBlocksAgainstLiveWorld(
+            ServerLevel level,
+            CaptureSessionState session,
+            Instant now
+    ) {
+        LinkedHashSet<ChunkPoint> loadedChunks = new LinkedHashSet<>();
+        List<StoredBlockChange> liveTargets = new ArrayList<>();
+        for (StoredBlockChange change : session.buffer().orderedChanges()) {
+            ChunkPoint chunk = ChunkPoint.from(change.pos());
+            if (!this.isChunkLoaded(level, chunk)) {
+                continue;
+            }
+            loadedChunks.add(chunk);
+            liveTargets.add(change.withLatestState(this.liveStatePayload(level, change.pos().toBlockPos())));
+        }
+        return this.liveStateReconciler.reconcileLoadedBlocks(session, loadedChunks, liveTargets, now);
+    }
+
+    private boolean reconcileWorkingDraftEntitiesAgainstLiveWorld(
+            ServerLevel level,
+            CaptureSessionState session,
+            Instant now
+    ) {
+        List<StoredEntityChange> liveTargets = new ArrayList<>();
+        for (StoredEntityChange change : session.buffer().orderedEntityChanges()) {
+            Optional<UUID> entityId = this.entityUuid(change);
+            if (entityId.isEmpty()) {
+                continue;
+            }
+            Entity entity = level.getEntity(entityId.get());
+            EntityPayload livePayload = entity == null ? null : this.entitySnapshotService.capture(level, entity);
+            if (entity != null && livePayload == null) {
+                continue;
+            }
+            liveTargets.add(new StoredEntityChange(
+                    change.entityId(),
+                    change.entityType(),
+                    change.oldValue(),
+                    livePayload
+            ));
+        }
+        return this.liveStateReconciler.reconcileEntities(session, liveTargets, now);
+    }
+
+    private StatePayload liveStatePayload(ServerLevel level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        CompoundTag blockEntityTag = null;
+        if (state.hasBlockEntity()) {
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+            blockEntityTag = blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
+        }
+        return StatePayload.capture(state, blockEntityTag);
+    }
+
+    private boolean isChunkLoaded(ServerLevel level, ChunkPoint chunk) {
+        return level != null
+                && chunk != null
+                && level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null;
+    }
+
+    private Optional<UUID> entityUuid(StoredEntityChange change) {
+        if (change == null) {
+            return Optional.empty();
+        }
+        if (change.newValue() != null) {
+            Optional<UUID> id = change.newValue().uuid();
+            if (id.isPresent()) {
+                return id;
+            }
+        }
+        if (change.oldValue() != null) {
+            Optional<UUID> id = change.oldValue().uuid();
+            if (id.isPresent()) {
+                return id;
+            }
+        }
+        try {
+            return change.entityId() == null || change.entityId().isBlank()
+                    ? Optional.empty()
+                    : Optional.of(UUID.fromString(change.entityId()));
+        } catch (IllegalArgumentException ignored) {
+            return Optional.empty();
         }
     }
 
