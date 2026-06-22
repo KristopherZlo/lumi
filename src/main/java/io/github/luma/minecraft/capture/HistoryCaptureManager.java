@@ -1798,7 +1798,7 @@ public final class HistoryCaptureManager {
         CompoundTag blockEntityTag = null;
         if (state.hasBlockEntity()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
-            blockEntityTag = blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
+            blockEntityTag = BlockEntitySnapshot.capture(level, blockEntity);
         }
         return StatePayload.capture(state, blockEntityTag);
     }

@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.integration.common.ExternalToolMutationSourceResolver;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
+import io.github.luma.minecraft.capture.BlockEntitySnapshot;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
@@ -154,7 +155,7 @@ abstract class LevelSetBlockMixin {
             return null;
         }
         BlockEntity blockEntity = serverLevel.getBlockEntity(pos);
-        return blockEntity == null ? null : blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
+        return BlockEntitySnapshot.capture(serverLevel, blockEntity);
     }
 
     @Unique

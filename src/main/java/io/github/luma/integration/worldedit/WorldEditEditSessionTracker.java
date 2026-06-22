@@ -14,6 +14,7 @@ import com.sk89q.worldedit.world.block.BlockStateHolder;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.AutoCheckpointService;
+import io.github.luma.minecraft.capture.BlockEntitySnapshot;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.Locale;
@@ -145,7 +146,7 @@ public final class WorldEditEditSessionTracker {
                 return null;
             }
             BlockEntity blockEntity = this.level.getBlockEntity(pos);
-            return blockEntity == null ? null : blockEntity.saveWithFullMetadata(this.level.registryAccess());
+            return BlockEntitySnapshot.capture(this.level, blockEntity);
         }
     }
 }

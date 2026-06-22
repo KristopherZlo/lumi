@@ -136,20 +136,26 @@ public final class ExternalToolMutationOriginDetector implements ExternalToolMut
         return TOOL_PROFILES.stream().anyMatch(profile -> profile.matches(className));
     }
 
-    private Optional<ToolProfile> detectProfile(List<String> classNames) {
+    private Optional<DetectedToolProfile> detectProfile(List<String> classNames) {
         for (ToolProfile profile : TOOL_PROFILES) {
-            if (classNames.stream().anyMatch(profile::matches)) {
-                return Optional.of(profile);
+            for (String className : classNames) {
+                if (profile.matches(className)) {
+                    return Optional.of(new DetectedToolProfile(
+                            profile,
+                            className.toLowerCase(Locale.ROOT)
+                    ));
+                }
             }
         }
         return Optional.empty();
     }
 
-    private ObservedExternalToolOperation operationFor(ToolProfile profile) {
+    private ObservedExternalToolOperation operationFor(DetectedToolProfile detected) {
+        ToolProfile profile = detected.profile();
         long now = this.nanoTime.getAsLong();
         ObservedOperation operation = this.currentOperation.get();
-        if (operation == null || !operation.matches(profile) || operation.expired(now, this.operationIdleTimeoutNanos)) {
-            operation = new ObservedOperation(profile, profile.actor() + "-" + UUID.randomUUID(), now);
+        if (operation == null || !operation.matches(detected) || operation.expired(now, this.operationIdleTimeoutNanos)) {
+            operation = new ObservedOperation(profile, detected.stackKey(), profile.actor() + "-" + UUID.randomUUID(), now);
             this.currentOperation.set(operation);
             LumaDebugLog.log(
                     "external-tool-detect",
@@ -196,21 +202,28 @@ public final class ExternalToolMutationOriginDetector implements ExternalToolMut
         }
     }
 
+    private record DetectedToolProfile(ToolProfile profile, String stackKey) {
+    }
+
     private static final class ObservedOperation {
 
         private final ToolProfile profile;
+        private final String stackKey;
         private final String actionId;
         private long lastSeenNanos;
 
-        private ObservedOperation(ToolProfile profile, String actionId, long lastSeenNanos) {
+        private ObservedOperation(ToolProfile profile, String stackKey, String actionId, long lastSeenNanos) {
             this.profile = profile;
+            this.stackKey = stackKey;
             this.actionId = actionId;
             this.lastSeenNanos = lastSeenNanos;
         }
 
-        private boolean matches(ToolProfile otherProfile) {
+        private boolean matches(DetectedToolProfile detected) {
+            ToolProfile otherProfile = detected.profile();
             return this.profile.source() == otherProfile.source()
-                    && this.profile.actor().equals(otherProfile.actor());
+                    && this.profile.actor().equals(otherProfile.actor())
+                    && Objects.equals(this.stackKey, detected.stackKey());
         }
 
         private boolean expired(long now, long idleTimeoutNanos) {

@@ -226,9 +226,13 @@ public final class ChunkSnapshotCaptureService {
                 continue;
             }
             BlockPos pos = entry.getKey();
+            CompoundTag blockEntityTag = BlockEntitySnapshot.capture(level, blockEntity);
+            if (blockEntityTag == null) {
+                continue;
+            }
             PersistentBlockStatePolicy.PersistentBlockState persistentState = this.blockStatePolicy.normalize(
                     chunk.getBlockState(pos),
-                    blockEntity.saveWithFullMetadata(level.registryAccess())
+                    blockEntityTag
             );
             if (persistentState.blockEntityTag() == null) {
                 continue;

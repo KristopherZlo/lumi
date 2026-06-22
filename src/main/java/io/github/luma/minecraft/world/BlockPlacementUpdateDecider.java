@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.minecraft.capture.BlockEntitySnapshot;
 import java.util.Objects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -32,7 +33,7 @@ final class BlockPlacementUpdateDecider {
             return true;
         }
 
-        CompoundTag currentBlockEntityTag = currentBlockEntity.saveWithFullMetadata(level.registryAccess());
+        CompoundTag currentBlockEntityTag = BlockEntitySnapshot.capture(level, currentBlockEntity);
         return !Objects.equals(currentBlockEntityTag, targetBlockEntityTag);
     }
 }

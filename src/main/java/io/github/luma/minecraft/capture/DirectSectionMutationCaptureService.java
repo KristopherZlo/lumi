@@ -58,9 +58,7 @@ public final class DirectSectionMutationCaptureService {
         if (WorldMutationCaptureGuard.suppressesDirectSectionCapture()) {
             return PendingDirectSectionMutation.skipped();
         }
-
-        var owner = this.ownershipRegistry.ownerOf(section);
-        if (owner.isEmpty()) {
+        if (section == null) {
             return PendingDirectSectionMutation.skipped();
         }
 
@@ -70,13 +68,15 @@ public final class DirectSectionMutationCaptureService {
             return PendingDirectSectionMutation.skipped();
         }
 
-        ChunkSectionOwnershipRegistry.SectionOwner sectionOwner = owner.get();
-        BlockPos pos = sectionOwner.blockPos(localX, localY, localZ);
+        var owner = this.ownershipRegistry.ownerOf(section);
+        ChunkSectionOwnershipRegistry.SectionOwner sectionOwner = owner.orElse(null);
+        BlockPos pos = sectionOwner == null ? null : sectionOwner.blockPos(localX, localY, localZ);
         BlockState oldState = section.getBlockState(localX, localY, localZ);
-        CompoundTag oldBlockEntity = this.blockEntityTag(sectionOwner.level(), pos, oldState);
-        if (captureCurrentSource && sectionOwner.level() != null && !oldState.equals(newState)) {
+        ServerLevel ownerLevel = sectionOwner == null ? null : sectionOwner.level();
+        CompoundTag oldBlockEntity = this.blockEntityTag(ownerLevel, pos, oldState);
+        if (captureCurrentSource && ownerLevel != null && !oldState.equals(newState)) {
             HistoryCaptureManager.getInstance().capturePreMutationBaseline(
-                    sectionOwner.level(),
+                    ownerLevel,
                     pos,
                     oldState,
                     oldBlockEntity
@@ -108,15 +108,16 @@ public final class DirectSectionMutationCaptureService {
         }
 
         ServerLevel level = owner.get().level();
+        BlockPos pos = mutation.pos() == null ? owner.get().blockPos(localX, localY, localZ) : mutation.pos();
         BlockState appliedState = section.getBlockState(localX, localY, localZ);
         if (mutation.currentSource()) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     level,
-                    mutation.pos(),
+                    pos,
                     mutation.oldState(),
                     appliedState,
                     mutation.oldBlockEntity(),
-                    this.blockEntityTag(level, mutation.pos(), appliedState)
+                    this.blockEntityTag(level, pos, appliedState)
             );
             return;
         }
@@ -130,11 +131,11 @@ public final class DirectSectionMutationCaptureService {
         )) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     level,
-                    mutation.pos(),
+                    pos,
                     mutation.oldState(),
                     appliedState,
                     mutation.oldBlockEntity(),
-                    this.blockEntityTag(level, mutation.pos(), appliedState)
+                    this.blockEntityTag(level, pos, appliedState)
             );
         }
     }
@@ -144,7 +145,7 @@ public final class DirectSectionMutationCaptureService {
             return null;
         }
         BlockEntity blockEntity = level.getBlockEntity(pos);
-        return blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
+        return BlockEntitySnapshot.capture(level, blockEntity);
     }
 
     private boolean currentSourceCaptures() {

@@ -124,6 +124,6 @@ public final class PistonMovementBaselineCaptureService {
             return null;
         }
         BlockEntity blockEntity = level.getBlockEntity(pos);
-        return blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
+        return BlockEntitySnapshot.capture(level, blockEntity);
     }
 }

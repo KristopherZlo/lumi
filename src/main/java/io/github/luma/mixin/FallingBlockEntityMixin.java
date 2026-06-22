@@ -1,6 +1,7 @@
 package io.github.luma.mixin;
 
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.BlockEntitySnapshot;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.core.BlockPos;
@@ -34,7 +35,10 @@ abstract class FallingBlockEntityMixin {
         }
 
         BlockState state = level.getBlockState(pos);
-        CompoundTag newBlockEntity = blockEntity.saveWithFullMetadata(level.registryAccess());
+        CompoundTag newBlockEntity = BlockEntitySnapshot.capture(level, blockEntity);
+        if (newBlockEntity == null) {
+            return;
+        }
         WorldMutationContext.runWithSource(WorldMutationSource.FALLING_BLOCK, () -> HistoryCaptureManager.getInstance().recordBlockChange(
                 level,
                 pos,

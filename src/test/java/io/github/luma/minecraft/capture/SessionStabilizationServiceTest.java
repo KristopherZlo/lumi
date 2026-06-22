@@ -303,6 +303,28 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void baselineCorrectionOutsideCandidateSectionsDoesNotPullUnrelatedCells() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint correctedPos = new BlockPoint(1, 64, 1);
+        BlockPoint unrelatedPos = new BlockPoint(2, 64, 1);
+        ChunkSnapshotPayload baseline = uniformChunk("minecraft:air");
+        ChunkSnapshotPayload live = chunkWithStates(
+                stateTag("minecraft:air"),
+                Map.of(unrelatedPos, stateTag("minecraft:gold_block"))
+        );
+
+        List<StoredBlockChange> changes = service.diffChunk(
+                baseline,
+                live,
+                null,
+                Map.of(correctedPos, payload("minecraft:air")),
+                Set.of(5)
+        );
+
+        assertTrue(changes.isEmpty());
+    }
+
+    @Test
     void diffChunkKeepsPistonMovedSourceAndDestinationFromPreMotionBaseline() {
         SessionStabilizationService service = new SessionStabilizationService();
         BlockPoint source = new BlockPoint(1, 64, 1);

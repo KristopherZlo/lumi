@@ -28,11 +28,16 @@ public final class BlockEntityMutationSnapshotRegistry {
     }
 
     public void captureBeforePotentialMutation(BlockEntity blockEntity) {
-        if (blockEntity == null || !this.canCaptureCurrentSource()) {
+        if (blockEntity == null) {
+            return;
+        }
+        if (!this.canCaptureCurrentSource()) {
+            this.remove(blockEntity);
             return;
         }
         Level level = blockEntity.getLevel();
         if (!(level instanceof ServerLevel serverLevel)) {
+            this.remove(blockEntity);
             return;
         }
         synchronized (this.snapshots) {
@@ -41,7 +46,11 @@ public final class BlockEntityMutationSnapshotRegistry {
     }
 
     public void recordIfChanged(BlockEntity blockEntity) {
-        if (blockEntity == null || !this.canCaptureCurrentSource()) {
+        if (blockEntity == null) {
+            return;
+        }
+        if (!this.canCaptureCurrentSource()) {
+            this.remove(blockEntity);
             return;
         }
         Level level = blockEntity.getLevel();
@@ -55,7 +64,10 @@ public final class BlockEntityMutationSnapshotRegistry {
             return;
         }
 
-        CompoundTag currentTag = blockEntity.saveWithFullMetadata(serverLevel.registryAccess());
+        CompoundTag currentTag = BlockEntitySnapshot.capture(serverLevel, blockEntity);
+        if (currentTag == null) {
+            return;
+        }
         if (Objects.equals(snapshot.tag(), currentTag)) {
             return;
         }
@@ -82,10 +94,14 @@ public final class BlockEntityMutationSnapshotRegistry {
     }
 
     private Snapshot snapshot(ServerLevel level, BlockEntity blockEntity) {
+        CompoundTag tag = BlockEntitySnapshot.capture(level, blockEntity);
+        if (tag == null) {
+            return null;
+        }
         return new Snapshot(
                 blockEntity.getBlockPos().immutable(),
                 blockEntity.getBlockState(),
-                blockEntity.saveWithFullMetadata(level.registryAccess())
+                tag
         );
     }
 

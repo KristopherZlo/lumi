@@ -224,7 +224,8 @@ public final class SessionStabilizationService {
             ChunkSectionSnapshotPayload baselineSection = baselineSections.get(sectionY);
             ChunkSectionSnapshotPayload liveSection = liveSections.get(sectionY);
             boolean hasBaselineCorrection = this.hasBaselineCorrectionInSection(baselineCorrections, sectionY, bounds);
-            if (candidateSections != null && !candidateSections.contains(sectionY) && !hasBaselineCorrection) {
+            boolean candidateSection = candidateSections == null || candidateSections.contains(sectionY);
+            if (!candidateSection && !hasBaselineCorrection) {
                 continue;
             }
             if (this.sectionsEqual(baselineSection, liveSection)
@@ -242,6 +243,10 @@ public final class SessionStabilizationService {
                     for (int x = minX; x <= maxX; x++) {
                         int localX = x & 15;
                         BlockPoint worldPos = new BlockPoint(x, y, z);
+                        if (!candidateSection
+                                && (baselineCorrections == null || !baselineCorrections.containsKey(worldPos))) {
+                            continue;
+                        }
                         CompoundTag baselineState = this.readStateTag(baselineSection, localX, localY, localZ);
                         CompoundTag baselineBlockEntity = this.readBlockEntityTag(baseline, y, localX, localZ);
                         StatePayload correctedBaseline = baselineCorrections == null

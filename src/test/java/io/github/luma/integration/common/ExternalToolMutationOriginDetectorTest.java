@@ -145,6 +145,23 @@ class ExternalToolMutationOriginDetectorTest {
     }
 
     @Test
+    void startsNewActionWhenMatchedStackClassChangesWithinIdleWindow() {
+        AtomicLong now = new AtomicLong(1_000L);
+        ExternalToolMutationOriginDetector detector = new ExternalToolMutationOriginDetector(
+                () -> List.of(now.get() == 1_000L
+                        ? "com.moulberry.axiom.tools.BrushTool"
+                        : "com.moulberry.axiom.undo.UndoManager"),
+                now::get
+        );
+
+        String firstActionId = detector.detectOperation().orElseThrow().actionId();
+        now.addAndGet(100_000_000L);
+        String secondActionId = detector.detectOperation().orElseThrow().actionId();
+
+        assertNotEquals(firstActionId, secondActionId);
+    }
+
+    @Test
     void separatesExternalToolActorsWhenSourcesAreShared() {
         AtomicLong now = new AtomicLong(1_000L);
         ExternalToolMutationOriginDetector detector = new ExternalToolMutationOriginDetector(

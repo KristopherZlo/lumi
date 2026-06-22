@@ -4,6 +4,7 @@ import io.github.luma.LumaMod;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.AutoCheckpointService;
+import io.github.luma.minecraft.capture.BlockEntitySnapshot;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.util.ArrayList;
@@ -187,7 +188,7 @@ public final class AxiomBlockBufferCaptureService {
             return null;
         }
         BlockEntity blockEntity = level.getBlockEntity(pos);
-        return blockEntity == null ? null : blockEntity.saveWithFullMetadata(level.registryAccess());
+        return BlockEntitySnapshot.capture(level, blockEntity);
     }
 
     private String actorName(ServerPlayer player) {
