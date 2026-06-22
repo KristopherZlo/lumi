@@ -60,16 +60,6 @@ public final class SessionStabilizationService {
 
         try {
             CapturedChunks capturedChunks = this.captureLiveChunks(level, pendingChunks);
-            if (requireLoadedChunks && !capturedChunks.missingChunks().isEmpty()) {
-                throw new IllegalStateException(
-                        "Dirty chunks are not loaded for stabilization: " + capturedChunks.missingChunks()
-                );
-            }
-            if (requireLoadedChunks && !capturedChunks.transientChunks().isEmpty()) {
-                throw new IllegalStateException(
-                        "Dirty chunks are still settling piston movement: " + capturedChunks.transientChunks()
-                );
-            }
             List<ChunkPoint> processedChunks = capturedChunks.captured().keySet().stream().toList();
             if (processedChunks.isEmpty()) {
                 session.finishReconciliation(List.of());

@@ -15,12 +15,12 @@ class ActiveSessionRegionPolicyTest {
     private final ActiveSessionRegionPolicy policy = new ActiveSessionRegionPolicy();
 
     @Test
-    void activeRegionIncludesCausalEnvelopeAndPlayerLoadedChunks() {
+    void activeRegionIncludesOnlyCausalEnvelope() {
         CaptureSessionState session = CaptureSessionState.create(buffer());
         session.addRootChunk(new ChunkPoint(10, -4));
 
         assertTrue(this.policy.contains(session, new ChunkPoint(11, -3), false));
-        assertTrue(this.policy.contains(session, new ChunkPoint(20, -4), true));
+        assertFalse(this.policy.contains(session, new ChunkPoint(20, -4), true));
         assertFalse(this.policy.contains(session, new ChunkPoint(20, -4), false));
         assertFalse(this.policy.contains(null, new ChunkPoint(20, -4), true));
     }

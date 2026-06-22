@@ -33,14 +33,14 @@ class HistoryCaptureManagerTest {
     }
 
     @Test
-    void shouldBootstrapProjectsOnlyFromExplicitSources() {
+    void shouldBootstrapProjectsOnlyFromVanillaBuilderSources() {
         assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.ENTITY));
         assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.EXPLOSIVE));
-        assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.EXTERNAL_TOOL));
-        assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.WORLDEDIT));
-        assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.FAWE));
-        assertTrue(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.AXIOM));
+        assertFalse(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.EXTERNAL_TOOL));
+        assertFalse(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.WORLDEDIT));
+        assertFalse(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.FAWE));
+        assertFalse(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.AXIOM));
         assertFalse(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.EXPLOSION));
         assertFalse(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.FLUID));
         assertFalse(HistoryCaptureManager.allowsAutomaticProjectCreation(WorldMutationSource.FIRE));

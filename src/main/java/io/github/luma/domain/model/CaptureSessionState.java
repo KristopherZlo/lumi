@@ -112,8 +112,10 @@ public final class CaptureSessionState {
         boolean gameTimeChanged = previousGameTime == null || previousGameTime.longValue() != gameTime;
         boolean contextChanged = false;
         if (deferredActionContext != null && deferredActionContext.hasAction()) {
-            DeferredActionContext previous = this.deferredActionContexts.put(chunk, deferredActionContext);
-            contextChanged = !deferredActionContext.equals(previous);
+            DeferredActionContext previous = this.deferredActionContexts.get(chunk);
+            DeferredActionContext merged = mergeDeferredActionContext(previous, deferredActionContext);
+            this.deferredActionContexts.put(chunk, merged);
+            contextChanged = !merged.equals(previous);
         }
         return dirtyChanged || pendingChanged || gameTimeChanged || contextChanged;
     }
@@ -353,6 +355,21 @@ public final class CaptureSessionState {
             return true;
         }
         return gameTime - dirtyAt >= settleTicks;
+    }
+
+    private static DeferredActionContext mergeDeferredActionContext(
+            DeferredActionContext previous,
+            DeferredActionContext next
+    ) {
+        if (previous == null || !previous.hasAction()) {
+            return next;
+        }
+        return new DeferredActionContext(
+                next.actionId(),
+                next.actor(),
+                previous.accessAllowed() && next.accessAllowed(),
+                previous.hiddenInBuilderSurfaces() || next.hiddenInBuilderSurfaces()
+        );
     }
 
     public record DeferredActionContext(

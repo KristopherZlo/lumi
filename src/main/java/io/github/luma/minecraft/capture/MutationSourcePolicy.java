@@ -19,7 +19,23 @@ final class MutationSourcePolicy {
     }
 
     boolean allowsAutomaticProjectCreation(WorldMutationSource source) {
-        return this.isExplicitRootSource(source);
+        if (source == null) {
+            return false;
+        }
+        return switch (source) {
+            case PLAYER, ENTITY, EXPLOSIVE -> true;
+            case EXTERNAL_TOOL, WORLDEDIT, FAWE, AXIOM -> false;
+            case EXPLOSION,
+                    FLUID,
+                    FIRE,
+                    GROWTH,
+                    BLOCK_UPDATE,
+                    PISTON,
+                    FALLING_BLOCK,
+                    MOB,
+                    RESTORE,
+                    SYSTEM -> false;
+        };
     }
 
     boolean allowsSessionBootstrap(WorldMutationSource source) {

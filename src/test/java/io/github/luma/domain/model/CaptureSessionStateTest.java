@@ -131,6 +131,24 @@ class CaptureSessionStateTest {
     }
 
     @Test
+    void mergedDeferredActionKeepsRestrictiveChunkFlags() {
+        CaptureSessionState state = CaptureSessionState.create(buffer());
+        ChunkPoint chunk = new ChunkPoint(0, 0);
+        CaptureSessionState.DeferredActionContext hiddenDeniedAction =
+                new CaptureSessionState.DeferredActionContext("action-1", "builder", false, true);
+        CaptureSessionState.DeferredActionContext visibleAllowedAction =
+                new CaptureSessionState.DeferredActionContext("action-2", "builder", true, false);
+
+        assertTrue(state.markDirtyChunk(chunk, hiddenDeniedAction));
+        assertTrue(state.markDirtyChunk(chunk, visibleAllowedAction));
+
+        CaptureSessionState.DeferredActionContext merged = state.deferredActionContext(chunk);
+        assertEquals("action-2", merged.actionId());
+        assertFalse(merged.accessAllowed());
+        assertTrue(merged.hiddenInBuilderSurfaces());
+    }
+
+    @Test
     void dirtyChunksWaitForSettleTicksBeforeReconciliation() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
         ChunkPoint chunk = new ChunkPoint(0, 0);
