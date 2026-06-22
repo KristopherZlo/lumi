@@ -43,6 +43,13 @@ public final class ExternalToolMutationSourceResolver {
     }
 
     private boolean canOverridePlayerSource(ObservedExternalToolOperation operation) {
-        return operation != null && operation.source() == WorldMutationSource.AXIOM;
+        if (operation == null || operation.source() == null) {
+            return false;
+        }
+        return switch (operation.source()) {
+            case AXIOM, WORLDEDIT, FAWE, EXTERNAL_TOOL -> true;
+            case PLAYER, ENTITY, EXPLOSION, FLUID, FIRE, GROWTH, BLOCK_UPDATE, PISTON,
+                    FALLING_BLOCK, EXPLOSIVE, MOB, RESTORE, SYSTEM -> false;
+        };
     }
 }

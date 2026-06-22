@@ -3,6 +3,7 @@ package io.github.luma.integration.axiom;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Block;
@@ -35,7 +36,7 @@ class AxiomBlockBufferExtractorTest {
         );
         section.set(2, 3, 4, Blocks.STONE.defaultBlockState());
         section.set(5, 6, 7, FakeBlockBuffer.EMPTY_STATE);
-        buffer.values.put(BlockPos.asLong(1, -2, 3), section);
+        buffer.values.put(SectionPos.asLong(1, -2, 3), section);
 
         List<AxiomBlockMutation> mutations = this.extractor.extract(buffer);
 

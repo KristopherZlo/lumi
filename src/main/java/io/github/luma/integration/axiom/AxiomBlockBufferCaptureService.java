@@ -35,9 +35,9 @@ public final class AxiomBlockBufferCaptureService {
         this.extractor = extractor;
     }
 
-    public CaptureAttempt captureBeforeApply(Object blockBuffer, ServerLevel level, ServerPlayer player) {
+    public PreparedCapture prepareBeforeApply(Object blockBuffer, ServerLevel level, ServerPlayer player) {
         if (blockBuffer == null || level == null) {
-            return CaptureAttempt.noBulkCapture("missing-context", 0, 0);
+            return PreparedCapture.empty("missing-context", 0);
         }
 
         List<AxiomBlockMutation> mutations;
@@ -45,20 +45,20 @@ public final class AxiomBlockBufferCaptureService {
             mutations = this.extractor.extract(blockBuffer);
         } catch (RuntimeException | LinkageError exception) {
             LumaMod.LOGGER.warn("Failed to inspect Axiom block buffer before apply; direct section capture remains enabled", exception);
-            return CaptureAttempt.failed("extractor-failed", 0, 0);
+            return PreparedCapture.empty("extractor-failed", 0);
         }
         if (mutations.isEmpty()) {
-            return CaptureAttempt.noBulkCapture("empty-buffer", 0, 0);
+            return PreparedCapture.empty("empty-buffer", 0);
         }
         List<HistoryCaptureManager.BlockChangeInput> inputs;
         try {
             inputs = this.captureInputs(level, mutations);
         } catch (RuntimeException | LinkageError exception) {
             LumaMod.LOGGER.warn("Failed to prepare Axiom block buffer capture inputs; direct section capture remains enabled", exception);
-            return CaptureAttempt.failed("input-capture-failed", mutations.size(), 0);
+            return PreparedCapture.empty("input-capture-failed", mutations.size());
         }
         if (inputs.isEmpty()) {
-            return CaptureAttempt.noBulkCapture("no-capturable-changes", mutations.size(), 0);
+            return PreparedCapture.empty("no-capturable-changes", mutations.size());
         }
 
         String actor = this.actorName(player);
@@ -72,18 +72,49 @@ public final class AxiomBlockBufferCaptureService {
                     actionId,
                     accessAllowed
             );
-            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
-                    WorldMutationSource.AXIOM,
-                    actor,
-                    actionId,
-                    accessAllowed
-            )) {
-                HistoryCaptureManager.getInstance().recordBlockChanges(level, inputs);
-            }
-            return CaptureAttempt.captured(mutations.size(), inputs.size());
+            return PreparedCapture.prepared(level, actor, actionId, accessAllowed, mutations.size(), inputs);
         } catch (RuntimeException | LinkageError exception) {
-            LumaMod.LOGGER.warn("Failed to record Axiom block buffer before apply; direct section capture remains enabled", exception);
-            return CaptureAttempt.failed("recording-failed", mutations.size(), inputs.size());
+            LumaMod.LOGGER.warn("Failed to prepare Axiom block buffer capture; direct section capture remains enabled", exception);
+            return PreparedCapture.empty("checkpoint-failed", mutations.size());
+        }
+    }
+
+    public CaptureAttempt recordAfterApply(PreparedCapture preparedCapture) {
+        if (preparedCapture == null) {
+            return CaptureAttempt.noBulkCapture("not-prepared", 0, 0);
+        }
+        if (!preparedCapture.prepared()) {
+            return CaptureAttempt.noBulkCapture(
+                    preparedCapture.reason(),
+                    preparedCapture.extractedMutations(),
+                    preparedCapture.inputs().size()
+            );
+        }
+
+        List<HistoryCaptureManager.BlockChangeInput> appliedInputs = this.appliedInputs(preparedCapture);
+        if (appliedInputs.isEmpty()) {
+            return CaptureAttempt.noBulkCapture(
+                    "no-applied-changes",
+                    preparedCapture.extractedMutations(),
+                    0
+            );
+        }
+
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                WorldMutationSource.AXIOM,
+                preparedCapture.actor(),
+                preparedCapture.actionId(),
+                preparedCapture.accessAllowed()
+        )) {
+            HistoryCaptureManager.getInstance().recordBlockChanges(preparedCapture.level(), appliedInputs);
+            return CaptureAttempt.captured(preparedCapture.extractedMutations(), appliedInputs.size());
+        } catch (RuntimeException | LinkageError exception) {
+            LumaMod.LOGGER.warn("Failed to record Axiom block buffer after apply; direct section capture remains enabled", exception);
+            return CaptureAttempt.failed(
+                    "recording-failed",
+                    preparedCapture.extractedMutations(),
+                    appliedInputs.size()
+            );
         }
     }
 
@@ -126,6 +157,31 @@ public final class AxiomBlockBufferCaptureService {
                 || Objects.equals(oldBlockEntity, mutation.newBlockEntity());
     }
 
+    private List<HistoryCaptureManager.BlockChangeInput> appliedInputs(PreparedCapture preparedCapture) {
+        List<HistoryCaptureManager.BlockChangeInput> applied = new ArrayList<>(preparedCapture.inputs().size());
+        for (HistoryCaptureManager.BlockChangeInput input : preparedCapture.inputs()) {
+            if (input == null || input.pos() == null || input.newState() == null) {
+                continue;
+            }
+            BlockState liveState = preparedCapture.level().getBlockState(input.pos());
+            if (!input.newState().equals(liveState)) {
+                continue;
+            }
+            CompoundTag liveBlockEntity = this.blockEntityTag(preparedCapture.level(), input.pos(), liveState);
+            if (input.newBlockEntity() != null && !Objects.equals(input.newBlockEntity(), liveBlockEntity)) {
+                continue;
+            }
+            applied.add(new HistoryCaptureManager.BlockChangeInput(
+                    input.pos(),
+                    input.oldState(),
+                    liveState,
+                    input.oldBlockEntity(),
+                    liveBlockEntity
+            ));
+        }
+        return List.copyOf(applied);
+    }
+
     private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos, BlockState state) {
         if (state == null || !state.hasBlockEntity()) {
             return null;
@@ -148,6 +204,62 @@ public final class AxiomBlockBufferCaptureService {
         return LumaAccessControl.getInstance().canUse(player);
     }
 
+    public record PreparedCapture(
+            boolean prepared,
+            String reason,
+            ServerLevel level,
+            String actor,
+            String actionId,
+            boolean accessAllowed,
+            int extractedMutations,
+            List<HistoryCaptureManager.BlockChangeInput> inputs
+    ) {
+
+        public boolean hasSourceContext() {
+            return this.prepared && this.actionId != null && !this.actionId.isBlank();
+        }
+
+        static PreparedCapture prepared(
+                ServerLevel level,
+                String actor,
+                String actionId,
+                boolean accessAllowed,
+                int extractedMutations,
+                List<HistoryCaptureManager.BlockChangeInput> inputs
+        ) {
+            return new PreparedCapture(
+                    true,
+                    "prepared",
+                    level,
+                    actor,
+                    actionId,
+                    accessAllowed,
+                    extractedMutations,
+                    inputs
+            );
+        }
+
+        static PreparedCapture empty(String reason, int extractedMutations) {
+            return new PreparedCapture(
+                    false,
+                    reason,
+                    null,
+                    "",
+                    "",
+                    false,
+                    extractedMutations,
+                    List.of()
+            );
+        }
+
+        public PreparedCapture {
+            reason = reason == null ? "" : reason;
+            actor = actor == null || actor.isBlank() ? "axiom" : actor;
+            actionId = actionId == null ? "" : actionId;
+            inputs = inputs == null ? List.of() : List.copyOf(inputs);
+        }
+    }
+
     public record CaptureAttempt(
             boolean captured,
             String reason,
@@ -156,7 +268,7 @@ public final class AxiomBlockBufferCaptureService {
     ) {
 
         public boolean suppressDirectSectionFallback() {
-            return this.captured;
+            return false;
         }
 
         static CaptureAttempt captured(int extractedMutations, int capturedInputs) {

@@ -30,12 +30,24 @@ class ExternalToolMutationSourceResolverTest {
     }
 
     @Test
-    void keepsNonAxiomToolFramesOutOfPlayerBreaks() {
-        ExternalToolMutationSourceResolver resolver = new ExternalToolMutationSourceResolver(() -> Optional.of(
-                new ObservedExternalToolOperation(WorldMutationSource.WORLDEDIT, "worldedit", "worldedit-action")
-        ));
+    void letsKnownBuilderToolsOverridePlayerSource() {
+        for (WorldMutationSource source : java.util.List.of(
+                WorldMutationSource.WORLDEDIT,
+                WorldMutationSource.FAWE,
+                WorldMutationSource.EXTERNAL_TOOL
+        )) {
+            ExternalToolMutationSourceResolver resolver = new ExternalToolMutationSourceResolver(() -> Optional.of(
+                    new ObservedExternalToolOperation(source, source.name().toLowerCase(), source.name() + "-action")
+            ));
 
-        assertTrue(resolver.detectPlayerSourceOverride(WorldMutationSource.PLAYER, false).isEmpty());
+            Optional<ObservedExternalToolOperation> resolved = resolver.detectPlayerSourceOverride(
+                    WorldMutationSource.PLAYER,
+                    false
+            );
+
+            assertTrue(resolved.isPresent());
+            assertEquals(source, resolved.get().source());
+        }
     }
 
     @Test

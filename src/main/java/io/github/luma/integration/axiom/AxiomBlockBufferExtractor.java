@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.PalettedContainer;
 
@@ -25,6 +26,9 @@ final class AxiomBlockBufferExtractor {
         }
 
         Object emptyState = this.emptyState(blockBuffer);
+        if (emptyState == null) {
+            return List.of();
+        }
         List<AxiomBlockMutation> mutations = new ArrayList<>();
         for (Object entryObject : entries) {
             if (!(entryObject instanceof Long2ObjectMap.Entry<?> entry)) {
@@ -44,9 +48,9 @@ final class AxiomBlockBufferExtractor {
             Object emptyState,
             List<AxiomBlockMutation> mutations
     ) {
-        int sectionBlockX = BlockPos.getX(sectionKey) << 4;
-        int sectionBlockY = BlockPos.getY(sectionKey) << 4;
-        int sectionBlockZ = BlockPos.getZ(sectionKey) << 4;
+        int sectionBlockX = SectionPos.x(sectionKey) << 4;
+        int sectionBlockY = SectionPos.y(sectionKey) << 4;
+        int sectionBlockZ = SectionPos.z(sectionKey) << 4;
         for (int localY = 0; localY < SECTION_SIZE; localY++) {
             for (int localZ = 0; localZ < SECTION_SIZE; localZ++) {
                 for (int localX = 0; localX < SECTION_SIZE; localX++) {

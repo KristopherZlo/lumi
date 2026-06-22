@@ -41,9 +41,18 @@ class AxiomBlockBufferCaptureServiceTest {
     void emptyBulkCaptureDoesNotSuppressDirectSectionFallback() {
         AxiomBlockBufferCaptureService service = new AxiomBlockBufferCaptureService(new AxiomBlockBufferExtractor());
 
-        AxiomBlockBufferCaptureService.CaptureAttempt attempt = service.captureBeforeApply(null, null, null);
+        AxiomBlockBufferCaptureService.PreparedCapture attempt = service.prepareBeforeApply(null, null, null);
 
-        assertFalse(attempt.captured());
+        assertFalse(attempt.prepared());
+        assertFalse(attempt.hasSourceContext());
+    }
+
+    @Test
+    void capturedBulkDoesNotSuppressDirectSectionFallback() {
+        AxiomBlockBufferCaptureService.CaptureAttempt attempt =
+                AxiomBlockBufferCaptureService.CaptureAttempt.captured(1, 1);
+
+        assertTrue(attempt.captured());
         assertFalse(attempt.suppressDirectSectionFallback());
     }
 
