@@ -881,11 +881,18 @@ public final class RestoreService {
         MechanismReplayScope.Builder mechanismScope = MechanismReplayScope.builder();
 
         if (pendingDraft != null && !pendingDraft.isEmpty()) {
-            RecoveryDraft rollbackDraft = this.entityStateResolver.alignPendingEntityRollbackWithTarget(
+            RecoveryDraft rollbackDraft = this.blockTargetStateResolver.alignPendingRollbackWithTarget(
                     layout,
+                    project,
                     versions,
                     targetVersion,
                     pendingDraft
+            );
+            rollbackDraft = this.entityStateResolver.alignPendingEntityRollbackWithTarget(
+                    layout,
+                    versions,
+                    targetVersion,
+                    rollbackDraft
             );
             List<StoredBlockChange> rollbackChanges = rollbackDraft.changes();
             List<StoredEntityChange> rollbackEntityChanges = rollbackDraft.entityChanges();
@@ -1010,8 +1017,7 @@ public final class RestoreService {
             }
         }
 
-        List<PreparedChunkBatch> collapsed;
-        collapsed = this.collapsePreparedRestoreBatches("direct-restore", batches);
+        List<PreparedChunkBatch> collapsed = this.collapsePreparedRestoreBatches("direct-restore", batches);
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         LumaMod.LOGGER.info(

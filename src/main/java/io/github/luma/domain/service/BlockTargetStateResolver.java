@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
@@ -37,6 +38,56 @@ final class BlockTargetStateResolver {
     private final RestoreBaselineRequirementValidator baselineRequirementValidator =
             new RestoreBaselineRequirementValidator(this.baselineChunkRepository);
     private final VersionLineageService lineageService = new VersionLineageService();
+
+    RecoveryDraft alignPendingRollbackWithTarget(
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft
+    ) throws IOException {
+        if (pendingDraft == null || pendingDraft.changes().isEmpty()) {
+            return pendingDraft;
+        }
+
+        List<BlockPoint> positions = pendingDraft.changes().stream()
+                .filter(change -> change != null && change.pos() != null)
+                .map(StoredBlockChange::pos)
+                .distinct()
+                .toList();
+        if (positions.isEmpty()) {
+            return pendingDraft;
+        }
+
+        Map<BlockPoint, StatePayload> targetStates = this.resolve(
+                layout,
+                project,
+                versions,
+                targetVersion,
+                positions
+        );
+        List<StoredBlockChange> alignedChanges = new ArrayList<>(pendingDraft.changes().size());
+        for (StoredBlockChange change : pendingDraft.changes()) {
+            if (change == null || change.pos() == null) {
+                continue;
+            }
+            StoredBlockChange aligned = change.withOldValue(targetStates.getOrDefault(change.pos(), change.oldValue()));
+            if (!aligned.isNoOp()) {
+                alignedChanges.add(aligned);
+            }
+        }
+        return new RecoveryDraft(
+                pendingDraft.projectId(),
+                pendingDraft.variantId(),
+                pendingDraft.baseVersionId(),
+                pendingDraft.actor(),
+                pendingDraft.mutationSource(),
+                pendingDraft.startedAt(),
+                pendingDraft.updatedAt(),
+                alignedChanges,
+                pendingDraft.entityChanges()
+        );
+    }
 
     Map<BlockPoint, StatePayload> resolve(
             ProjectLayout layout,

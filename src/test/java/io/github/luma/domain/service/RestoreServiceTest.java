@@ -304,6 +304,42 @@ class RestoreServiceTest {
     }
 
     @Test
+    void pendingBlockRollbackUsesTargetStateInsteadOfDraftOldValue(@TempDir Path tempDir) throws Exception {
+        BlockTargetStateResolver resolver = new BlockTargetStateResolver();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        BlockPoint pos = new BlockPoint(1, 64, 1);
+        this.snapshotWriter.writeFile(
+                layout.snapshotFile("snapshot-0001"),
+                snapshotWithState("minecraft:stone")
+        );
+        ProjectVersion target = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "Alex",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                List.of(new StoredBlockChange(
+                        pos,
+                        StatePayload.air(),
+                        new StatePayload(state("minecraft:stone"), null)
+                ))
+        );
+
+        RecoveryDraft aligned = resolver.alignPendingRollbackWithTarget(
+                layout,
+                project("main"),
+                List.of(target),
+                target,
+                draft
+        );
+
+        assertTrue(aligned.changes().isEmpty());
+    }
+
+    @Test
     void detectsMechanismPayloadsForTargetStatePartialRestoreFallback() {
         RestoreMechanismReconciliationPlanner planner = new RestoreMechanismReconciliationPlanner();
 
