@@ -83,7 +83,7 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.EXPLOSION));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FLUID));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FIRE));
-        assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH));
+        assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.BLOCK_UPDATE));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.PISTON));
         assertFalse(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK));
@@ -103,7 +103,7 @@ class HistoryCaptureManagerTest {
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.EXPLOSION));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FLUID));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FIRE));
-        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.GROWTH));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.GROWTH));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.BLOCK_UPDATE));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.PISTON));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FALLING_BLOCK));

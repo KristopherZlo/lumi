@@ -41,12 +41,12 @@ class RedstoneReplayUpdatePlannerTest {
     }
 
     @Test
-    void derivedRedstonePowerChangeRestoresExactlyWithoutNeighborPropagation() {
+    void derivedRedstonePowerChangeQueuesNeighborPropagationAfterReplay() {
         BlockState off = Blocks.REDSTONE_WIRE.defaultBlockState()
                 .setValue(RedStoneWireBlock.POWER, 0);
         BlockState on = off.setValue(RedStoneWireBlock.POWER, 15);
 
-        assertFalse(this.planner.requiresPropagation(off, on));
+        assertTrue(this.planner.requiresPropagation(off, on));
     }
 
     @Test

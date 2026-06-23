@@ -598,6 +598,19 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         }
 
         @Override
+        public void openAmend(ProjectVersion activeHead) {
+            if (activeHead == null) {
+                return;
+            }
+            router.openSave(
+                    ProjectScreen.this,
+                    projectName,
+                    ProjectUiSupport.displayMessage(activeHead),
+                    true
+            );
+        }
+
+        @Override
         public void openCompare(String leftReference, String rightReference, String contextVersionId) {
             router.openCompare(ProjectScreen.this, projectName, leftReference, rightReference, contextVersionId);
         }

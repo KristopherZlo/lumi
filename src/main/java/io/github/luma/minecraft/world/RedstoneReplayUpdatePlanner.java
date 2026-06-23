@@ -11,6 +11,7 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -67,7 +68,8 @@ final class RedstoneReplayUpdatePlanner {
             return false;
         }
         return this.signalSourceBlockChanged(currentState, targetState)
-                || this.playerInputSignalChanged(currentState, targetState);
+                || this.playerInputSignalChanged(currentState, targetState)
+                || this.replayMechanismStateChanged(currentState, targetState);
     }
 
     Set<BlockPos> updatePositions(BlockPos pos, BlockState currentState, BlockState targetState) {
@@ -101,6 +103,25 @@ final class RedstoneReplayUpdatePlanner {
         }
         return this.mechanismStatePolicy.propertyChanged(currentState, targetState, "powered")
                 || this.mechanismStatePolicy.propertyChanged(currentState, targetState, "power");
+    }
+
+    private boolean replayMechanismStateChanged(BlockState currentState, BlockState targetState) {
+        if (currentState == null || targetState == null || currentState.getBlock() != targetState.getBlock()) {
+            return false;
+        }
+        if (this.isPistonAnimationState(currentState) || this.isPistonAnimationState(targetState)) {
+            return false;
+        }
+        return this.mechanismStatePolicy.isMechanismRelevant(currentState)
+                || this.mechanismStatePolicy.isMechanismRelevant(targetState);
+    }
+
+    private boolean isPistonAnimationState(BlockState state) {
+        return state != null
+                && (state.is(Blocks.PISTON)
+                || state.is(Blocks.STICKY_PISTON)
+                || state.is(Blocks.PISTON_HEAD)
+                || state.is(Blocks.MOVING_PISTON));
     }
 
     private Optional<BlockPos> attachedNeighbor(BlockPos pos, BlockState state) {

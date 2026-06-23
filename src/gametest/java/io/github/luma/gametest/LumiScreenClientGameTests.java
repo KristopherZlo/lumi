@@ -91,11 +91,14 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
 
         FlowLayout section = sections.buildSection(this.projectModel(new PendingChangeSummary(3, 1, 2), null, false));
         this.assertActive(section, "luma.action.save_build");
+        this.assertActive(section, "luma.action.amend_version");
         this.assertActive(section, "luma.action.see_changes");
         this.assertActive(section, "luma.action.quick_rollback");
 
         this.press(section, "luma.action.save_build");
         this.assertEquals("openSave", actions.lastAction, "save action");
+        this.press(section, "luma.action.amend_version");
+        this.assertEquals("openAmend", actions.lastAction, "amend action");
         this.press(section, "luma.action.see_changes");
         this.assertEquals("openCompare", actions.lastAction, "compare action");
         this.assertEquals("v0001", actions.leftReference, "compare left reference");
@@ -104,6 +107,7 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
 
         FlowLayout busy = sections.buildSection(this.projectModel(new PendingChangeSummary(1, 0, 0), this.activeOperation(), true));
         this.assertInactive(busy, "luma.action.save_build");
+        this.assertInactive(busy, "luma.action.amend_version");
         this.assertInactive(busy, "luma.action.quick_rollback");
         this.assertInactive(busy, "luma.action.return_before_restore");
         this.assertActive(busy, "luma.action.see_changes");
@@ -440,6 +444,11 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         @Override
         public void openSave() {
             this.lastAction = "openSave";
+        }
+
+        @Override
+        public void openAmend(ProjectVersion activeHead) {
+            this.lastAction = "openAmend";
         }
 
         @Override

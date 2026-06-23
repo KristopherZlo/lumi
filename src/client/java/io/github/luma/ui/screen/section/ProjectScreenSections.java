@@ -102,16 +102,19 @@ public final class ProjectScreenSections {
         this.onboardingSaveButton = saveButton;
         saveButton.active((!pending.isEmpty() && !operationActive)
                 || this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.SAVE_BUILD);
-        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        actions.gap(4);
-        actions.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout actions = LumaUi.actionRow();
         if (!pending.isEmpty()) {
             actions.child(LumaUi.statChip(Component.translatable("luma.build.blocks_placed"), Component.literal("+" + pending.addedBlocks())));
             actions.child(LumaUi.statChip(Component.translatable("luma.build.blocks_removed"), Component.literal("-" + pending.removedBlocks())));
             actions.child(LumaUi.statChip(Component.translatable("luma.build.blocks_changed"), Component.literal(Integer.toString(pending.changedBlocks()))));
         }
-        actions.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
         actions.child(saveButton);
+        ButtonComponent amendButton = LumaUi.button(
+                Component.translatable("luma.action.amend_version"),
+                button -> this.actions.openAmend(activeHead)
+        );
+        amendButton.active(activeHead != null && !pending.isEmpty() && !operationActive);
+        actions.child(amendButton);
 
         ButtonComponent changesButton = LumaUi.button(Component.translatable("luma.action.see_changes"), button -> this.actions.openCompare(
                 activeHead == null ? "" : activeHead.id(),
@@ -291,6 +294,8 @@ public final class ProjectScreenSections {
     public interface Actions {
 
         void openSave();
+
+        void openAmend(ProjectVersion activeHead);
 
         void openCompare(String leftReference, String rightReference, String contextVersionId);
 

@@ -51,6 +51,7 @@ final class MutationSourcePolicy {
                     ENTITY,
                     EXPLOSION,
                     FIRE,
+                    GROWTH,
                     MOB,
                     EXPLOSIVE,
                     EXTERNAL_TOOL,
@@ -58,7 +59,6 @@ final class MutationSourcePolicy {
                     FAWE,
                     AXIOM -> true;
             case FLUID,
-                    GROWTH,
                     BLOCK_UPDATE,
                     PISTON,
                     FALLING_BLOCK -> false;
@@ -79,13 +79,13 @@ final class MutationSourcePolicy {
             case EXPLOSION,
                     FLUID,
                     FIRE,
-                    GROWTH,
                     BLOCK_UPDATE,
                     PISTON,
                     FALLING_BLOCK,
                     MOB -> true;
             case PLAYER,
                     ENTITY,
+                    GROWTH,
                     EXPLOSIVE,
                     EXTERNAL_TOOL,
                     WORLDEDIT,

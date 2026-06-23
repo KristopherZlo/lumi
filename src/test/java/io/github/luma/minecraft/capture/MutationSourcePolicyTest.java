@@ -183,7 +183,7 @@ class MutationSourcePolicyTest {
     @Test
     void activeSessionRegionCanExpandTrackedChunksForSecondarySources() {
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FLUID, false));
-        assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH, false));
+        assertTrue(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.GROWTH, false));
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.BLOCK_UPDATE, false));
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.PISTON, false));
         assertFalse(this.policy.allowsTrackedChunkExpansion(WorldMutationSource.FALLING_BLOCK, false));
