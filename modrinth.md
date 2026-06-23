@@ -2,11 +2,6 @@
 
 ![Lumi banner](lumi-banner.png)
 
-![Minecraft 1.21.11](https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge)
-![Fabric](https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge)
-![Java 21](https://img.shields.io/badge/Java-21-1F6FEB?style=for-the-badge)
-![GPL 3.0](https://img.shields.io/badge/License-GPL%203.0-2EA043?style=for-the-badge)
-
 Lumi adds build history to Minecraft.
 
 Use it to save versions of a build, compare changes, branch ideas, restore old states, roll back mistakes, and recover interrupted work without copying the whole world folder every time.
@@ -23,7 +18,7 @@ Status: alpha. Keep normal backups.
 - Branches, local merges, import, and export
 - Live undo/redo for recent tracked edits
 - Crash recovery drafts and restore return points
-- Best-effort capture for supported WorldEdit, FAWE, Axiom, and normal Minecraft mutation paths
+- Best-effort capture for supported builder tools like WorldEdit, FAWE, and Axiom
 
 ## Default Controls
 
@@ -40,32 +35,9 @@ Status: alpha. Keep normal backups.
 
 Keybinds can be changed in Minecraft controls.
 
-## Requirements
-
-- Minecraft `1.21.11`
-- Fabric Loader `0.19.2+`
-- Fabric API `0.141.3+1.21.11`
-- Java `21+`
-- owo-lib `0.13.0+1.21.11`
-- Cloth Config `21.11.153+`
-
-Bundled: `lz4-java`.
-
-## Support
-
-- Singleplayer: primary target
-- Integrated server: supported
-- Dedicated server: available, but advanced
-- Client-only install: no
-- Server-only install: no
-
 ## Limits
 
 - Lumi does not add blocks, items, mobs, biomes, or worldgen.
 - Lumi does not replace normal world backups.
 - Multiplayer collaboration is not the focus.
-- Builder-tool capture depends on how the external tool edits the world.
-
-## License
-
-GPL-3.0-only.
+- Builder-tool support depends on the tool.
