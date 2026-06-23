@@ -98,6 +98,9 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
         if (actionAllowed && !actionId.isBlank()) {
+            if (defersImmediateCausalChange(WorldMutationContext.currentSource(), change)) {
+                return;
+            }
             this.historyManager.recordCurrentCausalChange(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
@@ -262,9 +265,11 @@ final class LiveUndoRedoActionRecorder {
 
         for (Map.Entry<CaptureSessionState.DeferredActionContext, List<StoredBlockChange>> entry : actionChanges.entrySet()) {
             CaptureSessionState.DeferredActionContext context = entry.getKey();
-            this.historyManager.recordCausalAction(
+            this.historyManager.recordCurrentCausalAction(
                     trackedProject.project().id().toString(),
+                    level.dimension().identifier().toString(),
                     context.actionId(),
+                    context.actor(),
                     entry.getValue(),
                     List.of(),
                     now
@@ -308,6 +313,10 @@ final class LiveUndoRedoActionRecorder {
                 : changes.stream()
                 .filter(change -> change != null && !change.isNoOp())
                 .toList();
+    }
+
+    static boolean defersImmediateCausalChange(WorldMutationSource source, StoredBlockChange change) {
+        return source == WorldMutationSource.GROWTH && change != null && change.hidden();
     }
 
     private static boolean isSpreadingFalloutSource(WorldMutationSource source) {

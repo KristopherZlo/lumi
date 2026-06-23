@@ -337,6 +337,29 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void currentCausalBatchStartsNewUndoActionWhenNoRootBlockChanged() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+
+        stack.recordCurrentCausalAction(
+                "bonemeal-growth",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                List.of(
+                        hiddenChange(1, "minecraft:oak_sapling", "minecraft:oak_log"),
+                        hiddenChange(2, "minecraft:air", "minecraft:moss_carpet")
+                ),
+                List.of(),
+                NOW.plusSeconds(1)
+        );
+
+        UndoRedoAction action = stack.selectUndo().action();
+        assertEquals("bonemeal-growth", action.id());
+        assertEquals(2, action.size());
+        assertTrue(action.redoChanges().stream().allMatch(StoredBlockChange::hidden));
+    }
+
+    @Test
     void causalBatchDoesNotPromoteOlderRedstoneAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",

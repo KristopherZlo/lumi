@@ -234,6 +234,29 @@ public final class UndoRedoActionStack {
         return this.recordSecondaryIntoExistingAction(action, changes, entityChanges, now);
     }
 
+    public long recordCurrentCausalAction(
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            Instant now
+    ) {
+        if (actionId == null || actionId.isBlank()) {
+            return this.revision;
+        }
+
+        UndoRedoAction action = this.undoStack.peekFirst();
+        if (action == null || !action.id().equals(actionId)) {
+            action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
+            this.undoStack.addFirst(action);
+            this.trimUndoStack();
+        }
+
+        return this.recordSecondaryIntoExistingAction(action, changes, entityChanges, now, true);
+    }
+
     public Selection selectUndo() {
         UndoRedoAction action = this.undoStack.peekFirst();
         return action == null ? null : new Selection(action.copy(), this.revision);
@@ -409,6 +432,16 @@ public final class UndoRedoActionStack {
             List<StoredEntityChange> entityChanges,
             Instant now
     ) {
+        return this.recordSecondaryIntoExistingAction(action, changes, entityChanges, now, false);
+    }
+
+    private long recordSecondaryIntoExistingAction(
+            UndoRedoAction action,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            Instant now,
+            boolean clearRedoOnMutation
+    ) {
         int before = action.size();
         boolean recorded = false;
         for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
@@ -430,6 +463,9 @@ public final class UndoRedoActionStack {
             this.undoStack.remove(action);
         }
         if (recorded || before != action.size()) {
+            if (clearRedoOnMutation) {
+                this.redoStack.clear();
+            }
             this.revision += 1;
         }
         return this.revision;

@@ -73,6 +73,21 @@ class LiveUndoRedoActionRecorderTest {
         assertTrue(recordable.getFirst().hidden());
     }
 
+    @Test
+    void hiddenGrowthChangesWaitForSettledReconciliation() {
+        StoredBlockChange hiddenGrowth = new StoredBlockChange(
+                new BlockPoint(0, 64, 0),
+                state("minecraft:moss_block"),
+                state("minecraft:azalea"),
+                true
+        );
+
+        assertTrue(LiveUndoRedoActionRecorder.defersImmediateCausalChange(
+                WorldMutationSource.GROWTH,
+                hiddenGrowth
+        ));
+    }
+
     private static StatePayload state(String blockId) {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", blockId);
