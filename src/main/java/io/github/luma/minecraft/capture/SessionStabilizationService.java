@@ -93,7 +93,11 @@ public final class SessionStabilizationService {
                     persistentDeltaChanges,
                     capturedChunks.captured()
             );
-            List<StoredBlockChange> actionChanges = this.reconciliationActionChanges(currentChanges, composedChanges);
+            List<StoredBlockChange> actionChanges = this.reconciliationActionChanges(
+                    currentChanges,
+                    composedChanges,
+                    deferredActionContexts
+            );
             int bufferBefore = session.buffer().size();
             boolean bufferChanged = !currentChanges.equals(composedChanges);
             if (bufferChanged) {
@@ -486,6 +490,30 @@ public final class SessionStabilizationService {
             }
         }
         return List.copyOf(changes);
+    }
+
+    List<StoredBlockChange> reconciliationActionChanges(
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> composedChanges,
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
+    ) {
+        if (!hasHiddenDeferredAction(deferredActionContexts)) {
+            return this.reconciliationActionChanges(currentChanges, composedChanges);
+        }
+        return composedChanges == null ? List.of() : List.copyOf(composedChanges);
+    }
+
+    private static boolean hasHiddenDeferredAction(
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
+    ) {
+        for (CaptureSessionState.DeferredActionContext context : deferredActionContexts == null
+                ? List.<CaptureSessionState.DeferredActionContext>of()
+                : deferredActionContexts.values()) {
+            if (context != null && context.hasAction() && context.hiddenInBuilderSurfaces()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private StoredBlockChange reconciliationActionChange(

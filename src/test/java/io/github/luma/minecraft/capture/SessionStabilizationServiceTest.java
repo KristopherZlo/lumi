@@ -523,6 +523,28 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void hiddenDeferredReconciliationUsesComposedChangesForLiveUndoPayload() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        StoredBlockChange settledGrowth = new StoredBlockChange(
+                new BlockPoint(2, 64, 1),
+                payload("minecraft:oak_sapling"),
+                payload("minecraft:oak_log"),
+                true
+        );
+
+        List<StoredBlockChange> actionChanges = service.reconciliationActionChanges(
+                List.of(settledGrowth),
+                List.of(settledGrowth),
+                Map.of(
+                        new ChunkPoint(0, 0),
+                        new CaptureSessionState.DeferredActionContext("bonemeal-growth", "Alex", true, true)
+                )
+        );
+
+        assertEquals(List.of(settledGrowth), actionChanges);
+    }
+
+    @Test
     void reconciliationRelatedDeltasExcludeAlreadyTrackedDirectChanges() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange directPlacement = new StoredBlockChange(
