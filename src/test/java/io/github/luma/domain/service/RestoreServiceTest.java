@@ -231,6 +231,22 @@ class RestoreServiceTest {
     }
 
     @Test
+    void restoreMechanismDetectionUsesSharedPropertyBasedPolicy() {
+        RestoreMechanismReconciliationPlanner planner = new RestoreMechanismReconciliationPlanner();
+
+        assertTrue(planner.containsMechanismState(List.of(change(
+                1,
+                state("minecraft:air"),
+                state("minecraft:copper_bulb", "lit", "true")
+        ))));
+        assertFalse(planner.containsMechanismState(List.of(change(
+                1,
+                state("minecraft:dirt"),
+                state("minecraft:stone")
+        ))));
+    }
+
+    @Test
     void directForwardRestoreStaysSparseWhenMechanismTargetScopeIsTooLarge(@TempDir Path tempDir)
             throws Throwable {
         RestoreService service = new RestoreService();

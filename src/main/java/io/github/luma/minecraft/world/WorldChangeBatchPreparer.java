@@ -404,8 +404,7 @@ public final class WorldChangeBatchPreparer {
     }
 
     private static boolean isMechanismRelated(BlockState state) {
-        return MECHANISM_STATE_POLICY.isMechanismRelevant(state)
-                || MECHANISM_STATE_POLICY.shouldSuppressReplayCallbacks(state);
+        return MECHANISM_STATE_POLICY.isMechanismReplayRelevant(state);
     }
 
     private BlockState[] decodePalette(

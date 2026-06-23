@@ -1,10 +1,12 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.domain.model.StatePayload;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.BasePressurePlateBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -21,7 +23,27 @@ import net.minecraft.world.level.block.state.properties.Property;
  */
 public final class MechanismStatePolicy {
 
-    private static final Set<String> CAPTURE_SCOPE_PROPERTY_NAMES = Set.of(
+    private static final Set<String> MECHANISM_BLOCK_IDS = Set.of(
+            "minecraft:redstone_wire",
+            "minecraft:redstone_torch",
+            "minecraft:redstone_wall_torch",
+            "minecraft:redstone_block",
+            "minecraft:repeater",
+            "minecraft:comparator",
+            "minecraft:redstone_lamp",
+            "minecraft:observer",
+            "minecraft:dispenser",
+            "minecraft:dropper",
+            "minecraft:piston",
+            "minecraft:sticky_piston",
+            "minecraft:piston_head",
+            "minecraft:moving_piston",
+            "minecraft:lever",
+            "minecraft:tripwire",
+            "minecraft:tripwire_hook",
+            "minecraft:target"
+    );
+    private static final Set<String> MECHANISM_PROPERTY_NAMES = Set.of(
             "attached",
             "enabled",
             "extended",
@@ -49,9 +71,28 @@ public final class MechanismStatePolicy {
     );
 
     public boolean isMechanismRelevant(BlockState state) {
+        if (state == null) {
+            return false;
+        }
         return this.isRedstoneMechanism(state)
                 || this.isPistonMechanismParticipant(state)
-                || this.isPlayerInputControl(state);
+                || this.isPlayerInputControl(state)
+                || this.hasAnyPropertyNamed(state, MECHANISM_PROPERTY_NAMES);
+    }
+
+    public boolean isMechanismPayload(StatePayload payload) {
+        if (payload == null || payload.blockId() == null) {
+            return false;
+        }
+        String blockId = payload.blockId().toLowerCase(Locale.ROOT);
+        return MECHANISM_BLOCK_IDS.contains(blockId)
+                || blockId.endsWith("_button")
+                || blockId.endsWith("_pressure_plate")
+                || this.hasMechanismStateProperty(payload);
+    }
+
+    public boolean isMechanismReplayRelevant(BlockState state) {
+        return this.isMechanismRelevant(state) || this.shouldSuppressReplayCallbacks(state);
     }
 
     public boolean isPlayerInputControl(BlockState state) {
@@ -76,13 +117,7 @@ public final class MechanismStatePolicy {
     }
 
     public boolean shouldScopeBlockUpdate(BlockState state) {
-        if (state == null) {
-            return false;
-        }
-        if (this.isMechanismRelevant(state)) {
-            return true;
-        }
-        return this.hasAnyPropertyNamed(state, CAPTURE_SCOPE_PROPERTY_NAMES);
+        return this.isMechanismRelevant(state);
     }
 
     public boolean shouldGuardExactReplay(BlockState state) {
@@ -140,6 +175,22 @@ public final class MechanismStatePolicy {
                 || state.is(Blocks.REDSTONE_LAMP)
                 || state.is(Blocks.DISPENSER)
                 || state.is(Blocks.DROPPER));
+    }
+
+    private boolean hasMechanismStateProperty(StatePayload payload) {
+        if (payload.stateTag() == null) {
+            return false;
+        }
+        Optional<CompoundTag> properties = payload.stateTag().getCompound("Properties");
+        if (properties.isEmpty()) {
+            return false;
+        }
+        for (String propertyName : properties.orElseThrow().keySet()) {
+            if (MECHANISM_PROPERTY_NAMES.contains(propertyName.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean hasAnyPropertyNamed(BlockState state, Set<String> propertyNames) {

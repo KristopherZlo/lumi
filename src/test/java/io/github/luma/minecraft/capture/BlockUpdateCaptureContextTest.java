@@ -31,6 +31,7 @@ class BlockUpdateCaptureContextTest {
         assertTrue(this.context.shouldScope(Blocks.STONE_PRESSURE_PLATE.defaultBlockState()));
         assertTrue(this.context.shouldScope(Blocks.PISTON.defaultBlockState()));
         assertTrue(this.context.shouldScope(Blocks.PISTON_HEAD.defaultBlockState()));
+        assertTrue(this.context.shouldScope(Blocks.COPPER_BULB.defaultBlockState()));
     }
 
     @Test

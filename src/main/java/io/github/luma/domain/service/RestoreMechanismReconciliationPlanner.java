@@ -3,15 +3,12 @@ package io.github.luma.domain.service;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChunkSectionPoint;
-import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.minecraft.world.MechanismReplayScope;
+import io.github.luma.minecraft.world.MechanismStatePolicy;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -22,38 +19,7 @@ final class RestoreMechanismReconciliationPlanner {
 
     static final int MAX_MECHANISM_RECONCILIATION_CELLS = 65_536;
 
-    private static final Set<String> MECHANISM_BLOCK_IDS = Set.of(
-            "minecraft:redstone_wire",
-            "minecraft:redstone_torch",
-            "minecraft:redstone_wall_torch",
-            "minecraft:redstone_block",
-            "minecraft:repeater",
-            "minecraft:comparator",
-            "minecraft:redstone_lamp",
-            "minecraft:observer",
-            "minecraft:dispenser",
-            "minecraft:dropper",
-            "minecraft:piston",
-            "minecraft:sticky_piston",
-            "minecraft:piston_head",
-            "minecraft:moving_piston",
-            "minecraft:lever",
-            "minecraft:tripwire",
-            "minecraft:tripwire_hook",
-            "minecraft:target"
-    );
-    private static final Set<String> MECHANISM_PROPERTY_NAMES = Set.of(
-            "attached",
-            "enabled",
-            "extended",
-            "in_wall",
-            "lit",
-            "locked",
-            "open",
-            "power",
-            "powered",
-            "triggered"
-    );
+    private final MechanismStatePolicy mechanismStatePolicy = new MechanismStatePolicy();
 
     Optional<List<BlockPoint>> boundedExactRootReplayPositions(
             io.github.luma.domain.model.BuildProject project,
@@ -146,34 +112,8 @@ final class RestoreMechanismReconciliationPlanner {
 
     boolean containsMechanismState(List<StoredBlockChange> changes) {
         for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
-            if (this.isMechanismPayload(change.oldValue()) || this.isMechanismPayload(change.newValue())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean isMechanismPayload(StatePayload payload) {
-        if (payload == null || payload.blockId() == null) {
-            return false;
-        }
-        String blockId = payload.blockId().toLowerCase(Locale.ROOT);
-        return MECHANISM_BLOCK_IDS.contains(blockId)
-                || blockId.endsWith("_button")
-                || blockId.endsWith("_pressure_plate")
-                || this.hasMechanismStateProperty(payload);
-    }
-
-    private boolean hasMechanismStateProperty(StatePayload payload) {
-        if (payload.stateTag() == null) {
-            return false;
-        }
-        Optional<CompoundTag> properties = payload.stateTag().getCompound("Properties");
-        if (properties.isEmpty()) {
-            return false;
-        }
-        for (String propertyName : properties.orElseThrow().keySet()) {
-            if (MECHANISM_PROPERTY_NAMES.contains(propertyName.toLowerCase(Locale.ROOT))) {
+            if (this.mechanismStatePolicy.isMechanismPayload(change.oldValue())
+                    || this.mechanismStatePolicy.isMechanismPayload(change.newValue())) {
                 return true;
             }
         }

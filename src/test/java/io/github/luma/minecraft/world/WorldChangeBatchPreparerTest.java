@@ -421,6 +421,27 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void analyzedPrepareCollectsMechanismScopeForPropertyBasedMechanisms() throws Exception {
+        BlockPoint pos = new BlockPoint(2, 64, 3);
+
+        PreparedWorldChangeBatches analyzed = this.preparer.prepareAnalyzed(
+                null,
+                List.of(new StoredBlockChange(
+                        pos,
+                        payload(Blocks.COPPER_BULB.defaultBlockState()),
+                        payload(Blocks.AIR.defaultBlockState())
+                )),
+                List.of(),
+                true,
+                NO_OP,
+                EntityApplyMode.DELTA
+        );
+
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(pos));
+        assertTrue(analyzed.mechanismReplayScope().sections().contains(new ChunkSectionPoint(0, 0, 4)));
+    }
+
+    @Test
     void analyzedPrepareLeavesOrdinaryChangesOutOfMechanismScope() throws Exception {
         PreparedWorldChangeBatches analyzed = this.preparer.prepareAnalyzed(
                 null,
