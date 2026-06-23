@@ -66,6 +66,20 @@ public final class UndoRedoHistoryManager {
         this.stack(projectId).recordCausalChange(actionId, change, now);
     }
 
+    public synchronized void recordCurrentCausalChange(
+            String projectId,
+            String dimensionId,
+            String actionId,
+            String actor,
+            StoredBlockChange change,
+            Instant now
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        this.stack(projectId).recordCurrentCausalChange(actionId, actor, projectId, dimensionId, change, now);
+    }
+
     public synchronized void recordRelatedEntityChange(
             String projectId,
             String dimensionId,

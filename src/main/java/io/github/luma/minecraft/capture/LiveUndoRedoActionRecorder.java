@@ -98,9 +98,11 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
         if (actionAllowed && !actionId.isBlank()) {
-            this.historyManager.recordCausalChange(
+            this.historyManager.recordCurrentCausalChange(
                     trackedProject.project().id().toString(),
+                    level.dimension().identifier().toString(),
                     actionId,
+                    WorldMutationContext.currentActor(),
                     change,
                     now
             );

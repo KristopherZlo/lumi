@@ -88,6 +88,33 @@ public final class UndoRedoActionStack {
         return this.recordIntoAction(action, recordableChange, now, false);
     }
 
+    public long recordCurrentCausalChange(
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            StoredBlockChange change,
+            Instant now
+    ) {
+        if (actionId == null || actionId.isBlank() || change == null) {
+            return this.revision;
+        }
+
+        StoredBlockChange recordableChange = this.withAppliedOldValue(dimensionId, change);
+        if (recordableChange == null || recordableChange.isNoOp()) {
+            return this.revision;
+        }
+
+        UndoRedoAction action = this.undoStack.peekFirst();
+        if (action == null || !action.id().equals(actionId)) {
+            action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
+            this.undoStack.addFirst(action);
+            this.trimUndoStack();
+        }
+
+        return this.recordIntoAction(action, recordableChange, now, true);
+    }
+
     public long recordRelatedEntityChange(
             String dimensionId,
             StoredEntityChange change,
