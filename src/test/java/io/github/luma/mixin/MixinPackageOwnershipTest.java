@@ -29,6 +29,16 @@ class MixinPackageOwnershipTest {
         );
     }
 
+    @Test
+    void bonemealItemMixinIsRegisteredForGrowthCapture() throws IOException {
+        String mixinConfig = Files.readString(Path.of("src/main/resources/lumi.mixins.json"), StandardCharsets.UTF_8);
+
+        assertTrue(
+                mixinConfig.contains("\"BoneMealItemMixin\""),
+                "Bonemeal growth must keep the player action context for undo/redo capture"
+        );
+    }
+
     private static boolean sourceContainsMixinAnnotation(Path sourceFile) {
         try {
             return Files.readString(sourceFile, StandardCharsets.UTF_8).contains("@Mixin");

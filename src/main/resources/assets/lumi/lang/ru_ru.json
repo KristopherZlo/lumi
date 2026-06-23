@@ -64,6 +64,12 @@
   "luma.action.open_details": "Открыть детали",
   "luma.action.save_version": "Сохранить",
   "luma.action.amend_version": "Заменить последнее сохранение",
+
+  "luma.action.save_build.tooltip": "Save current unsaved changes as a new save.",
+  "luma.action.amend_version.tooltip": "Add current unsaved changes to the latest save instead of creating a new one.",
+  "luma.action.see_changes.tooltip": "Compare the latest save with the current build.",
+  "luma.action.quick_rollback.tooltip": "Restore the latest save into the world.",
+  "luma.action.return_before_restore.tooltip": "Return to the build state saved before the last restore.",
   "luma.action.restore": "Восстановить",
   "luma.action.compare": "Посмотреть изменения",
   "luma.action.compare_overlay": "Подсветить в мире",
@@ -939,6 +945,8 @@
   "luma.more.title": "Ещё",
   "luma.more.help": "Здесь лежит обслуживание проекта, ручная подсветка, граф истории и raw references.",
   "luma.more.tab_project_tools": "Project tools",
+
+  "luma.more.tab_history_graph": "History graph",
   "luma.more.onboarding_title": "Обучение",
   "luma.more.onboarding_help": "Replay the short safe-loop tour for saving, changes, mistakes, and restore awareness.",
   "luma.more.cleanup_title": "Очистка хранилища",

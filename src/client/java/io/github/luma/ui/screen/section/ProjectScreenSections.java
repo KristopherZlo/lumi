@@ -99,20 +99,24 @@ public final class ProjectScreenSections {
                 Component.translatable("luma.action.save_build"),
                 button -> this.actions.openSave()
         );
+        saveButton.tooltip(Component.translatable("luma.action.save_build.tooltip"));
         this.onboardingSaveButton = saveButton;
         saveButton.active((!pending.isEmpty() && !operationActive)
                 || this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.SAVE_BUILD);
-        FlowLayout actions = LumaUi.actionRow();
         if (!pending.isEmpty()) {
-            actions.child(LumaUi.statChip(Component.translatable("luma.build.blocks_placed"), Component.literal("+" + pending.addedBlocks())));
-            actions.child(LumaUi.statChip(Component.translatable("luma.build.blocks_removed"), Component.literal("-" + pending.removedBlocks())));
-            actions.child(LumaUi.statChip(Component.translatable("luma.build.blocks_changed"), Component.literal(Integer.toString(pending.changedBlocks()))));
+            FlowLayout stats = LumaUi.actionRow();
+            stats.child(LumaUi.statChip(Component.translatable("luma.build.blocks_placed"), Component.literal("+" + pending.addedBlocks())));
+            stats.child(LumaUi.statChip(Component.translatable("luma.build.blocks_removed"), Component.literal("-" + pending.removedBlocks())));
+            stats.child(LumaUi.statChip(Component.translatable("luma.build.blocks_changed"), Component.literal(Integer.toString(pending.changedBlocks()))));
+            section.child(stats);
         }
+        FlowLayout actions = LumaUi.actionRow();
         actions.child(saveButton);
         ButtonComponent amendButton = LumaUi.button(
                 Component.translatable("luma.action.amend_version"),
                 button -> this.actions.openAmend(activeHead)
         );
+        amendButton.tooltip(Component.translatable("luma.action.amend_version.tooltip"));
         amendButton.active(activeHead != null && !pending.isEmpty() && !operationActive);
         actions.child(amendButton);
 
@@ -121,6 +125,7 @@ public final class ProjectScreenSections {
                 CompareScreenController.CURRENT_WORLD_REFERENCE,
                 activeHead == null ? "" : activeHead.id()
         ));
+        changesButton.tooltip(Component.translatable("luma.action.see_changes.tooltip"));
         this.onboardingChangesButton = changesButton;
         changesButton.active(activeHead != null
                 || this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.SEE_CHANGES);
@@ -129,12 +134,14 @@ public final class ProjectScreenSections {
                 Component.translatable("luma.action.quick_rollback"),
                 button -> this.actions.quickRollback()
         );
+        quickRollbackButton.tooltip(Component.translatable("luma.action.quick_rollback.tooltip"));
         quickRollbackButton.active(activeHead != null && !operationActive);
         actions.child(quickRollbackButton);
         ButtonComponent returnButton = LumaUi.button(
                 Component.translatable("luma.action.return_before_restore"),
                 button -> this.actions.returnBeforeRestore()
         );
+        returnButton.tooltip(Component.translatable("luma.action.return_before_restore.tooltip"));
         returnButton.active(model.state().hasRestoreReturnPoint() && !operationActive);
         actions.child(returnButton);
         section.child(actions);

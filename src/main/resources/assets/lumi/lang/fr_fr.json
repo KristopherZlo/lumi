@@ -62,6 +62,12 @@
   "luma.action.open_details": "Ouvert",
   "luma.action.save_version": "Enregistrer",
   "luma.action.amend_version": "Remplacer la dernière sauvegarde",
+
+  "luma.action.save_build.tooltip": "Save current unsaved changes as a new save.",
+  "luma.action.amend_version.tooltip": "Add current unsaved changes to the latest save instead of creating a new one.",
+  "luma.action.see_changes.tooltip": "Compare the latest save with the current build.",
+  "luma.action.quick_rollback.tooltip": "Restore the latest save into the world.",
+  "luma.action.return_before_restore.tooltip": "Return to the build state saved before the last restore.",
   "luma.action.restore": "Restaurer",
   "luma.action.compare": "Voir les changements",
   "luma.action.compare_overlay": "Point culminant dans le monde",
@@ -586,6 +592,8 @@
   "luma.more.onboarding_title": "Onboarding",
   "luma.more.onboarding_help": "Replay the short safe-loop tour for saving, changes, mistakes, and restore awareness.",
   "luma.more.tab_project_tools": "Project tools",
+
+  "luma.more.tab_history_graph": "History graph",
   "luma.more.cleanup_title": "Nettoyage du stockage",
   "luma.more.cleanup_help": "Recherchez les instantanés orphelins, les aperçus, les fichiers de cache et les brouillons d'opérations obsolètes avant de supprimer quoi que ce soit.",
   "luma.more.deleted_saves_title": "Deleted saves",

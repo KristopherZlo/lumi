@@ -102,6 +102,10 @@ public final class ScreenRouter {
         this.client.setScreen(new MoreScreen(parent, projectName));
     }
 
+    public void openHistoryGraph(Screen parent, String projectName) {
+        this.client.setScreen(MoreScreen.historyGraph(parent, projectName));
+    }
+
     public void openDiagnostics(Screen parent, String projectName) {
         this.client.setScreen(new DiagnosticsScreen(parent, projectName));
     }

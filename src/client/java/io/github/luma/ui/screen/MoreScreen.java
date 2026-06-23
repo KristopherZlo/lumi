@@ -55,9 +55,18 @@ public final class MoreScreen extends LumaScreen {
     private ManualUpdateCheckController.Result updateCheckResult;
 
     public MoreScreen(Screen parent, String projectName) {
-        super(Component.translatable("luma.screen.more.title"));
+        this(parent, projectName, MoreTab.PROJECT_TOOLS);
+    }
+
+    public static MoreScreen historyGraph(Screen parent, String projectName) {
+        return new MoreScreen(parent, projectName, MoreTab.HISTORY_GRAPH);
+    }
+
+    private MoreScreen(Screen parent, String projectName, MoreTab initialTab) {
+        super(Component.translatable(titleKey(initialTab)));
         this.parent = parent;
         this.projectName = projectName;
+        this.activeTab = initialTab == null ? MoreTab.PROJECT_TOOLS : initialTab;
     }
 
     @Override
@@ -89,19 +98,21 @@ public final class MoreScreen extends LumaScreen {
 
         ProjectWindowLayout window = ProjectWindowLayout.forProject(
                 this.width,
-                Component.translatable("luma.screen.more.title"),
+                Component.translatable(titleKey(this.activeTab)),
                 this.state.project(),
                 this.state.variants()
         );
         stack.child(window.root());
-        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.MORE);
-        window.content().child(LumaUi.caption(Component.translatable("luma.more.help")));
+        this.sidebarNavigation.attach(window, this, this.projectName, this.workspaceTab());
+        window.content().child(LumaUi.caption(Component.translatable(helpKey(this.activeTab))));
         FlowLayout body = LumaUi.screenBody();
         window.content().child(LumaUi.screenScroll(body));
 
-        new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
-                .addHint(body, ClientContextualHelpHint.MORE);
-        body.child(this.tabRow());
+        if (this.activeTab != MoreTab.HISTORY_GRAPH) {
+            new ContextualHelpPresenter(this.contextualHelpService, this::rebuild)
+                    .addHint(body, ClientContextualHelpHint.MORE);
+            body.child(this.tabRow());
+        }
         if (this.activeTab == MoreTab.PROJECT_TOOLS) {
             body.child(this.onboardingSection());
             body.child(this.navigationCard(
@@ -111,12 +122,15 @@ public final class MoreScreen extends LumaScreen {
                     button -> this.router.openCleanup(this, this.projectName)
             ));
             body.child(this.actionsSection());
-            body.child(this.graphSection());
             body.child(this.rawReferencesSection());
+        } else if (this.activeTab == MoreTab.HISTORY_GRAPH) {
+            body.child(this.graphSection());
         } else {
             body.child(this.deletedSavesSection());
         }
-        body.child(this.updateCheckSection());
+        if (this.activeTab != MoreTab.HISTORY_GRAPH) {
+            body.child(this.updateCheckSection());
+        }
         body.child(LumaUi.bottomSpacer());
 
         this.updateOverlay().ifPresent(stack::child);
@@ -353,6 +367,18 @@ public final class MoreScreen extends LumaScreen {
         this.uiAdapter.inflateAndMount();
     }
 
+    private ProjectWorkspaceTab workspaceTab() {
+        return this.activeTab == MoreTab.HISTORY_GRAPH ? ProjectWorkspaceTab.HISTORY_GRAPH : ProjectWorkspaceTab.MORE;
+    }
+
+    private static String titleKey(MoreTab tab) {
+        return tab == MoreTab.HISTORY_GRAPH ? "luma.advanced.history_graph_title" : "luma.screen.more.title";
+    }
+
+    private static String helpKey(MoreTab tab) {
+        return tab == MoreTab.HISTORY_GRAPH ? "luma.advanced.history_graph_help" : "luma.more.help";
+    }
+
     private final class UpdateDialogActions implements UpdateNoticeDialogView.Actions {
 
         @Override
@@ -377,6 +403,7 @@ public final class MoreScreen extends LumaScreen {
 
     private enum MoreTab {
         PROJECT_TOOLS,
+        HISTORY_GRAPH,
         DELETED_SAVES
     }
 }
