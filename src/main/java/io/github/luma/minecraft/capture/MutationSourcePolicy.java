@@ -42,6 +42,10 @@ final class MutationSourcePolicy {
         return this.isExplicitRootSource(source);
     }
 
+    boolean allowsCausalSessionBootstrap(WorldMutationSource source, String actionId) {
+        return source == WorldMutationSource.GROWTH && this.hasCausalAction(actionId);
+    }
+
     boolean allowsTrackedChunkExpansion(WorldMutationSource source) {
         if (source == null) {
             return false;
@@ -164,7 +168,7 @@ final class MutationSourcePolicy {
             return this.canUseDeferredStabilization(project, source, activeSessionRegion, actionId);
         }
         if (!hasActiveSession) {
-            return this.allowsSessionBootstrap(source);
+            return this.allowsSessionBootstrap(source) || this.allowsCausalSessionBootstrap(source, actionId);
         }
         if (this.requiresActiveRegionMembership(source) && !activeSessionRegion) {
             return false;

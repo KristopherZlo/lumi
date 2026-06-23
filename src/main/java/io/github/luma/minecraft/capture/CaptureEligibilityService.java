@@ -45,6 +45,11 @@ final class CaptureEligibilityService {
         return this.sourcePolicy.allowsSessionBootstrap(source);
     }
 
+    boolean allowsSessionBootstrap(WorldMutationSource source, String actionId) {
+        return this.sourcePolicy.allowsSessionBootstrap(source)
+                || this.sourcePolicy.allowsCausalSessionBootstrap(source, actionId);
+    }
+
     boolean allowsTrackedChunkExpansion(WorldMutationSource source) {
         return this.sourcePolicy.allowsTrackedChunkExpansion(source);
     }

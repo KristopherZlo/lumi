@@ -47,6 +47,20 @@ class CaptureEligibilityServiceTest {
         assertFalse(this.eligibility.canInspectBlockMutationPayload(
                 wholeDimension,
                 WorldMutationSource.GROWTH,
+                false,
+                false,
+                ""
+        ));
+        assertTrue(this.eligibility.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.GROWTH,
+                false,
+                false,
+                "action-1"
+        ));
+        assertFalse(this.eligibility.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.GROWTH,
                 true,
                 true,
                 ""

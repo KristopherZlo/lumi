@@ -1594,7 +1594,7 @@ public final class HistoryCaptureManager {
             );
             return false;
         }
-        if (allowsSessionBootstrap(source)) {
+        if (allowsSessionBootstrap(source, WorldMutationContext.currentActionId())) {
             return true;
         }
         this.diagnosticsLogger.logSkippedCapture(
@@ -1897,6 +1897,10 @@ public final class HistoryCaptureManager {
 
     public static boolean allowsSessionBootstrap(io.github.luma.domain.model.WorldMutationSource source) {
         return ELIGIBILITY.allowsSessionBootstrap(source);
+    }
+
+    public static boolean allowsSessionBootstrap(io.github.luma.domain.model.WorldMutationSource source, String actionId) {
+        return ELIGIBILITY.allowsSessionBootstrap(source, actionId);
     }
 
     public static boolean allowsTrackedChunkExpansion(io.github.luma.domain.model.WorldMutationSource source) {

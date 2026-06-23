@@ -77,6 +77,15 @@ class HistoryCaptureManagerTest {
     }
 
     @Test
+    void causalGrowthCanBootstrapExistingTrackedSession() {
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH, ""));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH, null));
+        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH, "action-1"));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.FLUID, "action-1"));
+    }
+
+    @Test
     void shouldExpandTrackedChunksOnlyFromBuilderDrivenSources() {
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.allowsTrackedChunkExpansion(WorldMutationSource.ENTITY));
