@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "ChunkAccessSectionOwnershipMixin",
+    "ComparatorBlockEntityMixin",
     "CropBlockMixin",
     "EntityMutationMixin",
     "AxiomSetBufferPacketMixin",
@@ -29,6 +30,7 @@
     "PistonBaseBlockMixin",
     "PistonMovingBlockEntityContextMixin",
     "SaplingBlockMixin",
+    "SculkSensorBlockEntityMixin",
     "ScheduledTickContextMixin",
     "ServerLevelBlockEventContextMixin",
     "ServerLevelEntityTickMixin",

@@ -104,6 +104,7 @@ Important capture rules:
 - Direct and integrated bulk tool captures write pending drafts against the captured session baseline, not against intermediate live states produced earlier in the same unsaved edit.
 - Dirty-chunk stabilization may replace the latest settled target state for a touched cell, but it must preserve the first session-baseline old state already captured for that cell.
 - External bulk-tool buffers that do not include block-entity payloads are treated as state-only updates; missing NBT is not persisted as a block-entity deletion unless the block state actually changes.
+- Lectern books, comparator output, and sculk sensor frequency are captured as block-entity payload changes so restore and rollback can replay them with the block state.
 - Axiom block-buffer capture keeps direct-section fallback enabled during normal apply, then records only post-apply buffer cells whose live world state reached the intended target.
 - Before save/freeze turns a working draft into version data, loaded pending block/entity entries are reconciled against the live world so native tool undo/delete cannot leave stale spawned blocks or entities in the commit.
 - Moving piston animation state is transient. Lumi waits for dirty chunks to settle instead of persisting `moving_piston` as final build state.
