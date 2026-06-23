@@ -2,6 +2,10 @@
 
 ![Lumi banner](lumi-banner.png)
 
+![Minecraft 1.21.11](https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge)
+![Fabric](https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge)
+![Java 21](https://img.shields.io/badge/Java-21-1F6FEB?style=for-the-badge)
+
 Lumi adds build history to Minecraft.
 
 Use it to save versions of a build, compare changes, branch ideas, restore old states, roll back mistakes, and recover interrupted work without copying the whole world folder every time.
@@ -34,6 +38,25 @@ Status: alpha. Keep normal backups.
 | Wooden sword | Select a region for partial restore |
 
 Keybinds can be changed in Minecraft controls.
+
+## Requirements
+
+- Minecraft `1.21.11`
+- Fabric Loader `0.19.2+`
+- Fabric API `0.141.3+1.21.11`
+- Java `21+`
+- owo-lib `0.13.0+1.21.11`
+- Cloth Config `21.11.153+`
+
+## Client / Server
+
+- Client: required
+- Server: required on dedicated servers
+- Singleplayer: primary target
+- Integrated server: supported
+- Dedicated server: available, but advanced
+- Client-only install: no
+- Server-only install: no
 
 ## Limits
 
