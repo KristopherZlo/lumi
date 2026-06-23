@@ -56,6 +56,26 @@ public final class HistoryDebugLog {
         }
     }
 
+    public void logSkippedLiveUndoRedoBlock(BuildProject project, String route, String reason, String actionId,
+            WorldMutationSource source, StoredBlockChange change) {
+        if (LumaDebugLog.enabled(project) && change != null) {
+            LumaDebugLog.log(project, "history-action",
+                    "Skipped live block route={} reason={} source={} action={} actor={} change={}",
+                    route, reason == null ? "unknown" : reason, source, blank(actionId),
+                    WorldMutationContext.currentActor(), this.describe(change));
+        }
+    }
+
+    public void logLiveUndoRedoActionBatch(BuildProject project, String route, String actionId, String actor,
+            List<StoredBlockChange> changes) {
+        if (LumaDebugLog.enabled(project) && changes != null && !changes.isEmpty()) {
+            LumaDebugLog.log(project, "history-action",
+                    "Recorded live block batch route={} action={} actor={} blocks={} hidden={} sample=[{}]",
+                    route, blank(actionId), actor == null || actor.isBlank() ? "world" : actor,
+                    changes.size(), hiddenCount(changes), this.sampleChanges(changes));
+        }
+    }
+
     public void logCapturedBlock(BuildProject project, String route, WorldMutationSource source, BlockPos pos,
             BlockState oldState, BlockState newState, int pendingBefore, int pendingAfter
     ) {
@@ -264,4 +284,11 @@ public final class HistoryDebugLog {
     private static long time(ServerLevel level) { return level == null ? -1 : level.getGameTime(); }
 
     private static String blank(String value) { return value == null || value.isBlank() ? "<none>" : value; }
+
+    private static long hiddenCount(List<StoredBlockChange> changes) {
+        if (changes == null) {
+            return 0;
+        }
+        return changes.stream().filter(StoredBlockChange::hidden).count();
+    }
 }

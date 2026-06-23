@@ -99,6 +99,14 @@ final class LiveUndoRedoActionRecorder {
         }
         if (actionAllowed && !actionId.isBlank()) {
             if (defersImmediateCausalChange(WorldMutationContext.currentSource(), change)) {
+                this.historyDebugLog.logSkippedLiveUndoRedoBlock(
+                        trackedProject.project(),
+                        "growth-deferred-immediate",
+                        "waiting-for-settled-reconciliation",
+                        actionId,
+                        WorldMutationContext.currentSource(),
+                        change
+                );
                 return;
             }
             this.historyManager.recordCurrentCausalChange(
@@ -274,10 +282,25 @@ final class LiveUndoRedoActionRecorder {
                     List.of(),
                     now
             );
+            this.historyDebugLog.logLiveUndoRedoActionBatch(
+                    trackedProject.project(),
+                    "reconciled-causal",
+                    context.actionId(),
+                    context.actor(),
+                    entry.getValue()
+            );
         }
 
         for (StoredBlockChange change : relatedChanges) {
             if (change.hidden()) {
+                this.historyDebugLog.logSkippedLiveUndoRedoBlock(
+                        trackedProject.project(),
+                        "reconciled-related",
+                        "hidden-without-action-context",
+                        "",
+                        null,
+                        change
+                );
                 continue;
             }
             this.historyManager.recordRelatedChange(
@@ -287,6 +310,13 @@ final class LiveUndoRedoActionRecorder {
                     now,
                     relatedJoinWindowFor(change),
                     relatedJoinRadiusFor(change)
+            );
+            this.historyDebugLog.logLiveUndoRedoBlock(
+                    trackedProject.project(),
+                    "reconciled-related",
+                    "",
+                    null,
+                    change
             );
         }
     }

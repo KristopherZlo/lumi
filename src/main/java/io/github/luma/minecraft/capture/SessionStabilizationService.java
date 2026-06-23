@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
@@ -96,6 +97,15 @@ public final class SessionStabilizationService {
             List<StoredBlockChange> actionChanges = this.reconciliationActionChanges(
                     currentChanges,
                     composedChanges,
+                    deferredActionContexts
+            );
+            this.logHiddenDeferredReconciliation(
+                    project,
+                    processedChunks,
+                    currentChanges,
+                    deltaChanges,
+                    composedChanges,
+                    actionChanges,
                     deferredActionContexts
             );
             int bufferBefore = session.buffer().size();
@@ -514,6 +524,62 @@ public final class SessionStabilizationService {
             }
         }
         return false;
+    }
+
+    private void logHiddenDeferredReconciliation(
+            BuildProject project,
+            List<ChunkPoint> chunks,
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> deltaChanges,
+            List<StoredBlockChange> composedChanges,
+            List<StoredBlockChange> actionChanges,
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
+    ) {
+        if (!LumaDebugLog.enabled(project) || !hasHiddenDeferredAction(deferredActionContexts)) {
+            return;
+        }
+        CaptureSessionState.DeferredActionContext sample = firstHiddenDeferredAction(deferredActionContexts);
+        LumaDebugLog.log(project, "capture",
+                "Reconciled hidden deferred action chunks={} current={} liveDelta={} composed={} undoPayload={} hiddenContexts={} sampleAction={} sampleActor={}",
+                size(chunks), size(currentChanges), size(deltaChanges), size(composedChanges), size(actionChanges),
+                hiddenDeferredActionCount(deferredActionContexts),
+                sample == null ? "<none>" : blank(sample.actionId()),
+                sample == null ? "<none>" : sample.actor());
+    }
+
+    private static CaptureSessionState.DeferredActionContext firstHiddenDeferredAction(
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
+    ) {
+        for (CaptureSessionState.DeferredActionContext context : deferredActionContexts == null
+                ? List.<CaptureSessionState.DeferredActionContext>of()
+                : deferredActionContexts.values()) {
+            if (context != null && context.hasAction() && context.hiddenInBuilderSurfaces()) {
+                return context;
+            }
+        }
+        return null;
+    }
+
+    private static int hiddenDeferredActionCount(
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
+    ) {
+        int count = 0;
+        for (CaptureSessionState.DeferredActionContext context : deferredActionContexts == null
+                ? List.<CaptureSessionState.DeferredActionContext>of()
+                : deferredActionContexts.values()) {
+            if (context != null && context.hasAction() && context.hiddenInBuilderSurfaces()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static int size(List<?> values) {
+        return values == null ? 0 : values.size();
+    }
+
+    private static String blank(String value) {
+        return value == null || value.isBlank() ? "<none>" : value;
     }
 
     private StoredBlockChange reconciliationActionChange(
