@@ -9,6 +9,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.preview.LoadingAnimationComponent;
 import io.github.luma.ui.preview.ProjectPreviewTextureCache;
+import io.github.luma.ui.preview.ZoomablePreviewComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -23,6 +24,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.function.BiConsumer;
 import net.minecraft.network.chat.Component;
 
 public final class ProjectUiSupport {
@@ -186,6 +188,55 @@ public final class ProjectUiSupport {
             );
             texture.sizing(Sizing.fixed(width), Sizing.fixed(height));
             return texture;
+        } catch (Exception exception) {
+            return previewPlaceholder(width, height, false);
+        }
+    }
+
+    public static UIComponent zoomableVersionPreview(
+            ProjectScreenController controller,
+            String projectName,
+            ProjectVersion version,
+            int width,
+            int height,
+            int zoomStep,
+            int panX,
+            int panY,
+            BiConsumer<Integer, Integer> panChanged
+    ) {
+        int previewWidth = version == null || version.preview() == null ? 0 : version.preview().width();
+        int previewHeight = version == null || version.preview() == null ? 0 : version.preview().height();
+        if (version == null
+                || version.preview() == null
+                || version.preview().fileName() == null
+                || version.preview().fileName().isBlank()
+                || previewWidth <= 0
+                || previewHeight <= 0) {
+            return previewPlaceholder(width, height, version != null && controller.previewLoading(projectName, version.id()));
+        }
+
+        String previewPath = controller.resolvePreviewPath(projectName, version.id());
+        if (previewPath == null || previewPath.isBlank()) {
+            return previewPlaceholder(width, height, controller.previewLoading(projectName, version.id()));
+        }
+
+        Path path = Path.of(previewPath);
+        if (!Files.exists(path)) {
+            return previewPlaceholder(width, height, controller.previewLoading(projectName, version.id()));
+        }
+
+        try {
+            return new ZoomablePreviewComponent(
+                    ProjectPreviewTextureCache.load(projectName, version.id(), path),
+                    previewWidth,
+                    previewHeight,
+                    width,
+                    height,
+                    zoomStep,
+                    panX,
+                    panY,
+                    panChanged
+            );
         } catch (Exception exception) {
             return previewPlaceholder(width, height, false);
         }

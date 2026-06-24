@@ -15,6 +15,7 @@ import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.PatchWorldChanges;
@@ -81,6 +82,16 @@ public final class VersionService {
         return this.startSaveVersion(level, projectName, message, author, VersionKind.MANUAL);
     }
 
+    public OperationHandle startSaveVersion(
+            ServerLevel level,
+            String projectName,
+            String message,
+            String author,
+            List<String> tags
+    ) throws IOException {
+        return this.startSaveVersion(level, projectName, message, author, VersionKind.MANUAL, tags);
+    }
+
     public Optional<VersionSaveTiming> saveTiming(OperationHandle handle) {
         if (handle == null || handle.id() == null || handle.id().isBlank()) {
             return Optional.empty();
@@ -90,6 +101,16 @@ public final class VersionService {
     }
 
     public OperationHandle startAmendVersion(ServerLevel level, String projectName, String message, String author) throws IOException {
+        return this.startAmendVersion(level, projectName, message, author, List.of());
+    }
+
+    public OperationHandle startAmendVersion(
+            ServerLevel level,
+            String projectName,
+            String message,
+            String author,
+            List<String> tags
+    ) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         BuildProject project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
@@ -103,7 +124,7 @@ public final class VersionService {
                 "amend-version",
                 "blocks",
                 LumaDebugLog.enabled(project),
-                progressSink -> this.runAmendVersionOperation(level, layout, project, message, author, progressSink)
+                progressSink -> this.runAmendVersionOperation(level, layout, project, message, author, tags, progressSink)
         );
     }
 
@@ -120,6 +141,17 @@ public final class VersionService {
             String message,
             String author,
             VersionKind versionKind
+    ) throws IOException {
+        return this.startSaveVersion(level, projectName, message, author, versionKind, List.of());
+    }
+
+    public OperationHandle startSaveVersion(
+            ServerLevel level,
+            String projectName,
+            String message,
+            String author,
+            VersionKind versionKind,
+            List<String> tags
     ) throws IOException {
         VersionSaveTimingBuilder timing = new VersionSaveTimingBuilder();
         long requestStartedAt = System.nanoTime();
@@ -144,6 +176,7 @@ public final class VersionService {
                         message,
                         author,
                         versionKind,
+                        tags,
                         progressSink,
                         timing
                 )
@@ -173,6 +206,7 @@ public final class VersionService {
             String message,
             String author,
             VersionKind versionKind,
+            List<String> tags,
             WorldOperationManager.ProgressSink progressSink,
             VersionSaveTimingBuilder timing
     ) throws IOException {
@@ -191,6 +225,7 @@ public final class VersionService {
                 draft.baseVersionId(),
                 progressSink,
                 isolatedDraft.workZone(),
+                tags,
                 timing
         );
     }
@@ -201,6 +236,7 @@ public final class VersionService {
             BuildProject project,
             String message,
             String author,
+            List<String> tags,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, author, progressSink, null);
@@ -244,6 +280,7 @@ public final class VersionService {
                 headVersion.id(),
                 progressSink,
                 isolatedDraft.workZone(),
+                tags,
                 null
         );
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
@@ -448,7 +485,8 @@ public final class VersionService {
                 parentVersionIdOverride,
                 progressSink,
                 null,
-                null
+                null,
+                List.of()
         );
     }
 
@@ -464,7 +502,8 @@ public final class VersionService {
             String parentVersionIdOverride,
             WorldOperationManager.ProgressSink progressSink,
             VersionSaveTimingBuilder timing,
-            WorkZone workZone
+            WorkZone workZone,
+            List<String> tags
     ) throws IOException {
         return this.writeVersion(
                 level,
@@ -480,7 +519,8 @@ public final class VersionService {
                 true,
                 true,
                 timing,
-                workZone
+                workZone,
+                tags
         );
     }
 
@@ -498,7 +538,8 @@ public final class VersionService {
             boolean publishHead,
             boolean allowSnapshotCapture,
             VersionSaveTimingBuilder timing,
-            WorkZone workZone
+            WorkZone workZone,
+            List<String> tags
     ) throws IOException {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
@@ -656,6 +697,9 @@ public final class VersionService {
                 this.sourceInfo(versionKind, workZone),
                 now
         );
+        if (tags != null && !tags.isEmpty()) {
+            version = ProjectVersionTags.withTags(version, tags);
+        }
 
         progressSink.update(OperationStage.FINALIZING, draft.changes().size(), draft.changes().size(), "Finalizing version");
         sectionStartedAt = System.nanoTime();
@@ -764,6 +808,7 @@ public final class VersionService {
                 rebaseFromVersionId,
                 progressSink,
                 null,
+                List.of(),
                 null
         );
     }
@@ -781,6 +826,7 @@ public final class VersionService {
             String rebaseFromVersionId,
             WorldOperationManager.ProgressSink progressSink,
             WorkZone workZone,
+            List<String> tags,
             VersionSaveTimingBuilder timing
     ) throws IOException {
         long backgroundStartedAt = System.nanoTime();
@@ -797,7 +843,8 @@ public final class VersionService {
                     parentVersionIdOverride,
                     progressSink,
                     timing,
-                    workZone
+                    workZone,
+                    tags
             );
             long sectionStartedAt = System.nanoTime();
             try {

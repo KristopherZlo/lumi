@@ -131,27 +131,15 @@ public final class HistoryEditService {
             throw new IllegalArgumentException("Root saves cannot be deleted");
         }
 
-        List<ProjectVersion> visibleVersions = this.versionRepository.loadAll(layout).stream()
-                .filter(candidate -> !tombstones.versionDeleted(candidate.id()))
-                .toList();
-        boolean hasVisibleChildren = visibleVersions.stream()
-                .anyMatch(candidate -> version.id().equals(candidate.parentVersionId()));
-        if (hasVisibleChildren) {
-            throw new IllegalArgumentException("Only leaf saves can be deleted");
-        }
-
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         List<ProjectVariant> visibleHeadVariants = variants.stream()
                 .filter(variant -> !tombstones.variantDeleted(variant.id()))
                 .filter(variant -> version.id().equals(variant.headVersionId()))
                 .toList();
-        if (visibleHeadVariants.size() > 1) {
-            throw new IllegalArgumentException("Save is the head of multiple branches");
-        }
 
         Instant now = Instant.now();
-        if (visibleHeadVariants.size() == 1) {
-            ProjectVariant headVariant = visibleHeadVariants.getFirst();
+        boolean variantsChanged = false;
+        for (ProjectVariant headVariant : visibleHeadVariants) {
             variants = replaceVariant(variants, new ProjectVariant(
                     headVariant.id(),
                     headVariant.name(),
@@ -160,6 +148,22 @@ public final class HistoryEditService {
                     headVariant.main(),
                     headVariant.createdAt()
             ));
+            variantsChanged = true;
+        }
+        for (ProjectVariant variant : variants) {
+            if (!tombstones.variantDeleted(variant.id()) && version.id().equals(variant.baseVersionId())) {
+                variants = replaceVariant(variants, new ProjectVariant(
+                        variant.id(),
+                        variant.name(),
+                        version.parentVersionId(),
+                        variant.headVersionId(),
+                        variant.main(),
+                        variant.createdAt()
+                ));
+                variantsChanged = true;
+            }
+        }
+        if (variantsChanged) {
             this.variantRepository.save(layout, variants);
         }
         this.tombstoneRepository.tombstoneVersion(layout, version.id(), now);
@@ -168,6 +172,27 @@ public final class HistoryEditService {
                 now,
                 "version-deleted",
                 "Soft-deleted save " + version.id(),
+                version.id(),
+                version.variantId()
+        ));
+        this.projectCacheInvalidator.invalidate(server, project.id().toString());
+    }
+
+    public void restoreDeletedVersion(MinecraftServer server, String projectName, String versionId) throws IOException {
+        ProjectLayout layout = this.layoutResolver.resolveLayout(server, projectName);
+        BuildProject project = this.loadProject(layout, projectName);
+        HistoryTombstones tombstones = this.tombstoneRepository.load(layout);
+        ProjectVersion version = this.versionRepository.load(layout, versionId)
+                .filter(candidate -> tombstones.versionDeleted(candidate.id()))
+                .orElseThrow(() -> new IllegalArgumentException("Deleted version not found: " + versionId));
+
+        Instant now = Instant.now();
+        this.tombstoneRepository.restoreVersion(layout, version.id(), now);
+        this.projectRepository.save(layout, project.withUpdatedAt(now).withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION));
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                now,
+                "version-restored",
+                "Restored soft-deleted save " + version.id(),
                 version.id(),
                 version.variantId()
         ));

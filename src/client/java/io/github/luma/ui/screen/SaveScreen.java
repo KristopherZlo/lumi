@@ -4,10 +4,12 @@ import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.navigation.ScreenRouter;
@@ -20,10 +22,13 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 public final class SaveScreen extends LumaScreen {
 
@@ -44,6 +49,8 @@ public final class SaveScreen extends LumaScreen {
     );
     private String status = "luma.status.project_ready";
     private String saveMessage = "";
+    private String tagText = "";
+    private boolean tagEditorVisible = false;
     private boolean showMoreOptions;
     private TextBoxComponent saveNameInput;
 
@@ -114,6 +121,7 @@ public final class SaveScreen extends LumaScreen {
                 .addHint(body, ClientContextualHelpHint.SAVE);
         body.child(this.summarySection(pending));
         body.child(this.messageSection());
+        body.child(this.saveTagsSection());
         body.child(this.primaryActions(operationActive));
         body.child(this.moreSection(activeHead, operationActive));
         body.child(LumaUi.bottomSpacer());
@@ -122,6 +130,14 @@ public final class SaveScreen extends LumaScreen {
     @Override
     public void onClose() {
         this.client.setScreen(this.parent);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == GLFW.GLFW_KEY_TAB && this.acceptTagCompletion()) {
+            return true;
+        }
+        return super.keyPressed(event);
     }
 
     private FlowLayout summarySection(PendingChangeSummary pending) {
@@ -159,6 +175,37 @@ public final class SaveScreen extends LumaScreen {
         );
     }
 
+    private FlowLayout saveTagsSection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.save.tags_title"),
+                Component.translatable("luma.save.tags_help")
+        );
+        FlowLayout row = LumaUi.actionRow();
+        for (String tag : ProjectVersionTags.parse(this.tagText)) {
+            row.child(LumaUi.caption(Component.literal("#" + tag)));
+        }
+        row.child(LumaUi.iconButton("missing-tag", Component.translatable("luma.action.edit_tags"), button -> {
+            this.tagEditorVisible = !this.tagEditorVisible;
+            this.rebuild();
+        }));
+        section.child(row);
+        if (this.tagEditorVisible) {
+            FlowLayout editRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+            editRow.gap(4);
+            editRow.verticalAlignment(VerticalAlignment.CENTER);
+            TextBoxComponent input = UIComponents.textBox(Sizing.fixed(Math.min(280, Math.max(150, this.width / 3))), this.tagText);
+            input.setHint(Component.translatable("luma.history.tags_input"));
+            input.onChanged().subscribe(value -> this.tagText = TagInputSupport.limit(value));
+            editRow.child(input);
+            String suffix = TagInputSupport.suggestionSuffix(this.tagText, TagInputSupport.knownTags(this.state.versions()), true);
+            if (!suffix.isBlank()) {
+                editRow.child(LumaUi.caption(Component.literal(suffix)));
+            }
+            section.child(editRow);
+        }
+        return section;
+    }
+
     private FlowLayout primaryActions(boolean operationActive) {
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.save.actions_title"),
@@ -166,7 +213,7 @@ public final class SaveScreen extends LumaScreen {
         );
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent saveButton = LumaUi.primaryButton(Component.translatable("luma.action.save"), button -> {
-            String result = this.controller.saveVersion(this.projectName, this.saveMessage);
+            String result = this.controller.saveVersion(this.projectName, this.saveMessage, ProjectVersionTags.parse(this.tagText));
             if ("luma.status.save_started".equals(result)) {
                 this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
                 return;
@@ -200,7 +247,7 @@ public final class SaveScreen extends LumaScreen {
 
         FlowLayout expanded = LumaUi.revealGroup();
         ButtonComponent replaceButton = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> {
-            String result = this.controller.amendVersion(this.projectName, this.saveMessage);
+            String result = this.controller.amendVersion(this.projectName, this.saveMessage, ProjectVersionTags.parse(this.tagText));
             if ("luma.status.amend_started".equals(result)) {
                 this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
                 return;
@@ -236,5 +283,18 @@ public final class SaveScreen extends LumaScreen {
 
     private void rebuild() {
         this.rebuildPreservingScroll(() -> this.bodyScroll);
+    }
+
+    private boolean acceptTagCompletion() {
+        if (!this.tagEditorVisible) {
+            return false;
+        }
+        List<String> knownTags = TagInputSupport.knownTags(this.state.versions());
+        if (!TagInputSupport.hasSuggestion(this.tagText, knownTags)) {
+            return false;
+        }
+        this.tagText = TagInputSupport.acceptSuggestion(this.tagText, knownTags, true);
+        this.rebuild();
+        return true;
     }
 }

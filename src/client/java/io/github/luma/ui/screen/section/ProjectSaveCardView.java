@@ -5,10 +5,14 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.TextBoxComponent;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
@@ -50,6 +54,21 @@ public final class ProjectSaveCardView {
                     public void openBranchDialog(ProjectVersion version) {
                         actions.openBranchDialog(version);
                     }
+
+                    @Override
+                    public void toggleTagEditor(ProjectVersion version) {
+                        actions.toggleTagEditor(version);
+                    }
+
+                    @Override
+                    public void updateTagEditor(String value) {
+                        actions.updateTagEditor(value);
+                    }
+
+                    @Override
+                    public void saveTags(ProjectVersion version) {
+                        actions.saveTags(version);
+                    }
                 }
         );
     }
@@ -83,6 +102,10 @@ public final class ProjectSaveCardView {
         } else {
             card.child(this.narrowContent(model));
             card.child(this.actionRow(model));
+        }
+        card.child(this.tagRow(model));
+        if (model.tagEditorVisible()) {
+            card.child(this.tagEditor(model));
         }
         return card;
     }
@@ -128,14 +151,6 @@ public final class ProjectSaveCardView {
                 "luma.build.save_card_summary",
                 model.version().stats().changedBlocks()
         )));
-        List<String> tags = ProjectVersionTags.from(model.version());
-        if (!tags.isEmpty()) {
-            FlowLayout tagRow = LumaUi.actionRow();
-            for (String tag : tags) {
-                tagRow.child(LumaUi.chip(Component.literal("#" + tag)));
-            }
-            text.child(tagRow);
-        }
         if (model.current()) {
             FlowLayout meta = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
             meta.gap(4);
@@ -158,6 +173,43 @@ public final class ProjectSaveCardView {
             actions.child(this.actionButton(model, actionState));
         }
         return actions;
+    }
+
+    private FlowLayout tagRow(Model model) {
+        FlowLayout row = LumaUi.actionRow();
+        for (String tag : ProjectVersionTags.from(model.version())) {
+            row.child(LumaUi.caption(Component.literal("#" + tag)));
+        }
+        row.child(LumaUi.iconButton(
+                "missing-tag",
+                Component.translatable("luma.action.edit_tags"),
+                button -> this.actions.toggleTagEditor(model.version())
+        ));
+        return row;
+    }
+
+    private FlowLayout tagEditor(Model model) {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(4);
+        row.verticalAlignment(VerticalAlignment.CENTER);
+        TextBoxComponent input = UIComponents.textBox(
+                Sizing.fixed(Math.min(260, Math.max(140, model.width() / 3))),
+                model.tagEditorText()
+        );
+        input.setHint(Component.translatable("luma.history.tags_input"));
+        input.onChanged().subscribe(this.actions::updateTagEditor);
+        row.child(input);
+        String suffix = TagInputSupport.suggestionSuffix(model.tagEditorText(), model.knownTags(), true);
+        if (!suffix.isBlank()) {
+            row.child(LumaUi.caption(Component.literal(suffix)));
+        }
+        ButtonComponent save = LumaUi.primaryButton(
+                Component.translatable("luma.action.save_tags"),
+                button -> this.actions.saveTags(model.version())
+        );
+        save.margins(Insets.none());
+        row.child(save);
+        return row;
     }
 
     private ButtonComponent actionButton(Model model, ProjectSaveCardLayout.ActionState actionState) {
@@ -193,7 +245,10 @@ public final class ProjectSaveCardView {
             boolean current,
             boolean operationActive,
             int width,
-            boolean createVariantAction
+            boolean createVariantAction,
+            boolean tagEditorVisible,
+            String tagEditorText,
+            List<String> knownTags
     ) {
         public Model(
                 String projectName,
@@ -203,12 +258,26 @@ public final class ProjectSaveCardView {
                 boolean operationActive,
                 int width
         ) {
-            this(projectName, version, versionVariant, current, operationActive, width, true);
+            this(projectName, version, versionVariant, current, operationActive, width, true, false, "", List.of());
+        }
+
+        public Model(
+                String projectName,
+                ProjectVersion version,
+                ProjectVariant versionVariant,
+                boolean current,
+                boolean operationActive,
+                int width,
+                boolean createVariantAction
+        ) {
+            this(projectName, version, versionVariant, current, operationActive, width, createVariantAction, false, "", List.of());
         }
 
         public Model {
             Objects.requireNonNull(projectName, "projectName");
             Objects.requireNonNull(version, "version");
+            tagEditorText = TagInputSupport.limit(tagEditorText);
+            knownTags = knownTags == null ? List.of() : knownTags;
         }
     }
 
@@ -219,6 +288,12 @@ public final class ProjectSaveCardView {
         void requestRestore(ProjectVariant variant, ProjectVersion version);
 
         void openBranchDialog(ProjectVersion version);
+
+        void toggleTagEditor(ProjectVersion version);
+
+        void updateTagEditor(String value);
+
+        void saveTags(ProjectVersion version);
     }
 
     interface PreviewFactory {

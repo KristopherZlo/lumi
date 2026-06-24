@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -102,16 +103,41 @@ class HistoryEditServiceTest {
     }
 
     @Test
-    void deleteVersionRejectsNonLeafSaves() throws Exception {
+    void deleteVersionSoftDeletesNonLeafSaves() throws Exception {
         ProjectLayout layout = this.seedProject();
         HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
         });
 
-        assertThrows(IllegalArgumentException.class, () -> service.deleteVersion(null, "Tower", "v0002"));
+        service.deleteVersion(null, "Tower", "v0002");
+
+        List<ProjectVariant> variants = new VariantRepository().loadAll(layout);
+        assertEquals("v0001", variants.stream()
+                .filter(variant -> variant.id().equals("main"))
+                .findFirst()
+                .orElseThrow()
+                .headVersionId());
+        assertEquals("v0001", variants.stream()
+                .filter(variant -> variant.id().equals("feature"))
+                .findFirst()
+                .orElseThrow()
+                .baseVersionId());
+        assertTrue(new HistoryTombstoneRepository().load(layout).versionDeleted("v0002"));
     }
 
     @Test
-    void deleteVersionRejectsSavesThatHeadMultipleBranches() throws Exception {
+    void restoreDeletedVersionRemovesVersionTombstone() throws Exception {
+        ProjectLayout layout = this.seedProject();
+        HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
+        });
+
+        service.deleteVersion(null, "Tower", "v0002");
+        service.restoreDeletedVersion(null, "Tower", "v0002");
+
+        assertFalse(new HistoryTombstoneRepository().load(layout).versionDeleted("v0002"));
+    }
+
+    @Test
+    void deleteVersionMovesMultipleBranchHeadsToParent() throws Exception {
         ProjectLayout layout = this.seedProject();
         new VariantRepository().save(layout, List.of(
                 new ProjectVariant("main", "main", "v0001", "v0002", true, NOW),
@@ -121,12 +147,13 @@ class HistoryEditServiceTest {
         HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
         });
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> service.deleteVersion(null, "Tower", "v0003")
-        );
+        service.deleteVersion(null, "Tower", "v0003");
 
-        assertEquals("Save is the head of multiple branches", exception.getMessage());
+        assertEquals(List.of("v0002", "v0002"), new VariantRepository().loadAll(layout).stream()
+                .filter(variant -> variant.id().equals("feature") || variant.id().equals("review"))
+                .map(ProjectVariant::headVersionId)
+                .toList());
+        assertTrue(new HistoryTombstoneRepository().load(layout).versionDeleted("v0003"));
     }
 
     @Test

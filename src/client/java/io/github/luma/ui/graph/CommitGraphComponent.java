@@ -47,7 +47,7 @@ public final class CommitGraphComponent extends BaseUIComponent {
     private static final int HOVER_CARD_FILL = 0xF2091018;
     private static final int HOVER_CARD_BORDER = 0xCC6C7A89;
     private static final int HOVER_CARD_WIDTH = 186;
-    private static final int HOVER_CARD_HEIGHT = 72;
+    private static final int HOVER_CARD_HEIGHT = 52;
     private static final int HOVER_PREVIEW_WIDTH = 54;
     private static final int HOVER_PREVIEW_HEIGHT = 40;
 
@@ -240,13 +240,17 @@ public final class CommitGraphComponent extends BaseUIComponent {
     }
 
     private void drawNode(OwoUIGraphics graphics, int x, int y, int laneColor, boolean activeHead, boolean hovered) {
-        int outer = activeHead || hovered ? 11 : 9;
-        int inner = activeHead || hovered ? 7 : 5;
-        graphics.fill(x - outer / 2, y - outer / 2, x + outer / 2 + 1, y + outer / 2 + 1, 0xFF091018);
+        int outer = activeHead || hovered ? 10 : 8;
+        int inner = activeHead || hovered ? 6 : 4;
+        int outerX = x - outer / 2;
+        int outerY = y - outer / 2;
+        int innerX = x - inner / 2;
+        int innerY = y - inner / 2;
+        graphics.fill(outerX, outerY, outerX + outer, outerY + outer, 0xFF091018);
         if (activeHead || hovered) {
-            graphics.drawRectOutline(x - outer / 2, y - outer / 2, outer + 1, outer + 1, hovered ? 0xFFFFFFFF : 0xFFEAF5FF);
+            graphics.drawRectOutline(outerX, outerY, outer, outer, hovered ? 0xFFFFFFFF : 0xFFEAF5FF);
         }
-        graphics.fill(x - inner / 2, y - inner / 2, x + inner / 2 + 1, y + inner / 2 + 1, laneColor);
+        graphics.fill(innerX, innerY, innerX + inner, innerY + inner, laneColor);
     }
 
     private void drawHoverCard(OwoUIGraphics graphics, Font font, CommitGraphNode node, int mouseX, int mouseY) {

@@ -12,6 +12,7 @@ import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
+import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
@@ -39,6 +40,7 @@ public final class MoreScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final ScreenRouter router = new ScreenRouter();
     private final ProjectHomeScreenController controller = new ProjectHomeScreenController();
+    private final ProjectScreenController projectController = new ProjectScreenController();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private final UpdateCheckService updateCheckService = UpdateCheckService.getInstance();
@@ -48,6 +50,7 @@ public final class MoreScreen extends LumaScreen {
     private ProjectHomeViewState state;
     private List<ProjectVersion> deletedVersions = List.of();
     private MoreTab activeTab = MoreTab.PROJECT_TOOLS;
+    private String status = "luma.status.project_ready";
     private boolean updateCheckInProgress = false;
     private ManualUpdateCheckController.Result updateCheckResult;
 
@@ -64,7 +67,7 @@ public final class MoreScreen extends LumaScreen {
 
     @Override
     protected void build(FlowLayout root) {
-        this.state = this.controller.loadState(this.projectName, "luma.status.project_ready", false);
+        this.state = this.controller.loadState(this.projectName, this.status, false);
         this.deletedVersions = this.controller.loadDeletedVersions(this.projectName);
 
         root.surface(LumaUi.screenBackdrop());
@@ -92,6 +95,9 @@ public final class MoreScreen extends LumaScreen {
         );
         stack.child(window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.MORE);
+        if (!"luma.status.project_ready".equals(this.status)) {
+            window.content().child(LumaUi.statusBanner(Component.translatable(this.status)));
+        }
         window.content().child(LumaUi.caption(Component.translatable("luma.more.help")));
         FlowLayout body = LumaUi.screenBody();
         window.content().child(LumaUi.screenScroll(body));
@@ -106,6 +112,12 @@ public final class MoreScreen extends LumaScreen {
                     "luma.more.cleanup_help",
                     "luma.action.open_cleanup",
                     button -> this.router.openCleanup(this, this.projectName)
+            ));
+            body.child(this.navigationCard(
+                    "luma.advanced.actions_title",
+                    "luma.compare.manual_help",
+                    "luma.action.manual_compare",
+                    button -> this.router.openCompare(this, this.projectName, "", "")
             ));
         } else {
             body.child(this.deletedSavesSection());
@@ -201,9 +213,18 @@ public final class MoreScreen extends LumaScreen {
                     Component.translatable(ProjectUiSupport.versionKindKey(version.versionKind()))
             )));
             card.child(LumaUi.caption(Component.translatable("luma.advanced.raw_save_id", version.id())));
+            FlowLayout actions = LumaUi.actionRow();
+            actions.child(LumaUi.primaryButton(Component.translatable("luma.action.restore_deleted_save"), button ->
+                    this.restoreDeletedSave(version.id())));
+            card.child(actions);
             section.child(card);
         }
         return section;
+    }
+
+    private void restoreDeletedSave(String versionId) {
+        this.status = this.projectController.restoreDeletedVersion(this.projectName, versionId);
+        this.rebuild();
     }
 
     private FlowLayout updateCheckSection() {

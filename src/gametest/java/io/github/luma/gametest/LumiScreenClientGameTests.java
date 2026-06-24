@@ -341,9 +341,11 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
                 960,
                 "main",
                 false,
+                "",
+                "",
+                "",
                 pendingRestoreVariantId,
                 pendingRestoreVersionId,
-                "",
                 selection
         );
     }
@@ -497,6 +499,21 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         @Override
         public void setHistoryTagFilter(String filter) {
             this.lastAction = "setHistoryTagFilter";
+        }
+
+        @Override
+        public void toggleTagEditor(ProjectVersion version) {
+            this.lastAction = "toggleTagEditor";
+        }
+
+        @Override
+        public void updateTagEditor(String value) {
+            this.lastAction = "updateTagEditor";
+        }
+
+        @Override
+        public void saveTags(ProjectVersion version) {
+            this.lastAction = "saveTags";
         }
 
         @Override

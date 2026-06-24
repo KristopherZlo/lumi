@@ -13,6 +13,7 @@ import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.WorkZoneScreenController;
 import io.github.luma.ui.graph.CommitGraphComponent;
@@ -31,12 +32,15 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 public final class WorkZoneScreen extends LumaScreen {
 
@@ -57,6 +61,8 @@ public final class WorkZoneScreen extends LumaScreen {
     private boolean zonePickerVisible;
     private boolean zoneHistoryGraphVisible;
     private String zoneTagFilter = "";
+    private String tagEditorVersionId = "";
+    private String tagEditorText = "";
 
     public WorkZoneScreen(Screen parent, String projectName) {
         super(Component.translatable("luma.screen.zones.title", projectName));
@@ -104,7 +110,7 @@ public final class WorkZoneScreen extends LumaScreen {
         WorkZone focused = this.focusedZone();
         if (focused != null && !this.zonePickerVisible) {
             boolean active = focused.id().equals(this.state.zones().activeZoneId(this.state.actor()));
-            this.addZoneTitleActions(window, active);
+            body.child(this.zoneNavigationSection(active));
             body.child(this.zoneDetailSection(focused, active));
             body.child(this.saveZoneSection(focused, active));
             body.child(this.zoneHistorySection(focused));
@@ -124,6 +130,14 @@ public final class WorkZoneScreen extends LumaScreen {
     public void refreshFromRemote(String statusKey) {
         this.status = statusKey == null || statusKey.isBlank() ? "luma.status.zones_ready" : statusKey;
         this.rebuild();
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == GLFW.GLFW_KEY_TAB && this.acceptTagCompletion()) {
+            return true;
+        }
+        return super.keyPressed(event);
     }
 
     @Override
@@ -210,14 +224,16 @@ public final class WorkZoneScreen extends LumaScreen {
         return section;
     }
 
-    private void addZoneTitleActions(ProjectWindowLayout window, boolean active) {
-        if (active) {
-            window.titleBar().child(LumaUi.button(Component.translatable("luma.zones.leave"), button -> this.selectZone("")));
-        }
-        window.titleBar().child(LumaUi.button(Component.translatable("luma.action.back"), button -> {
+    private FlowLayout zoneNavigationSection(boolean active) {
+        FlowLayout row = LumaUi.actionRow();
+        row.child(LumaUi.button(Component.translatable("luma.action.back"), button -> {
             this.zonePickerVisible = true;
             this.rebuild();
         }));
+        if (active) {
+            row.child(LumaUi.button(Component.translatable("luma.zones.leave"), button -> this.selectZone("")));
+        }
+        return row;
     }
 
     private FlowLayout saveZoneSection(WorkZone zone, boolean active) {
@@ -246,8 +262,7 @@ public final class WorkZoneScreen extends LumaScreen {
             section.child(LumaUi.caption(Component.translatable("luma.zones.history_empty")));
             return section;
         }
-        section.child(this.zoneHistoryViewToggle());
-        section.child(this.zoneTagFilter());
+        section.child(this.zoneHistoryToolbar());
         List<ProjectVersion> versions = allVersions.stream()
                 .filter(version -> this.matchesTagFilter(version, this.zoneTagFilter))
                 .toList();
@@ -276,9 +291,10 @@ public final class WorkZoneScreen extends LumaScreen {
         return section;
     }
 
-    private FlowLayout zoneHistoryViewToggle() {
+    private FlowLayout zoneHistoryToolbar() {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(4);
+        row.child(this.zoneTagFilter());
         row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
         ButtonComponent cards = LumaUi.iconButton("folder-open", Component.translatable("luma.history.view_cards"), button -> {
             this.zoneHistoryGraphVisible = false;
@@ -297,15 +313,20 @@ public final class WorkZoneScreen extends LumaScreen {
     }
 
     private FlowLayout zoneTagFilter() {
-        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         row.gap(4);
+        row.verticalAlignment(VerticalAlignment.CENTER);
         var input = UIComponents.textBox(Sizing.fixed(Math.min(180, Math.max(120, this.width / 5))), this.zoneTagFilter);
         input.setHint(Component.translatable("luma.history.tag_filter"));
         input.onChanged().subscribe(value -> {
-            this.zoneTagFilter = value == null ? "" : value;
+            this.zoneTagFilter = TagInputSupport.limit(value);
             this.rebuild();
         });
         row.child(input);
+        String suffix = TagInputSupport.suggestionSuffix(this.zoneTagFilter, TagInputSupport.knownTags(this.state.versions()), false);
+        if (!suffix.isBlank()) {
+            row.child(LumaUi.caption(Component.literal(suffix)));
+        }
         return row;
     }
 
@@ -340,7 +361,10 @@ public final class WorkZoneScreen extends LumaScreen {
                 latest,
                 false,
                 this.width,
-                false
+                false,
+                version.id().equals(this.tagEditorVersionId),
+                this.tagEditorText,
+                TagInputSupport.knownTags(this.state.versions())
         ));
     }
 
@@ -374,6 +398,21 @@ public final class WorkZoneScreen extends LumaScreen {
     private void refresh(String statusKey) {
         this.status = statusKey == null || statusKey.isBlank() ? "luma.status.zones_ready" : statusKey;
         this.rebuild();
+    }
+
+    private boolean acceptTagCompletion() {
+        List<String> knownTags = TagInputSupport.knownTags(this.state.versions());
+        if (!this.tagEditorVersionId.isBlank() && TagInputSupport.hasSuggestion(this.tagEditorText, knownTags)) {
+            this.tagEditorText = TagInputSupport.acceptSuggestion(this.tagEditorText, knownTags, true);
+            this.refresh("luma.status.zones_ready");
+            return true;
+        }
+        if (TagInputSupport.hasSuggestion(this.zoneTagFilter, knownTags)) {
+            this.zoneTagFilter = TagInputSupport.acceptSuggestion(this.zoneTagFilter, knownTags, false);
+            this.refresh("luma.status.zones_ready");
+            return true;
+        }
+        return false;
     }
 
     private String effectiveProjectName() {
@@ -430,6 +469,43 @@ public final class WorkZoneScreen extends LumaScreen {
         @Override
         public void openBranchDialog(ProjectVersion version) {
             router.openSaveDetails(WorkZoneScreen.this, effectiveProjectName(), version.id());
+        }
+
+        @Override
+        public void toggleTagEditor(ProjectVersion version) {
+            if (version == null) {
+                return;
+            }
+            if (version.id().equals(tagEditorVersionId)) {
+                tagEditorVersionId = "";
+                tagEditorText = "";
+            } else {
+                tagEditorVersionId = version.id();
+                tagEditorText = ProjectVersionTags.serialize(ProjectVersionTags.from(version));
+            }
+            refresh("luma.status.zones_ready");
+        }
+
+        @Override
+        public void updateTagEditor(String value) {
+            tagEditorText = TagInputSupport.limit(value);
+        }
+
+        @Override
+        public void saveTags(ProjectVersion version) {
+            if (version == null) {
+                return;
+            }
+            String result = projectController.updateVersionTags(
+                    effectiveProjectName(),
+                    version.id(),
+                    ProjectVersionTags.parse(tagEditorText)
+            );
+            if ("luma.status.tags_updated".equals(result)) {
+                tagEditorVersionId = "";
+                tagEditorText = "";
+            }
+            refresh(result);
         }
     }
 }

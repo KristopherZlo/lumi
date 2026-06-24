@@ -8,6 +8,7 @@ import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
@@ -17,6 +18,7 @@ import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -166,8 +168,7 @@ public final class ProjectScreenSections {
                         ProjectUiSupport.displayVariantName(selectedVariant)
                 )
         );
-        section.child(this.historyViewToggle(model));
-        section.child(this.tagFilter(model));
+        section.child(this.historyToolbar(model));
         if (model.historyGraphVisible()) {
             section.child(this.graphView(model, selectedVariant));
             return section;
@@ -217,9 +218,10 @@ public final class ProjectScreenSections {
         return section;
     }
 
-    private FlowLayout historyViewToggle(Model model) {
+    private FlowLayout historyToolbar(Model model) {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(4);
+        row.child(this.tagFilter(model));
         row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
         ButtonComponent cards = LumaUi.iconButton(
                 "folder-open",
@@ -240,12 +242,17 @@ public final class ProjectScreenSections {
     }
 
     private FlowLayout tagFilter(Model model) {
-        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         row.gap(4);
-        var input = UIComponents.textBox(Sizing.fixed(Math.min(180, Math.max(120, model.width() / 5))), model.historyTagFilter());
+        row.verticalAlignment(VerticalAlignment.CENTER);
+        TextBoxComponent input = UIComponents.textBox(Sizing.fixed(Math.min(180, Math.max(120, model.width() / 5))), model.historyTagFilter());
         input.setHint(Component.translatable("luma.history.tag_filter"));
         input.onChanged().subscribe(value -> this.actions.setHistoryTagFilter(value));
         row.child(input);
+        String suffix = TagInputSupport.suggestionSuffix(model.historyTagFilter(), TagInputSupport.knownTags(model.state().versions()), false);
+        if (!suffix.isBlank()) {
+            row.child(LumaUi.caption(Component.literal(suffix)));
+        }
         return row;
     }
 
@@ -306,7 +313,11 @@ public final class ProjectScreenSections {
                 entry.variant(),
                 entry.current(),
                 operationActive,
-                model.width()
+                model.width(),
+                true,
+                entry.version().id().equals(model.tagEditorVersionId()),
+                model.tagEditorText(),
+                TagInputSupport.knownTags(model.state().versions())
         ));
     }
 
@@ -341,11 +352,15 @@ public final class ProjectScreenSections {
             String selectedVariantId,
             boolean historyGraphVisible,
             String historyTagFilter,
+            String tagEditorVersionId,
+            String tagEditorText,
             String pendingRestoreVariantId,
             String pendingRestoreVersionId,
             Optional<Bounds3i> lumiSelection
     ) {
         public Model {
+            tagEditorVersionId = tagEditorVersionId == null ? "" : tagEditorVersionId;
+            tagEditorText = tagEditorText == null ? "" : tagEditorText;
             lumiSelection = lumiSelection == null ? Optional.empty() : lumiSelection;
         }
     }
@@ -367,6 +382,12 @@ public final class ProjectScreenSections {
         void setHistoryGraphVisible(boolean visible);
 
         void setHistoryTagFilter(String filter);
+
+        void toggleTagEditor(ProjectVersion version);
+
+        void updateTagEditor(String value);
+
+        void saveTags(ProjectVersion version);
 
         void requestRestore(ProjectVariant variant, ProjectVersion version);
     }

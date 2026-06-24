@@ -15,12 +15,14 @@ import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
+import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.BranchCreationDialogStateFactory;
 import io.github.luma.ui.controller.BranchCreationResult;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
@@ -56,6 +58,7 @@ import net.minecraft.client.gui.screens.options.controls.ControlsScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
+import org.lwjgl.glfw.GLFW;
 
 public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppressingScreen {
 
@@ -90,6 +93,8 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private String selectedVariantId = "";
     private boolean historyGraphVisible = false;
     private String historyTagFilter = "";
+    private String tagEditorVersionId = "";
+    private String tagEditorText = "";
     private String pendingRestoreVariantId = "";
     private String pendingRestoreVersionId = "";
     private String pendingBranchBaseVersionId = "";
@@ -240,6 +245,9 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             this.closeBranchDialog();
             return true;
         }
+        if (event.key() == GLFW.GLFW_KEY_TAB && this.acceptTagCompletion()) {
+            return true;
+        }
         return super.keyPressed(event);
     }
 
@@ -265,6 +273,8 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 this.selectedVariantId,
                 this.historyGraphVisible,
                 this.historyTagFilter,
+                this.tagEditorVersionId,
+                this.tagEditorText,
                 this.pendingRestoreVariantId,
                 this.pendingRestoreVersionId,
                 this.selectedLumiBounds()
@@ -497,6 +507,21 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         this.rebuildPreservingScroll(() -> this.bodyScroll, preserveScroll);
     }
 
+    private boolean acceptTagCompletion() {
+        List<String> knownTags = TagInputSupport.knownTags(this.state.versions());
+        if (!this.tagEditorVersionId.isBlank() && TagInputSupport.hasSuggestion(this.tagEditorText, knownTags)) {
+            this.tagEditorText = TagInputSupport.acceptSuggestion(this.tagEditorText, knownTags, true);
+            this.refresh("luma.status.project_ready");
+            return true;
+        }
+        if (TagInputSupport.hasSuggestion(this.historyTagFilter, knownTags)) {
+            this.historyTagFilter = TagInputSupport.acceptSuggestion(this.historyTagFilter, knownTags, false);
+            this.refresh("luma.status.project_ready");
+            return true;
+        }
+        return false;
+    }
+
     @Override
     protected void onLumaTick() {
         if (this.onboardingTour != null && this.handleOnboardingTransition(this.onboardingTour.tick())) {
@@ -642,8 +667,41 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
 
         @Override
         public void setHistoryTagFilter(String filter) {
-            historyTagFilter = filter == null ? "" : filter;
+            historyTagFilter = TagInputSupport.limit(filter);
             refresh("luma.status.project_ready");
+        }
+
+        @Override
+        public void toggleTagEditor(ProjectVersion version) {
+            if (version == null) {
+                return;
+            }
+            if (version.id().equals(tagEditorVersionId)) {
+                tagEditorVersionId = "";
+                tagEditorText = "";
+            } else {
+                tagEditorVersionId = version.id();
+                tagEditorText = ProjectVersionTags.serialize(ProjectVersionTags.from(version));
+            }
+            refresh("luma.status.project_ready");
+        }
+
+        @Override
+        public void updateTagEditor(String value) {
+            tagEditorText = TagInputSupport.limit(value);
+        }
+
+        @Override
+        public void saveTags(ProjectVersion version) {
+            if (version == null) {
+                return;
+            }
+            String result = actionController.updateVersionTags(projectName, version.id(), ProjectVersionTags.parse(tagEditorText));
+            if ("luma.status.tags_updated".equals(result)) {
+                tagEditorVersionId = "";
+                tagEditorText = "";
+            }
+            refresh(result);
         }
 
         @Override
