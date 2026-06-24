@@ -115,7 +115,7 @@ public final class WorkZoneServerNetworking {
         return new WorkZoneSnapshot(
                 project,
                 this.projectService.loadVariants(server, project.name()),
-                this.projectService.loadVersions(server, project.name()),
+                this.projectService.loadWorkZoneVersions(server, project.name()),
                 zones,
                 actor,
                 this.focusedZoneId(zones, actor, WorkZoneCell.from(BlockPoint.from(player.blockPosition()))),

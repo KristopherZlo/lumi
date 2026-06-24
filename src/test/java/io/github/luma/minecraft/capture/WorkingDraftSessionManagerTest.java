@@ -115,6 +115,31 @@ class WorkingDraftSessionManagerTest {
     }
 
     @Test
+    void expectedZoneSaveRemainderStaysPendingWithoutRecoveryScreen() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("zone-save-remainder.mbp"));
+        BuildProject project = project();
+        TrackedProject trackedProject = trackedProject(layout, project);
+        RecoveryRepository repository = new RecoveryRepository();
+        repository.saveDraft(layout, new RecoveryDraft(
+                project.id().toString(),
+                "main",
+                "v0002",
+                "tester",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                List.of(change("minecraft:dirt", "minecraft:glass"))
+        ));
+        WorkingDraftSessionManager manager = new WorkingDraftSessionManager();
+
+        manager.markPersistedDraftCurrentRun(project.id().toString());
+
+        assertTrue(manager.snapshotDraft(trackedProject).isPresent());
+        assertFalse(manager.hasInterruptedDraft(project.id().toString(), trackedProject));
+        assertTrue(new WorkingDraftSessionManager().hasInterruptedDraft(project.id().toString(), trackedProject));
+    }
+
+    @Test
     void consumingPersistedCurrentRunDraftClearsCurrentRunSuppression() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("current-run-consumed.mbp"));
         BuildProject project = project();

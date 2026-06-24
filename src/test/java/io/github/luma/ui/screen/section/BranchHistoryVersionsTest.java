@@ -6,8 +6,10 @@ import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.domain.service.ProjectVersionVisibility;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,7 +56,33 @@ class BranchHistoryVersionsTest {
         assertEquals(List.of(true, false), entries.stream().map(BranchHistoryVersions.Entry::current).toList());
     }
 
+    @Test
+    void globalHistoryCardsSkipZoneScopedVersionsEvenWhenTheyAreTheStoredHead() {
+        ProjectVariant main = new ProjectVariant("main", "Main", "v0001", "v0003", true, instant(0));
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", 60),
+                version("v0002", "main", "v0001", 120, Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, "zone-a")),
+                version("v0003", "main", "v0002", 180, Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, "zone-a"))
+        );
+
+        List<String> visibleIds = new BranchHistoryVersions().forVariant(versions, List.of(main), main).stream()
+                .map(entry -> entry.version().id())
+                .toList();
+
+        assertEquals(List.of("v0001"), visibleIds);
+    }
+
     private static ProjectVersion version(String id, String variantId, String parentVersionId, long offsetSeconds) {
+        return version(id, variantId, parentVersionId, offsetSeconds, Map.of());
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String variantId,
+            String parentVersionId,
+            long offsetSeconds,
+            Map<String, String> metadata
+    ) {
         return new ProjectVersion(
                 id,
                 "11111111-1111-1111-1111-111111111111",
@@ -67,7 +95,9 @@ class BranchHistoryVersionsTest {
                 id,
                 ChangeStats.empty(),
                 PreviewInfo.none(),
-                ExternalSourceInfo.manual(),
+                metadata.isEmpty()
+                        ? ExternalSourceInfo.manual()
+                        : ExternalSourceInfo.external("MANUAL", "manual", "Manual Save", "", null, false, false, metadata),
                 instant(offsetSeconds)
         );
     }

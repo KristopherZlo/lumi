@@ -910,11 +910,28 @@ public final class VersionService {
             recordTiming(timing, VersionSaveTiming.REBASE_WORKING_DRAFT, sectionStartedAt);
             sectionStartedAt = System.nanoTime();
             this.recoveryRepository.deleteOperationDraft(layout);
+            this.markExpectedWorkZoneRemainder(level, layout, project, workZone);
             recordTiming(timing, VersionSaveTiming.OPERATION_DRAFT_DELETE, sectionStartedAt);
             return version;
         } finally {
             recordTiming(timing, VersionSaveTiming.BACKGROUND_TOTAL, backgroundStartedAt);
         }
+    }
+
+    private void markExpectedWorkZoneRemainder(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            WorkZone workZone
+    ) throws IOException {
+        if (level == null || workZone == null) {
+            return;
+        }
+        if (this.recoveryRepository.loadDraft(layout).filter(draft -> !draft.isEmpty()).isEmpty()) {
+            return;
+        }
+        // ponytail: no new marker file; current-run suppression already means "pending, not crash recovery".
+        HistoryCaptureManager.getInstance().markPersistedDraftCurrentRun(level.getServer(), project.id().toString());
     }
 
     static List<StoredBlockChange> mergeChanges(List<StoredBlockChange> baseChanges, List<StoredBlockChange> overlayChanges) {
@@ -1025,7 +1042,7 @@ public final class VersionService {
             return sourceInfo;
         }
         Map<String, String> metadata = new LinkedHashMap<>(sourceInfo.metadata());
-        metadata.put("workZoneId", workZone.id());
+        metadata.put(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, workZone.id());
         metadata.put("workZoneName", workZone.name());
         metadata.put("workZoneColor", Integer.toHexString(workZone.color() & 0xFFFFFF).toUpperCase(java.util.Locale.ROOT));
         return ExternalSourceInfo.external(

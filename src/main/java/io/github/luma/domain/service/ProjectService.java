@@ -58,6 +58,7 @@ public final class ProjectService {
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final WorldInitialBackupService worldInitialBackupService = new WorldInitialBackupService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
 
     public List<BuildProject> listProjects(MinecraftServer server) throws IOException {
         return this.projectRepository.loadAll(this.projectsRoot(server));
@@ -232,6 +233,14 @@ public final class ProjectService {
     }
 
     public List<ProjectVersion> loadVersions(MinecraftServer server, String projectName) throws IOException {
+        return this.loadVisibleVersions(server, projectName);
+    }
+
+    public List<ProjectVersion> loadWorkZoneVersions(MinecraftServer server, String projectName) throws IOException {
+        return this.versionVisibility.workZoneHistory(this.loadVisibleVersions(server, projectName));
+    }
+
+    private List<ProjectVersion> loadVisibleVersions(MinecraftServer server, String projectName) throws IOException {
         ProjectLayout layout = this.resolveLayout(server, projectName);
         var tombstones = this.historyTombstoneRepository.load(layout);
         return this.versionRepository.loadAll(layout).stream()

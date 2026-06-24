@@ -11,6 +11,7 @@ import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.integration.common.IntegrationStatus;
 import io.github.luma.integration.common.ExternalToolIntegrationRegistry;
@@ -25,6 +26,7 @@ import net.minecraft.server.MinecraftServer;
 public final class ProjectHomeScreenController {
 
     private final Query query;
+    private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
 
     public ProjectHomeScreenController() {
         this(new ServiceQuery());
@@ -94,7 +96,7 @@ public final class ProjectHomeScreenController {
             return List.of();
         }
         try {
-            return this.query.loadDeletedVersions(projectName).stream()
+            return this.versionVisibility.globalHistory(this.query.loadDeletedVersions(projectName)).stream()
                     .sorted(Comparator.comparing(ProjectVersion::createdAt).reversed())
                     .toList();
         } catch (Exception exception) {

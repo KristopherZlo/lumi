@@ -35,7 +35,7 @@ public final class WorkZoneScreenController {
             return new WorkZoneViewState(
                     this.projectService.loadProject(server, projectName),
                     this.projectService.loadVariants(server, projectName),
-                    this.projectService.loadVersions(server, projectName),
+                    this.projectService.loadWorkZoneVersions(server, projectName),
                     zones,
                     actor,
                     this.focusedZoneId(zones, actor),
