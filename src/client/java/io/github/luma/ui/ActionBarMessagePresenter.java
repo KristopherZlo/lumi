@@ -69,6 +69,10 @@ public final class ActionBarMessagePresenter {
                 ).withStyle(ChatFormatting.GRAY));
     }
 
+    public static Component zoneEntered(String zoneName) {
+        return baseMessage().append(Component.translatable("luma.actionbar.zone_entered", zoneName).withStyle(ChatFormatting.GRAY));
+    }
+
     public static boolean shouldShowOperationPercent(OperationSnapshot snapshot) {
         if (snapshot == null || snapshot.terminal()) {
             return false;

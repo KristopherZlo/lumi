@@ -26,6 +26,7 @@ import io.github.luma.client.update.MinecraftUpdateNoticeSink;
 import io.github.luma.client.update.UpdateWorldJoinNotifier;
 import io.github.luma.debug.StartupProfiler;
 import io.github.luma.debug.TesterDiagnosticsMode;
+import io.github.luma.network.WorkZoneClientNetworking;
 import io.github.luma.telemetry.TelemetryService;
 import io.github.luma.ui.controller.AsyncCompareCache;
 import io.github.luma.ui.controller.ClientWorkspaceOpenService;
@@ -41,6 +42,7 @@ import io.github.luma.ui.overlay.PendingChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.PendingChangesOverlayRenderer;
 import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.RecentChangesOverlayRenderer;
+import io.github.luma.ui.overlay.WorkZoneOverlayRenderer;
 import io.github.luma.ui.overlay.LumiRegionSelectionRenderer;
 import io.github.luma.ui.overlay.OverlayDiagnostics;
 import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
@@ -161,6 +163,7 @@ public final class LumaClient implements ClientModInitializer {
         StartupProfiler.logElapsed("client.key-bindings", keyBindingsStartedAt);
 
         long eventRegistrationStartedAt = StartupProfiler.start();
+        WorkZoneClientNetworking.getInstance().register();
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
         if (this.clientRuntimeLoadSamplingEnabled) {
             WorldRenderEvents.END_MAIN.register(ClientRuntimeLoadSampler.getInstance()::onWorldRender);
@@ -168,6 +171,7 @@ public final class LumaClient implements ClientModInitializer {
         }
         WorldRenderEvents.END_MAIN.register(CompareOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(LumiRegionSelectionRenderer::render);
+        WorldRenderEvents.END_MAIN.register(WorkZoneOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(PendingChangesOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(RecentChangesOverlayRenderer::render);
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
@@ -203,6 +207,7 @@ public final class LumaClient implements ClientModInitializer {
         boolean worldInputActive = this.shortcutScreenPolicy.worldInputActive(client, shortcutsSuppressed);
         boolean undoRedoInputActive = this.shortcutScreenPolicy.undoRedoInputActive(client, shortcutsSuppressed);
         WorkspaceHudCoordinator.getInstance().tick(client);
+        WorkZoneOverlayRenderer.tick(client);
         ClientOnboardingFlowCoordinator.getInstance().tick(client);
         PreviewCaptureCoordinator.getInstance().tick(client);
         this.selectionTeachingController.tick(client);

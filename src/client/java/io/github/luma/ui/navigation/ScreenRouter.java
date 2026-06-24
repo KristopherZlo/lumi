@@ -16,6 +16,7 @@ import io.github.luma.ui.screen.SaveScreen;
 import io.github.luma.ui.screen.SettingsScreen;
 import io.github.luma.ui.screen.ShareScreen;
 import io.github.luma.ui.screen.VariantsScreen;
+import io.github.luma.ui.screen.WorkZoneScreen;
 import io.github.luma.ui.controller.ProjectScreenController;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -104,6 +105,10 @@ public final class ScreenRouter {
 
     public void openHistoryGraph(Screen parent, String projectName) {
         this.client.setScreen(MoreScreen.historyGraph(parent, projectName));
+    }
+
+    public void openWorkZones(Screen parent, String projectName) {
+        this.client.setScreen(new WorkZoneScreen(parent, projectName));
     }
 
     public void openDiagnostics(Screen parent, String projectName) {

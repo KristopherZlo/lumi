@@ -1,0 +1,101 @@
+package io.github.luma.ui.controller;
+
+import io.github.luma.LumaMod;
+import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.WorkZoneCell;
+import io.github.luma.domain.model.WorkZoneState;
+import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.WorkZoneService;
+import io.github.luma.network.WorkZoneClientNetworking;
+import io.github.luma.ui.state.WorkZoneViewState;
+import java.time.Instant;
+import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.server.MinecraftServer;
+
+public final class WorkZoneScreenController {
+
+    private final Minecraft client = Minecraft.getInstance();
+    private final ProjectService projectService = new ProjectService();
+    private final WorkZoneService workZoneService = new WorkZoneService();
+
+    public WorkZoneViewState load(String projectName, String status) {
+        if (!this.client.hasSingleplayerServer()) {
+            return WorkZoneViewState.fromSnapshot(WorkZoneClientNetworking.getInstance().openState(projectName));
+        }
+        try {
+            MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(this.client);
+            var layout = this.projectService.resolveLayout(server, projectName);
+            WorkZoneState zones = this.workZoneService.load(layout);
+            String actor = this.actor();
+            return new WorkZoneViewState(
+                    this.projectService.loadProject(server, projectName),
+                    this.projectService.loadVariants(server, projectName),
+                    zones,
+                    actor,
+                    this.focusedZoneId(zones, actor),
+                    status
+            );
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to load work zones for project {}", projectName, exception);
+            return new WorkZoneViewState(null, List.<ProjectVariant>of(), WorkZoneState.empty(), this.actor(), "", "luma.status.project_failed");
+        }
+    }
+
+    public String createZone(String projectName, String name) {
+        if (!this.client.hasSingleplayerServer()) {
+            WorkZoneClientNetworking.getInstance().create(projectName, name);
+            return "luma.status.zones_loading";
+        }
+        try {
+            MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(this.client);
+            var project = this.projectService.loadProject(server, projectName);
+            this.workZoneService.createZone(
+                    this.projectService.resolveLayout(server, projectName),
+                    project.id().toString(),
+                    name,
+                    this.actor(),
+                    Instant.now()
+            );
+            return "luma.status.zone_created";
+        } catch (IllegalArgumentException exception) {
+            return "luma.status.zone_name_required";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to create work zone for project {}", projectName, exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
+    public String selectZone(String projectName, String zoneId) {
+        if (!this.client.hasSingleplayerServer()) {
+            WorkZoneClientNetworking.getInstance().select(projectName, zoneId);
+            return "luma.status.zones_loading";
+        }
+        try {
+            MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(this.client);
+            this.workZoneService.selectZone(this.projectService.resolveLayout(server, projectName), this.actor(), zoneId);
+            return zoneId == null || zoneId.isBlank() ? "luma.status.zone_cleared" : "luma.status.zone_selected";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to select work zone for project {}", projectName, exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
+    private String actor() {
+        return this.client.getUser() == null ? "player" : this.client.getUser().getName();
+    }
+
+    private String focusedZoneId(WorkZoneState zones, String actor) {
+        String activeZoneId = zones.activeZoneId(actor);
+        if (!activeZoneId.isBlank() || this.client.player == null) {
+            return activeZoneId;
+        }
+        WorkZoneCell playerCell = WorkZoneCell.from(BlockPoint.from(this.client.player.blockPosition()));
+        return zones.zones().stream()
+                .filter(zone -> zone.contains(playerCell))
+                .map(zone -> zone.id())
+                .findFirst()
+                .orElse("");
+    }
+}

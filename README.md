@@ -31,6 +31,7 @@ Status: alpha. Keep normal world backups.
 - Shows changed blocks with an in-world overlay.
 - Restores a full version, only a selected area, or everything except a selected area.
 - Supports branches, local merges, import, and export.
+- Lets builders label current work with named work zones and save an active zone without consuming other pending work.
 - Keeps live undo/redo for recent tracked edits.
 - Keeps recovery drafts for interrupted work.
 - Captures supported WorldEdit, FAWE, Axiom, and normal Minecraft mutation paths on a best-effort basis.
@@ -39,7 +40,7 @@ Status: alpha. Keep normal world backups.
 
 - Not a backup replacement.
 - Not a survival content mod.
-- Not a multiplayer collaboration system.
+- Not a full multiplayer conflict-resolution system.
 - Not a guarantee that every builder tool path is captured.
 
 ### Default Controls
@@ -63,7 +64,8 @@ All keybinds are remappable in Minecraft controls.
 - Server: required on dedicated servers
 - Singleplayer: primary target
 - Integrated server: supported
-- Dedicated server: available, but not the main target
+- Dedicated server: supported for the Zones workflow when Lumi is installed on both client and server
+- Dedicated server actions require operator-level permission; use `/lumi save <message>` to save tracked work from the server side
 
 ## For Developers
 

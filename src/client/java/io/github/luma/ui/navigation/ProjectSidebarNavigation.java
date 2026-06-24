@@ -43,6 +43,8 @@ public final class ProjectSidebarNavigation {
                 this.router.openProjectIgnoringRecovery(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.more.tab_history_graph"), ProjectWorkspaceTab.HISTORY_GRAPH, activeTab, () ->
                 this.router.openHistoryGraph(parent, projectName));
+        this.addTab(tabs, Component.translatable("luma.tab.zones"), ProjectWorkspaceTab.ZONES, activeTab, () ->
+                this.router.openWorkZones(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.tab.variants"), ProjectWorkspaceTab.VARIANTS, activeTab, () ->
                 this.router.openVariants(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.tab.import_export"), ProjectWorkspaceTab.IMPORT_EXPORT, activeTab, () ->
