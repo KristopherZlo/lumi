@@ -5,9 +5,9 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 /**
  * Validates baseline payload availability before restore planning hands work to
@@ -45,17 +45,23 @@ final class RestoreBaselineRequirementValidator {
         return chunks;
     }
 
+    static boolean isMissingBaselineChunks(IllegalArgumentException exception) {
+        return exception != null
+                && exception.getMessage() != null
+                && exception.getMessage().startsWith("Missing baseline chunks");
+    }
+
     private static List<ChunkPoint> unique(Collection<ChunkPoint> chunks) {
         if (chunks == null || chunks.isEmpty()) {
             return List.of();
         }
-        Map<String, ChunkPoint> unique = new LinkedHashMap<>();
+        Set<ChunkPoint> unique = new LinkedHashSet<>();
         for (ChunkPoint chunk : chunks) {
             if (chunk != null) {
-                unique.put(chunk.x() + ":" + chunk.z(), chunk);
+                unique.add(chunk);
             }
         }
-        return List.copyOf(unique.values());
+        return List.copyOf(unique);
     }
 
     private static String format(List<ChunkPoint> chunks) {

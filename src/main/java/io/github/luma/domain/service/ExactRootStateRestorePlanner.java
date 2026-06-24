@@ -66,6 +66,12 @@ final class ExactRootStateRestorePlanner {
         if (!hasPendingDraft && !hasPatchReplay) {
             return false;
         }
+        if (hasPendingDraft
+                && !hasPatchReplay
+                && targetVersion.versionKind() == VersionKind.WORLD_ROOT
+                && targetVersion.id().equals(pendingDraft.baseVersionId())) {
+            return false;
+        }
         if (targetVersion.versionKind() == VersionKind.WORLD_ROOT) {
             return true;
         }

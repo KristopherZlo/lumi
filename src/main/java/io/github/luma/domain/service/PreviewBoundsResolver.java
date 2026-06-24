@@ -17,10 +17,10 @@ import io.github.luma.storage.repository.PatchMetaRepository;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.server.level.ServerLevel;
 
 public final class PreviewBoundsResolver {
@@ -262,7 +262,7 @@ public final class PreviewBoundsResolver {
     }
 
     private List<ChunkPoint> patchChunksFromMetadata(ProjectLayout layout, List<String> patchIds) throws IOException {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         for (String patchId : patchIds) {
             Optional<PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
             if (metadata.isEmpty()) {
@@ -276,7 +276,7 @@ public final class PreviewBoundsResolver {
                 }
             }
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     private boolean hasCompleteVisibleSectionIndex(ProjectLayout layout, List<String> patchIds) throws IOException {
@@ -321,7 +321,7 @@ public final class PreviewBoundsResolver {
             return ChunkSelectionFactory.fromBounds(project.bounds());
         }
 
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         addChunks(chunks, this.baselineChunkRepository.listChunks(layout));
         for (ProjectVersion version : versions) {
             for (String patchId : version.patchIds()) {
@@ -336,22 +336,22 @@ public final class PreviewBoundsResolver {
         }
 
         if (draft == null || draft.isEmpty()) {
-            return List.copyOf(chunks.values());
+            return List.copyOf(chunks);
         }
 
         addChunks(chunks, ChunkSelectionFactory.fromStoredChanges(BUILDER_SURFACE.visibleBlockChanges(draft.changes())));
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
-    private static void addChunks(Map<String, ChunkPoint> chunks, List<ChunkPoint> source) {
+    private static void addChunks(Set<ChunkPoint> chunks, List<ChunkPoint> source) {
         for (ChunkPoint chunk : source == null ? List.<ChunkPoint>of() : source) {
             addChunk(chunks, chunk);
         }
     }
 
-    private static void addChunk(Map<String, ChunkPoint> chunks, ChunkPoint chunk) {
+    private static void addChunk(Set<ChunkPoint> chunks, ChunkPoint chunk) {
         if (chunk != null) {
-            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+            chunks.add(chunk);
         }
     }
 

@@ -49,6 +49,11 @@ final class BlockTargetStateResolver {
         if (pendingDraft == null || pendingDraft.changes().isEmpty()) {
             return pendingDraft;
         }
+        if (targetVersion != null
+                && targetVersion.versionKind() == VersionKind.WORLD_ROOT
+                && targetVersion.id().equals(pendingDraft.baseVersionId())) {
+            return pendingDraft;
+        }
 
         List<BlockPoint> positions = pendingDraft.changes().stream()
                 .filter(change -> change != null && change.pos() != null)
@@ -125,6 +130,40 @@ final class BlockTargetStateResolver {
         }
         this.applyPatchChain(layout, chain.patchVersions(), positionsByChunk, states);
         return Map.copyOf(states);
+    }
+
+    Map<BlockPoint, StatePayload> resolveOrEmptyWhenBaselineMissing(
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            ProjectVersion targetVersion,
+            List<BlockPoint> positions
+    ) throws IOException {
+        try {
+            return this.resolve(layout, project, versions, targetVersion, positions);
+        } catch (IllegalArgumentException exception) {
+            if (RestoreBaselineRequirementValidator.isMissingBaselineChunks(exception)) {
+                List<BlockPoint> availablePositions = this.positionsWithBaseline(layout, positions);
+                if (availablePositions.isEmpty()) {
+                    return Map.of();
+                }
+                return this.resolve(layout, project, versions, targetVersion, availablePositions);
+            }
+            throw exception;
+        }
+    }
+
+    private List<BlockPoint> positionsWithBaseline(ProjectLayout layout, List<BlockPoint> positions) {
+        if (layout == null || positions == null || positions.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashMap<BlockPoint, BlockPoint> available = new LinkedHashMap<>();
+        for (BlockPoint position : positions) {
+            if (position != null && this.baselineChunkRepository.contains(layout, ChunkPoint.from(position))) {
+                available.putIfAbsent(position, position);
+            }
+        }
+        return List.copyOf(available.values());
     }
 
     private VersionChain versionChain(Map<String, ProjectVersion> versionMap, ProjectVersion targetVersion) {

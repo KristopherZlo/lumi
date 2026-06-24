@@ -5,7 +5,7 @@ import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.StoredBlockChange;
 import java.util.Collection;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 public final class ChunkSelectionFactory {
@@ -14,7 +14,7 @@ public final class ChunkSelectionFactory {
     }
 
     public static List<ChunkPoint> fromBounds(Bounds3i bounds) {
-        LinkedHashMap<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
         int minChunkX = bounds.min().x() >> 4;
         int maxChunkX = bounds.max().x() >> 4;
         int minChunkZ = bounds.min().z() >> 4;
@@ -22,46 +22,39 @@ public final class ChunkSelectionFactory {
 
         for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
             for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
-                ChunkPoint chunk = new ChunkPoint(chunkX, chunkZ);
-                chunks.put(key(chunk), chunk);
+                chunks.add(new ChunkPoint(chunkX, chunkZ));
             }
         }
 
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     public static List<ChunkPoint> fromChanges(Collection<BlockChangeRecord> changes) {
-        LinkedHashMap<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
         for (BlockChangeRecord change : changes) {
-            ChunkPoint chunk = ChunkPoint.from(change.pos());
-            chunks.put(key(chunk), chunk);
+            chunks.add(ChunkPoint.from(change.pos()));
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     public static List<ChunkPoint> fromStoredChanges(Collection<StoredBlockChange> changes) {
-        LinkedHashMap<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
         for (StoredBlockChange change : changes) {
-            ChunkPoint chunk = ChunkPoint.from(change.pos());
-            chunks.put(key(chunk), chunk);
+            chunks.add(ChunkPoint.from(change.pos()));
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     public static List<ChunkPoint> merge(Collection<ChunkPoint> first, Collection<ChunkPoint> second) {
-        LinkedHashMap<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
         addAll(chunks, first);
         addAll(chunks, second);
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
-    private static void addAll(LinkedHashMap<String, ChunkPoint> chunks, Collection<ChunkPoint> source) {
+    private static void addAll(LinkedHashSet<ChunkPoint> chunks, Collection<ChunkPoint> source) {
         for (ChunkPoint chunk : source) {
-            chunks.put(key(chunk), chunk);
+            chunks.add(chunk);
         }
-    }
-
-    private static String key(ChunkPoint chunk) {
-        return chunk.x() + ":" + chunk.z();
     }
 }

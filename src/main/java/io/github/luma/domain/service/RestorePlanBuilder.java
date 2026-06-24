@@ -15,9 +15,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Builds the snapshot, patch, and baseline sources needed for a restore.
@@ -56,7 +57,7 @@ final class RestorePlanBuilder {
                 targetVersion.id(),
                 chain.anchor().id()
         );
-        Map<String, ChunkPoint> restoredChunks = new LinkedHashMap<>();
+        Set<ChunkPoint> restoredChunks = new LinkedHashSet<>();
 
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
             for (var chunk : this.snapshotReader.loadChunks(layout.snapshotFile(chain.anchor().snapshotId()))) {
@@ -121,29 +122,29 @@ final class RestorePlanBuilder {
             ProjectLayout layout,
             BuildProject project,
             RestoreChain chain,
-            Map<String, ChunkPoint> restoredChunks,
+            Set<ChunkPoint> restoredChunks,
             Collection<ChunkPoint> requiredBaselineChunks
     ) throws IOException {
         if (!project.tracksWholeDimension()) {
             return List.of();
         }
         if (chain.anchor().versionKind() == VersionKind.WORLD_ROOT) {
-            Map<String, ChunkPoint> chunks = new LinkedHashMap<>(restoredChunks);
+            Set<ChunkPoint> chunks = new LinkedHashSet<>(restoredChunks);
             for (ChunkPoint chunk : requiredBaselineChunks == null ? List.<ChunkPoint>of() : requiredBaselineChunks) {
                 putChunk(chunks, chunk);
             }
             return this.baselineRequirementValidator.requirePresent(
                     layout,
-                    chunks.values(),
+                    chunks,
                     "world-root restore plan"
             );
         }
-        return this.baselineChunkRepository.listMissingChunks(layout, List.copyOf(restoredChunks.values()));
+        return this.baselineChunkRepository.listMissingChunks(layout, List.copyOf(restoredChunks));
     }
 
-    private static void putChunk(Map<String, ChunkPoint> chunks, ChunkPoint chunk) {
+    private static void putChunk(Set<ChunkPoint> chunks, ChunkPoint chunk) {
         if (chunk != null) {
-            chunks.put(chunk.x() + ":" + chunk.z(), chunk);
+            chunks.add(chunk);
         }
     }
 

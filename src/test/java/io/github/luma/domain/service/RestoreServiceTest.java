@@ -285,6 +285,41 @@ class RestoreServiceTest {
     }
 
     @Test
+    void directForwardRestoreSkipsMechanismTargetStateWhenBaselineChunkIsMissing(@TempDir Path tempDir)
+            throws Throwable {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(new StoredBlockChange(
+                        new BlockPoint(-64, 64, -48),
+                        StatePayload.air(),
+                        new StatePayload(state("minecraft:redstone_wire"), null)
+                )),
+                List.of()
+        ));
+        BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW)
+                .withActiveVariantId("main", NOW);
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion target = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        ProjectVariant activeVariant = new ProjectVariant("main", "main", "v0001", "v0001", true, NOW);
+
+        Optional<List<PreparedChunkBatch>> decoded = invokeTryDecodeDirectRestore(
+                service,
+                layout,
+                project,
+                List.of(root, target),
+                List.of(activeVariant),
+                target
+        );
+
+        assertTrue(decoded.isPresent());
+    }
+
+    @Test
     void targetBlockStatesResolveSnapshotAndPatchChain(@TempDir Path tempDir) throws Exception {
         BlockTargetStateResolver resolver = new BlockTargetStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
@@ -317,6 +352,30 @@ class RestoreServiceTest {
         );
 
         assertEquals("minecraft:air", states.get(pos).blockId());
+    }
+
+    @Test
+    void targetBlockStatesSkipMissingBaselineChunksAndKeepAvailableStates(@TempDir Path tempDir) throws Exception {
+        BlockTargetStateResolver resolver = new BlockTargetStateResolver();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        BlockPoint available = new BlockPoint(1, 64, 1);
+        BlockPoint missing = new BlockPoint(16, 64, 1);
+        this.snapshotWriter.writeFile(
+                new BaselineChunkRepository().filePath(layout, new ChunkPoint(0, 0)),
+                snapshotWithState("minecraft:stone")
+        );
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+
+        var states = resolver.resolveOrEmptyWhenBaselineMissing(
+                layout,
+                project("main"),
+                List.of(root),
+                root,
+                List.of(available, missing)
+        );
+
+        assertEquals("minecraft:stone", states.get(available).blockId());
+        assertFalse(states.containsKey(missing));
     }
 
     @Test
@@ -353,6 +412,38 @@ class RestoreServiceTest {
         );
 
         assertTrue(aligned.changes().isEmpty());
+    }
+
+    @Test
+    void pendingBlockRollbackToDraftBaseSkipsBaselineLookupForWorldRootLineage(@TempDir Path tempDir) throws Exception {
+        BlockTargetStateResolver resolver = new BlockTargetStateResolver();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        BlockPoint pos = new BlockPoint(32, 64, 0);
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "Alex",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                List.of(new StoredBlockChange(
+                        pos,
+                        new StatePayload(state("minecraft:stone"), null),
+                        new StatePayload(state("minecraft:dirt"), null)
+                ))
+        );
+
+        RecoveryDraft aligned = resolver.alignPendingRollbackWithTarget(
+                layout,
+                BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW),
+                List.of(root),
+                root,
+                draft
+        );
+
+        assertEquals("minecraft:stone", aligned.changes().getFirst().oldValue().blockId());
     }
 
     @Test

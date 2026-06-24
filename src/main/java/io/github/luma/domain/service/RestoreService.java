@@ -994,13 +994,14 @@ public final class RestoreService {
                         RestoreMechanismReconciliationPlanner.MAX_MECHANISM_RECONCILIATION_CELLS
                 );
             } else {
-                Map<BlockPoint, StatePayload> targetStates = this.blockTargetStateResolver.resolve(
-                        layout,
-                        project,
-                        versions,
-                        targetVersion,
-                        mechanismPositions.orElseThrow()
-                );
+                Map<BlockPoint, StatePayload> targetStates =
+                        this.blockTargetStateResolver.resolveOrEmptyWhenBaselineMissing(
+                                layout,
+                                project,
+                                versions,
+                                targetVersion,
+                                mechanismPositions.orElseThrow()
+                        );
                 if (!targetStates.isEmpty()) {
                     batches.addAll(this.batchPreparer.prepareTargetStates(
                             level,
@@ -1272,10 +1273,6 @@ public final class RestoreService {
             );
             return analyzed;
         }
-    }
-
-    private static String chunkKey(ChunkPoint chunk) {
-        return chunk.x() + ":" + chunk.z();
     }
 
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {

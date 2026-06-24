@@ -14,10 +14,11 @@ import io.github.luma.storage.repository.PatchMetaRepository;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 final class VersionSnapshotPlanner {
 
@@ -123,7 +124,7 @@ final class VersionSnapshotPlanner {
             return ChunkSelectionFactory.fromBounds(project.bounds());
         }
 
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         this.addChunks(chunks, this.baselineChunkRepository.listChunks(layout));
         for (ProjectVersion version : versions) {
             for (String patchId : version.patchIds()) {
@@ -139,11 +140,11 @@ final class VersionSnapshotPlanner {
 
         if (draft == null || draft.isEmpty()) {
             LumaDebugLog.log(project, "save", "Collected {} snapshot chunks for project {} without working draft", chunks.size(), project.name());
-            return List.copyOf(chunks.values());
+            return List.copyOf(chunks);
         }
 
         this.addChunks(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
-        List<ChunkPoint> merged = List.copyOf(chunks.values());
+        List<ChunkPoint> merged = List.copyOf(chunks);
         LumaDebugLog.log(
                 project,
                 "save",
@@ -194,15 +195,15 @@ final class VersionSnapshotPlanner {
         return fraction >= threshold;
     }
 
-    private void addChunks(Map<String, ChunkPoint> chunks, List<ChunkPoint> source) {
+    private void addChunks(Set<ChunkPoint> chunks, List<ChunkPoint> source) {
         for (ChunkPoint chunk : source == null ? List.<ChunkPoint>of() : source) {
             this.addChunk(chunks, chunk);
         }
     }
 
-    private void addChunk(Map<String, ChunkPoint> chunks, ChunkPoint chunk) {
+    private void addChunk(Set<ChunkPoint> chunks, ChunkPoint chunk) {
         if (chunk != null) {
-            chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
+            chunks.add(chunk);
         }
     }
 }

@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -142,10 +143,10 @@ final class RestoreEntityStateResolver {
             return List.of();
         }
 
-        Map<String, ChunkPoint> selectedChunks = new LinkedHashMap<>();
+        Set<ChunkPoint> selectedChunks = new LinkedHashSet<>();
         for (ChunkPoint chunk : chunks) {
             if (chunk != null) {
-                selectedChunks.put(chunkKey(chunk), chunk);
+                selectedChunks.add(chunk);
             }
         }
         if (selectedChunks.isEmpty()) {
@@ -158,32 +159,31 @@ final class RestoreEntityStateResolver {
                     layout,
                     versions,
                     targetVersion,
-                    selectedChunks.values()
+                    selectedChunks
             );
         } catch (IllegalArgumentException exception) {
             return List.of();
         }
-        Map<String, List<CompoundTag>> entitiesByChunk = new LinkedHashMap<>();
-        for (ChunkPoint chunk : selectedChunks.values()) {
-            entitiesByChunk.put(chunkKey(chunk), new ArrayList<>());
+        Map<ChunkPoint, List<CompoundTag>> entitiesByChunk = new LinkedHashMap<>();
+        for (ChunkPoint chunk : selectedChunks) {
+            entitiesByChunk.put(chunk, new ArrayList<>());
         }
         for (EntityPayload payload : targetStates.values()) {
             if (payload == null || payload.chunk() == null) {
                 continue;
             }
-            String chunkKey = chunkKey(payload.chunk());
-            List<CompoundTag> entities = entitiesByChunk.get(chunkKey);
+            List<CompoundTag> entities = entitiesByChunk.get(payload.chunk());
             if (entities != null) {
                 entities.add(payload.copyTag());
             }
         }
 
         List<PreparedChunkBatch> batches = new ArrayList<>();
-        for (ChunkPoint chunk : selectedChunks.values()) {
+        for (ChunkPoint chunk : selectedChunks) {
             batches.add(new PreparedChunkBatch(
                     chunk,
                     List.of(),
-                    EntityBatch.replacePlacedEntities(entitiesByChunk.getOrDefault(chunkKey(chunk), List.of()))
+                    EntityBatch.replacePlacedEntities(entitiesByChunk.getOrDefault(chunk, List.of()))
             ));
         }
         return batches;
@@ -255,20 +255,19 @@ final class RestoreEntityStateResolver {
     }
 
     private List<ChunkPoint> entityTargetCandidateChunks(List<StoredEntityChange> changes) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         for (StoredEntityChange change : changes == null ? List.<StoredEntityChange>of() : changes) {
             this.addPayloadChunk(chunks, change.oldValue());
             this.addPayloadChunk(chunks, change.newValue());
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
-    private void addPayloadChunk(Map<String, ChunkPoint> chunks, EntityPayload payload) {
+    private void addPayloadChunk(Set<ChunkPoint> chunks, EntityPayload payload) {
         if (payload == null || payload.chunk() == null) {
             return;
         }
-        ChunkPoint chunk = payload.chunk();
-        chunks.putIfAbsent(chunkKey(chunk), chunk);
+        chunks.add(payload.chunk());
     }
 
     private Map<String, EntityPayload> targetEntityStatesForChunks(
@@ -281,25 +280,24 @@ final class RestoreEntityStateResolver {
             return Map.of();
         }
 
-        Map<String, ChunkPoint> selected = new LinkedHashMap<>();
+        Set<ChunkPoint> selected = new LinkedHashSet<>();
         for (ChunkPoint chunk : selectedChunks) {
             if (chunk != null) {
-                selected.put(chunkKey(chunk), chunk);
+                selected.add(chunk);
             }
         }
         if (selected.isEmpty()) {
             return Map.of();
         }
-        Set<String> selectedChunkKeys = selected.keySet();
 
         RestoreChain chain = this.restorePlanBuilder.resolveChain(versions, targetVersion);
         Map<String, EntityPayload> states = new LinkedHashMap<>();
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
             for (var chunk : this.snapshotReader.readFile(
                     layout.snapshotFile(chain.anchor().snapshotId()),
-                    selected.values()
+                    selected
             ).chunks()) {
-                if (!selectedChunkKeys.contains(chunkKey(chunk.chunkX(), chunk.chunkZ()))) {
+                if (!selected.contains(new ChunkPoint(chunk.chunkX(), chunk.chunkZ()))) {
                     continue;
                 }
                 for (EntityPayload entity : chunk.entitySnapshots()) {
@@ -308,7 +306,7 @@ final class RestoreEntityStateResolver {
             }
         }
         for (ProjectVersion version : chain.patchVersions()) {
-            for (StoredEntityChange change : this.payloadLoader.loadVersionEntityChangesForChunks(layout, version, selected.values())) {
+            for (StoredEntityChange change : this.payloadLoader.loadVersionEntityChangesForChunks(layout, version, selected)) {
                 if (change.newValue() == null) {
                     states.remove(change.entityId());
                 } else {
@@ -317,13 +315,5 @@ final class RestoreEntityStateResolver {
             }
         }
         return states;
-    }
-
-    private static String chunkKey(ChunkPoint chunk) {
-        return chunkKey(chunk.x(), chunk.z());
-    }
-
-    private static String chunkKey(int chunkX, int chunkZ) {
-        return chunkX + ":" + chunkZ;
     }
 }

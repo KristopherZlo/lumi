@@ -7,6 +7,7 @@ import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchStats;
 import io.github.luma.domain.model.PatchChunkSlice;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.StoredBlockChange;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,13 +23,13 @@ public final class ChangeStatsFactory {
 
     public static ChangeStats summarize(List<StoredBlockChange> changes) {
         Map<String, Boolean> blockTypes = new LinkedHashMap<>();
-        Map<String, Integer> chunkCounters = new LinkedHashMap<>();
+        Map<ChunkPoint, Integer> chunkCounters = new LinkedHashMap<>();
 
         for (StoredBlockChange change : changes) {
             if (!BUILDER_SURFACE.includes(change)) {
                 continue;
             }
-            chunkCounters.merge(chunkKey(change), 1, Integer::sum);
+            chunkCounters.merge(ChunkPoint.from(change.pos()), 1, Integer::sum);
             blockTypes.put(change.newValue().blockId(), Boolean.TRUE);
         }
 
@@ -62,18 +63,18 @@ public final class ChangeStatsFactory {
     }
 
     public static List<ChunkDelta> chunkDeltas(List<StoredBlockChange> changes) {
-        Map<String, Integer> chunkCounters = new LinkedHashMap<>();
+        Map<ChunkPoint, Integer> chunkCounters = new LinkedHashMap<>();
         for (StoredBlockChange change : changes) {
             if (!BUILDER_SURFACE.includes(change)) {
                 continue;
             }
-            chunkCounters.merge(chunkKey(change), 1, Integer::sum);
+            chunkCounters.merge(ChunkPoint.from(change.pos()), 1, Integer::sum);
         }
 
         List<ChunkDelta> chunkDeltas = new ArrayList<>();
-        for (Map.Entry<String, Integer> entry : chunkCounters.entrySet()) {
-            String[] split = entry.getKey().split(":");
-            chunkDeltas.add(new ChunkDelta(Integer.parseInt(split[0]), Integer.parseInt(split[1]), entry.getValue()));
+        for (Map.Entry<ChunkPoint, Integer> entry : chunkCounters.entrySet()) {
+            ChunkPoint chunk = entry.getKey();
+            chunkDeltas.add(new ChunkDelta(chunk.x(), chunk.z(), entry.getValue()));
         }
 
         return chunkDeltas;
@@ -100,10 +101,6 @@ public final class ChangeStatsFactory {
         }
 
         return new PendingChangeSummary(added, removed, changed);
-    }
-
-    private static String chunkKey(StoredBlockChange change) {
-        return (change.pos().x() >> 4) + ":" + (change.pos().z() >> 4);
     }
 
     private static boolean isAir(String state) {
