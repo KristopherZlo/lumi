@@ -116,11 +116,8 @@ public final class SaveDetailsScreen extends LumaScreen {
         FlowLayout frame = LumaUi.screenFrame();
         stack.child(frame);
 
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        frame.child(header);
-
         if (version == null) {
+            frame.child(LumaUi.closeHeader(Component.translatable("luma.screen.save_details.title", this.projectName), button -> this.onClose()));
             frame.child(LumaUi.emptyState(
                     Component.translatable("luma.save_details.empty_title"),
                     Component.translatable("luma.preview.no_version")
@@ -128,10 +125,10 @@ public final class SaveDetailsScreen extends LumaScreen {
             return;
         }
 
-        frame.child(LumaUi.value(Component.translatable(
+        frame.child(LumaUi.closeHeader(Component.translatable(
                 "luma.screen.save_details.title",
                 ProjectUiSupport.displayMessage(version)
-        )));
+        ), button -> this.onClose()));
         if (this.shouldShowStatusBanner()) {
             frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
         }

@@ -102,8 +102,8 @@ public final class WorkZoneScreen extends LumaScreen {
         WorkZone focused = this.focusedZone();
         if (focused != null && !this.zonePickerVisible) {
             boolean active = focused.id().equals(this.state.zones().activeZoneId(this.state.actor()));
+            this.addZoneTitleActions(window, active);
             body.child(this.zoneDetailSection(focused, active));
-            body.child(this.detailActions(active));
             body.child(this.saveZoneSection(focused, active));
             body.child(this.zoneHistorySection(focused));
             body.child(LumaUi.bottomSpacer());
@@ -208,16 +208,14 @@ public final class WorkZoneScreen extends LumaScreen {
         return section;
     }
 
-    private FlowLayout detailActions(boolean active) {
-        FlowLayout actions = LumaUi.actionRow();
+    private void addZoneTitleActions(ProjectWindowLayout window, boolean active) {
         if (active) {
-            actions.child(LumaUi.button(Component.translatable("luma.zones.leave"), button -> this.selectZone("")));
+            window.titleBar().child(LumaUi.button(Component.translatable("luma.zones.leave"), button -> this.selectZone("")));
         }
-        actions.child(LumaUi.button(Component.translatable("luma.action.back"), button -> {
+        window.titleBar().child(LumaUi.button(Component.translatable("luma.action.back"), button -> {
             this.zonePickerVisible = true;
             this.rebuild();
         }));
-        return actions;
     }
 
     private FlowLayout saveZoneSection(WorkZone zone, boolean active) {
@@ -269,15 +267,17 @@ public final class WorkZoneScreen extends LumaScreen {
     }
 
     private FlowLayout zoneHistoryViewToggle() {
-        FlowLayout row = LumaUi.actionRow();
-        ButtonComponent cards = LumaUi.button(Component.translatable("luma.history.view_cards"), button -> {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(4);
+        row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
+        ButtonComponent cards = LumaUi.iconButton("folder-open", Component.translatable("luma.history.view_cards"), button -> {
             this.zoneHistoryGraphVisible = false;
             this.rebuild();
         });
         cards.active(this.zoneHistoryGraphVisible);
         row.child(cards);
 
-        ButtonComponent graph = LumaUi.button(Component.translatable("luma.history.view_graph"), button -> {
+        ButtonComponent graph = LumaUi.iconButton("git-branch", Component.translatable("luma.history.view_graph"), button -> {
             this.zoneHistoryGraphVisible = true;
             this.rebuild();
         });
@@ -301,7 +301,9 @@ public final class WorkZoneScreen extends LumaScreen {
         graph.child(new CommitGraphComponent(
                 nodes,
                 this.state.variants(),
-                versionId -> this.router.openSaveDetails(this, this.effectiveProjectName(), versionId)
+                versionId -> this.router.openSaveDetails(this, this.effectiveProjectName(), versionId),
+                this.effectiveProjectName(),
+                version -> this.projectController.resolvePreviewPath(this.effectiveProjectName(), version.id())
         ));
         return graph;
     }

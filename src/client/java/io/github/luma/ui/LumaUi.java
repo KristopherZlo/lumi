@@ -103,6 +103,15 @@ public final class LumaUi {
         return titleBar;
     }
 
+    public static FlowLayout closeHeader(Component title, Consumer<ButtonComponent> onClose) {
+        FlowLayout header = titleBar();
+        FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        titleColumn.child(value(title));
+        header.child(titleColumn);
+        header.child(closeButton(onClose));
+        return header;
+    }
+
     public static FlowLayout screenBody() {
         FlowLayout layout = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
         layout.padding(Insets.bottom(10));
@@ -328,6 +337,10 @@ public final class LumaUi {
         button.tooltip(tooltip);
         button.renderer(new IconButtonRenderer(icon, disabledIcon, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED));
         return button;
+    }
+
+    public static ButtonComponent closeButton(Consumer<ButtonComponent> onPress) {
+        return iconButton("missing-close", Component.translatable("luma.action.close"), onPress);
     }
 
     private static ButtonComponent styledButton(

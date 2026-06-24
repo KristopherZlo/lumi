@@ -78,11 +78,7 @@ public final class SaveScreen extends LumaScreen {
         FlowLayout frame = LumaUi.screenFrame();
         root.child(frame);
 
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        frame.child(header);
-
-        frame.child(LumaUi.value(Component.translatable("luma.screen.save.title")));
+        frame.child(LumaUi.closeHeader(Component.translatable("luma.screen.save.title"), button -> this.onClose()));
         if (this.shouldShowStatusBanner()) {
             frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
         }

@@ -17,6 +17,7 @@
   "luma.common.unavailable": "Unavailable",
 
   "luma.action.back": "Back",
+  "luma.action.close": "Close",
   "luma.action.next": "Next",
   "luma.action.refresh": "Refresh",
   "luma.action.more": "More",

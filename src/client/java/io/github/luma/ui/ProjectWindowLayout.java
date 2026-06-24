@@ -72,4 +72,8 @@ public final class ProjectWindowLayout {
     public FlowLayout content() {
         return this.content;
     }
+
+    public FlowLayout titleBar() {
+        return this.titleBar;
+    }
 }

@@ -46,11 +46,7 @@ public final class DiagnosticsScreen extends LumaScreen {
         FlowLayout frame = LumaUi.screenFrame();
         root.child(frame);
 
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        frame.child(header);
-
-        frame.child(LumaUi.value(Component.translatable("luma.screen.diagnostics.title")));
+        frame.child(LumaUi.closeHeader(Component.translatable("luma.screen.diagnostics.title"), button -> this.onClose()));
         frame.child(LumaUi.caption(Component.translatable("luma.diagnostics.help")));
 
         FlowLayout body = LumaUi.screenBody();

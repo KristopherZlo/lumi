@@ -11,8 +11,10 @@ import io.github.luma.ui.preview.LoadingAnimationComponent;
 import io.github.luma.ui.preview.ProjectPreviewTextureCache;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.nio.file.Files;
@@ -190,7 +192,8 @@ public final class ProjectUiSupport {
     }
 
     private static FlowLayout previewPlaceholder(int width, int height, boolean loading) {
-        FlowLayout placeholder = LumaUi.insetPanel(Sizing.fixed(width), Sizing.fixed(height));
+        FlowLayout placeholder = UIContainers.verticalFlow(Sizing.fixed(width), Sizing.fixed(height));
+        placeholder.surface(Surface.flat(0xEA101113));
         placeholder.horizontalAlignment(HorizontalAlignment.CENTER);
         placeholder.verticalAlignment(VerticalAlignment.CENTER);
         if (loading) {

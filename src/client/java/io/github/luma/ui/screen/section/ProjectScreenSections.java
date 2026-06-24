@@ -207,15 +207,19 @@ public final class ProjectScreenSections {
     }
 
     private FlowLayout historyViewToggle(Model model) {
-        FlowLayout row = LumaUi.actionRow();
-        ButtonComponent cards = LumaUi.button(
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(4);
+        row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
+        ButtonComponent cards = LumaUi.iconButton(
+                "folder-open",
                 Component.translatable("luma.history.view_cards"),
                 button -> this.actions.setHistoryGraphVisible(false)
         );
         cards.active(model.historyGraphVisible());
         row.child(cards);
 
-        ButtonComponent graph = LumaUi.button(
+        ButtonComponent graph = LumaUi.iconButton(
+                "git-branch",
                 Component.translatable("luma.history.view_graph"),
                 button -> this.actions.setHistoryGraphVisible(true)
         );
@@ -243,7 +247,9 @@ public final class ProjectScreenSections {
         graph.child(new CommitGraphComponent(
                 nodes,
                 model.state().variants(),
-                versionId -> this.actions.openSaveDetails(versionId)
+                versionId -> this.actions.openSaveDetails(versionId),
+                model.projectName(),
+                version -> this.previewController.resolvePreviewPath(model.projectName(), version.id())
         ));
         return graph;
     }

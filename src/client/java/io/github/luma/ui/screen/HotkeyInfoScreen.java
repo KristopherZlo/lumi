@@ -77,16 +77,14 @@ public final class HotkeyInfoScreen extends LumaScreen {
     }
 
     private FlowLayout header(int contentWidth) {
-        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        header.verticalAlignment(VerticalAlignment.CENTER);
-        header.gap(5);
+        FlowLayout header = LumaUi.titleBar();
 
         FlowLayout text = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
         text.gap(2);
         text.child(LumaUi.value(Component.translatable("luma.hotkeys.title")).maxWidth(Math.max(1, contentWidth - 68)));
         text.child(LumaUi.caption(Component.translatable("luma.hotkeys.help")).maxWidth(Math.max(1, contentWidth - 68)));
         header.child(text);
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        header.child(LumaUi.closeButton(button -> this.onClose()));
         return header;
     }
 

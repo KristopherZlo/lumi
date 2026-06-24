@@ -56,11 +56,7 @@ public final class CreateProjectScreen extends LumaScreen {
         FlowLayout frame = LumaUi.screenFrame();
         root.child(frame);
 
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        frame.child(header);
-
-        frame.child(LumaUi.value(Component.translatable("luma.screen.create_project.title")));
+        frame.child(LumaUi.closeHeader(Component.translatable("luma.screen.create_project.title"), button -> this.onClose()));
         frame.child(LumaUi.statusBanner(Component.translatable(this.status)));
 
         frame.child(LumaUi.caption(Component.translatable("luma.create_project.name")));

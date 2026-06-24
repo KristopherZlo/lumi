@@ -3,11 +3,14 @@ package io.github.luma.ui.graph;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.preview.ProjectPreviewTextureCache;
 import io.wispforest.owo.ui.base.BaseUIComponent;
 import io.wispforest.owo.ui.core.Color;
 import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -15,9 +18,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 public final class CommitGraphComponent extends BaseUIComponent {
@@ -41,7 +47,9 @@ public final class CommitGraphComponent extends BaseUIComponent {
     private static final int HOVER_CARD_FILL = 0xF2091018;
     private static final int HOVER_CARD_BORDER = 0xCC6C7A89;
     private static final int HOVER_CARD_WIDTH = 186;
-    private static final int HOVER_CARD_HEIGHT = 52;
+    private static final int HOVER_CARD_HEIGHT = 72;
+    private static final int HOVER_PREVIEW_WIDTH = 54;
+    private static final int HOVER_PREVIEW_HEIGHT = 40;
 
     private final List<CommitGraphNode> nodes;
     private final Map<String, ProjectVariant> variantById;
@@ -49,15 +57,27 @@ public final class CommitGraphComponent extends BaseUIComponent {
     private final int laneCount;
     private final int preferredHeight;
     private final Consumer<String> openVersionDetails;
+    private final String projectName;
+    private final Function<ProjectVersion, String> previewPathResolver;
 
     public CommitGraphComponent(List<CommitGraphNode> nodes, List<ProjectVariant> variants) {
-        this(nodes, variants, null);
+        this(nodes, variants, null, "", null);
     }
 
     public CommitGraphComponent(
             List<CommitGraphNode> nodes,
             List<ProjectVariant> variants,
             Consumer<String> openVersionDetails
+    ) {
+        this(nodes, variants, openVersionDetails, "", null);
+    }
+
+    public CommitGraphComponent(
+            List<CommitGraphNode> nodes,
+            List<ProjectVariant> variants,
+            Consumer<String> openVersionDetails,
+            String projectName,
+            Function<ProjectVersion, String> previewPathResolver
     ) {
         this.nodes = nodes == null ? List.of() : List.copyOf(nodes);
         this.variantById = this.indexVariants(variants);
@@ -68,6 +88,8 @@ public final class CommitGraphComponent extends BaseUIComponent {
                 .orElse(1);
         this.preferredHeight = CommitGraphGeometry.preferredHeight(this.nodes.size(), !this.headVariantsByLane.isEmpty());
         this.openVersionDetails = openVersionDetails;
+        this.projectName = projectName == null ? "" : projectName;
+        this.previewPathResolver = previewPathResolver;
         this.sizing(Sizing.fill(100), Sizing.fixed(this.preferredHeight));
     }
 
@@ -218,19 +240,13 @@ public final class CommitGraphComponent extends BaseUIComponent {
     }
 
     private void drawNode(OwoUIGraphics graphics, int x, int y, int laneColor, boolean activeHead, boolean hovered) {
-        graphics.drawCircle(x, y, 24, activeHead || hovered ? 6.8D : 5.0D, Color.ofArgb(0xFF091018));
+        int outer = activeHead || hovered ? 11 : 9;
+        int inner = activeHead || hovered ? 7 : 5;
+        graphics.fill(x - outer / 2, y - outer / 2, x + outer / 2 + 1, y + outer / 2 + 1, 0xFF091018);
         if (activeHead || hovered) {
-            graphics.drawRing(
-                    x,
-                    y,
-                    24,
-                    hovered ? 5.2D : 5.0D,
-                    activeHead ? 7.2D : 6.8D,
-                    Color.ofArgb(laneColor),
-                    Color.ofArgb(hovered ? 0xFFFFFFFF : 0xFFEAF5FF)
-            );
+            graphics.drawRectOutline(x - outer / 2, y - outer / 2, outer + 1, outer + 1, hovered ? 0xFFFFFFFF : 0xFFEAF5FF);
         }
-        graphics.drawCircle(x, y, 24, activeHead ? 4.0D : 3.8D, Color.ofArgb(laneColor));
+        graphics.fill(x - inner / 2, y - inner / 2, x + inner / 2 + 1, y + inner / 2 + 1, laneColor);
     }
 
     private void drawHoverCard(OwoUIGraphics graphics, Font font, CommitGraphNode node, int mouseX, int mouseY) {
@@ -253,13 +269,32 @@ public final class CommitGraphComponent extends BaseUIComponent {
         }
 
         ProjectVersion version = node.version();
-        int textWidth = cardWidth - 12;
+        Optional<HoverPreview> preview = this.hoverPreview(version);
+        int textX = preview.isPresent() ? cardX + HOVER_PREVIEW_WIDTH + 12 : cardX + 6;
+        int textWidth = cardX + cardWidth - textX - 6;
         graphics.fill(cardX, cardY, cardX + cardWidth, cardY + HOVER_CARD_HEIGHT, HOVER_CARD_FILL);
         graphics.drawRectOutline(cardX, cardY, cardWidth, HOVER_CARD_HEIGHT, HOVER_CARD_BORDER);
+        if (preview.isPresent()) {
+            HoverPreview image = preview.get();
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    image.textureId(),
+                    cardX + 6,
+                    cardY + 6,
+                    0,
+                    0,
+                    HOVER_PREVIEW_WIDTH,
+                    HOVER_PREVIEW_HEIGHT,
+                    image.width(),
+                    image.height(),
+                    image.width(),
+                    image.height()
+            );
+        }
         graphics.drawString(
                 font,
                 this.trim(font, ProjectUiSupport.displayMessage(version), textWidth),
-                cardX + 6,
+                textX,
                 cardY + 6,
                 TEXT_PRIMARY,
                 false
@@ -267,7 +302,7 @@ public final class CommitGraphComponent extends BaseUIComponent {
         graphics.drawString(
                 font,
                 this.trim(font, ProjectUiSupport.safeText(version.author()) + " | " + ProjectUiSupport.formatTimestamp(version.createdAt()), textWidth),
-                cardX + 6,
+                textX,
                 cardY + 20,
                 TEXT_MUTED,
                 false
@@ -275,11 +310,36 @@ public final class CommitGraphComponent extends BaseUIComponent {
         graphics.drawString(
                 font,
                 this.trim(font, version.stats().changedBlocks() + " changed blocks", textWidth),
-                cardX + 6,
+                textX,
                 cardY + 34,
                 TEXT_MUTED,
                 false
         );
+    }
+
+    private Optional<HoverPreview> hoverPreview(ProjectVersion version) {
+        if (version == null
+                || version.preview() == null
+                || version.preview().width() <= 0
+                || version.preview().height() <= 0
+                || this.previewPathResolver == null
+                || this.projectName.isBlank()) {
+            return Optional.empty();
+        }
+        String rawPath = this.previewPathResolver.apply(version);
+        if (rawPath == null || rawPath.isBlank()) {
+            return Optional.empty();
+        }
+        Path path = Path.of(rawPath);
+        if (!Files.exists(path)) {
+            return Optional.empty();
+        }
+        try {
+            Identifier textureId = ProjectPreviewTextureCache.load(this.projectName, version.id(), path);
+            return Optional.of(new HoverPreview(textureId, version.preview().width(), version.preview().height()));
+        } catch (Exception ignored) {
+            return Optional.empty();
+        }
     }
 
     private int drawBadge(OwoUIGraphics graphics, Font font, String rawLabel, int x, int y, int color, int rightX) {
@@ -354,5 +414,8 @@ public final class CommitGraphComponent extends BaseUIComponent {
                 !this.headVariantsByLane.isEmpty(),
                 this.nodes
         );
+    }
+
+    private record HoverPreview(Identifier textureId, int width, int height) {
     }
 }
