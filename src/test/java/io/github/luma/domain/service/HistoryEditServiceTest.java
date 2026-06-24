@@ -58,6 +58,20 @@ class HistoryEditServiceTest {
     }
 
     @Test
+    void updateVersionTagsStoresNormalizedTagsInSourceMetadata() throws Exception {
+        ProjectLayout layout = this.seedProject();
+        HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
+        });
+
+        ProjectVersion tagged = service.updateVersionTags(null, "Tower", "v0002", List.of(" Roof ", "#Interior", "roof"));
+
+        assertEquals(List.of("roof", "interior"), io.github.luma.domain.model.ProjectVersionTags.from(tagged));
+        ProjectVersion stored = new VersionRepository().load(layout, "v0002").orElseThrow();
+        assertEquals(List.of("roof", "interior"), io.github.luma.domain.model.ProjectVersionTags.from(stored));
+        assertEquals("v0001", stored.parentVersionId());
+    }
+
+    @Test
     void deleteHeadVersionMovesBranchToParentAndTombstonesVersion() throws Exception {
         ProjectLayout layout = this.seedProject();
         HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {

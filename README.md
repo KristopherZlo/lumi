@@ -27,6 +27,7 @@ Status: alpha. Keep normal world backups.
 
 - Tracks a dimension or selected build area as a project.
 - Saves named versions with change stats and restore data.
+- Lets saves carry searchable tags.
 - Compares versions, branches, and the current world.
 - Shows changed blocks with an in-world overlay.
 - Restores a full version, only a selected area, or everything except a selected area.

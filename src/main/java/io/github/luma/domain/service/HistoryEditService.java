@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.HistoryTombstones;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
@@ -86,6 +87,34 @@ public final class HistoryEditService {
         ));
         this.projectCacheInvalidator.invalidate(server, project.id().toString());
         return renamed;
+    }
+
+    public ProjectVersion updateVersionTags(
+            MinecraftServer server,
+            String projectName,
+            String versionId,
+            List<String> tags
+    ) throws IOException {
+        ProjectLayout layout = this.layoutResolver.resolveLayout(server, projectName);
+        BuildProject project = this.loadProject(layout, projectName);
+        HistoryTombstones tombstones = this.tombstoneRepository.load(layout);
+        ProjectVersion version = this.versionRepository.load(layout, versionId)
+                .filter(candidate -> !tombstones.versionDeleted(candidate.id()))
+                .orElseThrow(() -> new IllegalArgumentException("Version not found: " + versionId));
+
+        ProjectVersion tagged = ProjectVersionTags.withTags(version, tags);
+        Instant now = Instant.now();
+        this.versionRepository.save(layout, tagged);
+        this.projectRepository.save(layout, project.withUpdatedAt(now).withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION));
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                now,
+                "version-tags-updated",
+                "Updated tags for save " + version.id(),
+                version.id(),
+                version.variantId()
+        ));
+        this.projectCacheInvalidator.invalidate(server, project.id().toString());
+        return tagged;
     }
 
     public void deleteVersion(MinecraftServer server, String projectName, String versionId) throws IOException {
