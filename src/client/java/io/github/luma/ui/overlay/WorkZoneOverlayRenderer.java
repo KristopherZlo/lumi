@@ -1,14 +1,14 @@
 package io.github.luma.ui.overlay;
 
 import io.github.luma.domain.model.BlockPoint;
-import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorkZoneSnapshot;
 import io.github.luma.domain.model.WorkZoneState;
+import io.github.luma.domain.model.WorkZoneShellFace;
 import io.github.luma.domain.service.ProjectService;
-import io.github.luma.domain.service.WorkZoneBoundsMerger;
+import io.github.luma.domain.service.WorkZoneShellPlanner;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.network.WorkZoneClientNetworking;
 import io.github.luma.ui.ActionBarMessagePresenter;
@@ -23,12 +23,13 @@ public final class WorkZoneOverlayRenderer {
 
     private static final ProjectService PROJECT_SERVICE = new ProjectService();
     private static final WorkZoneService WORK_ZONE_SERVICE = new WorkZoneService();
-    private static final WorkZoneBoundsMerger BOUNDS_MERGER = new WorkZoneBoundsMerger();
-    private static final int REFRESH_TICKS = 10;
+    private static final WorkZoneShellPlanner SHELL_PLANNER = new WorkZoneShellPlanner();
+    private static final int REFRESH_TICKS = 1;
     private static final int FILL_ALPHA = 30;
     private static final float OUTLINE_WIDTH = 2.0F;
     private static final float OUTSET = 0.01F;
     private static State activeState;
+    private static ShellState cachedShell;
     private static MeshState cachedMesh;
     private static String lastEnteredZoneId = "";
     private static int refreshCooldown;
@@ -59,7 +60,7 @@ public final class WorkZoneOverlayRenderer {
 
     public static void render(WorldRenderContext context) {
         State state = activeState;
-        if (context == null || context.matrices() == null || state == null || state.boxes().isEmpty()) {
+        if (context == null || context.matrices() == null || state == null || state.faces().isEmpty()) {
             clearCachedMesh();
             return;
         }
@@ -107,9 +108,10 @@ public final class WorkZoneOverlayRenderer {
                 .findFirst()
                 .orElse(null);
         WorkZone enteredZone = enteredZone(zones.zones(), activeZone, playerCell);
+        WorkZone renderedZone = activeZone == null ? enteredZone : activeZone;
         return new State(
-                activeZone == null ? List.of() : renderBoxes(activeZone, playerCell),
-                activeZone == null ? 0 : activeZone.color(),
+                renderedZone == null ? List.of() : renderFaces(renderedZone, playerCell),
+                renderedZone == null ? 0 : renderedZone.color(),
                 enteredZone == null ? "" : enteredZone.id(),
                 enteredZone == null ? "" : enteredZone.name()
         );
@@ -125,11 +127,15 @@ public final class WorkZoneOverlayRenderer {
                 .orElse(null);
     }
 
-    private static List<Bounds3i> renderBoxes(WorkZone zone, WorkZoneCell playerCell) {
-        if (zone.cells().isEmpty()) {
-            return BOUNDS_MERGER.merge(List.of(playerCell));
+    private static List<WorkZoneShellFace> renderFaces(WorkZone zone, WorkZoneCell playerCell) {
+        ShellKey key = ShellKey.from(zone, playerCell);
+        ShellState current = cachedShell;
+        if (current != null && current.key().equals(key)) {
+            return current.faces();
         }
-        return BOUNDS_MERGER.merge(zone.cells());
+        List<WorkZoneShellFace> faces = SHELL_PLANNER.plan(zone.cells().isEmpty() ? List.of(playerCell) : zone.cells());
+        cachedShell = new ShellState(key, faces);
+        return faces;
     }
 
     private static MeshState mesh(State state) {
@@ -143,25 +149,19 @@ public final class WorkZoneOverlayRenderer {
         int blue = state.color() & 0xFF;
         int outlineColor = 0xFF000000 | state.color();
         OverlayMeshBatch.Builder builder = OverlayMeshBatch.builder();
-        for (Bounds3i box : state.boxes()) {
-            builder.addBox(
-                    box.min().x(),
-                    box.min().y(),
-                    box.min().z(),
-                    box.max().x() + 1,
-                    box.max().y() + 1,
-                    box.max().z() + 1,
+        for (WorkZoneShellFace face : state.faces()) {
+            builder.addShellFace(
+                    face,
                     red,
                     green,
                     blue,
                     FILL_ALPHA,
                     outlineColor,
                     OUTLINE_WIDTH,
-                    OUTSET,
                     OUTSET
             );
         }
-        cachedMesh = new MeshState(state.boxes(), state.color(), builder.build());
+        cachedMesh = new MeshState(state.faces(), state.color(), builder.build());
         return cachedMesh;
     }
 
@@ -169,6 +169,7 @@ public final class WorkZoneOverlayRenderer {
         activeState = null;
         lastEnteredZoneId = "";
         refreshCooldown = 0;
+        cachedShell = null;
         clearCachedMesh();
     }
 
@@ -184,19 +185,39 @@ public final class WorkZoneOverlayRenderer {
         return client == null || client.options == null ? 8 : client.options.getEffectiveRenderDistance();
     }
 
-    private record State(List<Bounds3i> boxes, int color, String enteredZoneId, String enteredZoneName) {
+    private record State(List<WorkZoneShellFace> faces, int color, String enteredZoneId, String enteredZoneName) {
 
         private State {
-            boxes = boxes == null ? List.of() : List.copyOf(boxes);
+            faces = faces == null ? List.of() : List.copyOf(faces);
             enteredZoneId = enteredZoneId == null ? "" : enteredZoneId;
             enteredZoneName = enteredZoneName == null ? "" : enteredZoneName;
         }
     }
 
-    private record MeshState(List<Bounds3i> boxes, int color, OverlayMeshBatch batch) {
+    private record ShellKey(String zoneId, int cellCount, String updatedAt, WorkZoneCell previewCell) {
+
+        private static ShellKey from(WorkZone zone, WorkZoneCell playerCell) {
+            WorkZoneCell preview = zone.cells().isEmpty() ? playerCell : null;
+            return new ShellKey(
+                    zone.id(),
+                    zone.cells().size(),
+                    zone.updatedAt().toString(),
+                    preview
+            );
+        }
+    }
+
+    private record ShellState(ShellKey key, List<WorkZoneShellFace> faces) {
+
+        private ShellState {
+            faces = faces == null ? List.of() : List.copyOf(faces);
+        }
+    }
+
+    private record MeshState(List<WorkZoneShellFace> faces, int color, OverlayMeshBatch batch) {
 
         private boolean matches(State state) {
-            return this.color == state.color() && this.boxes.equals(state.boxes());
+            return this.color == state.color() && this.faces.equals(state.faces());
         }
     }
 }

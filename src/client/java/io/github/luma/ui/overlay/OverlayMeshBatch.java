@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.luma.domain.model.WorkZoneShellFace;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -315,6 +316,33 @@ final class OverlayMeshBatch implements AutoCloseable {
             ));
         }
 
+        void addShellFace(
+                WorkZoneShellFace face,
+                int red,
+                int green,
+                int blue,
+                int fillAlpha,
+                int outlineArgb,
+                float outlineWidth,
+                float outset
+        ) {
+            ShellFacePrimitive primitive = new ShellFacePrimitive(
+                    face,
+                    red,
+                    green,
+                    blue,
+                    fillAlpha,
+                    outlineArgb,
+                    outlineWidth,
+                    outset
+            );
+            this.add(SectionKey.fromBlock(
+                    (int) Math.floor(primitive.bounds.minX()),
+                    (int) Math.floor(primitive.bounds.minY()),
+                    (int) Math.floor(primitive.bounds.minZ())
+            ), primitive);
+        }
+
         OverlayMeshBatch build() {
             if (this.sections.isEmpty()) {
                 return EMPTY;
@@ -533,6 +561,131 @@ final class OverlayMeshBatch implements AutoCloseable {
         }
     }
 
+    private static final class ShellFacePrimitive implements OverlayPrimitive {
+
+        private final WorkZoneShellFace face;
+        private final int red;
+        private final int green;
+        private final int blue;
+        private final int fillAlpha;
+        private final int outlineArgb;
+        private final float outlineWidth;
+        private final float outset;
+        private final OverlayBounds bounds;
+
+        private ShellFacePrimitive(
+                WorkZoneShellFace face,
+                int red,
+                int green,
+                int blue,
+                int fillAlpha,
+                int outlineArgb,
+                float outlineWidth,
+                float outset
+        ) {
+            this.face = face;
+            this.red = red;
+            this.green = green;
+            this.blue = blue;
+            this.fillAlpha = fillAlpha;
+            this.outlineArgb = outlineArgb;
+            this.outlineWidth = outlineWidth;
+            this.outset = outset;
+            this.bounds = this.bounds(face, outset);
+        }
+
+        @Override
+        public OverlayBounds bounds() {
+            return this.bounds;
+        }
+
+        @Override
+        public void emitFill(PoseStack matrices, VertexConsumer consumer, int originX, int originY, int originZ) {
+            OverlayFaceRenderer.renderFace(
+                    matrices,
+                    consumer,
+                    this.face.side(),
+                    this.face.plane() - this.axisOffset(originX, originY, originZ),
+                    this.face.minA() - this.minAOffset(originX, originY, originZ),
+                    this.face.maxA() - this.minAOffset(originX, originY, originZ),
+                    this.face.minB() - this.minBOffset(originX, originY, originZ),
+                    this.face.maxB() - this.minBOffset(originX, originY, originZ),
+                    this.red,
+                    this.green,
+                    this.blue,
+                    this.fillAlpha
+            );
+        }
+
+        @Override
+        public void emitOutline(PoseStack matrices, VertexConsumer consumer, int originX, int originY, int originZ) {
+            OverlayBounds local = this.bounds.translate(-originX, -originY, -originZ);
+            renderOutline(
+                    matrices,
+                    consumer,
+                    local.minX(),
+                    local.minY(),
+                    local.minZ(),
+                    local.maxX() - local.minX(),
+                    local.maxY() - local.minY(),
+                    local.maxZ() - local.minZ(),
+                    this.outlineArgb,
+                    this.outlineWidth
+            );
+        }
+
+        private int axisOffset(int originX, int originY, int originZ) {
+            return switch (this.face.side()) {
+                case WEST, EAST -> originX;
+                case DOWN, UP -> originY;
+                case NORTH, SOUTH -> originZ;
+            };
+        }
+
+        private int minAOffset(int originX, int originY, int originZ) {
+            return switch (this.face.side()) {
+                case WEST, EAST -> originY;
+                case DOWN, UP, NORTH, SOUTH -> originX;
+            };
+        }
+
+        private int minBOffset(int originX, int originY, int originZ) {
+            return switch (this.face.side()) {
+                case WEST, EAST, DOWN, UP -> originZ;
+                case NORTH, SOUTH -> originY;
+            };
+        }
+
+        private OverlayBounds bounds(WorkZoneShellFace face, float outset) {
+            return switch (face.side()) {
+                case WEST, EAST -> OverlayBounds.of(
+                        face.plane() - outset,
+                        face.minA() - outset,
+                        face.minB() - outset,
+                        face.plane() + outset,
+                        face.maxA() + outset,
+                        face.maxB() + outset
+                );
+                case DOWN, UP -> OverlayBounds.of(
+                        face.minA() - outset,
+                        face.plane() - outset,
+                        face.minB() - outset,
+                        face.maxA() + outset,
+                        face.plane() + outset,
+                        face.maxB() + outset
+                );
+                case NORTH, SOUTH -> OverlayBounds.of(
+                        face.minA() - outset,
+                        face.minB() - outset,
+                        face.plane() - outset,
+                        face.maxA() + outset,
+                        face.maxB() + outset,
+                        face.plane() + outset
+                );
+            };
+        }
+    }
+
     private static void renderOutline(
             PoseStack matrices,
             VertexConsumer consumer,
@@ -706,6 +859,17 @@ final class OverlayMeshBatch implements AutoCloseable {
                     Math.max(this.maxX, other.maxX),
                     Math.max(this.maxY, other.maxY),
                     Math.max(this.maxZ, other.maxZ)
+            );
+        }
+
+        private OverlayBounds translate(double dx, double dy, double dz) {
+            return new OverlayBounds(
+                    this.minX + dx,
+                    this.minY + dy,
+                    this.minZ + dz,
+                    this.maxX + dx,
+                    this.maxY + dy,
+                    this.maxZ + dz
             );
         }
 

@@ -2,6 +2,7 @@ package io.github.luma.ui.overlay;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import io.github.luma.domain.model.WorkZoneShellFace;
 
 final class OverlayFaceRenderer {
 
@@ -75,6 +76,31 @@ final class OverlayFaceRenderer {
         addQuad(pose, consumer, red, green, blue, alpha, minX, minY, minZ, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ);
         addQuad(pose, consumer, red, green, blue, alpha, minX, maxY, minZ, maxX, maxY, minZ, maxX, maxY, maxZ, minX, maxY, maxZ);
         return 6;
+    }
+
+    static void renderFace(
+            PoseStack matrices,
+            VertexConsumer consumer,
+            WorkZoneShellFace.Side side,
+            float plane,
+            float minA,
+            float maxA,
+            float minB,
+            float maxB,
+            int red,
+            int green,
+            int blue,
+            int alpha
+    ) {
+        PoseStack.Pose pose = matrices.last();
+        switch (side) {
+            case WEST -> addQuad(pose, consumer, red, green, blue, alpha, plane, minA, minB, plane, maxA, minB, plane, maxA, maxB, plane, minA, maxB);
+            case EAST -> addQuad(pose, consumer, red, green, blue, alpha, plane, minA, minB, plane, minA, maxB, plane, maxA, maxB, plane, maxA, minB);
+            case DOWN -> addQuad(pose, consumer, red, green, blue, alpha, minA, plane, minB, minA, plane, maxB, maxA, plane, maxB, maxA, plane, minB);
+            case UP -> addQuad(pose, consumer, red, green, blue, alpha, minA, plane, minB, maxA, plane, minB, maxA, plane, maxB, minA, plane, maxB);
+            case NORTH -> addQuad(pose, consumer, red, green, blue, alpha, minA, minB, plane, maxA, minB, plane, maxA, maxB, plane, minA, maxB, plane);
+            case SOUTH -> addQuad(pose, consumer, red, green, blue, alpha, minA, minB, plane, minA, maxB, plane, maxA, maxB, plane, maxA, minB, plane);
+        }
     }
 
     private static void addQuad(
