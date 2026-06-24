@@ -4,6 +4,7 @@ import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorkZoneShellFace;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -16,7 +17,11 @@ public final class WorkZoneShellPlanner {
             return List.of();
         }
         Set<WorkZoneCell> occupied = new HashSet<>(cells);
-        Set<UnitFace> exposed = new TreeSet<>();
+        Set<UnitFace> exposed = new TreeSet<>(Comparator
+                .comparing(UnitFace::side)
+                .thenComparingInt(UnitFace::plane)
+                .thenComparingInt(UnitFace::a)
+                .thenComparingInt(UnitFace::b));
         for (WorkZoneCell cell : occupied) {
             this.collect(cell, occupied, exposed);
         }
@@ -100,21 +105,7 @@ public final class WorkZoneShellPlanner {
         }
     }
 
-    private record UnitFace(WorkZoneShellFace.Side side, int plane, int a, int b) implements Comparable<UnitFace> {
-
-        @Override
-        public int compareTo(UnitFace other) {
-            int bySide = Integer.compare(this.side.ordinal(), other.side.ordinal());
-            if (bySide != 0) {
-                return bySide;
-            }
-            int byPlane = Integer.compare(this.plane, other.plane);
-            if (byPlane != 0) {
-                return byPlane;
-            }
-            int byA = Integer.compare(this.a, other.a);
-            return byA != 0 ? byA : Integer.compare(this.b, other.b);
-        }
+    private record UnitFace(WorkZoneShellFace.Side side, int plane, int a, int b) {
     }
 
     private record FaceRect(

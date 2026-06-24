@@ -20,9 +20,7 @@ final class BranchHistoryVersions {
 
         Set<String> visibleVersionIds = new LinkedHashSet<>();
         for (ProjectVersion version : versions) {
-            if (version != null
-                    && variant.id().equals(version.variantId())
-                    && this.versionVisibility.workZoneId(version).isBlank()) {
+            if (version != null && variant.id().equals(version.variantId())) {
                 visibleVersionIds.add(version.id());
             }
         }

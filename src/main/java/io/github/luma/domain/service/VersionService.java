@@ -243,7 +243,8 @@ public final class VersionService {
                 headVersion.parentVersionId(),
                 headVersion.id(),
                 progressSink,
-                isolatedDraft.workZone()
+                isolatedDraft.workZone(),
+                null
         );
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
@@ -446,35 +447,7 @@ public final class VersionService {
                 schedulePreview,
                 parentVersionIdOverride,
                 progressSink,
-                null
-        );
-    }
-
-    private ProjectVersion writeVersion(
-            ServerLevel level,
-            ProjectLayout layout,
-            BuildProject project,
-            RecoveryDraft draft,
-            String message,
-            String author,
-            VersionKind versionKind,
-            boolean schedulePreview,
-            String parentVersionIdOverride,
-            WorldOperationManager.ProgressSink progressSink,
-            VersionSaveTimingBuilder timing
-    ) throws IOException {
-        return this.writeVersion(
-                level,
-                layout,
-                project,
-                draft,
-                message,
-                author,
-                versionKind,
-                schedulePreview,
-                parentVersionIdOverride,
-                progressSink,
-                timing,
+                null,
                 null
         );
     }
@@ -508,39 +481,6 @@ public final class VersionService {
                 true,
                 timing,
                 workZone
-        );
-    }
-
-    private ProjectVersion writeVersion(
-            ServerLevel level,
-            ProjectLayout layout,
-            BuildProject project,
-            RecoveryDraft draft,
-            String message,
-            String author,
-            VersionKind versionKind,
-            boolean schedulePreview,
-            String parentVersionIdOverride,
-            WorldOperationManager.ProgressSink progressSink,
-            boolean publishHead,
-            boolean allowSnapshotCapture,
-            VersionSaveTimingBuilder timing
-    ) throws IOException {
-        return this.writeVersion(
-                level,
-                layout,
-                project,
-                draft,
-                message,
-                author,
-                versionKind,
-                schedulePreview,
-                parentVersionIdOverride,
-                progressSink,
-                publishHead,
-                allowSnapshotCapture,
-                timing,
-                null
         );
     }
 
@@ -840,37 +780,6 @@ public final class VersionService {
             String parentVersionIdOverride,
             String rebaseFromVersionId,
             WorldOperationManager.ProgressSink progressSink,
-            WorkZone workZone
-    ) throws IOException {
-        return this.writeVersionFromOperationDraft(
-                level,
-                layout,
-                project,
-                draft,
-                message,
-                author,
-                versionKind,
-                schedulePreview,
-                parentVersionIdOverride,
-                rebaseFromVersionId,
-                progressSink,
-                workZone,
-                null
-        );
-    }
-
-    private ProjectVersion writeVersionFromOperationDraft(
-            ServerLevel level,
-            ProjectLayout layout,
-            BuildProject project,
-            RecoveryDraft draft,
-            String message,
-            String author,
-            VersionKind versionKind,
-            boolean schedulePreview,
-            String parentVersionIdOverride,
-            String rebaseFromVersionId,
-            WorldOperationManager.ProgressSink progressSink,
             WorkZone workZone,
             VersionSaveTimingBuilder timing
     ) throws IOException {
@@ -1043,8 +952,6 @@ public final class VersionService {
         }
         Map<String, String> metadata = new LinkedHashMap<>(sourceInfo.metadata());
         metadata.put(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, workZone.id());
-        metadata.put("workZoneName", workZone.name());
-        metadata.put("workZoneColor", Integer.toHexString(workZone.color() & 0xFFFFFF).toUpperCase(java.util.Locale.ROOT));
         return ExternalSourceInfo.external(
                 sourceInfo.tool(),
                 sourceInfo.operationType(),
