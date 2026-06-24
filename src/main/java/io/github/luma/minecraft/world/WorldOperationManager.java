@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
@@ -42,6 +42,7 @@ public final class WorldOperationManager {
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
     private static final double MAX_ADAPTIVE_SCALE = 1.25D;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
+    private static final AtomicInteger NEXT_BACKGROUND_THREAD_INDEX = new AtomicInteger(1);
 
     private final WorldApplyOperationProfile applyOperationProfile = new WorldApplyOperationProfile();
     private final WorldApplyBudgetPlanner budgetPlanner = new WorldApplyBudgetPlanner();
@@ -242,7 +243,7 @@ public final class WorldOperationManager {
     }
 
     private static ExecutorService createExecutor() {
-        return Executors.newFixedThreadPool(1, new NamedThreadFactory());
+        return Executors.newSingleThreadExecutor(WorldOperationManager::backgroundThread);
     }
 
     @FunctionalInterface
@@ -1715,16 +1716,10 @@ public final class WorldOperationManager {
         }
     }
 
-    private static final class NamedThreadFactory implements ThreadFactory {
-
-        private int nextIndex = 1;
-
-        @Override
-        public synchronized Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "Lumi-WorldOp-" + this.nextIndex++);
-            thread.setDaemon(true);
-            thread.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 2));
-            return thread;
-        }
+    private static Thread backgroundThread(Runnable runnable) {
+        Thread thread = new Thread(runnable, "Lumi-WorldOp-" + NEXT_BACKGROUND_THREAD_INDEX.getAndIncrement());
+        thread.setDaemon(true);
+        thread.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 2));
+        return thread;
     }
 }

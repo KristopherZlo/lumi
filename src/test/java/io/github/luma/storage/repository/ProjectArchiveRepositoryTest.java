@@ -64,6 +64,7 @@ class ProjectArchiveRepositoryTest {
         assertEquals(ProjectArchiveScopeType.PROJECT, manifest.scopeOrDefault().type());
         assertFalse(manifest.includesPreviews());
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/project.json")));
+        assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/work-zones.json")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/cache/baseline-chunks/chunk_0_0.bin.lz4")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/recovery/journal.json")));
         assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().startsWith("project/previews/")));
@@ -73,6 +74,7 @@ class ProjectArchiveRepositoryTest {
         try (ZipFile zip = new ZipFile(archiveFile.toFile(), StandardCharsets.UTF_8)) {
             assertTrue(zip.getEntry("manifest.json") != null);
             assertTrue(zip.getEntry("project/project.json") != null);
+            assertTrue(zip.getEntry("project/work-zones.json") != null);
             assertTrue(zip.getEntry("project/recovery/journal.json") != null);
             assertTrue(zip.getEntry("project/cache/baseline-chunks/chunk_0_0.bin.lz4") != null);
             assertTrue(zip.getEntry("project/previews/v0001.png") == null);
@@ -101,6 +103,7 @@ class ProjectArchiveRepositoryTest {
 
         assertTrue(Files.exists(importedLayout.projectFile()));
         assertTrue(Files.exists(importedLayout.variantsFile()));
+        assertTrue(Files.exists(importedLayout.workZonesFile()));
         assertTrue(Files.exists(importedLayout.versionFile("v0001")));
         assertTrue(Files.exists(importedLayout.patchMetaFile("patch-0001")));
         assertTrue(Files.exists(importedLayout.patchDataFile("patch-0001")));
@@ -317,6 +320,11 @@ class ProjectArchiveRepositoryTest {
         Files.write(layout.patchDataFile("patch-0001"), new byte[]{1, 2, 3});
         Files.write(layout.snapshotFile("snapshot-0001"), new byte[]{4, 5, 6});
         Files.write(layout.previewFile("v0001"), new byte[]{7, 8, 9});
+        Files.writeString(
+                layout.workZonesFile(),
+                "{\"schemaVersion\":1,\"zones\":[],\"activeZoneByActor\":{}}",
+                StandardCharsets.UTF_8
+        );
         Files.createDirectories(layout.cacheDir().resolve("baseline-chunks"));
         Files.write(layout.cacheDir().resolve("baseline-chunks").resolve("chunk_0_0.bin.lz4"), new byte[]{10});
         Files.writeString(layout.recoveryJournalFile(), "[]", StandardCharsets.UTF_8);
