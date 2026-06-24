@@ -201,7 +201,6 @@ sourceSets {
 
 configurations {
     testClientMods
-    testClientFullStackMods
 }
 
 configurations.named('testImplementation') {
@@ -212,7 +211,6 @@ configurations.named('testRuntimeOnly') {
     extendsFrom configurations.clientRuntimeOnly
 }
 
-def legacyArtifactPatterns = ['luma-*.jar', 'luma-*.pom', 'luma-*.module']
 def devRuntimeSelfModPatterns = ['luma-*.jar', 'lumi-*.jar']
 
 def deleteMatchingFiles = { File directory, Collection<String> includes ->
@@ -229,18 +227,6 @@ def deleteMatchingFiles = { File directory, Collection<String> includes ->
     }
 
     return matchingFiles
-}
-
-def purgeLegacyArtifacts = tasks.register('purgeLegacyArtifacts') {
-    group = 'build setup'
-    description = 'Removes stale legacy Luma build artifacts after the Lumi rename.'
-
-    doLast {
-        def removedFiles = deleteMatchingFiles(layout.buildDirectory.dir('libs').get().asFile, legacyArtifactPatterns)
-        removedFiles.each { file ->
-            logger.lifecycle("Removed stale legacy artifact {}", file)
-        }
-    }
 }
 
 def purgeDevRuntimeSelfMods = tasks.register('purgeDevRuntimeSelfMods') {
@@ -260,41 +246,9 @@ def purgeDevRuntimeSelfMods = tasks.register('purgeDevRuntimeSelfMods') {
     }
 }
 
-def testClientModVersions = [
-        sodium               : 'mc1.21.11-0.8.7-fabric',
-        ferriteCore          : '8.2.0-fabric',
-        modMenu              : '17.0.0',
-        lithium              : 'mc1.21.11-0.21.4-fabric',
-        immediatelyFast      : '1.14.2+1.21.11-fabric',
-        etf                  : '7.1-fabric-1.21.11',
-        emf                  : '3.1.1-fabric-1.21.11',
-        sodiumExtra          : 'mc1.21.11-0.8.3+fabric',
-        modernFixReplacement : '5.26.2-build.1',
-        zoomify              : '2.15.2+1.21.11',
-        krypton              : '0.2.10',
-        voxy                 : '0.2.13-alpha',
-        cubesWithoutBorders  : '3.0.0+1.21.11',
-        rrls                 : '5.1.15+mc1.21.11-fabric',
-        fastQuit             : '3.1.3+mc1.21.11',
-        particleCore         : '0.3.2+1.21.11',
-        fabricLanguageKotlin : '1.13.10+kotlin.2.3.20',
-        yacl                 : '3.8.2+1.21.11-fabric',
-        fzzyConfig           : '0.7.6+1.21.11',
-        placeholderApi       : '2.8.2+1.21.10'
-]
-
 def pinnedTestClientModFiles = [
         'Axiom-5.4.1-for-MC1.21.11.jar'                        : 'https://cdn.modrinth.com/data/N6n5dqoA/versions/WVcmqicM/Axiom-5.4.1-for-MC1.21.11.jar'
 ]
-
-def pinnedFullStackTestClientModFiles = [
-        'entityculling-fabric-1.10.1-mc1.21.11.jar'            : 'https://cdn.modrinth.com/data/NNAgCjsB/versions/WORDhU8n/entityculling-fabric-1.10.1-mc1.21.11.jar',
-        'ForgeConfigAPIPort-v21.11.1-mc1.21.11-Fabric.jar'     : 'https://cdn.modrinth.com/data/ohNO6lps/versions/uXrWPsCu/ForgeConfigAPIPort-v21.11.1-mc1.21.11-Fabric.jar'
-]
-
-def includeFullTestClientStack = providers.gradleProperty('lumi.testClientFullStack')
-        .map { it.toBoolean() }
-        .orElse(false)
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -316,29 +270,6 @@ dependencies {
     testClientMods "maven.modrinth:fabric-api:${project.fabric_api_version}"
     testClientMods "maven.modrinth:worldedit:${project.worldedit_version}"
 
-    testClientFullStackMods "maven.modrinth:fabric-language-kotlin:${testClientModVersions.fabricLanguageKotlin}"
-    testClientFullStackMods "maven.modrinth:yacl:${testClientModVersions.yacl}"
-    testClientFullStackMods "maven.modrinth:fzzy-config:${testClientModVersions.fzzyConfig}"
-    testClientFullStackMods "maven.modrinth:cloth-config:${project.cloth_config_version}+fabric"
-    testClientFullStackMods "maven.modrinth:placeholder-api:${testClientModVersions.placeholderApi}"
-
-    testClientFullStackMods "maven.modrinth:sodium:${testClientModVersions.sodium}"
-    testClientFullStackMods "maven.modrinth:ferrite-core:${testClientModVersions.ferriteCore}"
-    testClientFullStackMods "maven.modrinth:modmenu:${testClientModVersions.modMenu}"
-    testClientFullStackMods "maven.modrinth:lithium:${testClientModVersions.lithium}"
-    testClientFullStackMods "maven.modrinth:immediatelyfast:${testClientModVersions.immediatelyFast}"
-    testClientFullStackMods "maven.modrinth:entitytexturefeatures:${testClientModVersions.etf}"
-    testClientFullStackMods "maven.modrinth:entity-model-features:${testClientModVersions.emf}"
-    testClientFullStackMods "maven.modrinth:sodium-extra:${testClientModVersions.sodiumExtra}"
-    testClientFullStackMods "maven.modrinth:modernfix-mvus:${testClientModVersions.modernFixReplacement}"
-    testClientFullStackMods "maven.modrinth:zoomify:${testClientModVersions.zoomify}"
-    testClientFullStackMods "maven.modrinth:krypton:${testClientModVersions.krypton}"
-    testClientFullStackMods "maven.modrinth:voxy:${testClientModVersions.voxy}"
-    testClientFullStackMods "maven.modrinth:cubes-without-borders:${testClientModVersions.cubesWithoutBorders}"
-    testClientFullStackMods "maven.modrinth:rrls:${testClientModVersions.rrls}"
-    testClientFullStackMods "maven.modrinth:fastquit:${testClientModVersions.fastQuit}"
-    testClientFullStackMods "maven.modrinth:particle-core:${testClientModVersions.particleCore}"
-
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -347,9 +278,7 @@ dependencies {
 
 def downloadPinnedTestClientMods = tasks.register('downloadPinnedTestClientMods') {
     def outputDir = layout.buildDirectory.dir('test-client-downloads')
-    inputs.property('includeFullTestClientStack', includeFullTestClientStack)
     inputs.property('pinnedTestClientModFiles', pinnedTestClientModFiles)
-    inputs.property('pinnedFullStackTestClientModFiles', pinnedFullStackTestClientModFiles)
     outputs.dir(outputDir)
 
     doLast {
@@ -359,12 +288,7 @@ def downloadPinnedTestClientMods = tasks.register('downloadPinnedTestClientMods'
         }
         targetDir.mkdirs()
 
-        def pinnedFiles = pinnedTestClientModFiles
-        if (includeFullTestClientStack.get()) {
-            pinnedFiles += pinnedFullStackTestClientModFiles
-        }
-
-        pinnedFiles.each { fileName, url ->
+        pinnedTestClientModFiles.each { fileName, url ->
             def outputFile = new File(targetDir, fileName)
             ant.get(src: url, dest: outputFile, skipexisting: false)
         }
@@ -381,7 +305,6 @@ def installTestClientMods = tasks.register('installTestClientMods', Sync) {
     dependsOn(downloadPinnedTestClientMods)
     finalizedBy(purgeTestClientRuntimeRemapCache)
     from(configurations.testClientMods)
-    from({ includeFullTestClientStack.get() ? configurations.testClientFullStackMods : files() })
     from(layout.buildDirectory.dir('test-client-downloads'))
     into(layout.projectDirectory.dir('run/test-client/mods'))
 
@@ -404,10 +327,6 @@ purgeTestClientRuntimeRemapCache.configure {
 tasks.named('runTestClient').configure {
     dependsOn(installTestClientMods)
     dependsOn(purgeTestClientRuntimeRemapCache)
-}
-
-tasks.matching { it.name in ['jar', 'sourcesJar', 'remapJar', 'remapSourcesJar'] }.configureEach {
-    dependsOn(purgeLegacyArtifacts)
 }
 
 tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {

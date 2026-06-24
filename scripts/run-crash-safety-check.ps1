@@ -10,8 +10,7 @@ param(
         "mid-world-operation-apply",
         "light-refresh-drain-start"
     ),
-    [int]$MarkerTimeoutSeconds = 240,
-    [switch]$FullStack
+    [int]$MarkerTimeoutSeconds = 240
 )
 
 $ErrorActionPreference = "Stop"
@@ -92,9 +91,6 @@ function Invoke-TestClientMode {
         if ($JavaHome) {
             $arguments.JavaHome = $JavaHome
         }
-        if ($FullStack) {
-            $arguments.FullStack = $true
-        }
         & $testClientScript @arguments
     } finally {
         if ($null -eq $previousMode) {
@@ -133,10 +129,6 @@ function Invoke-CrashSample {
             "-GradleTasks", "runClientGameTest"
         )
     }
-    if ($FullStack) {
-        $arguments += "-FullStack"
-    }
-
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = "powershell.exe"
     $startInfo.Arguments = Join-ProcessArguments -Arguments $arguments

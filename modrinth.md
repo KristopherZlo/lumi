@@ -4,7 +4,6 @@
 
 ![Minecraft 1.21.11](https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge)
 ![Fabric](https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge)
-![Java 21](https://img.shields.io/badge/Java-21-1F6FEB?style=for-the-badge)
 
 Lumi adds build history to Minecraft.
 
