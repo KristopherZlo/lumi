@@ -293,6 +293,8 @@
   "luma.history.quick_save_hint": "Напиши короткую заметку, чтобы потом быстро понять, что это за сохранение.",
   "luma.history.selected_badge": "Выбрана",
   "luma.history.current_badge": "Последняя",
+  "luma.history.view_cards": "Карточки",
+  "luma.history.view_graph": "Граф",
   "luma.history.start_badge": "Старт",
   "luma.history.version_meta": "Автор: %s | %s",
   "luma.history.commit_blocks": "Блоки",

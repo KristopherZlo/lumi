@@ -303,6 +303,8 @@
   "luma.history.quick_save_hint": "Write a short note so you can recognize this save later.",
   "luma.history.selected_badge": "Selected",
   "luma.history.current_badge": "Latest save",
+  "luma.history.view_cards": "Cards",
+  "luma.history.view_graph": "Graph",
   "luma.history.start_badge": "Start",
   "luma.history.version_meta": "By %s | %s",
   "luma.history.commit_blocks": "Blocks",

@@ -14,6 +14,9 @@ import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.WorkZoneScreenController;
+import io.github.luma.ui.graph.CommitGraphComponent;
+import io.github.luma.ui.graph.CommitGraphLayout;
+import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
@@ -51,6 +54,7 @@ public final class WorkZoneScreen extends LumaScreen {
     private String newZoneName = "";
     private String saveMessage = "";
     private boolean zonePickerVisible;
+    private boolean zoneHistoryGraphVisible;
 
     public WorkZoneScreen(Screen parent, String projectName) {
         super(Component.translatable("luma.screen.zones.title", projectName));
@@ -242,19 +246,77 @@ public final class WorkZoneScreen extends LumaScreen {
             section.child(LumaUi.caption(Component.translatable("luma.zones.history_empty")));
             return section;
         }
-        for (ProjectVersion version : versions) {
-            ProjectVariant variant = ProjectUiSupport.variantFor(this.state.variants(), version.variantId());
-            section.child(this.saveCardView.render(new ProjectSaveCardView.Model(
-                    this.effectiveProjectName(),
-                    version,
-                    variant,
-                    ProjectUiSupport.isVariantHead(this.state.variants(), version),
-                    false,
-                    this.width,
-                    false
-            )));
+        section.child(this.zoneHistoryViewToggle());
+        if (this.zoneHistoryGraphVisible) {
+            section.child(this.zoneHistoryGraph(versions));
+            return section;
+        }
+
+        ProjectVersion latest = versions.getFirst();
+        section.child(LumaUi.caption(Component.translatable("luma.history.current_badge")));
+        section.child(this.zoneSaveCard(latest, true));
+
+        List<ProjectVersion> olderVersions = versions.stream()
+                .filter(version -> !version.id().equals(latest.id()))
+                .toList();
+        if (!olderVersions.isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.build.recent_saves_title")));
+        }
+        for (ProjectVersion version : olderVersions) {
+            section.child(this.zoneSaveCard(version, false));
         }
         return section;
+    }
+
+    private FlowLayout zoneHistoryViewToggle() {
+        FlowLayout row = LumaUi.actionRow();
+        ButtonComponent cards = LumaUi.button(Component.translatable("luma.history.view_cards"), button -> {
+            this.zoneHistoryGraphVisible = false;
+            this.rebuild();
+        });
+        cards.active(this.zoneHistoryGraphVisible);
+        row.child(cards);
+
+        ButtonComponent graph = LumaUi.button(Component.translatable("luma.history.view_graph"), button -> {
+            this.zoneHistoryGraphVisible = true;
+            this.rebuild();
+        });
+        graph.active(!this.zoneHistoryGraphVisible);
+        row.child(graph);
+        return row;
+    }
+
+    private FlowLayout zoneHistoryGraph(List<ProjectVersion> versions) {
+        FlowLayout graph = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        String activeVariantId = this.state.project() == null ? "" : this.state.project().activeVariantId();
+        List<CommitGraphNode> nodes = CommitGraphLayout.build(
+                versions,
+                this.state.variants(),
+                activeVariantId
+        );
+        if (nodes.isEmpty()) {
+            graph.child(LumaUi.caption(Component.translatable("luma.zones.history_empty")));
+            return graph;
+        }
+        graph.child(new CommitGraphComponent(
+                nodes,
+                this.state.variants(),
+                versionId -> this.router.openSaveDetails(this, this.effectiveProjectName(), versionId)
+        ));
+        return graph;
+    }
+
+    private FlowLayout zoneSaveCard(ProjectVersion version, boolean latest) {
+        ProjectVariant variant = ProjectUiSupport.variantFor(this.state.variants(), version.variantId());
+        return this.saveCardView.render(new ProjectSaveCardView.Model(
+                this.effectiveProjectName(),
+                version,
+                variant,
+                latest,
+                false,
+                this.width,
+                false
+        ));
     }
 
     private WorkZone focusedZone() {

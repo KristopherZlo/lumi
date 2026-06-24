@@ -38,6 +38,10 @@ public final class CommitGraphComponent extends BaseUIComponent {
     private static final int TEXT_PRIMARY = 0xFFF3F7FA;
     private static final int TEXT_MUTED = 0xFF98A6B3;
     private static final int TEXT_BADGE = 0xFF0B1016;
+    private static final int HOVER_CARD_FILL = 0xF2091018;
+    private static final int HOVER_CARD_BORDER = 0xCC6C7A89;
+    private static final int HOVER_CARD_WIDTH = 186;
+    private static final int HOVER_CARD_HEIGHT = 52;
 
     private final List<CommitGraphNode> nodes;
     private final Map<String, ProjectVariant> variantById;
@@ -119,6 +123,9 @@ public final class CommitGraphComponent extends BaseUIComponent {
         this.drawLaneRuns(graphics, geometry);
         this.drawParentConnectors(graphics, geometry);
         this.drawRows(graphics, font, geometry, hoveredNode);
+        if (hoveredNode != null) {
+            this.drawHoverCard(graphics, font, hoveredNode, mouseX, mouseY);
+        }
     }
 
     private void drawLegend(OwoUIGraphics graphics, Font font, int startX, int y, int rightX) {
@@ -224,6 +231,55 @@ public final class CommitGraphComponent extends BaseUIComponent {
             );
         }
         graphics.drawCircle(x, y, 24, activeHead ? 4.0D : 3.8D, Color.ofArgb(laneColor));
+    }
+
+    private void drawHoverCard(OwoUIGraphics graphics, Font font, CommitGraphNode node, int mouseX, int mouseY) {
+        int cardWidth = Math.min(HOVER_CARD_WIDTH, Math.max(120, this.width - 8));
+        int cardX = mouseX + 12;
+        int cardY = mouseY + 12;
+        int rightEdge = this.x + this.width - 4;
+        int bottomEdge = this.y + this.height - 4;
+        if (cardX + cardWidth > rightEdge) {
+            cardX = mouseX - cardWidth - 12;
+        }
+        if (cardX < this.x + 4) {
+            cardX = this.x + 4;
+        }
+        if (cardY + HOVER_CARD_HEIGHT > bottomEdge) {
+            cardY = mouseY - HOVER_CARD_HEIGHT - 12;
+        }
+        if (cardY < this.y + 4) {
+            cardY = this.y + 4;
+        }
+
+        ProjectVersion version = node.version();
+        int textWidth = cardWidth - 12;
+        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + HOVER_CARD_HEIGHT, HOVER_CARD_FILL);
+        graphics.drawRectOutline(cardX, cardY, cardWidth, HOVER_CARD_HEIGHT, HOVER_CARD_BORDER);
+        graphics.drawString(
+                font,
+                this.trim(font, ProjectUiSupport.displayMessage(version), textWidth),
+                cardX + 6,
+                cardY + 6,
+                TEXT_PRIMARY,
+                false
+        );
+        graphics.drawString(
+                font,
+                this.trim(font, ProjectUiSupport.safeText(version.author()) + " | " + ProjectUiSupport.formatTimestamp(version.createdAt()), textWidth),
+                cardX + 6,
+                cardY + 20,
+                TEXT_MUTED,
+                false
+        );
+        graphics.drawString(
+                font,
+                this.trim(font, version.stats().changedBlocks() + " changed blocks", textWidth),
+                cardX + 6,
+                cardY + 34,
+                TEXT_MUTED,
+                false
+        );
     }
 
     private int drawBadge(OwoUIGraphics graphics, Font font, String rawLabel, int x, int y, int color, int rightX) {

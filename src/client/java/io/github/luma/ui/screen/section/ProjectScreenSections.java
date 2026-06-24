@@ -209,14 +209,14 @@ public final class ProjectScreenSections {
     private FlowLayout historyViewToggle(Model model) {
         FlowLayout row = LumaUi.actionRow();
         ButtonComponent cards = LumaUi.button(
-                Component.translatable("luma.build.recent_saves_title"),
+                Component.translatable("luma.history.view_cards"),
                 button -> this.actions.setHistoryGraphVisible(false)
         );
         cards.active(model.historyGraphVisible());
         row.child(cards);
 
         ButtonComponent graph = LumaUi.button(
-                Component.translatable("luma.more.tab_history_graph"),
+                Component.translatable("luma.history.view_graph"),
                 button -> this.actions.setHistoryGraphVisible(true)
         );
         graph.active(!model.historyGraphVisible());

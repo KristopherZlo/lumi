@@ -267,6 +267,8 @@
   "luma.history.quick_save_hint": "Schreiben Sie eine kurze Notiz, damit Sie diesen Speicher später wiedererkennen können.",
   "luma.history.selected_badge": "Ausgewählt",
   "luma.history.current_badge": "Letzte Speicherung",
+  "luma.history.view_cards": "Cards",
+  "luma.history.view_graph": "Graph",
   "luma.history.start_badge": "Start",
   "luma.history.version_meta": "Von %s | %s",
   "luma.history.commit_blocks": "Blöcke",
