@@ -10,7 +10,6 @@ import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
-import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
 import io.github.luma.ui.controller.VariantsScreenController;
@@ -245,23 +244,6 @@ public final class VariantsScreen extends LumaScreen {
         });
         switchButton.active(!active && !this.operationActive());
         actions.child(switchButton);
-
-        actions.child(LumaUi.iconButton("folder-open", Component.translatable("luma.action.open_saves"), button -> this.router.openProjectIgnoringRecovery(
-                this.parent,
-                this.projectName,
-                variant.id(),
-                "luma.status.project_ready"
-        )));
-
-        ButtonComponent compareButton = LumaUi.iconButton("eye", Component.translatable("luma.action.see_changes"), button -> this.router.openCompare(
-                this,
-                this.projectName,
-                variant.headVersionId(),
-                CompareScreenController.CURRENT_WORLD_REFERENCE,
-                variant.headVersionId()
-        ));
-        compareButton.active(headVersion != null);
-        actions.child(compareButton);
 
         ButtonComponent mergeButton = LumaUi.button(Component.translatable("luma.action.merge_into_current"), button -> {
             String result = this.actionController.mergeVariantIntoCurrent(this.projectName, variant.id());

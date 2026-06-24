@@ -103,10 +103,6 @@ public final class ScreenRouter {
         this.client.setScreen(new MoreScreen(parent, projectName));
     }
 
-    public void openHistoryGraph(Screen parent, String projectName) {
-        this.client.setScreen(MoreScreen.historyGraph(parent, projectName));
-    }
-
     public void openWorkZones(Screen parent, String projectName) {
         this.client.setScreen(new WorkZoneScreen(parent, projectName));
     }

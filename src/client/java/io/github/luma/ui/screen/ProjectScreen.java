@@ -88,7 +88,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     );
     private String statusKey;
     private String selectedVariantId = "";
-    private boolean showAllSaves = false;
+    private boolean historyGraphVisible = false;
     private String pendingRestoreVariantId = "";
     private String pendingRestoreVersionId = "";
     private String pendingBranchBaseVersionId = "";
@@ -262,7 +262,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 this.state,
                 this.width,
                 this.selectedVariantId,
-                this.showAllSaves,
+                this.historyGraphVisible,
                 this.pendingRestoreVariantId,
                 this.pendingRestoreVersionId,
                 this.selectedLumiBounds()
@@ -616,23 +616,8 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         }
 
         @Override
-        public void openVariants() {
-            router.openVariants(ProjectScreen.this, projectName);
-        }
-
-        @Override
         public void openRecovery() {
             router.openRecovery(ProjectScreen.this, projectName);
-        }
-
-        @Override
-        public void quickRollback() {
-            refresh(actionController.quickRollback(projectName));
-        }
-
-        @Override
-        public void returnBeforeRestore() {
-            refresh(actionController.returnBeforeRestore(projectName));
         }
 
         @Override
@@ -648,17 +633,8 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         }
 
         @Override
-        public void selectVariant(String variantId) {
-            if (ProjectUiSupport.variantFor(state.variants(), variantId) != null) {
-                selectedVariantId = variantId;
-                showAllSaves = false;
-            }
-            refresh("luma.status.project_ready", false);
-        }
-
-        @Override
-        public void toggleAllSaves() {
-            showAllSaves = !showAllSaves;
+        public void setHistoryGraphVisible(boolean visible) {
+            historyGraphVisible = visible;
             refresh("luma.status.project_ready");
         }
 

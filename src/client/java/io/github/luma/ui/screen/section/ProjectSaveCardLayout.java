@@ -14,11 +14,15 @@ final class ProjectSaveCardLayout {
     }
 
     static List<ActionState> actions(boolean hasVersionVariant, boolean operationActive) {
+        return actions(hasVersionVariant, operationActive, true);
+    }
+
+    static List<ActionState> actions(boolean hasVersionVariant, boolean operationActive, boolean createVariantAction) {
         return List.of(
-                new ActionState(Action.OPEN, true),
                 new ActionState(Action.RESTORE, hasVersionVariant && !operationActive),
-                new ActionState(Action.CREATE_VARIANT, !operationActive)
-        );
+                new ActionState(Action.CREATE_VARIANT, !operationActive, createVariantAction),
+                new ActionState(Action.OPEN, true)
+        ).stream().filter(ActionState::visible).toList();
     }
 
     enum Placement {
@@ -32,6 +36,10 @@ final class ProjectSaveCardLayout {
         CREATE_VARIANT
     }
 
-    record ActionState(Action action, boolean active) {
+    record ActionState(Action action, boolean active, boolean visible) {
+
+        ActionState(Action action, boolean active) {
+            this(action, active, true);
+        }
     }
 }

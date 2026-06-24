@@ -41,8 +41,6 @@ public final class ProjectSidebarNavigation {
         FlowLayout tabs = LumaUi.sidebarTabs();
         this.addTab(tabs, Component.translatable("luma.tab.history"), ProjectWorkspaceTab.HISTORY, activeTab, () ->
                 this.router.openProjectIgnoringRecovery(parent, projectName));
-        this.addTab(tabs, Component.translatable("luma.more.tab_history_graph"), ProjectWorkspaceTab.HISTORY_GRAPH, activeTab, () ->
-                this.router.openHistoryGraph(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.tab.zones"), ProjectWorkspaceTab.ZONES, activeTab, () ->
                 this.router.openWorkZones(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.tab.variants"), ProjectWorkspaceTab.VARIANTS, activeTab, () ->

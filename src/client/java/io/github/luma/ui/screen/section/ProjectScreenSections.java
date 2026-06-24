@@ -10,6 +10,9 @@ import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
+import io.github.luma.ui.graph.CommitGraphComponent;
+import io.github.luma.ui.graph.CommitGraphLayout;
+import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
@@ -18,15 +21,12 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.network.chat.Component;
 
 public final class ProjectScreenSections {
-
-    private static final int RECENT_SAVE_LIMIT = 6;
 
     private final ProjectScreenController previewController;
     private final Actions actions;
@@ -130,20 +130,6 @@ public final class ProjectScreenSections {
         changesButton.active(activeHead != null
                 || this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.SEE_CHANGES);
         actions.child(changesButton);
-        ButtonComponent quickRollbackButton = LumaUi.button(
-                Component.translatable("luma.action.quick_rollback"),
-                button -> this.actions.quickRollback()
-        );
-        quickRollbackButton.tooltip(Component.translatable("luma.action.quick_rollback.tooltip"));
-        quickRollbackButton.active(activeHead != null && !operationActive);
-        actions.child(quickRollbackButton);
-        ButtonComponent returnButton = LumaUi.button(
-                Component.translatable("luma.action.return_before_restore"),
-                button -> this.actions.returnBeforeRestore()
-        );
-        returnButton.tooltip(Component.translatable("luma.action.return_before_restore.tooltip"));
-        returnButton.active(model.state().hasRestoreReturnPoint() && !operationActive);
-        actions.child(returnButton);
         section.child(actions);
 
         if (model.state().hasRecoveryDraft()) {
@@ -173,11 +159,15 @@ public final class ProjectScreenSections {
 
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.build.recent_saves_title"),
-                null
+                selectedVariant == null ? null : Component.translatable(
+                        "luma.build.recent_saves_help",
+                        ProjectUiSupport.displayVariantName(selectedVariant)
+                )
         );
-        FlowLayout picker = this.variantPicker(model);
-        if (!picker.children().isEmpty()) {
-            section.child(picker);
+        section.child(this.historyViewToggle(model));
+        if (model.historyGraphVisible()) {
+            section.child(this.graphView(model, selectedVariant));
+            return section;
         }
 
         if (entries.isEmpty()) {
@@ -197,19 +187,65 @@ public final class ProjectScreenSections {
             return section;
         }
 
-        int limit = model.showAllSaves() ? entries.size() : Math.min(RECENT_SAVE_LIMIT, entries.size());
-        for (int index = 0; index < limit; index++) {
-            section.child(this.saveCard(model, entries.get(index)));
-        }
+        BranchHistoryVersions.Entry latest = entries.stream()
+                .filter(BranchHistoryVersions.Entry::current)
+                .findFirst()
+                .orElse(entries.getFirst());
+        section.child(LumaUi.caption(Component.translatable("luma.history.current_badge")));
+        section.child(this.saveCard(model, latest));
 
-        if (entries.size() > RECENT_SAVE_LIMIT) {
-            FlowLayout historyActions = LumaUi.actionRow();
-            historyActions.child(LumaUi.button(Component.translatable(
-                    model.showAllSaves() ? "luma.action.show_recent_saves" : "luma.action.show_older_saves"
-            ), button -> this.actions.toggleAllSaves()));
-            section.child(historyActions);
+        List<BranchHistoryVersions.Entry> olderEntries = entries.stream()
+                .filter(entry -> !entry.version().id().equals(latest.version().id()))
+                .toList();
+        if (!olderEntries.isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.build.recent_saves_title")));
+        }
+        for (BranchHistoryVersions.Entry entry : olderEntries) {
+            section.child(this.saveCard(model, entry));
         }
         return section;
+    }
+
+    private FlowLayout historyViewToggle(Model model) {
+        FlowLayout row = LumaUi.actionRow();
+        ButtonComponent cards = LumaUi.button(
+                Component.translatable("luma.build.recent_saves_title"),
+                button -> this.actions.setHistoryGraphVisible(false)
+        );
+        cards.active(model.historyGraphVisible());
+        row.child(cards);
+
+        ButtonComponent graph = LumaUi.button(
+                Component.translatable("luma.more.tab_history_graph"),
+                button -> this.actions.setHistoryGraphVisible(true)
+        );
+        graph.active(!model.historyGraphVisible());
+        row.child(graph);
+        return row;
+    }
+
+    private FlowLayout graphView(Model model, ProjectVariant selectedVariant) {
+        FlowLayout graph = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        if (selectedVariant == null) {
+            graph.child(LumaUi.caption(Component.translatable("luma.history.empty")));
+            return graph;
+        }
+
+        List<CommitGraphNode> nodes = CommitGraphLayout.build(
+                model.state().versions(),
+                model.state().variants(),
+                selectedVariant.id()
+        );
+        if (nodes.isEmpty()) {
+            graph.child(LumaUi.caption(Component.translatable("luma.history.empty")));
+            return graph;
+        }
+        graph.child(new CommitGraphComponent(
+                nodes,
+                model.state().variants(),
+                versionId -> this.actions.openSaveDetails(versionId)
+        ));
+        return graph;
     }
 
     private FlowLayout operationSection(Model model) {
@@ -230,22 +266,6 @@ public final class ProjectScreenSections {
             section.child(LumaUi.caption(Component.literal(operation.detail())));
         }
         return section;
-    }
-
-    private FlowLayout variantPicker(Model model) {
-        FlowLayout picker = LumaUi.actionRow();
-        if (model.state().variants().size() <= 1) {
-            return picker;
-        }
-        for (ProjectVariant variant : this.sortedVariants(model)) {
-            ButtonComponent button = LumaUi.button(
-                    Component.literal(ProjectUiSupport.displayVariantName(variant)),
-                    pressed -> this.actions.selectVariant(variant.id())
-            );
-            button.active(!variant.id().equals(model.selectedVariantId()));
-            picker.child(button);
-        }
-        return picker;
     }
 
     private FlowLayout saveCard(Model model, BranchHistoryVersions.Entry entry) {
@@ -275,20 +295,12 @@ public final class ProjectScreenSections {
         return ProjectUiSupport.variantFor(model.state().variants(), model.state().project().activeVariantId());
     }
 
-    private List<ProjectVariant> sortedVariants(Model model) {
-        return model.state().variants().stream()
-                .sorted(Comparator
-                        .comparing((ProjectVariant variant) -> !variant.id().equals(model.state().project().activeVariantId()))
-                        .thenComparing(ProjectVariant::createdAt))
-                .toList();
-    }
-
     public record Model(
             String projectName,
             ProjectHomeViewState state,
             int width,
             String selectedVariantId,
-            boolean showAllSaves,
+            boolean historyGraphVisible,
             String pendingRestoreVariantId,
             String pendingRestoreVersionId,
             Optional<Bounds3i> lumiSelection
@@ -306,21 +318,13 @@ public final class ProjectScreenSections {
 
         void openCompare(String leftReference, String rightReference, String contextVersionId);
 
-        void openVariants();
-
         void openRecovery();
-
-        void quickRollback();
-
-        void returnBeforeRestore();
 
         void openSaveDetails(String versionId);
 
         void openBranchDialog(ProjectVersion version);
 
-        void selectVariant(String variantId);
-
-        void toggleAllSaves();
+        void setHistoryGraphVisible(boolean visible);
 
         void requestRestore(ProjectVariant variant, ProjectVersion version);
     }
