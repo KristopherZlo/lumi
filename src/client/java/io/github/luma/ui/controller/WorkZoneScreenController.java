@@ -9,7 +9,6 @@ import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.network.WorkZoneClientNetworking;
-import io.github.luma.storage.repository.VersionRepository;
 import io.github.luma.ui.state.WorkZoneViewState;
 import java.time.Instant;
 import java.util.List;
@@ -21,7 +20,6 @@ public final class WorkZoneScreenController {
 
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectService projectService = new ProjectService();
-    private final VersionRepository versionRepository = new VersionRepository();
     private final VersionService versionService = new VersionService();
     private final WorkZoneService workZoneService = new WorkZoneService();
 
@@ -37,7 +35,7 @@ public final class WorkZoneScreenController {
             return new WorkZoneViewState(
                     this.projectService.loadProject(server, projectName),
                     this.projectService.loadVariants(server, projectName),
-                    this.versionRepository.loadAll(layout),
+                    this.projectService.loadVersions(server, projectName),
                     zones,
                     actor,
                     this.focusedZoneId(zones, actor),

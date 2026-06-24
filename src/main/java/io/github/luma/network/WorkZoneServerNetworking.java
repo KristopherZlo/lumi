@@ -13,7 +13,6 @@ import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.storage.GsonProvider;
 import io.github.luma.storage.ProjectLayout;
-import io.github.luma.storage.repository.VersionRepository;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Optional;
@@ -25,7 +24,6 @@ public final class WorkZoneServerNetworking {
 
     private final ProjectService projectService = new ProjectService();
     private final WorkZoneService workZoneService = new WorkZoneService();
-    private final VersionRepository versionRepository = new VersionRepository();
     private final VersionService versionService = new VersionService();
 
     public void register() {
@@ -117,7 +115,7 @@ public final class WorkZoneServerNetworking {
         return new WorkZoneSnapshot(
                 project,
                 this.projectService.loadVariants(server, project.name()),
-                this.versionRepository.loadAll(layout),
+                this.projectService.loadVersions(server, project.name()),
                 zones,
                 actor,
                 this.focusedZoneId(zones, actor, WorkZoneCell.from(BlockPoint.from(player.blockPosition()))),
