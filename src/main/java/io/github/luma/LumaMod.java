@@ -12,6 +12,7 @@ import io.github.luma.minecraft.command.LumaCommands;
 import io.github.luma.minecraft.bootstrap.WorldBootstrapService;
 import io.github.luma.minecraft.world.WorldOperationBossBarManager;
 import io.github.luma.minecraft.world.WorldOperationManager;
+import io.github.luma.network.WorkZoneServerNetworking;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -35,6 +36,7 @@ public final class LumaMod implements ModInitializer {
     private final WorldBootstrapService worldBootstrapService = new WorldBootstrapService();
     private final OptionalIntegrationBootstrap optionalIntegrations = new OptionalIntegrationBootstrap();
     private final WorldOperationBossBarManager operationBossBars = new WorldOperationBossBarManager();
+    private final WorkZoneServerNetworking workZoneNetworking = new WorkZoneServerNetworking();
 
     @Override
     public void onInitialize() {
@@ -44,6 +46,7 @@ public final class LumaMod implements ModInitializer {
         this.optionalIntegrations.initialize();
         StartupProfiler.logElapsed("main.optional-integrations", integrationsStartedAt);
         long commandsStartedAt = StartupProfiler.start();
+        this.workZoneNetworking.register();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> this.commands.register(dispatcher));
         StartupProfiler.logElapsed("main.command-registration-callback", commandsStartedAt);
         long eventsStartedAt = StartupProfiler.start();
