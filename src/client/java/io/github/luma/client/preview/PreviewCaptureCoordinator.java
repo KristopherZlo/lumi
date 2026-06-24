@@ -18,13 +18,16 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.client.Minecraft;
 
 public final class PreviewCaptureCoordinator {
 
     private static final PreviewCaptureCoordinator INSTANCE = new PreviewCaptureCoordinator();
-    private static final ExecutorService BUILD_EXECUTOR = Executors.newSingleThreadExecutor(new PreviewThreadFactory());
+    private static final AtomicInteger NEXT_PREVIEW_THREAD_INDEX = new AtomicInteger(1);
+    private static final ExecutorService BUILD_EXECUTOR = Executors.newSingleThreadExecutor(
+            PreviewCaptureCoordinator::previewThread
+    );
     private static final int IDLE_SCAN_COOLDOWN_TICKS = 40;
     private static final int COMPLETED_SCAN_COOLDOWN_TICKS = 20;
     private static final int FAILED_SCAN_COOLDOWN_TICKS = 40;
@@ -293,16 +296,10 @@ public final class PreviewCaptureCoordinator {
         FAILED_ATTEMPT
     }
 
-    private static final class PreviewThreadFactory implements ThreadFactory {
-
-        private int nextIndex = 1;
-
-        @Override
-        public synchronized Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "Lumi-ClientPreview-" + this.nextIndex++);
-            thread.setDaemon(true);
-            thread.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 2));
-            return thread;
-        }
+    private static Thread previewThread(Runnable runnable) {
+        Thread thread = new Thread(runnable, "Lumi-ClientPreview-" + NEXT_PREVIEW_THREAD_INDEX.getAndIncrement());
+        thread.setDaemon(true);
+        thread.setPriority(Math.max(Thread.MIN_PRIORITY, Thread.NORM_PRIORITY - 2));
+        return thread;
     }
 }

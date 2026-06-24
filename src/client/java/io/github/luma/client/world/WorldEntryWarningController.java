@@ -12,7 +12,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.worldselection.WorldOpenFlows;
 import net.minecraft.network.chat.Component;
@@ -27,7 +26,7 @@ public final class WorldEntryWarningController {
     private final WorldInitialBackupWarningService warningService = new WorldInitialBackupWarningService();
     private final WorldInitialBackupService backupService = new WorldInitialBackupService();
     private final WorldInitialBackupIdentityReader identityReader = new WorldInitialBackupIdentityReader();
-    private final ExecutorService backupExecutor = Executors.newSingleThreadExecutor(new BackupThreadFactory());
+    private final ExecutorService backupExecutor = Executors.newSingleThreadExecutor(WorldEntryWarningController::backupThread);
     private final Set<String> bypassOnce = ConcurrentHashMap.newKeySet();
 
     private WorldEntryWarningController() {
@@ -136,14 +135,10 @@ public final class WorldEntryWarningController {
         return client.getLevelSource().getLevelPath(levelId);
     }
 
-    private static final class BackupThreadFactory implements ThreadFactory {
-
-        @Override
-        public Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "lumi-pre-open-backup");
-            thread.setDaemon(true);
-            thread.setPriority(Thread.MIN_PRIORITY);
-            return thread;
-        }
+    private static Thread backupThread(Runnable runnable) {
+        Thread thread = new Thread(runnable, "lumi-pre-open-backup");
+        thread.setDaemon(true);
+        thread.setPriority(Thread.MIN_PRIORITY);
+        return thread;
     }
 }
