@@ -30,6 +30,10 @@ public record ProjectLayout(Path root) {
         return this.root.resolve("history-tombstones.json");
     }
 
+    public Path workZonesFile() {
+        return this.root.resolve("work-zones.json");
+    }
+
     public Path versionsDir() {
         return this.root.resolve("versions");
     }
