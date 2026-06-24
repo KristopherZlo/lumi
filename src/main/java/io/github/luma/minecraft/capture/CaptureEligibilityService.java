@@ -70,6 +70,10 @@ final class CaptureEligibilityService {
         return this.sourcePolicy.usesDeferredStabilization(project, source);
     }
 
+    boolean usesLiveStateReconciliation(WorldMutationSource source) {
+        return this.sourcePolicy.usesLiveStateReconciliation(source);
+    }
+
     boolean canCaptureDeferredPreMutationBaseline(
             BuildProject project,
             WorldMutationSource source,

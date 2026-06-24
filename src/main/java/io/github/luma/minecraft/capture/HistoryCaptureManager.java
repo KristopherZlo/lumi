@@ -5,11 +5,9 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
-import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.RecoveryDraft;
-import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
@@ -35,7 +33,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -63,6 +60,7 @@ public final class HistoryCaptureManager {
     private final LiveUndoRedoActionRecorder liveUndoRedoActionRecorder =
             new LiveUndoRedoActionRecorder(this.historyDebugLog);
     private final ProjectService projectService = new ProjectService();
+    private final ActiveWorkZoneTouchRecorder activeWorkZoneTouchRecorder = new ActiveWorkZoneTouchRecorder();
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final TrackedProjectCatalog trackedProjectCatalog = new TrackedProjectCatalog(
@@ -74,6 +72,8 @@ public final class HistoryCaptureManager {
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
     private final CaptureBaselineCoordinator baselineCoordinator =
             new CaptureBaselineCoordinator(this.stabilizationService, new PersistentBlockStatePolicy());
+    private final LiveBlockSectionReconciliationMarker liveBlockSectionReconciliationMarker =
+            new LiveBlockSectionReconciliationMarker(this.baselineCoordinator, this.workingDrafts);
     private final SessionDraftBlockChangeRecorder draftBlockChangeRecorder = new SessionDraftBlockChangeRecorder();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
     private final EntitySnapshotService entitySnapshotService = new EntitySnapshotService();
@@ -352,67 +352,28 @@ public final class HistoryCaptureManager {
                 if (session == null) {
                     continue;
                 }
-                if (mutation != null && !session.isRootChunk(chunk)) {
-                    this.baselineCoordinator.recordBaselineCorrection(
-                            session,
-                            pos,
-                            mutation.oldState(),
-                            mutation.oldBlockEntity()
-                    );
-                }
-                if (ELIGIBILITY.isExplicitRootSource(source)) {
-                    this.baselineCoordinator.captureSessionChunkBaseline(
+                if (usesDeferredStabilization) {
+                    this.recordDeferredBlockMutation(
                             trackedProject,
                             level,
-                            session,
-                            chunk,
-                            pos,
-                            mutation.oldState(),
-                            mutation.oldBlockEntity()
-                    );
-                    session.addRootChunk(chunk);
-                } else if (usesDeferredStabilization) {
-                    if (!this.activeSessionRegionPolicy.contains(level, session, chunk)) {
-                        LumaDebugLog.log(
-                                trackedProject.project(),
-                                "capture",
-                                "Skipped deferred {} mutation at {} for project {} because chunk {}:{} is outside the active session region",
-                                source,
-                                pos,
-                                trackedProject.project().name(),
-                                chunk.x(),
-                                chunk.z()
-                        );
-                        continue;
-                    }
-                    this.baselineCoordinator.captureSessionChunkBaseline(
-                            trackedProject,
-                            level,
-                            session,
-                            chunk,
-                            pos,
-                            mutation.oldState(),
-                            mutation.oldBlockEntity()
-                    );
-                    session.markDirtySection(
-                            new ChunkSectionPoint(chunk, Math.floorDiv(pos.getY(), 16)),
-                            this.deferredActionContext(session, chunk, source),
-                            level.getGameTime()
-                    );
-                    this.workingDrafts.markDirty(projectId);
-                    LumaDebugLog.log(
-                        trackedProject.project(),
-                        "capture",
-                        "Marked chunk {}:{} dirty for deferred {} stabilization in project {}",
-                            chunk.x(),
-                            chunk.z(),
                             source,
-                            trackedProject.project().name()
+                            pos,
+                            chunk,
+                            mutation.oldState(),
+                            mutation.oldBlockEntity(),
+                            now,
+                            deferredActionContext
                     );
                     continue;
                 }
+                if (ELIGIBILITY.usesLiveStateReconciliation(source)) {
+                    this.liveBlockSectionReconciliationMarker.mark(
+                            trackedProject, level, source, pos, chunk, mutation.oldState(), mutation.oldBlockEntity(),
+                            deferredActionContext, ELIGIBILITY.isExplicitRootSource(source));
+                }
                 SessionDraftBlockChangeRecorder.Result draftRecord =
                         this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
+                this.activeWorkZoneTouchRecorder.record(trackedProject, capturedChange, now);
                 this.liveUndoRedoActionRecorder.recordBlockAction(trackedProject, level, capturedChange, now);
                 this.historyDebugLog.logCapturedBlock(
                         trackedProject.project(),
@@ -638,57 +599,30 @@ public final class HistoryCaptureManager {
             );
             return;
         }
-        if (!session.isRootChunk(chunk)) {
-            this.baselineCoordinator.recordBaselineCorrection(
-                    session,
-                    input.pos(),
-                    mutation.oldState(),
-                    mutation.oldBlockEntity()
-            );
-        }
-        if (ELIGIBILITY.isExplicitRootSource(source)) {
-            this.baselineCoordinator.captureSessionChunkBaseline(
+        if (usesDeferredStabilization) {
+            this.recordDeferredBlockMutation(
                     trackedProject,
                     level,
-                    session,
-                    chunk,
+                    source,
                     input.pos(),
-                    mutation.oldState(),
-                    mutation.oldBlockEntity()
-            );
-            session.addRootChunk(chunk);
-        } else if (usesDeferredStabilization) {
-            if (!this.activeSessionRegionPolicy.contains(level, session, chunk)) {
-                this.diagnosticsLogger.logSkippedCapture(
-                        trackedProject,
-                        source,
-                        input.pos(),
-                        "outside-active-session-region",
-                        "chunk " + chunk.x() + ":" + chunk.z() + " is outside the active session region"
-                );
-                return;
-            }
-            this.baselineCoordinator.captureSessionChunkBaseline(
-                    trackedProject,
-                    level,
-                    session,
                     chunk,
-                    input.pos(),
                     mutation.oldState(),
-                    mutation.oldBlockEntity()
+                    mutation.oldBlockEntity(),
+                    now,
+                    deferredActionContext
             );
-            session.markDirtySection(
-                    new ChunkSectionPoint(chunk, Math.floorDiv(input.pos().getY(), 16)),
-                    this.deferredActionContext(session, chunk, source),
-                    level.getGameTime()
-            );
-            this.workingDrafts.markDirty(projectId);
             return;
+        }
+        if (ELIGIBILITY.usesLiveStateReconciliation(source)) {
+            this.liveBlockSectionReconciliationMarker.mark(
+                    trackedProject, level, source, input.pos(), chunk, mutation.oldState(), mutation.oldBlockEntity(),
+                    deferredActionContext, ELIGIBILITY.isExplicitRootSource(source));
         }
 
         StoredBlockChange capturedChange = mutation.change();
         SessionDraftBlockChangeRecorder.Result draftRecord =
                 this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
+        this.activeWorkZoneTouchRecorder.record(trackedProject, capturedChange, now);
         liveUndoProjects.putIfAbsent(projectId, trackedProject);
         liveUndoChanges.computeIfAbsent(projectId, ignored -> new ArrayList<>()).add(capturedChange);
         CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
@@ -799,6 +733,7 @@ public final class HistoryCaptureManager {
 
                 int pendingBefore = buffer.size();
                 buffer.addEntityChange(capturedChange, now);
+                this.activeWorkZoneTouchRecorder.record(trackedProject, pos, now);
                 this.liveUndoRedoActionRecorder.recordEntityAction(trackedProject, level, capturedChange, now, actionStartedAt);
                 int pendingAfter = buffer.size();
                 this.workingDrafts.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
@@ -1624,25 +1559,9 @@ public final class HistoryCaptureManager {
         if (session == null) {
             return;
         }
-        if (ELIGIBILITY.isExplicitRootSource(source)) {
-            session.addRootChunk(chunk);
-        }
-        this.baselineCoordinator.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
-        this.baselineCoordinator.captureSessionChunkBaseline(
-                trackedProject,
-                level,
-                session,
-                chunk,
-                pos,
-                oldState,
-                oldBlockEntity
-        );
-        session.markDirtySection(
-                new ChunkSectionPoint(chunk, Math.floorDiv(pos.getY(), 16)),
-                deferredActionContext,
-                level.getGameTime()
-        );
-        this.workingDrafts.markDirty(projectId);
+        this.liveBlockSectionReconciliationMarker.mark(
+                trackedProject, level, source, pos, chunk, oldState, oldBlockEntity,
+                deferredActionContext, ELIGIBILITY.isExplicitRootSource(source));
         CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
         diagnostics.record(
                 source,
@@ -1736,35 +1655,15 @@ public final class HistoryCaptureManager {
         if (level == null || trackedProject == null || session == null || session.buffer().isEmpty()) {
             return false;
         }
-        boolean blocksChanged = this.reconcileWorkingDraftBlocksAgainstLiveWorld(level, session, now);
         boolean entitiesChanged = this.reconcileWorkingDraftEntitiesAgainstLiveWorld(level, session, now);
-        boolean changed = blocksChanged || entitiesChanged;
-        if (changed) {
+        if (entitiesChanged) {
             LumaMod.LOGGER.info(
                     "Reconciled working draft for project {} against live world; pending={}",
                     trackedProject.project().name(),
                     session.buffer().size()
             );
         }
-        return changed;
-    }
-
-    private boolean reconcileWorkingDraftBlocksAgainstLiveWorld(
-            ServerLevel level,
-            CaptureSessionState session,
-            Instant now
-    ) {
-        LinkedHashSet<ChunkPoint> loadedChunks = new LinkedHashSet<>();
-        List<StoredBlockChange> liveTargets = new ArrayList<>();
-        for (StoredBlockChange change : session.buffer().orderedChanges()) {
-            ChunkPoint chunk = ChunkPoint.from(change.pos());
-            if (!this.isChunkLoaded(level, chunk)) {
-                continue;
-            }
-            loadedChunks.add(chunk);
-            liveTargets.add(change.withLatestState(this.liveStatePayload(level, change.pos().toBlockPos())));
-        }
-        return this.liveStateReconciler.reconcileLoadedBlocks(session, loadedChunks, liveTargets, now);
+        return entitiesChanged;
     }
 
     private boolean reconcileWorkingDraftEntitiesAgainstLiveWorld(
@@ -1791,22 +1690,6 @@ public final class HistoryCaptureManager {
             ));
         }
         return this.liveStateReconciler.reconcileEntities(session, liveTargets, now);
-    }
-
-    private StatePayload liveStatePayload(ServerLevel level, BlockPos pos) {
-        BlockState state = level.getBlockState(pos);
-        CompoundTag blockEntityTag = null;
-        if (state.hasBlockEntity()) {
-            BlockEntity blockEntity = level.getBlockEntity(pos);
-            blockEntityTag = BlockEntitySnapshot.capture(level, blockEntity);
-        }
-        return StatePayload.capture(state, blockEntityTag);
-    }
-
-    private boolean isChunkLoaded(ServerLevel level, ChunkPoint chunk) {
-        return level != null
-                && chunk != null
-                && level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null;
     }
 
     private Optional<UUID> entityUuid(StoredEntityChange change) {

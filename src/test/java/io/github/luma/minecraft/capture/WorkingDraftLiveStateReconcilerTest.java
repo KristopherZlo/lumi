@@ -1,14 +1,11 @@
 package io.github.luma.minecraft.capture;
 
-import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.CaptureSessionState;
-import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
-import io.github.luma.domain.model.StatePayload;
-import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.WorldMutationSource;
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
@@ -21,22 +18,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WorkingDraftLiveStateReconcilerTest {
 
     @Test
-    void loadedBlockReturnedToBaselineIsDroppedFromDraft() {
-        Instant now = Instant.parse("2026-06-22T10:15:30Z");
-        TrackedChangeBuffer buffer = buffer(now);
-        BlockPoint pos = new BlockPoint(1, 64, 1);
-        buffer.addChange(new StoredBlockChange(pos, payload("minecraft:air"), payload("minecraft:grass_block")), now);
-        CaptureSessionState session = CaptureSessionState.create(buffer);
-
-        boolean changed = new WorkingDraftLiveStateReconciler().reconcileLoadedBlocks(
-                session,
-                List.of(new ChunkPoint(0, 0)),
-                List.of(new StoredBlockChange(pos, payload("minecraft:air"), payload("minecraft:air"))),
-                now.plusSeconds(1)
-        );
-
-        assertTrue(changed);
-        assertTrue(buffer.isEmpty());
+    void blockDraftChangesAreNotReconciledAgainstLiveWorld() {
+        for (Method method : WorkingDraftLiveStateReconciler.class.getDeclaredMethods()) {
+            assertTrue(!method.getName().contains("Block"));
+        }
     }
 
     @Test
@@ -72,12 +57,6 @@ class WorkingDraftLiveStateReconcilerTest {
                 WorldMutationSource.AXIOM,
                 now
         );
-    }
-
-    private static StatePayload payload(String blockId) {
-        CompoundTag state = new CompoundTag();
-        state.putString("Name", blockId);
-        return new StatePayload(state, null);
     }
 
     private static EntityPayload entity(String type, String uuid) {

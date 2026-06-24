@@ -49,7 +49,7 @@ public final class WorldMutationContext {
     public static SourceFrame pushSource(WorldMutationSource source) {
         WorldMutationSource resolvedSource = source == null ? WorldMutationSource.SYSTEM : source;
         Frame parent = currentFrame();
-        if (inheritsParentAction(resolvedSource)) {
+        if (inheritsParentAction(resolvedSource, parent)) {
             SOURCE_STACK.get().push(new Frame(
                     resolvedSource,
                     parent.actor(),
@@ -205,7 +205,10 @@ public final class WorldMutationContext {
         return frame == null ? Frame.system() : frame;
     }
 
-    private static boolean inheritsParentAction(WorldMutationSource source) {
+    private static boolean inheritsParentAction(WorldMutationSource source, Frame parent) {
+        if (source == WorldMutationSource.GROWTH && parent.source() == WorldMutationSource.GROWTH && parent.hasAction()) {
+            return true;
+        }
         return switch (source) {
             case PLAYER,
                     ENTITY,

@@ -13,10 +13,6 @@ public record StoredBlockChange(
         this(pos, oldValue, newValue, false);
     }
 
-    public StoredBlockChange withLatestState(StatePayload newValue) {
-        return new StoredBlockChange(this.pos, this.oldValue, newValue, this.hidden);
-    }
-
     public StoredBlockChange withOldValue(StatePayload oldValue) {
         return new StoredBlockChange(this.pos, oldValue, this.newValue, this.hidden);
     }

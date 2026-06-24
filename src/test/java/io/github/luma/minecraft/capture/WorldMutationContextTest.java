@@ -78,6 +78,30 @@ class WorldMutationContextTest {
     }
 
     @Test
+    void nestedGrowthSourceKeepsCausalGrowthActionIdentity() {
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "builder", true);
+        String playerActionId = WorldMutationContext.currentActionId();
+        try {
+            WorldMutationContext.pushCausalSource(WorldMutationSource.GROWTH);
+            try {
+                WorldMutationContext.pushSource(WorldMutationSource.GROWTH);
+                try {
+                    assertEquals(WorldMutationSource.GROWTH, WorldMutationContext.currentSource());
+                    assertEquals("builder", WorldMutationContext.currentActor());
+                    assertEquals(playerActionId, WorldMutationContext.currentActionId());
+                    assertTrue(WorldMutationContext.currentAccessAllowed());
+                } finally {
+                    WorldMutationContext.popSource();
+                }
+            } finally {
+                WorldMutationContext.popSource();
+            }
+        } finally {
+            WorldMutationContext.popSource();
+        }
+    }
+
+    @Test
     void explicitExplosiveSourceKeepsPlayerActionIdentity() {
         WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "builder", true);
         String playerActionId = WorldMutationContext.currentActionId();
