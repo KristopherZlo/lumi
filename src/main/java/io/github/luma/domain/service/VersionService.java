@@ -190,6 +190,7 @@ public final class VersionService {
                 "",
                 draft.baseVersionId(),
                 progressSink,
+                isolatedDraft.workZone(),
                 timing
         );
     }
@@ -241,7 +242,8 @@ public final class VersionService {
                 true,
                 headVersion.parentVersionId(),
                 headVersion.id(),
-                progressSink
+                progressSink,
+                isolatedDraft.workZone()
         );
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
@@ -300,7 +302,8 @@ public final class VersionService {
                 draft.variantId()
         );
 
-        DraftSplit split = this.splitDraftForActiveZone(layout, draft, author);
+        ScopedDraftSplit scoped = this.splitDraftForActiveZone(layout, draft, author);
+        DraftSplit split = scoped.split();
         if (split.selected().isEmpty()) {
             if (!split.remainder().isEmpty()) {
                 this.recoveryRepository.saveDraft(layout, split.remainder());
@@ -326,16 +329,16 @@ public final class VersionService {
             this.recoveryRepository.saveDraft(layout, split.remainder());
         }
         recordTiming(timing, VersionSaveTiming.RECOVERY_DRAFT_DELETE, sectionStartedAt);
-        return new IsolatedDraft(split.selected());
+        return new IsolatedDraft(split.selected(), scoped.workZone());
     }
 
-    private DraftSplit splitDraftForActiveZone(ProjectLayout layout, RecoveryDraft draft, String author) throws IOException {
+    private ScopedDraftSplit splitDraftForActiveZone(ProjectLayout layout, RecoveryDraft draft, String author) throws IOException {
         Optional<WorkZone> zone = this.workZoneService.activeZone(layout, author)
                 .filter(candidate -> !candidate.cells().isEmpty());
         if (zone.isEmpty()) {
-            return DraftSplit.unscoped(draft);
+            return new ScopedDraftSplit(DraftSplit.unscoped(draft), null);
         }
-        return splitDraftForZone(draft, zone.get());
+        return new ScopedDraftSplit(splitDraftForZone(draft, zone.get()), zone.get());
     }
 
     static DraftSplit splitDraftForZone(RecoveryDraft draft, WorkZone zone) {
@@ -471,9 +474,40 @@ public final class VersionService {
                 schedulePreview,
                 parentVersionIdOverride,
                 progressSink,
+                timing,
+                null
+        );
+    }
+
+    private ProjectVersion writeVersion(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String message,
+            String author,
+            VersionKind versionKind,
+            boolean schedulePreview,
+            String parentVersionIdOverride,
+            WorldOperationManager.ProgressSink progressSink,
+            VersionSaveTimingBuilder timing,
+            WorkZone workZone
+    ) throws IOException {
+        return this.writeVersion(
+                level,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                versionKind,
+                schedulePreview,
+                parentVersionIdOverride,
+                progressSink,
                 true,
                 true,
-                timing
+                timing,
+                workZone
         );
     }
 
@@ -491,6 +525,40 @@ public final class VersionService {
             boolean publishHead,
             boolean allowSnapshotCapture,
             VersionSaveTimingBuilder timing
+    ) throws IOException {
+        return this.writeVersion(
+                level,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                versionKind,
+                schedulePreview,
+                parentVersionIdOverride,
+                progressSink,
+                publishHead,
+                allowSnapshotCapture,
+                timing,
+                null
+        );
+    }
+
+    private ProjectVersion writeVersion(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String message,
+            String author,
+            VersionKind versionKind,
+            boolean schedulePreview,
+            String parentVersionIdOverride,
+            WorldOperationManager.ProgressSink progressSink,
+            boolean publishHead,
+            boolean allowSnapshotCapture,
+            VersionSaveTimingBuilder timing,
+            WorkZone workZone
     ) throws IOException {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
@@ -645,42 +713,7 @@ public final class VersionService {
                         },
                 stats,
                 PreviewInfo.none(),
-                switch (versionKind) {
-                    case WORLD_ROOT -> ExternalSourceInfo.manual();
-                    case RECOVERY -> ExternalSourceInfo.recovery();
-                    case RESTORE -> ExternalSourceInfo.restore();
-                    case PARTIAL_RESTORE -> ExternalSourceInfo.external(
-                            "SYSTEM",
-                            "partial-restore",
-                            "Partial Restore",
-                            "",
-                            null,
-                            false,
-                            false,
-                            Map.of()
-                    );
-                    case MERGE -> ExternalSourceInfo.external(
-                            "SYSTEM",
-                            "merge",
-                            "Branch Merge",
-                            "",
-                            null,
-                            false,
-                            false,
-                            Map.of()
-                    );
-                    case AUTO_CHECKPOINT -> ExternalSourceInfo.external(
-                            "SYSTEM",
-                            "auto-checkpoint",
-                            "Auto Checkpoint",
-                            "",
-                            null,
-                            false,
-                            false,
-                            Map.of()
-                    );
-                    case INITIAL, MANUAL -> ExternalSourceInfo.manual();
-                },
+                this.sourceInfo(versionKind, workZone),
                 now
         );
 
@@ -790,6 +823,7 @@ public final class VersionService {
                 parentVersionIdOverride,
                 rebaseFromVersionId,
                 progressSink,
+                null,
                 null
         );
     }
@@ -806,6 +840,38 @@ public final class VersionService {
             String parentVersionIdOverride,
             String rebaseFromVersionId,
             WorldOperationManager.ProgressSink progressSink,
+            WorkZone workZone
+    ) throws IOException {
+        return this.writeVersionFromOperationDraft(
+                level,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                versionKind,
+                schedulePreview,
+                parentVersionIdOverride,
+                rebaseFromVersionId,
+                progressSink,
+                workZone,
+                null
+        );
+    }
+
+    private ProjectVersion writeVersionFromOperationDraft(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String message,
+            String author,
+            VersionKind versionKind,
+            boolean schedulePreview,
+            String parentVersionIdOverride,
+            String rebaseFromVersionId,
+            WorldOperationManager.ProgressSink progressSink,
+            WorkZone workZone,
             VersionSaveTimingBuilder timing
     ) throws IOException {
         long backgroundStartedAt = System.nanoTime();
@@ -821,7 +887,8 @@ public final class VersionService {
                     schedulePreview,
                     parentVersionIdOverride,
                     progressSink,
-                    timing
+                    timing,
+                    workZone
             );
             long sectionStartedAt = System.nanoTime();
             try {
@@ -917,6 +984,62 @@ public final class VersionService {
         return new PatchWorldChanges(blockChanges, entityChanges);
     }
 
+    private ExternalSourceInfo sourceInfo(VersionKind versionKind, WorkZone workZone) {
+        ExternalSourceInfo sourceInfo = switch (versionKind) {
+            case WORLD_ROOT -> ExternalSourceInfo.manual();
+            case RECOVERY -> ExternalSourceInfo.recovery();
+            case RESTORE -> ExternalSourceInfo.restore();
+            case PARTIAL_RESTORE -> ExternalSourceInfo.external(
+                    "SYSTEM",
+                    "partial-restore",
+                    "Partial Restore",
+                    "",
+                    null,
+                    false,
+                    false,
+                    Map.of()
+            );
+            case MERGE -> ExternalSourceInfo.external(
+                    "SYSTEM",
+                    "merge",
+                    "Branch Merge",
+                    "",
+                    null,
+                    false,
+                    false,
+                    Map.of()
+            );
+            case AUTO_CHECKPOINT -> ExternalSourceInfo.external(
+                    "SYSTEM",
+                    "auto-checkpoint",
+                    "Auto Checkpoint",
+                    "",
+                    null,
+                    false,
+                    false,
+                    Map.of()
+            );
+            case INITIAL, MANUAL -> ExternalSourceInfo.manual();
+        };
+        if (workZone == null || workZone.id().isBlank()) {
+            return sourceInfo;
+        }
+        Map<String, String> metadata = new LinkedHashMap<>(sourceInfo.metadata());
+        metadata.put("workZoneId", workZone.id());
+        metadata.put("workZoneName", workZone.name());
+        metadata.put("workZoneColor", Integer.toHexString(workZone.color() & 0xFFFFFF).toUpperCase(java.util.Locale.ROOT));
+        return ExternalSourceInfo.external(
+                sourceInfo.tool(),
+                sourceInfo.operationType(),
+                sourceInfo.operationLabel(),
+                sourceInfo.actor(),
+                sourceInfo.sourceBounds(),
+                sourceInfo.usedClipboard(),
+                sourceInfo.usedSelection(),
+                metadata
+        );
+    }
+
     int versionsSinceSnapshot(List<ProjectVersion> versions, String headVersionId) {
         return this.snapshotPlanner.versionsSinceSnapshot(versions, headVersionId);
     }
@@ -954,7 +1077,10 @@ public final class VersionService {
         }
     }
 
-    private record IsolatedDraft(RecoveryDraft draft) {
+    private record ScopedDraftSplit(DraftSplit split, WorkZone workZone) {
+    }
+
+    private record IsolatedDraft(RecoveryDraft draft, WorkZone workZone) {
     }
 
 }

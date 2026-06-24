@@ -49,6 +49,10 @@ public final class WorkZoneClientNetworking {
         this.request("select", projectName, zoneId, "");
     }
 
+    public void save(String projectName, String zoneId, String message) {
+        this.request("save", projectName, zoneId, message);
+    }
+
     private void request(String action, String projectName, String zoneId, String zoneName) {
         if (!ClientPlayNetworking.canSend(WorkZonePayloads.Request.TYPE)) {
             this.latest = WorkZoneSnapshot.empty("luma.status.server_mod_required");

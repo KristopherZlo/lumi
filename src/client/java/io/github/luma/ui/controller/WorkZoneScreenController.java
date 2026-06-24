@@ -6,11 +6,14 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorkZoneState;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.network.WorkZoneClientNetworking;
+import io.github.luma.storage.repository.VersionRepository;
 import io.github.luma.ui.state.WorkZoneViewState;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 
@@ -18,6 +21,8 @@ public final class WorkZoneScreenController {
 
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectService projectService = new ProjectService();
+    private final VersionRepository versionRepository = new VersionRepository();
+    private final VersionService versionService = new VersionService();
     private final WorkZoneService workZoneService = new WorkZoneService();
 
     public WorkZoneViewState load(String projectName, String status) {
@@ -32,6 +37,7 @@ public final class WorkZoneScreenController {
             return new WorkZoneViewState(
                     this.projectService.loadProject(server, projectName),
                     this.projectService.loadVariants(server, projectName),
+                    this.versionRepository.loadAll(layout),
                     zones,
                     actor,
                     this.focusedZoneId(zones, actor),
@@ -39,7 +45,7 @@ public final class WorkZoneScreenController {
             );
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Failed to load work zones for project {}", projectName, exception);
-            return new WorkZoneViewState(null, List.<ProjectVariant>of(), WorkZoneState.empty(), this.actor(), "", "luma.status.project_failed");
+            return new WorkZoneViewState(null, List.<ProjectVariant>of(), List.of(), WorkZoneState.empty(), this.actor(), "", "luma.status.project_failed");
         }
     }
 
@@ -82,6 +88,39 @@ public final class WorkZoneScreenController {
         }
     }
 
+    public String saveZone(String projectName, String zoneId, String message) {
+        String normalizedMessage = message == null ? "" : message.trim();
+        if (normalizedMessage.isBlank()) {
+            return "luma.status.quick_save_name_required";
+        }
+        if (zoneId == null || zoneId.isBlank()) {
+            return "luma.status.zone_not_found";
+        }
+        if (!this.client.hasSingleplayerServer()) {
+            WorkZoneClientNetworking.getInstance().save(projectName, zoneId, normalizedMessage);
+            return "luma.status.zones_loading";
+        }
+        try {
+            MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(this.client);
+            var layout = this.projectService.resolveLayout(server, projectName);
+            this.workZoneService.selectZone(layout, this.actor(), zoneId);
+            this.versionService.startSaveVersion(
+                    ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
+                    projectName,
+                    normalizedMessage,
+                    this.actor()
+            );
+            return "luma.status.save_started";
+        } catch (IllegalArgumentException exception) {
+            return this.illegalArgumentStatus(exception);
+        } catch (IllegalStateException exception) {
+            return this.illegalStateStatus(exception);
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to save work zone {} for project {}", zoneId, projectName, exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
     private String actor() {
         return this.client.getUser() == null ? "player" : this.client.getUser().getName();
     }
@@ -97,5 +136,24 @@ public final class WorkZoneScreenController {
                 .map(zone -> zone.id())
                 .findFirst()
                 .orElse("");
+    }
+
+    private String illegalArgumentStatus(IllegalArgumentException exception) {
+        String message = exception.getMessage() == null ? "" : exception.getMessage().toLowerCase(Locale.ROOT);
+        if (message.contains("unknown zone")) {
+            return "luma.status.zone_not_found";
+        }
+        if (message.contains("no pending tracked changes")) {
+            return "luma.status.no_changes_to_save";
+        }
+        return "luma.status.operation_failed";
+    }
+
+    private String illegalStateStatus(IllegalStateException exception) {
+        String message = exception.getMessage() == null ? "" : exception.getMessage().toLowerCase(Locale.ROOT);
+        if (message.contains("admin") || message.contains("cheats")) {
+            return "luma.status.admin_required";
+        }
+        return "luma.status.world_operation_busy";
     }
 }
