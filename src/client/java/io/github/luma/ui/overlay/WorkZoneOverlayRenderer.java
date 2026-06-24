@@ -8,6 +8,7 @@ import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorkZoneSnapshot;
 import io.github.luma.domain.model.WorkZoneState;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.WorkZoneBoundsMerger;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.network.WorkZoneClientNetworking;
 import io.github.luma.ui.ActionBarMessagePresenter;
@@ -22,6 +23,7 @@ public final class WorkZoneOverlayRenderer {
 
     private static final ProjectService PROJECT_SERVICE = new ProjectService();
     private static final WorkZoneService WORK_ZONE_SERVICE = new WorkZoneService();
+    private static final WorkZoneBoundsMerger BOUNDS_MERGER = new WorkZoneBoundsMerger();
     private static final int REFRESH_TICKS = 10;
     private static final int FILL_ALPHA = 30;
     private static final float OUTLINE_WIDTH = 2.0F;
@@ -125,19 +127,9 @@ public final class WorkZoneOverlayRenderer {
 
     private static List<Bounds3i> renderBoxes(WorkZone zone, WorkZoneCell playerCell) {
         if (zone.cells().isEmpty()) {
-            return List.of(cellBounds(playerCell));
+            return BOUNDS_MERGER.merge(List.of(playerCell));
         }
-        if (!zone.contains(playerCell)) {
-            return List.of();
-        }
-        return zone.cells().stream().map(WorkZoneOverlayRenderer::cellBounds).toList();
-    }
-
-    private static Bounds3i cellBounds(WorkZoneCell cell) {
-        int x = cell.x() * WorkZoneCell.SIZE;
-        int y = cell.y() * WorkZoneCell.SIZE;
-        int z = cell.z() * WorkZoneCell.SIZE;
-        return new Bounds3i(new BlockPoint(x, y, z), new BlockPoint(x + 15, y + 15, z + 15));
+        return BOUNDS_MERGER.merge(zone.cells());
     }
 
     private static MeshState mesh(State state) {
