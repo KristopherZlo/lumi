@@ -14,10 +14,6 @@ public record IntegrationStatus(
         mode = mode == null ? IntegrationMode.UNAVAILABLE : mode;
     }
 
-    public List<String> capabilityLabels() {
-        return IntegrationCapability.labels(this.capabilities);
-    }
-
     public List<String> capabilityDisplayLabels() {
         return IntegrationCapability.displayLabels(this.capabilities);
     }

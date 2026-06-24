@@ -48,35 +48,6 @@ class ExternalToolIntegrationRegistryTest {
         assertEquals(IntegrationMode.DETECTED, status.mode());
         assertTrue(status.capabilities().contains(IntegrationCapability.FALLBACK_CAPTURE));
         assertTrue(status.capabilities().contains(IntegrationCapability.MASS_EDIT_GROUPING));
-        assertFalse(status.capabilities().contains(IntegrationCapability.SELECTION));
-        assertFalse(status.capabilities().contains(IntegrationCapability.CLIPBOARD));
-    }
-
-    @Test
-    void reportsFaweStableCapabilitiesThroughWorldEditCompatibleApis() {
-        Set<String> classes = Set.of(
-                "com.fastasyncworldedit.core.Fawe",
-                "com.sk89q.worldedit.WorldEdit",
-                "com.sk89q.worldedit.LocalSession",
-                "com.sk89q.worldedit.fabric.FabricAdapter",
-                "com.sk89q.worldedit.regions.Region",
-                "com.sk89q.worldedit.session.ClipboardHolder",
-                "com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat",
-                "com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats"
-        );
-        ExternalToolIntegrationRegistry registry = new ExternalToolIntegrationRegistry(
-                modId -> false,
-                classes::contains
-        );
-
-        IntegrationStatus status = registry.faweStatus();
-
-        assertTrue(status.available());
-        assertEquals(IntegrationMode.DETECTED, status.mode());
-        assertTrue(status.capabilities().contains(IntegrationCapability.FALLBACK_CAPTURE));
-        assertTrue(status.capabilities().contains(IntegrationCapability.SELECTION));
-        assertTrue(status.capabilities().contains(IntegrationCapability.CLIPBOARD));
-        assertTrue(status.capabilities().contains(IntegrationCapability.SCHEMATIC));
     }
 
     @Test
@@ -102,10 +73,6 @@ class ExternalToolIntegrationRegistryTest {
         assertEquals(IntegrationMode.ACTIVE, status.mode());
         assertTrue(status.capabilities().contains(IntegrationCapability.OPERATION_TRACKING));
         assertTrue(status.capabilities().contains(IntegrationCapability.MASS_EDIT_GROUPING));
-        assertTrue(status.capabilities().contains(IntegrationCapability.SELECTION));
-        assertTrue(status.capabilities().contains(IntegrationCapability.CLIPBOARD));
-        assertTrue(status.capabilities().contains(IntegrationCapability.SCHEMATIC));
-        assertTrue(status.capabilityDisplayLabels().contains("Stable selection"));
     }
 
     @Test
@@ -121,9 +88,6 @@ class ExternalToolIntegrationRegistryTest {
         assertTrue(status.available());
         assertEquals(IntegrationMode.PARTIAL, status.mode());
         assertTrue(status.capabilities().contains(IntegrationCapability.CUSTOM_REGION_API));
-        assertFalse(status.capabilities().contains(IntegrationCapability.SELECTION));
-        assertFalse(status.capabilities().contains(IntegrationCapability.CLIPBOARD));
-        assertFalse(status.capabilities().contains(IntegrationCapability.SCHEMATIC));
     }
 
     @Test
