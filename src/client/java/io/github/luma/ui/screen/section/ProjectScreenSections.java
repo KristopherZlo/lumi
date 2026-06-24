@@ -4,6 +4,7 @@ import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.ProjectUiSupport;
@@ -16,6 +17,7 @@ import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
@@ -165,6 +167,7 @@ public final class ProjectScreenSections {
                 )
         );
         section.child(this.historyViewToggle(model));
+        section.child(this.tagFilter(model));
         if (model.historyGraphVisible()) {
             section.child(this.graphView(model, selectedVariant));
             return section;
@@ -187,14 +190,22 @@ public final class ProjectScreenSections {
             return section;
         }
 
-        BranchHistoryVersions.Entry latest = entries.stream()
+        List<BranchHistoryVersions.Entry> visibleEntries = entries.stream()
+                .filter(entry -> this.matchesTagFilter(entry.version(), model.historyTagFilter()))
+                .toList();
+        if (visibleEntries.isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.history.tag_filter_empty")));
+            return section;
+        }
+
+        BranchHistoryVersions.Entry latest = visibleEntries.stream()
                 .filter(BranchHistoryVersions.Entry::current)
                 .findFirst()
-                .orElse(entries.getFirst());
+                .orElse(visibleEntries.getFirst());
         section.child(LumaUi.caption(Component.translatable("luma.history.current_badge")));
         section.child(this.saveCard(model, latest));
 
-        List<BranchHistoryVersions.Entry> olderEntries = entries.stream()
+        List<BranchHistoryVersions.Entry> olderEntries = visibleEntries.stream()
                 .filter(entry -> !entry.version().id().equals(latest.version().id()))
                 .toList();
         if (!olderEntries.isEmpty()) {
@@ -228,6 +239,16 @@ public final class ProjectScreenSections {
         return row;
     }
 
+    private FlowLayout tagFilter(Model model) {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(4);
+        var input = UIComponents.textBox(Sizing.fixed(Math.min(180, Math.max(120, model.width() / 5))), model.historyTagFilter());
+        input.setHint(Component.translatable("luma.history.tag_filter"));
+        input.onChanged().subscribe(value -> this.actions.setHistoryTagFilter(value));
+        row.child(input);
+        return row;
+    }
+
     private FlowLayout graphView(Model model, ProjectVariant selectedVariant) {
         FlowLayout graph = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
         if (selectedVariant == null) {
@@ -235,8 +256,11 @@ public final class ProjectScreenSections {
             return graph;
         }
 
+        List<ProjectVersion> visibleVersions = model.state().versions().stream()
+                .filter(version -> this.matchesTagFilter(version, model.historyTagFilter()))
+                .toList();
         List<CommitGraphNode> nodes = CommitGraphLayout.build(
-                model.state().versions(),
+                visibleVersions,
                 model.state().variants(),
                 selectedVariant.id()
         );
@@ -301,12 +325,22 @@ public final class ProjectScreenSections {
         return ProjectUiSupport.variantFor(model.state().variants(), model.state().project().activeVariantId());
     }
 
+    private boolean matchesTagFilter(ProjectVersion version, String filter) {
+        String needle = this.normalizedTagFilter(filter);
+        return needle.isBlank() || ProjectVersionTags.from(version).stream().anyMatch(tag -> tag.contains(needle));
+    }
+
+    private String normalizedTagFilter(String filter) {
+        return filter == null ? "" : filter.trim().replaceFirst("^#+", "").toLowerCase(java.util.Locale.ROOT);
+    }
+
     public record Model(
             String projectName,
             ProjectHomeViewState state,
             int width,
             String selectedVariantId,
             boolean historyGraphVisible,
+            String historyTagFilter,
             String pendingRestoreVariantId,
             String pendingRestoreVersionId,
             Optional<Bounds3i> lumiSelection
@@ -331,6 +365,8 @@ public final class ProjectScreenSections {
         void openBranchDialog(ProjectVersion version);
 
         void setHistoryGraphVisible(boolean visible);
+
+        void setHistoryTagFilter(String filter);
 
         void requestRestore(ProjectVariant variant, ProjectVersion version);
     }

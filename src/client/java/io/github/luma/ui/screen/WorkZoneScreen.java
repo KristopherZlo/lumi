@@ -5,6 +5,7 @@ import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.ui.ActionBarMessagePresenter;
@@ -55,6 +56,7 @@ public final class WorkZoneScreen extends LumaScreen {
     private String saveMessage = "";
     private boolean zonePickerVisible;
     private boolean zoneHistoryGraphVisible;
+    private String zoneTagFilter = "";
 
     public WorkZoneScreen(Screen parent, String projectName) {
         super(Component.translatable("luma.screen.zones.title", projectName));
@@ -239,12 +241,20 @@ public final class WorkZoneScreen extends LumaScreen {
                 Component.translatable("luma.zones.history_title"),
                 Component.translatable("luma.zones.history_help")
         );
-        List<ProjectVersion> versions = this.zoneVersions(zone);
-        if (versions.isEmpty()) {
+        List<ProjectVersion> allVersions = this.zoneVersions(zone);
+        if (allVersions.isEmpty()) {
             section.child(LumaUi.caption(Component.translatable("luma.zones.history_empty")));
             return section;
         }
         section.child(this.zoneHistoryViewToggle());
+        section.child(this.zoneTagFilter());
+        List<ProjectVersion> versions = allVersions.stream()
+                .filter(version -> this.matchesTagFilter(version, this.zoneTagFilter))
+                .toList();
+        if (versions.isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.history.tag_filter_empty")));
+            return section;
+        }
         if (this.zoneHistoryGraphVisible) {
             section.child(this.zoneHistoryGraph(versions));
             return section;
@@ -283,6 +293,19 @@ public final class WorkZoneScreen extends LumaScreen {
         });
         graph.active(!this.zoneHistoryGraphVisible);
         row.child(graph);
+        return row;
+    }
+
+    private FlowLayout zoneTagFilter() {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(4);
+        var input = UIComponents.textBox(Sizing.fixed(Math.min(180, Math.max(120, this.width / 5))), this.zoneTagFilter);
+        input.setHint(Component.translatable("luma.history.tag_filter"));
+        input.onChanged().subscribe(value -> {
+            this.zoneTagFilter = value == null ? "" : value;
+            this.rebuild();
+        });
+        row.child(input);
         return row;
     }
 
@@ -371,6 +394,11 @@ public final class WorkZoneScreen extends LumaScreen {
 
     private static String colorHex(int color) {
         return "#" + String.format(java.util.Locale.ROOT, "%06X", color & 0xFFFFFF);
+    }
+
+    private boolean matchesTagFilter(ProjectVersion version, String filter) {
+        String needle = filter == null ? "" : filter.trim().replaceFirst("^#+", "").toLowerCase(java.util.Locale.ROOT);
+        return needle.isBlank() || ProjectVersionTags.from(version).stream().anyMatch(tag -> tag.contains(needle));
     }
 
     private final class ZoneSaveCardActions implements ProjectSaveCardView.Actions {

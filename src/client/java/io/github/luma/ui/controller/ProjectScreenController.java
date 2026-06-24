@@ -451,6 +451,22 @@ public final class ProjectScreenController {
         }
     }
 
+    public String updateVersionTags(String projectName, String versionId, List<String> tags) {
+        try {
+            this.historyEditService.updateVersionTags(
+                    ClientProjectAccess.requireSingleplayerServer(this.client),
+                    projectName,
+                    versionId,
+                    tags
+            );
+            return "luma.status.tags_updated";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Update tags request failed for project {} version {}", projectName, versionId, exception);
+            this.reportFailedAction(exception);
+            return historyEditFailureStatus(exception);
+        }
+    }
+
     public String deleteVersion(String projectName, String versionId) {
         try {
             this.historyEditService.deleteVersion(

@@ -2,6 +2,7 @@ package io.github.luma.ui.screen.section;
 
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
@@ -11,6 +12,7 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
+import java.util.List;
 import java.util.Objects;
 import net.minecraft.network.chat.Component;
 
@@ -126,6 +128,14 @@ public final class ProjectSaveCardView {
                 "luma.build.save_card_summary",
                 model.version().stats().changedBlocks()
         )));
+        List<String> tags = ProjectVersionTags.from(model.version());
+        if (!tags.isEmpty()) {
+            FlowLayout tagRow = LumaUi.actionRow();
+            for (String tag : tags) {
+                tagRow.child(LumaUi.chip(Component.literal("#" + tag)));
+            }
+            text.child(tagRow);
+        }
         if (model.current()) {
             FlowLayout meta = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
             meta.gap(4);

@@ -89,6 +89,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private String statusKey;
     private String selectedVariantId = "";
     private boolean historyGraphVisible = false;
+    private String historyTagFilter = "";
     private String pendingRestoreVariantId = "";
     private String pendingRestoreVersionId = "";
     private String pendingBranchBaseVersionId = "";
@@ -263,6 +264,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 this.width,
                 this.selectedVariantId,
                 this.historyGraphVisible,
+                this.historyTagFilter,
                 this.pendingRestoreVariantId,
                 this.pendingRestoreVersionId,
                 this.selectedLumiBounds()
@@ -635,6 +637,12 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         @Override
         public void setHistoryGraphVisible(boolean visible) {
             historyGraphVisible = visible;
+            refresh("luma.status.project_ready");
+        }
+
+        @Override
+        public void setHistoryTagFilter(String filter) {
+            historyTagFilter = filter == null ? "" : filter;
             refresh("luma.status.project_ready");
         }
 

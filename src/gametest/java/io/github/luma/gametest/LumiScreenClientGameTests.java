@@ -343,6 +343,7 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
                 false,
                 pendingRestoreVariantId,
                 pendingRestoreVersionId,
+                "",
                 selection
         );
     }
@@ -491,6 +492,11 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         @Override
         public void setHistoryGraphVisible(boolean visible) {
             this.lastAction = visible ? "showHistoryGraph" : "showHistoryCards";
+        }
+
+        @Override
+        public void setHistoryTagFilter(String filter) {
+            this.lastAction = "setHistoryTagFilter";
         }
 
         @Override

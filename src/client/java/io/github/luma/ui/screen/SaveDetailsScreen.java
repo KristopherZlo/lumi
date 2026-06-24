@@ -10,6 +10,7 @@ import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.ui.ContextualHelpPresenter;
@@ -82,6 +83,9 @@ public final class SaveDetailsScreen extends LumaScreen {
     private boolean showAdvancedInfo = false;
     private String renameVersionId = "";
     private String renameMessage = "";
+    private String tagVersionId = "";
+    private String tagText = "";
+    private boolean tagEditorVisible = false;
     private String pendingBranchBaseVersionId = "";
     private String branchName = "";
     private int previewZoomStep = 1;
@@ -229,9 +233,53 @@ public final class SaveDetailsScreen extends LumaScreen {
                 ProjectUiSupport.safeText(version.author()),
                 ProjectUiSupport.formatTimestamp(version.createdAt())
         )));
+        text.child(this.tagsSection(version));
         hero.child(text);
         section.child(hero);
         return section;
+    }
+
+    private FlowLayout tagsSection(ProjectVersion version) {
+        this.ensureTagText(version);
+        FlowLayout section = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        section.gap(4);
+
+        FlowLayout row = LumaUi.actionRow();
+        List<String> tags = ProjectVersionTags.from(version);
+        if (tags.isEmpty()) {
+            row.child(LumaUi.caption(Component.translatable("luma.history.tags_empty")));
+        } else {
+            for (String tag : tags) {
+                row.child(LumaUi.chip(Component.literal("#" + tag)));
+            }
+        }
+        row.child(LumaUi.button(Component.literal("#"), button -> {
+            this.tagEditorVisible = !this.tagEditorVisible;
+            this.rebuild();
+        }));
+        section.child(row);
+
+        if (this.tagEditorVisible) {
+            TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.tagText);
+            input.setHint(Component.translatable("luma.history.tags_input"));
+            input.onChanged().subscribe(value -> this.tagText = value == null ? "" : value);
+            section.child(input);
+            FlowLayout actions = LumaUi.actionRow();
+            actions.child(LumaUi.primaryButton(Component.translatable("luma.action.save_tags"), button -> this.saveTags(version)));
+            section.child(actions);
+        }
+        return section;
+    }
+
+    private void ensureTagText(ProjectVersion version) {
+        if (version == null) {
+            return;
+        }
+        if (!version.id().equals(this.tagVersionId)) {
+            this.tagVersionId = version.id();
+            this.tagText = ProjectVersionTags.serialize(ProjectVersionTags.from(version));
+            this.tagEditorVisible = false;
+        }
     }
 
     private FlowLayout previewPanel(ProjectVersion version) {
@@ -466,6 +514,22 @@ public final class SaveDetailsScreen extends LumaScreen {
             this.renameVersionId = version.id();
             this.renameMessage = ProjectUiSupport.displayMessage(version);
         }
+    }
+
+    private void saveTags(ProjectVersion version) {
+        if (version == null) {
+            return;
+        }
+        String result = this.controller.updateVersionTags(
+                this.projectName,
+                version.id(),
+                ProjectVersionTags.parse(this.tagText)
+        );
+        if ("luma.status.tags_updated".equals(result)) {
+            this.tagVersionId = "";
+            this.tagEditorVisible = false;
+        }
+        this.refresh(result);
     }
 
     private BranchCreationDialogState branchDialogState() {
