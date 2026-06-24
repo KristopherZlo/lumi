@@ -1,6 +1,8 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.WorkZone;
+import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectWindowLayout;
@@ -16,6 +18,9 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -31,6 +36,7 @@ public final class WorkZoneScreen extends LumaScreen {
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.zones_ready";
     private String newZoneName = "";
+    private String saveMessage = "";
     private boolean zonePickerVisible;
 
     public WorkZoneScreen(Screen parent, String projectName) {
@@ -79,7 +85,10 @@ public final class WorkZoneScreen extends LumaScreen {
         WorkZone focused = this.focusedZone();
         if (focused != null && !this.zonePickerVisible) {
             body.child(this.currentZoneSection());
-            body.child(this.zoneCard(focused, focused.id().equals(this.state.zones().activeZoneId(this.state.actor()))));
+            boolean active = focused.id().equals(this.state.zones().activeZoneId(this.state.actor()));
+            body.child(this.zoneDetailSection(focused, active));
+            body.child(this.saveZoneSection(focused, active));
+            body.child(this.zoneHistorySection(focused));
             body.child(LumaUi.button(Component.translatable("luma.action.back"), button -> {
                 this.zonePickerVisible = true;
                 this.rebuild();
@@ -171,12 +180,70 @@ public final class WorkZoneScreen extends LumaScreen {
             card.child(LumaUi.caption(Component.translatable("luma.zones.zone_draft")));
         }
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent select = LumaUi.button(Component.translatable(active ? "luma.zones.selected" : "luma.zones.select"), button ->
+        ButtonComponent select = LumaUi.button(Component.translatable(active ? "luma.zones.active" : "luma.zones.enter"), button ->
                 this.selectZone(zone.id()));
         select.active(!active);
         actions.child(select);
         card.child(actions);
         return card;
+    }
+
+    private FlowLayout zoneDetailSection(WorkZone zone, boolean active) {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.zones.details_title", zone.name()),
+                Component.translatable(active ? "luma.zones.details_active" : "luma.zones.details_inactive")
+        );
+        section.child(LumaUi.caption(Component.translatable(
+                "luma.zones.zone_meta",
+                colorHex(zone.color()),
+                zone.cells().size()
+        )));
+        if (zone.cells().isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.zones.zone_draft")));
+        }
+        FlowLayout actions = LumaUi.actionRow();
+        ButtonComponent enter = LumaUi.primaryButton(Component.translatable(active ? "luma.zones.active" : "luma.zones.enter"), button ->
+                this.selectZone(zone.id()));
+        enter.active(!active);
+        actions.child(enter);
+        section.child(actions);
+        return section;
+    }
+
+    private FlowLayout saveZoneSection(WorkZone zone, boolean active) {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.zones.save_title"),
+                Component.translatable(active ? "luma.zones.save_help" : "luma.zones.save_enter_first")
+        );
+        TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.saveMessage);
+        input.setHint(Component.translatable("luma.zones.save_input"));
+        input.onChanged().subscribe(value -> this.saveMessage = value == null ? "" : value);
+        section.child(input);
+        ButtonComponent save = LumaUi.primaryButton(Component.translatable("luma.zones.save_button"), button ->
+                this.saveZone(zone.id()));
+        save.active(active);
+        section.child(save);
+        return section;
+    }
+
+    private FlowLayout zoneHistorySection(WorkZone zone) {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.zones.history_title"),
+                Component.translatable("luma.zones.history_help")
+        );
+        List<ProjectVersion> versions = this.zoneVersions(zone);
+        if (versions.isEmpty()) {
+            section.child(LumaUi.caption(Component.translatable("luma.zones.history_empty")));
+            return section;
+        }
+        for (ProjectVersion version : versions.stream().limit(5).toList()) {
+            section.child(LumaUi.caption(Component.translatable(
+                    "luma.zones.history_item",
+                    version.id(),
+                    version.message()
+            )));
+        }
+        return section;
     }
 
     private WorkZone selectedZone() {
@@ -200,6 +267,16 @@ public final class WorkZoneScreen extends LumaScreen {
         this.rebuild();
     }
 
+    private void saveZone(String zoneId) {
+        this.status = this.controller.saveZone(this.effectiveProjectName(), zoneId, this.saveMessage);
+        if ("luma.status.save_started".equals(this.status)) {
+            this.client.gui.setOverlayMessage(ActionBarMessagePresenter.info(this.status), false);
+            this.saveMessage = "";
+        }
+        this.zonePickerVisible = false;
+        this.rebuild();
+    }
+
     private void rebuild() {
         this.rebuildPreservingScroll(() -> this.bodyScroll);
     }
@@ -209,6 +286,23 @@ public final class WorkZoneScreen extends LumaScreen {
             return this.state.project().name();
         }
         return this.projectName == null ? "" : this.projectName;
+    }
+
+    private List<ProjectVersion> zoneVersions(WorkZone zone) {
+        if (zone == null) {
+            return List.of();
+        }
+        return this.state.versions().stream()
+                .filter(version -> zone.id().equals(workZoneMetadata(version).get("workZoneId")))
+                .sorted(Comparator.comparing(ProjectVersion::createdAt).reversed())
+                .toList();
+    }
+
+    private static Map<String, String> workZoneMetadata(ProjectVersion version) {
+        if (version == null || version.sourceInfo() == null || version.sourceInfo().metadata() == null) {
+            return Map.of();
+        }
+        return version.sourceInfo().metadata();
     }
 
     private static String colorHex(int color) {
