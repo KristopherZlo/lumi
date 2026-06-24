@@ -6,6 +6,7 @@ import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import java.util.List;
+import java.util.function.Predicate;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
@@ -116,6 +117,26 @@ class PartialRestorePlannerTest {
 
         assertTrue(selectedAreaPlan.isEmpty());
         assertTrue(outsideSelectionPlan.isEmpty());
+    }
+
+    @Test
+    void hardScopeKeepsComplexZoneCellsStrict() {
+        Bounds3i bounds = new Bounds3i(new BlockPoint(0, 0, 0), new BlockPoint(31, 31, 31));
+        Predicate<BlockPoint> firstCellOnly = point -> point.x() < 16 && point.y() < 16 && point.z() < 16;
+        StoredBlockChange allowed = change(1, 1, 1, "minecraft:stone", "minecraft:oak_planks");
+        StoredBlockChange sameBoundsDifferentCell = change(20, 1, 1, "minecraft:dirt", "minecraft:glass");
+
+        List<StoredBlockChange> planned = this.planner.plan(
+                List.of(),
+                List.of(allowed, sameBoundsDifferentCell),
+                List.of(),
+                bounds,
+                PartialRestoreMode.SELECTED_AREA,
+                bounds::contains,
+                firstCellOnly
+        );
+
+        assertEquals(List.of(new BlockPoint(1, 1, 1)), planned.stream().map(StoredBlockChange::pos).toList());
     }
 
     private static StoredBlockChange change(int x, int y, int z, String oldBlock, String newBlock) {

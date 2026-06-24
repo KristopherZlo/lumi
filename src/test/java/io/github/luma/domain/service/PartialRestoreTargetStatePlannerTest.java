@@ -129,6 +129,53 @@ class PartialRestoreTargetStatePlannerTest {
     }
 
     @Test
+    void hardScopeKeepsTargetStateRestoreInsideComplexZoneCells() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        BuildProject project = BuildProject.create(
+                "project",
+                "minecraft:overworld",
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(15, 95, 0)),
+                point(0),
+                NOW);
+        BlockPoint allowed = new BlockPoint(1, 64, 0);
+        BlockPoint sameBoundsDifferentCell = new BlockPoint(1, 80, 0);
+        writeSnapshot(layout, "current-root", Map.of(), List.of());
+        writeSnapshot(layout, "target-root", Map.of(), List.of());
+        writePatch(layout, "current-patch", "current-head",
+                List.of(
+                        change(allowed, "minecraft:stone", "minecraft:gold_block"),
+                        change(sameBoundsDifferentCell, "minecraft:stone", "minecraft:gold_block")),
+                List.of());
+        writePatch(layout, "target-patch", "target-head",
+                List.of(
+                        change(allowed, "minecraft:stone", "minecraft:diamond_block"),
+                        change(sameBoundsDifferentCell, "minecraft:stone", "minecraft:diamond_block")),
+                List.of());
+        ProjectVersion currentRoot = version("current-root", "", "current-root", List.of(), VersionKind.INITIAL);
+        ProjectVersion currentHead = version("current-head", "current-root", "", List.of("current-patch"),
+                VersionKind.MANUAL);
+        ProjectVersion targetRoot = version("target-root", "", "target-root", List.of(), VersionKind.INITIAL);
+        ProjectVersion targetHead = version("target-head", "target-root", "", List.of("target-patch"),
+                VersionKind.MANUAL);
+
+        PartialRestoreTargetStatePlanner.Plan plan = this.planner.plan(
+                layout,
+                project,
+                List.of(currentRoot, currentHead, targetRoot, targetHead),
+                currentHead,
+                targetHead,
+                null,
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(15, 95, 0)),
+                PartialRestoreMode.SELECTED_AREA,
+                64,
+                95,
+                noop(),
+                point -> point.y() < 80);
+
+        assertEquals(List.of(allowed), plan.blockChanges().stream().map(StoredBlockChange::pos).toList());
+    }
+
+    @Test
     void fillsWholeDimensionTargetStateFromBaselineChunks() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW);

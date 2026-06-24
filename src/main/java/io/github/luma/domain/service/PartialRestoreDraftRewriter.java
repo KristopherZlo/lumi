@@ -12,6 +12,7 @@ import io.github.luma.storage.repository.RecoveryRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 
 final class PartialRestoreDraftRewriter {
@@ -82,16 +83,27 @@ final class PartialRestoreDraftRewriter {
             Bounds3i bounds,
             PartialRestoreMode mode
     ) throws IOException {
+        this.preserveOutsideRestoredRegion(layout, pendingDraft, bounds, mode, point -> true);
+    }
+
+    void preserveOutsideRestoredRegion(
+            ProjectLayout layout,
+            RecoveryDraft pendingDraft,
+            Bounds3i bounds,
+            PartialRestoreMode mode,
+            Predicate<BlockPoint> hardScope
+    ) throws IOException {
         if (pendingDraft == null || pendingDraft.isEmpty()) {
             this.recoveryRepository.deleteDraft(layout);
             return;
         }
         PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
+        Predicate<BlockPoint> hardLimit = hardScope == null ? point -> true : hardScope;
         List<StoredBlockChange> remaining = pendingDraft.changes().stream()
-                .filter(change -> !effectiveMode.includes(bounds.contains(change.pos())))
+                .filter(change -> !this.includes(change.pos(), bounds, effectiveMode, hardLimit))
                 .toList();
         List<StoredEntityChange> remainingEntities = pendingDraft.entityChanges().stream()
-                .filter(change -> !effectiveMode.includes(this.entityChangeInside(change, bounds)))
+                .filter(change -> !this.includes(this.entityPoint(change), bounds, effectiveMode, hardLimit))
                 .toList();
         if (remaining.isEmpty() && remainingEntities.isEmpty()) {
             this.recoveryRepository.deleteDraft(layout);
@@ -110,14 +122,23 @@ final class PartialRestoreDraftRewriter {
         ));
     }
 
-    private boolean entityChangeInside(StoredEntityChange change, Bounds3i bounds) {
-        if (change == null || bounds == null) {
-            return false;
+    private boolean includes(
+            BlockPoint point,
+            Bounds3i bounds,
+            PartialRestoreMode mode,
+            Predicate<BlockPoint> hardScope
+    ) {
+        return point != null && hardScope.test(point) && mode.includes(bounds.contains(point));
+    }
+
+    private BlockPoint entityPoint(StoredEntityChange change) {
+        if (change == null || (change.oldValue() == null && change.newValue() == null)) {
+            return null;
         }
         BlockPos pos = change.newValue() == null
                 ? change.oldValue().blockPos()
                 : change.newValue().blockPos();
-        return bounds.contains(BlockPoint.from(pos));
+        return BlockPoint.from(pos);
     }
 
     private static String firstNonBlank(String first, String fallback) {

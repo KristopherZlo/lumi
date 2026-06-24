@@ -14,16 +14,45 @@ import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.Objects;
 import net.minecraft.network.chat.Component;
 
-final class ProjectSaveCardView {
+public final class ProjectSaveCardView {
 
     private static final int PREVIEW_WIDTH = 96;
     private static final int PREVIEW_MIN_HEIGHT = 72;
     private static final int PREVIEW_MAX_HEIGHT = 96;
 
     private final PreviewFactory previewFactory;
-    private final ProjectScreenSections.Actions actions;
+    private final Actions actions;
 
     ProjectSaveCardView(ProjectScreenController previewController, ProjectScreenSections.Actions actions) {
+        this(
+                (projectName, version, width, minHeight, maxHeight) -> ProjectUiSupport.versionPreview(
+                        previewController,
+                        projectName,
+                        version,
+                        width,
+                        minHeight,
+                        maxHeight
+                ),
+                new Actions() {
+                    @Override
+                    public void openSaveDetails(String versionId) {
+                        actions.openSaveDetails(versionId);
+                    }
+
+                    @Override
+                    public void requestRestore(ProjectVariant variant, ProjectVersion version) {
+                        actions.requestRestore(variant, version);
+                    }
+
+                    @Override
+                    public void openBranchDialog(ProjectVersion version) {
+                        actions.openBranchDialog(version);
+                    }
+                }
+        );
+    }
+
+    public ProjectSaveCardView(ProjectScreenController previewController, Actions actions) {
         this(
                 (projectName, version, width, minHeight, maxHeight) -> ProjectUiSupport.versionPreview(
                         previewController,
@@ -37,12 +66,12 @@ final class ProjectSaveCardView {
         );
     }
 
-    ProjectSaveCardView(PreviewFactory previewFactory, ProjectScreenSections.Actions actions) {
+    ProjectSaveCardView(PreviewFactory previewFactory, Actions actions) {
         this.previewFactory = Objects.requireNonNull(previewFactory, "previewFactory");
         this.actions = Objects.requireNonNull(actions, "actions");
     }
 
-    FlowLayout render(Model model) {
+    public FlowLayout render(Model model) {
         FlowLayout card = model.current()
                 ? LumaUi.activeInsetPanel(Sizing.fill(100), Sizing.content())
                 : LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
@@ -113,7 +142,8 @@ final class ProjectSaveCardView {
 
         for (ProjectSaveCardLayout.ActionState actionState : ProjectSaveCardLayout.actions(
                 model.versionVariant() != null,
-                model.operationActive()
+                model.operationActive(),
+                model.createVariantAction()
         )) {
             actions.child(this.actionButton(model, actionState));
         }
@@ -146,18 +176,39 @@ final class ProjectSaveCardView {
         return button;
     }
 
-    record Model(
+    public record Model(
             String projectName,
             ProjectVersion version,
             ProjectVariant versionVariant,
             boolean current,
             boolean operationActive,
-            int width
+            int width,
+            boolean createVariantAction
     ) {
-        Model {
+        public Model(
+                String projectName,
+                ProjectVersion version,
+                ProjectVariant versionVariant,
+                boolean current,
+                boolean operationActive,
+                int width
+        ) {
+            this(projectName, version, versionVariant, current, operationActive, width, true);
+        }
+
+        public Model {
             Objects.requireNonNull(projectName, "projectName");
             Objects.requireNonNull(version, "version");
         }
+    }
+
+    public interface Actions {
+
+        void openSaveDetails(String versionId);
+
+        void requestRestore(ProjectVariant variant, ProjectVersion version);
+
+        void openBranchDialog(ProjectVersion version);
     }
 
     interface PreviewFactory {

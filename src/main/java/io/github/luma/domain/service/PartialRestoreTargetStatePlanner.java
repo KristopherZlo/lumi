@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.nbt.CompoundTag;
 
 /**
@@ -86,6 +87,39 @@ final class PartialRestoreTargetStatePlanner {
         if (layout == null || project == null || currentHead == null || targetVersion == null || bounds == null) {
             throw new IllegalArgumentException("Partial restore target-state planning requires project, versions, and bounds");
         }
+        return this.plan(
+                layout,
+                project,
+                versions,
+                currentHead,
+                targetVersion,
+                pendingDraft,
+                bounds,
+                mode,
+                worldMinY,
+                worldMaxY,
+                progressSink,
+                point -> true
+        );
+    }
+
+    Plan plan(
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            ProjectVersion currentHead,
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft,
+            Bounds3i bounds,
+            PartialRestoreMode mode,
+            int worldMinY,
+            int worldMaxY,
+            WorldOperationManager.ProgressSink progressSink,
+            Predicate<BlockPoint> hardScope
+    ) throws IOException {
+        if (layout == null || project == null || currentHead == null || targetVersion == null || bounds == null) {
+            throw new IllegalArgumentException("Partial restore target-state planning requires project, versions, and bounds");
+        }
 
         Scope scope = this.scope(
                 layout,
@@ -97,7 +131,8 @@ final class PartialRestoreTargetStatePlanner {
                 bounds,
                 mode,
                 worldMinY,
-                worldMaxY);
+                worldMaxY,
+                hardScope);
         Map<String, ProjectVersion> versionMap = this.lineageService.versionMap(versions);
         progress(progressSink, "Reconstructing current save state");
         VersionState current = this.reconstruct(layout, project, versionMap, currentHead, scope);
@@ -118,15 +153,17 @@ final class PartialRestoreTargetStatePlanner {
             Bounds3i bounds,
             PartialRestoreMode mode,
             int worldMinY,
-            int worldMaxY
+            int worldMaxY,
+            Predicate<BlockPoint> hardScope
     ) throws IOException {
         PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
+        Predicate<BlockPoint> hardLimit = hardScope == null ? point -> true : hardScope;
         if (effectiveMode == PartialRestoreMode.SELECTED_AREA) {
             Bounds3i projectBounds = project.bounds();
             Bounds3i limitBounds = project.tracksWholeDimension() ? null : projectBounds;
             Bounds3i scopedBounds = limitBounds == null ? bounds : intersection(bounds, limitBounds);
             if (scopedBounds == null) {
-                return emptyScope(bounds, limitBounds, effectiveMode);
+                return emptyScope(bounds, limitBounds, effectiveMode, hardLimit);
             }
             List<ChunkPoint> selectedChunks = chunksIntersecting(scopedBounds);
             List<ChunkPoint> scopeChunks = project.tracksWholeDimension()
@@ -144,7 +181,8 @@ final class PartialRestoreTargetStatePlanner {
                     effectiveMode,
                     scopeChunks,
                     scopedBounds.min().y(),
-                    scopedBounds.max().y()
+                    scopedBounds.max().y(),
+                    hardLimit
             );
         }
 
@@ -154,11 +192,16 @@ final class PartialRestoreTargetStatePlanner {
         List<ChunkPoint> chunks = project.tracksWholeDimension()
                 ? this.knownWholeDimensionChunks(layout, versions, currentHead, targetVersion)
                 : chunksIntersecting(projectBounds);
-        return new Scope(bounds, projectBounds, effectiveMode, chunks, minY, maxY);
+        return new Scope(bounds, projectBounds, effectiveMode, chunks, minY, maxY, hardLimit);
     }
 
-    private static Scope emptyScope(Bounds3i bounds, Bounds3i limitBounds, PartialRestoreMode mode) {
-        return new Scope(bounds, limitBounds, mode, List.of(), 0, -1);
+    private static Scope emptyScope(
+            Bounds3i bounds,
+            Bounds3i limitBounds,
+            PartialRestoreMode mode,
+            Predicate<BlockPoint> hardScope
+    ) {
+        return new Scope(bounds, limitBounds, mode, List.of(), 0, -1, hardScope);
     }
 
     private static Bounds3i intersection(Bounds3i left, Bounds3i right) {
@@ -563,12 +606,14 @@ final class PartialRestoreTargetStatePlanner {
             PartialRestoreMode mode,
             List<ChunkPoint> chunks,
             int minY,
-            int maxY
+            int maxY,
+            Predicate<BlockPoint> hardScope
     ) {
 
         private Scope {
             mode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
             chunks = chunks == null ? List.of() : List.copyOf(chunks);
+            hardScope = hardScope == null ? point -> true : hardScope;
         }
 
         private boolean includesChunk(ChunkPoint chunk) {
@@ -581,6 +626,7 @@ final class PartialRestoreTargetStatePlanner {
                     && pos.y() <= this.maxY
                     && this.includesChunk(ChunkPoint.from(pos))
                     && (this.limitBounds == null || this.limitBounds.contains(pos))
+                    && this.hardScope.test(pos)
                     && this.mode.includes(this.bounds.contains(pos));
         }
 
@@ -590,7 +636,7 @@ final class PartialRestoreTargetStatePlanner {
         }
 
         private boolean includesEntityPair(EntityPayload current, EntityPayload target) {
-            if (!this.insideLimit(current) && !this.insideLimit(target)) {
+            if (!this.insideHardLimit(current) && !this.insideHardLimit(target)) {
                 return false;
             }
             boolean inside = this.insideBounds(current) || this.insideBounds(target);
@@ -608,6 +654,14 @@ final class PartialRestoreTargetStatePlanner {
         private boolean insideLimit(EntityPayload payload) {
             return payload != null
                     && (this.limitBounds == null || this.limitBounds.contains(BlockPoint.from(payload.blockPos())));
+        }
+
+        private boolean insideHardLimit(EntityPayload payload) {
+            if (payload == null) {
+                return false;
+            }
+            BlockPoint point = BlockPoint.from(payload.blockPos());
+            return (this.limitBounds == null || this.limitBounds.contains(point)) && this.hardScope.test(point);
         }
     }
 }

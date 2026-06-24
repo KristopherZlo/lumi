@@ -50,6 +50,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -764,6 +765,7 @@ class RestoreServiceTest {
                 ProjectVersion.class,
                 RecoveryDraft.class,
                 PartialRestoreRequest.class,
+                Predicate.class,
                 int.class,
                 int.class,
                 io.github.luma.minecraft.world.WorldOperationManager.ProgressSink.class
@@ -780,6 +782,7 @@ class RestoreServiceTest {
                     targetVersion,
                     pendingDraft,
                     request,
+                    (Predicate<BlockPoint>) point -> request.bounds() == null || request.bounds().contains(point),
                     64,
                     64,
                     (io.github.luma.minecraft.world.WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {

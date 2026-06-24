@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 final class PartialRestorePlanner {
 
@@ -34,25 +35,49 @@ final class PartialRestorePlanner {
         if (bounds == null) {
             throw new IllegalArgumentException("Partial restore requires bounds");
         }
+        return this.plan(
+                pendingDraftChanges,
+                reverseLineageChanges,
+                forwardLineageChanges,
+                bounds,
+                mode,
+                bounds::contains,
+                point -> true
+        );
+    }
 
+    List<StoredBlockChange> plan(
+            List<StoredBlockChange> pendingDraftChanges,
+            List<StoredBlockChange> reverseLineageChanges,
+            List<StoredBlockChange> forwardLineageChanges,
+            Bounds3i bounds,
+            PartialRestoreMode mode,
+            Predicate<BlockPoint> selectedScope,
+            Predicate<BlockPoint> hardScope
+    ) {
+        if (bounds == null) {
+            throw new IllegalArgumentException("Partial restore requires bounds");
+        }
         PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
+        Predicate<BlockPoint> selected = selectedScope == null ? bounds::contains : selectedScope;
+        Predicate<BlockPoint> hardLimit = hardScope == null ? point -> true : hardScope;
         Map<BlockPoint, ChangeAccumulator> changes = new LinkedHashMap<>();
         for (StoredBlockChange change : safeChanges(pendingDraftChanges)) {
-            if (!effectiveMode.includes(bounds.contains(change.pos()))) {
+            if (!includes(change.pos(), effectiveMode, selected, hardLimit)) {
                 continue;
             }
             this.accumulate(changes, change.pos(), change.newValue(), change.oldValue());
         }
 
         for (StoredBlockChange change : safeChanges(reverseLineageChanges)) {
-            if (!effectiveMode.includes(bounds.contains(change.pos()))) {
+            if (!includes(change.pos(), effectiveMode, selected, hardLimit)) {
                 continue;
             }
             this.accumulate(changes, change.pos(), change.newValue(), change.oldValue());
         }
 
         for (StoredBlockChange change : safeChanges(forwardLineageChanges)) {
-            if (!effectiveMode.includes(bounds.contains(change.pos()))) {
+            if (!includes(change.pos(), effectiveMode, selected, hardLimit)) {
                 continue;
             }
             this.accumulate(changes, change.pos(), change.oldValue(), change.newValue());
@@ -66,6 +91,15 @@ final class PartialRestorePlanner {
             }
         }
         return List.copyOf(result);
+    }
+
+    private static boolean includes(
+            BlockPoint point,
+            PartialRestoreMode mode,
+            Predicate<BlockPoint> selectedScope,
+            Predicate<BlockPoint> hardScope
+    ) {
+        return point != null && hardScope.test(point) && mode.includes(selectedScope.test(point));
     }
 
     private void accumulate(

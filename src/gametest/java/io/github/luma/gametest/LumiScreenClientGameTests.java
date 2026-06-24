@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -163,7 +164,8 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
                 form,
                 projectBounds,
                 null,
-                Optional.of(selection)
+                Optional.of(selection),
+                Map.of()
         ));
         this.assertActive(section, "luma.action.use_selected_area");
         this.assertActive(section, "luma.partial_restore.mode_outside_selection");
@@ -200,7 +202,8 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
                 form,
                 projectBounds,
                 null,
-                Optional.of(selection)
+                Optional.of(selection),
+                Map.of()
         ));
         this.press(refreshed, "luma.action.apply_partial_restore");
         this.assertEquals("apply", actions.lastAction, "apply action");
@@ -471,23 +474,8 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         }
 
         @Override
-        public void openVariants() {
-            this.lastAction = "openVariants";
-        }
-
-        @Override
         public void openRecovery() {
             this.lastAction = "openRecovery";
-        }
-
-        @Override
-        public void quickRollback() {
-            this.lastAction = "quickRollback";
-        }
-
-        @Override
-        public void returnBeforeRestore() {
-            this.lastAction = "returnBeforeRestore";
         }
 
         @Override
@@ -501,13 +489,8 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         }
 
         @Override
-        public void selectVariant(String variantId) {
-            this.lastAction = "selectVariant";
-        }
-
-        @Override
-        public void toggleAllSaves() {
-            this.lastAction = "toggleAllSaves";
+        public void setHistoryGraphVisible(boolean visible) {
+            this.lastAction = visible ? "showHistoryGraph" : "showHistoryCards";
         }
 
         @Override

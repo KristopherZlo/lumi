@@ -1,5 +1,9 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.domain.model.PartialRestoreMode;
+import io.github.luma.domain.model.PartialRestoreRegionSource;
+import io.github.luma.domain.model.PartialRestoreRequest;
+import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.service.ProjectVersionVisibility;
@@ -7,9 +11,13 @@ import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectWindowLayout;
+import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.WorkZoneScreenController;
+import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
+import io.github.luma.ui.screen.section.ProjectSaveCardView;
 import io.github.luma.ui.state.WorkZoneViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
@@ -21,6 +29,7 @@ import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -31,8 +40,11 @@ public final class WorkZoneScreen extends LumaScreen {
     private final String projectName;
     private final Minecraft client = Minecraft.getInstance();
     private final WorkZoneScreenController controller = new WorkZoneScreenController();
+    private final ProjectScreenController projectController = new ProjectScreenController();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
+    private final ScreenRouter router = new ScreenRouter();
+    private final ProjectSaveCardView saveCardView = new ProjectSaveCardView(this.projectController, new ZoneSaveCardActions());
     private WorkZoneViewState state;
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.zones_ready";
@@ -87,9 +99,9 @@ public final class WorkZoneScreen extends LumaScreen {
         if (focused != null && !this.zonePickerVisible) {
             boolean active = focused.id().equals(this.state.zones().activeZoneId(this.state.actor()));
             body.child(this.zoneDetailSection(focused, active));
+            body.child(this.detailActions(active));
             body.child(this.saveZoneSection(focused, active));
             body.child(this.zoneHistorySection(focused));
-            body.child(this.detailActions(active));
             body.child(LumaUi.bottomSpacer());
             return;
         }
@@ -230,11 +242,16 @@ public final class WorkZoneScreen extends LumaScreen {
             section.child(LumaUi.caption(Component.translatable("luma.zones.history_empty")));
             return section;
         }
-        for (ProjectVersion version : versions.stream().limit(5).toList()) {
-            section.child(LumaUi.caption(Component.translatable(
-                    "luma.zones.history_item",
-                    version.id(),
-                    version.message()
+        for (ProjectVersion version : versions) {
+            ProjectVariant variant = ProjectUiSupport.variantFor(this.state.variants(), version.variantId());
+            section.child(this.saveCardView.render(new ProjectSaveCardView.Model(
+                    this.effectiveProjectName(),
+                    version,
+                    variant,
+                    ProjectUiSupport.isVariantHead(this.state.variants(), version),
+                    false,
+                    this.width,
+                    false
             )));
         }
         return section;
@@ -267,6 +284,11 @@ public final class WorkZoneScreen extends LumaScreen {
         this.rebuildPreservingScroll(() -> this.bodyScroll);
     }
 
+    private void refresh(String statusKey) {
+        this.status = statusKey == null || statusKey.isBlank() ? "luma.status.zones_ready" : statusKey;
+        this.rebuild();
+    }
+
     private String effectiveProjectName() {
         if (this.state != null && this.state.project() != null) {
             return this.state.project().name();
@@ -285,5 +307,37 @@ public final class WorkZoneScreen extends LumaScreen {
 
     private static String colorHex(int color) {
         return "#" + String.format(java.util.Locale.ROOT, "%06X", color & 0xFFFFFF);
+    }
+
+    private final class ZoneSaveCardActions implements ProjectSaveCardView.Actions {
+
+        @Override
+        public void openSaveDetails(String versionId) {
+            router.openSaveDetails(WorkZoneScreen.this, effectiveProjectName(), versionId);
+        }
+
+        @Override
+        public void requestRestore(ProjectVariant variant, ProjectVersion version) {
+            String zoneId = versionVisibility.workZoneId(version);
+            if (zoneId.isBlank()) {
+                refresh("luma.status.operation_failed");
+                return;
+            }
+            PartialRestoreRequest request = new PartialRestoreRequest(
+                    effectiveProjectName(),
+                    version.id(),
+                    null,
+                    PartialRestoreMode.SELECTED_AREA,
+                    PartialRestoreRegionSource.LUMI_REGION,
+                    client.getUser().getName(),
+                    Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
+            );
+            refresh(projectController.partialRestore(request));
+        }
+
+        @Override
+        public void openBranchDialog(ProjectVersion version) {
+            router.openSaveDetails(WorkZoneScreen.this, effectiveProjectName(), version.id());
+        }
     }
 }

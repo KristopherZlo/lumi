@@ -11,6 +11,7 @@ import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
@@ -37,6 +38,7 @@ import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -53,6 +55,7 @@ public final class SaveDetailsScreen extends LumaScreen {
     private final String versionId;
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectScreenController controller = new ProjectScreenController();
+    private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
     private final BranchCreationDialogStateFactory branchDialogFactory = new BranchCreationDialogStateFactory();
     private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.controller, new BranchDialogActions());
     private final RestoreConfirmationDialogView restoreDialogView = new RestoreConfirmationDialogView(new RestoreDialogActions());
@@ -342,6 +345,14 @@ public final class SaveDetailsScreen extends LumaScreen {
         comparePrevious.active(!this.parentVersionId(version.id()).isBlank());
         actions.child(comparePrevious);
 
+        ButtonComponent branchButton = LumaUi.iconButton(
+                "git-branch",
+                Component.translatable("luma.save_details.create_idea"),
+                button -> this.openBranchDialog(version)
+        );
+        branchButton.active(!operationActive);
+        actions.child(branchButton);
+
         section.child(actions);
         return section;
     }
@@ -355,7 +366,8 @@ public final class SaveDetailsScreen extends LumaScreen {
                 this.partialRestoreForm,
                 this.state.project() == null ? null : this.state.project().bounds(),
                 this.fallbackPartialRestoreBounds(),
-                this.selectedLumiBounds()
+                this.selectedLumiBounds(),
+                this.restoreMetadata(version)
         ));
     }
 
@@ -403,7 +415,6 @@ public final class SaveDetailsScreen extends LumaScreen {
         deleteButton.active(this.canDeleteVersion(version) && !operationActive);
         actions.child(deleteButton);
 
-        actions.child(LumaUi.button(Component.translatable("luma.save_details.create_idea"), button -> this.openBranchDialog(version)));
         expanded.child(actions);
 
         FlowLayout advanced = LumaUi.actionRow();
@@ -519,18 +530,19 @@ public final class SaveDetailsScreen extends LumaScreen {
             ProjectVariant versionVariant,
             boolean operationActive
     ) {
+        boolean zoneScoped = !this.versionVisibility.workZoneId(version).isBlank();
         return new RestoreConfirmationDialogView.Model(
                 this.width,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
-                Component.translatable("luma.restore.confirm_help"),
+                Component.translatable(zoneScoped ? "luma.restore.confirm_zone_help" : "luma.restore.confirm_help"),
                 Component.translatable(
                         "luma.restore.confirm_target",
                         ProjectUiSupport.displayVariantName(versionVariant),
                         ProjectUiSupport.displayMessage(version)
                 ),
-                this.state.project().settings().safetySnapshotBeforeRestore(),
+                !zoneScoped && this.state.project().settings().safetySnapshotBeforeRestore(),
                 version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
-                this.selectedLumiBounds().isPresent(),
+                !zoneScoped && this.selectedLumiBounds().isPresent(),
                 operationActive
         );
     }
@@ -561,7 +573,27 @@ public final class SaveDetailsScreen extends LumaScreen {
             return;
         }
 
+        String zoneId = this.versionVisibility.workZoneId(version);
+        if (!zoneId.isBlank()) {
+            this.executeZoneRestore(version, zoneId);
+            return;
+        }
+
         String result = this.controller.restoreVersion(this.projectName, version.id());
+        this.router.openProjectIgnoringRecovery(this.parent, this.projectName, version.variantId(), result);
+    }
+
+    private void executeZoneRestore(ProjectVersion version, String zoneId) {
+        PartialRestoreRequest request = new PartialRestoreRequest(
+                this.projectName,
+                version.id(),
+                null,
+                PartialRestoreMode.SELECTED_AREA,
+                PartialRestoreRegionSource.LUMI_REGION,
+                this.client.getUser().getName(),
+                Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
+        );
+        String result = this.controller.partialRestore(request);
         this.router.openProjectIgnoringRecovery(this.parent, this.projectName, version.variantId(), result);
     }
 
@@ -578,10 +610,15 @@ public final class SaveDetailsScreen extends LumaScreen {
                 mode,
                 PartialRestoreRegionSource.LUMI_REGION,
                 this.client.getUser().getName(),
-                java.util.Map.of()
+                this.restoreMetadata(version)
         );
         String result = this.controller.partialRestore(request);
         this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
+    }
+
+    private Map<String, String> restoreMetadata(ProjectVersion version) {
+        String zoneId = this.versionVisibility.workZoneId(version);
+        return zoneId.isBlank() ? Map.of() : Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId);
     }
 
     private boolean canReplaceLatest(ProjectVersion version) {

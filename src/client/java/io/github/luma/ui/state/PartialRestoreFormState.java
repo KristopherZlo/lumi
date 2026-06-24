@@ -144,6 +144,15 @@ public final class PartialRestoreFormState {
     }
 
     public Optional<PartialRestoreRequest> request(String projectName, String versionId, String actor) {
+        return this.request(projectName, versionId, actor, Map.of());
+    }
+
+    public Optional<PartialRestoreRequest> request(
+            String projectName,
+            String versionId,
+            String actor,
+            Map<String, String> metadata
+    ) {
         try {
             Bounds3i bounds = new Bounds3i(
                     new BlockPoint(Integer.parseInt(this.minX), Integer.parseInt(this.minY), Integer.parseInt(this.minZ)),
@@ -157,7 +166,7 @@ public final class PartialRestoreFormState {
                     this.restoreMode,
                     this.regionSource,
                     actor,
-                    Map.of()
+                    metadata
             ));
         } catch (NumberFormatException exception) {
             return Optional.empty();
