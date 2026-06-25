@@ -67,7 +67,9 @@ class WorkZoneScreenZoneActionsTest {
         assertTrue(methodBody.contains("Component.translatable(\"luma.save.name_input\")"));
         assertTrue(methodBody.contains("Component.translatable(\"luma.save.tags_title\")"));
         assertTrue(methodBody.contains("new TagSuggestionComponent("));
-        assertTrue(methodBody.contains("ProjectVersionTags.parse(this.saveTags)"));
+        assertTrue(this.source.contains("ProjectVersionTags.parse(this.saveTags)"));
+        assertTrue(methodBody.contains("Component.translatable(\"luma.action.amend_version\")"));
+        assertTrue(methodBody.contains("startZoneDialogSave(true)"));
     }
 
     @Test

@@ -59,6 +59,10 @@ public final class WorkZoneClientNetworking {
         this.request("save", projectName, zoneId, message, ProjectVersionTags.serialize(tags));
     }
 
+    public void amend(String projectName, String zoneId, String message, List<String> tags) {
+        this.request("amend", projectName, zoneId, message, ProjectVersionTags.serialize(tags));
+    }
+
     private void request(String action, String projectName, String zoneId, String zoneName) {
         this.request(action, projectName, zoneId, zoneName, "");
     }

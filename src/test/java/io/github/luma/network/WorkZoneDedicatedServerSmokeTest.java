@@ -23,7 +23,9 @@ class WorkZoneDedicatedServerSmokeTest {
 
         assertTrue(source.contains("LumaAccessControl.getInstance().canUse(player)"));
         assertTrue(source.contains("\"save\".equals(action)"));
+        assertTrue(source.contains("\"amend\".equals(action)"));
         assertTrue(source.contains("this.versionService.startSaveVersion"));
+        assertTrue(source.contains("this.versionService.startAmendVersion"));
         assertTrue(source.contains("ProjectVersionTags.parse(request.tags())"));
     }
 

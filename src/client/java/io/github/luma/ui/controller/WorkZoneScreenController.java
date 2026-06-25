@@ -91,6 +91,14 @@ public final class WorkZoneScreenController {
     }
 
     public String saveZone(String projectName, String zoneId, String message, List<String> tags) {
+        return this.startZoneVersion(projectName, zoneId, message, tags, false);
+    }
+
+    public String amendZone(String projectName, String zoneId, String message, List<String> tags) {
+        return this.startZoneVersion(projectName, zoneId, message, tags, true);
+    }
+
+    private String startZoneVersion(String projectName, String zoneId, String message, List<String> tags, boolean amend) {
         String normalizedMessage = message == null ? "" : message.trim();
         if (normalizedMessage.isBlank()) {
             return "luma.status.quick_save_name_required";
@@ -99,13 +107,27 @@ public final class WorkZoneScreenController {
             return "luma.status.zone_not_found";
         }
         if (!this.client.hasSingleplayerServer()) {
-            WorkZoneClientNetworking.getInstance().save(projectName, zoneId, normalizedMessage, tags);
+            if (amend) {
+                WorkZoneClientNetworking.getInstance().amend(projectName, zoneId, normalizedMessage, tags);
+            } else {
+                WorkZoneClientNetworking.getInstance().save(projectName, zoneId, normalizedMessage, tags);
+            }
             return "luma.status.zones_loading";
         }
         try {
             MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(this.client);
             var layout = this.projectService.resolveLayout(server, projectName);
             this.workZoneService.selectZone(layout, this.actor(), zoneId);
+            if (amend) {
+                this.versionService.startAmendVersion(
+                        ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
+                        projectName,
+                        normalizedMessage,
+                        this.actor(),
+                        tags == null ? List.of() : tags
+                );
+                return "luma.status.amend_started";
+            }
             this.versionService.startSaveVersion(
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName,

@@ -45,7 +45,8 @@ public final class WorkZoneServerNetworking {
             BuildProject project = this.project(request, server, player, "open-state".equals(action)
                     || "create".equals(action)
                     || "select".equals(action)
-                    || "save".equals(action));
+                    || "save".equals(action)
+                    || "amend".equals(action));
             if (project == null) {
                 this.send(player, WorkZoneSnapshot.empty("luma.status.no_workspace"));
                 return;
@@ -57,9 +58,12 @@ public final class WorkZoneServerNetworking {
                 this.workZoneService.createZone(layout, project.id().toString(), request.zoneName(), actor, Instant.now());
             } else if ("select".equals(action)) {
                 this.workZoneService.selectZone(layout, actor, request.zoneId());
-            } else if ("save".equals(action)) {
-                this.save(request, player, layout, project, actor);
-                this.send(player, this.snapshot(server, player, project, actor, "luma.status.save_started"));
+            } else if ("save".equals(action) || "amend".equals(action)) {
+                boolean amend = "amend".equals(action);
+                this.save(request, player, layout, project, actor, amend);
+                this.send(player, this.snapshot(server, player, project, actor, amend
+                        ? "luma.status.amend_started"
+                        : "luma.status.save_started"));
                 return;
             }
 
@@ -79,13 +83,18 @@ public final class WorkZoneServerNetworking {
             ServerPlayer player,
             ProjectLayout layout,
             BuildProject project,
-            String actor
+            String actor,
+            boolean amend
     ) throws Exception {
         String message = request.zoneName() == null ? "" : request.zoneName().trim();
         if (message.isBlank()) {
             throw new IllegalArgumentException("Save message is required");
         }
         this.workZoneService.selectZone(layout, actor, request.zoneId());
+        if (amend) {
+            this.versionService.startAmendVersion(player.level(), project.name(), message, actor, ProjectVersionTags.parse(request.tags()));
+            return;
+        }
         this.versionService.startSaveVersion(player.level(), project.name(), message, actor, ProjectVersionTags.parse(request.tags()));
     }
 

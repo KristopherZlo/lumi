@@ -405,10 +405,19 @@ public final class WorkZoneScreen extends LumaScreen {
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent save = LumaUi.primaryButton(
                 Component.translatable("luma.zones.save_button"),
-                button -> this.saveZone(this.pendingSaveZoneId, ProjectVersionTags.parse(this.saveTags))
+                button -> this.startZoneDialogSave(false)
         );
         save.active(!this.pendingSaveZoneId.isBlank());
         actions.child(save);
+
+        ProjectVersion activeHead = ProjectUiSupport.activeHead(
+                this.state.project(),
+                this.state.variants(),
+                this.state.versions()
+        );
+        ButtonComponent amend = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> this.startZoneDialogSave(true));
+        amend.active(!this.pendingSaveZoneId.isBlank() && activeHead != null);
+        actions.child(amend);
         actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.closeZoneSaveDialog()));
         modal.child(actions);
 
@@ -658,9 +667,11 @@ public final class WorkZoneScreen extends LumaScreen {
         this.refresh("luma.status.zones_ready");
     }
 
-    private void saveZone(String zoneId, List<String> tags) {
-        this.status = this.controller.saveZone(this.effectiveProjectName(), zoneId, this.saveMessage, tags);
-        if ("luma.status.save_started".equals(this.status)) {
+    private void startZoneDialogSave(boolean amend) {
+        this.status = amend
+                ? this.controller.amendZone(this.effectiveProjectName(), this.pendingSaveZoneId, this.saveMessage, ProjectVersionTags.parse(this.saveTags))
+                : this.controller.saveZone(this.effectiveProjectName(), this.pendingSaveZoneId, this.saveMessage, ProjectVersionTags.parse(this.saveTags));
+        if ("luma.status.save_started".equals(this.status) || "luma.status.amend_started".equals(this.status)) {
             this.client.gui.setOverlayMessage(ActionBarMessagePresenter.info(this.status), false);
             this.saveMessage = "";
             this.saveTags = "";
