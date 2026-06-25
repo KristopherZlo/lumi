@@ -50,7 +50,7 @@ Status: alpha. Keep normal world backups.
 | Key | Action |
 | --- | --- |
 | `U` | Open Build History |
-| `Left Alt+S` | Open the Save build modal |
+| `Left Alt+S` | Open the Save build modal, or Save zone while viewing an active zone |
 | `Left Alt+Z` | Undo |
 | `Left Alt+Y` | Redo |
 | `R` | Quick rollback |

@@ -6,6 +6,7 @@ import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.service.ProjectVersionVisibility;
@@ -16,6 +17,8 @@ import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.TagSuggestionComponent;
 import io.github.luma.ui.TagInputSupport;
+import io.github.luma.ui.controller.BranchCreationDialogStateFactory;
+import io.github.luma.ui.controller.BranchCreationResult;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.WorkZoneScreenController;
 import io.github.luma.ui.graph.CommitGraphComponent;
@@ -25,13 +28,18 @@ import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.overlay.WorkZoneOverlayRenderer;
+import io.github.luma.ui.screen.section.BranchCreationDialogView;
 import io.github.luma.ui.screen.section.ProjectSaveCardView;
+import io.github.luma.ui.screen.section.RestoreConfirmationDialogView;
+import io.github.luma.ui.state.BranchCreationDialogState;
 import io.github.luma.ui.state.WorkZoneViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
@@ -53,15 +61,24 @@ public final class WorkZoneScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final WorkZoneScreenController controller = new WorkZoneScreenController();
     private final ProjectScreenController projectController = new ProjectScreenController();
+    private final BranchCreationDialogStateFactory branchDialogFactory = new BranchCreationDialogStateFactory();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
     private final ScreenRouter router = new ScreenRouter();
     private final ProjectSaveCardView saveCardView = new ProjectSaveCardView(this.projectController, new ZoneSaveCardActions());
+    private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.projectController, new BranchDialogActions());
+    private final RestoreConfirmationDialogView restoreDialogView = new RestoreConfirmationDialogView(new RestoreDialogActions());
     private WorkZoneViewState state;
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.zones_ready";
     private String newZoneName = "";
     private String saveMessage = "";
+    private boolean saveDialogVisible;
+    private String pendingSaveZoneId = "";
+    private String pendingRestoreVariantId = "";
+    private String pendingRestoreVersionId = "";
+    private String pendingBranchBaseVersionId = "";
+    private String branchName = "";
     private boolean zonePickerVisible;
     private boolean zoneHistoryGraphVisible;
     private String openedZoneId = "";
@@ -99,13 +116,16 @@ public final class WorkZoneScreen extends LumaScreen {
             return;
         }
 
+        StackLayout stack = UIContainers.stack(Sizing.fill(100), Sizing.fill(100));
+        root.child(stack);
+
         ProjectWindowLayout window = ProjectWindowLayout.forProject(
                 this.width,
                 Component.translatable("luma.screen.zones.title", this.effectiveProjectName()),
                 this.state.project(),
                 this.state.variants()
         );
-        root.child(window.root());
+        stack.child(window.root());
         this.sidebarNavigation.attach(window, this, this.effectiveProjectName(), ProjectWorkspaceTab.ZONES, this.activeZoneColor());
         WorkZone focused = this.focusedZone();
         if (focused != null && !this.zonePickerVisible) {
@@ -128,11 +148,28 @@ public final class WorkZoneScreen extends LumaScreen {
             body.child(this.saveZoneSection(focused, active));
             body.child(this.zoneHistorySection(focused));
             body.child(LumaUi.bottomSpacer());
-            return;
+        } else {
+            body.child(this.createZoneSection());
+            body.child(this.zoneListSection());
+            body.child(LumaUi.bottomSpacer());
         }
-        body.child(this.createZoneSection());
-        body.child(this.zoneListSection());
-        body.child(LumaUi.bottomSpacer());
+
+        BranchCreationDialogState branchDialog = this.branchDialogState();
+        if (branchDialog.visible()) {
+            stack.child(this.branchDialogView.overlay(new BranchCreationDialogView.Model(
+                    this.effectiveProjectName(),
+                    this.width,
+                    branchDialog,
+                    null
+            )));
+        } else if (!this.pendingRestoreVersionId.isBlank()) {
+            RestoreConfirmationDialogView.Model dialog = this.restoreDialogModel();
+            if (dialog != null) {
+                stack.child(this.restoreDialogView.overlay(dialog));
+            }
+        } else if (this.saveDialogVisible) {
+            stack.child(this.zoneSaveDialogOverlay());
+        }
     }
 
     @Override
@@ -147,6 +184,19 @@ public final class WorkZoneScreen extends LumaScreen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (this.saveDialogVisible && OnboardingScreen.isEscapeKey(event)) {
+            this.closeZoneSaveDialog();
+            return true;
+        }
+        if (this.branchDialogState().visible() && OnboardingScreen.isEscapeKey(event)) {
+            this.closeBranchDialog();
+            return true;
+        }
+        if (!this.pendingRestoreVersionId.isBlank() && OnboardingScreen.isEscapeKey(event)) {
+            this.clearPendingRestore();
+            this.refresh("luma.status.zones_ready");
+            return true;
+        }
         if (event.key() == GLFW.GLFW_KEY_TAB && this.acceptTagCompletion()) {
             return true;
         }
@@ -289,15 +339,45 @@ public final class WorkZoneScreen extends LumaScreen {
                 Component.translatable("luma.zones.save_title"),
                 Component.translatable(active ? "luma.zones.save_help" : "luma.zones.save_enter_first")
         );
-        TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.saveMessage);
-        input.setHint(Component.translatable("luma.zones.save_input"));
-        input.onChanged().subscribe(value -> this.saveMessage = value == null ? "" : value);
-        section.child(input);
         ButtonComponent save = LumaUi.primaryButton(Component.translatable("luma.zones.save_button"), button ->
-                this.saveZone(zone.id()));
+                this.openZoneSaveDialog(zone.id()));
         save.active(active);
         section.child(save);
         return section;
+    }
+
+    private FlowLayout zoneSaveDialogOverlay() {
+        FlowLayout overlay = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
+        overlay.surface(Surface.flat(0x99000000));
+        overlay.padding(Insets.of(10));
+        overlay.horizontalAlignment(HorizontalAlignment.CENTER);
+        overlay.verticalAlignment(VerticalAlignment.CENTER);
+
+        FlowLayout modal = LumaUi.modalFrame(Math.min(360, Math.max(260, this.width - 40)));
+        modal.child(LumaUi.closeHeader(Component.translatable("luma.zones.save_title"), button -> this.closeZoneSaveDialog()));
+        if (!"luma.status.zones_ready".equals(this.state.status())) {
+            modal.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
+        }
+        modal.child(LumaUi.caption(Component.translatable("luma.zones.save_help")));
+
+        TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.saveMessage);
+        input.setHint(Component.translatable("luma.zones.save_input"));
+        input.onChanged().subscribe(value -> this.saveMessage = value == null ? "" : value);
+        modal.child(LumaUi.formField(
+                Component.translatable("luma.zones.save_input"),
+                null,
+                input
+        ));
+
+        FlowLayout actions = LumaUi.actionRow();
+        ButtonComponent save = LumaUi.primaryButton(Component.translatable("luma.zones.save_button"), button -> this.saveZone(this.pendingSaveZoneId));
+        save.active(!this.pendingSaveZoneId.isBlank());
+        actions.child(save);
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.closeZoneSaveDialog()));
+        modal.child(actions);
+
+        overlay.child(modal);
+        return overlay;
     }
 
     private FlowLayout zoneHistorySection(WorkZone zone) {
@@ -515,14 +595,131 @@ public final class WorkZoneScreen extends LumaScreen {
         this.rebuild();
     }
 
+    public void openZoneSaveDialog() {
+        WorkZone active = this.activeZone();
+        if (active == null) {
+            this.refresh("luma.status.zone_not_found");
+            return;
+        }
+        this.openZoneSaveDialog(active.id());
+    }
+
+    private void openZoneSaveDialog(String zoneId) {
+        this.pendingSaveZoneId = zoneId == null ? "" : zoneId;
+        this.saveDialogVisible = true;
+        this.saveMessage = "";
+        this.refresh("luma.status.zones_ready");
+    }
+
+    private void closeZoneSaveDialog() {
+        this.saveDialogVisible = false;
+        this.pendingSaveZoneId = "";
+        this.saveMessage = "";
+        this.refresh("luma.status.zones_ready");
+    }
+
     private void saveZone(String zoneId) {
         this.status = this.controller.saveZone(this.effectiveProjectName(), zoneId, this.saveMessage);
         if ("luma.status.save_started".equals(this.status)) {
             this.client.gui.setOverlayMessage(ActionBarMessagePresenter.info(this.status), false);
             this.saveMessage = "";
+            this.saveDialogVisible = false;
+            this.pendingSaveZoneId = "";
         }
         this.zonePickerVisible = false;
         this.rebuild();
+    }
+
+    private BranchCreationDialogState branchDialogState() {
+        return this.branchDialogFactory.create(
+                this.state == null ? List.of() : this.state.versions(),
+                this.state == null ? List.of() : this.state.variants(),
+                null,
+                this.pendingBranchBaseVersionId,
+                this.branchName
+        );
+    }
+
+    private void createBranch(BranchCreationDialogState dialog) {
+        if (!dialog.canCreate()) {
+            return;
+        }
+        BranchCreationResult result = this.projectController.createAndSwitchVariant(
+                this.effectiveProjectName(),
+                this.branchName.trim(),
+                dialog.baseVersion().id()
+        );
+        if (result.switched()) {
+            this.selectedZoneVariantId = result.variantId();
+            this.pendingBranchBaseVersionId = "";
+            this.branchName = "";
+        }
+        this.refresh(result.statusKey());
+    }
+
+    private void closeBranchDialog() {
+        this.pendingBranchBaseVersionId = "";
+        this.branchName = "";
+        this.refresh("luma.status.zones_ready");
+    }
+
+    private RestoreConfirmationDialogView.Model restoreDialogModel() {
+        ProjectVersion version = ProjectUiSupport.versionFor(this.state.versions(), this.pendingRestoreVersionId);
+        ProjectVariant variant = ProjectUiSupport.variantFor(this.state.variants(), this.pendingRestoreVariantId);
+        if (version == null || variant == null) {
+            this.clearPendingRestore();
+            return null;
+        }
+
+        return new RestoreConfirmationDialogView.Model(
+                this.width,
+                Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
+                Component.translatable("luma.restore.confirm_zone_help"),
+                Component.translatable(
+                        "luma.restore.confirm_target",
+                        ProjectUiSupport.displayVariantName(variant),
+                        ProjectUiSupport.displayMessage(version)
+                ),
+                false,
+                version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
+                false,
+                false
+        );
+    }
+
+    private void confirmPendingRestore() {
+        ProjectVersion version = ProjectUiSupport.versionFor(this.state.versions(), this.pendingRestoreVersionId);
+        if (version == null) {
+            this.clearPendingRestore();
+            this.refresh("luma.status.operation_failed");
+            return;
+        }
+        String zoneId = this.versionVisibility.workZoneId(version);
+        if (zoneId.isBlank()) {
+            this.clearPendingRestore();
+            this.refresh("luma.status.operation_failed");
+            return;
+        }
+        this.clearPendingRestore();
+        this.executeZoneRestore(version, zoneId);
+    }
+
+    private void executeZoneRestore(ProjectVersion version, String zoneId) {
+        PartialRestoreRequest request = new PartialRestoreRequest(
+                this.effectiveProjectName(),
+                version.id(),
+                null,
+                PartialRestoreMode.SELECTED_AREA,
+                PartialRestoreRegionSource.LUMI_REGION,
+                this.client.getUser().getName(),
+                Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
+        );
+        this.refresh(this.projectController.partialRestore(request));
+    }
+
+    private void clearPendingRestore() {
+        this.pendingRestoreVariantId = "";
+        this.pendingRestoreVersionId = "";
     }
 
     private void rebuild() {
@@ -613,6 +810,53 @@ public final class WorkZoneScreen extends LumaScreen {
                 .anyMatch(tag -> tag.toLowerCase(java.util.Locale.ROOT).contains(needle));
     }
 
+    private final class RestoreDialogActions implements RestoreConfirmationDialogView.Actions {
+
+        @Override
+        public void cancel() {
+            clearPendingRestore();
+            refresh("luma.status.zones_ready");
+        }
+
+        @Override
+        public void restoreWhole() {
+            confirmPendingRestore();
+        }
+
+        @Override
+        public void restoreSelectedArea() {
+            confirmPendingRestore();
+        }
+
+        @Override
+        public void restoreOutsideSelection() {
+            confirmPendingRestore();
+        }
+    }
+
+    private final class BranchDialogActions implements BranchCreationDialogView.Actions {
+
+        @Override
+        public void updateBranchName(String value) {
+            branchName = value == null ? "" : value;
+        }
+
+        @Override
+        public boolean canCreate() {
+            return branchDialogState().canCreate();
+        }
+
+        @Override
+        public void create() {
+            createBranch(branchDialogState());
+        }
+
+        @Override
+        public void cancel() {
+            closeBranchDialog();
+        }
+    }
+
     private final class ZoneSaveCardActions implements ProjectSaveCardView.Actions {
 
         @Override
@@ -622,26 +866,19 @@ public final class WorkZoneScreen extends LumaScreen {
 
         @Override
         public void requestRestore(ProjectVariant variant, ProjectVersion version) {
-            String zoneId = versionVisibility.workZoneId(version);
-            if (zoneId.isBlank()) {
-                refresh("luma.status.operation_failed");
+            if (variant == null || version == null) {
                 return;
             }
-            PartialRestoreRequest request = new PartialRestoreRequest(
-                    effectiveProjectName(),
-                    version.id(),
-                    null,
-                    PartialRestoreMode.SELECTED_AREA,
-                    PartialRestoreRegionSource.LUMI_REGION,
-                    client.getUser().getName(),
-                    Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
-            );
-            refresh(projectController.partialRestore(request));
+            pendingRestoreVariantId = variant.id();
+            pendingRestoreVersionId = version.id();
+            refresh("luma.status.restore_confirmation_required");
         }
 
         @Override
         public void openBranchDialog(ProjectVersion version) {
-            router.openVariants(WorkZoneScreen.this, effectiveProjectName(), version.id());
+            pendingBranchBaseVersionId = version == null ? "" : version.id();
+            branchName = "";
+            refresh("luma.status.zones_ready");
         }
 
         @Override

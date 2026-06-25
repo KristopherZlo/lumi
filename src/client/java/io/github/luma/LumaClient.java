@@ -49,6 +49,7 @@ import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
 import io.github.luma.ui.screen.HotkeyInfoScreen;
 import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.QuickSaveScreen;
+import io.github.luma.ui.screen.WorkZoneScreen;
 import org.lwjgl.glfw.GLFW;
 
 public final class LumaClient implements ClientModInitializer {
@@ -291,9 +292,12 @@ public final class LumaClient implements ClientModInitializer {
             quickSaveClicked = true;
         }
         boolean projectScreenQuickSave = client.screen instanceof ProjectScreen;
-        if ((worldInputActive || projectScreenQuickSave) && overlayHold && quickSaveClicked) {
+        boolean workZoneScreenQuickSave = client.screen instanceof WorkZoneScreen;
+        if ((worldInputActive || projectScreenQuickSave || workZoneScreenQuickSave) && overlayHold && quickSaveClicked) {
             if (client.screen instanceof ProjectScreen projectScreen) {
                 projectScreen.openSaveDialog();
+            } else if (client.screen instanceof WorkZoneScreen workZoneScreen) {
+                workZoneScreen.openZoneSaveDialog();
             } else {
                 client.setScreen(new QuickSaveScreen());
             }
