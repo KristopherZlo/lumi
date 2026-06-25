@@ -192,10 +192,7 @@ public final class OnboardingTour {
         text.child(this.wrappedAccent(Component.translatable("luma.onboarding.topic_" + page.id()), textWidth));
         header.child(text);
 
-        ButtonComponent close = LumaUi.button(
-                Component.translatable("luma.action.close_onboarding"),
-                button -> actions.handle(Transition.COMPLETE)
-        );
+        ButtonComponent close = LumaUi.closeButton(button -> actions.handle(Transition.COMPLETE));
         close.sizing(Sizing.fixed(20), Sizing.fixed(18));
         header.child(close);
         return header;

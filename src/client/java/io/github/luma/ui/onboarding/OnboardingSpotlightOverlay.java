@@ -151,15 +151,7 @@ public final class OnboardingSpotlightOverlay extends BaseUIComponent {
         int cursorY = panelY + PANEL_PADDING;
         this.closeX = panelX + PANEL_WIDTH - PANEL_PADDING - CLOSE_BUTTON_SIZE;
         this.closeY = panelY + PANEL_PADDING - 1;
-        this.drawButton(
-                graphics,
-                font,
-                this.closeX,
-                this.closeY,
-                CLOSE_BUTTON_SIZE,
-                Component.translatable("luma.action.close_onboarding"),
-                true
-        );
+        this.drawCloseButton(graphics, this.closeX, this.closeY);
 
         graphics.drawString(font, this.tour.headerText(), textX, cursorY, MUTED, false);
         cursorY += 11;
@@ -216,6 +208,29 @@ public final class OnboardingSpotlightOverlay extends BaseUIComponent {
                 textColor,
                 false
         );
+    }
+
+    private void drawCloseButton(OwoUIGraphics graphics, int x, int y) {
+        graphics.fill(x, y, x + CLOSE_BUTTON_SIZE, y + CLOSE_BUTTON_SIZE, 0xFF252B30);
+        graphics.drawRectOutline(x, y, CLOSE_BUTTON_SIZE, CLOSE_BUTTON_SIZE, PANEL_BORDER);
+        int start = 5;
+        int end = CLOSE_BUTTON_SIZE - 6;
+        for (int offset = 0; offset <= end - start; offset++) {
+            graphics.fill(
+                    x + start + offset,
+                    y + start + offset,
+                    x + start + offset + 1,
+                    y + start + offset + 1,
+                    TEXT
+            );
+            graphics.fill(
+                    x + end - offset,
+                    y + start + offset,
+                    x + end - offset + 1,
+                    y + start + offset + 1,
+                    TEXT
+            );
+        }
     }
 
     private Rect hole(UIComponent target) {

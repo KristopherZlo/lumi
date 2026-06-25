@@ -2,13 +2,15 @@ package io.github.luma.ui;
 
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
+import io.wispforest.owo.ui.component.TextBoxComponent;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 
 public final class TagInputSupport {
 
-    public static final int MAX_LENGTH = 256;
+    public static final int MAX_LENGTH = 128;
 
     private TagInputSupport() {
     }
@@ -31,21 +33,29 @@ public final class TagInputSupport {
         return List.copyOf(tags);
     }
 
-    public static String suggestionSuffix(String text, List<String> knownTags, boolean appendComma) {
-        String suggestion = suggestion(text, knownTags);
-        String token = currentToken(text);
-        if (suggestion.isBlank() || token.isBlank()) {
-            return "";
-        }
-        String suffix = suggestion.toLowerCase(Locale.ROOT).startsWith(token.toLowerCase(Locale.ROOT))
-                ? suggestion.substring(Math.min(token.length(), suggestion.length()))
-                : suggestion;
-        return suffix + (appendComma ? ", " : "");
+    public static void configure(TextBoxComponent input, String text, List<String> knownTags, boolean appendComma) {
+        input.setMaxLength(MAX_LENGTH);
+        input.setSuggestion(null);
+    }
+
+    public static String acceptInto(TextBoxComponent input, String text, List<String> knownTags, boolean appendComma) {
+        String accepted = acceptSuggestion(text, knownTags, appendComma);
+        input.setValue(accepted);
+        input.setCursorPosition(accepted.length());
+        configure(input, accepted, knownTags, appendComma);
+        return accepted;
     }
 
     public static String acceptSuggestion(String text, List<String> knownTags, boolean appendComma) {
         String suggestion = suggestion(text, knownTags);
         if (suggestion.isBlank()) {
+            return limit(text);
+        }
+        return acceptSuggestion(text, suggestion, appendComma);
+    }
+
+    public static String acceptSuggestion(String text, String suggestion, boolean appendComma) {
+        if (suggestion == null || suggestion.isBlank()) {
             return limit(text);
         }
         int comma = text == null ? -1 : text.lastIndexOf(',');
@@ -55,6 +65,46 @@ public final class TagInputSupport {
 
     public static boolean hasSuggestion(String text, List<String> knownTags) {
         return !suggestion(text, knownTags).isBlank();
+    }
+
+    public static List<String> suggestions(String text, List<String> knownTags, int limit) {
+        String token = currentToken(text);
+        if (token.isBlank() || knownTags == null || knownTags.isEmpty() || limit <= 0) {
+            return List.of();
+        }
+        List<String> existing = ProjectVersionTags.parse(text);
+        String normalizedToken = token.toLowerCase(Locale.ROOT);
+        ArrayList<String> prefix = new ArrayList<>();
+        ArrayList<String> fuzzy = new ArrayList<>();
+        for (String tag : knownTags) {
+            if (tag == null || tag.isBlank() || existing.contains(tag)) {
+                continue;
+            }
+            String normalizedTag = tag.toLowerCase(Locale.ROOT);
+            if (normalizedTag.equals(normalizedToken)) {
+                continue;
+            }
+            if (normalizedTag.startsWith(normalizedToken)) {
+                prefix.add(tag);
+            } else if (fuzzyMatches(normalizedTag, normalizedToken)) {
+                fuzzy.add(tag);
+            }
+        }
+
+        ArrayList<String> result = new ArrayList<>(limit);
+        for (String tag : prefix) {
+            result.add(tag);
+            if (result.size() == limit) {
+                return List.copyOf(result);
+            }
+        }
+        for (String tag : fuzzy) {
+            result.add(tag);
+            if (result.size() == limit) {
+                return List.copyOf(result);
+            }
+        }
+        return List.copyOf(result);
     }
 
     private static String suggestion(String text, List<String> knownTags) {

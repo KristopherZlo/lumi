@@ -47,6 +47,7 @@ import io.github.luma.ui.overlay.LumiRegionSelectionRenderer;
 import io.github.luma.ui.overlay.OverlayDiagnostics;
 import io.github.luma.ui.overlay.WorkspaceHudCoordinator;
 import io.github.luma.ui.screen.HotkeyInfoScreen;
+import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.QuickSaveScreen;
 import org.lwjgl.glfw.GLFW;
 
@@ -289,8 +290,13 @@ public final class LumaClient implements ClientModInitializer {
         while (this.quickSaveKey.consumeClick()) {
             quickSaveClicked = true;
         }
-        if (worldInputActive && overlayHold && quickSaveClicked) {
-            client.setScreen(new QuickSaveScreen());
+        boolean projectScreenQuickSave = client.screen instanceof ProjectScreen;
+        if ((worldInputActive || projectScreenQuickSave) && overlayHold && quickSaveClicked) {
+            if (client.screen instanceof ProjectScreen projectScreen) {
+                projectScreen.openSaveDialog();
+            } else {
+                client.setScreen(new QuickSaveScreen());
+            }
         }
 
         boolean hotkeyInfoClicked = false;

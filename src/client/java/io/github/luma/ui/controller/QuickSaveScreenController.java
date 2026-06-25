@@ -2,10 +2,12 @@ package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.telemetry.TelemetryService;
 import java.io.IOException;
+import java.util.List;
 import java.util.Locale;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.level.ServerLevel;
@@ -23,16 +25,17 @@ public final class QuickSaveScreenController {
     }
 
     public String saveCurrentWorkspace(String message) {
+        return this.saveCurrentWorkspace(message, List.of());
+    }
+
+    public String saveCurrentWorkspace(String message, List<String> tags) {
         String normalizedMessage = message == null ? "" : message.trim();
-        if (normalizedMessage.isBlank()) {
-            return "luma.status.quick_save_name_required";
-        }
         if (!this.query.hasSingleplayerServer()) {
             return "luma.status.singleplayer_only";
         }
 
         try {
-            this.query.saveCurrentWorkspace(normalizedMessage);
+            this.query.saveCurrentWorkspace(normalizedMessage, tags == null ? List.of() : tags);
             return "luma.status.save_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Quick save request rejected", exception);
@@ -44,6 +47,14 @@ public final class QuickSaveScreenController {
             LumaMod.LOGGER.warn("Quick save request failed", exception);
             TelemetryService.getInstance().recordOperationRejected("quick_save", "luma.status.operation_failed", exception);
             return "luma.status.operation_failed";
+        }
+    }
+
+    public List<ProjectVersion> currentWorkspaceVersions() {
+        try {
+            return this.query.currentWorkspaceVersions();
+        } catch (Exception exception) {
+            return List.of();
         }
     }
 
@@ -72,7 +83,9 @@ public final class QuickSaveScreenController {
 
         boolean hasSingleplayerServer();
 
-        void saveCurrentWorkspace(String message) throws Exception;
+        void saveCurrentWorkspace(String message, List<String> tags) throws Exception;
+
+        List<ProjectVersion> currentWorkspaceVersions() throws Exception;
     }
 
     private static final class ServiceQuery implements Query {
@@ -87,7 +100,18 @@ public final class QuickSaveScreenController {
         }
 
         @Override
-        public void saveCurrentWorkspace(String message) throws IOException {
+        public void saveCurrentWorkspace(String message, List<String> tags) throws IOException {
+            Workspace workspace = this.currentWorkspace();
+            this.versionService.startSaveVersion(workspace.level(), workspace.project().name(), message, this.client.getUser().getName(), tags);
+        }
+
+        @Override
+        public List<ProjectVersion> currentWorkspaceVersions() throws IOException {
+            Workspace workspace = this.currentWorkspace();
+            return this.projectService.loadVersions(workspace.level().getServer(), workspace.project().name());
+        }
+
+        private Workspace currentWorkspace() throws IOException {
             var server = ClientProjectAccess.requireSingleplayerServer(this.client);
             ServerLevel level = server.getLevel(this.client.level == null
                     ? net.minecraft.world.level.Level.OVERWORLD
@@ -98,7 +122,10 @@ public final class QuickSaveScreenController {
 
             String author = this.client.getUser().getName();
             BuildProject project = this.projectService.ensureWorldProject(level, author);
-            this.versionService.startSaveVersion(level, project.name(), message, author);
+            return new Workspace(level, project);
+        }
+
+        private record Workspace(ServerLevel level, BuildProject project) {
         }
     }
 }

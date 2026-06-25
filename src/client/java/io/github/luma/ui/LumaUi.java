@@ -8,10 +8,12 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Color;
 import io.wispforest.owo.ui.core.CursorStyle;
+import io.wispforest.owo.ui.core.Easing;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
+import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.function.Consumer;
 import net.minecraft.network.chat.Component;
@@ -62,7 +64,13 @@ public final class LumaUi {
         layout.surface(windowSurface());
         layout.padding(Insets.of(6));
         layout.gap(5);
-        return layout;
+        return animateOpen(layout);
+    }
+
+    public static <T extends UIComponent> T animateOpen(T component) {
+        component.margins(Insets.top(8));
+        component.margins().animate(160, Easing.CUBIC, Insets.none()).forwards();
+        return component;
     }
 
     public static Surface screenBackdrop() {
@@ -104,7 +112,10 @@ public final class LumaUi {
     }
 
     public static FlowLayout closeHeader(Component title, Consumer<ButtonComponent> onClose) {
-        FlowLayout header = titleBar();
+        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        header.padding(Insets.bottom(3));
+        header.gap(5);
+        header.verticalAlignment(VerticalAlignment.CENTER);
         FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
         titleColumn.child(value(title));
         header.child(titleColumn);
@@ -203,7 +214,7 @@ public final class LumaUi {
         header.verticalAlignment(VerticalAlignment.CENTER);
         header.child(accent(Component.translatable(hint.titleKey())));
         header.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
-        ButtonComponent dismiss = button(Component.translatable("luma.action.dismiss_hint"), onDismiss);
+        ButtonComponent dismiss = iconButton("missing-close", Component.translatable("luma.action.dismiss_hint"), onDismiss);
         header.child(dismiss);
         panel.child(header);
         panel.child(caption(Component.translatable(hint.bodyKey())));
@@ -305,6 +316,22 @@ public final class LumaUi {
         button.sizing(Sizing.fill(100), Sizing.fixed(20));
         button.margins(Insets.none());
         button.active(true);
+        return button;
+    }
+
+    public static ButtonComponent sidebarTab(Component text, boolean selected, int innerBorder, Consumer<ButtonComponent> onPress) {
+        ButtonComponent button = sidebarTab(text, selected, onPress);
+        button.renderer((graphics, component, delta) -> {
+            int fill = selected ? STATUS_FILL : component.isHovered() ? BUTTON_HOVER : BUTTON_FILL;
+            graphics.fill(component.getX(), component.getY(), component.getX() + component.getWidth(), component.getY() + component.getHeight(), fill);
+            graphics.drawRectOutline(
+                    component.getX() + 1,
+                    component.getY() + 1,
+                    component.getWidth() - 2,
+                    component.getHeight() - 2,
+                    innerBorder
+            );
+        });
         return button;
     }
 

@@ -27,13 +27,13 @@ Status: alpha. Keep normal world backups.
 
 - Tracks a dimension or selected build area as a project.
 - Saves named versions with change stats and restore data.
-- Lets saves carry searchable tags.
+- Lets saves carry searchable tags, with tag input fields capped at 128 characters.
 - Soft-deletes non-root saves without removing their stored files.
 - Compares versions, branches, and the current world.
 - Shows changed blocks with an in-world overlay.
 - Restores a full version, only a selected area, or everything except a selected area.
 - Supports branches, local merges, import, and export.
-- Lets builders label current work with named work zones and save an active zone without consuming other pending work.
+- Lets builders label current work with named work zones, save an active zone without consuming other pending work, and review zone saves on a separate zone-history surface.
 - Keeps live undo/redo for recent tracked edits.
 - Keeps recovery drafts for interrupted work.
 - Captures supported WorldEdit, FAWE, Axiom, and normal Minecraft mutation paths on a best-effort basis.
@@ -50,7 +50,7 @@ Status: alpha. Keep normal world backups.
 | Key | Action |
 | --- | --- |
 | `U` | Open Build History |
-| `Left Alt+S` | Quick save |
+| `Left Alt+S` | Open the Save build modal |
 | `Left Alt+Z` | Undo |
 | `Left Alt+Y` | Redo |
 | `R` | Quick rollback |
