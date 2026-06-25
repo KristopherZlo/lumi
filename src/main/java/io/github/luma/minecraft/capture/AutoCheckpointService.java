@@ -24,11 +24,8 @@ import net.minecraft.server.level.ServerPlayer;
 public final class AutoCheckpointService {
 
     private static final AutoCheckpointService INSTANCE = new AutoCheckpointService();
-    private static final int LARGE_COMMAND_THRESHOLD = 512;
     private static final int DEDUP_LIMIT = 256;
 
-    private final AutoCheckpointCommandClassifier commandClassifier =
-            new AutoCheckpointCommandClassifier(LARGE_COMMAND_THRESHOLD);
     private final ProjectService projectService = new ProjectService();
     private final RecoveryService recoveryService = new RecoveryService();
     private final VersionService versionService = new VersionService();
@@ -54,10 +51,15 @@ public final class AutoCheckpointService {
         if (!LumaAccessControl.getInstance().canUse(player)) {
             return;
         }
-        if (!this.commandClassifier.shouldCheckpoint(command, player.blockPosition())) {
+        Optional<BuildProject> project = this.findProject(level, "large command");
+        if (project.isEmpty() || !project.get().settings().autoCheckpointEnabled()) {
             return;
         }
-        this.checkpoint(level, "command:" + WorldMutationContext.currentActionId(), player.getName().getString(), "large command");
+        int threshold = project.get().settings().autoCheckpointLargeChangeThreshold();
+        if (!new AutoCheckpointCommandClassifier(threshold).shouldCheckpoint(command, player.blockPosition())) {
+            return;
+        }
+        this.checkpoint(level, project.get(), "command:" + WorldMutationContext.currentActionId(), player.getName().getString(), "large command");
     }
 
     public void checkpointBeforeExternalOperation(
@@ -82,10 +84,23 @@ public final class AutoCheckpointService {
         if (!accessAllowed) {
             return;
         }
-        this.checkpoint(level, source.name().toLowerCase(java.util.Locale.ROOT) + ":" + actionId, actor, source.name());
+        this.findProject(level, source.name()).ifPresent(project ->
+                this.checkpoint(level, project, source.name().toLowerCase(java.util.Locale.ROOT) + ":" + actionId, actor, source.name()));
     }
 
-    private void checkpoint(ServerLevel level, String dedupKey, String author, String reason) {
+    private Optional<BuildProject> findProject(ServerLevel level, String reason) {
+        try {
+            return this.projectService.findWorldProject(level);
+        } catch (IOException | RuntimeException exception) {
+            LumaMod.LOGGER.warn("Auto checkpoint failed before {}", reason, exception);
+            return Optional.empty();
+        }
+    }
+
+    private void checkpoint(ServerLevel level, BuildProject project, String dedupKey, String author, String reason) {
+        if (!project.settings().autoCheckpointEnabled()) {
+            return;
+        }
         if (dedupKey == null || dedupKey.isBlank()) {
             dedupKey = reason + ":" + System.nanoTime();
         }
@@ -97,29 +112,22 @@ public final class AutoCheckpointService {
         }
 
         try {
-            Optional<BuildProject> project = this.projectService.findWorldProject(level);
-            if (project.isEmpty()) {
-                return;
-            }
-            if (!project.get().settings().autoCheckpointEnabled()) {
-                return;
-            }
-            Optional<RecoveryDraft> draft = this.recoveryService.loadDraft(level.getServer(), project.get().name());
+            Optional<RecoveryDraft> draft = this.recoveryService.loadDraft(level.getServer(), project.name());
             if (draft.isEmpty() || draft.get().isEmpty()) {
                 return;
             }
             if (this.worldOperationManager.hasActiveOperation(level.getServer())) {
-                LumaMod.LOGGER.info("Skipped auto checkpoint for {} because a Lumi operation is active", project.get().name());
+                LumaMod.LOGGER.info("Skipped auto checkpoint for {} because a Lumi operation is active", project.name());
                 return;
             }
             this.versionService.startSaveVersion(
                     level,
-                    project.get().name(),
+                    project.name(),
                     "Auto checkpoint before " + reason,
                     author == null || author.isBlank() ? "lumi" : author,
                     VersionKind.AUTO_CHECKPOINT
             );
-            LumaMod.LOGGER.info("Queued auto checkpoint for project {} before {}", project.get().name(), reason);
+            LumaMod.LOGGER.info("Queued auto checkpoint for project {} before {}", project.name(), reason);
         } catch (IOException | RuntimeException exception) {
             LumaMod.LOGGER.warn("Auto checkpoint failed before {}", reason, exception);
         }

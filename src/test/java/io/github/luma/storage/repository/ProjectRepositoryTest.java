@@ -1,6 +1,7 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.storage.GsonProvider;
 import io.github.luma.storage.ProjectLayout;
 import java.io.IOException;
@@ -64,6 +65,7 @@ class ProjectRepositoryTest {
         BuildProject loaded = this.repository.load(layout).orElseThrow();
 
         assertFalse(loaded.settings().autoCheckpointEnabled());
+        assertEquals(ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD, loaded.settings().autoCheckpointLargeChangeThreshold());
     }
 
     @Test
