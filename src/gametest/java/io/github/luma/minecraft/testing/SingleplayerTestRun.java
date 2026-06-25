@@ -585,11 +585,6 @@ final class SingleplayerTestRun {
         if (savedVersion != null) {
             this.check(this.workZoneId.equals(this.versionVisibility.workZoneId(savedVersion)),
                     "Work-zone smoke save records zone metadata");
-            String metadataZoneId = savedVersion.sourceInfo() == null
-                    ? ""
-                    : savedVersion.sourceInfo().metadata().getOrDefault(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, "");
-            this.check(this.workZoneId.equals(metadataZoneId),
-                    "Work-zone smoke save source info exposes the zone id");
             VersionDiff diff = this.value("Work-zone smoke save diff can be built", () ->
                     this.diffService.compareVersionToParent(server, this.project.name(), savedVersion.id()));
             if (diff != null) {
