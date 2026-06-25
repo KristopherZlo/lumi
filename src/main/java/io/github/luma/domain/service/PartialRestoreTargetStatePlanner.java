@@ -440,10 +440,7 @@ final class PartialRestoreTargetStatePlanner {
             return AIR;
         }
         int localIndex = (localY << 8) | (localZ << 4) | localX;
-        if (localIndex < 0 || localIndex >= section.paletteIndexes().length) {
-            throw new IOException("Snapshot section index outside palette data");
-        }
-        int paletteIndex = section.paletteIndexes()[localIndex];
+        int paletteIndex = section.paletteIndexAt(localIndex);
         if (paletteIndex < 0 || paletteIndex >= section.palette().size()) {
             throw new IOException("Snapshot palette index outside palette");
         }

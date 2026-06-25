@@ -20,6 +20,7 @@ final class StorageLimits {
     static final int MAX_SNAPSHOT_BLOCK_ENTITIES_PER_CHUNK = 128 * 4096;
     static final int MAX_SNAPSHOT_ENTITY_SNAPSHOTS_PER_CHUNK = 262_144;
     static final int MAX_SNAPSHOT_PALETTE_INDEXES = 4096;
+    static final int MAX_SNAPSHOT_PACKED_LONGS = 4096;
 
     private StorageLimits() {
     }

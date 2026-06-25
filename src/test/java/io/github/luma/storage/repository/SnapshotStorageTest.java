@@ -9,10 +9,12 @@ import io.github.luma.domain.model.SnapshotSectionData;
 import io.github.luma.storage.ProjectLayout;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +71,7 @@ class SnapshotStorageTest {
         this.writer.writeFile(file, snapshot);
         SnapshotData restored = this.reader.readFile(file);
 
+        assertSnapshotVersion(file, 8);
         assertEquals(snapshot.projectId(), restored.projectId());
         assertEquals(snapshot.minBuildHeight(), restored.minBuildHeight());
         assertEquals(snapshot.maxBuildHeight(), restored.maxBuildHeight());
@@ -82,6 +85,9 @@ class SnapshotStorageTest {
         SnapshotSectionData restoredSection = restoredChunk.sections().getFirst();
         assertEquals(0, restoredSection.sectionY());
         assertEquals(List.of(state("minecraft:stone"), state("minecraft:gold_block")), restoredSection.palette());
+        assertEquals(1, restoredSection.bitsPerEntry());
+        assertEquals(0, restoredSection.paletteIndexAt(0));
+        assertEquals(1, restoredSection.paletteIndexAt(1));
         assertArrayEquals(indexes, restoredSection.paletteIndexes());
     }
 
@@ -100,7 +106,7 @@ class SnapshotStorageTest {
                 List.of(new ChunkSectionSnapshotPayload(
                         0,
                         List.of(state("minecraft:air"), state("minecraft:stone"), state("minecraft:gold_block")),
-                        packIndexes(indexes, 2),
+                        packMinecraftIndexes(indexes, 2),
                         2
                 )),
                 Map.of(SnapshotWriter.packVerticalIndex(5, 1, 0), blockEntity("minecraft:chest")),
@@ -119,7 +125,88 @@ class SnapshotStorageTest {
         assertEquals(1, restoredChunk.sections().size());
         SnapshotSectionData restoredSection = restoredChunk.sections().getFirst();
         assertEquals(List.of(state("minecraft:air"), state("minecraft:stone"), state("minecraft:gold_block")), restoredSection.palette());
+        assertArrayEquals(payload.sections().getFirst().packedStorage(), restoredSection.packedStorage());
         assertArrayEquals(indexes, restoredSection.paletteIndexes());
+    }
+
+    @Test
+    void singlePaletteSectionRoundTripsWithoutPackedStorage() throws Exception {
+        SnapshotData snapshot = new SnapshotData(
+                "project",
+                Instant.parse("2026-04-20T10:00:00Z"),
+                0,
+                15,
+                List.of(new SnapshotChunkData(
+                        0,
+                        0,
+                        List.of(new SnapshotSectionData(0, List.of(state("minecraft:stone")), 0, new long[0])),
+                        Map.of()
+                ))
+        );
+
+        Path file = this.tempDir.resolve("single-palette.bin.lz4");
+        this.writer.writeFile(file, snapshot);
+        SnapshotSectionData section = this.reader.readFile(file).chunks().getFirst().sections().getFirst();
+
+        assertEquals(0, section.bitsPerEntry());
+        assertEquals(0, section.packedStorage().length);
+        assertEquals(0, section.paletteIndexAt(0));
+        assertEquals(0, section.paletteIndexAt(4095));
+    }
+
+    @Test
+    void multiPalettePackedSectionRoundTrips() throws Exception {
+        short[] indexes = new short[4096];
+        indexes[0] = 1;
+        indexes[257] = 2;
+        long[] packed = packMinecraftIndexes(indexes, 2);
+        SnapshotData snapshot = snapshotWithSection(new SnapshotSectionData(
+                0,
+                List.of(state("minecraft:air"), state("minecraft:stone"), state("minecraft:gold_block")),
+                2,
+                packed
+        ));
+
+        Path file = this.tempDir.resolve("multi-palette-packed.bin.lz4");
+        this.writer.writeFile(file, snapshot);
+        SnapshotSectionData section = this.reader.readFile(file).chunks().getFirst().sections().getFirst();
+
+        assertEquals(2, section.bitsPerEntry());
+        assertArrayEquals(packed, section.packedStorage());
+        assertEquals(1, section.paletteIndexAt(0));
+        assertEquals(2, section.paletteIndexAt(257));
+    }
+
+    @Test
+    void minecraftStylePaddedLongsRoundTrip() throws Exception {
+        short[] indexes = new short[4096];
+        indexes[11] = 16;
+        indexes[12] = 1;
+        indexes[13] = 15;
+        long[] packed = packMinecraftIndexes(indexes, 5);
+        SnapshotData snapshot = snapshotWithSection(new SnapshotSectionData(0, palette(17), 5, packed));
+
+        Path file = this.tempDir.resolve("minecraft-padded.bin.lz4");
+        this.writer.writeFile(file, snapshot);
+        SnapshotSectionData section = this.reader.readFile(file).chunks().getFirst().sections().getFirst();
+
+        assertArrayEquals(packed, section.packedStorage());
+        assertEquals(16, section.paletteIndexAt(11));
+        assertEquals(1, section.paletteIndexAt(12));
+        assertEquals(15, section.paletteIndexAt(13));
+    }
+
+    @Test
+    void readsSnapshotV7PaletteIndexes() throws Exception {
+        short[] indexes = new short[4096];
+        indexes[0] = 1;
+        Path file = this.tempDir.resolve("snapshot-v7.bin.lz4");
+        this.writeSnapshotFile(file, 7, this.v7Chunk(indexes));
+
+        SnapshotSectionData section = this.reader.readFile(file).chunks().getFirst().sections().getFirst();
+
+        assertEquals(1, section.paletteIndexAt(0));
+        assertArrayEquals(indexes, section.paletteIndexes());
     }
 
     @Test
@@ -230,7 +317,7 @@ class SnapshotStorageTest {
         ChunkSectionSnapshotPayload section = new ChunkSectionSnapshotPayload(
                 0,
                 List.of(state("minecraft:air"), state("minecraft:stone")),
-                packIndexes(indexes, 1),
+                packMinecraftIndexes(indexes, 1),
                 1
         );
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("content-ref-project.mbp"));
@@ -291,7 +378,7 @@ class SnapshotStorageTest {
         Path file = this.tempDir.resolve("bad-chunk-count.bin.lz4");
         try (DataOutputStream data = new DataOutputStream(Files.newOutputStream(file))) {
             data.writeInt(SNAPSHOT_MAGIC);
-            data.writeInt(7);
+            data.writeInt(8);
             data.writeUTF("project");
             data.writeLong(Instant.parse("2026-04-20T10:00:00Z").toEpochMilli());
             data.writeInt(0);
@@ -327,6 +414,32 @@ class SnapshotStorageTest {
         assertThrows(java.io.IOException.class, () -> this.reader.readFile(file));
     }
 
+    @Test
+    void rejectsBadPackedLength() throws Exception {
+        Path file = this.tempDir.resolve("bad-packed-length.bin.lz4");
+        this.writeSnapshotFile(file, 8, this.v8Chunk(
+                List.of(state("minecraft:air"), state("minecraft:stone")),
+                1,
+                new long[] {0L}
+        ));
+
+        assertThrows(java.io.IOException.class, () -> this.reader.readFile(file));
+    }
+
+    @Test
+    void rejectsBadPackedPaletteIndex() throws Exception {
+        short[] indexes = new short[4096];
+        indexes[0] = 2;
+        Path file = this.tempDir.resolve("bad-packed-palette-index.bin.lz4");
+        this.writeSnapshotFile(file, 8, this.v8Chunk(
+                List.of(state("minecraft:air"), state("minecraft:stone")),
+                2,
+                packMinecraftIndexes(indexes, 2)
+        ));
+
+        assertThrows(java.io.IOException.class, () -> this.reader.readFile(file));
+    }
+
     private static net.minecraft.nbt.CompoundTag state(String blockId) {
         net.minecraft.nbt.CompoundTag state = new net.minecraft.nbt.CompoundTag();
         state.putString("Name", blockId);
@@ -346,22 +459,108 @@ class SnapshotStorageTest {
         return new EntityPayload(tag);
     }
 
-    private static long[] packIndexes(short[] indexes, int bitsPerEntry) {
-        int bitCount = indexes.length * bitsPerEntry;
-        long[] packed = new long[(bitCount + 63) / 64];
+    private static SnapshotData snapshotWithSection(SnapshotSectionData section) {
+        return new SnapshotData(
+                "project",
+                Instant.parse("2026-04-20T10:00:00Z"),
+                0,
+                15,
+                List.of(new SnapshotChunkData(0, 0, List.of(section), Map.of()))
+        );
+    }
+
+    private static List<net.minecraft.nbt.CompoundTag> palette(int size) {
+        List<net.minecraft.nbt.CompoundTag> palette = new ArrayList<>();
+        for (int index = 0; index < size; index++) {
+            palette.add(state("minecraft:test_" + index));
+        }
+        return palette;
+    }
+
+    private static long[] packMinecraftIndexes(short[] indexes, int bitsPerEntry) {
+        int valuesPerLong = Long.SIZE / bitsPerEntry;
+        long[] packed = new long[SnapshotSectionData.packedLongCount(bitsPerEntry)];
         long mask = (1L << bitsPerEntry) - 1L;
         for (int index = 0; index < indexes.length; index++) {
             long value = indexes[index] & mask;
-            long bitIndex = (long) index * bitsPerEntry;
-            int startLong = (int) (bitIndex >>> 6);
-            int startOffset = (int) (bitIndex & 63L);
-            packed[startLong] |= value << startOffset;
-            int spill = startOffset + bitsPerEntry - 64;
-            if (spill > 0) {
-                packed[startLong + 1] |= value >>> (bitsPerEntry - spill);
-            }
+            int storageIndex = index / valuesPerLong;
+            int bitOffset = (index - storageIndex * valuesPerLong) * bitsPerEntry;
+            packed[storageIndex] |= value << bitOffset;
         }
         return packed;
+    }
+
+    private static void assertSnapshotVersion(Path file, int expectedVersion) throws Exception {
+        try (DataInputStream data = new DataInputStream(Files.newInputStream(file))) {
+            assertEquals(SNAPSHOT_MAGIC, data.readInt());
+            assertEquals(expectedVersion, data.readInt());
+        }
+    }
+
+    private void writeSnapshotFile(Path file, int version, byte[] chunk) throws Exception {
+        byte[] compressedChunk = this.compressFrame(chunk);
+        try (DataOutputStream data = new DataOutputStream(Files.newOutputStream(file))) {
+            data.writeInt(SNAPSHOT_MAGIC);
+            data.writeInt(version);
+            data.writeUTF("project");
+            data.writeLong(Instant.parse("2026-04-20T10:00:00Z").toEpochMilli());
+            data.writeInt(0);
+            data.writeInt(15);
+            data.writeInt(1);
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(chunk.length);
+            data.writeInt(compressedChunk.length);
+            data.write(compressedChunk);
+        }
+    }
+
+    private byte[] v7Chunk(short[] indexes) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream data = new DataOutputStream(bytes)) {
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(1);
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(2);
+            StorageIo.writeCompound(data, state("minecraft:air"));
+            StorageIo.writeCompound(data, state("minecraft:stone"));
+            data.writeInt(indexes.length);
+            for (short index : indexes) {
+                data.writeShort(index);
+            }
+            data.writeInt(0);
+        }
+        return bytes.toByteArray();
+    }
+
+    private byte[] v8Chunk(
+            List<net.minecraft.nbt.CompoundTag> palette,
+            int bitsPerEntry,
+            long[] packedStorage
+    ) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream data = new DataOutputStream(bytes)) {
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(1);
+            data.writeInt(0);
+            data.writeInt(0);
+            data.writeInt(palette.size());
+            for (net.minecraft.nbt.CompoundTag tag : palette) {
+                StorageIo.writeCompound(data, tag);
+            }
+            data.writeInt(bitsPerEntry);
+            data.writeInt(packedStorage.length);
+            for (long packedLong : packedStorage) {
+                data.writeLong(packedLong);
+            }
+            data.writeInt(0);
+        }
+        return bytes.toByteArray();
     }
 
     private byte[] corruptPaletteChunk() throws Exception {

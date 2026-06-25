@@ -145,7 +145,10 @@ public final class SnapshotBatchPreparer {
                     for (int localX = 0; localX < 16; localX++) {
                         int stateIndex = section == null
                                 ? 0
-                                : section.paletteIndexes()[(localY << 8) | (localZ << 4) | localX];
+                                : section.paletteIndexAt((localY << 8) | (localZ << 4) | localX);
+                        if (section != null && (stateIndex < 0 || stateIndex >= decodedPalette.length)) {
+                            throw new IOException("Snapshot section palette index out of range");
+                        }
                         builder.set(
                                 localX,
                                 localY,
@@ -206,17 +209,15 @@ public final class SnapshotBatchPreparer {
     private int uniformPaletteIndex(SnapshotSectionData section) {
         if (section == null
                 || section.palette() == null
-                || section.palette().isEmpty()
-                || section.paletteIndexes() == null
-                || section.paletteIndexes().length != SectionChangeMask.ENTRY_COUNT) {
+                || section.palette().isEmpty()) {
             return -1;
         }
-        int first = section.paletteIndexes()[0];
+        int first = section.paletteIndexAt(0);
         if (first < 0 || first >= section.palette().size()) {
             return -1;
         }
-        for (short index : section.paletteIndexes()) {
-            if (index != first) {
+        for (int localIndex = 1; localIndex < SectionChangeMask.ENTRY_COUNT; localIndex++) {
+            if (section.paletteIndexAt(localIndex) != first) {
                 return -1;
             }
         }
@@ -281,11 +282,7 @@ public final class SnapshotBatchPreparer {
             );
         }
         int localIndex = SectionChangeMask.localIndex(point.x(), point.y(), point.z());
-        short[] indexes = section.paletteIndexes();
-        if (indexes == null || indexes.length != SectionChangeMask.ENTRY_COUNT) {
-            throw new IOException("Malformed snapshot section palette index table");
-        }
-        int paletteIndex = indexes[localIndex];
+        int paletteIndex = section.paletteIndexAt(localIndex);
         if (paletteIndex < 0 || section.palette() == null || paletteIndex >= section.palette().size()) {
             throw new IOException("Snapshot section palette index out of range");
         }

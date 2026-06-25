@@ -6,6 +6,7 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ContentRef;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SectionFingerprint;
+import io.github.luma.domain.model.SectionChangeMask;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotMetadata;
@@ -32,7 +33,8 @@ import net.jpountz.lz4.LZ4FrameInputStream;
 public final class SnapshotReader {
 
     private static final int MAGIC = 0x4C534E50;
-    private static final int ADDRESSABLE_CONTENT_REF_VERSION = 7;
+    private static final int SNAPSHOT_V7 = 7;
+    private static final int SNAPSHOT_V8 = 8;
 
     public SnapshotData load(ProjectLayout layout, SnapshotRef snapshot) throws IOException {
         return this.readFile(layout.snapshotFile(snapshot.id()));
@@ -83,7 +85,7 @@ public final class SnapshotReader {
                             StorageLimits.MAX_SNAPSHOT_FRAME_COMPRESSED_BYTES,
                             "snapshot chunk frame"
                     );
-                    chunkData.add(this.readDecompressedChunkFrame(frame, compressedBytes));
+                    chunkData.add(this.readDecompressedChunkFrame(header.version(), frame, compressedBytes));
                 } else {
                     input.seek(input.getFilePointer() + frame.compressedLength());
                 }
@@ -149,7 +151,7 @@ public final class SnapshotReader {
                 input.readInt(),
                 StorageLimits.MAX_SNAPSHOT_CHUNKS
         );
-        return new AddressableHeader(projectId, createdAt, minY, maxY, chunkCount);
+        return new AddressableHeader(version, projectId, createdAt, minY, maxY, chunkCount);
     }
 
     private AddressableChunkFrame readAddressableChunkFrame(
@@ -211,10 +213,14 @@ public final class SnapshotReader {
         );
     }
 
-    private SnapshotChunkData readDecompressedChunkFrame(AddressableChunkFrame frame, byte[] compressedBytes) throws IOException {
+    private SnapshotChunkData readDecompressedChunkFrame(
+            int version,
+            AddressableChunkFrame frame,
+            byte[] compressedBytes
+    ) throws IOException {
         byte[] chunkBytes = this.decompressFrame(compressedBytes, frame.uncompressedLength());
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(chunkBytes))) {
-            SnapshotChunkData chunk = this.readChunk(input);
+            SnapshotChunkData chunk = this.readChunk(version, input);
             if (chunk.chunkX() != frame.chunkX() || chunk.chunkZ() != frame.chunkZ()) {
                 throw new IOException("Snapshot chunk frame coordinate mismatch");
             }
@@ -254,7 +260,8 @@ public final class SnapshotReader {
             sections.add(new SnapshotSectionData(
                     section.sectionY(),
                     section.palette(),
-                    section.paletteIndexes(),
+                    section.bitsPerEntry(),
+                    section.packedStorage(),
                     contentRef
             ));
         }
@@ -267,7 +274,7 @@ public final class SnapshotReader {
         );
     }
 
-    private SnapshotChunkData readChunk(DataInputStream input) throws IOException {
+    private SnapshotChunkData readChunk(int version, DataInputStream input) throws IOException {
         int chunkX = input.readInt();
         int chunkZ = input.readInt();
         int sectionCount = StorageLimits.requireLength(
@@ -283,7 +290,7 @@ public final class SnapshotReader {
 
         List<SnapshotSectionData> sections = new ArrayList<>();
         for (int sectionIndex = 0; sectionIndex < sectionCount; sectionIndex++) {
-            sections.add(this.readSection(input));
+            sections.add(this.readSection(version, input));
         }
 
         Map<Integer, net.minecraft.nbt.CompoundTag> blockEntities = new LinkedHashMap<>();
@@ -293,7 +300,7 @@ public final class SnapshotReader {
         return new SnapshotChunkData(chunkX, chunkZ, sections, blockEntities, this.readEntitySnapshots(input));
     }
 
-    private SnapshotSectionData readSection(DataInputStream input) throws IOException {
+    private SnapshotSectionData readSection(int version, DataInputStream input) throws IOException {
         int sectionY = input.readInt();
         int paletteSize = StorageLimits.requireLength(
                 "snapshot palette count",
@@ -304,19 +311,76 @@ public final class SnapshotReader {
         for (int paletteIndex = 0; paletteIndex < paletteSize; paletteIndex++) {
             palette.add(StorageIo.readCompound(input));
         }
+        if (version == SNAPSHOT_V7) {
+            return this.readV7Section(input, sectionY, palette);
+        }
+        return this.readV8Section(input, sectionY, palette);
+    }
+
+    private SnapshotSectionData readV7Section(
+            DataInputStream input,
+            int sectionY,
+            List<net.minecraft.nbt.CompoundTag> palette
+    ) throws IOException {
         int paletteIndexCount = StorageLimits.requireLength(
                 "snapshot palette index count",
                 input.readInt(),
                 StorageLimits.MAX_SNAPSHOT_PALETTE_INDEXES
         );
+        if (paletteIndexCount != SectionChangeMask.ENTRY_COUNT) {
+            throw new IOException("Snapshot palette index count mismatch");
+        }
         short[] indexes = new short[paletteIndexCount];
         for (int paletteIndex = 0; paletteIndex < paletteIndexCount; paletteIndex++) {
             indexes[paletteIndex] = input.readShort();
-            if (indexes[paletteIndex] < 0 || indexes[paletteIndex] >= paletteSize) {
+            if (indexes[paletteIndex] < 0 || indexes[paletteIndex] >= palette.size()) {
                 throw new IOException("Snapshot palette index outside palette");
             }
         }
         return new SnapshotSectionData(sectionY, palette, indexes);
+    }
+
+    private SnapshotSectionData readV8Section(
+            DataInputStream input,
+            int sectionY,
+            List<net.minecraft.nbt.CompoundTag> palette
+    ) throws IOException {
+        if (palette.isEmpty()) {
+            throw new IOException("Snapshot section palette is empty");
+        }
+        int bitsPerEntry = input.readInt();
+        if (bitsPerEntry < 0 || bitsPerEntry > Integer.SIZE) {
+            throw new IOException("Snapshot packed bits per entry out of bounds");
+        }
+        int packedLongCount = StorageLimits.requireLength(
+                "snapshot packed long count",
+                input.readInt(),
+                StorageLimits.MAX_SNAPSHOT_PACKED_LONGS
+        );
+        if (palette.size() == 1) {
+            if (bitsPerEntry != 0 || packedLongCount != 0) {
+                throw new IOException("Snapshot single-palette section must not store packed data");
+            }
+            return new SnapshotSectionData(sectionY, palette, 0, new long[0]);
+        }
+        if (bitsPerEntry <= 0 || (1L << bitsPerEntry) < palette.size()) {
+            throw new IOException("Snapshot packed bits cannot address palette");
+        }
+        int expectedLongCount = SnapshotSectionData.packedLongCount(bitsPerEntry);
+        if (packedLongCount != expectedLongCount) {
+            throw new IOException("Snapshot packed long count mismatch");
+        }
+        long[] packedStorage = new long[packedLongCount];
+        for (int index = 0; index < packedStorage.length; index++) {
+            packedStorage[index] = input.readLong();
+        }
+        for (int localIndex = 0; localIndex < SectionChangeMask.ENTRY_COUNT; localIndex++) {
+            int paletteIndex = paletteIndexAt(packedStorage, bitsPerEntry, localIndex);
+            if (paletteIndex < 0 || paletteIndex >= palette.size()) {
+                throw new IOException("Snapshot palette index outside palette");
+            }
+        }
+        return new SnapshotSectionData(sectionY, palette, bitsPerEntry, packedStorage);
     }
 
     private List<EntityPayload> readEntitySnapshots(DataInputStream input) throws IOException {
@@ -368,7 +432,18 @@ public final class SnapshotReader {
     }
 
     private static boolean isSupportedAddressableVersion(int version) {
-        return version == ADDRESSABLE_CONTENT_REF_VERSION;
+        return version == SNAPSHOT_V7 || version == SNAPSHOT_V8;
+    }
+
+    private static int paletteIndexAt(long[] packedStorage, int bitsPerEntry, int localIndex) {
+        int valuesPerLong = Math.max(1, Long.SIZE / bitsPerEntry);
+        int storageIndex = localIndex / valuesPerLong;
+        if (storageIndex < 0 || storageIndex >= packedStorage.length) {
+            return -1;
+        }
+        int bitOffset = (localIndex - storageIndex * valuesPerLong) * bitsPerEntry;
+        long mask = (1L << bitsPerEntry) - 1L;
+        return (int) ((packedStorage[storageIndex] >>> bitOffset) & mask);
     }
 
     private static String snapshotId(Path snapshotFile) {
@@ -378,7 +453,7 @@ public final class SnapshotReader {
                 : fileName;
     }
 
-    private record AddressableHeader(String projectId, Instant createdAt, int minY, int maxY, int chunkCount) {
+    private record AddressableHeader(int version, String projectId, Instant createdAt, int minY, int maxY, int chunkCount) {
     }
 
     private record AddressableChunkFrame(
