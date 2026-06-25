@@ -6,8 +6,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Computes a stable branch-aware lane layout for the workspace commit graph.
@@ -39,10 +41,14 @@ public final class CommitGraphLayout {
         }
         Map<String, ProjectVersion> versionMap = new HashMap<>();
         Map<String, Integer> rowIndexByVersionId = new HashMap<>();
+        Set<String> visibleVariantIds = new LinkedHashSet<>();
         for (int index = 0; index < orderedVersions.size(); index++) {
             ProjectVersion version = orderedVersions.get(index);
             versionMap.put(version.id(), version);
             rowIndexByVersionId.put(version.id(), index);
+            if (version.variantId() != null && !version.variantId().isBlank()) {
+                visibleVariantIds.add(version.variantId());
+            }
         }
 
         List<ProjectVariant> orderedVariants = variants == null
@@ -55,10 +61,14 @@ public final class CommitGraphLayout {
                         .toList();
 
         Map<String, Integer> versionLane = new LinkedHashMap<>();
+        Map<String, Integer> variantLane = new LinkedHashMap<>();
         Map<String, List<String>> headVariantsByVersion = new LinkedHashMap<>();
         int nextLane = 0;
 
         for (ProjectVariant variant : orderedVariants) {
+            if (!visibleVariantIds.contains(variant.id())) {
+                continue;
+            }
             if (variant.headVersionId() == null || variant.headVersionId().isBlank()) {
                 continue;
             }
@@ -68,6 +78,7 @@ public final class CommitGraphLayout {
             }
 
             int lane = nextLane++;
+            variantLane.put(variant.id(), lane);
             ProjectVersion cursor = versionMap.get(variant.headVersionId());
             while (cursor != null) {
                 versionLane.putIfAbsent(cursor.id(), lane);
@@ -78,12 +89,18 @@ public final class CommitGraphLayout {
             }
         }
 
-        for (ProjectVersion version : orderedVersions) {
+        for (int index = orderedVersions.size() - 1; index >= 0; index--) {
+            ProjectVersion version = orderedVersions.get(index);
             if (versionLane.containsKey(version.id())) {
                 continue;
             }
-            int lane = nextLane++;
+            Integer parentLane = versionLane.get(version.parentVersionId());
+            Integer sameVariantLane = variantLane.get(version.variantId());
+            int lane = parentLane != null ? parentLane : sameVariantLane == null ? nextLane++ : sameVariantLane;
             versionLane.put(version.id(), lane);
+            if (version.variantId() != null && !version.variantId().isBlank()) {
+                variantLane.putIfAbsent(version.variantId(), lane);
+            }
         }
 
         Map<Integer, LaneSpan> laneSpans = new LinkedHashMap<>();

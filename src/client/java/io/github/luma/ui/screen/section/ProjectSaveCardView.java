@@ -5,6 +5,7 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.TagSuggestionComponent;
 import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.wispforest.owo.ui.component.ButtonComponent;
@@ -68,6 +69,11 @@ public final class ProjectSaveCardView {
                     @Override
                     public void saveTags(ProjectVersion version) {
                         actions.saveTags(version);
+                    }
+
+                    @Override
+                    public void bindTagInput(TextBoxComponent input) {
+                        actions.bindTagInput(input);
                     }
                 }
         );
@@ -189,27 +195,46 @@ public final class ProjectSaveCardView {
     }
 
     private FlowLayout tagEditor(Model model) {
+        FlowLayout editor = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        editor.gap(2);
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(4);
         row.verticalAlignment(VerticalAlignment.CENTER);
         TextBoxComponent input = UIComponents.textBox(
-                Sizing.fixed(Math.min(260, Math.max(140, model.width() / 3))),
+                Sizing.expand(100),
                 model.tagEditorText()
         );
         input.setHint(Component.translatable("luma.history.tags_input"));
-        input.onChanged().subscribe(this.actions::updateTagEditor);
+        TagInputSupport.configure(input, model.tagEditorText(), model.knownTags(), true);
+        this.actions.bindTagInput(input);
+        String[] liveText = {model.tagEditorText()};
+        TagSuggestionComponent suggestions = new TagSuggestionComponent(
+                () -> liveText[0],
+                model::knownTags,
+                true,
+                accepted -> {
+                    liveText[0] = accepted;
+                    this.actions.updateTagEditor(accepted);
+                    input.setValue(accepted);
+                    input.setCursorPosition(accepted.length());
+                }
+        );
+        input.onChanged().subscribe(value -> {
+            liveText[0] = TagInputSupport.limit(value);
+            this.actions.updateTagEditor(liveText[0]);
+            suggestions.refresh();
+        });
         row.child(input);
-        String suffix = TagInputSupport.suggestionSuffix(model.tagEditorText(), model.knownTags(), true);
-        if (!suffix.isBlank()) {
-            row.child(LumaUi.caption(Component.literal(suffix)));
-        }
-        ButtonComponent save = LumaUi.primaryButton(
+        ButtonComponent save = LumaUi.iconButton(
+                "save",
                 Component.translatable("luma.action.save_tags"),
                 button -> this.actions.saveTags(model.version())
         );
         save.margins(Insets.none());
         row.child(save);
-        return row;
+        editor.child(row);
+        editor.child(suggestions);
+        return editor;
     }
 
     private ButtonComponent actionButton(Model model, ProjectSaveCardLayout.ActionState actionState) {
@@ -294,6 +319,9 @@ public final class ProjectSaveCardView {
         void updateTagEditor(String value);
 
         void saveTags(ProjectVersion version);
+
+        default void bindTagInput(TextBoxComponent input) {
+        }
     }
 
     interface PreviewFactory {

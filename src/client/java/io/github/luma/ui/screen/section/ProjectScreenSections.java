@@ -8,6 +8,7 @@ import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.OperationProgressPresenter;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.TagSuggestionComponent;
 import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
@@ -25,6 +26,7 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -200,8 +202,7 @@ public final class ProjectScreenSections {
         }
 
         BranchHistoryVersions.Entry latest = visibleEntries.stream()
-                .filter(BranchHistoryVersions.Entry::current)
-                .findFirst()
+                .max(Comparator.comparing(entry -> entry.version().createdAt()))
                 .orElse(visibleEntries.getFirst());
         section.child(LumaUi.caption(Component.translatable("luma.history.current_badge")));
         section.child(this.saveCard(model, latest));
@@ -222,38 +223,59 @@ public final class ProjectScreenSections {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(4);
         row.verticalAlignment(VerticalAlignment.CENTER);
-        row.child(this.tagFilter(model));
-        row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
+        FlowLayout filter = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        filter.child(this.tagFilter(model));
+        row.child(filter);
+
+        FlowLayout viewToggle = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+        viewToggle.gap(4);
+
         ButtonComponent cards = LumaUi.iconButton(
-                "folder-open",
+                "view-cards",
                 Component.translatable("luma.history.view_cards"),
                 !model.historyGraphVisible(),
                 button -> this.actions.setHistoryGraphVisible(false)
         );
-        row.child(cards);
+        viewToggle.child(cards);
 
         ButtonComponent graph = LumaUi.iconButton(
-                "git-branch",
+                "view-graph",
                 Component.translatable("luma.history.view_graph"),
                 model.historyGraphVisible(),
                 button -> this.actions.setHistoryGraphVisible(true)
         );
-        row.child(graph);
+        viewToggle.child(graph);
+        row.child(viewToggle);
         return row;
     }
 
     private FlowLayout tagFilter(Model model) {
-        FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-        row.gap(4);
-        row.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout row = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
+        row.gap(2);
         TextBoxComponent input = UIComponents.textBox(Sizing.fixed(Math.min(180, Math.max(120, model.width() / 5))), model.historyTagFilter());
         input.setHint(Component.translatable("luma.history.tag_filter"));
-        input.onChanged().subscribe(value -> this.actions.setHistoryTagFilter(value));
+        TagInputSupport.configure(input, model.historyTagFilter(), TagInputSupport.knownTags(model.state().versions()), false);
+        String[] liveText = {model.historyTagFilter()};
+        TagSuggestionComponent suggestions = new TagSuggestionComponent(
+                () -> liveText[0],
+                () -> TagInputSupport.knownTags(model.state().versions()),
+                false,
+                accepted -> {
+                    liveText[0] = accepted;
+                    this.actions.setHistoryTagFilter(accepted);
+                    input.setValue(accepted);
+                    input.setCursorPosition(accepted.length());
+                    this.actions.refreshHistoryView();
+                }
+        );
+        input.onChanged().subscribe(value -> {
+            liveText[0] = TagInputSupport.limit(value);
+            this.actions.setHistoryTagFilter(liveText[0]);
+            suggestions.refresh();
+        });
+        input.focusLost().subscribe(this.actions::refreshHistoryView);
         row.child(input);
-        String suffix = TagInputSupport.suggestionSuffix(model.historyTagFilter(), TagInputSupport.knownTags(model.state().versions()), false);
-        if (!suffix.isBlank()) {
-            row.child(LumaUi.caption(Component.literal(suffix)));
-        }
+        row.child(suggestions);
         return row;
     }
 
@@ -339,7 +361,8 @@ public final class ProjectScreenSections {
 
     private boolean matchesTagFilter(ProjectVersion version, String filter) {
         String needle = this.normalizedTagFilter(filter);
-        return needle.isBlank() || ProjectVersionTags.from(version).stream().anyMatch(tag -> tag.contains(needle));
+        return needle.isBlank() || ProjectVersionTags.from(version).stream()
+                .anyMatch(tag -> tag.toLowerCase(java.util.Locale.ROOT).contains(needle));
     }
 
     private String normalizedTagFilter(String filter) {
@@ -361,7 +384,8 @@ public final class ProjectScreenSections {
     ) {
         public Model {
             tagEditorVersionId = tagEditorVersionId == null ? "" : tagEditorVersionId;
-            tagEditorText = tagEditorText == null ? "" : tagEditorText;
+            historyTagFilter = TagInputSupport.limit(historyTagFilter);
+            tagEditorText = TagInputSupport.limit(tagEditorText);
             lumiSelection = lumiSelection == null ? Optional.empty() : lumiSelection;
         }
     }
@@ -384,6 +408,9 @@ public final class ProjectScreenSections {
 
         void setHistoryTagFilter(String filter);
 
+        default void refreshHistoryView() {
+        }
+
         void toggleTagEditor(ProjectVersion version);
 
         void updateTagEditor(String value);
@@ -391,5 +418,8 @@ public final class ProjectScreenSections {
         void saveTags(ProjectVersion version);
 
         void requestRestore(ProjectVariant variant, ProjectVersion version);
+
+        default void bindTagInput(TextBoxComponent input) {
+        }
     }
 }

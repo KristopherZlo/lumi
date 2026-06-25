@@ -1,14 +1,17 @@
 package io.github.luma.ui.preview;
 
+import java.util.function.BiConsumer;
+
+import org.lwjgl.glfw.GLFW;
+
 import io.wispforest.owo.ui.base.BaseUIComponent;
 import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
-import java.util.function.BiConsumer;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 public final class ZoomablePreviewComponent extends BaseUIComponent {
 
@@ -19,6 +22,9 @@ public final class ZoomablePreviewComponent extends BaseUIComponent {
     private final BiConsumer<Integer, Integer> panChanged;
     private int panX;
     private int panY;
+    private boolean dragging;
+    private int lastMouseX;
+    private int lastMouseY;
 
     public ZoomablePreviewComponent(
             Identifier textureId,
@@ -45,11 +51,38 @@ public final class ZoomablePreviewComponent extends BaseUIComponent {
     public void update(float delta, int mouseX, int mouseY) {
         super.update(delta, mouseX, mouseY);
         this.cursorStyle(this.zoomFactor() > 1 ? CursorStyle.HAND : CursorStyle.NONE);
+        if (!this.dragging) {
+            return;
+        }
+        if (GLFW.glfwGetMouseButton(
+                Minecraft.getInstance().getWindow().handle(),
+                GLFW.GLFW_MOUSE_BUTTON_LEFT
+        ) != GLFW.GLFW_PRESS) {
+            this.dragging = false;
+            return;
+        }
+        this.dragBy(mouseX - this.lastMouseX, mouseY - this.lastMouseY);
+        this.lastMouseX = mouseX;
+        this.lastMouseY = mouseY;
     }
 
     @Override
     public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
-        return this.zoomFactor() > 1 && click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT;
+        if (this.zoomFactor() <= 1 || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            return false;
+        }
+        this.dragging = true;
+        this.lastMouseX = this.x + (int) Math.round(click.x());
+        this.lastMouseY = this.y + (int) Math.round(click.y());
+        return true;
+    }
+
+    @Override
+    public boolean onMouseUp(MouseButtonEvent click) {
+        if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            this.dragging = false;
+        }
+        return super.onMouseUp(click);
     }
 
     @Override
@@ -57,13 +90,16 @@ public final class ZoomablePreviewComponent extends BaseUIComponent {
         if (this.zoomFactor() <= 1 || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             return super.onMouseDrag(click, deltaX, deltaY);
         }
+        return true;
+    }
+
+    private void dragBy(int deltaX, int deltaY) {
         int cropWidth = this.cropWidth();
         int cropHeight = this.cropHeight();
         this.setPan(
-                this.panX - (int) Math.round(deltaX * cropWidth / Math.max(1, this.width)),
-                this.panY - (int) Math.round(deltaY * cropHeight / Math.max(1, this.height))
+                this.panX - (int) Math.round(deltaX * cropWidth / (double) Math.max(1, this.width)),
+                this.panY - (int) Math.round(deltaY * cropHeight / (double) Math.max(1, this.height))
         );
-        return true;
     }
 
     @Override
