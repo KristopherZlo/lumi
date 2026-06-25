@@ -27,6 +27,7 @@ Status: alpha. Keep normal world backups.
 
 - Tracks a dimension or selected build area as a project.
 - Saves named versions with change stats and restore data.
+- Amends replace the visible branch or zone head while keeping superseded files on disk.
 - Lets saves carry searchable tags, with tag input fields capped at 128 characters.
 - Soft-deletes non-root saves without removing their stored files.
 - Compares versions, branches, and the current world.

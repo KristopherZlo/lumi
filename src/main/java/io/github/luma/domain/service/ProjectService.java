@@ -59,6 +59,7 @@ public final class ProjectService {
     private final WorldInitialBackupService worldInitialBackupService = new WorldInitialBackupService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
+    private final VersionLineageService versionLineageService = new VersionLineageService();
 
     public List<BuildProject> listProjects(MinecraftServer server) throws IOException {
         return this.projectRepository.loadAll(this.projectsRoot(server));
@@ -241,11 +242,18 @@ public final class ProjectService {
     }
 
     private List<ProjectVersion> loadVisibleVersions(MinecraftServer server, String projectName) throws IOException {
-        ProjectLayout layout = this.resolveLayout(server, projectName);
+        return this.loadVisibleVersions(this.resolveLayout(server, projectName));
+    }
+
+    List<ProjectVersion> loadVisibleVersions(ProjectLayout layout) throws IOException {
         var tombstones = this.historyTombstoneRepository.load(layout);
-        return this.versionRepository.loadAll(layout).stream()
+        List<ProjectVersion> versions = this.versionRepository.loadAll(layout).stream()
                 .filter(version -> !tombstones.versionDeleted(version.id()))
                 .toList();
+        List<ProjectVariant> variants = this.variantRepository.loadAll(layout).stream()
+                .filter(variant -> !tombstones.variantDeleted(variant.id()))
+                .toList();
+        return this.versionLineageService.reachableVersions(versions, variants);
     }
 
     public List<ProjectVersion> loadDeletedVersions(MinecraftServer server, String projectName) throws IOException {
