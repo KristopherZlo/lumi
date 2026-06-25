@@ -1,9 +1,11 @@
 package io.github.luma.network;
 
 import io.github.luma.LumaMod;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.WorkZoneSnapshot;
 import io.github.luma.storage.GsonProvider;
 import io.github.luma.ui.screen.WorkZoneScreen;
+import java.util.List;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 
@@ -50,15 +52,23 @@ public final class WorkZoneClientNetworking {
     }
 
     public void save(String projectName, String zoneId, String message) {
-        this.request("save", projectName, zoneId, message);
+        this.save(projectName, zoneId, message, List.of());
+    }
+
+    public void save(String projectName, String zoneId, String message, List<String> tags) {
+        this.request("save", projectName, zoneId, message, ProjectVersionTags.serialize(tags));
     }
 
     private void request(String action, String projectName, String zoneId, String zoneName) {
+        this.request(action, projectName, zoneId, zoneName, "");
+    }
+
+    private void request(String action, String projectName, String zoneId, String zoneName, String tags) {
         if (!ClientPlayNetworking.canSend(WorkZonePayloads.Request.TYPE)) {
             this.latest = WorkZoneSnapshot.empty("luma.status.server_mod_required");
             return;
         }
-        ClientPlayNetworking.send(new WorkZonePayloads.Request(action, projectName, zoneId, zoneName));
+        ClientPlayNetworking.send(new WorkZonePayloads.Request(action, projectName, zoneId, zoneName, tags));
     }
 
     private boolean shouldRequestOpenState(String projectName) {

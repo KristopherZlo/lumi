@@ -73,6 +73,7 @@ public final class WorkZoneScreen extends LumaScreen {
     private String status = "luma.status.zones_ready";
     private String newZoneName = "";
     private String saveMessage = "";
+    private String saveTags = "";
     private boolean saveDialogVisible;
     private String pendingSaveZoneId = "";
     private String pendingRestoreVariantId = "";
@@ -87,6 +88,7 @@ public final class WorkZoneScreen extends LumaScreen {
     private String tagEditorVersionId = "";
     private String tagEditorText = "";
     private TextBoxComponent activeTagInput;
+    private TextBoxComponent saveTagsInput;
 
     public WorkZoneScreen(Screen parent, String projectName) {
         super(Component.translatable("luma.screen.zones.title", projectName));
@@ -186,6 +188,9 @@ public final class WorkZoneScreen extends LumaScreen {
     public boolean keyPressed(KeyEvent event) {
         if (this.saveDialogVisible && OnboardingScreen.isEscapeKey(event)) {
             this.closeZoneSaveDialog();
+            return true;
+        }
+        if (this.saveDialogVisible && event.key() == GLFW.GLFW_KEY_TAB && this.acceptSaveDialogTagCompletion()) {
             return true;
         }
         if (this.branchDialogState().visible() && OnboardingScreen.isEscapeKey(event)) {
@@ -358,19 +363,50 @@ public final class WorkZoneScreen extends LumaScreen {
         if (!"luma.status.zones_ready".equals(this.state.status())) {
             modal.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
         }
-        modal.child(LumaUi.caption(Component.translatable("luma.zones.save_help")));
+        modal.child(LumaUi.caption(Component.translatable("luma.save.summary_help")));
 
         TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.saveMessage);
-        input.setHint(Component.translatable("luma.zones.save_input"));
+        input.setHint(Component.translatable("luma.save.name_help"));
         input.onChanged().subscribe(value -> this.saveMessage = value == null ? "" : value);
         modal.child(LumaUi.formField(
-                Component.translatable("luma.zones.save_input"),
+                Component.translatable("luma.save.name_input"),
                 null,
                 input
         ));
 
+        TextBoxComponent tags = UIComponents.textBox(Sizing.fill(100), this.saveTags);
+        this.saveTagsInput = tags;
+        tags.setHint(Component.translatable("luma.history.tags_input"));
+        TagInputSupport.configure(tags, this.saveTags, TagInputSupport.knownTags(this.state.versions()), true);
+        FlowLayout tagInput = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        tagInput.gap(2);
+        TagSuggestionComponent tagSuggestions = new TagSuggestionComponent(
+                () -> this.saveTags,
+                () -> TagInputSupport.knownTags(this.state.versions()),
+                true,
+                accepted -> {
+                    this.saveTags = accepted;
+                    tags.setValue(accepted);
+                    tags.setCursorPosition(accepted.length());
+                }
+        );
+        tags.onChanged().subscribe(value -> {
+            this.saveTags = TagInputSupport.limit(value);
+            tagSuggestions.refresh();
+        });
+        tagInput.child(tags);
+        tagInput.child(tagSuggestions);
+        modal.child(LumaUi.formField(
+                Component.translatable("luma.save.tags_title"),
+                null,
+                tagInput
+        ));
+
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent save = LumaUi.primaryButton(Component.translatable("luma.zones.save_button"), button -> this.saveZone(this.pendingSaveZoneId));
+        ButtonComponent save = LumaUi.primaryButton(
+                Component.translatable("luma.zones.save_button"),
+                button -> this.saveZone(this.pendingSaveZoneId, ProjectVersionTags.parse(this.saveTags))
+        );
         save.active(!this.pendingSaveZoneId.isBlank());
         actions.child(save);
         actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.closeZoneSaveDialog()));
@@ -608,6 +644,8 @@ public final class WorkZoneScreen extends LumaScreen {
         this.pendingSaveZoneId = zoneId == null ? "" : zoneId;
         this.saveDialogVisible = true;
         this.saveMessage = "";
+        this.saveTags = "";
+        this.saveTagsInput = null;
         this.refresh("luma.status.zones_ready");
     }
 
@@ -615,16 +653,20 @@ public final class WorkZoneScreen extends LumaScreen {
         this.saveDialogVisible = false;
         this.pendingSaveZoneId = "";
         this.saveMessage = "";
+        this.saveTags = "";
+        this.saveTagsInput = null;
         this.refresh("luma.status.zones_ready");
     }
 
-    private void saveZone(String zoneId) {
-        this.status = this.controller.saveZone(this.effectiveProjectName(), zoneId, this.saveMessage);
+    private void saveZone(String zoneId, List<String> tags) {
+        this.status = this.controller.saveZone(this.effectiveProjectName(), zoneId, this.saveMessage, tags);
         if ("luma.status.save_started".equals(this.status)) {
             this.client.gui.setOverlayMessage(ActionBarMessagePresenter.info(this.status), false);
             this.saveMessage = "";
+            this.saveTags = "";
             this.saveDialogVisible = false;
             this.pendingSaveZoneId = "";
+            this.saveTagsInput = null;
         }
         this.zonePickerVisible = false;
         this.rebuild();
@@ -745,6 +787,17 @@ public final class WorkZoneScreen extends LumaScreen {
             return true;
         }
         return false;
+    }
+
+    private boolean acceptSaveDialogTagCompletion() {
+        List<String> knownTags = TagInputSupport.knownTags(this.state.versions());
+        if (!TagInputSupport.hasSuggestion(this.saveTags, knownTags)) {
+            return false;
+        }
+        this.saveTags = this.saveTagsInput == null
+                ? TagInputSupport.acceptSuggestion(this.saveTags, knownTags, true)
+                : TagInputSupport.acceptInto(this.saveTagsInput, this.saveTags, knownTags, true);
+        return true;
     }
 
     private String effectiveProjectName() {

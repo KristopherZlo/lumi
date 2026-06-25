@@ -31,6 +31,7 @@ public final class QuickSaveScreen extends LumaScreen {
     private String saveMessage = "";
     private String saveTags = "";
     private String status = "luma.status.quick_save_ready";
+    private String activeZoneName = "";
     private TextBoxComponent saveNameInput;
     private TextBoxComponent saveTagsInput;
 
@@ -45,6 +46,7 @@ public final class QuickSaveScreen extends LumaScreen {
 
     @Override
     protected void build(FlowLayout root) {
+        this.activeZoneName = this.controller.activeZoneName();
         root.surface(LumaUi.screenBackdrop());
         root.padding(Insets.of(10));
         root.gap(0);
@@ -54,7 +56,9 @@ public final class QuickSaveScreen extends LumaScreen {
         FlowLayout frame = LumaUi.modalFrame(this.dialogWidth());
         root.child(frame);
 
-        frame.child(LumaUi.closeHeader(Component.translatable("luma.screen.save.title"), button -> this.onClose()));
+        frame.child(LumaUi.closeHeader(Component.translatable(this.activeZoneName.isBlank()
+                ? "luma.screen.save.title"
+                : "luma.zones.save_title"), button -> this.onClose()));
         frame.child(LumaUi.statusBanner(Component.translatable(this.status)));
         frame.child(this.messageField());
         frame.child(this.tagsField());
@@ -86,7 +90,9 @@ public final class QuickSaveScreen extends LumaScreen {
         });
         return LumaUi.formField(
                 Component.translatable("luma.save.name_input"),
-                Component.translatable("luma.quick_save.name_help"),
+                Component.translatable(this.activeZoneName.isBlank()
+                        ? "luma.quick_save.name_help"
+                        : "luma.zones.save_help"),
                 this.saveNameInput
         );
     }

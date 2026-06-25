@@ -87,6 +87,10 @@ public final class WorkZoneScreenController {
     }
 
     public String saveZone(String projectName, String zoneId, String message) {
+        return this.saveZone(projectName, zoneId, message, List.of());
+    }
+
+    public String saveZone(String projectName, String zoneId, String message, List<String> tags) {
         String normalizedMessage = message == null ? "" : message.trim();
         if (normalizedMessage.isBlank()) {
             return "luma.status.quick_save_name_required";
@@ -95,7 +99,7 @@ public final class WorkZoneScreenController {
             return "luma.status.zone_not_found";
         }
         if (!this.client.hasSingleplayerServer()) {
-            WorkZoneClientNetworking.getInstance().save(projectName, zoneId, normalizedMessage);
+            WorkZoneClientNetworking.getInstance().save(projectName, zoneId, normalizedMessage, tags);
             return "luma.status.zones_loading";
         }
         try {
@@ -106,7 +110,8 @@ public final class WorkZoneScreenController {
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName,
                     normalizedMessage,
-                    this.actor()
+                    this.actor(),
+                    tags == null ? List.of() : tags
             );
             return "luma.status.save_started";
         } catch (IllegalArgumentException exception) {

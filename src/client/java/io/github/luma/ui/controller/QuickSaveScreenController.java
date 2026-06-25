@@ -5,6 +5,7 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.VersionService;
+import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.telemetry.TelemetryService;
 import java.io.IOException;
 import java.util.List;
@@ -58,6 +59,14 @@ public final class QuickSaveScreenController {
         }
     }
 
+    public String activeZoneName() {
+        try {
+            return this.query.activeZoneName();
+        } catch (Exception exception) {
+            return "";
+        }
+    }
+
     private String rejected(String action, String statusKey, Exception exception) {
         TelemetryService.getInstance().recordOperationRejected(action, statusKey, exception);
         return statusKey;
@@ -86,6 +95,8 @@ public final class QuickSaveScreenController {
         void saveCurrentWorkspace(String message, List<String> tags) throws Exception;
 
         List<ProjectVersion> currentWorkspaceVersions() throws Exception;
+
+        String activeZoneName() throws Exception;
     }
 
     private static final class ServiceQuery implements Query {
@@ -93,6 +104,7 @@ public final class QuickSaveScreenController {
         private final Minecraft client = Minecraft.getInstance();
         private final ProjectService projectService = new ProjectService();
         private final VersionService versionService = new VersionService();
+        private final WorkZoneService workZoneService = new WorkZoneService();
 
         @Override
         public boolean hasSingleplayerServer() {
@@ -109,6 +121,18 @@ public final class QuickSaveScreenController {
         public List<ProjectVersion> currentWorkspaceVersions() throws IOException {
             Workspace workspace = this.currentWorkspace();
             return this.projectService.loadVersions(workspace.level().getServer(), workspace.project().name());
+        }
+
+        @Override
+        public String activeZoneName() throws IOException {
+            Workspace workspace = this.currentWorkspace();
+            String actor = this.client.getUser().getName();
+            return this.workZoneService.activeZone(
+                            this.projectService.resolveLayout(workspace.level().getServer(), workspace.project().name()),
+                            actor
+                    )
+                    .map(io.github.luma.domain.model.WorkZone::name)
+                    .orElse("");
         }
 
         private Workspace currentWorkspace() throws IOException {

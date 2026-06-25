@@ -24,7 +24,7 @@ public final class WorkZonePayloads {
         registered = true;
     }
 
-    public record Request(String action, String projectName, String zoneId, String zoneName) implements CustomPacketPayload {
+    public record Request(String action, String projectName, String zoneId, String zoneName, String tags) implements CustomPacketPayload {
 
         public static final CustomPacketPayload.Type<Request> TYPE = new CustomPacketPayload.Type<>(
                 Identifier.fromNamespaceAndPath(LumaMod.MOD_ID, "work_zone_request")
@@ -38,14 +38,21 @@ public final class WorkZonePayloads {
                 Request::zoneId,
                 ByteBufCodecs.stringUtf8(128),
                 Request::zoneName,
+                ByteBufCodecs.stringUtf8(512),
+                Request::tags,
                 Request::new
         );
+
+        public Request(String action, String projectName, String zoneId, String zoneName) {
+            this(action, projectName, zoneId, zoneName, "");
+        }
 
         public Request {
             action = action == null ? "" : action;
             projectName = projectName == null ? "" : projectName;
             zoneId = zoneId == null ? "" : zoneId;
             zoneName = zoneName == null ? "" : zoneName;
+            tags = tags == null ? "" : tags;
         }
 
         @Override

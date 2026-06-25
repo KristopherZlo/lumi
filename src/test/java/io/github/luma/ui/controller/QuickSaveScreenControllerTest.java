@@ -30,6 +30,15 @@ class QuickSaveScreenControllerTest {
     }
 
     @Test
+    void exposesActiveZoneNameForZoneSaveModalCopy() {
+        FakeQuery query = new FakeQuery();
+        query.activeZoneName = "Tower roof";
+        QuickSaveScreenController controller = new QuickSaveScreenController(query);
+
+        assertEquals("Tower roof", controller.activeZoneName());
+    }
+
+    @Test
     void allowsBlankNameLikeTheMainSaveDialog() {
         FakeQuery query = new FakeQuery();
         QuickSaveScreenController controller = new QuickSaveScreenController(query);
@@ -77,6 +86,7 @@ class QuickSaveScreenControllerTest {
         private RuntimeException failure;
         private boolean saveCalled;
         private String savedMessage = "";
+        private String activeZoneName = "";
 
         @Override
         public boolean hasSingleplayerServer() {
@@ -96,6 +106,11 @@ class QuickSaveScreenControllerTest {
         @Override
         public List<ProjectVersion> currentWorkspaceVersions() {
             return List.of();
+        }
+
+        @Override
+        public String activeZoneName() {
+            return this.activeZoneName;
         }
 
         private List<String> savedTags = List.of();

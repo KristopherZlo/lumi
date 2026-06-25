@@ -56,11 +56,35 @@ class WorkZoneScreenZoneActionsTest {
     }
 
     @Test
+    void saveZoneDialogRepeatsSaveBuildFields() {
+        String methodBody = methodBody(
+                "    private FlowLayout zoneSaveDialogOverlay() {",
+                "    private FlowLayout zoneHistorySection(WorkZone zone) {"
+        );
+
+        assertTrue(methodBody.contains("LumaUi.closeHeader(Component.translatable(\"luma.zones.save_title\")"));
+        assertTrue(methodBody.contains("Component.translatable(\"luma.save.summary_help\")"));
+        assertTrue(methodBody.contains("Component.translatable(\"luma.save.name_input\")"));
+        assertTrue(methodBody.contains("Component.translatable(\"luma.save.tags_title\")"));
+        assertTrue(methodBody.contains("new TagSuggestionComponent("));
+        assertTrue(methodBody.contains("ProjectVersionTags.parse(this.saveTags)"));
+    }
+
+    @Test
     void altSaveOnWorkZoneScreenOpensZoneSaveDialog() throws IOException {
         String clientSource = Files.readString(Path.of("src/client/java/io/github/luma/LumaClient.java"));
 
         assertTrue(clientSource.contains("client.screen instanceof WorkZoneScreen"));
         assertTrue(clientSource.contains("workZoneScreen.openZoneSaveDialog()"));
+    }
+
+    @Test
+    void quickSaveScreenUsesZoneTitleWhenAnActiveZoneExists() throws IOException {
+        String quickSaveSource = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/QuickSaveScreen.java"));
+
+        assertTrue(quickSaveSource.contains("this.activeZoneName"));
+        assertTrue(quickSaveSource.contains("\"luma.zones.save_title\""));
+        assertTrue(quickSaveSource.contains("\"luma.screen.save.title\""));
     }
 
     private String methodBody(String start, String end) {

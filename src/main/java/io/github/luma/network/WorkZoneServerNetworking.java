@@ -3,6 +3,7 @@ package io.github.luma.network;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorkZoneSnapshot;
@@ -85,7 +86,7 @@ public final class WorkZoneServerNetworking {
             throw new IllegalArgumentException("Save message is required");
         }
         this.workZoneService.selectZone(layout, actor, request.zoneId());
-        this.versionService.startSaveVersion(player.level(), project.name(), message, actor);
+        this.versionService.startSaveVersion(player.level(), project.name(), message, actor, ProjectVersionTags.parse(request.tags()));
     }
 
     private BuildProject project(

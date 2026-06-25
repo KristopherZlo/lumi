@@ -24,6 +24,7 @@ class WorkZoneDedicatedServerSmokeTest {
         assertTrue(source.contains("LumaAccessControl.getInstance().canUse(player)"));
         assertTrue(source.contains("\"save\".equals(action)"));
         assertTrue(source.contains("this.versionService.startSaveVersion"));
+        assertTrue(source.contains("ProjectVersionTags.parse(request.tags())"));
     }
 
     @Test
@@ -32,5 +33,14 @@ class WorkZoneDedicatedServerSmokeTest {
 
         assertTrue(source.contains("!client.hasSingleplayerServer()"));
         assertTrue(source.contains("new WorkZoneScreen(parent, \"\")"));
+    }
+
+    @Test
+    void singleplayerActiveZoneOpensZonesTabFromWorkspaceHotkey() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/controller/ClientWorkspaceOpenService.java"));
+
+        assertTrue(source.contains("boolean hasActiveZone"));
+        assertTrue(source.contains("result.hasActiveZone()"));
+        assertTrue(source.contains("new WorkZoneScreen(parent, result.projectName())"));
     }
 }

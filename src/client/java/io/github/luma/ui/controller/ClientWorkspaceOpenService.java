@@ -5,6 +5,7 @@ import io.github.luma.client.onboarding.ClientOnboardingService;
 import io.github.luma.client.update.UpdatePromptCoordinator;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
+import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.screen.ProjectOpeningScreen;
@@ -28,22 +29,25 @@ public final class ClientWorkspaceOpenService {
 
     private final ProjectService projectService;
     private final RecoveryService recoveryService;
+    private final WorkZoneService workZoneService;
     private final ClientOnboardingService onboardingService;
     private final UpdatePromptCoordinator updatePromptCoordinator = new UpdatePromptCoordinator();
     private final AtomicReference<CompletableFuture<WorkspaceOpenResult>> pendingOpen = new AtomicReference<>();
 
     public ClientWorkspaceOpenService() {
-        this(new ProjectService(), new RecoveryService(), new ClientOnboardingService());
+        this(new ProjectService(), new RecoveryService(), new ClientOnboardingService(), new WorkZoneService());
     }
 
     ClientWorkspaceOpenService(
             ProjectService projectService,
             RecoveryService recoveryService,
-            ClientOnboardingService onboardingService
+            ClientOnboardingService onboardingService,
+            WorkZoneService workZoneService
     ) {
         this.projectService = Objects.requireNonNull(projectService, "projectService");
         this.recoveryService = Objects.requireNonNull(recoveryService, "recoveryService");
         this.onboardingService = Objects.requireNonNull(onboardingService, "onboardingService");
+        this.workZoneService = Objects.requireNonNull(workZoneService, "workZoneService");
     }
 
     public void openCurrentWorkspace(Minecraft client, Screen parent) {
@@ -102,9 +106,14 @@ public final class ClientWorkspaceOpenService {
                 level = server.overworld();
             }
             var project = this.projectService.ensureWorldProject(level, author);
+            boolean hasActiveZone = this.workZoneService.activeZone(
+                    this.projectService.resolveLayout(server, project.name()),
+                    author
+            ).isPresent();
             request.complete(new WorkspaceOpenResult(
                     project.name(),
-                    this.recoveryService.hasInterruptedDraft(server, project.name())
+                    this.recoveryService.hasInterruptedDraft(server, project.name()),
+                    hasActiveZone
             ));
         } catch (Throwable throwable) {
             request.completeExceptionally(throwable);
@@ -134,6 +143,10 @@ public final class ClientWorkspaceOpenService {
             client.setScreen(new RecoveryScreen(parent, result.projectName()));
             return;
         }
+        if (target == WorkspaceOpenTarget.PROJECT && result.hasActiveZone()) {
+            client.setScreen(new WorkZoneScreen(parent, result.projectName()));
+            return;
+        }
         if (target == WorkspaceOpenTarget.ONBOARDING) {
             client.setScreen(new OnboardingScreen(parent, result.projectName(), this.onboardingService));
             return;
@@ -151,6 +164,6 @@ public final class ClientWorkspaceOpenService {
         ONBOARDING
     }
 
-    private record WorkspaceOpenResult(String projectName, boolean hasRecoveryDraft) {
+    private record WorkspaceOpenResult(String projectName, boolean hasRecoveryDraft, boolean hasActiveZone) {
     }
 }
