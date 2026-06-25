@@ -11,9 +11,10 @@ import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.integration.common.IntegrationStatus;
-import io.github.luma.integration.common.IntegrationStatusService;
+import io.github.luma.integration.common.ExternalToolIntegrationRegistry;
 import io.github.luma.ui.state.ProjectAdvancedViewState;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import net.minecraft.server.MinecraftServer;
 public final class ProjectHomeScreenController {
 
     private final Query query;
+    private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
 
     public ProjectHomeScreenController() {
         this(new ServiceQuery());
@@ -94,7 +96,7 @@ public final class ProjectHomeScreenController {
             return List.of();
         }
         try {
-            return this.query.loadDeletedVersions(projectName).stream()
+            return this.versionVisibility.globalHistory(this.query.loadDeletedVersions(projectName)).stream()
                     .sorted(Comparator.comparing(ProjectVersion::createdAt).reversed())
                     .toList();
         } catch (Exception exception) {
@@ -135,7 +137,7 @@ public final class ProjectHomeScreenController {
         private final ProjectService projectService = new ProjectService();
         private final RecoveryService recoveryService = new RecoveryService();
         private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
-        private final IntegrationStatusService integrationStatusService = new IntegrationStatusService();
+        private final ExternalToolIntegrationRegistry integrationRegistry = new ExternalToolIntegrationRegistry();
         private final OperationSnapshotViewService operationSnapshotViewService = new OperationSnapshotViewService();
 
         @Override
@@ -185,7 +187,7 @@ public final class ProjectHomeScreenController {
 
         @Override
         public List<IntegrationStatus> loadIntegrations() {
-            return this.integrationStatusService.statuses();
+            return this.integrationRegistry.statuses();
         }
 
         @Override

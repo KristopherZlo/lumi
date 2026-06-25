@@ -50,11 +50,10 @@ import io.github.luma.storage.repository.WorldOriginRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import net.minecraft.core.BlockPos;
+import java.util.function.Predicate;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -84,6 +83,8 @@ public final class RestoreService {
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final VersionService versionService = new VersionService();
     private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
+    private final PartialRestoreEntityPlanner partialRestoreEntityPlanner = new PartialRestoreEntityPlanner();
+    private final PartialRestoreRequestResolver partialRestoreRequestResolver = new PartialRestoreRequestResolver();
     private final PartialRestoreTargetStatePlanner partialRestoreTargetStatePlanner = new PartialRestoreTargetStatePlanner();
     private final PartialRestorePendingDraftProvider partialRestorePendingDraftProvider =
             new PartialRestorePendingDraftProvider();
@@ -458,14 +459,15 @@ public final class RestoreService {
     }
 
     public OperationHandle partialRestore(ServerLevel level, PartialRestoreRequest request) throws IOException {
-        if (request == null || request.bounds() == null) {
+        if (request == null) {
             throw new IllegalArgumentException("Partial restore requires bounds");
         }
 
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), request.projectName());
+        PartialRestoreRequestResolver.Resolved resolvedRequest = this.partialRestoreRequestResolver.resolve(layout, request);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + request.projectName()));
-        this.partialRestoreDiagnosticsLog.logSelectedArea(level, project, request);
+        this.partialRestoreDiagnosticsLog.logSelectedArea(level, project, resolvedRequest.request());
 
         return this.worldOperationManager.startPreparedApplyOperation(
                 level,
@@ -473,7 +475,14 @@ public final class RestoreService {
                 "partial-restore",
                 "blocks",
                 LumaDebugLog.enabled(project),
-                progressSink -> this.preparePartialRestoreOperation(level, layout, project, request, progressSink)
+                progressSink -> this.preparePartialRestoreOperation(
+                        level,
+                        layout,
+                        project,
+                        resolvedRequest.request(),
+                        resolvedRequest.hardScope(),
+                        progressSink
+                )
         );
     }
 
@@ -482,6 +491,7 @@ public final class RestoreService {
             ProjectLayout layout,
             io.github.luma.domain.model.BuildProject project,
             PartialRestoreRequest request,
+            Predicate<BlockPoint> hardScope,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing partial restore request");
@@ -515,6 +525,7 @@ public final class RestoreService {
                 targetVersion,
                 pendingDraft,
                 request,
+                hardScope,
                 level.getMinY(),
                 level.getMaxY(),
                 progressSink
@@ -574,13 +585,16 @@ public final class RestoreService {
     }
 
     public PartialRestorePlanSummary summarizePartialRestorePlan(ServerLevel level, PartialRestoreRequest request) throws IOException {
-        if (request == null || request.bounds() == null) {
+        if (request == null) {
             throw new IllegalArgumentException("Partial restore requires bounds");
         }
 
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), request.projectName());
+        PartialRestoreRequestResolver.Resolved resolvedRequest = this.partialRestoreRequestResolver.resolve(layout, request);
+        request = resolvedRequest.request();
+        String projectName = request.projectName();
         var project = this.projectRepository.load(layout)
-                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + request.projectName()));
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, request.targetVersionId());
@@ -600,6 +614,7 @@ public final class RestoreService {
                 targetVersion,
                 pendingDraft.orElse(null),
                 request,
+                resolvedRequest.hardScope(),
                 level.getMinY(),
                 level.getMaxY(),
                 (stage, completed, total, detail) -> {
@@ -629,6 +644,7 @@ public final class RestoreService {
             ProjectVersion targetVersion,
             RecoveryDraft pendingDraft,
             PartialRestoreRequest request,
+            Predicate<BlockPoint> hardScope,
             int worldMinY,
             int worldMaxY,
             WorldOperationManager.ProgressSink progressSink
@@ -643,6 +659,7 @@ public final class RestoreService {
                     targetVersion,
                     pendingDraft,
                     request,
+                    hardScope,
                     worldMinY,
                     worldMaxY,
                     progressSink
@@ -681,6 +698,7 @@ public final class RestoreService {
                         targetVersion,
                         pendingDraft,
                         request,
+                        hardScope,
                         worldMinY,
                         worldMaxY,
                         progressSink
@@ -713,14 +731,17 @@ public final class RestoreService {
                 reverseChanges.blockChanges(),
                 forwardChanges.blockChanges(),
                 request.bounds(),
-                request.restoreMode()
+                request.restoreMode(),
+                request.bounds()::contains,
+                hardScope
         );
-        List<StoredEntityChange> partialEntityChanges = this.planPartialEntityChanges(
+        List<StoredEntityChange> partialEntityChanges = this.partialRestoreEntityPlanner.plan(
                 pendingDraft == null ? List.of() : pendingDraft.entityChanges(),
                 reverseChanges.entityChanges(),
                 forwardChanges.entityChanges(),
                 request.bounds(),
-                request.restoreMode()
+                request.restoreMode(),
+                hardScope
         );
         Instant now = Instant.now();
         RecoveryDraft draft = new RecoveryDraft(
@@ -754,6 +775,7 @@ public final class RestoreService {
             ProjectVersion targetVersion,
             RecoveryDraft pendingDraft,
             PartialRestoreRequest request,
+            Predicate<BlockPoint> hardScope,
             int worldMinY,
             int worldMaxY,
             WorldOperationManager.ProgressSink progressSink
@@ -773,7 +795,8 @@ public final class RestoreService {
                 request.restoreMode(),
                 worldMinY,
                 worldMaxY,
-                progressSink
+                progressSink,
+                hardScope
         );
         Instant now = Instant.now();
         RecoveryDraft draft = new RecoveryDraft(
@@ -994,13 +1017,14 @@ public final class RestoreService {
                         RestoreMechanismReconciliationPlanner.MAX_MECHANISM_RECONCILIATION_CELLS
                 );
             } else {
-                Map<BlockPoint, StatePayload> targetStates = this.blockTargetStateResolver.resolve(
-                        layout,
-                        project,
-                        versions,
-                        targetVersion,
-                        mechanismPositions.orElseThrow()
-                );
+                Map<BlockPoint, StatePayload> targetStates =
+                        this.blockTargetStateResolver.resolveOrEmptyWhenBaselineMissing(
+                                layout,
+                                project,
+                                versions,
+                                targetVersion,
+                                mechanismPositions.orElseThrow()
+                        );
                 if (!targetStates.isEmpty()) {
                     batches.addAll(this.batchPreparer.prepareTargetStates(
                             level,
@@ -1274,10 +1298,6 @@ public final class RestoreService {
         }
     }
 
-    private static String chunkKey(ChunkPoint chunk) {
-        return chunk.x() + ":" + chunk.z();
-    }
-
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {
         return this.chunkCollector.touchedChunksForPlan(plan.baselineGaps(), plan.patchChain());
     }
@@ -1290,54 +1310,6 @@ public final class RestoreService {
             return RestorePlanMode.BLOCKED_FINGERPRINT;
         }
         return RestorePlanMode.BASELINE_CHUNKS;
-    }
-
-    private List<StoredEntityChange> planPartialEntityChanges(
-            List<StoredEntityChange> pendingChanges,
-            List<StoredEntityChange> reverseLineageChanges,
-            List<StoredEntityChange> forwardLineageChanges,
-            io.github.luma.domain.model.Bounds3i bounds,
-            PartialRestoreMode mode
-    ) {
-        PartialRestoreMode effectiveMode = mode == null ? PartialRestoreMode.SELECTED_AREA : mode;
-        Map<String, StoredEntityChange> planned = new LinkedHashMap<>();
-        for (StoredEntityChange change : pendingChanges) {
-            if (effectiveMode.includes(this.entityChangeInside(change, bounds))) {
-                planned.put(change.entityId(), change);
-            }
-        }
-        for (StoredEntityChange change : reverseLineageChanges) {
-            this.accumulatePartialEntityChange(planned, change.inverse(), bounds, effectiveMode);
-        }
-        for (StoredEntityChange change : forwardLineageChanges) {
-            this.accumulatePartialEntityChange(planned, change, bounds, effectiveMode);
-        }
-        return planned.values().stream()
-                .filter(change -> !change.isNoOp())
-                .toList();
-    }
-
-    private void accumulatePartialEntityChange(
-            Map<String, StoredEntityChange> planned,
-            StoredEntityChange target,
-            io.github.luma.domain.model.Bounds3i bounds,
-            PartialRestoreMode mode
-    ) {
-        if (!mode.includes(this.entityChangeInside(target, bounds))) {
-            return;
-        }
-        StoredEntityChange current = planned.get(target.entityId());
-        planned.put(target.entityId(), current == null ? target : current.withLatestState(target.newValue()));
-    }
-
-    private boolean entityChangeInside(StoredEntityChange change, io.github.luma.domain.model.Bounds3i bounds) {
-        if (change == null || bounds == null) {
-            return false;
-        }
-        BlockPos pos = change.newValue() == null
-                ? change.oldValue().blockPos()
-                : change.newValue().blockPos();
-        return bounds.contains(io.github.luma.domain.model.BlockPoint.from(pos));
     }
 
     private static int totalPlacements(List<PreparedChunkBatch> batches) {

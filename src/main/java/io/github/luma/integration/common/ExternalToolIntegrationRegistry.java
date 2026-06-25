@@ -75,7 +75,6 @@ public final class ExternalToolIntegrationRegistry {
             capabilities.add(IntegrationCapability.MASS_EDIT_GROUPING);
             capabilities.add(IntegrationCapability.ENTITY_TRACKING);
         }
-        this.addWorldEditSessionCapabilities(capabilities);
 
         boolean available = modDetected || corePresent || !capabilities.isEmpty();
         IntegrationMode mode = this.worldEditMode(available, editSessionEventPresent, corePresent);
@@ -97,7 +96,6 @@ public final class ExternalToolIntegrationRegistry {
             capabilities.add(IntegrationCapability.FALLBACK_CAPTURE);
             capabilities.add(IntegrationCapability.MASS_EDIT_GROUPING);
             capabilities.add(IntegrationCapability.ENTITY_TRACKING);
-            this.addWorldEditSessionCapabilities(capabilities);
         }
 
         return new IntegrationStatus(
@@ -207,42 +205,6 @@ public final class ExternalToolIntegrationRegistry {
         return IntegrationMode.DETECTED;
     }
 
-    private void addWorldEditSessionCapabilities(Set<IntegrationCapability> capabilities) {
-        if (this.worldEditSelectionApiPresent()) {
-            capabilities.add(IntegrationCapability.SELECTION);
-        }
-        if (this.worldEditClipboardApiPresent()) {
-            capabilities.add(IntegrationCapability.CLIPBOARD);
-        }
-        if (this.worldEditSchematicApiPresent()) {
-            capabilities.add(IntegrationCapability.SCHEMATIC);
-        }
-    }
-
-    private boolean worldEditSelectionApiPresent() {
-        return this.allClassesPresent(
-                "com.sk89q.worldedit.WorldEdit",
-                "com.sk89q.worldedit.LocalSession",
-                "com.sk89q.worldedit.fabric.FabricAdapter",
-                "com.sk89q.worldedit.regions.Region"
-        );
-    }
-
-    private boolean worldEditClipboardApiPresent() {
-        return this.allClassesPresent(
-                "com.sk89q.worldedit.WorldEdit",
-                "com.sk89q.worldedit.LocalSession",
-                "com.sk89q.worldedit.session.ClipboardHolder"
-        );
-    }
-
-    private boolean worldEditSchematicApiPresent() {
-        return this.allClassesPresent(
-                "com.sk89q.worldedit.extent.clipboard.io.ClipboardFormat",
-                "com.sk89q.worldedit.extent.clipboard.io.ClipboardFormats"
-        );
-    }
-
     private IntegrationStatus detectedBuilderToolStatus(
             String id,
             List<String> modIds,
@@ -289,15 +251,6 @@ public final class ExternalToolIntegrationRegistry {
             }
         }
         return false;
-    }
-
-    private boolean allClassesPresent(String... classNames) {
-        for (String className : classNames) {
-            if (!this.classPresent.test(className)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static boolean classExists(String className) {

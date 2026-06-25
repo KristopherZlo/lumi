@@ -1,7 +1,6 @@
 param(
     [string]$Username = "LumiTestClient",
     [string]$JavaHome,
-    [switch]$FullStack,
     [string[]]$GradleTasks = @("installTestClientMods", "runTestClient"),
     [string[]]$JvmArgs = @(),
     [Parameter(ValueFromRemainingArguments = $true)]
@@ -182,10 +181,6 @@ try {
     $arguments = @()
     $arguments += $GradleTasks
     $arguments += "-Plumi.testUsername=$Username"
-
-    if ($FullStack) {
-        $arguments += "-Plumi.testClientFullStack=true"
-    }
 
     & .\gradlew.bat @arguments
     $gradleExitCode = $LASTEXITCODE

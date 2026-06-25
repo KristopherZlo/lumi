@@ -6,7 +6,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.server.MinecraftServer;
 
@@ -16,6 +16,7 @@ import net.minecraft.server.MinecraftServer;
 public final class WorldBootstrapService implements AutoCloseable {
 
     private static final int PLAYER_JOIN_BOOTSTRAP_DELAY_TICKS = 20 * 10;
+    private static final AtomicInteger NEXT_BOOTSTRAP_THREAD_INDEX = new AtomicInteger(1);
 
     private final ProjectService projectService;
     private ExecutorService executor;
@@ -24,7 +25,7 @@ public final class WorldBootstrapService implements AutoCloseable {
     private int ticksUntilBootstrap = -1;
 
     public WorldBootstrapService() {
-        this(new ProjectService(), Executors.newSingleThreadExecutor(new BootstrapThreadFactory()));
+        this(new ProjectService(), Executors.newSingleThreadExecutor(WorldBootstrapService::bootstrapThread));
     }
 
     WorldBootstrapService(ProjectService projectService, ExecutorService executor) {
@@ -94,21 +95,15 @@ public final class WorldBootstrapService implements AutoCloseable {
 
     private synchronized ExecutorService executor() {
         if (this.executor.isShutdown() || this.executor.isTerminated()) {
-            this.executor = Executors.newSingleThreadExecutor(new BootstrapThreadFactory());
+            this.executor = Executors.newSingleThreadExecutor(WorldBootstrapService::bootstrapThread);
         }
         return this.executor;
     }
 
-    private static final class BootstrapThreadFactory implements ThreadFactory {
-
-        private int index;
-
-        @Override
-        public synchronized Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "lumi-world-bootstrap-" + (++this.index));
-            thread.setDaemon(true);
-            thread.setPriority(Thread.MIN_PRIORITY);
-            return thread;
-        }
+    private static Thread bootstrapThread(Runnable runnable) {
+        Thread thread = new Thread(runnable, "lumi-world-bootstrap-" + NEXT_BOOTSTRAP_THREAD_INDEX.getAndIncrement());
+        thread.setDaemon(true);
+        thread.setPriority(Thread.MIN_PRIORITY);
+        return thread;
     }
 }

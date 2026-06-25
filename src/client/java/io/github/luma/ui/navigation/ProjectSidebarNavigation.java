@@ -37,19 +37,29 @@ public final class ProjectSidebarNavigation {
             String projectName,
             ProjectWorkspaceTab activeTab
     ) {
+        this.attach(window, currentScreen, projectName, activeTab, null);
+    }
+
+    public void attach(
+            ProjectWindowLayout window,
+            Screen currentScreen,
+            String projectName,
+            ProjectWorkspaceTab activeTab,
+            Integer activeZoneColor
+    ) {
         Screen parent = this.navigationParent(currentScreen);
         FlowLayout tabs = LumaUi.sidebarTabs();
-        this.addTab(tabs, Component.translatable("luma.tab.history"), ProjectWorkspaceTab.HISTORY, activeTab, () ->
-                this.router.openProjectIgnoringRecovery(parent, projectName));
-        this.addTab(tabs, Component.translatable("luma.more.tab_history_graph"), ProjectWorkspaceTab.HISTORY_GRAPH, activeTab, () ->
-                this.router.openHistoryGraph(parent, projectName));
-        this.addTab(tabs, Component.translatable("luma.tab.variants"), ProjectWorkspaceTab.VARIANTS, activeTab, () ->
+        this.addTab(tabs, Component.translatable("luma.tab.history"), ProjectWorkspaceTab.HISTORY, activeTab, activeZoneColor, () ->
+                this.router.openProjectTab(parent, projectName));
+        this.addTab(tabs, Component.translatable("luma.tab.zones"), ProjectWorkspaceTab.ZONES, activeTab, activeZoneColor, () ->
+                this.router.openWorkZones(parent, projectName));
+        this.addTab(tabs, Component.translatable("luma.tab.variants"), ProjectWorkspaceTab.VARIANTS, activeTab, activeZoneColor, () ->
                 this.router.openVariants(parent, projectName));
-        this.addTab(tabs, Component.translatable("luma.tab.import_export"), ProjectWorkspaceTab.IMPORT_EXPORT, activeTab, () ->
+        this.addTab(tabs, Component.translatable("luma.tab.import_export"), ProjectWorkspaceTab.IMPORT_EXPORT, activeTab, activeZoneColor, () ->
                 this.router.openShare(parent, projectName));
-        this.addTab(tabs, Component.translatable("luma.action.settings"), ProjectWorkspaceTab.SETTINGS, activeTab, () ->
+        this.addTab(tabs, Component.translatable("luma.action.settings"), ProjectWorkspaceTab.SETTINGS, activeTab, activeZoneColor, () ->
                 this.router.openSettings(parent, projectName));
-        this.addTab(tabs, Component.translatable("luma.action.more"), ProjectWorkspaceTab.MORE, activeTab, () ->
+        this.addTab(tabs, Component.translatable("luma.action.more"), ProjectWorkspaceTab.MORE, activeTab, activeZoneColor, () ->
                 this.router.openMore(parent, projectName));
 
         window.sidebar().child(tabs);
@@ -72,9 +82,13 @@ public final class ProjectSidebarNavigation {
             Component label,
             ProjectWorkspaceTab tab,
             ProjectWorkspaceTab activeTab,
+            Integer activeZoneColor,
             Runnable action
     ) {
-        tabs.child(LumaUi.sidebarTab(label, tab == activeTab, button -> action.run()));
+        boolean zoneTab = tab == ProjectWorkspaceTab.ZONES || tab == ProjectWorkspaceTab.VARIANTS;
+        tabs.child(activeZoneColor != null && zoneTab
+                ? LumaUi.sidebarTab(label, tab == activeTab, activeZoneColor, button -> action.run())
+                : LumaUi.sidebarTab(label, tab == activeTab, button -> action.run()));
     }
 
     private FlowLayout supportFooter() {

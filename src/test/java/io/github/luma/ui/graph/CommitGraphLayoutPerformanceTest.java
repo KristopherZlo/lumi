@@ -36,6 +36,63 @@ class CommitGraphLayoutPerformanceTest {
     }
 
     @Test
+    void detachedLinearDescendantsReuseParentLane() {
+        Instant baseTime = Instant.parse("2026-04-21T00:00:00Z");
+        List<ProjectVersion> versions = List.of(
+                this.version("v0001", "main", "", baseTime),
+                this.version("v0002", "main", "v0001", baseTime.plusSeconds(1)),
+                this.version("v0003", "main", "v0002", baseTime.plusSeconds(2))
+        );
+        List<ProjectVariant> variants = List.of(new ProjectVariant("main", "main", "v0001", "v0001", true, baseTime));
+
+        List<Integer> lanes = CommitGraphLayout.build(versions, variants, "main").stream()
+                .map(CommitGraphNode::lane)
+                .distinct()
+                .toList();
+        List<Integer> lanesWithoutVariants = CommitGraphLayout.build(versions, List.of(), "main").stream()
+                .map(CommitGraphNode::lane)
+                .distinct()
+                .toList();
+
+        assertEquals(List.of(0), lanes);
+        assertEquals(List.of(0), lanesWithoutVariants);
+    }
+
+    @Test
+    void sameVariantRowsReuseLaneWhenParentsAreFilteredOut() {
+        Instant baseTime = Instant.parse("2026-04-21T00:00:00Z");
+        List<ProjectVersion> versions = List.of(
+                this.version("v0003", "main", "v0002", baseTime.plusSeconds(2)),
+                this.version("v0001", "main", "", baseTime)
+        );
+        List<ProjectVariant> variants = List.of(new ProjectVariant("main", "main", "v0003", "v0001", true, baseTime));
+
+        List<Integer> lanes = CommitGraphLayout.build(versions, variants, "main").stream()
+                .map(CommitGraphNode::lane)
+                .distinct()
+                .toList();
+
+        assertEquals(List.of(0), lanes);
+    }
+
+    @Test
+    void hiddenVariantsDoNotReserveEmptyLanes() {
+        Instant baseTime = Instant.parse("2026-04-21T00:00:00Z");
+        List<ProjectVersion> versions = List.of(this.version("v0001", "main", "", baseTime));
+        List<ProjectVariant> variants = List.of(
+                new ProjectVariant("main", "main", "v0001", "v0001", true, baseTime),
+                new ProjectVariant("hidden", "hidden", "v1000", "v1000", false, baseTime.plusSeconds(1))
+        );
+
+        List<Integer> laneCounts = CommitGraphLayout.build(versions, variants, "main").stream()
+                .map(CommitGraphNode::laneCount)
+                .distinct()
+                .toList();
+
+        assertEquals(List.of(1), laneCounts);
+    }
+
+    @Test
     void commitGraphExposesParentLaneForBranchConnectors() {
         Instant baseTime = Instant.parse("2026-04-21T00:00:00Z");
         List<ProjectVersion> versions = List.of(

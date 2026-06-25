@@ -1,8 +1,10 @@
 package io.github.luma.ui.screen;
 
+import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.LumaScrollContainer;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.core.UIComponent;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,6 +20,8 @@ import org.lwjgl.glfw.GLFW;
  * the background.
  */
 public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
+
+    private boolean openingAnimationPending = true;
 
     protected LumaScreen(Component title) {
         super(title);
@@ -70,6 +74,14 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     protected void onLumaTick() {
+    }
+
+    protected final <T extends UIComponent> T animateOnFirstOpen(T component) {
+        if (!this.openingAnimationPending) {
+            return component;
+        }
+        this.openingAnimationPending = false;
+        return LumaUi.animateOpen(component);
     }
 
     private static double scrollProgress(Supplier<? extends LumaScrollContainer<?>> scrollProvider) {

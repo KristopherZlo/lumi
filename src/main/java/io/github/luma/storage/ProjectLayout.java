@@ -30,6 +30,10 @@ public record ProjectLayout(Path root) {
         return this.root.resolve("history-tombstones.json");
     }
 
+    public Path workZonesFile() {
+        return this.root.resolve("work-zones.json");
+    }
+
     public Path versionsDir() {
         return this.root.resolve("versions");
     }
@@ -120,6 +124,10 @@ public record ProjectLayout(Path root) {
 
     public Path recoveryWalFile() {
         return this.recoveryDir().resolve("draft.wal.lz4");
+    }
+
+    public Path recoveryExpectedDraftFile() {
+        return this.recoveryDir().resolve("expected-draft.marker");
     }
 
     public Path recoveryOperationDraftFile() {

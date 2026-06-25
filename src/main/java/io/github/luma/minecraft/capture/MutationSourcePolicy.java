@@ -114,6 +114,10 @@ final class MutationSourcePolicy {
                 && (source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK));
     }
 
+    boolean usesLiveStateReconciliation(WorldMutationSource source) {
+        return source != null && source != WorldMutationSource.GROWTH;
+    }
+
     boolean canCaptureDeferredPreMutationBaseline(
             BuildProject project,
             WorldMutationSource source,
@@ -180,7 +184,8 @@ final class MutationSourcePolicy {
         return source == WorldMutationSource.BLOCK_UPDATE
                 || source == WorldMutationSource.PISTON
                 || source == WorldMutationSource.FLUID
-                || source == WorldMutationSource.FALLING_BLOCK;
+                || source == WorldMutationSource.FALLING_BLOCK
+                || source == WorldMutationSource.GROWTH;
     }
 
     boolean requiresCausalActionForDirectCapture(WorldMutationSource source) {

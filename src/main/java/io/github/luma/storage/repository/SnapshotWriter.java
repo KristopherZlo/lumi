@@ -5,6 +5,7 @@ import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.ContentRef;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.SectionFingerprint;
+import io.github.luma.domain.model.SectionChangeMask;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotRef;
@@ -27,7 +28,7 @@ import net.jpountz.lz4.LZ4FrameOutputStream;
 public final class SnapshotWriter {
 
     private static final int MAGIC = 0x4C534E50;
-    private static final int VERSION = 7;
+    private static final int VERSION = 8;
     private static final String SNAPSHOT_SECTION_CONTENT = "snapshot-section";
     private final PayloadContentRepository contentRepository = new PayloadContentRepository();
 
@@ -123,13 +124,14 @@ public final class SnapshotWriter {
     }
 
     private byte[] chunkBytes(SnapshotChunkData chunk) throws IOException {
+        List<SnapshotSectionData> sections = storedSections(chunk);
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream data = new DataOutputStream(bytes)) {
             data.writeInt(chunk.chunkX());
             data.writeInt(chunk.chunkZ());
-            data.writeInt(chunk.sections().size());
+            data.writeInt(sections.size());
             data.writeInt(chunk.blockEntities().size());
-            for (SnapshotSectionData section : chunk.sections()) {
+            for (SnapshotSectionData section : sections) {
                 this.writeSection(data, section);
             }
             for (Map.Entry<Integer, net.minecraft.nbt.CompoundTag> entry : chunk.blockEntities().entrySet()) {
@@ -145,13 +147,14 @@ public final class SnapshotWriter {
     }
 
     private void writeSectionFingerprints(DataOutputStream data, SnapshotChunkData chunk) throws IOException {
-        data.writeInt(chunk.sections().size());
-        for (SnapshotSectionData section : chunk.sections()) {
+        List<SnapshotSectionData> sections = storedSections(chunk);
+        data.writeInt(sections.size());
+        for (SnapshotSectionData section : sections) {
             SectionFingerprint fingerprint = SectionFingerprint.fromBytes(
                     chunk.chunkX(),
                     chunk.chunkZ(),
                     section.sectionY(),
-                    section.paletteIndexes().length,
+                    SectionChangeMask.ENTRY_COUNT,
                     this.sectionBytes(section)
             );
             data.writeInt(fingerprint.sectionY());
@@ -188,9 +191,11 @@ public final class SnapshotWriter {
         for (var tag : section.palette()) {
             StorageIo.writeCompound(data, tag);
         }
-        data.writeInt(section.paletteIndexes().length);
-        for (short paletteIndex : section.paletteIndexes()) {
-            data.writeShort(paletteIndex);
+        data.writeInt(section.bitsPerEntry());
+        long[] packedStorage = section.packedStorage();
+        data.writeInt(packedStorage.length);
+        for (long packedLong : packedStorage) {
+            data.writeLong(packedLong);
         }
     }
 
@@ -225,14 +230,16 @@ public final class SnapshotWriter {
         }
         List<SnapshotChunkData> chunks = new ArrayList<>(snapshot.chunks().size());
         for (SnapshotChunkData chunk : snapshot.chunks()) {
-            List<SnapshotSectionData> sections = new ArrayList<>(chunk.sections().size());
-            for (SnapshotSectionData section : chunk.sections()) {
+            List<SnapshotSectionData> storedSections = storedSections(chunk);
+            List<SnapshotSectionData> sections = new ArrayList<>(storedSections.size());
+            for (SnapshotSectionData section : storedSections) {
                 byte[] bytes = this.sectionBytes(section);
                 ContentRef contentRef = this.contentRepository.writeContent(layout, SNAPSHOT_SECTION_CONTENT, bytes);
                 sections.add(new SnapshotSectionData(
                         section.sectionY(),
                         section.palette(),
-                        section.paletteIndexes(),
+                        section.bitsPerEntry(),
+                        section.packedStorage(),
                         contentRef
                 ));
             }
@@ -259,7 +266,8 @@ public final class SnapshotWriter {
             sections.add(new SnapshotSectionData(
                     section.sectionY(),
                     section.palette(),
-                    section.unpackPaletteIndexes()
+                    section.bitsPerEntry(),
+                    section.packedStorage()
             ));
         }
         return new SnapshotChunkData(
@@ -273,5 +281,14 @@ public final class SnapshotWriter {
 
     public static int packVerticalIndex(int relativeY, int localX, int localZ) {
         return (relativeY << 8) | (localZ << 4) | localX;
+    }
+
+    private static List<SnapshotSectionData> storedSections(SnapshotChunkData chunk) {
+        if (chunk == null || chunk.sections().isEmpty()) {
+            return List.of();
+        }
+        return chunk.sections().stream()
+                .filter(section -> section != null && !section.palette().isEmpty())
+                .toList();
     }
 }

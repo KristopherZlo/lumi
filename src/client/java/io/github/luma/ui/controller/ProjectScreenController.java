@@ -154,12 +154,17 @@ public final class ProjectScreenController {
     }
 
     public String saveVersion(String projectName, String message) {
+        return this.saveVersion(projectName, message, List.of());
+    }
+
+    public String saveVersion(String projectName, String message, List<String> tags) {
         try {
             this.versionService.startSaveVersion(
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName,
                     message,
-                    this.client.getUser().getName()
+                    this.client.getUser().getName(),
+                    tags
             );
             return "luma.status.save_started";
         } catch (IllegalStateException exception) {
@@ -174,12 +179,17 @@ public final class ProjectScreenController {
     }
 
     public String amendVersion(String projectName, String message) {
+        return this.amendVersion(projectName, message, List.of());
+    }
+
+    public String amendVersion(String projectName, String message, List<String> tags) {
         try {
             this.versionService.startAmendVersion(
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName,
                     message,
-                    this.client.getUser().getName()
+                    this.client.getUser().getName(),
+                    tags
             );
             return "luma.status.amend_started";
         } catch (IllegalStateException exception) {
@@ -451,6 +461,22 @@ public final class ProjectScreenController {
         }
     }
 
+    public String updateVersionTags(String projectName, String versionId, List<String> tags) {
+        try {
+            this.historyEditService.updateVersionTags(
+                    ClientProjectAccess.requireSingleplayerServer(this.client),
+                    projectName,
+                    versionId,
+                    tags
+            );
+            return "luma.status.tags_updated";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Update tags request failed for project {} version {}", projectName, versionId, exception);
+            this.reportFailedAction(exception);
+            return historyEditFailureStatus(exception);
+        }
+    }
+
     public String deleteVersion(String projectName, String versionId) {
         try {
             this.historyEditService.deleteVersion(
@@ -461,6 +487,21 @@ public final class ProjectScreenController {
             return "luma.status.version_deleted";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Delete version request failed for project {} version {}", projectName, versionId, exception);
+            this.reportFailedAction(exception);
+            return historyEditFailureStatus(exception);
+        }
+    }
+
+    public String restoreDeletedVersion(String projectName, String versionId) {
+        try {
+            this.historyEditService.restoreDeletedVersion(
+                    ClientProjectAccess.requireSingleplayerServer(this.client),
+                    projectName,
+                    versionId
+            );
+            return "luma.status.version_restored";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Restore deleted version request failed for project {} version {}", projectName, versionId, exception);
             this.reportFailedAction(exception);
             return historyEditFailureStatus(exception);
         }

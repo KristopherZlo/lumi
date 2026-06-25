@@ -11,6 +11,7 @@ import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LiveUndoRedoActionRecorderTest {
@@ -74,7 +75,7 @@ class LiveUndoRedoActionRecorderTest {
     }
 
     @Test
-    void hiddenGrowthChangesWaitForSettledReconciliation() {
+    void hiddenGrowthChangesRecordImmediatelyForUndoRedo() {
         StoredBlockChange hiddenGrowth = new StoredBlockChange(
                 new BlockPoint(0, 64, 0),
                 state("minecraft:moss_block"),
@@ -82,7 +83,7 @@ class LiveUndoRedoActionRecorderTest {
                 true
         );
 
-        assertTrue(LiveUndoRedoActionRecorder.defersImmediateCausalChange(
+        assertFalse(LiveUndoRedoActionRecorder.defersImmediateCausalChange(
                 WorldMutationSource.GROWTH,
                 hiddenGrowth
         ));

@@ -10,11 +10,15 @@ import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.TagSuggestionComponent;
+import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.BranchCreationDialogStateFactory;
 import io.github.luma.ui.controller.BranchCreationResult;
 import io.github.luma.ui.controller.ProjectScreenController;
@@ -36,7 +40,9 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -46,13 +52,15 @@ import org.lwjgl.glfw.GLFW;
 
 public final class SaveDetailsScreen extends LumaScreen {
 
-    private static final int[] PREVIEW_WIDTH_STEPS = {168, 212, 284, 356};
+    private static final int[] PREVIEW_VIEWPORT_WIDTH_STEPS = {168, 212, 284};
+    private static final int MAX_PREVIEW_ZOOM_STEP = 3;
 
     private final Screen parent;
     private final String projectName;
     private final String versionId;
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectScreenController controller = new ProjectScreenController();
+    private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
     private final BranchCreationDialogStateFactory branchDialogFactory = new BranchCreationDialogStateFactory();
     private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.controller, new BranchDialogActions());
     private final RestoreConfirmationDialogView restoreDialogView = new RestoreConfirmationDialogView(new RestoreDialogActions());
@@ -72,16 +80,20 @@ public final class SaveDetailsScreen extends LumaScreen {
             "luma.status.project_ready"
     );
     private String status = "luma.status.project_ready";
-    private boolean showMoreOptions = false;
     private boolean pendingRestoreConfirmation = false;
     private boolean pendingDeleteConfirmation = false;
     private boolean showPartialRestore = false;
-    private boolean showAdvancedInfo = false;
     private String renameVersionId = "";
     private String renameMessage = "";
+    private String tagVersionId = "";
+    private String tagText = "";
+    private boolean tagEditorVisible = false;
+    private TextBoxComponent activeTagInput;
     private String pendingBranchBaseVersionId = "";
     private String branchName = "";
-    private int previewZoomStep = 1;
+    private int previewZoomStep = 0;
+    private int previewPanX = 0;
+    private int previewPanY = 0;
     private int refreshCooldown = 0;
 
     public SaveDetailsScreen(Screen parent, String projectName, String versionId) {
@@ -111,13 +123,10 @@ public final class SaveDetailsScreen extends LumaScreen {
         root.child(stack);
 
         FlowLayout frame = LumaUi.screenFrame();
-        stack.child(frame);
-
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        frame.child(header);
+        stack.child(this.animateOnFirstOpen(frame));
 
         if (version == null) {
+            frame.child(LumaUi.closeHeader(Component.translatable("luma.screen.save_details.title", this.projectName), button -> this.onClose()));
             frame.child(LumaUi.emptyState(
                     Component.translatable("luma.save_details.empty_title"),
                     Component.translatable("luma.preview.no_version")
@@ -125,10 +134,10 @@ public final class SaveDetailsScreen extends LumaScreen {
             return;
         }
 
-        frame.child(LumaUi.value(Component.translatable(
+        frame.child(LumaUi.closeHeader(Component.translatable(
                 "luma.screen.save_details.title",
                 ProjectUiSupport.displayMessage(version)
-        )));
+        ), button -> this.onClose()));
         if (this.shouldShowStatusBanner()) {
             frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
         }
@@ -140,8 +149,9 @@ public final class SaveDetailsScreen extends LumaScreen {
         ContextualHelpPresenter contextualHelp = new ContextualHelpPresenter(this.contextualHelpService, this::rebuild);
         contextualHelp.addHint(body, ClientContextualHelpHint.RESTORE);
         body.child(this.summarySection(version, versionVariant));
-        body.child(this.changesSection(version));
         body.child(this.primaryActions(version, versionVariant, operationActive));
+        body.child(this.changeStats(version));
+        body.child(this.advancedInfoSection(version));
         body.child(this.moreSection(version, operationActive));
         if (this.showPartialRestore) {
             contextualHelp.addHint(body, ClientContextualHelpHint.PARTIAL_RESTORE);
@@ -173,6 +183,9 @@ public final class SaveDetailsScreen extends LumaScreen {
     public boolean keyPressed(KeyEvent event) {
         if (this.branchDialogState().visible() && event.key() == GLFW.GLFW_KEY_ESCAPE) {
             this.closeBranchDialog();
+            return true;
+        }
+        if (event.key() == GLFW.GLFW_KEY_TAB && this.acceptTagCompletion()) {
             return true;
         }
         return super.keyPressed(event);
@@ -216,7 +229,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         hero.gap(10);
         hero.child(this.previewPanel(version));
 
-        FlowLayout text = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        FlowLayout text = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
         text.gap(6);
         text.child(LumaUi.value(Component.literal(ProjectUiSupport.displayMessage(version))));
 
@@ -229,22 +242,96 @@ public final class SaveDetailsScreen extends LumaScreen {
                 ProjectUiSupport.safeText(version.author()),
                 ProjectUiSupport.formatTimestamp(version.createdAt())
         )));
+        text.child(this.tagsSection(version));
         hero.child(text);
         section.child(hero);
         return section;
     }
 
+    private FlowLayout tagsSection(ProjectVersion version) {
+        this.ensureTagText(version);
+        FlowLayout section = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        section.gap(4);
+
+        FlowLayout row = LumaUi.actionRow();
+        List<String> tags = ProjectVersionTags.from(version);
+        if (tags.isEmpty()) {
+            row.child(LumaUi.caption(Component.translatable("luma.history.tags_empty")));
+        } else {
+            for (String tag : tags) {
+                row.child(LumaUi.chip(Component.literal("#" + tag)));
+            }
+        }
+        row.child(LumaUi.iconButton("missing-tag", Component.translatable("luma.action.edit_tags"), button -> {
+            this.tagEditorVisible = !this.tagEditorVisible;
+            this.rebuild();
+        }));
+        section.child(row);
+
+        if (this.tagEditorVisible) {
+            FlowLayout editor = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+            editor.gap(2);
+            FlowLayout editRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+            editRow.gap(4);
+            editRow.verticalAlignment(VerticalAlignment.CENTER);
+            TextBoxComponent input = UIComponents.textBox(Sizing.expand(100), this.tagText);
+            input.setHint(Component.translatable("luma.history.tags_input"));
+            TagInputSupport.configure(input, this.tagText, TagInputSupport.knownTags(this.state.versions()), true);
+            TagSuggestionComponent suggestions = new TagSuggestionComponent(
+                    () -> this.tagText,
+                    () -> TagInputSupport.knownTags(this.state.versions()),
+                    true,
+                    accepted -> {
+                        this.tagText = accepted;
+                        input.setValue(accepted);
+                        input.setCursorPosition(accepted.length());
+                    }
+            );
+            input.onChanged().subscribe(value -> {
+                this.tagText = TagInputSupport.limit(value);
+                suggestions.refresh();
+            });
+            this.activeTagInput = input;
+            editRow.child(input);
+            ButtonComponent save = LumaUi.iconButton("save", Component.translatable("luma.action.save_tags"), button -> this.saveTags(version));
+            save.margins(Insets.none());
+            editRow.child(save);
+            editor.child(editRow);
+            editor.child(suggestions);
+            section.child(editor);
+        }
+        return section;
+    }
+
+    private void ensureTagText(ProjectVersion version) {
+        if (version == null) {
+            return;
+        }
+        if (!version.id().equals(this.tagVersionId)) {
+            this.tagVersionId = version.id();
+            this.tagText = TagInputSupport.limit(ProjectVersionTags.serialize(ProjectVersionTags.from(version)));
+            this.tagEditorVisible = false;
+        }
+    }
+
     private FlowLayout previewPanel(ProjectVersion version) {
-        int previewWidth = this.previewWidth();
+        int previewWidth = this.previewViewportWidth();
+        int previewHeight = Math.max(96, (previewWidth * 3) / 4);
         FlowLayout panel = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
         panel.gap(4);
-        panel.child(ProjectUiSupport.versionPreview(
+        panel.child(ProjectUiSupport.zoomableVersionPreview(
                 this.controller,
                 this.projectName,
                 version,
                 previewWidth,
-                Math.max(88, previewWidth / 2),
-                Math.max(132, (previewWidth * 3) / 4)
+                previewHeight,
+                this.previewZoomStep,
+                this.previewPanX,
+                this.previewPanY,
+                (x, y) -> {
+                    this.previewPanX = x;
+                    this.previewPanY = y;
+                }
         ));
 
         FlowLayout actions = LumaUi.actionRow();
@@ -256,35 +343,52 @@ public final class SaveDetailsScreen extends LumaScreen {
         actions.child(zoomOut);
 
         ButtonComponent zoomIn = LumaUi.iconButton("zoom-in", Component.translatable("luma.action.zoom_in"), button -> {
-            this.previewZoomStep = Math.min(this.maxPreviewZoomStep(), this.previewZoomStep + 1);
+            this.previewZoomStep = Math.min(MAX_PREVIEW_ZOOM_STEP, this.previewZoomStep + 1);
             this.rebuild();
         });
-        zoomIn.active(this.previewZoomStep < this.maxPreviewZoomStep());
+        zoomIn.active(this.previewZoomStep < MAX_PREVIEW_ZOOM_STEP);
         actions.child(zoomIn);
+        ButtonComponent left = LumaUi.iconButton("arrow-left", Component.translatable("luma.action.back"), button -> this.panPreview(-24, 0));
+        left.active(this.previewZoomStep > 0);
+        actions.child(left);
+        ButtonComponent up = LumaUi.iconButton("chevron-up", Component.translatable("luma.action.preview_pan_up"), button -> this.panPreview(0, -24));
+        up.active(this.previewZoomStep > 0);
+        actions.child(up);
+        ButtonComponent down = LumaUi.iconButton("chevron-down", Component.translatable("luma.action.preview_pan_down"), button -> this.panPreview(0, 24));
+        down.active(this.previewZoomStep > 0);
+        actions.child(down);
+        ButtonComponent right = LumaUi.iconButton("arrow-right", Component.translatable("luma.action.next"), button -> this.panPreview(24, 0));
+        right.active(this.previewZoomStep > 0);
+        actions.child(right);
         panel.child(actions);
         return panel;
     }
 
-    private int previewWidth() {
-        return PREVIEW_WIDTH_STEPS[Math.max(0, Math.min(this.previewZoomStep, this.maxPreviewZoomStep()))];
+    private void panPreview(int deltaX, int deltaY) {
+        this.previewPanX += deltaX;
+        this.previewPanY += deltaY;
+        this.rebuild();
     }
 
-    private int maxPreviewZoomStep() {
+    private int previewViewportWidth() {
+        return PREVIEW_VIEWPORT_WIDTH_STEPS[this.previewViewportStep()];
+    }
+
+    private int previewViewportStep() {
         if (this.width < 560) {
-            return 1;
+            return 0;
         }
         if (this.width < 760) {
-            return 2;
+            return 1;
         }
-        return PREVIEW_WIDTH_STEPS.length - 1;
+        return PREVIEW_VIEWPORT_WIDTH_STEPS.length - 1;
     }
 
-    private FlowLayout changesSection(ProjectVersion version) {
+    private FlowLayout changeStats(ProjectVersion version) {
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.save_details.changes_title"),
                 Component.translatable("luma.save_details.changes_help")
         );
-
         FlowLayout stats = LumaUi.actionRow();
         ChangeStats changeStats = version.stats() == null ? ChangeStats.empty() : version.stats();
         stats.child(LumaUi.statChip(
@@ -300,7 +404,6 @@ public final class SaveDetailsScreen extends LumaScreen {
                 Component.literal(Integer.toString(changeStats.distinctBlockTypes()))
         ));
         section.child(stats);
-
         return section;
     }
 
@@ -315,32 +418,13 @@ public final class SaveDetailsScreen extends LumaScreen {
         restoreButton.active(!operationActive);
         actions.child(restoreButton);
 
-        actions.child(LumaUi.iconButton("eye", Component.translatable("luma.action.compare_with_current"), button -> {
-            SaveDetailsCompareTarget.Target target = SaveDetailsCompareTarget.seeChangesTarget(
-                    this.state.project(),
-                    this.state.versions(),
-                    this.state.variants(),
-                    version,
-                    this.state.recoveryDraft()
-            );
-            this.router.openCompare(
-                    this,
-                    this.projectName,
-                    target.leftReference(),
-                    target.rightReference(),
-                    target.contextVersionId()
-            );
-        }));
-
-        ButtonComponent comparePrevious = LumaUi.iconButton("git-branch", Component.translatable("luma.action.compare_with_parent"), button -> this.router.openCompare(
-                this,
-                this.projectName,
-                this.parentVersionId(version.id()),
-                version.id(),
-                version.id()
-        ));
-        comparePrevious.active(!this.parentVersionId(version.id()).isBlank());
-        actions.child(comparePrevious);
+        ButtonComponent branchButton = LumaUi.iconButton(
+                "git-branch",
+                Component.translatable("luma.save_details.create_idea"),
+                button -> this.openBranchDialog(version)
+        );
+        branchButton.active(!operationActive);
+        actions.child(branchButton);
 
         section.child(actions);
         return section;
@@ -355,39 +439,27 @@ public final class SaveDetailsScreen extends LumaScreen {
                 this.partialRestoreForm,
                 this.state.project() == null ? null : this.state.project().bounds(),
                 this.fallbackPartialRestoreBounds(),
-                this.selectedLumiBounds()
+                this.selectedLumiBounds(),
+                this.restoreMetadata(version)
         ));
     }
 
     private FlowLayout moreSection(ProjectVersion version, boolean operationActive) {
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.save_details.more_title"),
-                Component.translatable("luma.save_details.more_help")
+                null
         );
-
-        FlowLayout toggle = LumaUi.actionRow();
-        toggle.child(LumaUi.button(Component.translatable(
-                this.showMoreOptions ? "luma.action.hide_tools" : "luma.action.more_tools"
-        ), button -> {
-            this.showMoreOptions = !this.showMoreOptions;
-            this.rebuild();
-        }));
-        section.child(toggle);
-
-        if (!this.showMoreOptions) {
-            return section;
-        }
 
         FlowLayout expanded = LumaUi.revealGroup();
         this.ensureRenameMessage(version);
         expanded.child(this.renameSection(version, operationActive));
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent replaceButton = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> this.router.openSave(
-                this,
-                this.projectName,
-                ProjectUiSupport.displayMessage(version),
-                true
-        ));
+        ButtonComponent replaceButton = LumaUi.button(Component.translatable("luma.action.amend_version"), button ->
+                this.refresh(this.controller.amendVersion(
+                        this.projectName,
+                        ProjectUiSupport.displayMessage(version),
+                        ProjectVersionTags.from(version)
+                )));
         replaceButton.active(this.canReplaceLatest(version) && !operationActive);
         actions.child(replaceButton);
 
@@ -403,22 +475,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         deleteButton.active(this.canDeleteVersion(version) && !operationActive);
         actions.child(deleteButton);
 
-        actions.child(LumaUi.button(Component.translatable("luma.save_details.create_idea"), button -> this.openBranchDialog(version)));
         expanded.child(actions);
-
-        FlowLayout advanced = LumaUi.actionRow();
-        advanced.child(LumaUi.button(Component.translatable(
-                this.showAdvancedInfo ? "luma.action.hide_advanced_info" : "luma.action.advanced_info"
-        ), button -> {
-            this.showAdvancedInfo = !this.showAdvancedInfo;
-            this.rebuild();
-        }));
-        expanded.child(advanced);
-        if (this.showAdvancedInfo) {
-            FlowLayout advancedExpanded = LumaUi.revealGroup();
-            advancedExpanded.child(this.advancedInfoSection(version));
-            expanded.child(advancedExpanded);
-        }
         section.child(expanded);
         return section;
     }
@@ -458,6 +515,36 @@ public final class SaveDetailsScreen extends LumaScreen {
             this.renameVersionId = version.id();
             this.renameMessage = ProjectUiSupport.displayMessage(version);
         }
+    }
+
+    private void saveTags(ProjectVersion version) {
+        if (version == null) {
+            return;
+        }
+        String result = this.controller.updateVersionTags(
+                this.projectName,
+                version.id(),
+                ProjectVersionTags.parse(this.tagText)
+        );
+        if ("luma.status.tags_updated".equals(result)) {
+            this.tagVersionId = "";
+            this.tagEditorVisible = false;
+        }
+        this.refresh(result);
+    }
+
+    private boolean acceptTagCompletion() {
+        if (!this.tagEditorVisible) {
+            return false;
+        }
+        List<String> knownTags = TagInputSupport.knownTags(this.state.versions());
+        if (!TagInputSupport.hasSuggestion(this.tagText, knownTags)) {
+            return false;
+        }
+        this.tagText = this.activeTagInput == null
+                ? TagInputSupport.acceptSuggestion(this.tagText, knownTags, true)
+                : TagInputSupport.acceptInto(this.activeTagInput, this.tagText, knownTags, true);
+        return true;
     }
 
     private BranchCreationDialogState branchDialogState() {
@@ -501,7 +588,7 @@ public final class SaveDetailsScreen extends LumaScreen {
     }
 
     private FlowLayout advancedInfoSection(ProjectVersion version) {
-        FlowLayout section = LumaUi.insetSection(
+        FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.save_details.advanced_info_title"),
                 Component.translatable("luma.save_details.advanced_info_help")
         );
@@ -519,18 +606,19 @@ public final class SaveDetailsScreen extends LumaScreen {
             ProjectVariant versionVariant,
             boolean operationActive
     ) {
+        boolean zoneScoped = !this.versionVisibility.workZoneId(version).isBlank();
         return new RestoreConfirmationDialogView.Model(
                 this.width,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
-                Component.translatable("luma.restore.confirm_help"),
+                Component.translatable(zoneScoped ? "luma.restore.confirm_zone_help" : "luma.restore.confirm_help"),
                 Component.translatable(
                         "luma.restore.confirm_target",
                         ProjectUiSupport.displayVariantName(versionVariant),
                         ProjectUiSupport.displayMessage(version)
                 ),
-                this.state.project().settings().safetySnapshotBeforeRestore(),
+                !zoneScoped && this.state.project().settings().safetySnapshotBeforeRestore(),
                 version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
-                this.selectedLumiBounds().isPresent(),
+                !zoneScoped && this.selectedLumiBounds().isPresent(),
                 operationActive
         );
     }
@@ -561,7 +649,27 @@ public final class SaveDetailsScreen extends LumaScreen {
             return;
         }
 
+        String zoneId = this.versionVisibility.workZoneId(version);
+        if (!zoneId.isBlank()) {
+            this.executeZoneRestore(version, zoneId);
+            return;
+        }
+
         String result = this.controller.restoreVersion(this.projectName, version.id());
+        this.router.openProjectIgnoringRecovery(this.parent, this.projectName, version.variantId(), result);
+    }
+
+    private void executeZoneRestore(ProjectVersion version, String zoneId) {
+        PartialRestoreRequest request = new PartialRestoreRequest(
+                this.projectName,
+                version.id(),
+                null,
+                PartialRestoreMode.SELECTED_AREA,
+                PartialRestoreRegionSource.LUMI_REGION,
+                this.client.getUser().getName(),
+                Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
+        );
+        String result = this.controller.partialRestore(request);
         this.router.openProjectIgnoringRecovery(this.parent, this.projectName, version.variantId(), result);
     }
 
@@ -578,10 +686,15 @@ public final class SaveDetailsScreen extends LumaScreen {
                 mode,
                 PartialRestoreRegionSource.LUMI_REGION,
                 this.client.getUser().getName(),
-                java.util.Map.of()
+                this.restoreMetadata(version)
         );
         String result = this.controller.partialRestore(request);
         this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
+    }
+
+    private Map<String, String> restoreMetadata(ProjectVersion version) {
+        String zoneId = this.versionVisibility.workZoneId(version);
+        return zoneId.isBlank() ? Map.of() : Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId);
     }
 
     private boolean canReplaceLatest(ProjectVersion version) {
@@ -601,8 +714,7 @@ public final class SaveDetailsScreen extends LumaScreen {
                 || version.parentVersionId().isBlank()) {
             return false;
         }
-        return this.state.versions().stream()
-                .noneMatch(candidate -> version.id().equals(candidate.parentVersionId()));
+        return true;
     }
 
     private boolean canRenameVersion(ProjectVersion version, boolean operationActive) {
@@ -610,15 +722,6 @@ public final class SaveDetailsScreen extends LumaScreen {
                 && !operationActive
                 && !this.renameMessage.trim().isBlank()
                 && !this.renameMessage.trim().equals(ProjectUiSupport.displayMessage(version));
-    }
-
-    private String parentVersionId(String versionId) {
-        for (ProjectVersion version : this.state.versions()) {
-            if (version.id().equals(versionId)) {
-                return version.parentVersionId() == null ? "" : version.parentVersionId();
-            }
-        }
-        return "";
     }
 
     private Bounds3i fallbackPartialRestoreBounds() {

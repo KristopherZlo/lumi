@@ -10,6 +10,7 @@ import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.screen.ProjectOpeningScreen;
 import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.RecoveryScreen;
+import io.github.luma.ui.screen.WorkZoneScreen;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -21,7 +22,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
 /**
- * Opens the current singleplayer workspace without blocking the client tick.
+ * Opens the current workspace without blocking the client tick.
  */
 public final class ClientWorkspaceOpenService {
 
@@ -55,6 +56,10 @@ public final class ClientWorkspaceOpenService {
 
     private void openCurrentWorkspace(Minecraft client, Screen parent, WorkspaceOpenTarget target) {
         if (client == null || client.player == null) {
+            return;
+        }
+        if (!client.hasSingleplayerServer()) {
+            client.setScreen(new WorkZoneScreen(parent, ""));
             return;
         }
 
@@ -137,7 +142,8 @@ public final class ClientWorkspaceOpenService {
             client.setScreen(new OnboardingScreen(parent, result.projectName(), this.onboardingService));
             return;
         }
-        this.updatePromptCoordinator.openProjectScreen(client, new ProjectScreen(parent, result.projectName()));
+        ProjectScreen projectScreen = new ProjectScreen(parent, result.projectName());
+        this.updatePromptCoordinator.openProjectScreen(client, projectScreen);
     }
 
     private enum WorkspaceOpenTarget {

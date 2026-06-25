@@ -15,14 +15,18 @@ import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
+import io.github.luma.ui.TagSuggestionComponent;
+import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.BranchCreationDialogStateFactory;
 import io.github.luma.ui.controller.BranchCreationResult;
+import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.ScreenOperationStateSupport;
@@ -36,7 +40,12 @@ import io.github.luma.ui.screen.section.ProjectScreenSections;
 import io.github.luma.ui.screen.section.RestoreConfirmationDialogView;
 import io.github.luma.ui.screen.section.UpdateNoticeDialogView;
 import io.github.luma.ui.state.BranchCreationDialogState;
+import io.github.luma.ui.state.CompareLoadState;
+import io.github.luma.ui.state.CompareViewState;
 import io.github.luma.ui.state.ProjectHomeViewState;
+import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.TextBoxComponent;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -56,6 +65,7 @@ import net.minecraft.client.gui.screens.options.controls.ControlsScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
+import org.lwjgl.glfw.GLFW;
 
 public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppressingScreen {
 
@@ -64,6 +74,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectHomeScreenController stateController = new ProjectHomeScreenController();
     private final ProjectScreenController actionController = new ProjectScreenController();
+    private final CompareScreenController compareController = new CompareScreenController();
     private final BranchCreationDialogStateFactory branchDialogFactory = new BranchCreationDialogStateFactory();
     private final ScreenRouter router = new ScreenRouter();
     private final UpdateCheckService updateCheckService = UpdateCheckService.getInstance();
@@ -74,6 +85,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private final UpdateNoticeDialogView updateDialogView = new UpdateNoticeDialogView(new UpdateDialogActions());
     private final ClientOnboardingService onboardingService;
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
+    private final boolean animateWindow;
     private OnboardingTour onboardingTour;
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private ProjectHomeViewState state = new ProjectHomeViewState(
@@ -88,11 +100,20 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     );
     private String statusKey;
     private String selectedVariantId = "";
-    private boolean showAllSaves = false;
+    private boolean historyGraphVisible = false;
+    private String historyTagFilter = "";
+    private String tagEditorVersionId = "";
+    private String tagEditorText = "";
     private String pendingRestoreVariantId = "";
     private String pendingRestoreVersionId = "";
     private String pendingBranchBaseVersionId = "";
     private String branchName = "";
+    private boolean saveDialogVisible = false;
+    private String saveDialogMessage = "";
+    private String saveDialogTags = "";
+    private TextBoxComponent activeTagInput;
+    private String pendingCompareLeftReference = "";
+    private String pendingCompareRightReference = "";
     private int refreshCooldown = 0;
 
     public ProjectScreen(Screen parent, String projectName) {
@@ -104,7 +125,11 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     }
 
     public ProjectScreen(Screen parent, String projectName, String selectedVariantId, String statusKey) {
-        this(parent, projectName, selectedVariantId, statusKey, new ClientOnboardingService(), null);
+        this(parent, projectName, selectedVariantId, statusKey, true);
+    }
+
+    public ProjectScreen(Screen parent, String projectName, String selectedVariantId, String statusKey, boolean animateWindow) {
+        this(parent, projectName, selectedVariantId, statusKey, new ClientOnboardingService(), null, animateWindow);
     }
 
     public ProjectScreen(
@@ -115,6 +140,18 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             ClientOnboardingService onboardingService,
             OnboardingTour onboardingTour
     ) {
+        this(parent, projectName, selectedVariantId, statusKey, onboardingService, onboardingTour, true);
+    }
+
+    public ProjectScreen(
+            Screen parent,
+            String projectName,
+            String selectedVariantId,
+            String statusKey,
+            ClientOnboardingService onboardingService,
+            OnboardingTour onboardingTour,
+            boolean animateWindow
+    ) {
         super(Component.translatable("luma.screen.project.title", projectName));
         this.parent = parent;
         this.projectName = projectName;
@@ -122,6 +159,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         this.statusKey = statusKey == null || statusKey.isBlank() ? "luma.status.project_ready" : statusKey;
         this.onboardingService = onboardingService == null ? new ClientOnboardingService() : onboardingService;
         this.onboardingTour = onboardingTour;
+        this.animateWindow = animateWindow;
     }
 
     @Override
@@ -161,7 +199,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 this.state.project(),
                 this.state.variants()
         );
-        stack.child(window.root());
+        stack.child(this.animateWindow ? this.animateOnFirstOpen(window.root()) : window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.HISTORY);
         if (this.shouldShowStatusBanner()) {
             window.content().child(LumaUi.statusBanner(this.bannerText()));
@@ -205,6 +243,8 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             )));
         } else if (this.onboardingTour == null && !this.pendingRestoreVersionId.isBlank()) {
             this.restoreDialogModel(model).ifPresent(dialog -> stack.child(this.restoreDialogView.overlay(dialog)));
+        } else if (this.onboardingTour == null && this.saveDialogVisible) {
+            stack.child(this.saveDialogOverlay(model));
         } else if (this.onboardingTour == null) {
             this.updateNotice().ifPresent(notice -> stack.child(this.updateDialogView.overlay(
                     new UpdateNoticeDialogView.Model(this.width, notice)
@@ -235,8 +275,18 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         if (this.onboardingTour != null) {
             return true;
         }
+        if (this.saveDialogVisible && OnboardingScreen.isEscapeKey(event)) {
+            this.closeSaveDialog();
+            return true;
+        }
+        if (this.saveDialogVisible && event.key() == GLFW.GLFW_KEY_TAB && this.acceptSaveDialogTagCompletion()) {
+            return true;
+        }
         if (this.branchDialogState().visible() && OnboardingScreen.isEscapeKey(event)) {
             this.closeBranchDialog();
+            return true;
+        }
+        if (event.key() == GLFW.GLFW_KEY_TAB && this.acceptTagCompletion()) {
             return true;
         }
         return super.keyPressed(event);
@@ -262,7 +312,10 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 this.state,
                 this.width,
                 this.selectedVariantId,
-                this.showAllSaves,
+                this.historyGraphVisible,
+                this.historyTagFilter,
+                this.tagEditorVersionId,
+                this.tagEditorText,
                 this.pendingRestoreVariantId,
                 this.pendingRestoreVersionId,
                 this.selectedLumiBounds()
@@ -304,6 +357,106 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 model.lumiSelection().isPresent(),
                 operationActive
         ));
+    }
+
+    private FlowLayout saveDialogOverlay(ProjectScreenSections.Model model) {
+        FlowLayout overlay = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
+        overlay.surface(Surface.flat(0x99000000));
+        overlay.padding(Insets.of(10));
+        overlay.horizontalAlignment(HorizontalAlignment.CENTER);
+        overlay.verticalAlignment(VerticalAlignment.CENTER);
+
+        FlowLayout modal = LumaUi.modalFrame(Math.min(380, Math.max(280, this.width - 40)));
+        modal.child(LumaUi.closeHeader(Component.translatable("luma.screen.save.title"), button -> this.closeSaveDialog()));
+        modal.child(LumaUi.caption(Component.translatable("luma.save.summary_help")));
+
+        TextBoxComponent message = UIComponents.textBox(Sizing.fill(100), this.saveDialogMessage);
+        message.setHint(Component.translatable("luma.save.name_help"));
+        message.onChanged().subscribe(value -> this.saveDialogMessage = value == null ? "" : value);
+        modal.child(LumaUi.formField(
+                Component.translatable("luma.save.name_input"),
+                null,
+                message
+        ));
+
+        TextBoxComponent tags = UIComponents.textBox(Sizing.fill(100), this.saveDialogTags);
+        tags.setHint(Component.translatable("luma.history.tags_input"));
+        TagInputSupport.configure(tags, this.saveDialogTags, TagInputSupport.knownTags(this.state.versions()), true);
+        FlowLayout tagInput = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        tagInput.gap(2);
+        TagSuggestionComponent tagSuggestions = new TagSuggestionComponent(
+                () -> this.saveDialogTags,
+                () -> TagInputSupport.knownTags(this.state.versions()),
+                true,
+                accepted -> {
+                    this.saveDialogTags = accepted;
+                    tags.setValue(accepted);
+                    tags.setCursorPosition(accepted.length());
+                }
+        );
+        tags.onChanged().subscribe(value -> {
+            this.saveDialogTags = TagInputSupport.limit(value);
+            tagSuggestions.refresh();
+        });
+        this.activeTagInput = tags;
+        tagInput.child(tags);
+        tagInput.child(tagSuggestions);
+        modal.child(LumaUi.formField(
+                Component.translatable("luma.save.tags_title"),
+                null,
+                tagInput
+        ));
+
+        ProjectVersion activeHead = ProjectUiSupport.activeHead(
+                model.state().project(),
+                model.state().variants(),
+                model.state().versions()
+        );
+        boolean operationActive = ScreenOperationStateSupport.blocksMutationActions(model.state().operationSnapshot());
+        boolean canSave = !model.state().pendingChanges().isEmpty() && !operationActive;
+
+        FlowLayout actions = LumaUi.actionRow();
+        ButtonComponent save = LumaUi.primaryButton(Component.translatable("luma.action.save"), button -> this.startDialogSave(false));
+        save.active(canSave);
+        actions.child(save);
+
+        ButtonComponent amend = LumaUi.button(Component.translatable("luma.action.amend_version"), button -> this.startDialogSave(true));
+        amend.active(canSave && activeHead != null);
+        actions.child(amend);
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.closeSaveDialog()));
+        modal.child(actions);
+
+        overlay.child(modal);
+        return overlay;
+    }
+
+    public void openSaveDialog() {
+        this.openSaveDialog("");
+    }
+
+    private void openSaveDialog(String initialMessage) {
+        this.saveDialogVisible = true;
+        this.saveDialogMessage = initialMessage == null ? "" : initialMessage;
+        this.saveDialogTags = "";
+        this.activeTagInput = null;
+        this.refresh("luma.status.project_ready");
+    }
+
+    private void closeSaveDialog() {
+        this.saveDialogVisible = false;
+        this.activeTagInput = null;
+        this.refresh("luma.status.project_ready");
+    }
+
+    private void startDialogSave(boolean amend) {
+        String result = amend
+                ? this.actionController.amendVersion(this.projectName, this.saveDialogMessage, ProjectVersionTags.parse(this.saveDialogTags))
+                : this.actionController.saveVersion(this.projectName, this.saveDialogMessage, ProjectVersionTags.parse(this.saveDialogTags));
+        if ("luma.status.save_started".equals(result) || "luma.status.amend_started".equals(result)) {
+            this.saveDialogVisible = false;
+            this.activeTagInput = null;
+        }
+        this.refresh(result);
     }
 
     private void skipUpdate(UpdateProjectNotice notice) {
@@ -495,9 +648,41 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         this.rebuildPreservingScroll(() -> this.bodyScroll, preserveScroll);
     }
 
+    private boolean acceptTagCompletion() {
+        List<String> knownTags = TagInputSupport.knownTags(this.state.versions());
+        if (!this.tagEditorVersionId.isBlank() && TagInputSupport.hasSuggestion(this.tagEditorText, knownTags)) {
+            this.tagEditorText = this.activeTagInput == null
+                    ? TagInputSupport.acceptSuggestion(this.tagEditorText, knownTags, true)
+                    : TagInputSupport.acceptInto(this.activeTagInput, this.tagEditorText, knownTags, true);
+            return true;
+        }
+        if (TagInputSupport.hasSuggestion(this.historyTagFilter, knownTags)) {
+            this.historyTagFilter = TagInputSupport.acceptSuggestion(this.historyTagFilter, knownTags, false);
+            this.refresh("luma.status.project_ready");
+            return true;
+        }
+        return false;
+    }
+
+    private boolean acceptSaveDialogTagCompletion() {
+        List<String> knownTags = TagInputSupport.knownTags(this.state.versions());
+        if (!TagInputSupport.hasSuggestion(this.saveDialogTags, knownTags)) {
+            return false;
+        }
+        this.saveDialogTags = this.activeTagInput == null
+                ? TagInputSupport.acceptSuggestion(this.saveDialogTags, knownTags, true)
+                : TagInputSupport.acceptInto(this.activeTagInput, this.saveDialogTags, knownTags, true);
+        return true;
+    }
+
     @Override
     protected void onLumaTick() {
         if (this.onboardingTour != null && this.handleOnboardingTransition(this.onboardingTour.tick())) {
+            return;
+        }
+        if (this.hasPendingCompareOverlay() && ++this.refreshCooldown >= 10) {
+            this.refreshCooldown = 0;
+            this.continuePendingCompareOverlay();
             return;
         }
         if (++this.refreshCooldown < 10) {
@@ -518,6 +703,40 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             this.state = refreshed;
             this.refresh(this.statusKey);
         }
+    }
+
+    private void requestCompareOverlay(String leftReference, String rightReference) {
+        this.pendingCompareLeftReference = leftReference == null ? "" : leftReference;
+        this.pendingCompareRightReference = rightReference == null ? "" : rightReference;
+        this.continuePendingCompareOverlay();
+    }
+
+    private void continuePendingCompareOverlay() {
+        CompareViewState compare = this.compareController.loadState(
+                this.projectName,
+                this.pendingCompareLeftReference,
+                this.pendingCompareRightReference,
+                "luma.status.compare_loading"
+        );
+        if (compare.loadState() == CompareLoadState.LOADING) {
+            this.refresh(compare.status());
+            return;
+        }
+        if (compare.loadState() == CompareLoadState.READY) {
+            String result = this.compareController.showOverlay(this.projectName, compare);
+            this.pendingCompareLeftReference = "";
+            this.pendingCompareRightReference = "";
+            this.statusKey = result;
+            this.client.setScreen(null);
+            return;
+        }
+        this.pendingCompareLeftReference = "";
+        this.pendingCompareRightReference = "";
+        this.refresh(compare.status());
+    }
+
+    private boolean hasPendingCompareOverlay() {
+        return !this.pendingCompareRightReference.isBlank();
     }
 
     private FlowLayout onboardingOverlay() {
@@ -594,7 +813,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
 
         @Override
         public void openSave() {
-            router.openSave(ProjectScreen.this, projectName);
+            openSaveDialog("");
         }
 
         @Override
@@ -602,37 +821,17 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             if (activeHead == null) {
                 return;
             }
-            router.openSave(
-                    ProjectScreen.this,
-                    projectName,
-                    ProjectUiSupport.displayMessage(activeHead),
-                    true
-            );
+            openSaveDialog(ProjectUiSupport.displayMessage(activeHead));
         }
 
         @Override
         public void openCompare(String leftReference, String rightReference, String contextVersionId) {
-            router.openCompare(ProjectScreen.this, projectName, leftReference, rightReference, contextVersionId);
-        }
-
-        @Override
-        public void openVariants() {
-            router.openVariants(ProjectScreen.this, projectName);
+            requestCompareOverlay(leftReference, rightReference);
         }
 
         @Override
         public void openRecovery() {
             router.openRecovery(ProjectScreen.this, projectName);
-        }
-
-        @Override
-        public void quickRollback() {
-            refresh(actionController.quickRollback(projectName));
-        }
-
-        @Override
-        public void returnBeforeRestore() {
-            refresh(actionController.returnBeforeRestore(projectName));
         }
 
         @Override
@@ -648,18 +847,57 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         }
 
         @Override
-        public void selectVariant(String variantId) {
-            if (ProjectUiSupport.variantFor(state.variants(), variantId) != null) {
-                selectedVariantId = variantId;
-                showAllSaves = false;
-            }
-            refresh("luma.status.project_ready", false);
+        public void setHistoryGraphVisible(boolean visible) {
+            historyGraphVisible = visible;
+            refresh("luma.status.project_ready");
         }
 
         @Override
-        public void toggleAllSaves() {
-            showAllSaves = !showAllSaves;
+        public void setHistoryTagFilter(String filter) {
+            historyTagFilter = TagInputSupport.limit(filter);
+        }
+
+        @Override
+        public void refreshHistoryView() {
             refresh("luma.status.project_ready");
+        }
+
+        @Override
+        public void toggleTagEditor(ProjectVersion version) {
+            if (version == null) {
+                return;
+            }
+            if (version.id().equals(tagEditorVersionId)) {
+                tagEditorVersionId = "";
+                tagEditorText = "";
+            } else {
+                tagEditorVersionId = version.id();
+                tagEditorText = TagInputSupport.limit(ProjectVersionTags.serialize(ProjectVersionTags.from(version)));
+            }
+            refresh("luma.status.project_ready");
+        }
+
+        @Override
+        public void updateTagEditor(String value) {
+            tagEditorText = TagInputSupport.limit(value);
+        }
+
+        @Override
+        public void bindTagInput(TextBoxComponent input) {
+            activeTagInput = input;
+        }
+
+        @Override
+        public void saveTags(ProjectVersion version) {
+            if (version == null) {
+                return;
+            }
+            String result = actionController.updateVersionTags(projectName, version.id(), ProjectVersionTags.parse(tagEditorText));
+            if ("luma.status.tags_updated".equals(result)) {
+                tagEditorVersionId = "";
+                tagEditorText = "";
+            }
+            refresh(result);
         }
 
         @Override

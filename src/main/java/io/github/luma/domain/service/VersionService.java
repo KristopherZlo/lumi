@@ -15,6 +15,7 @@ import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.PatchWorldChanges;
@@ -24,6 +25,8 @@ import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.VersionSaveTiming;
+import io.github.luma.domain.model.WorkZone;
+import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
 import io.github.luma.debug.LumiTestFailpoints;
@@ -64,6 +67,7 @@ public final class VersionService {
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
+    private final WorkZoneService workZoneService = new WorkZoneService();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final PreviewBoundsResolver previewBoundsResolver = new PreviewBoundsResolver();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
@@ -78,6 +82,16 @@ public final class VersionService {
         return this.startSaveVersion(level, projectName, message, author, VersionKind.MANUAL);
     }
 
+    public OperationHandle startSaveVersion(
+            ServerLevel level,
+            String projectName,
+            String message,
+            String author,
+            List<String> tags
+    ) throws IOException {
+        return this.startSaveVersion(level, projectName, message, author, VersionKind.MANUAL, tags);
+    }
+
     public Optional<VersionSaveTiming> saveTiming(OperationHandle handle) {
         if (handle == null || handle.id() == null || handle.id().isBlank()) {
             return Optional.empty();
@@ -87,6 +101,16 @@ public final class VersionService {
     }
 
     public OperationHandle startAmendVersion(ServerLevel level, String projectName, String message, String author) throws IOException {
+        return this.startAmendVersion(level, projectName, message, author, List.of());
+    }
+
+    public OperationHandle startAmendVersion(
+            ServerLevel level,
+            String projectName,
+            String message,
+            String author,
+            List<String> tags
+    ) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         BuildProject project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
@@ -100,7 +124,7 @@ public final class VersionService {
                 "amend-version",
                 "blocks",
                 LumaDebugLog.enabled(project),
-                progressSink -> this.runAmendVersionOperation(level, layout, project, message, author, progressSink)
+                progressSink -> this.runAmendVersionOperation(level, layout, project, message, author, tags, progressSink)
         );
     }
 
@@ -117,6 +141,17 @@ public final class VersionService {
             String message,
             String author,
             VersionKind versionKind
+    ) throws IOException {
+        return this.startSaveVersion(level, projectName, message, author, versionKind, List.of());
+    }
+
+    public OperationHandle startSaveVersion(
+            ServerLevel level,
+            String projectName,
+            String message,
+            String author,
+            VersionKind versionKind,
+            List<String> tags
     ) throws IOException {
         VersionSaveTimingBuilder timing = new VersionSaveTimingBuilder();
         long requestStartedAt = System.nanoTime();
@@ -141,6 +176,7 @@ public final class VersionService {
                         message,
                         author,
                         versionKind,
+                        tags,
                         progressSink,
                         timing
                 )
@@ -170,10 +206,11 @@ public final class VersionService {
             String message,
             String author,
             VersionKind versionKind,
+            List<String> tags,
             WorldOperationManager.ProgressSink progressSink,
             VersionSaveTimingBuilder timing
     ) throws IOException {
-        IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, progressSink, timing);
+        IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, author, progressSink, timing);
         RecoveryDraft draft = isolatedDraft.draft();
         this.writeVersionFromOperationDraft(
                 level,
@@ -187,6 +224,8 @@ public final class VersionService {
                 "",
                 draft.baseVersionId(),
                 progressSink,
+                isolatedDraft.workZone(),
+                tags,
                 timing
         );
     }
@@ -197,9 +236,10 @@ public final class VersionService {
             BuildProject project,
             String message,
             String author,
+            List<String> tags,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
-        IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, progressSink, null);
+        IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, author, progressSink, null);
         RecoveryDraft draft = isolatedDraft.draft();
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVariant activeVariant = variants.stream()
@@ -238,7 +278,10 @@ public final class VersionService {
                 true,
                 headVersion.parentVersionId(),
                 headVersion.id(),
-                progressSink
+                progressSink,
+                isolatedDraft.workZone(),
+                tags,
+                null
         );
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
@@ -253,6 +296,7 @@ public final class VersionService {
             ServerLevel level,
             ProjectLayout layout,
             BuildProject project,
+            String author,
             WorldOperationManager.ProgressSink progressSink,
             VersionSaveTimingBuilder timing
     ) throws IOException {
@@ -296,17 +340,100 @@ public final class VersionService {
                 draft.variantId()
         );
 
+        ScopedDraftSplit scoped = this.splitDraftForActiveZone(layout, draft, author);
+        DraftSplit split = scoped.split();
+        if (split.selected().isEmpty()) {
+            if (!split.remainder().isEmpty()) {
+                this.recoveryRepository.saveDraft(layout, split.remainder());
+            }
+            throw new IllegalArgumentException("No pending tracked changes for active work zone");
+        }
+        if (!split.remainder().isEmpty()) {
+            // ponytail: one full-draft write protects out-of-zone edits if zone-save isolation is interrupted.
+            this.recoveryRepository.saveDraft(layout, draft);
+        }
+
         // Keep a durable fallback until the async save fully commits, without exposing it to live capture.
         sectionStartedAt = System.nanoTime();
-        progressSink.update(OperationStage.WRITING, 0, draft.totalChangeCount(), "Writing operation draft");
-        this.recoveryRepository.saveOperationDraft(layout, draft);
+        progressSink.update(OperationStage.WRITING, 0, split.selected().totalChangeCount(), "Writing operation draft");
+        this.recoveryRepository.saveOperationDraft(layout, split.selected());
         recordTiming(timing, VersionSaveTiming.OPERATION_DRAFT_WRITE, sectionStartedAt);
         LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_OPERATION_DRAFT_WRITE);
 
         sectionStartedAt = System.nanoTime();
-        this.recoveryRepository.deleteDraft(layout);
+        if (split.remainder().isEmpty()) {
+            this.recoveryRepository.deleteDraft(layout);
+        } else {
+            this.recoveryRepository.saveDraft(layout, split.remainder());
+        }
         recordTiming(timing, VersionSaveTiming.RECOVERY_DRAFT_DELETE, sectionStartedAt);
-        return new IsolatedDraft(draft);
+        return new IsolatedDraft(split.selected(), scoped.workZone());
+    }
+
+    private ScopedDraftSplit splitDraftForActiveZone(ProjectLayout layout, RecoveryDraft draft, String author) throws IOException {
+        Optional<WorkZone> zone = this.workZoneService.activeZone(layout, author)
+                .filter(candidate -> !candidate.cells().isEmpty());
+        if (zone.isEmpty()) {
+            return new ScopedDraftSplit(DraftSplit.unscoped(draft), null);
+        }
+        return new ScopedDraftSplit(splitDraftForZone(draft, zone.get()), zone.get());
+    }
+
+    static DraftSplit splitDraftForZone(RecoveryDraft draft, WorkZone zone) {
+        if (draft == null || zone == null || zone.cells().isEmpty()) {
+            return DraftSplit.unscoped(draft);
+        }
+
+        List<StoredBlockChange> selectedBlocks = new ArrayList<>();
+        List<StoredBlockChange> remainderBlocks = new ArrayList<>();
+        for (StoredBlockChange change : draft.changes()) {
+            if (zone.contains(WorkZoneCell.from(change.pos()))) {
+                selectedBlocks.add(change);
+            } else {
+                remainderBlocks.add(change);
+            }
+        }
+
+        List<StoredEntityChange> selectedEntities = new ArrayList<>();
+        List<StoredEntityChange> remainderEntities = new ArrayList<>();
+        for (StoredEntityChange change : draft.entityChanges()) {
+            if (entityTouchesZone(change, zone)) {
+                selectedEntities.add(change);
+            } else {
+                remainderEntities.add(change);
+            }
+        }
+
+        return new DraftSplit(
+                draftWithChanges(draft, selectedBlocks, selectedEntities),
+                draftWithChanges(draft, remainderBlocks, remainderEntities)
+        );
+    }
+
+    private static boolean entityTouchesZone(StoredEntityChange change, WorkZone zone) {
+        return entityPayloadTouchesZone(change.oldValue(), zone) || entityPayloadTouchesZone(change.newValue(), zone);
+    }
+
+    private static boolean entityPayloadTouchesZone(io.github.luma.domain.model.EntityPayload payload, WorkZone zone) {
+        return payload != null && zone.contains(WorkZoneCell.from(BlockPoint.from(payload.blockPos())));
+    }
+
+    private static RecoveryDraft draftWithChanges(
+            RecoveryDraft draft,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges
+    ) {
+        return new RecoveryDraft(
+                draft.projectId(),
+                draft.variantId(),
+                draft.baseVersionId(),
+                draft.actor(),
+                draft.mutationSource(),
+                draft.startedAt(),
+                draft.updatedAt(),
+                changes,
+                entityChanges
+        );
     }
 
     ProjectVersion writeVersion(
@@ -357,7 +484,9 @@ public final class VersionService {
                 schedulePreview,
                 parentVersionIdOverride,
                 progressSink,
-                null
+                null,
+                null,
+                List.of()
         );
     }
 
@@ -372,7 +501,9 @@ public final class VersionService {
             boolean schedulePreview,
             String parentVersionIdOverride,
             WorldOperationManager.ProgressSink progressSink,
-            VersionSaveTimingBuilder timing
+            VersionSaveTimingBuilder timing,
+            WorkZone workZone,
+            List<String> tags
     ) throws IOException {
         return this.writeVersion(
                 level,
@@ -387,7 +518,9 @@ public final class VersionService {
                 progressSink,
                 true,
                 true,
-                timing
+                timing,
+                workZone,
+                tags
         );
     }
 
@@ -404,7 +537,9 @@ public final class VersionService {
             WorldOperationManager.ProgressSink progressSink,
             boolean publishHead,
             boolean allowSnapshotCapture,
-            VersionSaveTimingBuilder timing
+            VersionSaveTimingBuilder timing,
+            WorkZone workZone,
+            List<String> tags
     ) throws IOException {
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
@@ -559,44 +694,12 @@ public final class VersionService {
                         },
                 stats,
                 PreviewInfo.none(),
-                switch (versionKind) {
-                    case WORLD_ROOT -> ExternalSourceInfo.manual();
-                    case RECOVERY -> ExternalSourceInfo.recovery();
-                    case RESTORE -> ExternalSourceInfo.restore();
-                    case PARTIAL_RESTORE -> ExternalSourceInfo.external(
-                            "SYSTEM",
-                            "partial-restore",
-                            "Partial Restore",
-                            "",
-                            null,
-                            false,
-                            false,
-                            Map.of()
-                    );
-                    case MERGE -> ExternalSourceInfo.external(
-                            "SYSTEM",
-                            "merge",
-                            "Branch Merge",
-                            "",
-                            null,
-                            false,
-                            false,
-                            Map.of()
-                    );
-                    case AUTO_CHECKPOINT -> ExternalSourceInfo.external(
-                            "SYSTEM",
-                            "auto-checkpoint",
-                            "Auto Checkpoint",
-                            "",
-                            null,
-                            false,
-                            false,
-                            Map.of()
-                    );
-                    case INITIAL, MANUAL -> ExternalSourceInfo.manual();
-                },
+                this.sourceInfo(versionKind, workZone),
                 now
         );
+        if (tags != null && !tags.isEmpty()) {
+            version = ProjectVersionTags.withTags(version, tags);
+        }
 
         progressSink.update(OperationStage.FINALIZING, draft.changes().size(), draft.changes().size(), "Finalizing version");
         sectionStartedAt = System.nanoTime();
@@ -704,6 +807,8 @@ public final class VersionService {
                 parentVersionIdOverride,
                 rebaseFromVersionId,
                 progressSink,
+                null,
+                List.of(),
                 null
         );
     }
@@ -720,6 +825,8 @@ public final class VersionService {
             String parentVersionIdOverride,
             String rebaseFromVersionId,
             WorldOperationManager.ProgressSink progressSink,
+            WorkZone workZone,
+            List<String> tags,
             VersionSaveTimingBuilder timing
     ) throws IOException {
         long backgroundStartedAt = System.nanoTime();
@@ -735,7 +842,9 @@ public final class VersionService {
                     schedulePreview,
                     parentVersionIdOverride,
                     progressSink,
-                    timing
+                    timing,
+                    workZone,
+                    tags
             );
             long sectionStartedAt = System.nanoTime();
             try {
@@ -757,11 +866,27 @@ public final class VersionService {
             recordTiming(timing, VersionSaveTiming.REBASE_WORKING_DRAFT, sectionStartedAt);
             sectionStartedAt = System.nanoTime();
             this.recoveryRepository.deleteOperationDraft(layout);
+            this.markExpectedWorkZoneRemainder(level, layout, project, workZone);
             recordTiming(timing, VersionSaveTiming.OPERATION_DRAFT_DELETE, sectionStartedAt);
             return version;
         } finally {
             recordTiming(timing, VersionSaveTiming.BACKGROUND_TOTAL, backgroundStartedAt);
         }
+    }
+
+    private void markExpectedWorkZoneRemainder(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            WorkZone workZone
+    ) throws IOException {
+        if (level == null || workZone == null) {
+            return;
+        }
+        if (this.recoveryRepository.loadDraft(layout).filter(draft -> !draft.isEmpty()).isEmpty()) {
+            return;
+        }
+        HistoryCaptureManager.getInstance().markPersistedDraftCurrentRun(level.getServer(), project.id().toString());
     }
 
     static List<StoredBlockChange> mergeChanges(List<StoredBlockChange> baseChanges, List<StoredBlockChange> overlayChanges) {
@@ -831,6 +956,60 @@ public final class VersionService {
         return new PatchWorldChanges(blockChanges, entityChanges);
     }
 
+    private ExternalSourceInfo sourceInfo(VersionKind versionKind, WorkZone workZone) {
+        ExternalSourceInfo sourceInfo = switch (versionKind) {
+            case WORLD_ROOT -> ExternalSourceInfo.manual();
+            case RECOVERY -> ExternalSourceInfo.recovery();
+            case RESTORE -> ExternalSourceInfo.restore();
+            case PARTIAL_RESTORE -> ExternalSourceInfo.external(
+                    "SYSTEM",
+                    "partial-restore",
+                    "Partial Restore",
+                    "",
+                    null,
+                    false,
+                    false,
+                    Map.of()
+            );
+            case MERGE -> ExternalSourceInfo.external(
+                    "SYSTEM",
+                    "merge",
+                    "Branch Merge",
+                    "",
+                    null,
+                    false,
+                    false,
+                    Map.of()
+            );
+            case AUTO_CHECKPOINT -> ExternalSourceInfo.external(
+                    "SYSTEM",
+                    "auto-checkpoint",
+                    "Auto Checkpoint",
+                    "",
+                    null,
+                    false,
+                    false,
+                    Map.of()
+            );
+            case INITIAL, MANUAL -> ExternalSourceInfo.manual();
+        };
+        if (workZone == null || workZone.id().isBlank()) {
+            return sourceInfo;
+        }
+        Map<String, String> metadata = new LinkedHashMap<>(sourceInfo.metadata());
+        metadata.put(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, workZone.id());
+        return ExternalSourceInfo.external(
+                sourceInfo.tool(),
+                sourceInfo.operationType(),
+                sourceInfo.operationLabel(),
+                sourceInfo.actor(),
+                sourceInfo.sourceBounds(),
+                sourceInfo.usedClipboard(),
+                sourceInfo.usedSelection(),
+                metadata
+        );
+    }
+
     int versionsSinceSnapshot(List<ProjectVersion> versions, String headVersionId) {
         return this.snapshotPlanner.versionsSinceSnapshot(versions, headVersionId);
     }
@@ -861,7 +1040,17 @@ public final class VersionService {
         }
     }
 
-    private record IsolatedDraft(RecoveryDraft draft) {
+    record DraftSplit(RecoveryDraft selected, RecoveryDraft remainder) {
+
+        private static DraftSplit unscoped(RecoveryDraft draft) {
+            return new DraftSplit(draft, draftWithChanges(draft, List.of(), List.of()));
+        }
+    }
+
+    private record ScopedDraftSplit(DraftSplit split, WorkZone workZone) {
+    }
+
+    private record IsolatedDraft(RecoveryDraft draft, WorkZone workZone) {
     }
 
 }

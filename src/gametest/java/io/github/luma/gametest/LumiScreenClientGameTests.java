@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -90,6 +91,7 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         ProjectScreenSections sections = new ProjectScreenSections(new ProjectScreenController(), actions);
 
         FlowLayout section = sections.buildSection(this.projectModel(new PendingChangeSummary(3, 1, 2), null, false));
+        this.assertCurrentBuildStatsBeforeActions(section);
         this.assertActive(section, "luma.action.save_build");
         this.assertActive(section, "luma.action.amend_version");
         this.assertActive(section, "luma.action.see_changes");
@@ -162,7 +164,8 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
                 form,
                 projectBounds,
                 null,
-                Optional.of(selection)
+                Optional.of(selection),
+                Map.of()
         ));
         this.assertActive(section, "luma.action.use_selected_area");
         this.assertActive(section, "luma.partial_restore.mode_outside_selection");
@@ -199,7 +202,8 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
                 form,
                 projectBounds,
                 null,
-                Optional.of(selection)
+                Optional.of(selection),
+                Map.of()
         ));
         this.press(refreshed, "luma.action.apply_partial_restore");
         this.assertEquals("apply", actions.lastAction, "apply action");
@@ -337,6 +341,9 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
                 960,
                 "main",
                 false,
+                "",
+                "",
+                "",
                 pendingRestoreVariantId,
                 pendingRestoreVersionId,
                 selection
@@ -392,6 +399,18 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
 
     private void press(FlowLayout root, String key) {
         this.button(root, key).onPress(new KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0));
+    }
+
+    private void assertCurrentBuildStatsBeforeActions(FlowLayout section) {
+        if (section.children().size() < 3) {
+            throw new AssertionError("Current build section should render stats and actions on separate rows");
+        }
+        if (!this.buttons(section.children().get(1)).isEmpty()) {
+            throw new AssertionError("Current build stats row should not contain action buttons");
+        }
+        if (this.buttons(section.children().get(2)).isEmpty()) {
+            throw new AssertionError("Current build actions row should follow stats row");
+        }
     }
 
     private List<ButtonComponent> buttons(UIComponent component) {
@@ -458,23 +477,8 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         }
 
         @Override
-        public void openVariants() {
-            this.lastAction = "openVariants";
-        }
-
-        @Override
         public void openRecovery() {
             this.lastAction = "openRecovery";
-        }
-
-        @Override
-        public void quickRollback() {
-            this.lastAction = "quickRollback";
-        }
-
-        @Override
-        public void returnBeforeRestore() {
-            this.lastAction = "returnBeforeRestore";
         }
 
         @Override
@@ -488,13 +492,28 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         }
 
         @Override
-        public void selectVariant(String variantId) {
-            this.lastAction = "selectVariant";
+        public void setHistoryGraphVisible(boolean visible) {
+            this.lastAction = visible ? "showHistoryGraph" : "showHistoryCards";
         }
 
         @Override
-        public void toggleAllSaves() {
-            this.lastAction = "toggleAllSaves";
+        public void setHistoryTagFilter(String filter) {
+            this.lastAction = "setHistoryTagFilter";
+        }
+
+        @Override
+        public void toggleTagEditor(ProjectVersion version) {
+            this.lastAction = "toggleTagEditor";
+        }
+
+        @Override
+        public void updateTagEditor(String value) {
+            this.lastAction = "updateTagEditor";
+        }
+
+        @Override
+        public void saveTags(ProjectVersion version) {
+            this.lastAction = "saveTags";
         }
 
         @Override

@@ -49,13 +49,15 @@ public final class DashboardScreen extends LumaScreen {
         FlowLayout frame = LumaUi.screenFrame();
         root.child(frame);
 
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        FlowLayout header = LumaUi.titleBar();
+        FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        titleColumn.child(LumaUi.value(Component.translatable("luma.screen.dashboard.title")));
+        header.child(titleColumn);
         header.child(LumaUi.button(Component.translatable("luma.action.refresh"), button -> this.refresh("luma.status.dashboard_ready")));
+        header.child(LumaUi.closeButton(button -> this.onClose()));
         frame.child(header);
 
         FlowLayout titleRow = LumaUi.actionRow();
-        titleRow.child(LumaUi.value(Component.translatable("luma.screen.dashboard.title")));
         titleRow.child(LumaUi.chip(Component.translatable("luma.dashboard.current_dimension", this.currentDimensionLabel())));
         frame.child(titleRow);
         frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));

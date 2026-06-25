@@ -265,13 +265,14 @@ public final class QuickRollbackService {
         if (positions.isEmpty()) {
             return batches == null ? List.of() : batches;
         }
-        Map<BlockPoint, io.github.luma.domain.model.StatePayload> targetStates = this.blockTargetStateResolver.resolve(
-                layout,
-                project,
-                versions,
-                targetVersion,
-                positions
-        );
+        Map<BlockPoint, io.github.luma.domain.model.StatePayload> targetStates =
+                this.blockTargetStateResolver.resolveOrEmptyWhenBaselineMissing(
+                        layout,
+                        project,
+                        versions,
+                        targetVersion,
+                        positions
+                );
         if (targetStates.isEmpty()) {
             return batches == null ? List.of() : batches;
         }

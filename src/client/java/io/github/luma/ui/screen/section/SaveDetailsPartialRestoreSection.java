@@ -11,6 +11,7 @@ import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.core.Sizing;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -142,7 +143,12 @@ public final class SaveDetailsPartialRestoreSection {
     }
 
     private void preview(Model model) {
-        Optional<PartialRestoreRequest> request = model.form().request(model.projectName(), model.version().id(), model.actor());
+        Optional<PartialRestoreRequest> request = model.form().request(
+                model.projectName(),
+                model.version().id(),
+                model.actor(),
+                model.metadata()
+        );
         if (request.isEmpty()) {
             this.actions.invalidBounds();
             return;
@@ -151,7 +157,12 @@ public final class SaveDetailsPartialRestoreSection {
     }
 
     private void apply(Model model) {
-        Optional<PartialRestoreRequest> request = model.form().request(model.projectName(), model.version().id(), model.actor());
+        Optional<PartialRestoreRequest> request = model.form().request(
+                model.projectName(),
+                model.version().id(),
+                model.actor(),
+                model.metadata()
+        );
         if (request.isEmpty()) {
             this.actions.invalidBounds();
             return;
@@ -167,10 +178,12 @@ public final class SaveDetailsPartialRestoreSection {
             PartialRestoreFormState form,
             Bounds3i projectBounds,
             Bounds3i fallbackBounds,
-            Optional<Bounds3i> lumiSelection
+            Optional<Bounds3i> lumiSelection,
+            Map<String, String> metadata
     ) {
         public Model {
             lumiSelection = lumiSelection == null ? Optional.empty() : lumiSelection;
+            metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
         }
     }
 

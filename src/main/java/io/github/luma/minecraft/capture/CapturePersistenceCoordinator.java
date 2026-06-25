@@ -19,6 +19,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Coordinates low-priority persistence work for live capture sessions.
@@ -44,10 +45,10 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         this(
                 new RecoveryRepository(),
                 new BaselineChunkRepository(),
-                Executors.newSingleThreadExecutor(new MaintenanceThreadFactory("draft")),
+                Executors.newSingleThreadExecutor(maintenanceThreadFactory("draft")),
                 Executors.newFixedThreadPool(
                         defaultBaselineWriterThreads(),
-                        new MaintenanceThreadFactory("baseline")
+                        maintenanceThreadFactory("baseline")
                 )
         );
     }
@@ -333,6 +334,16 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 
+    private static ThreadFactory maintenanceThreadFactory(String queueName) {
+        AtomicInteger nextIndex = new AtomicInteger(1);
+        return runnable -> {
+            Thread thread = new Thread(runnable, "lumi-capture-" + queueName + "-" + nextIndex.getAndIncrement());
+            thread.setDaemon(true);
+            thread.setPriority(Thread.MIN_PRIORITY);
+            return thread;
+        };
+    }
+
     private static final class PendingDraftFlush {
 
         private final String projectId;
@@ -356,21 +367,4 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         }
     }
 
-    private static final class MaintenanceThreadFactory implements ThreadFactory {
-
-        private final String queueName;
-        private int index;
-
-        private MaintenanceThreadFactory(String queueName) {
-            this.queueName = queueName;
-        }
-
-        @Override
-        public synchronized Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(runnable, "lumi-capture-" + this.queueName + "-" + (++this.index));
-            thread.setDaemon(true);
-            thread.setPriority(Thread.MIN_PRIORITY);
-            return thread;
-        }
-    }
 }

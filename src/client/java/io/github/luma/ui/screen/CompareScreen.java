@@ -15,6 +15,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
+import io.wispforest.owo.ui.core.Sizing;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -84,15 +85,17 @@ public final class CompareScreen extends LumaScreen {
         FlowLayout frame = LumaUi.screenFrame();
         root.child(frame);
 
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        FlowLayout header = LumaUi.titleBar();
+        FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        titleColumn.child(LumaUi.value(this.sections.compareTitle(this.state)));
+        header.child(titleColumn);
         header.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
                 this.parent,
                 this.projectName
         )));
+        header.child(LumaUi.closeButton(button -> this.onClose()));
         frame.child(header);
 
-        frame.child(LumaUi.value(this.sections.compareTitle(this.state)));
         frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
 
         FlowLayout body = LumaUi.screenBody();

@@ -228,6 +228,9 @@ public final class ProjectArchiveRepository {
         List<ProjectArchiveEntry> entries = new ArrayList<>();
         entries.add(this.requiredEntry(layout.projectFile(), PROJECT_PREFIX + "project.json"));
         entries.add(this.requiredEntry(layout.variantsFile(), PROJECT_PREFIX + "variants.json"));
+        if (Files.exists(layout.workZonesFile())) {
+            entries.add(this.optionalEntry(layout.workZonesFile(), PROJECT_PREFIX + "work-zones.json"));
+        }
         this.collectDirectoryEntries(layout.versionsDir(), PROJECT_PREFIX + "versions/", entries);
         this.collectDirectoryEntries(layout.patchesDir(), PROJECT_PREFIX + "patches/", entries);
         this.collectDirectoryEntries(layout.snapshotsDir(), PROJECT_PREFIX + "snapshots/", entries);
@@ -256,6 +259,9 @@ public final class ProjectArchiveRepository {
         LinkedHashMap<String, ProjectArchiveEntry> entries = new LinkedHashMap<>();
         this.putEntry(entries, this.requiredEntry(layout.projectFile(), PROJECT_PREFIX + "project.json"));
         this.putEntry(entries, this.requiredEntry(layout.variantsFile(), PROJECT_PREFIX + "variants.json"));
+        if (Files.exists(layout.workZonesFile())) {
+            this.putEntry(entries, this.optionalEntry(layout.workZonesFile(), PROJECT_PREFIX + "work-zones.json"));
+        }
         for (ProjectVersion version : this.lineageVersions(versionMap, variant.headVersionId())) {
             this.putEntry(entries, this.requiredEntry(layout.versionFile(version.id()), PROJECT_PREFIX + "versions/" + version.id() + ".json"));
             for (String patchId : version.patchIds()) {
@@ -409,6 +415,7 @@ public final class ProjectArchiveRepository {
         }
         if (archivePath.equals(PROJECT_PREFIX + "project.json")
                 || archivePath.equals(PROJECT_PREFIX + "variants.json")
+                || archivePath.equals(PROJECT_PREFIX + "work-zones.json")
                 || archivePath.equals(PROJECT_PREFIX + "recovery/journal.json")) {
             return;
         }

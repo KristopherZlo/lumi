@@ -100,7 +100,7 @@ public final class ExactReplayStateGuard {
     }
 
     public void releaseForExplicitMutation(ServerLevel level, WorldMutationSource source) {
-        if (!this.isExplicitBuilderSource(source)) {
+        if (!this.isExplicitBuilderMutation(source, WorldMutationContext.currentActionId())) {
             return;
         }
         this.clear(level);
@@ -139,6 +139,11 @@ public final class ExactReplayStateGuard {
             case PLAYER, ENTITY, EXPLOSIVE, EXTERNAL_TOOL, WORLDEDIT, FAWE, AXIOM -> true;
             case EXPLOSION, FLUID, FIRE, GROWTH, BLOCK_UPDATE, PISTON, FALLING_BLOCK, MOB, RESTORE, SYSTEM -> false;
         };
+    }
+
+    boolean isExplicitBuilderMutation(WorldMutationSource source, String actionId) {
+        return this.isExplicitBuilderSource(source)
+                || (source == WorldMutationSource.GROWTH && actionId != null && !actionId.isBlank());
     }
 
     private void tick(ServerLevel level) {

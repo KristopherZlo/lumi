@@ -25,7 +25,7 @@ class BuildProjectTest {
         BuildProject updated = project
                 .withFavorite(true, updatedAt)
                 .withArchived(true, updatedAt)
-                .withSettings(new ProjectSettings(true, 3, 9, 4, 0.5D, false, false, true, true, false), updatedAt);
+                .withSettings(new ProjectSettings(true, 3, 9, 4, 0.5D, false, false, true, true, 256, false), updatedAt);
 
         assertTrue(updated.favorite());
         assertTrue(updated.archived());

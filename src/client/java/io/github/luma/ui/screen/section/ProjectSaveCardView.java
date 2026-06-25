@@ -2,28 +2,84 @@ package io.github.luma.ui.screen.section;
 
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.TagSuggestionComponent;
+import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.TextBoxComponent;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
+import java.util.List;
 import java.util.Objects;
 import net.minecraft.network.chat.Component;
 
-final class ProjectSaveCardView {
+public final class ProjectSaveCardView {
 
     private static final int PREVIEW_WIDTH = 96;
     private static final int PREVIEW_MIN_HEIGHT = 72;
     private static final int PREVIEW_MAX_HEIGHT = 96;
 
     private final PreviewFactory previewFactory;
-    private final ProjectScreenSections.Actions actions;
+    private final Actions actions;
 
     ProjectSaveCardView(ProjectScreenController previewController, ProjectScreenSections.Actions actions) {
+        this(
+                (projectName, version, width, minHeight, maxHeight) -> ProjectUiSupport.versionPreview(
+                        previewController,
+                        projectName,
+                        version,
+                        width,
+                        minHeight,
+                        maxHeight
+                ),
+                new Actions() {
+                    @Override
+                    public void openSaveDetails(String versionId) {
+                        actions.openSaveDetails(versionId);
+                    }
+
+                    @Override
+                    public void requestRestore(ProjectVariant variant, ProjectVersion version) {
+                        actions.requestRestore(variant, version);
+                    }
+
+                    @Override
+                    public void openBranchDialog(ProjectVersion version) {
+                        actions.openBranchDialog(version);
+                    }
+
+                    @Override
+                    public void toggleTagEditor(ProjectVersion version) {
+                        actions.toggleTagEditor(version);
+                    }
+
+                    @Override
+                    public void updateTagEditor(String value) {
+                        actions.updateTagEditor(value);
+                    }
+
+                    @Override
+                    public void saveTags(ProjectVersion version) {
+                        actions.saveTags(version);
+                    }
+
+                    @Override
+                    public void bindTagInput(TextBoxComponent input) {
+                        actions.bindTagInput(input);
+                    }
+                }
+        );
+    }
+
+    public ProjectSaveCardView(ProjectScreenController previewController, Actions actions) {
         this(
                 (projectName, version, width, minHeight, maxHeight) -> ProjectUiSupport.versionPreview(
                         previewController,
@@ -37,12 +93,12 @@ final class ProjectSaveCardView {
         );
     }
 
-    ProjectSaveCardView(PreviewFactory previewFactory, ProjectScreenSections.Actions actions) {
+    ProjectSaveCardView(PreviewFactory previewFactory, Actions actions) {
         this.previewFactory = Objects.requireNonNull(previewFactory, "previewFactory");
         this.actions = Objects.requireNonNull(actions, "actions");
     }
 
-    FlowLayout render(Model model) {
+    public FlowLayout render(Model model) {
         FlowLayout card = model.current()
                 ? LumaUi.activeInsetPanel(Sizing.fill(100), Sizing.content())
                 : LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
@@ -52,6 +108,10 @@ final class ProjectSaveCardView {
         } else {
             card.child(this.narrowContent(model));
             card.child(this.actionRow(model));
+        }
+        card.child(this.tagRow(model));
+        if (model.tagEditorVisible()) {
+            card.child(this.tagEditor(model));
         }
         return card;
     }
@@ -113,11 +173,68 @@ final class ProjectSaveCardView {
 
         for (ProjectSaveCardLayout.ActionState actionState : ProjectSaveCardLayout.actions(
                 model.versionVariant() != null,
-                model.operationActive()
+                model.operationActive(),
+                model.createVariantAction()
         )) {
             actions.child(this.actionButton(model, actionState));
         }
         return actions;
+    }
+
+    private FlowLayout tagRow(Model model) {
+        FlowLayout row = LumaUi.actionRow();
+        for (String tag : ProjectVersionTags.from(model.version())) {
+            row.child(LumaUi.caption(Component.literal("#" + tag)));
+        }
+        row.child(LumaUi.iconButton(
+                "missing-tag",
+                Component.translatable("luma.action.edit_tags"),
+                button -> this.actions.toggleTagEditor(model.version())
+        ));
+        return row;
+    }
+
+    private FlowLayout tagEditor(Model model) {
+        FlowLayout editor = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        editor.gap(2);
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(4);
+        row.verticalAlignment(VerticalAlignment.CENTER);
+        TextBoxComponent input = UIComponents.textBox(
+                Sizing.expand(100),
+                model.tagEditorText()
+        );
+        input.setHint(Component.translatable("luma.history.tags_input"));
+        TagInputSupport.configure(input, model.tagEditorText(), model.knownTags(), true);
+        this.actions.bindTagInput(input);
+        String[] liveText = {model.tagEditorText()};
+        TagSuggestionComponent suggestions = new TagSuggestionComponent(
+                () -> liveText[0],
+                model::knownTags,
+                true,
+                accepted -> {
+                    liveText[0] = accepted;
+                    this.actions.updateTagEditor(accepted);
+                    input.setValue(accepted);
+                    input.setCursorPosition(accepted.length());
+                }
+        );
+        input.onChanged().subscribe(value -> {
+            liveText[0] = TagInputSupport.limit(value);
+            this.actions.updateTagEditor(liveText[0]);
+            suggestions.refresh();
+        });
+        row.child(input);
+        ButtonComponent save = LumaUi.iconButton(
+                "save",
+                Component.translatable("luma.action.save_tags"),
+                button -> this.actions.saveTags(model.version())
+        );
+        save.margins(Insets.none());
+        row.child(save);
+        editor.child(row);
+        editor.child(suggestions);
+        return editor;
     }
 
     private ButtonComponent actionButton(Model model, ProjectSaveCardLayout.ActionState actionState) {
@@ -146,17 +263,64 @@ final class ProjectSaveCardView {
         return button;
     }
 
-    record Model(
+    public record Model(
             String projectName,
             ProjectVersion version,
             ProjectVariant versionVariant,
             boolean current,
             boolean operationActive,
-            int width
+            int width,
+            boolean createVariantAction,
+            boolean tagEditorVisible,
+            String tagEditorText,
+            List<String> knownTags
     ) {
-        Model {
+        public Model(
+                String projectName,
+                ProjectVersion version,
+                ProjectVariant versionVariant,
+                boolean current,
+                boolean operationActive,
+                int width
+        ) {
+            this(projectName, version, versionVariant, current, operationActive, width, true, false, "", List.of());
+        }
+
+        public Model(
+                String projectName,
+                ProjectVersion version,
+                ProjectVariant versionVariant,
+                boolean current,
+                boolean operationActive,
+                int width,
+                boolean createVariantAction
+        ) {
+            this(projectName, version, versionVariant, current, operationActive, width, createVariantAction, false, "", List.of());
+        }
+
+        public Model {
             Objects.requireNonNull(projectName, "projectName");
             Objects.requireNonNull(version, "version");
+            tagEditorText = TagInputSupport.limit(tagEditorText);
+            knownTags = knownTags == null ? List.of() : knownTags;
+        }
+    }
+
+    public interface Actions {
+
+        void openSaveDetails(String versionId);
+
+        void requestRestore(ProjectVariant variant, ProjectVersion version);
+
+        void openBranchDialog(ProjectVersion version);
+
+        void toggleTagEditor(ProjectVersion version);
+
+        void updateTagEditor(String value);
+
+        void saveTags(ProjectVersion version);
+
+        default void bindTagInput(TextBoxComponent input) {
         }
     }
 

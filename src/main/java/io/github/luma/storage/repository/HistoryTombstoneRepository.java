@@ -35,6 +35,12 @@ public final class HistoryTombstoneRepository {
         return next;
     }
 
+    public HistoryTombstones restoreVersion(ProjectLayout layout, String versionId, Instant now) throws IOException {
+        HistoryTombstones next = this.load(layout).withRestoredVersion(versionId, now);
+        this.save(layout, next);
+        return next;
+    }
+
     public HistoryTombstones tombstoneVariant(ProjectLayout layout, String variantId, Instant now) throws IOException {
         HistoryTombstones next = this.load(layout).withDeletedVariant(variantId, now);
         this.save(layout, next);

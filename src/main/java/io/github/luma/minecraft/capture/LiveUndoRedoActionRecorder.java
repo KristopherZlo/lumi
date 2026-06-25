@@ -346,7 +346,7 @@ final class LiveUndoRedoActionRecorder {
     }
 
     static boolean defersImmediateCausalChange(WorldMutationSource source, StoredBlockChange change) {
-        return source == WorldMutationSource.GROWTH && change != null && change.hidden();
+        return false;
     }
 
     private static boolean isSpreadingFalloutSource(WorldMutationSource source) {

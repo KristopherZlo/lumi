@@ -45,11 +45,7 @@ public final class CleanupScreen extends LumaScreen {
         FlowLayout frame = LumaUi.screenFrame();
         root.child(frame);
 
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
-        frame.child(header);
-
-        frame.child(LumaUi.value(Component.translatable("luma.screen.cleanup.title")));
+        frame.child(LumaUi.closeHeader(Component.translatable("luma.screen.cleanup.title"), button -> this.onClose()));
         frame.child(LumaUi.statusBanner(Component.translatable(this.status)));
 
         FlowLayout body = LumaUi.screenBody();

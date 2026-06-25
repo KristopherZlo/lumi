@@ -43,6 +43,15 @@ public record HistoryTombstones(
         return new HistoryTombstones(CURRENT_SCHEMA_VERSION, List.copyOf(next), this.deletedVariantIds, now);
     }
 
+    public HistoryTombstones withRestoredVersion(String versionId, Instant now) {
+        if (versionId == null || versionId.isBlank() || !this.versionDeleted(versionId)) {
+            return this;
+        }
+        LinkedHashSet<String> next = new LinkedHashSet<>(this.deletedVersionIds);
+        next.remove(versionId);
+        return new HistoryTombstones(CURRENT_SCHEMA_VERSION, List.copyOf(next), this.deletedVariantIds, now);
+    }
+
     public HistoryTombstones withDeletedVariant(String variantId, Instant now) {
         if (variantId == null || variantId.isBlank() || this.variantDeleted(variantId)) {
             return this;

@@ -29,9 +29,9 @@ class ProjectSaveCardLayoutTest {
         List<ProjectSaveCardLayout.ActionState> actions = ProjectSaveCardLayout.actions(true, false);
 
         assertEquals(3, actions.size());
-        assertEquals(ProjectSaveCardLayout.Action.OPEN, actions.get(0).action());
-        assertEquals(ProjectSaveCardLayout.Action.RESTORE, actions.get(1).action());
-        assertEquals(ProjectSaveCardLayout.Action.CREATE_VARIANT, actions.get(2).action());
+        assertEquals(ProjectSaveCardLayout.Action.RESTORE, actions.get(0).action());
+        assertEquals(ProjectSaveCardLayout.Action.CREATE_VARIANT, actions.get(1).action());
+        assertEquals(ProjectSaveCardLayout.Action.OPEN, actions.get(2).action());
         assertTrue(actions.get(0).active());
         assertTrue(actions.get(1).active());
         assertTrue(actions.get(2).active());
@@ -41,17 +41,17 @@ class ProjectSaveCardLayoutTest {
     void activeOperationDisablesRestoreAndVariantCreationOnly() {
         List<ProjectSaveCardLayout.ActionState> actions = ProjectSaveCardLayout.actions(true, true);
 
-        assertTrue(actions.get(0).active());
+        assertFalse(actions.get(0).active());
         assertFalse(actions.get(1).active());
-        assertFalse(actions.get(2).active());
+        assertTrue(actions.get(2).active());
     }
 
     @Test
     void missingVariantDisablesRestoreButKeepsVariantCreationAvailable() {
         List<ProjectSaveCardLayout.ActionState> actions = ProjectSaveCardLayout.actions(false, false);
 
-        assertTrue(actions.get(0).active());
-        assertFalse(actions.get(1).active());
+        assertFalse(actions.get(0).active());
+        assertTrue(actions.get(1).active());
         assertTrue(actions.get(2).active());
     }
 }

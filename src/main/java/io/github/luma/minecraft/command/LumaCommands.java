@@ -1,8 +1,11 @@
 package io.github.luma.minecraft.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.VersionService;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.io.IOException;
@@ -15,6 +18,7 @@ import net.minecraft.network.chat.Component;
 public final class LumaCommands {
 
     private final ProjectService projectService = new ProjectService();
+    private final VersionService versionService = new VersionService();
     private final LumaAccessControl accessControl = LumaAccessControl.getInstance();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
@@ -29,14 +33,34 @@ public final class LumaCommands {
         root.then(Commands.literal("status")
                 .executes(context -> LumaCommandExecutor.execute(context.getSource(), this::status)));
 
+        root.then(Commands.literal("save")
+                .then(Commands.argument("message", StringArgumentType.greedyString())
+                        .executes(context -> LumaCommandExecutor.execute(context.getSource(), source ->
+                                this.save(source, StringArgumentType.getString(context, "message"))))));
+
         dispatcher.register(root);
     }
 
     private int help(CommandSourceStack source) {
-        source.sendSuccess(() -> Component.literal("Lumi commands are diagnostic tools."), false);
+        source.sendSuccess(() -> Component.literal("Lumi commands require operator-level permission."), false);
         source.sendSuccess(() -> Component.literal("/lumi-onboarding - replay the short Lumi onboarding tour"), false);
         source.sendSuccess(() -> Component.literal("/lumi status - show project and operation status"), false);
+        source.sendSuccess(() -> Component.literal("/lumi save <message> - save current tracked changes"), false);
         source.sendSuccess(() -> Component.literal("Use the Lumi UI for project creation, save, restore, variants, recovery, share, merge, import/export, and cleanup."), false);
+        return 1;
+    }
+
+    private int save(CommandSourceStack source, String message) throws Exception {
+        String normalizedMessage = message == null ? "" : message.trim();
+        if (normalizedMessage.isBlank()) {
+            source.sendFailure(Component.literal("Lumi save needs a message."));
+            return 0;
+        }
+        var player = source.getPlayerOrException();
+        String author = player.getName().getString();
+        BuildProject project = this.projectService.ensureWorldProject(source.getLevel(), author);
+        var handle = this.versionService.startSaveVersion(source.getLevel(), project.name(), normalizedMessage, author);
+        source.sendSuccess(() -> Component.literal("Lumi save started: " + handle.id()), false);
         return 1;
     }
 

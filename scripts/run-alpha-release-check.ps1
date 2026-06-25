@@ -2,7 +2,6 @@ param(
     [string]$JavaHome,
     [switch]$SkipRuntimeLoad,
     [switch]$SkipCrashHarness,
-    [switch]$FullStack,
     [ValidateRange(1, 20)]
     [int]$RuntimeLoadRuns = 1,
     [ValidateRange(60, 7200)]
@@ -38,9 +37,6 @@ function Invoke-TestClientGradle {
         }
         if ($JavaHome) {
             $arguments.JavaHome = $JavaHome
-        }
-        if ($FullStack) {
-            $arguments.FullStack = $true
         }
         & $testClientScript @arguments
     } finally {
@@ -88,9 +84,6 @@ try {
         }
         if ($CrashHarnessFailpoints.Count -gt 0) {
             $arguments.Failpoints = $CrashHarnessFailpoints
-        }
-        if ($FullStack) {
-            $arguments.FullStack = $true
         }
         & $crashHarnessScript @arguments
     }

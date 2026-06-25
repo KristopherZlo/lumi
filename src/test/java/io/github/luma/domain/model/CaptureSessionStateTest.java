@@ -149,6 +149,21 @@ class CaptureSessionStateTest {
     }
 
     @Test
+    void hiddenDeferredContextWithoutActionIsRetainedForVisibility() {
+        CaptureSessionState state = CaptureSessionState.create(buffer());
+        ChunkPoint chunk = new ChunkPoint(0, 0);
+        CaptureSessionState.DeferredActionContext hiddenContext =
+                new CaptureSessionState.DeferredActionContext("", "fire", false, true);
+
+        assertTrue(state.markDirtyChunk(chunk, hiddenContext));
+
+        assertEquals(hiddenContext, state.deferredActionContexts(List.of(chunk)).get(chunk));
+        assertEquals(hiddenContext, state.deferredActionContext(chunk));
+        assertFalse(state.deferredActionContext(chunk).hasAction());
+        assertTrue(state.deferredActionContext(chunk).hasContext());
+    }
+
+    @Test
     void dirtyChunksWaitForSettleTicksBeforeReconciliation() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
         ChunkPoint chunk = new ChunkPoint(0, 0);

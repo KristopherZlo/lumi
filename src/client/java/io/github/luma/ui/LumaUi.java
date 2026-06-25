@@ -8,10 +8,12 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Color;
 import io.wispforest.owo.ui.core.CursorStyle;
+import io.wispforest.owo.ui.core.Easing;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
+import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.function.Consumer;
 import net.minecraft.network.chat.Component;
@@ -62,7 +64,13 @@ public final class LumaUi {
         layout.surface(windowSurface());
         layout.padding(Insets.of(6));
         layout.gap(5);
-        return layout;
+        return animateOpen(layout);
+    }
+
+    public static <T extends UIComponent> T animateOpen(T component) {
+        component.margins(Insets.top(8));
+        component.margins().animate(160, Easing.CUBIC, Insets.none()).forwards();
+        return component;
     }
 
     public static Surface screenBackdrop() {
@@ -101,6 +109,18 @@ public final class LumaUi {
         titleBar.padding(Insets.of(5));
         titleBar.gap(5);
         return titleBar;
+    }
+
+    public static FlowLayout closeHeader(Component title, Consumer<ButtonComponent> onClose) {
+        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        header.padding(Insets.bottom(3));
+        header.gap(5);
+        header.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        titleColumn.child(value(title));
+        header.child(titleColumn);
+        header.child(closeButton(onClose));
+        return header;
     }
 
     public static FlowLayout screenBody() {
@@ -194,7 +214,7 @@ public final class LumaUi {
         header.verticalAlignment(VerticalAlignment.CENTER);
         header.child(accent(Component.translatable(hint.titleKey())));
         header.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
-        ButtonComponent dismiss = button(Component.translatable("luma.action.dismiss_hint"), onDismiss);
+        ButtonComponent dismiss = iconButton("missing-close", Component.translatable("luma.action.dismiss_hint"), onDismiss);
         header.child(dismiss);
         panel.child(header);
         panel.child(caption(Component.translatable(hint.bodyKey())));
@@ -299,6 +319,23 @@ public final class LumaUi {
         return button;
     }
 
+    public static ButtonComponent sidebarTab(Component text, boolean selected, int innerBorder, Consumer<ButtonComponent> onPress) {
+        ButtonComponent button = sidebarTab(text, selected, onPress);
+        button.renderer((graphics, component, delta) -> {
+            int selectedFill = withAlpha(innerBorder, 0x78);
+            int fill = selected ? selectedFill : component.isHovered() ? withAlpha(innerBorder, 0x52) : withAlpha(innerBorder, 0x30);
+            graphics.fill(component.getX(), component.getY(), component.getX() + component.getWidth(), component.getY() + component.getHeight(), fill);
+            graphics.drawRectOutline(
+                    component.getX() + 1,
+                    component.getY() + 1,
+                    component.getWidth() - 2,
+                    component.getHeight() - 2,
+                    innerBorder
+            );
+        });
+        return button;
+    }
+
     public static FlowLayout revealGroup() {
         FlowLayout group = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
         group.gap(4);
@@ -321,13 +358,24 @@ public final class LumaUi {
     }
 
     public static ButtonComponent iconButton(String iconName, Component tooltip, Consumer<ButtonComponent> onPress) {
+        return iconButton(iconName, tooltip, false, onPress);
+    }
+
+    public static ButtonComponent iconButton(String iconName, Component tooltip, boolean selected, Consumer<ButtonComponent> onPress) {
         Identifier icon = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/" + iconName + ".png");
         Identifier disabledIcon = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/" + iconName + "_disabled.png");
-        ButtonComponent button = styledButton(Component.empty(), onPress, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED);
+        int fill = selected ? STATUS_FILL : BUTTON_FILL;
+        int hover = selected ? STATUS_FILL : BUTTON_HOVER;
+        ButtonComponent button = styledButton(Component.empty(), selected ? pressed -> {
+        } : onPress, fill, hover, BUTTON_DISABLED);
         button.sizing(Sizing.fixed(28), Sizing.fixed(18));
         button.tooltip(tooltip);
-        button.renderer(new IconButtonRenderer(icon, disabledIcon, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED));
+        button.renderer(new IconButtonRenderer(icon, disabledIcon, fill, hover, BUTTON_DISABLED));
         return button;
+    }
+
+    public static ButtonComponent closeButton(Consumer<ButtonComponent> onPress) {
+        return iconButton("missing-close", Component.translatable("luma.action.close"), onPress);
     }
 
     private static ButtonComponent styledButton(
@@ -344,6 +392,10 @@ public final class LumaUi {
         button.margins(Insets.bottom(BUTTON_WRAP_BOTTOM_MARGIN));
         button.cursorStyle(CursorStyle.HAND);
         return button;
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (alpha << 24) | (color & 0x00FFFFFF);
     }
 
     public static LabelComponent title(Component text) {

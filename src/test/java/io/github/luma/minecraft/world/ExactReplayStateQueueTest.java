@@ -274,10 +274,12 @@ class ExactReplayStateQueueTest {
     void guardReleasesForNewExplicitBuilderMutationsOnly() {
         ExactReplayStateGuard guard = new ExactReplayStateGuard();
 
-        assertTrue(guard.isExplicitBuilderSource(io.github.luma.domain.model.WorldMutationSource.PLAYER));
-        assertTrue(guard.isExplicitBuilderSource(io.github.luma.domain.model.WorldMutationSource.AXIOM));
-        assertFalse(guard.isExplicitBuilderSource(io.github.luma.domain.model.WorldMutationSource.BLOCK_UPDATE));
-        assertFalse(guard.isExplicitBuilderSource(io.github.luma.domain.model.WorldMutationSource.RESTORE));
+        assertTrue(guard.isExplicitBuilderMutation(io.github.luma.domain.model.WorldMutationSource.PLAYER, ""));
+        assertTrue(guard.isExplicitBuilderMutation(io.github.luma.domain.model.WorldMutationSource.AXIOM, ""));
+        assertTrue(guard.isExplicitBuilderMutation(io.github.luma.domain.model.WorldMutationSource.GROWTH, "action-1"));
+        assertFalse(guard.isExplicitBuilderMutation(io.github.luma.domain.model.WorldMutationSource.GROWTH, ""));
+        assertFalse(guard.isExplicitBuilderMutation(io.github.luma.domain.model.WorldMutationSource.BLOCK_UPDATE, "action-1"));
+        assertFalse(guard.isExplicitBuilderMutation(io.github.luma.domain.model.WorldMutationSource.RESTORE, "action-1"));
     }
 
     private static ChunkBatch batch(PreparedBlockPlacement placement) {

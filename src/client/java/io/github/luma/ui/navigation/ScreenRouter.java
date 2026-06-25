@@ -12,10 +12,10 @@ import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.RecoveryScreen;
 import io.github.luma.ui.screen.SaveDetailsScreen;
-import io.github.luma.ui.screen.SaveScreen;
 import io.github.luma.ui.screen.SettingsScreen;
 import io.github.luma.ui.screen.ShareScreen;
 import io.github.luma.ui.screen.VariantsScreen;
+import io.github.luma.ui.screen.WorkZoneScreen;
 import io.github.luma.ui.controller.ProjectScreenController;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -63,6 +63,10 @@ public final class ScreenRouter {
         this.openProjectAfterRecoveryCheck(parent, projectName, variantId, statusKey);
     }
 
+    public void openProjectTab(Screen parent, String projectName) {
+        this.openProjectAfterRecoveryCheck(parent, projectName, "", "luma.status.project_ready", false);
+    }
+
     public void openProjectSkippingOnboarding(Screen parent, String projectName) {
         this.updatePromptCoordinator.openProjectScreen(this.client, new ProjectScreen(parent, projectName));
     }
@@ -82,14 +86,6 @@ public final class ScreenRouter {
         this.client.setScreen(new RecoveryScreen(parent, projectName));
     }
 
-    public void openSave(Screen parent, String projectName) {
-        this.client.setScreen(new SaveScreen(parent, projectName));
-    }
-
-    public void openSave(Screen parent, String projectName, String initialMessage, boolean showMoreOptions) {
-        this.client.setScreen(new SaveScreen(parent, projectName, initialMessage, showMoreOptions));
-    }
-
     public void openSaveDetails(Screen parent, String projectName, String versionId) {
         this.client.setScreen(new SaveDetailsScreen(parent, projectName, versionId));
     }
@@ -102,8 +98,8 @@ public final class ScreenRouter {
         this.client.setScreen(new MoreScreen(parent, projectName));
     }
 
-    public void openHistoryGraph(Screen parent, String projectName) {
-        this.client.setScreen(MoreScreen.historyGraph(parent, projectName));
+    public void openWorkZones(Screen parent, String projectName) {
+        this.client.setScreen(new WorkZoneScreen(parent, projectName));
     }
 
     public void openDiagnostics(Screen parent, String projectName) {
@@ -120,6 +116,10 @@ public final class ScreenRouter {
 
     public void openVariants(Screen parent, String projectName, String baseVersionId) {
         this.client.setScreen(new VariantsScreen(parent, projectName, baseVersionId));
+    }
+
+    public void openVariantsIgnoringActiveZone(Screen parent, String projectName) {
+        this.client.setScreen(new VariantsScreen(parent, projectName, "", true));
     }
 
     public void openShare(Screen parent, String projectName) {
@@ -141,6 +141,16 @@ public final class ScreenRouter {
     }
 
     private void openProjectAfterRecoveryCheck(Screen parent, String projectName, String variantId, String statusKey) {
+        this.openProjectAfterRecoveryCheck(parent, projectName, variantId, statusKey, true);
+    }
+
+    private void openProjectAfterRecoveryCheck(
+            Screen parent,
+            String projectName,
+            String variantId,
+            String statusKey,
+            boolean animateWindow
+    ) {
         if (this.onboardingService.shouldShowOnboarding()) {
             this.client.setScreen(new OnboardingScreen(
                     parent,
@@ -153,7 +163,7 @@ public final class ScreenRouter {
         }
         this.updatePromptCoordinator.openProjectScreen(
                 this.client,
-                new ProjectScreen(parent, projectName, variantId, statusKey)
+                new ProjectScreen(parent, projectName, variantId, statusKey, animateWindow)
         );
     }
 }

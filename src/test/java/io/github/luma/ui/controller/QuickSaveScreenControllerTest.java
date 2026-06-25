@@ -1,5 +1,7 @@
 package io.github.luma.ui.controller;
 
+import io.github.luma.domain.model.ProjectVersion;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,13 +20,23 @@ class QuickSaveScreenControllerTest {
     }
 
     @Test
-    void rejectsBlankNamesBeforeTouchingServices() {
+    void passesTagsToCurrentWorkspaceSave() {
         FakeQuery query = new FakeQuery();
         QuickSaveScreenController controller = new QuickSaveScreenController(query);
 
-        assertEquals("luma.status.quick_save_name_required", controller.saveCurrentWorkspace(" "));
+        assertEquals("luma.status.save_started", controller.saveCurrentWorkspace("Checkpoint", List.of("roof")));
 
-        assertFalse(query.saveCalled);
+        assertEquals(List.of("roof"), query.savedTags);
+    }
+
+    @Test
+    void allowsBlankNameLikeTheMainSaveDialog() {
+        FakeQuery query = new FakeQuery();
+        QuickSaveScreenController controller = new QuickSaveScreenController(query);
+
+        assertEquals("luma.status.save_started", controller.saveCurrentWorkspace(" "));
+
+        assertEquals("", query.savedMessage);
     }
 
     @Test
@@ -72,12 +84,20 @@ class QuickSaveScreenControllerTest {
         }
 
         @Override
-        public void saveCurrentWorkspace(String message) {
+        public void saveCurrentWorkspace(String message, List<String> tags) {
             this.saveCalled = true;
             if (this.failure != null) {
                 throw this.failure;
             }
             this.savedMessage = message;
+            this.savedTags = tags;
         }
+
+        @Override
+        public List<ProjectVersion> currentWorkspaceVersions() {
+            return List.of();
+        }
+
+        private List<String> savedTags = List.of();
     }
 }

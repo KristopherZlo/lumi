@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import com.mojang.blaze3d.platform.Window;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
@@ -25,7 +24,7 @@ public final class ClientRuntimeLoadSampler implements AutoCloseable {
     private final ClientJvmLoadProbe jvmLoadProbe = new ClientJvmLoadProbe();
     private final ClientFrameTimeWindow frameTimes = new ClientFrameTimeWindow(DEFAULT_FRAME_WINDOW);
     private final ClientGpuMetricsProbe gpuMetricsProbe = new NvidiaSmiClientGpuMetricsProbe();
-    private final ExecutorService gpuExecutor = Executors.newSingleThreadExecutor(new MetricsThreadFactory());
+    private final ExecutorService gpuExecutor = Executors.newSingleThreadExecutor(ClientRuntimeLoadSampler::metricsThread);
     private final int sampleIntervalTicks = Math.max(1, Integer.getInteger(SAMPLE_TICKS_FLAG, 20));
     private final long gpuSampleIntervalNanos = TimeUnit.SECONDS.toNanos(
             Math.max(1L, Long.getLong(GPU_SAMPLE_SECONDS_FLAG, 5L))
@@ -183,15 +182,11 @@ public final class ClientRuntimeLoadSampler implements AutoCloseable {
         return client.screen.getClass().getSimpleName();
     }
 
-    private static final class MetricsThreadFactory implements ThreadFactory {
-
-        @Override
-        public Thread newThread(Runnable task) {
-            Thread thread = new Thread(task, "lumi-client-gpu-metrics");
-            thread.setDaemon(true);
-            thread.setPriority(Thread.MIN_PRIORITY);
-            return thread;
-        }
+    private static Thread metricsThread(Runnable task) {
+        Thread thread = new Thread(task, "lumi-client-gpu-metrics");
+        thread.setDaemon(true);
+        thread.setPriority(Thread.MIN_PRIORITY);
+        return thread;
     }
 
     private static final class Holder {

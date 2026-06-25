@@ -6,20 +6,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectSidebarNavigationTest {
 
     @Test
-    void sidebarIncludesHistoryGraphTab() throws IOException {
+    void sidebarKeepsSupportVisibleWithoutSeparateHistoryGraphTab() throws IOException {
         String source = Files.readString(
                 Path.of("src/client/java/io/github/luma/ui/navigation/ProjectSidebarNavigation.java"),
                 StandardCharsets.UTF_8
         );
 
+        assertFalse(
+                source.contains("openHistoryGraph"),
+                "Project sidebar should not expose History graph as a separate tab"
+        );
         assertTrue(
-                source.contains("luma.more.tab_history_graph") && source.contains("openHistoryGraph"),
-                "Project sidebar should expose History graph directly"
+                source.contains("supportFooter()"),
+                "Project sidebar should keep support visible in the fixed footer"
         );
     }
 }

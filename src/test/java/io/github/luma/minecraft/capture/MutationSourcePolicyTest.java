@@ -60,12 +60,12 @@ class MutationSourcePolicyTest {
     }
 
     @Test
-    void deferredActionContextCanBeReusedByDelayedPhysicsFallout() {
+    void deferredActionContextCanBeReusedByDelayedSecondaryFallout() {
         assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.BLOCK_UPDATE));
         assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.PISTON));
         assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.FLUID));
         assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.FALLING_BLOCK));
-        assertFalse(this.policy.canReuseDeferredActionContext(WorldMutationSource.GROWTH));
+        assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.GROWTH));
         assertFalse(this.policy.canReuseDeferredActionContext(WorldMutationSource.PLAYER));
     }
 
@@ -119,6 +119,13 @@ class MutationSourcePolicyTest {
         assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.PLAYER, ""));
         assertFalse(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.EXPLOSIVE));
         assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.EXPLOSIVE, ""));
+    }
+
+    @Test
+    void bonemealGrowthDoesNotUseSectionLiveStateReconciliation() {
+        assertFalse(this.policy.usesLiveStateReconciliation(WorldMutationSource.GROWTH));
+        assertTrue(this.policy.usesLiveStateReconciliation(WorldMutationSource.PLAYER));
+        assertTrue(this.policy.usesLiveStateReconciliation(WorldMutationSource.PISTON));
     }
 
     @Test

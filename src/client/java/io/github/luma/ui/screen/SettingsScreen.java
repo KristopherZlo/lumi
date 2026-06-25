@@ -46,9 +46,11 @@ public final class SettingsScreen extends LumaScreen {
     private String sessionIdleSeconds = "5";
     private String snapshotEveryVersions = "10";
     private String snapshotVolumeThreshold = "0.20";
+    private String autoCheckpointLargeChangeThreshold = Integer.toString(ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD);
     private String sessionIdleSecondsError = "";
     private String snapshotEveryVersionsError = "";
     private String snapshotVolumeThresholdError = "";
+    private String autoCheckpointLargeChangeThresholdError = "";
 
     public SettingsScreen(Screen parent, String projectName) {
         super(Component.translatable("luma.screen.settings.title", projectName));
@@ -76,6 +78,7 @@ public final class SettingsScreen extends LumaScreen {
             this.sessionIdleSeconds = Integer.toString(project.settings().sessionIdleSeconds());
             this.snapshotEveryVersions = Integer.toString(project.settings().snapshotEveryVersions());
             this.snapshotVolumeThreshold = Double.toString(project.settings().snapshotVolumeThreshold());
+            this.autoCheckpointLargeChangeThreshold = Integer.toString(project.settings().autoCheckpointLargeChangeThreshold());
             this.loaded = true;
         }
         root.surface(LumaUi.screenBackdrop());
@@ -161,6 +164,12 @@ public final class SettingsScreen extends LumaScreen {
                 Component.translatable("luma.settings.auto_checkpoint_help"),
                 this.toggleControl(this.autoCheckpointEnabled, value -> this.autoCheckpointEnabled = value),
                 ""
+        ));
+        section.child(this.fieldWithError(
+                Component.translatable("luma.settings.auto_checkpoint_threshold"),
+                Component.translatable("luma.settings.auto_checkpoint_threshold_help"),
+                this.numberInput(this.autoCheckpointLargeChangeThreshold, value -> this.autoCheckpointLargeChangeThreshold = value),
+                this.autoCheckpointLargeChangeThresholdError
         ));
         return section;
     }
@@ -307,10 +316,15 @@ public final class SettingsScreen extends LumaScreen {
 
         Integer parsedSessionIdleSeconds = this.parsePositiveInt(this.sessionIdleSeconds, error -> this.sessionIdleSecondsError = error);
         Integer parsedSnapshotEveryVersions = this.parsePositiveInt(this.snapshotEveryVersions, error -> this.snapshotEveryVersionsError = error);
+        Integer parsedAutoCheckpointLargeChangeThreshold = this.parsePositiveInt(
+                this.autoCheckpointLargeChangeThreshold,
+                error -> this.autoCheckpointLargeChangeThresholdError = error
+        );
         Double parsedSnapshotVolumeThreshold = this.parsePositiveDouble(this.snapshotVolumeThreshold, error -> this.snapshotVolumeThresholdError = error);
 
         if (parsedSessionIdleSeconds == null
                 || parsedSnapshotEveryVersions == null
+                || parsedAutoCheckpointLargeChangeThreshold == null
                 || parsedSnapshotVolumeThreshold == null) {
             this.status = "luma.status.settings_invalid";
             return;
@@ -328,6 +342,7 @@ public final class SettingsScreen extends LumaScreen {
                         this.previewGenerationEnabled,
                         this.debugLoggingEnabled,
                         this.autoCheckpointEnabled,
+                        parsedAutoCheckpointLargeChangeThreshold,
                         this.workspaceHudEnabled
                 ),
                 this.archived
@@ -366,6 +381,7 @@ public final class SettingsScreen extends LumaScreen {
         this.sessionIdleSecondsError = "";
         this.snapshotEveryVersionsError = "";
         this.snapshotVolumeThresholdError = "";
+        this.autoCheckpointLargeChangeThresholdError = "";
     }
 
     private int parseLegacyAutoVersionMinutes() {

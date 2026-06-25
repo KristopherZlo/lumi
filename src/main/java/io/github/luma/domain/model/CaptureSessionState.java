@@ -111,7 +111,7 @@ public final class CaptureSessionState {
         Long previousGameTime = this.pendingReconcileGameTimes.put(chunk, gameTime);
         boolean gameTimeChanged = previousGameTime == null || previousGameTime.longValue() != gameTime;
         boolean contextChanged = false;
-        if (deferredActionContext != null && deferredActionContext.hasAction()) {
+        if (deferredActionContext != null && deferredActionContext.hasContext()) {
             DeferredActionContext previous = this.deferredActionContexts.get(chunk);
             DeferredActionContext merged = mergeDeferredActionContext(previous, deferredActionContext);
             this.deferredActionContexts.put(chunk, merged);
@@ -313,7 +313,7 @@ public final class CaptureSessionState {
         LinkedHashMap<ChunkPoint, DeferredActionContext> contexts = new LinkedHashMap<>();
         for (ChunkPoint chunk : chunks) {
             DeferredActionContext context = this.deferredActionContexts.get(chunk);
-            if (context != null && context.hasAction()) {
+            if (context != null && context.hasContext()) {
                 contexts.put(chunk, context);
             }
         }
@@ -325,7 +325,7 @@ public final class CaptureSessionState {
             return null;
         }
         DeferredActionContext context = this.deferredActionContexts.get(chunk);
-        return context != null && context.hasAction() ? context : null;
+        return context != null && context.hasContext() ? context : null;
     }
 
     public boolean trackFallingEntity(UUID entityId) {
@@ -361,7 +361,7 @@ public final class CaptureSessionState {
             DeferredActionContext previous,
             DeferredActionContext next
     ) {
-        if (previous == null || !previous.hasAction()) {
+        if (previous == null || !previous.hasContext()) {
             return next;
         }
         return new DeferredActionContext(
@@ -390,6 +390,10 @@ public final class CaptureSessionState {
 
         public boolean hasAction() {
             return !this.actionId.isBlank();
+        }
+
+        public boolean hasContext() {
+            return this.hasAction() || this.hiddenInBuilderSurfaces;
         }
     }
 }

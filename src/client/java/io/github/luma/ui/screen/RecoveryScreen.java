@@ -64,12 +64,15 @@ public final class RecoveryScreen extends LumaScreen {
         FlowLayout frame = LumaUi.screenFrame();
         stack.child(frame);
 
-        FlowLayout header = LumaUi.actionRow();
-        header.child(LumaUi.button(Component.translatable("luma.action.back"), button -> this.onClose()));
+        FlowLayout header = LumaUi.titleBar();
+        FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        titleColumn.child(LumaUi.value(Component.translatable("luma.screen.recovery.title")));
+        header.child(titleColumn);
         header.child(LumaUi.button(Component.translatable("luma.action.open_workspace"), button -> this.router.openProjectIgnoringRecovery(
                 this.parent,
                 this.projectName
         )));
+        header.child(LumaUi.closeButton(button -> this.onClose()));
         frame.child(header);
 
         frame.child(LumaUi.value(Component.translatable("luma.screen.recovery.title")));

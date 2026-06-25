@@ -15,8 +15,10 @@ import io.github.luma.storage.repository.PatchMetaRepository;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 
 final class RestoreChunkCollector {
@@ -28,7 +30,7 @@ final class RestoreChunkCollector {
     }
 
     List<ChunkPoint> touchedChunksForVersions(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         for (ProjectVersion version : versions == null ? List.<ProjectVersion>of() : versions) {
             for (String patchId : version.patchIds()) {
                 PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
@@ -36,45 +38,44 @@ final class RestoreChunkCollector {
                 this.addPatchMetadataChunks(chunks, metadata);
             }
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     List<ChunkPoint> touchedChunksForDraft(RecoveryDraft draft) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         if (draft == null) {
             return List.of();
         }
         for (StoredBlockChange change : draft.changes()) {
-            ChunkPoint chunk = ChunkPoint.from(change.pos());
-            chunks.putIfAbsent(key(chunk), chunk);
+            chunks.add(ChunkPoint.from(change.pos()));
         }
         for (StoredEntityChange change : draft.entityChanges()) {
-            ChunkPoint chunk = change.chunk();
-            chunks.putIfAbsent(key(chunk), chunk);
+            if (change.chunk() != null) {
+                chunks.add(change.chunk());
+            }
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     List<ChunkPoint> batchChunks(List<PreparedChunkBatch> batches) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
             if (batch != null && batch.chunk() != null) {
-                chunks.putIfAbsent(key(batch.chunk()), batch.chunk());
+                chunks.add(batch.chunk());
             }
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     List<ChunkPoint> chunksForPositions(List<BlockPoint> positions) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         for (BlockPoint position : positions == null ? List.<BlockPoint>of() : positions) {
             if (position == null) {
                 continue;
             }
-            ChunkPoint chunk = ChunkPoint.from(position);
-            chunks.putIfAbsent(key(chunk), chunk);
+            chunks.add(ChunkPoint.from(position));
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     Map<ChunkPoint, List<BlockPoint>> positionsByChunk(List<BlockPoint> positions) {
@@ -122,32 +123,32 @@ final class RestoreChunkCollector {
             List<ChunkPoint> baselineGaps,
             List<PatchMetadata> patchChain
     ) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         for (ChunkPoint chunk : baselineGaps == null ? List.<ChunkPoint>of() : baselineGaps) {
             if (chunk != null) {
-                chunks.putIfAbsent(key(chunk), chunk);
+                chunks.add(chunk);
             }
         }
         for (PatchMetadata metadata : patchChain == null ? List.<PatchMetadata>of() : patchChain) {
             this.addPatchMetadataChunks(chunks, metadata);
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     @SafeVarargs
     final List<ChunkPoint> mergeChunks(List<ChunkPoint>... chunkLists) {
-        Map<String, ChunkPoint> chunks = new LinkedHashMap<>();
+        Set<ChunkPoint> chunks = new LinkedHashSet<>();
         for (List<ChunkPoint> chunkList : chunkLists) {
             if (chunkList == null) {
                 continue;
             }
             for (ChunkPoint chunk : chunkList) {
                 if (chunk != null) {
-                    chunks.putIfAbsent(key(chunk), chunk);
+                    chunks.add(chunk);
                 }
             }
         }
-        return List.copyOf(chunks.values());
+        return List.copyOf(chunks);
     }
 
     List<ChunkPoint> chunksIntersecting(Bounds3i bounds) {
@@ -168,17 +169,12 @@ final class RestoreChunkCollector {
         return chunks;
     }
 
-    private void addPatchMetadataChunks(Map<String, ChunkPoint> chunks, PatchMetadata metadata) {
+    private void addPatchMetadataChunks(Set<ChunkPoint> chunks, PatchMetadata metadata) {
         if (metadata == null) {
             return;
         }
         for (var chunk : metadata.chunks()) {
-            ChunkPoint point = new ChunkPoint(chunk.chunkX(), chunk.chunkZ());
-            chunks.putIfAbsent(key(point), point);
+            chunks.add(new ChunkPoint(chunk.chunkX(), chunk.chunkZ()));
         }
-    }
-
-    private static String key(ChunkPoint chunk) {
-        return chunk.x() + ":" + chunk.z();
     }
 }

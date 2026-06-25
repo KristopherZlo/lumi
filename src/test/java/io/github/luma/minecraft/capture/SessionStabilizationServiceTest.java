@@ -451,6 +451,42 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void finalLiveDiffAddsChangedCellsMissingFromDirectDraft() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint capturedPos = new BlockPoint(2, 64, 1);
+        BlockPoint missedPos = new BlockPoint(3, 64, 1);
+        StoredBlockChange directDraftChange = new StoredBlockChange(
+                capturedPos,
+                payload("minecraft:air"),
+                payload("minecraft:oak_planks")
+        );
+        ChunkSnapshotPayload baseline = uniformChunk("minecraft:air");
+        ChunkSnapshotPayload live = chunkWithStates(
+                stateTag("minecraft:air"),
+                Map.of(
+                        capturedPos, stateTag("minecraft:oak_planks"),
+                        missedPos, stateTag("minecraft:stone")
+                )
+        );
+
+        List<StoredBlockChange> liveDeltas = service.diffChunk(baseline, live, null, Map.of(), Set.of(4));
+        List<StoredBlockChange> composedChanges = service.composeStabilizedChanges(
+                List.of(),
+                List.of(directDraftChange),
+                liveDeltas,
+                Map.of(new ChunkPoint(0, 0), live)
+        );
+
+        Map<BlockPoint, StoredBlockChange> byPosition = new java.util.HashMap<>();
+        for (StoredBlockChange change : composedChanges) {
+            byPosition.put(change.pos(), change);
+        }
+        assertEquals(2, composedChanges.size());
+        assertEquals("minecraft:oak_planks", byPosition.get(capturedPos).newValue().blockId());
+        assertEquals("minecraft:stone", byPosition.get(missedPos).newValue().blockId());
+    }
+
+    @Test
     void stabilizationCompositionDropsCurrentChangeWhenLiveStateReturnedToBaseline() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange movedSource = new StoredBlockChange(

@@ -1,14 +1,21 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.RecoveryRepository;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Predicate;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -52,6 +59,28 @@ class PartialRestoreDraftRewriterTest {
         ));
 
         assertNull(this.rewriter.mergeRestoredChanges(pending, restored, NOW));
+    }
+
+    @Test
+    void preservesPendingChangesOutsideComplexZoneCells(@TempDir Path tempDir) throws Exception {
+        ProjectLayout layout = new ProjectLayout(tempDir);
+        RecoveryRepository repository = new RecoveryRepository();
+        RecoveryDraft pending = draft("Alex", WorldMutationSource.PLAYER, List.of(
+                change(1, "minecraft:stone", "minecraft:glass"),
+                change(20, "minecraft:dirt", "minecraft:gold_block")
+        ));
+        Predicate<BlockPoint> firstCellOnly = point -> point.x() < 16;
+
+        this.rewriter.preserveOutsideRestoredRegion(
+                layout,
+                pending,
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(31, 64, 0)),
+                PartialRestoreMode.SELECTED_AREA,
+                firstCellOnly
+        );
+
+        RecoveryDraft saved = repository.loadDraft(layout).orElseThrow();
+        assertEquals(List.of(new BlockPoint(20, 64, 0)), saved.changes().stream().map(StoredBlockChange::pos).toList());
     }
 
     private static RecoveryDraft draft(

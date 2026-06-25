@@ -64,6 +64,22 @@ class ExactRootStateRestorePlannerTest {
     }
 
     @Test
+    void skipsExactWorldRootStateForPendingRollbackToDraftBase(@TempDir Path tempDir) throws Exception {
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        ProjectVersion root = version("v0001", "", "", List.of(), VersionKind.WORLD_ROOT);
+
+        ExactRootStateRestorePlan plan = this.planner.plan(
+                layout,
+                root,
+                draftInChunks("v0001", List.of(new ChunkPoint(7, 2))),
+                DirectRestorePatchPlan.empty()
+        );
+
+        assertFalse(plan.append());
+        assertTrue(plan.chunks().isEmpty());
+    }
+
+    @Test
     void plansExactInitialStateForReplayAndPendingChunks(@TempDir Path tempDir) throws Exception {
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
         ProjectVersion initial = version("v0001", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
@@ -152,6 +168,10 @@ class ExactRootStateRestorePlannerTest {
     }
 
     private static RecoveryDraft draftInChunks(List<ChunkPoint> chunks) {
+        return draftInChunks("v0002", chunks);
+    }
+
+    private static RecoveryDraft draftInChunks(String baseVersionId, List<ChunkPoint> chunks) {
         List<StoredBlockChange> changes = chunks.stream()
                 .map(chunk -> new StoredBlockChange(
                         new BlockPoint(chunk.x() << 4, 64, chunk.z() << 4),
@@ -162,7 +182,7 @@ class ExactRootStateRestorePlannerTest {
         return new RecoveryDraft(
                 "project",
                 "main",
-                "v0002",
+                baseVersionId,
                 "tester",
                 WorldMutationSource.PLAYER,
                 NOW,

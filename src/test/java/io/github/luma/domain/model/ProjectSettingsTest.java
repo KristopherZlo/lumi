@@ -21,6 +21,7 @@ class ProjectSettingsTest {
         assertTrue(settings.previewGenerationEnabled());
         assertFalse(settings.debugLoggingEnabled());
         assertFalse(settings.autoCheckpointEnabled());
+        assertEquals(ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD, settings.autoCheckpointLargeChangeThreshold());
         assertTrue(settings.workspaceHudVisible());
     }
 
@@ -36,6 +37,7 @@ class ProjectSettingsTest {
                 false,
                 true,
                 true,
+                0,
                 null
         ));
 
@@ -48,6 +50,7 @@ class ProjectSettingsTest {
         assertFalse(settings.previewGenerationEnabled());
         assertTrue(settings.debugLoggingEnabled());
         assertTrue(settings.autoCheckpointEnabled());
+        assertEquals(ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD, settings.autoCheckpointLargeChangeThreshold());
         assertTrue(settings.workspaceHudVisible());
     }
 
@@ -63,9 +66,11 @@ class ProjectSettingsTest {
                 true,
                 false,
                 false,
+                256,
                 false
         ));
 
+        assertEquals(256, settings.autoCheckpointLargeChangeThreshold());
         assertFalse(settings.workspaceHudVisible());
     }
 }

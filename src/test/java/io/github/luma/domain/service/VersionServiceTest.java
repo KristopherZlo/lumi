@@ -16,6 +16,8 @@ import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.VersionKind;
+import io.github.luma.domain.model.WorkZone;
+import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
@@ -147,6 +149,50 @@ class VersionServiceTest {
         assertEquals("v0000", amended.baseVersionId());
         assertEquals(1.0D, x(amended.entityChanges().getFirst().oldValue()));
         assertEquals(3.0D, x(amended.entityChanges().getFirst().newValue()));
+    }
+
+    @Test
+    void splitDraftForZoneKeepsOutOfZoneChangesPending() {
+        String insideEntityId = "00000000-0000-0000-0000-000000000101";
+        String outsideEntityId = "00000000-0000-0000-0000-000000000102";
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                instant(10),
+                instant(20),
+                List.of(
+                        change(1, "minecraft:stone", "minecraft:gold_block"),
+                        change(32, "minecraft:stone", "minecraft:diamond_block")
+                ),
+                List.of(
+                        entityChange(insideEntityId, 1.0D, 2.0D),
+                        entityChange(outsideEntityId, 32.0D, 33.0D)
+                )
+        );
+        WorkZone zone = new WorkZone(
+                "zone",
+                "project",
+                "Tower",
+                0xFFFFFF,
+                List.of(new WorkZoneCell(0, 4, 0)),
+                "tester",
+                instant(0),
+                instant(0)
+        );
+
+        VersionService.DraftSplit split = VersionService.splitDraftForZone(draft, zone);
+
+        assertEquals(1, split.selected().changes().size());
+        assertEquals(new BlockPoint(1, 64, 1), split.selected().changes().getFirst().pos());
+        assertEquals(1, split.selected().entityChanges().size());
+        assertEquals(insideEntityId, split.selected().entityChanges().getFirst().entityId());
+        assertEquals(1, split.remainder().changes().size());
+        assertEquals(new BlockPoint(32, 64, 32), split.remainder().changes().getFirst().pos());
+        assertEquals(1, split.remainder().entityChanges().size());
+        assertEquals(outsideEntityId, split.remainder().entityChanges().getFirst().entityId());
     }
 
     @Test
