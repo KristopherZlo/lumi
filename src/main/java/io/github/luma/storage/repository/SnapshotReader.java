@@ -374,13 +374,14 @@ public final class SnapshotReader {
         for (int index = 0; index < packedStorage.length; index++) {
             packedStorage[index] = input.readLong();
         }
+        SnapshotSectionData section = new SnapshotSectionData(sectionY, palette, bitsPerEntry, packedStorage);
         for (int localIndex = 0; localIndex < SectionChangeMask.ENTRY_COUNT; localIndex++) {
-            int paletteIndex = paletteIndexAt(packedStorage, bitsPerEntry, localIndex);
+            int paletteIndex = section.paletteIndexAt(localIndex);
             if (paletteIndex < 0 || paletteIndex >= palette.size()) {
                 throw new IOException("Snapshot palette index outside palette");
             }
         }
-        return new SnapshotSectionData(sectionY, palette, bitsPerEntry, packedStorage);
+        return section;
     }
 
     private List<EntityPayload> readEntitySnapshots(DataInputStream input) throws IOException {
@@ -433,17 +434,6 @@ public final class SnapshotReader {
 
     private static boolean isSupportedAddressableVersion(int version) {
         return version == SNAPSHOT_V7 || version == SNAPSHOT_V8;
-    }
-
-    private static int paletteIndexAt(long[] packedStorage, int bitsPerEntry, int localIndex) {
-        int valuesPerLong = Math.max(1, Long.SIZE / bitsPerEntry);
-        int storageIndex = localIndex / valuesPerLong;
-        if (storageIndex < 0 || storageIndex >= packedStorage.length) {
-            return -1;
-        }
-        int bitOffset = (localIndex - storageIndex * valuesPerLong) * bitsPerEntry;
-        long mask = (1L << bitsPerEntry) - 1L;
-        return (int) ((packedStorage[storageIndex] >>> bitOffset) & mask);
     }
 
     private static String snapshotId(Path snapshotFile) {
