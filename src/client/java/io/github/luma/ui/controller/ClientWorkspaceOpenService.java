@@ -142,7 +142,8 @@ public final class ClientWorkspaceOpenService {
             client.setScreen(new OnboardingScreen(parent, result.projectName(), this.onboardingService));
             return;
         }
-        this.updatePromptCoordinator.openProjectScreen(client, new ProjectScreen(parent, result.projectName()));
+        ProjectScreen projectScreen = new ProjectScreen(parent, result.projectName());
+        this.updatePromptCoordinator.openProjectScreen(client, projectScreen);
     }
 
     private enum WorkspaceOpenTarget {

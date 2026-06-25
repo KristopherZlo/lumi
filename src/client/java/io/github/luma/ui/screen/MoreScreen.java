@@ -119,10 +119,10 @@ public final class MoreScreen extends LumaScreen {
                     "luma.action.manual_compare",
                     button -> this.router.openCompare(this, this.projectName, "", "")
             ));
+            body.child(this.updateCheckSection());
         } else {
             body.child(this.deletedSavesSection());
         }
-        body.child(this.updateCheckSection());
         body.child(LumaUi.bottomSpacer());
 
         this.updateOverlay().ifPresent(stack::child);
