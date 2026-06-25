@@ -16,13 +16,19 @@ class WorkZoneScreenZoneActionsTest {
     }
 
     @Test
-    void saveZoneButtonOpensZoneSaveDialog() {
+    void focusedZoneUsesCurrentBuildSectionInsteadOfSaveZoneSection() {
         String methodBody = methodBody(
-                "    private FlowLayout saveZoneSection(WorkZone zone, boolean active) {",
+                "    private FlowLayout zoneCurrentBuildSection(WorkZone zone, boolean active) {",
                 "    private FlowLayout zoneHistorySection(WorkZone zone) {"
         );
 
+        assertTrue(this.source.contains("body.child(this.zoneCurrentBuildSection(focused, active));"));
+        assertFalse(this.source.contains("body.child(this.saveZoneSection(focused, active));"));
+        assertTrue(methodBody.contains("Component.translatable(\"luma.build.status_title\")"));
+        assertTrue(methodBody.contains("\"luma.build.current_idea\""));
+        assertTrue(methodBody.contains("\"luma.build.current_place\""));
         assertTrue(methodBody.contains("openZoneSaveDialog(zone.id())"));
+        assertTrue(methodBody.contains("openZoneAmendDialog(zone.id(), activeHead)"));
         assertFalse(methodBody.contains("this.saveZone(zone.id())"));
     }
 

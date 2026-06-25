@@ -34,6 +34,7 @@ Status: alpha. Keep normal world backups.
 - Restores a full version, only a selected area, or everything except a selected area.
 - Supports branches, local merges, import, and export.
 - Lets builders label current work with named work zones, save an active zone without consuming other pending work, and review zone saves on a separate zone-history surface.
+- Shows the active zone's current build controls on the zone screen before zone history.
 - Keeps live undo/redo for recent tracked edits.
 - Keeps recovery drafts for interrupted work.
 - Captures supported WorldEdit, FAWE, Axiom, and normal Minecraft mutation paths on a best-effort basis.

@@ -147,7 +147,7 @@ public final class WorkZoneScreen extends LumaScreen {
         if (focused != null && !this.zonePickerVisible) {
             boolean active = focused.id().equals(this.state.zones().activeZoneId(this.state.actor()));
             body.child(this.zoneDetailSection(focused, active));
-            body.child(this.saveZoneSection(focused, active));
+            body.child(this.zoneCurrentBuildSection(focused, active));
             body.child(this.zoneHistorySection(focused));
             body.child(LumaUi.bottomSpacer());
         } else {
@@ -339,15 +339,56 @@ public final class WorkZoneScreen extends LumaScreen {
         return section;
     }
 
-    private FlowLayout saveZoneSection(WorkZone zone, boolean active) {
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.zones.save_title"),
-                Component.translatable(active ? "luma.zones.save_help" : "luma.zones.save_enter_first")
+    private FlowLayout zoneCurrentBuildSection(WorkZone zone, boolean active) {
+        ProjectVariant activeVariant = ProjectUiSupport.variantFor(
+                this.state.variants(),
+                this.state.project().activeVariantId()
         );
+        ProjectVersion activeHead = ProjectUiSupport.activeHead(
+                this.state.project(),
+                this.state.variants(),
+                this.state.versions()
+        );
+        FlowLayout section = LumaUi.panel(Sizing.fill(100), Sizing.content());
+
+        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        header.gap(6);
+        header.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout copy = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        copy.gap(2);
+        copy.child(LumaUi.value(Component.translatable("luma.build.status_title")));
+        copy.child(LumaUi.caption(Component.translatable(active ? "luma.zones.save_help" : "luma.zones.save_enter_first")));
+        header.child(copy);
+
+        FlowLayout context = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+        context.gap(4);
+        context.child(LumaUi.chip(Component.translatable(
+                "luma.build.current_idea",
+                ProjectUiSupport.displayVariantName(activeVariant)
+        )));
+        context.child(LumaUi.chip(Component.translatable(
+                "luma.build.current_place",
+                ProjectUiSupport.dimensionLabel(this.state.project().dimensionId())
+        )));
+        context.child(LumaUi.chip(Component.literal(zone.name())));
+        header.child(context);
+        section.child(header);
+
+        FlowLayout actions = LumaUi.actionRow();
         ButtonComponent save = LumaUi.primaryButton(Component.translatable("luma.zones.save_button"), button ->
                 this.openZoneSaveDialog(zone.id()));
+        save.tooltip(Component.translatable("luma.zones.save_help"));
         save.active(active);
-        section.child(save);
+        actions.child(save);
+
+        ButtonComponent amend = LumaUi.button(
+                Component.translatable("luma.action.amend_version"),
+                button -> this.openZoneAmendDialog(zone.id(), activeHead)
+        );
+        amend.tooltip(Component.translatable("luma.action.amend_version.tooltip"));
+        amend.active(active && activeHead != null);
+        actions.child(amend);
+        section.child(actions);
         return section;
     }
 
@@ -650,9 +691,20 @@ public final class WorkZoneScreen extends LumaScreen {
     }
 
     private void openZoneSaveDialog(String zoneId) {
+        this.openZoneSaveDialog(zoneId, "");
+    }
+
+    private void openZoneAmendDialog(String zoneId, ProjectVersion activeHead) {
+        if (activeHead == null) {
+            return;
+        }
+        this.openZoneSaveDialog(zoneId, ProjectUiSupport.displayMessage(activeHead));
+    }
+
+    private void openZoneSaveDialog(String zoneId, String initialMessage) {
         this.pendingSaveZoneId = zoneId == null ? "" : zoneId;
         this.saveDialogVisible = true;
-        this.saveMessage = "";
+        this.saveMessage = initialMessage == null ? "" : initialMessage;
         this.saveTags = "";
         this.saveTagsInput = null;
         this.refresh("luma.status.zones_ready");
