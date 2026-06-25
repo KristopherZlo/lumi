@@ -33,6 +33,7 @@ public final class WorkZoneOverlayRenderer {
     private static MeshState cachedMesh;
     private static String lastEnteredZoneId = "";
     private static int refreshCooldown;
+    private static boolean showAllZones;
 
     private WorkZoneOverlayRenderer() {
     }
@@ -74,6 +75,15 @@ public final class WorkZoneOverlayRenderer {
         );
     }
 
+    public static boolean showAllZones() {
+        return showAllZones;
+    }
+
+    public static void toggleShowAllZones() {
+        showAllZones = !showAllZones;
+        clearCachedMesh();
+    }
+
     private static State resolve(Minecraft client) {
         try {
             MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(client);
@@ -108,10 +118,18 @@ public final class WorkZoneOverlayRenderer {
                 .findFirst()
                 .orElse(null);
         WorkZone enteredZone = enteredZone(zones.zones(), activeZone, playerCell);
+        if (showAllZones) {
+            return new State(
+                    renderFaces(zones.zones()),
+                    enteredZone == null ? "" : enteredZone.id(),
+                    enteredZone == null ? "" : enteredZone.name()
+            );
+        }
         WorkZone renderedZone = activeZone == null ? enteredZone : activeZone;
         return new State(
-                renderedZone == null ? List.of() : renderFaces(renderedZone, playerCell),
-                renderedZone == null ? 0 : renderedZone.color(),
+                renderedZone == null ? List.of() : renderFaces(renderedZone, playerCell).stream()
+                        .map(face -> new RenderedFace(face, renderedZone.color()))
+                        .toList(),
                 enteredZone == null ? "" : enteredZone.id(),
                 enteredZone == null ? "" : enteredZone.name()
         );
@@ -125,6 +143,14 @@ public final class WorkZoneOverlayRenderer {
                 .filter(zone -> zone.contains(playerCell))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private static List<RenderedFace> renderFaces(List<WorkZone> zones) {
+        return zones.stream()
+                .filter(zone -> !zone.cells().isEmpty())
+                .flatMap(zone -> renderFaces(zone, null).stream()
+                        .map(face -> new RenderedFace(face, zone.color())))
+                .toList();
     }
 
     private static List<WorkZoneShellFace> renderFaces(WorkZone zone, WorkZoneCell playerCell) {
@@ -144,24 +170,21 @@ public final class WorkZoneOverlayRenderer {
             return current;
         }
         clearCachedMesh();
-        int red = state.color() >> 16 & 0xFF;
-        int green = state.color() >> 8 & 0xFF;
-        int blue = state.color() & 0xFF;
-        int outlineColor = 0xFF000000 | state.color();
         OverlayMeshBatch.Builder builder = OverlayMeshBatch.builder();
-        for (WorkZoneShellFace face : state.faces()) {
+        for (RenderedFace renderedFace : state.faces()) {
+            int color = renderedFace.color();
             builder.addShellFace(
-                    face,
-                    red,
-                    green,
-                    blue,
+                    renderedFace.face(),
+                    color >> 16 & 0xFF,
+                    color >> 8 & 0xFF,
+                    color & 0xFF,
                     FILL_ALPHA,
-                    outlineColor,
+                    0xFF000000 | color,
                     OUTLINE_WIDTH,
                     OUTSET
             );
         }
-        cachedMesh = new MeshState(state.faces(), state.color(), builder.build());
+        cachedMesh = new MeshState(state.faces(), builder.build());
         return cachedMesh;
     }
 
@@ -185,13 +208,16 @@ public final class WorkZoneOverlayRenderer {
         return client == null || client.options == null ? 8 : client.options.getEffectiveRenderDistance();
     }
 
-    private record State(List<WorkZoneShellFace> faces, int color, String enteredZoneId, String enteredZoneName) {
+    private record State(List<RenderedFace> faces, String enteredZoneId, String enteredZoneName) {
 
         private State {
             faces = faces == null ? List.of() : List.copyOf(faces);
             enteredZoneId = enteredZoneId == null ? "" : enteredZoneId;
             enteredZoneName = enteredZoneName == null ? "" : enteredZoneName;
         }
+    }
+
+    private record RenderedFace(WorkZoneShellFace face, int color) {
     }
 
     private record ShellKey(String zoneId, int cellCount, String updatedAt, WorkZoneCell previewCell) {
@@ -214,10 +240,10 @@ public final class WorkZoneOverlayRenderer {
         }
     }
 
-    private record MeshState(List<WorkZoneShellFace> faces, int color, OverlayMeshBatch batch) {
+    private record MeshState(List<RenderedFace> faces, OverlayMeshBatch batch) {
 
         private boolean matches(State state) {
-            return this.color == state.color() && this.faces.equals(state.faces());
+            return this.faces.equals(state.faces());
         }
     }
 }

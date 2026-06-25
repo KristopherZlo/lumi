@@ -129,11 +129,11 @@ public final class WorkZoneScreenController {
             return activeZoneId;
         }
         WorkZoneCell playerCell = WorkZoneCell.from(BlockPoint.from(this.client.player.blockPosition()));
-        return zones.zones().stream()
+        List<String> matches = zones.zones().stream()
                 .filter(zone -> zone.contains(playerCell))
                 .map(zone -> zone.id())
-                .findFirst()
-                .orElse("");
+                .toList();
+        return matches.size() == 1 ? matches.getFirst() : "";
     }
 
     private String illegalArgumentStatus(IllegalArgumentException exception) {

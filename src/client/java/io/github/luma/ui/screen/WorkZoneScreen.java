@@ -7,12 +7,14 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.WorkZone;
+import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.TagSuggestionComponent;
 import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.WorkZoneScreenController;
@@ -22,6 +24,7 @@ import io.github.luma.ui.graph.CommitGraphNode;
 import io.github.luma.ui.navigation.ScreenRouter;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
+import io.github.luma.ui.overlay.WorkZoneOverlayRenderer;
 import io.github.luma.ui.screen.section.ProjectSaveCardView;
 import io.github.luma.ui.state.WorkZoneViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
@@ -32,6 +35,7 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.Comparator;
 import java.util.List;
@@ -60,9 +64,12 @@ public final class WorkZoneScreen extends LumaScreen {
     private String saveMessage = "";
     private boolean zonePickerVisible;
     private boolean zoneHistoryGraphVisible;
+    private String openedZoneId = "";
+    private String selectedZoneVariantId = "";
     private String zoneTagFilter = "";
     private String tagEditorVersionId = "";
     private String tagEditorText = "";
+    private TextBoxComponent activeTagInput;
 
     public WorkZoneScreen(Screen parent, String projectName) {
         super(Component.translatable("luma.screen.zones.title", projectName));
@@ -99,7 +106,15 @@ public final class WorkZoneScreen extends LumaScreen {
                 this.state.variants()
         );
         root.child(window.root());
-        this.sidebarNavigation.attach(window, this, this.effectiveProjectName(), ProjectWorkspaceTab.ZONES);
+        this.sidebarNavigation.attach(window, this, this.effectiveProjectName(), ProjectWorkspaceTab.ZONES, this.activeZoneColor());
+        WorkZone focused = this.focusedZone();
+        if (focused != null && !this.zonePickerVisible) {
+            window.titleBar().child(LumaUi.iconButton("arrow-left", Component.translatable("luma.action.back"), button -> {
+                this.zonePickerVisible = true;
+                this.openedZoneId = "";
+                this.rebuild();
+            }));
+        }
         if (!"luma.status.zones_ready".equals(this.state.status())) {
             window.content().child(LumaUi.statusBanner(Component.translatable(this.state.status())));
         }
@@ -107,10 +122,8 @@ public final class WorkZoneScreen extends LumaScreen {
         FlowLayout body = LumaUi.screenBody();
         this.bodyScroll = LumaUi.screenScroll(body);
         window.content().child(this.bodyScroll);
-        WorkZone focused = this.focusedZone();
         if (focused != null && !this.zonePickerVisible) {
             boolean active = focused.id().equals(this.state.zones().activeZoneId(this.state.actor()));
-            body.child(this.zoneNavigationSection(active));
             body.child(this.zoneDetailSection(focused, active));
             body.child(this.saveZoneSection(focused, active));
             body.child(this.zoneHistorySection(focused));
@@ -165,10 +178,23 @@ public final class WorkZoneScreen extends LumaScreen {
     }
 
     private FlowLayout zoneListSection() {
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.zones.list_title"),
-                Component.translatable("luma.zones.list_help")
-        );
+        FlowLayout section = LumaUi.panel(Sizing.fill(100), Sizing.content());
+        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        header.gap(4);
+        header.verticalAlignment(VerticalAlignment.CENTER);
+        header.child(LumaUi.value(Component.translatable("luma.zones.list_title")));
+        header.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
+        header.child(LumaUi.button(
+                Component.translatable(WorkZoneOverlayRenderer.showAllZones()
+                        ? "luma.zones.render_focused"
+                        : "luma.zones.render_all"),
+                button -> {
+                    WorkZoneOverlayRenderer.toggleShowAllZones();
+                    this.rebuild();
+                }
+        ));
+        section.child(header);
+        section.child(LumaUi.caption(Component.translatable("luma.zones.list_help")));
         if (this.state.zones().zones().isEmpty()) {
             section.child(LumaUi.caption(Component.translatable("luma.zones.empty")));
             return section;
@@ -184,21 +210,47 @@ public final class WorkZoneScreen extends LumaScreen {
         FlowLayout card = active
                 ? LumaUi.activeInsetPanel(Sizing.fill(100), Sizing.content())
                 : LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
-        card.child(LumaUi.value(Component.literal(zone.name())));
-        card.child(LumaUi.caption(Component.translatable(
+        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        header.gap(4);
+        header.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout copy = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        FlowLayout title = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        title.gap(4);
+        title.verticalAlignment(VerticalAlignment.CENTER);
+        title.child(this.zoneColorDot(zone));
+        title.child(LumaUi.value(Component.literal(zone.name())));
+        copy.child(title);
+        copy.child(LumaUi.caption(Component.translatable(
                 "luma.zones.zone_meta",
                 colorHex(zone.color()),
                 zone.cells().size()
         )));
+        int sharedCells = this.sharedCellCount(zone);
+        if (sharedCells > 0) {
+            copy.child(LumaUi.caption(Component.translatable("luma.zones.shared_cells", sharedCells)));
+        }
+        header.child(copy);
+        FlowLayout actions = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+        actions.gap(4);
+        actions.verticalAlignment(VerticalAlignment.CENTER);
+        ButtonComponent enterOrLeave = LumaUi.iconButton(
+                active ? "log-out" : "log-in",
+                Component.translatable(active ? "luma.zones.leave" : "luma.zones.enter"),
+                button -> {
+                    if (active) {
+                        this.leaveZone(zone.id());
+                    } else {
+                        this.enterZone(zone.id());
+                    }
+                }
+        );
+        actions.child(enterOrLeave);
+        actions.child(LumaUi.iconButton("folder-open", Component.translatable("luma.action.open_details"), button -> this.openZone(zone.id())));
+        header.child(actions);
+        card.child(header);
         if (zone.cells().isEmpty()) {
             card.child(LumaUi.caption(Component.translatable("luma.zones.zone_draft")));
         }
-        FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent select = LumaUi.button(Component.translatable(active ? "luma.zones.active" : "luma.zones.enter"), button ->
-                this.selectZone(zone.id()));
-        select.active(!active);
-        actions.child(select);
-        card.child(actions);
         return card;
     }
 
@@ -216,24 +268,20 @@ public final class WorkZoneScreen extends LumaScreen {
             section.child(LumaUi.caption(Component.translatable("luma.zones.zone_draft")));
         }
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent enter = LumaUi.primaryButton(Component.translatable(active ? "luma.zones.active" : "luma.zones.enter"), button ->
-                this.selectZone(zone.id()));
-        enter.active(!active);
+        ButtonComponent enter = LumaUi.iconButton(
+                active ? "log-out" : "log-in",
+                Component.translatable(active ? "luma.zones.leave" : "luma.zones.enter"),
+                button -> {
+                    if (active) {
+                        this.leaveZone(zone.id());
+                    } else {
+                        this.enterZone(zone.id());
+                    }
+                }
+        );
         actions.child(enter);
         section.child(actions);
         return section;
-    }
-
-    private FlowLayout zoneNavigationSection(boolean active) {
-        FlowLayout row = LumaUi.actionRow();
-        row.child(LumaUi.button(Component.translatable("luma.action.back"), button -> {
-            this.zonePickerVisible = true;
-            this.rebuild();
-        }));
-        if (active) {
-            row.child(LumaUi.button(Component.translatable("luma.zones.leave"), button -> this.selectZone("")));
-        }
-        return row;
     }
 
     private FlowLayout saveZoneSection(WorkZone zone, boolean active) {
@@ -258,12 +306,15 @@ public final class WorkZoneScreen extends LumaScreen {
                 Component.translatable("luma.zones.history_help")
         );
         List<ProjectVersion> allVersions = this.zoneVersions(zone);
+        section.child(this.zoneHistoryToolbar());
         if (allVersions.isEmpty()) {
             section.child(LumaUi.caption(Component.translatable("luma.zones.history_empty")));
             return section;
         }
-        section.child(this.zoneHistoryToolbar());
+        section.child(this.zoneBranchStrip(allVersions));
+        String selectedVariantId = this.selectedZoneVariantId(allVersions);
         List<ProjectVersion> versions = allVersions.stream()
+                .filter(version -> selectedVariantId.isBlank() || selectedVariantId.equals(version.variantId()))
                 .filter(version -> this.matchesTagFilter(version, this.zoneTagFilter))
                 .toList();
         if (versions.isEmpty()) {
@@ -271,7 +322,10 @@ public final class WorkZoneScreen extends LumaScreen {
             return section;
         }
         if (this.zoneHistoryGraphVisible) {
-            section.child(this.zoneHistoryGraph(versions));
+            List<ProjectVersion> graphVersions = allVersions.stream()
+                    .filter(version -> this.matchesTagFilter(version, this.zoneTagFilter))
+                    .toList();
+            section.child(this.zoneHistoryGraph(graphVersions));
             return section;
         }
 
@@ -295,37 +349,65 @@ public final class WorkZoneScreen extends LumaScreen {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(4);
         row.verticalAlignment(VerticalAlignment.CENTER);
-        row.child(this.zoneTagFilter());
-        row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
-        ButtonComponent cards = LumaUi.iconButton("folder-open", Component.translatable("luma.history.view_cards"), !this.zoneHistoryGraphVisible, button -> {
+        FlowLayout filter = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        filter.child(this.zoneTagFilter());
+        row.child(filter);
+
+        FlowLayout viewToggle = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+        viewToggle.gap(4);
+        ButtonComponent cards = LumaUi.iconButton("view-cards", Component.translatable("luma.history.view_cards"), !this.zoneHistoryGraphVisible, button -> {
             this.zoneHistoryGraphVisible = false;
             this.rebuild();
         });
-        row.child(cards);
+        viewToggle.child(cards);
 
-        ButtonComponent graph = LumaUi.iconButton("git-branch", Component.translatable("luma.history.view_graph"), this.zoneHistoryGraphVisible, button -> {
+        ButtonComponent graph = LumaUi.iconButton("view-graph", Component.translatable("luma.history.view_graph"), this.zoneHistoryGraphVisible, button -> {
             this.zoneHistoryGraphVisible = true;
             this.rebuild();
         });
-        row.child(graph);
+        viewToggle.child(graph);
+        row.child(viewToggle);
+        return row;
+    }
+
+    private FlowLayout zoneBranchStrip(List<ProjectVersion> versions) {
+        FlowLayout row = LumaUi.actionRow();
+        String selectedVariantId = this.selectedZoneVariantId(versions);
+        this.zoneVariantIds(versions).forEach(variantId -> {
+            ButtonComponent button = LumaUi.button(Component.literal(ProjectUiSupport.displayVariantName(this.state.variants(), variantId)), pressed -> {
+                this.selectedZoneVariantId = variantId;
+                this.rebuild();
+            });
+            button.active(!variantId.equals(selectedVariantId));
+            row.child(button);
+        });
         return row;
     }
 
     private FlowLayout zoneTagFilter() {
-        FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-        row.gap(4);
-        row.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout row = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
+        row.gap(2);
         var input = UIComponents.textBox(Sizing.fixed(Math.min(180, Math.max(120, this.width / 5))), this.zoneTagFilter);
         input.setHint(Component.translatable("luma.history.tag_filter"));
+        TagInputSupport.configure(input, this.zoneTagFilter, TagInputSupport.knownTags(this.state.versions()), false);
+        TagSuggestionComponent suggestions = new TagSuggestionComponent(
+                () -> this.zoneTagFilter,
+                () -> TagInputSupport.knownTags(this.state.versions()),
+                false,
+                accepted -> {
+                    this.zoneTagFilter = accepted;
+                    input.setValue(accepted);
+                    input.setCursorPosition(accepted.length());
+                    this.rebuild();
+                }
+        );
         input.onChanged().subscribe(value -> {
             this.zoneTagFilter = TagInputSupport.limit(value);
-            this.rebuild();
+            suggestions.refresh();
         });
+        input.focusLost().subscribe(this::rebuild);
         row.child(input);
-        String suffix = TagInputSupport.suggestionSuffix(this.zoneTagFilter, TagInputSupport.knownTags(this.state.versions()), false);
-        if (!suffix.isBlank()) {
-            row.child(LumaUi.caption(Component.literal(suffix)));
-        }
+        row.child(suggestions);
         return row;
     }
 
@@ -360,7 +442,7 @@ public final class WorkZoneScreen extends LumaScreen {
                 latest,
                 false,
                 this.width,
-                false,
+                true,
                 version.id().equals(this.tagEditorVersionId),
                 this.tagEditorText,
                 TagInputSupport.knownTags(this.state.versions())
@@ -368,14 +450,67 @@ public final class WorkZoneScreen extends LumaScreen {
     }
 
     private WorkZone focusedZone() {
+        if (!this.openedZoneId.isBlank()) {
+            WorkZone opened = this.state.zones().zones().stream()
+                    .filter(zone -> zone.id().equals(this.openedZoneId))
+                    .findFirst()
+                    .orElse(null);
+            if (opened != null) {
+                return opened;
+            }
+            this.openedZoneId = "";
+        }
         return this.state.zones().zones().stream()
                 .filter(zone -> zone.id().equals(this.state.focusedZoneId()))
                 .findFirst()
                 .orElse(null);
     }
 
+    private WorkZone activeZone() {
+        if (this.state == null || this.state.zones() == null) {
+            return null;
+        }
+        String activeZoneId = this.state.zones().activeZoneId(this.state.actor());
+        return this.state.zones().zones().stream()
+                .filter(zone -> zone.id().equals(activeZoneId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Integer activeZoneColor() {
+        WorkZone active = this.activeZone();
+        return active == null ? null : (0xFF000000 | active.color());
+    }
+
+    private FlowLayout zoneColorDot(WorkZone zone) {
+        FlowLayout dot = UIContainers.verticalFlow(Sizing.fixed(7), Sizing.fixed(7));
+        dot.surface(Surface.flat(0xFF000000 | zone.color()));
+        return dot;
+    }
+
     private void selectZone(String zoneId) {
         this.status = this.controller.selectZone(this.effectiveProjectName(), zoneId);
+        if (zoneId != null && !zoneId.isBlank()) {
+            this.openedZoneId = zoneId;
+        }
+        this.zonePickerVisible = false;
+        this.rebuild();
+    }
+
+    private void enterZone(String zoneId) {
+        this.openedZoneId = zoneId == null ? "" : zoneId;
+        this.selectZone(zoneId);
+    }
+
+    private void leaveZone(String zoneId) {
+        this.status = this.controller.selectZone(this.effectiveProjectName(), "");
+        this.openedZoneId = "";
+        this.zonePickerVisible = true;
+        this.rebuild();
+    }
+
+    private void openZone(String zoneId) {
+        this.openedZoneId = zoneId == null ? "" : zoneId;
         this.zonePickerVisible = false;
         this.rebuild();
     }
@@ -402,8 +537,9 @@ public final class WorkZoneScreen extends LumaScreen {
     private boolean acceptTagCompletion() {
         List<String> knownTags = TagInputSupport.knownTags(this.state.versions());
         if (!this.tagEditorVersionId.isBlank() && TagInputSupport.hasSuggestion(this.tagEditorText, knownTags)) {
-            this.tagEditorText = TagInputSupport.acceptSuggestion(this.tagEditorText, knownTags, true);
-            this.refresh("luma.status.zones_ready");
+            this.tagEditorText = this.activeTagInput == null
+                    ? TagInputSupport.acceptSuggestion(this.tagEditorText, knownTags, true)
+                    : TagInputSupport.acceptInto(this.activeTagInput, this.tagEditorText, knownTags, true);
             return true;
         }
         if (TagInputSupport.hasSuggestion(this.zoneTagFilter, knownTags)) {
@@ -430,13 +566,51 @@ public final class WorkZoneScreen extends LumaScreen {
                 .toList();
     }
 
+    private List<String> zoneVariantIds(List<ProjectVersion> versions) {
+        return versions.stream()
+                .map(ProjectVersion::variantId)
+                .filter(variantId -> variantId != null && !variantId.isBlank())
+                .distinct()
+                .toList();
+    }
+
+    private String selectedZoneVariantId(List<ProjectVersion> versions) {
+        List<String> variantIds = this.zoneVariantIds(versions);
+        if (variantIds.contains(this.selectedZoneVariantId)) {
+            return this.selectedZoneVariantId;
+        }
+        String activeVariantId = this.state.project() == null ? "" : this.state.project().activeVariantId();
+        if (variantIds.contains(activeVariantId)) {
+            this.selectedZoneVariantId = activeVariantId;
+            return activeVariantId;
+        }
+        this.selectedZoneVariantId = variantIds.isEmpty() ? "" : variantIds.getFirst();
+        return this.selectedZoneVariantId;
+    }
+
+    private int sharedCellCount(WorkZone zone) {
+        if (zone == null || zone.cells().isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        for (WorkZoneCell cell : zone.cells()) {
+            boolean shared = this.state.zones().zones().stream()
+                    .anyMatch(other -> !other.id().equals(zone.id()) && other.contains(cell));
+            if (shared) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private static String colorHex(int color) {
         return "#" + String.format(java.util.Locale.ROOT, "%06X", color & 0xFFFFFF);
     }
 
     private boolean matchesTagFilter(ProjectVersion version, String filter) {
         String needle = filter == null ? "" : filter.trim().replaceFirst("^#+", "").toLowerCase(java.util.Locale.ROOT);
-        return needle.isBlank() || ProjectVersionTags.from(version).stream().anyMatch(tag -> tag.contains(needle));
+        return needle.isBlank() || ProjectVersionTags.from(version).stream()
+                .anyMatch(tag -> tag.toLowerCase(java.util.Locale.ROOT).contains(needle));
     }
 
     private final class ZoneSaveCardActions implements ProjectSaveCardView.Actions {
@@ -467,7 +641,7 @@ public final class WorkZoneScreen extends LumaScreen {
 
         @Override
         public void openBranchDialog(ProjectVersion version) {
-            router.openSaveDetails(WorkZoneScreen.this, effectiveProjectName(), version.id());
+            router.openVariants(WorkZoneScreen.this, effectiveProjectName(), version.id());
         }
 
         @Override
@@ -480,7 +654,7 @@ public final class WorkZoneScreen extends LumaScreen {
                 tagEditorText = "";
             } else {
                 tagEditorVersionId = version.id();
-                tagEditorText = ProjectVersionTags.serialize(ProjectVersionTags.from(version));
+                tagEditorText = TagInputSupport.limit(ProjectVersionTags.serialize(ProjectVersionTags.from(version)));
             }
             refresh("luma.status.zones_ready");
         }
@@ -488,6 +662,11 @@ public final class WorkZoneScreen extends LumaScreen {
         @Override
         public void updateTagEditor(String value) {
             tagEditorText = TagInputSupport.limit(value);
+        }
+
+        @Override
+        public void bindTagInput(TextBoxComponent input) {
+            activeTagInput = input;
         }
 
         @Override
