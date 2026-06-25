@@ -322,7 +322,8 @@ public final class LumaUi {
     public static ButtonComponent sidebarTab(Component text, boolean selected, int innerBorder, Consumer<ButtonComponent> onPress) {
         ButtonComponent button = sidebarTab(text, selected, onPress);
         button.renderer((graphics, component, delta) -> {
-            int fill = selected ? STATUS_FILL : component.isHovered() ? BUTTON_HOVER : BUTTON_FILL;
+            int selectedFill = withAlpha(innerBorder, 0x78);
+            int fill = selected ? selectedFill : component.isHovered() ? withAlpha(innerBorder, 0x52) : withAlpha(innerBorder, 0x30);
             graphics.fill(component.getX(), component.getY(), component.getX() + component.getWidth(), component.getY() + component.getHeight(), fill);
             graphics.drawRectOutline(
                     component.getX() + 1,
@@ -357,12 +358,19 @@ public final class LumaUi {
     }
 
     public static ButtonComponent iconButton(String iconName, Component tooltip, Consumer<ButtonComponent> onPress) {
+        return iconButton(iconName, tooltip, false, onPress);
+    }
+
+    public static ButtonComponent iconButton(String iconName, Component tooltip, boolean selected, Consumer<ButtonComponent> onPress) {
         Identifier icon = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/" + iconName + ".png");
         Identifier disabledIcon = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/" + iconName + "_disabled.png");
-        ButtonComponent button = styledButton(Component.empty(), onPress, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED);
+        int fill = selected ? STATUS_FILL : BUTTON_FILL;
+        int hover = selected ? STATUS_FILL : BUTTON_HOVER;
+        ButtonComponent button = styledButton(Component.empty(), selected ? pressed -> {
+        } : onPress, fill, hover, BUTTON_DISABLED);
         button.sizing(Sizing.fixed(28), Sizing.fixed(18));
         button.tooltip(tooltip);
-        button.renderer(new IconButtonRenderer(icon, disabledIcon, BUTTON_FILL, BUTTON_HOVER, BUTTON_DISABLED));
+        button.renderer(new IconButtonRenderer(icon, disabledIcon, fill, hover, BUTTON_DISABLED));
         return button;
     }
 
@@ -384,6 +392,10 @@ public final class LumaUi {
         button.margins(Insets.bottom(BUTTON_WRAP_BOTTOM_MARGIN));
         button.cursorStyle(CursorStyle.HAND);
         return button;
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (alpha << 24) | (color & 0x00FFFFFF);
     }
 
     public static LabelComponent title(Component text) {

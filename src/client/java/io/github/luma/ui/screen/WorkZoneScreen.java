@@ -294,20 +294,19 @@ public final class WorkZoneScreen extends LumaScreen {
     private FlowLayout zoneHistoryToolbar() {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(4);
+        row.verticalAlignment(VerticalAlignment.CENTER);
         row.child(this.zoneTagFilter());
         row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
-        ButtonComponent cards = LumaUi.iconButton("folder-open", Component.translatable("luma.history.view_cards"), button -> {
+        ButtonComponent cards = LumaUi.iconButton("folder-open", Component.translatable("luma.history.view_cards"), !this.zoneHistoryGraphVisible, button -> {
             this.zoneHistoryGraphVisible = false;
             this.rebuild();
         });
-        cards.active(this.zoneHistoryGraphVisible);
         row.child(cards);
 
-        ButtonComponent graph = LumaUi.iconButton("git-branch", Component.translatable("luma.history.view_graph"), button -> {
+        ButtonComponent graph = LumaUi.iconButton("git-branch", Component.translatable("luma.history.view_graph"), this.zoneHistoryGraphVisible, button -> {
             this.zoneHistoryGraphVisible = true;
             this.rebuild();
         });
-        graph.active(!this.zoneHistoryGraphVisible);
         row.child(graph);
         return row;
     }

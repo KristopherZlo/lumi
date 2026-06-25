@@ -348,7 +348,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         });
         zoomIn.active(this.previewZoomStep < MAX_PREVIEW_ZOOM_STEP);
         actions.child(zoomIn);
-        ButtonComponent left = LumaUi.button(Component.literal("<"), button -> this.panPreview(-24, 0));
+        ButtonComponent left = LumaUi.iconButton("arrow-left", Component.translatable("luma.action.back"), button -> this.panPreview(-24, 0));
         left.active(this.previewZoomStep > 0);
         actions.child(left);
         ButtonComponent up = LumaUi.iconButton("chevron-up", Component.translatable("luma.action.preview_pan_up"), button -> this.panPreview(0, -24));
@@ -357,7 +357,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         ButtonComponent down = LumaUi.iconButton("chevron-down", Component.translatable("luma.action.preview_pan_down"), button -> this.panPreview(0, 24));
         down.active(this.previewZoomStep > 0);
         actions.child(down);
-        ButtonComponent right = LumaUi.button(Component.literal(">"), button -> this.panPreview(24, 0));
+        ButtonComponent right = LumaUi.iconButton("arrow-right", Component.translatable("luma.action.next"), button -> this.panPreview(24, 0));
         right.active(this.previewZoomStep > 0);
         actions.child(right);
         panel.child(actions);

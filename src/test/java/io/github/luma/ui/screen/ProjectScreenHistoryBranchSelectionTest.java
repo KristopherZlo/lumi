@@ -32,6 +32,75 @@ class ProjectScreenHistoryBranchSelectionTest {
     }
 
     @Test
+    void historyViewToggleUsesRightAlignedIconButtons() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectScreenSections.java"));
+        int methodIndex = source.indexOf("    private FlowLayout historyToolbar(Model model) {");
+        int nextMethodIndex = source.indexOf("    private FlowLayout tagFilter(Model model) {", methodIndex);
+
+        assertTrue(methodIndex >= 0, "Project history toolbar should exist");
+        assertTrue(nextMethodIndex > methodIndex, "Project history toolbar should be bounded by tagFilter");
+
+        String methodBody = source.substring(methodIndex, nextMethodIndex);
+
+        assertTrue(methodBody.contains("row.child(this.tagFilter(model));"), "Tag filter should stay on the left");
+        assertTrue(methodBody.contains("UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1))"),
+                "History toolbar should push view toggles to the right");
+        assertTrue(methodBody.contains("LumaUi.iconButton(") && methodBody.contains("\"folder-open\""),
+                "Cards view toggle should be an icon button");
+        assertTrue(methodBody.contains("LumaUi.iconButton(") && methodBody.contains("\"git-branch\""),
+                "Graph view toggle should be an icon button");
+        assertFalse(methodBody.contains("LumaUi.button(Component.translatable(\"luma.history.view_cards\")"),
+                "Cards view toggle should not be a text button");
+        assertFalse(methodBody.contains("LumaUi.button(Component.translatable(\"luma.history.view_graph\")"),
+                "Graph view toggle should not be a text button");
+    }
+
+    @Test
+    void workZoneHistoryViewToggleUsesRightAlignedIconButtons() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/WorkZoneScreen.java"));
+        int methodIndex = source.indexOf("    private FlowLayout zoneHistoryToolbar() {");
+        int nextMethodIndex = source.indexOf("    private FlowLayout zoneTagFilter() {", methodIndex);
+
+        assertTrue(methodIndex >= 0, "Work-zone history toolbar should exist");
+        assertTrue(nextMethodIndex > methodIndex, "Work-zone history toolbar should be bounded by zoneTagFilter");
+
+        String methodBody = source.substring(methodIndex, nextMethodIndex);
+
+        assertTrue(methodBody.contains("row.child(this.zoneTagFilter());"), "Zone tag filter should stay on the left");
+        assertTrue(methodBody.contains("UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1))"),
+                "Zone history toolbar should push view toggles to the right");
+        assertTrue(methodBody.contains("LumaUi.iconButton(\"folder-open\""),
+                "Zone cards view toggle should be an icon button");
+        assertTrue(methodBody.contains("LumaUi.iconButton(\"git-branch\""),
+                "Zone graph view toggle should be an icon button");
+        assertFalse(methodBody.contains("LumaUi.button(Component.translatable(\"luma.history.view_cards\")"),
+                "Zone cards view toggle should not be a text button");
+        assertFalse(methodBody.contains("LumaUi.button(Component.translatable(\"luma.history.view_graph\")"),
+                "Zone graph view toggle should not be a text button");
+    }
+
+    @Test
+    void saveDetailsPreviewPanUsesCustomIconButtons() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/SaveDetailsScreen.java"));
+        int methodIndex = source.indexOf("    private FlowLayout previewPanel(ProjectVersion version) {");
+        int nextMethodIndex = source.indexOf("    private void panPreview(int deltaX, int deltaY) {", methodIndex);
+
+        assertTrue(methodIndex >= 0, "Save details preview panel should exist");
+        assertTrue(nextMethodIndex > methodIndex, "Save details preview panel should be bounded by panPreview");
+
+        String methodBody = source.substring(methodIndex, nextMethodIndex);
+
+        assertTrue(methodBody.contains("LumaUi.iconButton(\"arrow-left\""),
+                "Preview pan-left should use a custom icon");
+        assertTrue(methodBody.contains("LumaUi.iconButton(\"arrow-right\""),
+                "Preview pan-right should use a custom icon");
+        assertFalse(methodBody.contains("Component.literal(\"<\")"),
+                "Preview pan-left should not use a text arrow");
+        assertFalse(methodBody.contains("Component.literal(\">\")"),
+                "Preview pan-right should not use a text arrow");
+    }
+
+    @Test
     void historyBranchCreationCreatesAndSwitchesBranch() throws IOException {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java"));
         int methodIndex = source.indexOf("    private void createBranch(BranchCreationDialogState dialog) {");

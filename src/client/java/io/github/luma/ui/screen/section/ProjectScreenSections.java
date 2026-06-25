@@ -221,22 +221,23 @@ public final class ProjectScreenSections {
     private FlowLayout historyToolbar(Model model) {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(4);
+        row.verticalAlignment(VerticalAlignment.CENTER);
         row.child(this.tagFilter(model));
         row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
         ButtonComponent cards = LumaUi.iconButton(
                 "folder-open",
                 Component.translatable("luma.history.view_cards"),
+                !model.historyGraphVisible(),
                 button -> this.actions.setHistoryGraphVisible(false)
         );
-        cards.active(model.historyGraphVisible());
         row.child(cards);
 
         ButtonComponent graph = LumaUi.iconButton(
                 "git-branch",
                 Component.translatable("luma.history.view_graph"),
+                model.historyGraphVisible(),
                 button -> this.actions.setHistoryGraphVisible(true)
         );
-        graph.active(!model.historyGraphVisible());
         row.child(graph);
         return row;
     }
