@@ -14,6 +14,8 @@ import io.github.luma.domain.service.VersionService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.domain.model.SectionChangeMask;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -48,6 +50,7 @@ final class SingleplayerLargeHistoryScenario {
     private final Map<String, String> metricKeysByOperationId = new LinkedHashMap<>();
     private final Map<String, String> operationCompletions = new LinkedHashMap<>();
     private final Map<String, String> metrics = new LinkedHashMap<>();
+    private final Map<String, Long> storageBytesByCheckpoint = new LinkedHashMap<>();
     private final List<DiagnosticCheck> checks = new ArrayList<>();
 
     private Stage stage = Stage.PREFLIGHT;
@@ -236,6 +239,13 @@ final class SingleplayerLargeHistoryScenario {
                     this.operationCompletions.containsKey("main-save"),
                     this.operationCompletions.getOrDefault("main-save", "missing")
             ));
+            long storageBytes = this.measureProjectStorageBytes(server);
+            this.storageBytesByCheckpoint.put("main-save", storageBytes);
+            this.checks.add(new DiagnosticCheck(
+                    "Large main save storage bytes were measured",
+                    storageBytes > 0L,
+                    "storageBytes=" + storageBytes
+            ));
             this.stage = Stage.CREATE_BRANCH;
             return StepResult.messages(List.of("Large main save verified"));
         } catch (Exception exception) {
@@ -304,6 +314,13 @@ final class SingleplayerLargeHistoryScenario {
                     "Large branch save operation completed",
                     this.operationCompletions.containsKey("branch-save"),
                     this.operationCompletions.getOrDefault("branch-save", "missing")
+            ));
+            long storageBytes = this.measureProjectStorageBytes(server);
+            this.storageBytesByCheckpoint.put("branch-save", storageBytes);
+            this.checks.add(new DiagnosticCheck(
+                    "Large branch save storage bytes were measured",
+                    storageBytes >= this.storageBytesByCheckpoint.getOrDefault("main-save", 1L),
+                    "storageBytes=" + storageBytes
             ));
             this.stage = Stage.START_RESTORE_MAIN;
             return StepResult.messages(List.of("Large branch save verified"));
@@ -499,9 +516,27 @@ final class SingleplayerLargeHistoryScenario {
                 "Large persisted history summary: mainCells=" + this.mainCellCount()
                         + ", branchCells=" + this.branchCellCount()
                         + ", operations=" + this.operationCompletions
-                        + ", metrics=" + this.metrics.keySet(),
+                        + ", metrics=" + this.metrics.keySet()
+                        + ", storageBytes=" + this.storageBytesByCheckpoint,
                 "Large persisted history checks: " + this.checks.size()
         );
+    }
+
+    private long measureProjectStorageBytes(MinecraftServer server) throws Exception {
+        Path root = this.projectService.resolveLayout(server, this.project.name()).root();
+        try (var paths = Files.walk(root)) {
+            return paths.filter(Files::isRegularFile)
+                    .mapToLong(this::safeSize)
+                    .sum();
+        }
+    }
+
+    private long safeSize(Path path) {
+        try {
+            return Files.size(path);
+        } catch (Exception ignored) {
+            return 0L;
+        }
     }
 
     private String format(BlockPos pos) {

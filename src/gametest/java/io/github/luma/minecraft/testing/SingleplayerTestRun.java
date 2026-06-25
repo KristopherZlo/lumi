@@ -13,6 +13,7 @@ import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.SnapshotMetadata;
 import io.github.luma.domain.model.VersionDiff;
+import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorldInitialBackupManifest;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.WorldMutationSource;
@@ -23,12 +24,14 @@ import io.github.luma.domain.service.ProjectArchiveService;
 import io.github.luma.domain.service.ProjectCleanupService;
 import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
 import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
+import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
@@ -47,6 +50,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -84,6 +88,8 @@ final class SingleplayerTestRun {
     private final VariantService variantService = new VariantService();
     private final DiffService diffService = new DiffService();
     private final RecoveryService recoveryService = new RecoveryService();
+    private final WorkZoneService workZoneService = new WorkZoneService();
+    private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
     private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
     private final ProjectCleanupService cleanupService = new ProjectCleanupService();
     private final ProjectArchiveService archiveService = new ProjectArchiveService();
@@ -115,6 +121,9 @@ final class SingleplayerTestRun {
     private String gameplaySaveVersionId = "";
     private String gameplayEntityUpdateSaveVersionId = "";
     private String savedGameplayEntityId = "";
+    private String workZoneId = "";
+    private String workZoneSaveVersionId = "";
+    private int workZoneEditCount;
     private BlockPoint savedGameplayEntityPosition;
     private int previewWaitTicks;
     private int explosionWaitTicks;
@@ -201,6 +210,8 @@ final class SingleplayerTestRun {
                 case CHECK_PARTIAL_RESTORE -> this.checkPartialRestore(server);
                 case START_RESTORE_INITIAL -> this.startRestoreInitial();
                 case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
+                case START_WORK_ZONE_SMOKE -> this.startWorkZoneSmoke(server);
+                case CHECK_WORK_ZONE_SMOKE -> this.checkWorkZoneSmoke(server);
                 case START_EXTERNAL_TOOL_STRESS -> this.startExternalToolStress(server);
                 case CHECK_EXTERNAL_TOOL_STRESS -> this.checkExternalToolStress(server);
                 case CHECK_PLAYER_INTERACTIONS -> this.checkPlayerInteractions(server);
@@ -528,12 +539,98 @@ final class SingleplayerTestRun {
                 ? "Full restore returned the test volume to the prepared platform baseline"
                 : "Full restore returned the test volume to initial air");
         this.check("Final integrity report is valid", () -> this.integrityService.inspect(server, this.project.name()).valid());
+        this.completePhase(server, Phase.START_WORK_ZONE_SMOKE);
+    }
+
+    private void startWorkZoneSmoke(MinecraftServer server) throws Exception {
+        ProjectLayout layout = this.projectService.resolveLayout(server, this.project.name());
+        WorkZone zone = this.workZoneService.createZone(
+                layout,
+                this.project.id().toString(),
+                "Singleplayer smoke zone",
+                ACTOR,
+                java.time.Instant.now()
+        );
+        this.workZoneId = zone.id();
+        this.workZoneSaveVersionId = ProjectService.versionId(this.projectService.loadVersions(server, this.project.name()).size() + 1);
+        this.workZoneEditCount = 0;
+
+        Random random = new Random(0x5104E5L);
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
+        try {
+            for (int index = 0; index < 96; index++) {
+                BlockPos pos = this.randomZoneSmokePos(random);
+                this.level.setBlock(pos, this.zoneSmokeBlock(index).defaultBlockState(), 3);
+                this.workZoneService.touchBlock(layout, ACTOR, BlockPoint.from(pos), java.time.Instant.now());
+                this.workZoneEditCount += 1;
+            }
+        } finally {
+            WorldMutationContext.popSource();
+        }
+
+        this.pendingOperation = this.versionService.startSaveVersion(
+                this.level,
+                this.project.name(),
+                "Singleplayer work-zone smoke save",
+                ACTOR
+        );
+        this.log.info("Queued work-zone smoke save operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_WORK_ZONE_SMOKE);
+    }
+
+    private void checkWorkZoneSmoke(MinecraftServer server) throws Exception {
+        ProjectLayout layout = this.projectService.resolveLayout(server, this.project.name());
+        ProjectVersion savedVersion = this.versionById(server, this.workZoneSaveVersionId);
+        this.check(savedVersion != null, "Work-zone smoke save created " + this.workZoneSaveVersionId);
+        if (savedVersion != null) {
+            this.check(this.workZoneId.equals(this.versionVisibility.workZoneId(savedVersion)),
+                    "Work-zone smoke save records zone metadata");
+            String metadataZoneId = savedVersion.sourceInfo() == null
+                    ? ""
+                    : savedVersion.sourceInfo().metadata().getOrDefault(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, "");
+            this.check(this.workZoneId.equals(metadataZoneId),
+                    "Work-zone smoke save source info exposes the zone id");
+            VersionDiff diff = this.value("Work-zone smoke save diff can be built", () ->
+                    this.diffService.compareVersionToParent(server, this.project.name(), savedVersion.id()));
+            if (diff != null) {
+                this.check(diff.changedBlockCount() >= Math.min(8, this.workZoneEditCount),
+                        "Work-zone smoke save persisted randomized zone edits");
+            }
+        }
+        this.check("Zone history query returns the smoke save", () ->
+                this.projectService.loadWorkZoneVersions(server, this.project.name()).stream()
+                        .anyMatch(version -> version.id().equals(this.workZoneSaveVersionId)));
+        this.check("Work-zone cell state was persisted", () ->
+                this.workZoneService.load(layout).zones().stream()
+                        .filter(zone -> zone.id().equals(this.workZoneId))
+                        .anyMatch(zone -> !zone.cells().isEmpty()));
+        this.check("Work-zone smoke save consumed its draft", () ->
+                this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
+        this.workZoneService.selectZone(layout, ACTOR, "");
+
         Phase next = switch (this.mode) {
             case SMOKE, CRASH_SAFETY -> Phase.CLEANUP;
             case EXTERNAL_TOOLS -> Phase.START_EXTERNAL_TOOL_STRESS;
             default -> Phase.CHECK_PLAYER_INTERACTIONS;
         };
         this.completePhase(server, next);
+    }
+
+    private BlockPos randomZoneSmokePos(Random random) {
+        return this.volume.min().offset(
+                1 + random.nextInt(Math.max(1, SingleplayerTestVolume.WIDTH - 2)),
+                1 + random.nextInt(Math.max(1, SingleplayerTestVolume.HEIGHT - 2)),
+                1 + random.nextInt(Math.max(1, SingleplayerTestVolume.DEPTH - 2))
+        );
+    }
+
+    private Block zoneSmokeBlock(int index) {
+        return switch (Math.floorMod(index, 4)) {
+            case 0 -> Blocks.STONE;
+            case 1 -> Blocks.OAK_PLANKS;
+            case 2 -> Blocks.COPPER_BLOCK;
+            default -> Blocks.GLASS;
+        };
     }
 
     private void startExternalToolStress(MinecraftServer server) throws Exception {
@@ -1574,6 +1671,8 @@ final class SingleplayerTestRun {
         CHECK_PARTIAL_RESTORE("Verify partial restore", "check selected-area restore output"),
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
+        START_WORK_ZONE_SMOKE("Work-zone smoke", "create a zone, make deterministic random edits, and save zone history"),
+        CHECK_WORK_ZONE_SMOKE("Verify work-zone smoke", "inspect zone metadata, zone history, and saved diff output"),
         START_EXTERNAL_TOOL_STRESS(
                 "External-tool source diagnostics",
                 "record WorldEdit and Axiom-sourced edits through the external capture path"
@@ -1675,6 +1774,7 @@ final class SingleplayerTestRun {
                 case CHECK_BRANCH_SAVE -> START_PARTIAL_RESTORE;
                 case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
                 case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL,
+                     START_WORK_ZONE_SMOKE, CHECK_WORK_ZONE_SMOKE,
                      START_EXTERNAL_TOOL_STRESS, CHECK_EXTERNAL_TOOL_STRESS,
                      CHECK_PLAYER_INTERACTIONS,
                      START_GAMEPLAY_UNDO, CHECK_GAMEPLAY_UNDO, START_GAMEPLAY_REDO, CHECK_GAMEPLAY_REDO,
