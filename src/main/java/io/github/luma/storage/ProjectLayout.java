@@ -126,6 +126,10 @@ public record ProjectLayout(Path root) {
         return this.recoveryDir().resolve("draft.wal.lz4");
     }
 
+    public Path recoveryExpectedDraftFile() {
+        return this.recoveryDir().resolve("expected-draft.marker");
+    }
+
     public Path recoveryOperationDraftFile() {
         return this.recoveryDir().resolve("operation-draft.bin.lz4");
     }

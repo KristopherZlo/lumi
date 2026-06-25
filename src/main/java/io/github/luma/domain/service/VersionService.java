@@ -886,7 +886,6 @@ public final class VersionService {
         if (this.recoveryRepository.loadDraft(layout).filter(draft -> !draft.isEmpty()).isEmpty()) {
             return;
         }
-        // ponytail: no new marker file; current-run suppression already means "pending, not crash recovery".
         HistoryCaptureManager.getInstance().markPersistedDraftCurrentRun(level.getServer(), project.id().toString());
     }
 

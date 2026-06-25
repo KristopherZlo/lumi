@@ -33,6 +33,7 @@ public final class DashboardScreenController {
             this.projectService.ensureWorldProject(level, this.client.getUser().getName());
             for (var project : this.projectService.listProjects(server)) {
                 var draft = this.recoveryService.loadDraft(server, project.name()).orElse(null);
+                boolean interruptedDraft = this.recoveryService.hasInterruptedDraft(server, project.name());
                 items.add(new DashboardProjectItem(
                         project.name(),
                         project.dimensionId(),
@@ -40,7 +41,7 @@ public final class DashboardScreenController {
                         this.projectService.loadVersions(server, project.name()).size(),
                         this.projectService.loadVariants(server, project.name()).size(),
                         draft == null ? 0 : draft.changes().size(),
-                        draft != null,
+                        interruptedDraft,
                         project.tracksWholeDimension(),
                         project.archived(),
                         project.updatedAt().toString()

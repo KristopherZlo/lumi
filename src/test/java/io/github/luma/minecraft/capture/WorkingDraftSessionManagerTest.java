@@ -107,7 +107,7 @@ class WorkingDraftSessionManagerTest {
 
         assertTrue(manager.hasInterruptedDraft(project.id().toString(), trackedProject));
 
-        manager.markPersistedDraftCurrentRun(project.id().toString());
+        manager.markPersistedDraftCurrentRun(project.id().toString(), trackedProject);
 
         assertTrue(manager.snapshotDraft(trackedProject).isPresent());
         assertTrue(repository.loadDraft(layout).isPresent());
@@ -132,10 +132,76 @@ class WorkingDraftSessionManagerTest {
         ));
         WorkingDraftSessionManager manager = new WorkingDraftSessionManager();
 
-        manager.markPersistedDraftCurrentRun(project.id().toString());
+        manager.markPersistedDraftCurrentRun(project.id().toString(), trackedProject);
 
         assertTrue(manager.snapshotDraft(trackedProject).isPresent());
         assertFalse(manager.hasInterruptedDraft(project.id().toString(), trackedProject));
+        assertFalse(new WorkingDraftSessionManager().hasInterruptedDraft(project.id().toString(), trackedProject));
+    }
+
+    @Test
+    void cleanShutdownDraftStaysPendingAfterRestartWithoutRecoveryScreen() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("clean-shutdown.mbp"));
+        BuildProject project = project();
+        TrackedProject trackedProject = trackedProject(layout, project);
+        WorkingDraftSessionManager manager = new WorkingDraftSessionManager();
+
+        TrackedChangeBuffer buffer = manager.getOrCreate(trackedProject, WorldMutationSource.PLAYER, NOW);
+        buffer.addChange(change("minecraft:stone", "minecraft:gold_block"), NOW.plusSeconds(1));
+
+        assertTrue(manager.freezeForShutdownAfterReconciliation(project.id().toString(), trackedProject).isPresent());
+        assertFalse(new WorkingDraftSessionManager().hasInterruptedDraft(project.id().toString(), trackedProject));
+    }
+
+    @Test
+    void resumedExpectedDraftCanBecomeInterruptedAgain() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("resumed-expected.mbp"));
+        BuildProject project = project();
+        TrackedProject trackedProject = trackedProject(layout, project);
+        RecoveryRepository repository = new RecoveryRepository();
+        repository.saveDraft(layout, new RecoveryDraft(
+                project.id().toString(),
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                List.of(change("minecraft:stone", "minecraft:gold_block"))
+        ));
+        WorkingDraftSessionManager manager = new WorkingDraftSessionManager();
+        manager.markPersistedDraftCurrentRun(project.id().toString(), trackedProject);
+        WorkingDraftSessionManager restarted = new WorkingDraftSessionManager();
+
+        assertFalse(restarted.hasInterruptedDraft(project.id().toString(), trackedProject));
+        restarted.getOrCreate(trackedProject, WorldMutationSource.PLAYER, NOW.plusSeconds(1));
+
+        assertTrue(new WorkingDraftSessionManager().hasInterruptedDraft(project.id().toString(), trackedProject));
+    }
+
+    @Test
+    void recoveryFreezeOfExpectedDraftRestoresInterruptedSignal() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("operation-expected.mbp"));
+        BuildProject project = project();
+        TrackedProject trackedProject = trackedProject(layout, project);
+        RecoveryRepository repository = new RecoveryRepository();
+        repository.saveDraft(layout, new RecoveryDraft(
+                project.id().toString(),
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                List.of(change("minecraft:stone", "minecraft:gold_block"))
+        ));
+        WorkingDraftSessionManager manager = new WorkingDraftSessionManager();
+        manager.markPersistedDraftCurrentRun(project.id().toString(), trackedProject);
+
+        assertTrue(new WorkingDraftSessionManager()
+                .freezeForRecoveryAfterReconciliation(project.id().toString(), trackedProject)
+                .isPresent());
+
         assertTrue(new WorkingDraftSessionManager().hasInterruptedDraft(project.id().toString(), trackedProject));
     }
 
@@ -157,7 +223,7 @@ class WorkingDraftSessionManagerTest {
         );
         repository.saveDraft(layout, draft);
         WorkingDraftSessionManager manager = new WorkingDraftSessionManager();
-        manager.markPersistedDraftCurrentRun(project.id().toString());
+        manager.markPersistedDraftCurrentRun(project.id().toString(), trackedProject);
 
         assertTrue(manager.consumeAfterReconciliation(project.id().toString(), trackedProject).isPresent());
         assertTrue(repository.loadDraft(layout).isPresent());

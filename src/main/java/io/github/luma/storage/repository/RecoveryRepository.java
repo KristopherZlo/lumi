@@ -40,6 +40,7 @@ public final class RecoveryRepository {
     private static final int ENTITY_CHANGE_DRAFT_VERSION = 4;
     private static final int HIDDEN_BLOCK_CHANGE_DRAFT_VERSION = 5;
     private static final long WAL_COMPACT_THRESHOLD_BYTES = 512 * 1024;
+    private static final byte[] EXPECTED_DRAFT_MARKER = "expected\n".getBytes(StandardCharsets.UTF_8);
     private static final Type JOURNAL_TYPE = new TypeToken<List<RecoveryJournalEntry>>() { }.getType();
 
     public void saveDraft(ProjectLayout layout, RecoveryDraft draft) throws IOException {
@@ -112,9 +113,22 @@ public final class RecoveryRepository {
     }
 
     public void deleteDraft(ProjectLayout layout) throws IOException {
+        this.clearExpectedDraft(layout);
         Files.deleteIfExists(layout.recoveryBaseFile());
         Files.deleteIfExists(layout.recoveryWalFile());
         LumaMod.LOGGER.info("Deleted recovery draft storage for {}", layout.root().getFileName());
+    }
+
+    public void markExpectedDraft(ProjectLayout layout) throws IOException {
+        StorageIo.writeAtomically(layout.recoveryExpectedDraftFile(), output -> output.write(EXPECTED_DRAFT_MARKER));
+    }
+
+    public boolean hasExpectedDraft(ProjectLayout layout) {
+        return Files.exists(layout.recoveryExpectedDraftFile());
+    }
+
+    public void clearExpectedDraft(ProjectLayout layout) throws IOException {
+        Files.deleteIfExists(layout.recoveryExpectedDraftFile());
     }
 
     public List<RecoveryJournalEntry> loadJournal(ProjectLayout layout) throws IOException {

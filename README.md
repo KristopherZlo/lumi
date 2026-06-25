@@ -151,6 +151,7 @@ Main records:
 - `patches/*.bin.lz4`: chunk-addressable block/entity deltas
 - `snapshots/*.bin.lz4`: checkpoint anchors
 - `recovery/*.lz4`: crash-safe working drafts
+- `recovery/expected-draft.marker`: pending draft marker for clean exits and expected unsaved work
 - `cache/baseline-chunks/`: first-touch baseline chunks
 
 ### Runtime Model

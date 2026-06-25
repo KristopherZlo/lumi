@@ -79,8 +79,22 @@ final class WorkingDraftSessionManager {
         return this.sessionRegistry.activeProjectIds();
     }
 
-    void markPersistedDraftCurrentRun(String projectId) {
+    void markPersistedDraftCurrentRun(String projectId, TrackedProject trackedProject) throws IOException {
+        this.markCurrentRunDraft(projectId, trackedProject, true);
+    }
+
+    private void markCurrentRunDraft(String projectId, TrackedProject trackedProject, boolean durable) throws IOException {
         this.sessionRegistry.markCurrentRunDraft(projectId);
+        if (durable && trackedProject != null) {
+            this.recoveryRepository.markExpectedDraft(trackedProject.layout());
+        }
+    }
+
+    private void clearCurrentRunDraft(String projectId, TrackedProject trackedProject) throws IOException {
+        this.sessionRegistry.clearCurrentRunDraft(projectId);
+        if (trackedProject != null) {
+            this.recoveryRepository.clearExpectedDraft(trackedProject.layout());
+        }
     }
 
     CaptureSessionDiagnostics diagnosticsForSession(String projectId) {
@@ -134,6 +148,9 @@ final class WorkingDraftSessionManager {
                 buffer,
                 resumedDraft ? CaptureSessionState.resume(buffer) : CaptureSessionState.create(buffer)
         );
+        if (resumedDraft) {
+            this.clearCurrentRunDraft(projectId, trackedProject);
+        }
         diagnostics.seedFromBuffer(buffer);
         LumaMod.LOGGER.info(
                 "Opened active working draft for project {} on variant {} from base {} using {} source",
@@ -164,7 +181,7 @@ final class WorkingDraftSessionManager {
         if (buffer == null || !buffer.isEmpty()) {
             return;
         }
-        this.sessionRegistry.clearCurrentRunDraft(projectId);
+        this.clearCurrentRunDraft(projectId, trackedProject);
         this.sessionRegistry.close(projectId);
         this.clearSessionDiagnostics(projectId);
         this.persistenceCoordinator.deleteDraft(
@@ -237,6 +254,9 @@ final class WorkingDraftSessionManager {
         if (trackedProject == null) {
             return false;
         }
+        if (this.recoveryRepository.hasExpectedDraft(trackedProject.layout())) {
+            return false;
+        }
         return this.recoveryRepository.loadDraft(trackedProject.layout())
                 .filter(draft -> !draft.isEmpty())
                 .isPresent();
@@ -247,31 +267,32 @@ final class WorkingDraftSessionManager {
     }
 
     Optional<TrackedChangeBuffer> freezeAfterReconciliation(String projectId, TrackedProject trackedProject) throws IOException {
-        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.ALL);
+        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.ALL, false);
     }
 
     Optional<TrackedChangeBuffer> freezeIdleAfterReconciliation(String projectId, TrackedProject trackedProject) throws IOException {
-        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY);
+        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY, true);
     }
 
     Optional<TrackedChangeBuffer> freezeForRecoveryAfterReconciliation(
             String projectId,
             TrackedProject trackedProject
     ) throws IOException {
-        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY);
+        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY, false);
     }
 
     Optional<TrackedChangeBuffer> freezeForShutdownAfterReconciliation(
             String projectId,
             TrackedProject trackedProject
     ) throws IOException {
-        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY);
+        return this.freezeAfterReconciliation(projectId, trackedProject, PersistenceDrainMode.DRAFT_FLUSHES_ONLY, true);
     }
 
     private Optional<TrackedChangeBuffer> freezeAfterReconciliation(
             String projectId,
             TrackedProject trackedProject,
-            PersistenceDrainMode drainMode
+            PersistenceDrainMode drainMode,
+            boolean durableCurrentRunMarker
     ) throws IOException {
         LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_DRAFT_FREEZE);
         if (trackedProject != null) {
@@ -298,13 +319,16 @@ final class WorkingDraftSessionManager {
             );
             Optional<TrackedChangeBuffer> persistedDraft = this.recoveryRepository.loadDraft(trackedProject.layout())
                     .map(draft -> TrackedChangeBuffer.fromDraft(UUID.randomUUID().toString(), draft));
+            if (persistedDraft.isPresent() && !durableCurrentRunMarker) {
+                this.clearCurrentRunDraft(projectId, trackedProject);
+            }
             LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
             return persistedDraft;
         }
 
         if (trackedProject != null && !session.isEmpty()) {
             if (persistedDraftIsCurrent) {
-                this.sessionRegistry.markCurrentRunDraft(projectId);
+                this.markCurrentRunDraft(projectId, trackedProject, durableCurrentRunMarker);
                 LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
                 LumaMod.LOGGER.info(
                         "Skipped shutdown draft rewrite for project {} because the active working draft is already persisted",
@@ -322,7 +346,7 @@ final class WorkingDraftSessionManager {
             );
             this.recoveryRepository.saveDraft(trackedProject.layout(), session.toDraft());
             LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
-            this.sessionRegistry.markCurrentRunDraft(projectId);
+            this.markCurrentRunDraft(projectId, trackedProject, durableCurrentRunMarker);
             LumaMod.LOGGER.info(
                     "Persisted active working draft for project {} with {} pending changes",
                     trackedProject.project().name(),
@@ -342,7 +366,7 @@ final class WorkingDraftSessionManager {
         this.sessionRegistry.close(projectId);
         this.clearSessionDiagnostics(projectId);
         if (session != null) {
-            this.sessionRegistry.clearCurrentRunDraft(projectId);
+            this.clearCurrentRunDraft(projectId, trackedProject);
             LumaMod.LOGGER.info("Consumed in-memory working draft for project {} with {} pending changes", projectId, session.size());
             if (trackedProject != null) {
                 LumaDebugLog.log(
@@ -370,7 +394,7 @@ final class WorkingDraftSessionManager {
                 .map(draft -> TrackedChangeBuffer.fromDraft(UUID.randomUUID().toString(), draft))
                 .filter(buffer -> !buffer.isEmpty());
         if (persistedDraft.isPresent()) {
-            this.sessionRegistry.clearCurrentRunDraft(projectId);
+            this.clearCurrentRunDraft(projectId, trackedProject);
         }
         return persistedDraft;
     }
@@ -379,7 +403,7 @@ final class WorkingDraftSessionManager {
         this.sessionRegistry.close(projectId);
         this.clearSessionDiagnostics(projectId);
         if (trackedProject != null) {
-            this.sessionRegistry.clearCurrentRunDraft(projectId);
+            this.clearCurrentRunDraft(projectId, trackedProject);
             this.persistenceCoordinator.deleteDraft(
                     trackedProject.layout(),
                     projectId,
