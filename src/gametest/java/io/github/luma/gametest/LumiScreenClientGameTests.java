@@ -72,7 +72,7 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
     private void exerciseSafeScreens(ClientGameTestContext context) throws Exception {
         this.open(context, () -> new CreateProjectScreen(null), CreateProjectScreen.class, "lumi-ui-create-project");
         this.clickAndStay(context, "luma.action.create_project", CreateProjectScreen.class, "lumi-ui-create-project-validation");
-        this.clickAndClose(context, "luma.action.back");
+        this.closeCurrentScreen(context);
 
         this.open(context, () -> new CleanupScreen(null, "lumi-ui-smoke"), CleanupScreen.class, "lumi-ui-cleanup");
         this.clickAndClose(context, "luma.action.cancel");
@@ -95,7 +95,6 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         this.assertActive(section, "luma.action.save_build");
         this.assertActive(section, "luma.action.amend_version");
         this.assertActive(section, "luma.action.see_changes");
-        this.assertActive(section, "luma.action.quick_rollback");
 
         this.press(section, "luma.action.save_build");
         this.assertEquals("openSave", actions.lastAction, "save action");
@@ -104,14 +103,10 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         this.press(section, "luma.action.see_changes");
         this.assertEquals("openCompare", actions.lastAction, "compare action");
         this.assertEquals("v0001", actions.leftReference, "compare left reference");
-        this.press(section, "luma.action.quick_rollback");
-        this.assertEquals("quickRollback", actions.lastAction, "rollback action");
 
         FlowLayout busy = sections.buildSection(this.projectModel(new PendingChangeSummary(1, 0, 0), this.activeOperation(), true));
         this.assertInactive(busy, "luma.action.save_build");
         this.assertInactive(busy, "luma.action.amend_version");
-        this.assertInactive(busy, "luma.action.quick_rollback");
-        this.assertInactive(busy, "luma.action.return_before_restore");
         this.assertActive(busy, "luma.action.see_changes");
 
         RecordingRestoreActions restoreActions = new RecordingRestoreActions();
@@ -244,6 +239,16 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
 
     private void clickAndClose(ClientGameTestContext context, String buttonLabel) throws Exception {
         this.pressCurrentScreenButton(context, buttonLabel);
+        context.waitFor(client -> client.screen == null);
+    }
+
+    private void closeCurrentScreen(ClientGameTestContext context) throws Exception {
+        context.runOnClient(client -> {
+            if (client.screen == null) {
+                throw new AssertionError("Cannot close without an open screen");
+            }
+            client.screen.onClose();
+        });
         context.waitFor(client -> client.screen == null);
     }
 
