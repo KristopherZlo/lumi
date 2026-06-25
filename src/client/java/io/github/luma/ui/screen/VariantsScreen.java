@@ -4,6 +4,7 @@ import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.WorkZone;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
@@ -25,6 +26,7 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.Surface;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -37,6 +39,7 @@ public final class VariantsScreen extends LumaScreen {
     private final Screen parent;
     private final String projectName;
     private final String baseVersionId;
+    private final boolean ignoreActiveZone;
     private final Minecraft client = Minecraft.getInstance();
     private final VariantsScreenController stateController = new VariantsScreenController();
     private final ProjectScreenController actionController = new ProjectScreenController();
@@ -44,9 +47,11 @@ public final class VariantsScreen extends LumaScreen {
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
     private LumaScrollContainer<FlowLayout> bodyScroll;
-    private VariantsViewState state = new VariantsViewState(null, List.of(), List.of(), null, "luma.status.project_ready");
+    private VariantsViewState state = new VariantsViewState(null, List.of(), List.of(), null, null, "luma.status.project_ready");
     private String status = "luma.status.project_ready";
     private String variantName = "";
+    private String pendingDeleteVariantId = "";
+    private String deleteVariantName = "";
     private TextBoxComponent variantNameInput;
     private ButtonComponent createVariantButton;
     private int refreshCooldown = 0;
@@ -56,10 +61,15 @@ public final class VariantsScreen extends LumaScreen {
     }
 
     public VariantsScreen(Screen parent, String projectName, String baseVersionId) {
+        this(parent, projectName, baseVersionId, false);
+    }
+
+    public VariantsScreen(Screen parent, String projectName, String baseVersionId, boolean ignoreActiveZone) {
         super(Component.translatable("luma.screen.ideas.title", projectName));
         this.parent = parent;
         this.projectName = projectName;
         this.baseVersionId = baseVersionId == null ? "" : baseVersionId;
+        this.ignoreActiveZone = ignoreActiveZone;
     }
 
     @Override
@@ -69,7 +79,7 @@ public final class VariantsScreen extends LumaScreen {
 
     @Override
     protected void build(FlowLayout root) {
-        this.state = this.stateController.loadState(this.projectName, this.status);
+        this.state = this.loadState();
         ProjectVersion baseVersion = this.resolvedBaseVersion();
 
         root.surface(LumaUi.screenBackdrop());
@@ -88,12 +98,24 @@ public final class VariantsScreen extends LumaScreen {
 
         ProjectWindowLayout window = ProjectWindowLayout.forProject(
                 this.width,
-                Component.translatable("luma.screen.ideas.title", this.projectName),
+                this.zoneMode()
+                        ? Component.translatable("luma.screen.zone_ideas.title", this.activeZone().name())
+                        : Component.translatable("luma.screen.ideas.title", this.projectName),
                 this.state.project(),
                 this.state.variants()
         );
         root.child(window.root());
-        this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.VARIANTS);
+        this.sidebarNavigation.attach(
+                window,
+                this,
+                this.projectName,
+                ProjectWorkspaceTab.VARIANTS,
+                this.zoneMode() ? this.zoneColorArgb() : null
+        );
+        if (this.zoneMode()) {
+            window.titleBar().child(LumaUi.iconButton("arrow-left", Component.translatable("luma.action.back"), button ->
+                    this.router.openVariantsIgnoringActiveZone(this.parent, this.projectName)));
+        }
         if (this.shouldShowStatusBanner()) {
             window.content().child(LumaUi.statusBanner(this.bannerText()));
         }
@@ -126,7 +148,7 @@ public final class VariantsScreen extends LumaScreen {
             return;
         }
         this.refreshCooldown = 0;
-        VariantsViewState refreshed = this.stateController.loadState(this.projectName, this.status);
+        VariantsViewState refreshed = this.loadState();
         String normalizedStatus = ScreenOperationStateSupport.normalizeStatusKey(
                 this.status,
                 refreshed.operationSnapshot(),
@@ -134,7 +156,7 @@ public final class VariantsScreen extends LumaScreen {
         );
         if (!normalizedStatus.equals(this.status)) {
             this.status = normalizedStatus;
-            refreshed = this.stateController.loadState(this.projectName, this.status);
+            refreshed = this.loadState();
         }
         if (!refreshed.equals(this.state)) {
             this.state = refreshed;
@@ -144,9 +166,12 @@ public final class VariantsScreen extends LumaScreen {
 
     private FlowLayout overviewSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.ideas.overview_title"),
-                Component.translatable("luma.ideas.overview_help")
+                Component.translatable(this.zoneMode() ? "luma.ideas.zone_overview_title" : "luma.ideas.overview_title"),
+                Component.translatable(this.zoneMode() ? "luma.ideas.zone_overview_help" : "luma.ideas.overview_help")
         );
+        if (this.zoneMode()) {
+            section.child(LumaUi.chip(Component.translatable("luma.ideas.zone_badge", this.activeZone().name())));
+        }
         section.child(LumaUi.chip(Component.translatable(
                 "luma.build.current_idea",
                 ProjectUiSupport.displayVariantName(this.state.variants(), this.state.project().activeVariantId())
@@ -162,8 +187,8 @@ public final class VariantsScreen extends LumaScreen {
         FlowLayout section = LumaUi.sectionCard(
                 Component.translatable("luma.ideas.create_title"),
                 Component.translatable(
-                        "luma.ideas.create_help",
-                        baseVersion == null ? Component.translatable("luma.ideas.current_build_base") : Component.literal(ProjectUiSupport.displayMessage(baseVersion))
+                        this.zoneMode() ? "luma.ideas.zone_create_help" : "luma.ideas.create_help",
+                        baseVersion == null ? Component.translatable(this.zoneMode() ? "luma.ideas.zone_no_base" : "luma.ideas.current_build_base") : Component.literal(ProjectUiSupport.displayMessage(baseVersion))
                 )
         );
 
@@ -182,7 +207,8 @@ public final class VariantsScreen extends LumaScreen {
 
         FlowLayout actions = LumaUi.actionRow();
         this.createVariantButton = LumaUi.primaryButton(Component.translatable("luma.action.create_idea"), button -> {
-            String result = this.actionController.createVariant(this.projectName, this.variantName.trim(), this.baseVersionId);
+            String baseId = baseVersion == null ? this.baseVersionId : baseVersion.id();
+            String result = this.actionController.createVariant(this.projectName, this.variantName.trim(), baseId);
             if ("luma.status.variant_created".equals(result)) {
                 this.variantName = "";
             }
@@ -196,8 +222,8 @@ public final class VariantsScreen extends LumaScreen {
 
     private FlowLayout listSection() {
         FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.ideas.list_title"),
-                Component.translatable("luma.ideas.list_help")
+                Component.translatable(this.zoneMode() ? "luma.ideas.zone_list_title" : "luma.ideas.list_title"),
+                Component.translatable(this.zoneMode() ? "luma.ideas.zone_list_help" : "luma.ideas.list_help")
         );
 
         if (this.state.variants().isEmpty()) {
@@ -212,13 +238,16 @@ public final class VariantsScreen extends LumaScreen {
     }
 
     private FlowLayout variantCard(ProjectVariant variant) {
-        ProjectVersion headVersion = ProjectUiSupport.versionFor(this.state.versions(), variant.headVersionId());
+        ProjectVersion headVersion = this.headVersion(variant);
         boolean active = this.state.project() != null && variant.id().equals(this.state.project().activeVariantId());
 
         FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        if (this.zoneMode()) {
+            card.surface(Surface.flat(0xEA101113).and(Surface.outline(this.zoneColorArgb())));
+        }
         card.child(LumaUi.value(Component.literal(ProjectUiSupport.displayVariantName(variant))));
         if (headVersion == null) {
-            card.child(LumaUi.caption(Component.translatable("luma.ideas.no_saves")));
+            card.child(LumaUi.caption(Component.translatable(this.zoneMode() ? "luma.ideas.zone_no_saves" : "luma.ideas.no_saves")));
         } else {
             card.child(LumaUi.caption(Component.translatable(
                     "luma.ideas.latest_save",
@@ -237,7 +266,11 @@ public final class VariantsScreen extends LumaScreen {
         ButtonComponent switchButton = LumaUi.primaryButton(Component.translatable("luma.action.switch_idea"), button -> {
             String result = this.actionController.switchVariant(this.projectName, variant.id());
             if ("luma.status.variant_switched".equals(result)) {
-                this.router.openProjectIgnoringRecovery(this.parent, this.projectName, variant.id(), result);
+                if (this.zoneMode()) {
+                    this.refresh(result);
+                } else {
+                    this.router.openProjectIgnoringRecovery(this.parent, this.projectName, variant.id(), result);
+                }
             } else {
                 this.refresh(result);
             }
@@ -245,29 +278,103 @@ public final class VariantsScreen extends LumaScreen {
         switchButton.active(!active && !this.operationActive());
         actions.child(switchButton);
 
-        ButtonComponent mergeButton = LumaUi.button(Component.translatable("luma.action.merge_into_current"), button -> {
-            String result = this.actionController.mergeVariantIntoCurrent(this.projectName, variant.id());
-            this.refresh(result);
-        });
-        mergeButton.active(!active && headVersion != null && !this.operationActive());
-        actions.child(mergeButton);
+        if (!this.zoneMode()) {
+            ButtonComponent mergeButton = LumaUi.button(Component.translatable("luma.action.merge_into_current"), button -> {
+                String result = this.actionController.mergeVariantIntoCurrent(this.projectName, variant.id());
+                this.refresh(result);
+            });
+            mergeButton.active(!active && headVersion != null && !this.operationActive());
+            actions.child(mergeButton);
+        }
 
         boolean protectedMain = variant.main() || Objects.equals("main", variant.id());
         ButtonComponent deleteButton = LumaUi.iconButton("trash-2", Component.translatable("luma.action.delete_branch"), button -> {
-            String result = this.actionController.deleteVariant(this.projectName, variant.id());
-            this.refresh(result);
+            this.pendingDeleteVariantId = variant.id();
+            this.deleteVariantName = "";
+            this.rebuild();
         });
         deleteButton.active(!active && !protectedMain && !this.operationActive());
         actions.child(deleteButton);
         card.child(actions);
+        if (variant.id().equals(this.pendingDeleteVariantId)) {
+            card.child(this.deleteConfirmation(variant));
+        }
         return card;
+    }
+
+    private VariantsViewState loadState() {
+        return this.stateController.loadState(this.projectName, this.status, !this.ignoreActiveZone);
     }
 
     private ProjectVersion resolvedBaseVersion() {
         if (!this.baseVersionId.isBlank()) {
             return ProjectUiSupport.versionFor(this.state.versions(), this.baseVersionId);
         }
+        if (this.zoneMode() && this.state.project() != null) {
+            return this.latestVersionForVariant(this.state.project().activeVariantId());
+        }
         return ProjectUiSupport.activeHead(this.state.project(), this.state.variants(), this.state.versions());
+    }
+
+    private ProjectVersion headVersion(ProjectVariant variant) {
+        if (variant == null) {
+            return null;
+        }
+        return this.zoneMode()
+                ? this.latestVersionForVariant(variant.id())
+                : ProjectUiSupport.versionFor(this.state.versions(), variant.headVersionId());
+    }
+
+    private ProjectVersion latestVersionForVariant(String variantId) {
+        return this.state.versions().stream()
+                .filter(version -> variantId != null && variantId.equals(version.variantId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private FlowLayout deleteConfirmation(ProjectVariant variant) {
+        FlowLayout panel = LumaUi.insetSection(
+                Component.translatable("luma.ideas.delete_confirm_title", ProjectUiSupport.displayVariantName(variant)),
+                Component.translatable("luma.ideas.delete_confirm_help", ProjectUiSupport.displayVariantName(variant))
+        );
+        TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.deleteVariantName);
+        input.setHint(Component.literal(ProjectUiSupport.displayVariantName(variant)));
+        ButtonComponent confirm = LumaUi.primaryButton(Component.translatable("luma.action.delete_branch"), button -> this.confirmDeleteVariant(variant));
+        input.onChanged().subscribe(value -> {
+            this.deleteVariantName = value == null ? "" : value;
+            confirm.active(this.canConfirmDelete(variant));
+        });
+        panel.child(LumaUi.formField(
+                Component.translatable("luma.idea.name_input"),
+                Component.translatable("luma.ideas.delete_confirm_input_help"),
+                input
+        ));
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
+            this.pendingDeleteVariantId = "";
+            this.deleteVariantName = "";
+            this.rebuild();
+        }));
+        confirm.active(this.canConfirmDelete(variant));
+        actions.child(confirm);
+        panel.child(actions);
+        return panel;
+    }
+
+    private boolean canConfirmDelete(ProjectVariant variant) {
+        return variant != null
+                && variant.id().equals(this.pendingDeleteVariantId)
+                && ProjectUiSupport.displayVariantName(variant).equals(this.deleteVariantName.trim());
+    }
+
+    private void confirmDeleteVariant(ProjectVariant variant) {
+        if (!this.canConfirmDelete(variant)) {
+            return;
+        }
+        String result = this.actionController.deleteVariant(this.projectName, variant.id());
+        this.pendingDeleteVariantId = "";
+        this.deleteVariantName = "";
+        this.refresh(result);
     }
 
     private List<ProjectVariant> sortedVariants() {
@@ -304,8 +411,22 @@ public final class VariantsScreen extends LumaScreen {
 
     private void updateCreateButtonActive() {
         if (this.createVariantButton != null) {
-            this.createVariantButton.active(!this.variantName.trim().isBlank() && !this.operationActive());
+            this.createVariantButton.active(!this.variantName.trim().isBlank()
+                    && !this.operationActive()
+                    && (!this.zoneMode() || this.resolvedBaseVersion() != null));
         }
+    }
+
+    private boolean zoneMode() {
+        return this.activeZone() != null;
+    }
+
+    private WorkZone activeZone() {
+        return this.state == null ? null : this.state.activeZone();
+    }
+
+    private int zoneColorArgb() {
+        return this.zoneMode() ? 0xFF000000 | this.activeZone().color() : 0xFF2B2A2F;
     }
 
     private Component bannerText() {

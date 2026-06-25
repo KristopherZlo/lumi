@@ -33,7 +33,7 @@ public final class ProjectWindowLayout {
         this.sidebar.child(LumaUi.chip(place));
         this.sidebar.child(LumaUi.chip(idea));
 
-        FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        FlowLayout titleColumn = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
         titleColumn.gap(3);
         titleColumn.child(LumaUi.title(title));
         titleColumn.child(LumaUi.caption(Component.translatable("luma.window.home_help")));

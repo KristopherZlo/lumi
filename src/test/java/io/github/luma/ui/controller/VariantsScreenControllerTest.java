@@ -10,8 +10,11 @@ import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.WorkZone;
+import io.github.luma.domain.service.ProjectVersionVisibility;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -28,9 +31,25 @@ class VariantsScreenControllerTest {
 
         assertEquals(1, query.projectLoads);
         assertEquals(1, query.variantLoads);
+        assertEquals(1, query.activeZoneLoads);
         assertEquals(1, query.versionLoads);
+        assertEquals(0, query.zoneVersionLoads);
         assertEquals(1, query.operationLoads);
         assertEquals(List.of("v0003", "v0002", "v0001"), state.versions().stream().map(ProjectVersion::id).toList());
+    }
+
+    @Test
+    void loadStateUsesZoneHistoryWhenAZoneIsActive() {
+        FakeQuery query = new FakeQuery();
+        query.activeZone = new WorkZone("zone-a", "project", "Zone A", 0x55CCFF, List.of(), "tester", instant(0), instant(0));
+        VariantsScreenController controller = new VariantsScreenController(query);
+
+        var state = controller.loadState("Tower", "luma.status.project_ready");
+
+        assertEquals(0, query.versionLoads);
+        assertEquals(1, query.zoneVersionLoads);
+        assertEquals(query.activeZone, state.activeZone());
+        assertEquals(List.of("zone-a-v2", "zone-a-v1"), state.versions().stream().map(ProjectVersion::id).toList());
     }
 
     private static final class FakeQuery implements VariantsScreenController.Query {
@@ -38,7 +57,10 @@ class VariantsScreenControllerTest {
         private int projectLoads;
         private int variantLoads;
         private int versionLoads;
+        private int zoneVersionLoads;
+        private int activeZoneLoads;
         private int operationLoads;
+        private WorkZone activeZone;
 
         @Override
         public boolean hasSingleplayerServer() {
@@ -81,6 +103,22 @@ class VariantsScreenControllerTest {
         }
 
         @Override
+        public List<ProjectVersion> loadWorkZoneVersions(String projectName) {
+            this.zoneVersionLoads += 1;
+            return List.of(
+                    zoneVersion("zone-a-v1", "zone-a", 10),
+                    zoneVersion("zone-b-v1", "zone-b", 20),
+                    zoneVersion("zone-a-v2", "zone-a", 30)
+            );
+        }
+
+        @Override
+        public WorkZone loadActiveZone(String projectName) {
+            this.activeZoneLoads += 1;
+            return this.activeZone;
+        }
+
+        @Override
         public OperationSnapshot loadOperationSnapshot(BuildProject project) {
             this.operationLoads += 1;
             return new OperationSnapshot(
@@ -107,6 +145,33 @@ class VariantsScreenControllerTest {
                 io.github.luma.domain.model.ChangeStats.empty(),
                 io.github.luma.domain.model.PreviewInfo.none(),
                 io.github.luma.domain.model.ExternalSourceInfo.manual(),
+                instant(offsetSeconds)
+        );
+    }
+
+    private static ProjectVersion zoneVersion(String id, String zoneId, long offsetSeconds) {
+        return new ProjectVersion(
+                id,
+                "22222222-2222-2222-2222-222222222222",
+                "main",
+                "",
+                "",
+                List.of(),
+                io.github.luma.domain.model.VersionKind.MANUAL,
+                "tester",
+                id,
+                io.github.luma.domain.model.ChangeStats.empty(),
+                io.github.luma.domain.model.PreviewInfo.none(),
+                io.github.luma.domain.model.ExternalSourceInfo.external(
+                        "LUMI",
+                        "work-zone",
+                        "Work Zone Save",
+                        "tester",
+                        null,
+                        false,
+                        false,
+                        Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
+                ),
                 instant(offsetSeconds)
         );
     }
