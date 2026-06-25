@@ -2,13 +2,18 @@ package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorkZoneState;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.network.WorkZoneClientNetworking;
+import io.github.luma.storage.ProjectLayout;
 import io.github.luma.ui.state.WorkZoneViewState;
 import java.time.Instant;
 import java.util.List;
@@ -22,6 +27,7 @@ public final class WorkZoneScreenController {
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
     private final WorkZoneService workZoneService = new WorkZoneService();
+    private final RecoveryService recoveryService = new RecoveryService();
 
     public WorkZoneViewState load(String projectName, String status) {
         if (!this.client.hasSingleplayerServer()) {
@@ -30,15 +36,17 @@ public final class WorkZoneScreenController {
         try {
             MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(this.client);
             var layout = this.projectService.resolveLayout(server, projectName);
+            var project = this.projectService.loadProject(server, projectName);
             WorkZoneState zones = this.workZoneService.load(layout);
             String actor = this.actor();
             return new WorkZoneViewState(
-                    this.projectService.loadProject(server, projectName),
+                    project,
                     this.projectService.loadVariants(server, projectName),
                     this.projectService.loadWorkZoneVersions(server, projectName),
                     zones,
                     actor,
                     this.focusedZoneId(zones, actor),
+                    this.pendingChanges(server, project.name(), layout, actor),
                     status
             );
         } catch (Exception exception) {
@@ -161,6 +169,20 @@ public final class WorkZoneScreenController {
                 .map(zone -> zone.id())
                 .toList();
         return matches.size() == 1 ? matches.getFirst() : "";
+    }
+
+    private PendingChangeSummary pendingChanges(
+            MinecraftServer server,
+            String projectName,
+            ProjectLayout layout,
+            String actor
+    ) throws Exception {
+        WorkZone activeZone = this.workZoneService.activeZone(layout, actor).orElse(null);
+        if (activeZone == null) {
+            return PendingChangeSummary.empty();
+        }
+        RecoveryDraft draft = this.recoveryService.loadDraft(server, projectName).orElse(null);
+        return VersionService.summarizePendingForZone(draft, activeZone);
     }
 
     private String illegalArgumentStatus(IllegalArgumentException exception) {

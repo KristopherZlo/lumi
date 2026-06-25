@@ -13,6 +13,7 @@ import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PreviewInfo;
+import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
@@ -408,6 +409,13 @@ public final class VersionService {
                 draftWithChanges(draft, selectedBlocks, selectedEntities),
                 draftWithChanges(draft, remainderBlocks, remainderEntities)
         );
+    }
+
+    public static PendingChangeSummary summarizePendingForZone(RecoveryDraft draft, WorkZone zone) {
+        if (draft == null || draft.isEmpty() || zone == null || zone.cells().isEmpty()) {
+            return PendingChangeSummary.empty();
+        }
+        return ChangeStatsFactory.summarizePending(splitDraftForZone(draft, zone).selected().changes());
     }
 
     private static boolean entityTouchesZone(StoredEntityChange change, WorkZone zone) {

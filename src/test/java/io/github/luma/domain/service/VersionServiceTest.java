@@ -11,6 +11,7 @@ import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
@@ -193,6 +194,40 @@ class VersionServiceTest {
         assertEquals(new BlockPoint(32, 64, 32), split.remainder().changes().getFirst().pos());
         assertEquals(1, split.remainder().entityChanges().size());
         assertEquals(outsideEntityId, split.remainder().entityChanges().getFirst().entityId());
+    }
+
+    @Test
+    void summarizePendingForZoneUsesOnlyZoneBlocks() {
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                instant(10),
+                instant(20),
+                List.of(
+                        change(1, "minecraft:air", "minecraft:gold_block"),
+                        change(2, "minecraft:stone", "minecraft:air"),
+                        change(32, "minecraft:stone", "minecraft:diamond_block")
+                )
+        );
+        WorkZone zone = new WorkZone(
+                "zone",
+                "project",
+                "Tower",
+                0xFFFFFF,
+                List.of(new WorkZoneCell(0, 4, 0)),
+                "tester",
+                instant(0),
+                instant(0)
+        );
+
+        PendingChangeSummary summary = VersionService.summarizePendingForZone(draft, zone);
+
+        assertEquals(1, summary.addedBlocks());
+        assertEquals(1, summary.removedBlocks());
+        assertEquals(0, summary.changedBlocks());
     }
 
     @Test

@@ -27,8 +27,15 @@ class WorkZoneScreenZoneActionsTest {
         assertTrue(methodBody.contains("Component.translatable(\"luma.build.status_title\")"));
         assertTrue(methodBody.contains("\"luma.build.current_idea\""));
         assertTrue(methodBody.contains("\"luma.build.current_place\""));
+        assertTrue(methodBody.contains("this.state.pendingChanges()"));
+        assertTrue(methodBody.contains("LumaUi.statChip(Component.translatable(\"luma.build.blocks_placed\")"));
+        assertTrue(methodBody.contains("LumaUi.statChip(Component.translatable(\"luma.build.blocks_removed\")"));
+        assertTrue(methodBody.contains("LumaUi.statChip(Component.translatable(\"luma.build.blocks_changed\")"));
         assertTrue(methodBody.contains("openZoneSaveDialog(zone.id())"));
         assertTrue(methodBody.contains("openZoneAmendDialog(zone.id(), activeHead)"));
+        assertTrue(methodBody.contains("Component.translatable(\"luma.action.see_changes\")"));
+        assertTrue(methodBody.contains("requestCompareOverlay("));
+        assertTrue(methodBody.contains("CompareScreenController.CURRENT_WORLD_REFERENCE"));
         assertFalse(methodBody.contains("this.saveZone(zone.id())"));
     }
 

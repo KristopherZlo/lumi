@@ -1,6 +1,7 @@
 package io.github.luma.ui.state;
 
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.WorkZoneSnapshot;
@@ -14,6 +15,7 @@ public record WorkZoneViewState(
         WorkZoneState zones,
         String actor,
         String focusedZoneId,
+        PendingChangeSummary pendingChanges,
         String status
 ) {
 
@@ -23,7 +25,20 @@ public record WorkZoneViewState(
         zones = zones == null ? WorkZoneState.empty() : zones;
         actor = actor == null || actor.isBlank() ? "player" : actor;
         focusedZoneId = focusedZoneId == null ? "" : focusedZoneId;
+        pendingChanges = pendingChanges == null ? PendingChangeSummary.empty() : pendingChanges;
         status = status == null || status.isBlank() ? "luma.status.zones_ready" : status;
+    }
+
+    public WorkZoneViewState(
+            BuildProject project,
+            List<ProjectVariant> variants,
+            List<ProjectVersion> versions,
+            WorkZoneState zones,
+            String actor,
+            String focusedZoneId,
+            String status
+    ) {
+        this(project, variants, versions, zones, actor, focusedZoneId, PendingChangeSummary.empty(), status);
     }
 
     public static WorkZoneViewState fromSnapshot(WorkZoneSnapshot snapshot) {
@@ -37,6 +52,7 @@ public record WorkZoneViewState(
                 snapshot.zones(),
                 snapshot.actor(),
                 snapshot.focusedZoneId(),
+                snapshot.pendingChanges(),
                 snapshot.status()
         );
     }

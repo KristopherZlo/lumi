@@ -3,12 +3,15 @@ package io.github.luma.network;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVersionTags;
+import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorkZoneSnapshot;
 import io.github.luma.domain.model.WorkZoneState;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.minecraft.access.LumaAccessControl;
@@ -26,6 +29,7 @@ public final class WorkZoneServerNetworking {
     private final ProjectService projectService = new ProjectService();
     private final WorkZoneService workZoneService = new WorkZoneService();
     private final VersionService versionService = new VersionService();
+    private final RecoveryService recoveryService = new RecoveryService();
 
     public void register() {
         WorkZonePayloads.register();
@@ -122,6 +126,7 @@ public final class WorkZoneServerNetworking {
     ) throws Exception {
         var layout = this.projectService.resolveLayout(server, project.name());
         WorkZoneState zones = this.workZoneService.load(layout);
+        PendingChangeSummary pendingChanges = this.pendingChanges(server, project.name(), layout, zones, actor);
         return new WorkZoneSnapshot(
                 project,
                 this.projectService.loadVariants(server, project.name()),
@@ -129,8 +134,31 @@ public final class WorkZoneServerNetworking {
                 zones,
                 actor,
                 this.focusedZoneId(zones, actor, WorkZoneCell.from(BlockPoint.from(player.blockPosition()))),
+                pendingChanges,
                 status
         );
+    }
+
+    private PendingChangeSummary pendingChanges(
+            MinecraftServer server,
+            String projectName,
+            ProjectLayout layout,
+            WorkZoneState zones,
+            String actor
+    ) throws Exception {
+        String activeZoneId = zones.activeZoneId(actor);
+        if (activeZoneId.isBlank()) {
+            return PendingChangeSummary.empty();
+        }
+        WorkZone activeZone = zones.zones().stream()
+                .filter(zone -> activeZoneId.equals(zone.id()))
+                .findFirst()
+                .orElse(null);
+        if (activeZone == null) {
+            return PendingChangeSummary.empty();
+        }
+        RecoveryDraft draft = this.recoveryService.loadDraft(server, projectName).orElse(null);
+        return VersionService.summarizePendingForZone(draft, activeZone);
     }
 
     private String focusedZoneId(WorkZoneState zones, String actor, WorkZoneCell playerCell) {

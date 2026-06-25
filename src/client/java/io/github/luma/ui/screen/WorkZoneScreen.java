@@ -3,6 +3,7 @@ package io.github.luma.ui.screen;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
+import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
@@ -19,6 +20,7 @@ import io.github.luma.ui.TagSuggestionComponent;
 import io.github.luma.ui.TagInputSupport;
 import io.github.luma.ui.controller.BranchCreationDialogStateFactory;
 import io.github.luma.ui.controller.BranchCreationResult;
+import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.controller.WorkZoneScreenController;
 import io.github.luma.ui.graph.CommitGraphComponent;
@@ -32,6 +34,8 @@ import io.github.luma.ui.screen.section.BranchCreationDialogView;
 import io.github.luma.ui.screen.section.ProjectSaveCardView;
 import io.github.luma.ui.screen.section.RestoreConfirmationDialogView;
 import io.github.luma.ui.state.BranchCreationDialogState;
+import io.github.luma.ui.state.CompareLoadState;
+import io.github.luma.ui.state.CompareViewState;
 import io.github.luma.ui.state.WorkZoneViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
@@ -61,6 +65,7 @@ public final class WorkZoneScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final WorkZoneScreenController controller = new WorkZoneScreenController();
     private final ProjectScreenController projectController = new ProjectScreenController();
+    private final CompareScreenController compareController = new CompareScreenController();
     private final BranchCreationDialogStateFactory branchDialogFactory = new BranchCreationDialogStateFactory();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
@@ -87,6 +92,9 @@ public final class WorkZoneScreen extends LumaScreen {
     private String zoneTagFilter = "";
     private String tagEditorVersionId = "";
     private String tagEditorText = "";
+    private String pendingCompareLeftReference = "";
+    private String pendingCompareRightReference = "";
+    private int refreshCooldown;
     private TextBoxComponent activeTagInput;
     private TextBoxComponent saveTagsInput;
 
@@ -349,6 +357,7 @@ public final class WorkZoneScreen extends LumaScreen {
                 this.state.variants(),
                 this.state.versions()
         );
+        PendingChangeSummary pending = active ? this.state.pendingChanges() : PendingChangeSummary.empty();
         FlowLayout section = LumaUi.panel(Sizing.fill(100), Sizing.content());
 
         FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
@@ -357,7 +366,10 @@ public final class WorkZoneScreen extends LumaScreen {
         FlowLayout copy = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
         copy.gap(2);
         copy.child(LumaUi.value(Component.translatable("luma.build.status_title")));
-        copy.child(LumaUi.caption(Component.translatable(active ? "luma.zones.save_help" : "luma.zones.save_enter_first")));
+        copy.child(LumaUi.caption(Component.translatable(active
+                ? pending.isEmpty() ? "luma.build.status_clean" : "luma.build.status_dirty"
+                : "luma.zones.save_enter_first"
+        )));
         header.child(copy);
 
         FlowLayout context = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
@@ -374,11 +386,19 @@ public final class WorkZoneScreen extends LumaScreen {
         header.child(context);
         section.child(header);
 
+        if (!pending.isEmpty()) {
+            FlowLayout stats = LumaUi.actionRow();
+            stats.child(LumaUi.statChip(Component.translatable("luma.build.blocks_placed"), Component.literal("+" + pending.addedBlocks())));
+            stats.child(LumaUi.statChip(Component.translatable("luma.build.blocks_removed"), Component.literal("-" + pending.removedBlocks())));
+            stats.child(LumaUi.statChip(Component.translatable("luma.build.blocks_changed"), Component.literal(Integer.toString(pending.changedBlocks()))));
+            section.child(stats);
+        }
+
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent save = LumaUi.primaryButton(Component.translatable("luma.zones.save_button"), button ->
                 this.openZoneSaveDialog(zone.id()));
         save.tooltip(Component.translatable("luma.zones.save_help"));
-        save.active(active);
+        save.active(active && !pending.isEmpty());
         actions.child(save);
 
         ButtonComponent amend = LumaUi.button(
@@ -386,8 +406,16 @@ public final class WorkZoneScreen extends LumaScreen {
                 button -> this.openZoneAmendDialog(zone.id(), activeHead)
         );
         amend.tooltip(Component.translatable("luma.action.amend_version.tooltip"));
-        amend.active(active && activeHead != null);
+        amend.active(active && activeHead != null && !pending.isEmpty());
         actions.child(amend);
+
+        ButtonComponent changes = LumaUi.button(Component.translatable("luma.action.see_changes"), button -> this.requestCompareOverlay(
+                activeHead == null ? "" : activeHead.id(),
+                CompareScreenController.CURRENT_WORLD_REFERENCE
+        ));
+        changes.tooltip(Component.translatable("luma.action.see_changes.tooltip"));
+        changes.active(active && activeHead != null);
+        actions.child(changes);
         section.child(actions);
         return section;
     }
@@ -834,6 +862,48 @@ public final class WorkZoneScreen extends LumaScreen {
     private void refresh(String statusKey) {
         this.status = statusKey == null || statusKey.isBlank() ? "luma.status.zones_ready" : statusKey;
         this.rebuild();
+    }
+
+    @Override
+    protected void onLumaTick() {
+        if (this.hasPendingCompareOverlay() && ++this.refreshCooldown >= 10) {
+            this.refreshCooldown = 0;
+            this.continuePendingCompareOverlay();
+        }
+    }
+
+    private void requestCompareOverlay(String leftReference, String rightReference) {
+        this.pendingCompareLeftReference = leftReference == null ? "" : leftReference;
+        this.pendingCompareRightReference = rightReference == null ? "" : rightReference;
+        this.continuePendingCompareOverlay();
+    }
+
+    private void continuePendingCompareOverlay() {
+        CompareViewState compare = this.compareController.loadState(
+                this.effectiveProjectName(),
+                this.pendingCompareLeftReference,
+                this.pendingCompareRightReference,
+                "luma.status.compare_loading"
+        );
+        if (compare.loadState() == CompareLoadState.LOADING) {
+            this.refresh(compare.status());
+            return;
+        }
+        if (compare.loadState() == CompareLoadState.READY) {
+            String result = this.compareController.showOverlay(this.effectiveProjectName(), compare);
+            this.pendingCompareLeftReference = "";
+            this.pendingCompareRightReference = "";
+            this.status = result;
+            this.client.setScreen(null);
+            return;
+        }
+        this.pendingCompareLeftReference = "";
+        this.pendingCompareRightReference = "";
+        this.refresh(compare.status());
+    }
+
+    private boolean hasPendingCompareOverlay() {
+        return !this.pendingCompareRightReference.isBlank();
     }
 
     private boolean acceptTagCompletion() {

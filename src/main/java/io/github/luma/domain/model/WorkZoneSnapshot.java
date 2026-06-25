@@ -9,6 +9,7 @@ public record WorkZoneSnapshot(
         WorkZoneState zones,
         String actor,
         String focusedZoneId,
+        PendingChangeSummary pendingChanges,
         String status
 ) {
 
@@ -18,10 +19,20 @@ public record WorkZoneSnapshot(
         zones = zones == null ? WorkZoneState.empty() : zones;
         actor = actor == null || actor.isBlank() ? "player" : actor;
         focusedZoneId = focusedZoneId == null ? "" : focusedZoneId;
+        pendingChanges = pendingChanges == null ? PendingChangeSummary.empty() : pendingChanges;
         status = status == null || status.isBlank() ? "luma.status.zones_ready" : status;
     }
 
     public static WorkZoneSnapshot empty(String status) {
-        return new WorkZoneSnapshot(null, List.of(), List.of(), WorkZoneState.empty(), "player", "", status);
+        return new WorkZoneSnapshot(
+                null,
+                List.of(),
+                List.of(),
+                WorkZoneState.empty(),
+                "player",
+                "",
+                PendingChangeSummary.empty(),
+                status
+        );
     }
 }
