@@ -108,6 +108,8 @@ Run the local test-client profile:
 .\scripts\run-test-client.ps1
 ```
 
+The runtime smoke behavior contract is tracked in [SMOKE_BEHAVIOR.md](SMOKE_BEHAVIOR.md).
+
 Run the alpha gate:
 
 ```powershell

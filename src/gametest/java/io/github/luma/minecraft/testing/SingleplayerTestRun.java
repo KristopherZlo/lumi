@@ -6,18 +6,22 @@ import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.PartialRestoreRequest;
+import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.SnapshotMetadata;
 import io.github.luma.domain.model.VersionDiff;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorldInitialBackupManifest;
 import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.domain.service.DiffService;
+import io.github.luma.domain.service.HistoryEditService;
 import io.github.luma.domain.service.HistoryShareService;
 import io.github.luma.domain.service.MaterialDeltaService;
 import io.github.luma.domain.service.ProjectArchiveService;
@@ -30,6 +34,7 @@ import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
 import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.domain.service.VariantService;
+import io.github.luma.domain.service.VariantMergeService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
@@ -41,6 +46,7 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.SnapshotReader;
+import io.github.luma.storage.repository.VersionRepository;
 import io.github.luma.storage.repository.WorldInitialBackupRepository;
 import io.github.luma.storage.repository.WorldOriginRepository;
 import java.nio.file.Files;
@@ -86,9 +92,11 @@ final class SingleplayerTestRun {
     private final RestoreService restoreService = new RestoreService();
     private final UndoRedoService undoRedoService = new UndoRedoService();
     private final VariantService variantService = new VariantService();
+    private final VariantMergeService variantMergeService = new VariantMergeService();
     private final DiffService diffService = new DiffService();
     private final RecoveryService recoveryService = new RecoveryService();
     private final WorkZoneService workZoneService = new WorkZoneService();
+    private final HistoryEditService historyEditService = new HistoryEditService();
     private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
     private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
     private final ProjectCleanupService cleanupService = new ProjectCleanupService();
@@ -100,6 +108,7 @@ final class SingleplayerTestRun {
     private final SnapshotReader snapshotReader = new SnapshotReader();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
+    private final VersionRepository versionRepository = new VersionRepository();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final SingleplayerPerformanceMonitor performanceMonitor = new SingleplayerPerformanceMonitor();
@@ -120,10 +129,15 @@ final class SingleplayerTestRun {
     private SingleplayerStructureFixtureScenario structureFixtureScenario;
     private String gameplaySaveVersionId = "";
     private String gameplayEntityUpdateSaveVersionId = "";
+    private String branchSaveVersionId = "";
+    private String mergeVersionId = "";
     private String savedGameplayEntityId = "";
     private String workZoneId = "";
     private String workZoneSaveVersionId = "";
+    private String workZoneAmendVersionId = "";
+    private String concurrentSaveVersionId = "";
     private int workZoneEditCount;
+    private int concurrentSaveStoredVersionCount;
     private BlockPoint savedGameplayEntityPosition;
     private int previewWaitTicks;
     private int explosionWaitTicks;
@@ -204,14 +218,23 @@ final class SingleplayerTestRun {
                 case CHECK_SAVE -> this.checkSave(server);
                 case START_AMEND -> this.startAmend();
                 case CHECK_AMEND -> this.checkAmend(server);
+                case CHECK_METADATA_AND_SETTINGS -> this.checkMetadataAndSettings(server);
                 case START_BRANCH_SAVE -> this.startBranchSave(server);
                 case CHECK_BRANCH_SAVE -> this.checkBranchSave(server);
+                case START_MERGE_TARGET_SWITCH -> this.startMergeTargetSwitch(server);
+                case CHECK_MERGE_TARGET_SWITCH -> this.checkMergeTargetSwitch(server);
+                case START_MERGE_SMOKE -> this.startMergeSmoke(server);
+                case CHECK_MERGE_SMOKE -> this.checkMergeSmoke(server);
                 case START_PARTIAL_RESTORE -> this.startPartialRestore();
                 case CHECK_PARTIAL_RESTORE -> this.checkPartialRestore(server);
                 case START_RESTORE_INITIAL -> this.startRestoreInitial();
                 case CHECK_RESTORE_INITIAL -> this.checkRestoreInitial(server);
                 case START_WORK_ZONE_SMOKE -> this.startWorkZoneSmoke(server);
                 case CHECK_WORK_ZONE_SMOKE -> this.checkWorkZoneSmoke(server);
+                case START_WORK_ZONE_AMEND -> this.startWorkZoneAmend(server);
+                case CHECK_WORK_ZONE_AMEND -> this.checkWorkZoneAmend(server);
+                case START_CONCURRENT_SAVE_SMOKE -> this.startConcurrentSaveSmoke(server);
+                case CHECK_CONCURRENT_SAVE_SMOKE -> this.checkConcurrentSaveSmoke(server);
                 case START_EXTERNAL_TOOL_STRESS -> this.startExternalToolStress(server);
                 case CHECK_EXTERNAL_TOOL_STRESS -> this.checkExternalToolStress(server);
                 case CHECK_PLAYER_INTERACTIONS -> this.checkPlayerInteractions(server);
@@ -450,8 +473,14 @@ final class SingleplayerTestRun {
     }
 
     private void checkAmend(MinecraftServer server) throws Exception {
-        this.check("Amend created replacement version v0003 and kept detached v0002 for safety", () ->
-                this.projectService.loadVersions(server, this.project.name()).size() == 3);
+        this.check("Amend hid detached v0002 from visible history", () ->
+                this.projectService.loadVersions(server, this.project.name()).stream()
+                        .noneMatch(version -> ProjectService.versionId(2).equals(version.id())));
+        this.check("Amend created visible replacement version v0003", () ->
+                this.projectService.loadVersions(server, this.project.name()).stream()
+                        .anyMatch(version -> ProjectService.versionId(3).equals(version.id())));
+        this.check("Amend kept detached v0002 on disk", () ->
+                this.storedVersionById(server, ProjectService.versionId(2)) != null);
         this.check("Amend moved the main branch head to v0003", () ->
                 this.projectService.loadVariants(server, this.project.name()).stream()
                         .filter(variant -> variant.main())
@@ -463,6 +492,49 @@ final class SingleplayerTestRun {
         }
         this.checkBlock(this.volume.markerC(), Blocks.OAK_PLANKS, "Amended world marker C is oak planks");
         this.checkBlock(this.volume.markerD(), Blocks.COPPER_BLOCK, "Amended world marker D is copper block");
+        this.completePhase(server, Phase.CHECK_METADATA_AND_SETTINGS);
+    }
+
+    private void checkMetadataAndSettings(MinecraftServer server) throws Exception {
+        String amendVersionId = ProjectService.versionId(3);
+        this.historyEditService.renameVersion(server, this.project.name(), amendVersionId, "Renamed singleplayer amend");
+        this.historyEditService.updateVersionTags(server, this.project.name(), amendVersionId, List.of("Smoke", "#Amend", "smoke"));
+        ProjectVersion renamed = this.versionById(server, amendVersionId);
+        this.check(renamed != null && "Renamed singleplayer amend".equals(renamed.message()),
+                "Rename updates visible history metadata only");
+        this.check(renamed != null && ProjectVersionTags.from(renamed).equals(List.of("smoke", "amend")),
+                "Tag update normalizes and deduplicates tags");
+        this.check("Metadata edits did not create another visible version", () ->
+                this.projectService.loadVersions(server, this.project.name()).size() == 2);
+
+        ProjectSettings smokeSettings = new ProjectSettings(
+                true,
+                0,
+                0,
+                0,
+                0.0D,
+                false,
+                false,
+                true,
+                true,
+                0,
+                false
+        );
+        this.projectService.updateSettings(server, this.project.name(), smokeSettings);
+        ProjectSettings loaded = this.projectService.loadProject(server, this.project.name()).settings();
+        this.check(loaded.autoVersionsEnabled(), "Settings persist auto-version toggle");
+        this.check(loaded.autoVersionMinutes() == 10, "Settings sanitize auto-version minutes");
+        this.check(loaded.sessionIdleSeconds() == 5, "Settings sanitize idle seconds");
+        this.check(loaded.snapshotEveryVersions() == 10, "Settings sanitize snapshot interval");
+        this.check(loaded.snapshotVolumeThreshold() == 0.20D, "Settings sanitize snapshot threshold");
+        this.check(!loaded.safetySnapshotBeforeRestore(), "Settings persist restore safety toggle");
+        this.check(!loaded.previewGenerationEnabled(), "Settings persist preview toggle");
+        this.check(loaded.debugLoggingEnabled(), "Settings persist debug logging toggle");
+        this.check(loaded.autoCheckpointEnabled(), "Settings persist auto-checkpoint toggle");
+        this.check(loaded.autoCheckpointLargeChangeThreshold() == ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD,
+                "Settings sanitize auto-checkpoint threshold");
+        this.check(!loaded.workspaceHudVisible(), "Settings persist workspace HUD toggle");
+        this.project = this.projectService.updateSettings(server, this.project.name(), ProjectSettings.defaults());
         this.completePhase(server, Phase.START_BRANCH_SAVE);
     }
 
@@ -471,10 +543,11 @@ final class SingleplayerTestRun {
         this.variantService.activateVariantMetadataOnlyForTesting(server, this.project.name(), this.branch.id());
         WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
         try {
-            this.level.setBlock(this.volume.markerA(), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+                this.level.setBlock(this.volume.markerA(), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
         } finally {
             WorldMutationContext.popSource();
         }
+        this.branchSaveVersionId = this.nextVersionId(server);
         this.pendingOperation = this.versionService.startSaveVersion(this.level, this.project.name(), "Singleplayer test branch save", ACTOR);
         this.log.info("Queued branch save operation " + this.pendingOperation.id());
         this.completePhase(server, Phase.CHECK_BRANCH_SAVE);
@@ -483,9 +556,10 @@ final class SingleplayerTestRun {
     private void checkBranchSave(MinecraftServer server) throws Exception {
         this.project = this.projectService.loadProject(server, this.project.name());
         this.check(this.branch != null && this.branch.id().equals(this.project.activeVariantId()), "Testing branch is active");
-        this.check("Branch save created version v0004", () -> this.projectService.loadVersions(server, this.project.name()).size() == 4);
+        this.check("Branch save created " + this.branchSaveVersionId, () -> this.versionById(server, this.branchSaveVersionId) != null);
+        this.check("Branch history keeps detached amend head hidden", () -> this.projectService.loadVersions(server, this.project.name()).size() == 3);
         this.check("Branch diff is non-empty", () ->
-                this.diffService.compareVersions(server, this.project.name(), ProjectService.versionId(3), ProjectService.versionId(4))
+                this.diffService.compareVersions(server, this.project.name(), ProjectService.versionId(3), this.branchSaveVersionId)
                         .changedBlockCount() >= 1);
         var projectArchive = this.value("Project history package can be exported", () ->
                 this.archiveService.exportProject(server, this.project.name(), false));
@@ -499,6 +573,51 @@ final class SingleplayerTestRun {
             this.check(Files.exists(branchArchive.archiveFile()) && branchArchive.manifest().scopeOrDefault().variantScope(), "Branch export produced a variant-scoped zip");
             Files.deleteIfExists(branchArchive.archiveFile());
         }
+        this.completePhase(server, Phase.START_MERGE_TARGET_SWITCH);
+    }
+
+    private void startMergeTargetSwitch(MinecraftServer server) throws Exception {
+        this.variantService.switchVariant(this.level, this.project.name(), "main");
+        this.pendingOperation = this.worldOperationManager.snapshot(server)
+                .map(OperationSnapshot::handle)
+                .orElseThrow(() -> new IllegalStateException("Variant switch did not start an operation"));
+        this.log.info("Queued merge target switch operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_MERGE_TARGET_SWITCH);
+    }
+
+    private void checkMergeTargetSwitch(MinecraftServer server) throws Exception {
+        this.project = this.projectService.loadProject(server, this.project.name());
+        this.check("Main branch is active before merge", () -> "main".equals(this.project.activeVariantId()));
+        this.checkBlock(this.volume.markerA(), Blocks.STONE, "Switching to main restored marker A before merge");
+        this.completePhase(server, Phase.START_MERGE_SMOKE);
+    }
+
+    private void startMergeSmoke(MinecraftServer server) throws Exception {
+        var plan = this.variantMergeService.previewLocalMerge(server, this.project.name(), this.branch.id());
+        this.check(!plan.hasConflicts(), "Local merge smoke plan has no conflicts");
+        this.check(plan.mergeChangeCount() >= 1, "Local merge smoke plan has source changes");
+        if (plan.hasConflicts() || plan.mergeChangeCount() < 1) {
+            this.completePhase(server, Phase.CLEANUP);
+            return;
+        }
+        this.mergeVersionId = this.nextVersionId(server);
+        this.pendingOperation = this.variantMergeService.startLocalMerge(this.level, this.project.name(), this.branch.id(), List.of(), ACTOR);
+        this.log.info("Queued local merge operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_MERGE_SMOKE);
+    }
+
+    private void checkMergeSmoke(MinecraftServer server) throws Exception {
+        ProjectVersion merged = this.versionById(server, this.mergeVersionId);
+        this.check(merged != null && merged.versionKind() == VersionKind.MERGE, "Local merge wrote a merge version");
+        this.check("Local merge moved only the active main head", () ->
+                this.projectService.loadVariants(server, this.project.name()).stream()
+                        .anyMatch(variant -> variant.main() && this.mergeVersionId.equals(variant.headVersionId())));
+        this.check("Local merge left source branch head unchanged", () ->
+                this.projectService.loadVariants(server, this.project.name()).stream()
+                        .anyMatch(variant -> this.branch.id().equals(variant.id())
+                                && this.branchSaveVersionId.equals(variant.headVersionId())));
+        this.checkBlock(this.volume.markerA(), Blocks.GOLD_BLOCK, "Local merge applied source branch block");
+        this.check("Local merge consumed no draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
         this.completePhase(server, Phase.START_PARTIAL_RESTORE);
     }
 
@@ -552,7 +671,7 @@ final class SingleplayerTestRun {
                 java.time.Instant.now()
         );
         this.workZoneId = zone.id();
-        this.workZoneSaveVersionId = ProjectService.versionId(this.projectService.loadVersions(server, this.project.name()).size() + 1);
+        this.workZoneSaveVersionId = this.nextVersionId(server);
         this.workZoneEditCount = 0;
 
         Random random = new Random(0x5104E5L);
@@ -601,7 +720,84 @@ final class SingleplayerTestRun {
                         .anyMatch(zone -> !zone.cells().isEmpty()));
         this.check("Work-zone smoke save consumed its draft", () ->
                 this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
+        this.completePhase(server, Phase.START_WORK_ZONE_AMEND);
+    }
+
+    private void startWorkZoneAmend(MinecraftServer server) throws Exception {
+        ProjectLayout layout = this.projectService.resolveLayout(server, this.project.name());
+        this.workZoneService.selectZone(layout, ACTOR, this.workZoneId);
+        BlockPos pos = this.volume.markerB();
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
+        try {
+            this.level.setBlock(pos, Blocks.DIAMOND_BLOCK.defaultBlockState(), 3);
+            this.workZoneService.touchBlock(layout, ACTOR, BlockPoint.from(pos), java.time.Instant.now());
+        } finally {
+            WorldMutationContext.popSource();
+        }
+        this.workZoneAmendVersionId = this.nextVersionId(server);
+        this.pendingOperation = this.versionService.startAmendVersion(
+                this.level,
+                this.project.name(),
+                "Singleplayer work-zone smoke amend",
+                ACTOR,
+                List.of("zone-amend")
+        );
+        this.log.info("Queued work-zone amend operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_WORK_ZONE_AMEND);
+    }
+
+    private void checkWorkZoneAmend(MinecraftServer server) throws Exception {
+        ProjectLayout layout = this.projectService.resolveLayout(server, this.project.name());
+        ProjectVersion amended = this.versionById(server, this.workZoneAmendVersionId);
+        this.check(amended != null, "Work-zone amend created " + this.workZoneAmendVersionId);
+        this.check("Work-zone amend detached the previous zone head from visible history", () ->
+                this.projectService.loadVersions(server, this.project.name()).stream()
+                        .noneMatch(version -> this.workZoneSaveVersionId.equals(version.id())));
+        this.check("Work-zone amend kept the previous zone head on disk", () ->
+                this.storedVersionById(server, this.workZoneSaveVersionId) != null);
+        this.check("Zone history shows amended head only", () ->
+                this.projectService.loadWorkZoneVersions(server, this.project.name()).stream()
+                        .anyMatch(version -> this.workZoneAmendVersionId.equals(version.id()))
+                        && this.projectService.loadWorkZoneVersions(server, this.project.name()).stream()
+                        .noneMatch(version -> this.workZoneSaveVersionId.equals(version.id())));
+        this.check(amended != null && ProjectVersionTags.from(amended).contains("zone-amend"),
+                "Work-zone amend persists tags");
+        this.checkBlock(this.volume.markerB(), Blocks.DIAMOND_BLOCK, "Work-zone amend applied selected zone edit");
+        this.check("Work-zone amend consumed its draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
         this.workZoneService.selectZone(layout, ACTOR, "");
+        this.completePhase(server, Phase.START_CONCURRENT_SAVE_SMOKE);
+    }
+
+    private void startConcurrentSaveSmoke(MinecraftServer server) throws Exception {
+        BlockPos pos = this.volume.min().offset(12, 1, 12);
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
+        try {
+            this.level.setBlock(pos, Blocks.LAPIS_BLOCK.defaultBlockState(), 3);
+        } finally {
+            WorldMutationContext.popSource();
+        }
+
+        this.concurrentSaveStoredVersionCount = this.storedVersionCount(server);
+        this.concurrentSaveVersionId = this.nextVersionId(server);
+        this.pendingOperation = this.versionService.startSaveVersion(this.level, this.project.name(), "Singleplayer concurrent save winner", ACTOR);
+        try {
+            this.versionService.startSaveVersion(this.level, this.project.name(), "Singleplayer concurrent save loser", ACTOR);
+            this.recordFailure("Concurrent save rejected the second save");
+        } catch (IllegalStateException exception) {
+            this.check(exception.getMessage() != null
+                    && exception.getMessage().contains("Another world operation is already running"),
+                    "Concurrent save rejected the second save as busy");
+        }
+        this.log.info("Queued concurrent save winner operation " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_CONCURRENT_SAVE_SMOKE);
+    }
+
+    private void checkConcurrentSaveSmoke(MinecraftServer server) throws Exception {
+        this.check("Concurrent save created only one stored version", () ->
+                this.storedVersionCount(server) == this.concurrentSaveStoredVersionCount + 1);
+        this.check("Concurrent save winner is visible", () -> this.versionById(server, this.concurrentSaveVersionId) != null);
+        this.checkBlock(this.volume.min().offset(12, 1, 12), Blocks.LAPIS_BLOCK, "Concurrent save winner block is in world");
+        this.check("Concurrent save consumed the draft once", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
 
         Phase next = switch (this.mode) {
             case SMOKE, CRASH_SAFETY -> Phase.CLEANUP;
@@ -820,7 +1016,7 @@ final class SingleplayerTestRun {
     }
 
     private void startGameplaySave(MinecraftServer server) throws Exception {
-        this.gameplaySaveVersionId = ProjectService.versionId(this.projectService.loadVersions(server, this.project.name()).size() + 1);
+        this.gameplaySaveVersionId = this.nextVersionId(server);
         this.previewWaitTicks = 0;
         this.gameplaySaveValidated = false;
         this.pendingOperation = this.versionService.startSaveVersion(this.level, this.project.name(), "Singleplayer gameplay save", ACTOR);
@@ -909,7 +1105,7 @@ final class SingleplayerTestRun {
             entity.setCustomName(Component.literal("lumi-saved-entity-update"));
         }
         this.check(entity.blockPosition().equals(moved), "Gameplay entity saved update moved before save");
-        this.gameplayEntityUpdateSaveVersionId = ProjectService.versionId(this.projectService.loadVersions(server, this.project.name()).size() + 1);
+        this.gameplayEntityUpdateSaveVersionId = this.nextVersionId(server);
         this.gameplayEntityUpdateSaveValidated = false;
         this.pendingOperation = this.versionService.startSaveVersion(this.level, this.project.name(), "Singleplayer entity update save", ACTOR);
         this.log.info("Queued gameplay entity update save operation " + this.pendingOperation.id());
@@ -1518,6 +1714,18 @@ final class SingleplayerTestRun {
         return null;
     }
 
+    private ProjectVersion storedVersionById(MinecraftServer server, String versionId) throws Exception {
+        return this.versionRepository.load(this.projectService.resolveLayout(server, this.project.name()), versionId).orElse(null);
+    }
+
+    private int storedVersionCount(MinecraftServer server) throws Exception {
+        return this.versionRepository.loadAll(this.projectService.resolveLayout(server, this.project.name())).size();
+    }
+
+    private String nextVersionId(MinecraftServer server) throws Exception {
+        return ProjectService.versionId(this.storedVersionCount(server) + 1);
+    }
+
     private boolean previewReady(MinecraftServer server, ProjectVersion version) throws Exception {
         if (version == null
                 || version.preview() == null
@@ -1660,14 +1868,23 @@ final class SingleplayerTestRun {
         CHECK_SAVE("Verify save", "inspect version, patch, draft isolation, and cleanup dry-run"),
         START_AMEND("Queue amend", "replace the active branch head with merged tracked work"),
         CHECK_AMEND("Verify amend", "inspect amended history and world state"),
+        CHECK_METADATA_AND_SETTINGS("Metadata and settings smoke", "rename, tag, and persist every project setting"),
         START_BRANCH_SAVE("Branch and save", "create a branch, switch to it, and save divergent work"),
         CHECK_BRANCH_SAVE("Verify branch and export", "compare branch history and export packages"),
+        START_MERGE_TARGET_SWITCH("Queue merge target switch", "switch back to main before local merge"),
+        CHECK_MERGE_TARGET_SWITCH("Verify merge target switch", "check the main branch world before merge"),
+        START_MERGE_SMOKE("Queue local merge", "merge source branch changes into the active main branch"),
+        CHECK_MERGE_SMOKE("Verify local merge", "check merge version, branch heads, and applied blocks"),
         START_PARTIAL_RESTORE("Queue partial restore", "plan and start a selected-area restore"),
         CHECK_PARTIAL_RESTORE("Verify partial restore", "check selected-area restore output"),
         START_RESTORE_INITIAL("Queue full restore", "plan and start restore to the initial version"),
         CHECK_RESTORE_INITIAL("Verify full restore", "check final world state and project integrity"),
         START_WORK_ZONE_SMOKE("Work-zone smoke", "create a zone, make deterministic random edits, and save zone history"),
         CHECK_WORK_ZONE_SMOKE("Verify work-zone smoke", "inspect zone metadata, zone history, and saved diff output"),
+        START_WORK_ZONE_AMEND("Work-zone amend", "amend the active zone head with a selected zone edit"),
+        CHECK_WORK_ZONE_AMEND("Verify work-zone amend", "check zone amend head replacement and zone history visibility"),
+        START_CONCURRENT_SAVE_SMOKE("Concurrent save smoke", "start one save and reject an overlapping second save"),
+        CHECK_CONCURRENT_SAVE_SMOKE("Verify concurrent save smoke", "check only the first save committed"),
         START_EXTERNAL_TOOL_STRESS(
                 "External-tool source diagnostics",
                 "record WorldEdit and Axiom-sourced edits through the external capture path"
@@ -1765,11 +1982,16 @@ final class SingleplayerTestRun {
                 case START_UNDO, CHECK_UNDO, START_REDO, CHECK_REDO -> START_SAVE;
                 case START_SAVE, CHECK_SAVE -> CLEANUP;
                 case START_AMEND, CHECK_AMEND -> START_BRANCH_SAVE;
+                case CHECK_METADATA_AND_SETTINGS -> START_BRANCH_SAVE;
                 case START_BRANCH_SAVE -> START_RESTORE_INITIAL;
                 case CHECK_BRANCH_SAVE -> START_PARTIAL_RESTORE;
                 case START_PARTIAL_RESTORE, CHECK_PARTIAL_RESTORE -> START_RESTORE_INITIAL;
                 case START_RESTORE_INITIAL, CHECK_RESTORE_INITIAL,
                      START_WORK_ZONE_SMOKE, CHECK_WORK_ZONE_SMOKE,
+                     START_WORK_ZONE_AMEND, CHECK_WORK_ZONE_AMEND,
+                     START_CONCURRENT_SAVE_SMOKE, CHECK_CONCURRENT_SAVE_SMOKE,
+                     START_MERGE_TARGET_SWITCH, CHECK_MERGE_TARGET_SWITCH,
+                     START_MERGE_SMOKE, CHECK_MERGE_SMOKE,
                      START_EXTERNAL_TOOL_STRESS, CHECK_EXTERNAL_TOOL_STRESS,
                      CHECK_PLAYER_INTERACTIONS,
                      START_GAMEPLAY_UNDO, CHECK_GAMEPLAY_UNDO, START_GAMEPLAY_REDO, CHECK_GAMEPLAY_REDO,
