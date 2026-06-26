@@ -7,6 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
+import net.minecraft.world.entity.player.PlayerSkin;
 
 public final class SpecialThanksClientCache {
 
@@ -39,9 +40,16 @@ public final class SpecialThanksClientCache {
     }
 
     public Identifier textureFor(Minecraft client, String skinName) {
-        this.preload(client);
+        return this.skinFor(client, skinName).body().texturePath();
+    }
+
+    public PlayerSkin skinFor(Minecraft client, String skinName) {
+        if (client == null) {
+            return DefaultPlayerSkin.getDefaultSkin();
+        }
+        this.ensureSkinResolver(client);
         MinecraftSpecialThanksSkinResolver resolver = this.skinResolver;
-        return resolver == null ? DefaultPlayerSkin.getDefaultTexture() : resolver.textureFor(skinName);
+        return resolver == null ? DefaultPlayerSkin.getDefaultSkin() : resolver.skinFor(skinName);
     }
 
     public void addListener(Runnable listener) {
@@ -82,7 +90,7 @@ public final class SpecialThanksClientCache {
             return;
         }
         for (SpecialThanksEntry entry : this.entries) {
-            resolver.textureFor(entry.skinName());
+            resolver.skinFor(entry.skinName());
         }
     }
 

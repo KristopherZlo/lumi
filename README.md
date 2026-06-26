@@ -131,7 +131,7 @@ Run the alpha gate:
 | `src/main/java/io/github/luma/storage` | Paths, JSON manifests, binary payloads, archives, atomic writes |
 | `src/main/java/io/github/luma/integration` | Optional builder-tool adapters |
 | `src/client/java/io/github/luma` | UI controllers, screens, previews, overlays |
-| `src/main/resources/assets/lumi/special-thanks.json` | Special Thanks entries preloaded at client startup and refreshed from GitHub raw |
+| `src/main/resources/assets/lumi/special-thanks.json` | Special Thanks entries preloaded at client startup, refreshed from GitHub raw, and rendered as animated full-body showcases |
 | `src/main/java/io/github/luma/mixin` | Thin server-side Minecraft hook entrypoints |
 | `src/client/java/io/github/luma/mixin` | Thin client-side Minecraft hook entrypoints |
 | `src/test`, `src/gametest` | Unit tests, runtime tests, GameTests |

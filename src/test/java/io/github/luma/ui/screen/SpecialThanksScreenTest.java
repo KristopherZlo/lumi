@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SpecialThanksScreenTest {
@@ -26,19 +27,19 @@ class SpecialThanksScreenTest {
     }
 
     @Test
-    void specialThanksPageLoadsCatalogAndMinecraftSkinHeads() throws IOException {
+    void specialThanksPageRendersAnimatedPlayerShowcase() throws IOException {
         String source = Files.readString(
                 Path.of("src/client/java/io/github/luma/ui/screen/SpecialThanksScreen.java"),
                 StandardCharsets.UTF_8
         );
 
         assertTrue(source.contains("SpecialThanksClientCache"));
+        assertTrue(source.contains("SpecialThanksPlayerShowcaseComponent"));
         assertTrue(source.contains("addListener"));
         assertTrue(source.contains("removeListener"));
         assertTrue(source.contains("rebuildPreservingScroll"));
-        assertTrue(source.contains("UIComponents.texture"));
+        assertFalse(source.contains("UIComponents.texture"));
         assertTrue(source.contains("entry.skinName()"));
         assertTrue(source.contains("entry.description()"));
-        assertTrue(source.contains("specialThanks.textureFor"));
     }
 }

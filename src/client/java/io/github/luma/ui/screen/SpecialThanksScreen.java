@@ -2,6 +2,7 @@ package io.github.luma.ui.screen;
 
 import io.github.luma.client.specialthanks.SpecialThanksClientCache;
 import io.github.luma.client.specialthanks.SpecialThanksEntry;
+import io.github.luma.client.specialthanks.SpecialThanksPlayerShowcaseComponent;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectWindowLayout;
@@ -9,8 +10,6 @@ import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.state.ProjectHomeViewState;
-import io.wispforest.owo.ui.component.TextureComponent;
-import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
@@ -20,7 +19,6 @@ import io.wispforest.owo.ui.core.VerticalAlignment;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 
 public final class SpecialThanksScreen extends LumaScreen {
 
@@ -112,9 +110,9 @@ public final class SpecialThanksScreen extends LumaScreen {
     private FlowLayout entryCard(SpecialThanksEntry entry) {
         FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        row.gap(7);
+        row.gap(10);
         row.verticalAlignment(VerticalAlignment.CENTER);
-        row.child(this.skinFace(this.specialThanks.textureFor(this.client, entry.skinName())));
+        row.child(new SpecialThanksPlayerShowcaseComponent(entry.skinName()));
 
         FlowLayout text = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
         text.gap(2);
@@ -123,13 +121,6 @@ public final class SpecialThanksScreen extends LumaScreen {
         row.child(text);
         card.child(row);
         return card;
-    }
-
-    private TextureComponent skinFace(Identifier skin) {
-        TextureComponent face = UIComponents.texture(skin, 8, 8, 8, 8, 64, 64);
-        face.blend(true);
-        face.sizing(Sizing.fixed(32), Sizing.fixed(32));
-        return face;
     }
 
     private void rebuild() {

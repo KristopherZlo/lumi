@@ -1,0 +1,106 @@
+package io.github.luma.client.specialthanks;
+
+import io.wispforest.owo.ui.base.BaseUIComponent;
+import io.wispforest.owo.ui.core.OwoUIGraphics;
+import io.wispforest.owo.ui.core.Sizing;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.geom.EntityModelSet;
+import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.player.PlayerModel;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.PlayerModelType;
+import net.minecraft.world.entity.player.PlayerSkin;
+
+public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent {
+
+    private static final int WIDTH = 76;
+    private static final int HEIGHT = 112;
+    private static final float MODEL_HEIGHT = 2.125F;
+    private static final float FIT_SCALE = 0.97F;
+    private static final float PIVOT_Y = -1.0625F;
+    private static final float ROTATION_X = -5.0F;
+    private static final long WALK_CYCLE_MILLIS = 950L;
+    private static final long ORBIT_CYCLE_MILLIS = 9000L;
+
+    private final SpecialThanksClientCache specialThanks = SpecialThanksClientCache.getInstance();
+    private final String skinName;
+    private final PlayerModel wideModel;
+    private final PlayerModel slimModel;
+
+    public SpecialThanksPlayerShowcaseComponent(String skinName) {
+        this.skinName = skinName == null ? "" : skinName.trim();
+        EntityModelSet models = Minecraft.getInstance().getEntityModels();
+        this.wideModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER), false);
+        this.slimModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER_SLIM), true);
+        this.sizing(Sizing.fixed(WIDTH), Sizing.fixed(HEIGHT));
+    }
+
+    @Override
+    protected int determineHorizontalContentSize(Sizing sizing) {
+        return WIDTH;
+    }
+
+    @Override
+    protected int determineVerticalContentSize(Sizing sizing) {
+        return HEIGHT;
+    }
+
+    @Override
+    public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
+        Minecraft client = Minecraft.getInstance();
+        PlayerSkin skin = this.specialThanks.skinFor(client, this.skinName);
+        PlayerModel model = skin.model() == PlayerModelType.SLIM ? this.slimModel : this.wideModel;
+        long now = System.currentTimeMillis();
+
+        this.poseWalking(model, now);
+        Identifier texture = skin.body().texturePath();
+        float scale = FIT_SCALE * this.height / MODEL_HEIGHT;
+        float rotationY = this.rotationY(now);
+        graphics.submitSkinRenderState(
+                model,
+                texture,
+                scale,
+                ROTATION_X,
+                rotationY,
+                PIVOT_Y,
+                this.x,
+                this.y,
+                this.x + this.width,
+                this.y + this.height
+        );
+    }
+
+    private void poseWalking(PlayerModel model, long now) {
+        model.resetPose();
+        model.setAllVisible(true);
+
+        float swing = (float) ((now % WALK_CYCLE_MILLIS) / (double) WALK_CYCLE_MILLIS * Math.PI * 2.0D);
+        float leg = (float) Math.sin(swing) * 0.55F;
+        float arm = leg * 0.75F;
+
+        model.rightLeg.xRot = leg;
+        model.leftLeg.xRot = -leg;
+        model.rightArm.xRot = -arm;
+        model.leftArm.xRot = arm;
+        model.rightArm.zRot = 0.04F;
+        model.leftArm.zRot = -0.04F;
+        model.head.xRot = 0.06F;
+        model.hat.xRot = model.head.xRot;
+
+        this.copyRotation(model.rightPants, model.rightLeg);
+        this.copyRotation(model.leftPants, model.leftLeg);
+        this.copyRotation(model.rightSleeve, model.rightArm);
+        this.copyRotation(model.leftSleeve, model.leftArm);
+    }
+
+    private float rotationY(long now) {
+        return 25.0F + (float) ((now % ORBIT_CYCLE_MILLIS) / (double) ORBIT_CYCLE_MILLIS * 360.0D);
+    }
+
+    private void copyRotation(ModelPart target, ModelPart source) {
+        target.xRot = source.xRot;
+        target.yRot = source.yRot;
+        target.zRot = source.zRot;
+    }
+}

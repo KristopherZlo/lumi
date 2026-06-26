@@ -9,13 +9,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
+import net.minecraft.world.entity.player.PlayerSkin;
 
 public final class MinecraftSpecialThanksSkinResolver {
 
     private final Minecraft client;
     private final Runnable onSkinLoaded;
-    private final Map<String, Identifier> loaded = new ConcurrentHashMap<>();
-    private final Map<String, CompletableFuture<Identifier>> pending = new ConcurrentHashMap<>();
+    private final Map<String, PlayerSkin> loaded = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<PlayerSkin>> pending = new ConcurrentHashMap<>();
 
     public MinecraftSpecialThanksSkinResolver(Minecraft client, Runnable onSkinLoaded) {
         this.client = client;
@@ -24,39 +25,42 @@ public final class MinecraftSpecialThanksSkinResolver {
     }
 
     public Identifier textureFor(String skinName) {
-        String key = skinName == null ? "" : skinName.trim();
-        if (key.isBlank()) {
-            return DefaultPlayerSkin.getDefaultTexture();
-        }
-        Identifier texture = this.loaded.get(key);
-        if (texture != null) {
-            return texture;
-        }
-        this.pending.computeIfAbsent(key, this::load);
-        return DefaultPlayerSkin.getDefaultTexture();
+        return this.skinFor(skinName).body().texturePath();
     }
 
-    private CompletableFuture<Identifier> load(String skinName) {
-        CompletableFuture<Identifier> future = CompletableFuture.supplyAsync(() -> this.loadTexture(skinName), Util.backgroundExecutor());
-        future.whenComplete((texture, throwable) -> this.client.execute(() -> {
+    public PlayerSkin skinFor(String skinName) {
+        String key = skinName == null ? "" : skinName.trim();
+        if (key.isBlank()) {
+            return DefaultPlayerSkin.getDefaultSkin();
+        }
+        PlayerSkin skin = this.loaded.get(key);
+        if (skin != null) {
+            return skin;
+        }
+        this.pending.computeIfAbsent(key, this::load);
+        return DefaultPlayerSkin.getDefaultSkin();
+    }
+
+    private CompletableFuture<PlayerSkin> load(String skinName) {
+        CompletableFuture<PlayerSkin> future = CompletableFuture.supplyAsync(() -> this.loadSkin(skinName), Util.backgroundExecutor());
+        future.whenComplete((skin, throwable) -> this.client.execute(() -> {
             this.pending.remove(skinName);
-            if (throwable == null && texture != null) {
-                this.loaded.put(skinName, texture);
+            if (throwable == null && skin != null) {
+                this.loaded.put(skinName, skin);
                 this.onSkinLoaded.run();
             }
         }));
         return future;
     }
 
-    private Identifier loadTexture(String skinName) {
+    private PlayerSkin loadSkin(String skinName) {
         Optional<GameProfile> profile = this.client.services().profileResolver().fetchByName(skinName);
         if (profile.isEmpty()) {
-            return DefaultPlayerSkin.getDefaultTexture();
+            return DefaultPlayerSkin.getDefaultSkin();
         }
         return this.client.getSkinManager()
                 .get(profile.get())
                 .join()
-                .map(skin -> skin.body().texturePath())
-                .orElseGet(DefaultPlayerSkin::getDefaultTexture);
+                .orElseGet(DefaultPlayerSkin::getDefaultSkin);
     }
 }
