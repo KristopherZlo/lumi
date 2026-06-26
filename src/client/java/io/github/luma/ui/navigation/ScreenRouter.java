@@ -14,6 +14,7 @@ import io.github.luma.ui.screen.RecoveryScreen;
 import io.github.luma.ui.screen.SaveDetailsScreen;
 import io.github.luma.ui.screen.SettingsScreen;
 import io.github.luma.ui.screen.ShareScreen;
+import io.github.luma.ui.screen.SpecialThanksScreen;
 import io.github.luma.ui.screen.VariantsScreen;
 import io.github.luma.ui.screen.WorkZoneScreen;
 import io.github.luma.ui.controller.ProjectScreenController;
@@ -96,6 +97,10 @@ public final class ScreenRouter {
 
     public void openMore(Screen parent, String projectName) {
         this.client.setScreen(new MoreScreen(parent, projectName));
+    }
+
+    public void openSpecialThanks(Screen parent, String projectName) {
+        this.client.setScreen(new SpecialThanksScreen(parent, projectName));
     }
 
     public void openWorkZones(Screen parent, String projectName) {

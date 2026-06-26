@@ -107,6 +107,7 @@ public final class MoreScreen extends LumaScreen {
         body.child(this.tabRow());
         if (this.activeTab == MoreTab.PROJECT_TOOLS) {
             body.child(this.onboardingSection());
+            body.child(this.specialThanksSection());
             body.child(this.navigationCard(
                     "luma.more.cleanup_title",
                     "luma.more.cleanup_help",
@@ -149,6 +150,15 @@ public final class MoreScreen extends LumaScreen {
         }));
         section.child(actions);
         return section;
+    }
+
+    private FlowLayout specialThanksSection() {
+        return this.navigationCard(
+                "luma.more.special_thanks_title",
+                "luma.more.special_thanks_help",
+                "luma.action.open_special_thanks",
+                button -> this.router.openSpecialThanks(this, this.projectName)
+        );
     }
 
     @Override

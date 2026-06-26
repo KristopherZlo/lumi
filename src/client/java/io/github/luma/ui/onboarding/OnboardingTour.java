@@ -37,22 +37,7 @@ public final class OnboardingTour {
             ),
             Page.spotlight("save_spotlight", SpotlightTarget.SAVE_BUILD),
             Page.spotlight("changes_spotlight", SpotlightTarget.SEE_CHANGES),
-            Page.info("break_block"),
-            Page.hold(
-                    "undo_world",
-                    Transition.EXECUTE_UNDO,
-                    "luma.onboarding.hold_undo",
-                    LumiClientKeyBindings.Role.ACTION,
-                    LumiClientKeyBindings.Role.UNDO
-            ),
-            Page.hold(
-                    "redo_world",
-                    Transition.EXECUTE_REDO,
-                    "luma.onboarding.hold_redo",
-                    LumiClientKeyBindings.Role.ACTION,
-                    LumiClientKeyBindings.Role.REDO
-            ),
-            Page.info("shortcuts", true),
+            Page.info("fix_mistakes"),
             Page.info("finish")
     );
 
@@ -134,7 +119,7 @@ public final class OnboardingTour {
             return false;
         }
         return switch (this.currentPage().id()) {
-            case "save_spotlight", "break_block", "undo_world", "redo_world" -> false;
+            case "save_spotlight" -> false;
             default -> true;
         };
     }
@@ -339,7 +324,7 @@ public final class OnboardingTour {
         }
         this.flow = this.flow.next();
         this.resetHoldGate();
-        return page.spotlightTarget() == SpotlightTarget.SEE_CHANGES ? Transition.CLOSE_WORKSPACE : Transition.REBUILD;
+        return Transition.REBUILD;
     }
 
     private Transition skipShortcutPage(Page page) {

@@ -27,4 +27,16 @@ class ProjectSidebarNavigationTest {
                 "Project sidebar should keep support visible in the fixed footer"
         );
     }
+
+    @Test
+    void supportFooterShowsCreditAndPackagedVersion() throws IOException {
+        String source = Files.readString(
+                Path.of("src/client/java/io/github/luma/ui/navigation/ProjectSidebarNavigation.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertTrue(source.contains("luma.window.credit"));
+        assertTrue(source.contains("luma.window.mod_version"));
+        assertTrue(source.contains("getModContainer(LumaMod.MOD_ID)"));
+    }
 }

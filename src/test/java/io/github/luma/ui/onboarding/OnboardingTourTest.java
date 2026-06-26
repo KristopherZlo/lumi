@@ -13,16 +13,13 @@ class OnboardingTourTest {
                 "open",
                 "save_spotlight",
                 "changes_spotlight",
-                "break_block",
-                "undo_world",
-                "redo_world",
-                "shortcuts",
+                "fix_mistakes",
                 "finish"
         ), OnboardingTour.pageIds());
     }
 
     @Test
-    void firstTourHasNinePages() {
-        Assertions.assertEquals(9, OnboardingTour.pageCount());
+    void firstTourHasSixPages() {
+        Assertions.assertEquals(6, OnboardingTour.pageCount());
     }
 }

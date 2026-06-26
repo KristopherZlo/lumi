@@ -11,6 +11,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
 import java.net.URI;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -104,6 +105,8 @@ public final class ProjectSidebarNavigation {
                 Component.translatable("luma.action.paypal_donate"),
                 PAYPAL_DONATE_URI
         ));
+        footer.child(LumaUi.caption(Component.translatable("luma.window.credit")));
+        footer.child(LumaUi.caption(Component.translatable("luma.window.mod_version", this.currentModVersion())));
         return footer;
     }
 
@@ -124,5 +127,11 @@ public final class ProjectSidebarNavigation {
         supportButton.sizing(Sizing.expand(100), Sizing.fixed(18));
         row.child(supportButton);
         return row;
+    }
+
+    private String currentModVersion() {
+        return FabricLoader.getInstance().getModContainer(LumaMod.MOD_ID)
+                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                .orElse("unknown");
     }
 }

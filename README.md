@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>Build history for Minecraft builders.</strong>
+  <strong>Save the build. Try the idea. Undo the mistake.</strong>
 </p>
 
 <p align="center">
@@ -15,24 +15,28 @@
   <img alt="GPL 3.0" src="https://img.shields.io/badge/License-GPL%203.0-2EA043?style=for-the-badge" />
 </p>
 
-Lumi is a singleplayer-first Fabric mod for Minecraft `1.21.11`.
+Lumi is project history for Minecraft builders.
 
-It gives builders project history inside a world: save versions, compare changes, branch ideas, restore old states, roll back mistakes, and recover interrupted work.
+It works inside your world: save named moments of a build, compare what changed, branch risky ideas, restore older states, and recover interrupted work without copying the whole world folder every time.
 
 Status: alpha. Keep normal world backups.
 
 ## For Players
 
-### What It Does
+### Why Use It
+
+Big builds rarely move in a straight line. A roof pass goes wrong, a detail experiment gets messy, or a tool edit touches more blocks than expected. Lumi gives that work a history, so you can keep building without treating every risky step like a manual backup ritual.
+
+### What You Get
 
 - Tracks a dimension or selected build area as a project.
-- Saves named versions with change stats and restore data.
+- Saves named moments with change stats and restore data.
 - Amends replace the visible branch or zone head while keeping superseded files on disk.
 - Lets saves carry searchable tags, with tag input fields capped at 128 characters.
 - Soft-deletes non-root saves without removing their stored files.
-- Compares versions, branches, and the current world.
+- Compares saves, branches, and the current world.
 - Shows changed blocks with an in-world overlay.
-- Restores a full version, only a selected area, or everything except a selected area.
+- Restores a full save, only a selected area, or everything except a selected area.
 - Supports branches, local merges, import, and export.
 - Lets builders label current work with named work zones, save an active zone without consuming other pending work, and review zone saves on a separate zone-history surface.
 - Shows the active zone's current build controls on the zone screen before zone history.
