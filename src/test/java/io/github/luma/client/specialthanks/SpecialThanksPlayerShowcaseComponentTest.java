@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SpecialThanksPlayerShowcaseComponentTest {
@@ -25,5 +26,19 @@ class SpecialThanksPlayerShowcaseComponentTest {
         assertTrue(source.contains("PlayerModelType.SLIM"));
         assertTrue(source.contains("Math.sin"));
         assertTrue(source.contains("rotationY"));
+    }
+
+    @Test
+    void secondLayerUsesParentPartTransformOnly() throws IOException {
+        String source = Files.readString(Path.of(
+                "src/client/java/io/github/luma/client/specialthanks/SpecialThanksPlayerShowcaseComponent.java"
+        ));
+
+        assertFalse(source.contains("copyRotation("));
+        assertFalse(source.contains("hat.xRot"));
+        assertFalse(source.contains("rightSleeve.xRot"));
+        assertFalse(source.contains("leftSleeve.xRot"));
+        assertFalse(source.contains("rightPants.xRot"));
+        assertFalse(source.contains("leftPants.xRot"));
     }
 }

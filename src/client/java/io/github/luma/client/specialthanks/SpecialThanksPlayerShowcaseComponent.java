@@ -6,7 +6,6 @@ import io.wispforest.owo.ui.core.Sizing;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.PlayerModelType;
@@ -86,21 +85,9 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
         model.rightArm.zRot = 0.04F;
         model.leftArm.zRot = -0.04F;
         model.head.xRot = 0.06F;
-        model.hat.xRot = model.head.xRot;
-
-        this.copyRotation(model.rightPants, model.rightLeg);
-        this.copyRotation(model.leftPants, model.leftLeg);
-        this.copyRotation(model.rightSleeve, model.rightArm);
-        this.copyRotation(model.leftSleeve, model.leftArm);
     }
 
     private float rotationY(long now) {
         return 25.0F + (float) ((now % ORBIT_CYCLE_MILLIS) / (double) ORBIT_CYCLE_MILLIS * 360.0D);
-    }
-
-    private void copyRotation(ModelPart target, ModelPart source) {
-        target.xRot = source.xRot;
-        target.yRot = source.yRot;
-        target.zRot = source.zRot;
     }
 }
