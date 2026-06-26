@@ -27,7 +27,7 @@ public final class SpecialThanksScreen extends LumaScreen {
             "textures/entity/player/wide/steve.png"
     );
     private static final List<SpecialThanksEntry> ENTRIES = List.of(
-            new SpecialThanksEntry("Zlo", "luma.special_thanks.zlo_role", DEFAULT_SKIN)
+            new SpecialThanksEntry("ImZlo", "luma.special_thanks.zlo_role", DEFAULT_SKIN)
     );
 
     private final Screen parent;

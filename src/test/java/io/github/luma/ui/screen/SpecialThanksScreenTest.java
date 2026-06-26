@@ -35,6 +35,6 @@ class SpecialThanksScreenTest {
         assertTrue(source.contains("SpecialThanksEntry"));
         assertTrue(source.contains("UIComponents.texture"));
         assertTrue(source.contains("textures/entity/player/wide/steve.png"));
-        assertTrue(source.contains("\"Zlo\""));
+        assertTrue(source.contains("\"ImZlo\""));
     }
 }
