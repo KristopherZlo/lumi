@@ -17,46 +17,62 @@
 
 Lumi is project history for Minecraft builders.
 
-It works inside your world: save named moments of a build, compare what changed, branch risky ideas, restore older states, and recover interrupted work without copying the whole world folder every time.
+It runs inside your world: save named moments of a build, compare what changed, branch risky ideas, restore older states, and recover interrupted work without copying the whole world folder every time.
 
 Status: alpha. Keep normal world backups.
 
 ## For Players
 
-### Why Use It
+### Download
 
-Big builds rarely move in a straight line. A roof pass goes wrong, a detail experiment gets messy, or a tool edit touches more blocks than expected. Lumi gives that work a history, so you can keep building without treating every risky step like a manual backup ritual.
+Download alpha builds from [GitHub Releases](https://github.com/KristopherZlo/lumi/releases). Use a release that lists your Minecraft version.
 
-### What You Get
+Current target:
 
-- Tracks a dimension or selected build area as a project.
-- Saves named moments with change stats and restore data.
-- Amends replace the visible branch or zone head while keeping superseded files on disk.
-- Lets saves carry searchable tags, with tag input fields capped at 128 characters.
-- Soft-deletes non-root saves without removing their stored files.
-- Compares saves, branches, and the current world.
+- Minecraft `1.21.11`
+- Fabric Loader `0.19.2` or newer compatible Fabric loader
+- Java `21`
+- Fabric API `0.141.3+1.21.11`
+
+Lumi also declares owo-lib and cloth-config as Fabric dependencies. Install the dependency versions requested by the release if your launcher does not resolve them automatically.
+
+### Install
+
+1. Install Fabric for Minecraft `1.21.11`.
+2. Put the Lumi jar and required dependency jars in your `mods` folder.
+3. Start Minecraft and open a singleplayer world.
+4. Keep a normal world backup before relying on an alpha build.
+
+For dedicated servers, install Lumi on both the server and every client that uses Lumi screens or overlays. Dedicated server actions require operator-level permission; `/lumi save <message>` saves tracked work from the server side.
+
+### What Lumi Does
+
+- Tracks a whole dimension or a selected build area as a project.
+- Saves named build versions with change counts and restore data.
+- Compares saved versions, branches, and current unsaved work.
 - Shows changed blocks with an in-world overlay.
-- Restores a full save, only a selected area, or everything except a selected area.
-- Supports branches, local merges, import, and export.
-- Lets builders label current work with named work zones, save an active zone without consuming other pending work, and review zone saves on a separate zone-history surface.
-- Shows the active zone's current build controls on the zone screen before zone history.
-- Keeps live undo/redo for recent tracked edits.
+- Restores a whole save, a selected area, or everything outside a selected area.
+- Lets you branch risky ideas and merge local branches back into the active branch.
+- Imports and exports project history packages.
+- Adds live undo/redo for recent tracked edits.
 - Keeps recovery drafts for interrupted work.
-- Captures supported WorldEdit, FAWE, Axiom, and normal Minecraft mutation paths on a best-effort basis.
+- Lets you mark active work zones, save a zone separately, and keep unrelated pending work.
+- Captures normal Minecraft edits plus supported WorldEdit, FAWE, and Axiom mutation paths on a best-effort basis.
 
-### What It Is Not
+### Quick Start
 
-- Not a backup replacement.
-- Not a survival content mod.
-- Not a full multiplayer conflict-resolution system.
-- Not a guarantee that every builder tool path is captured.
+1. Press `U` to open Build History.
+2. Create or open a project for the current build area.
+3. Build normally.
+4. Press `Left Alt+S` to save the current work.
+5. Use compare, restore, branches, or undo/redo when an idea goes wrong.
 
 ### Default Controls
 
 | Key | Action |
 | --- | --- |
 | `U` | Open Build History, or Zones when an active zone is selected |
-| `Left Alt+S` | Open the Save build modal, or Save zone when an active zone is selected |
+| `Left Alt+S` | Open Save build, or Save zone when an active zone is selected |
 | `Left Alt+Z` | Undo |
 | `Left Alt+Y` | Redo |
 | `R` | Quick rollback |
@@ -66,29 +82,17 @@ Big builds rarely move in a straight line. A roof pass goes wrong, a detail expe
 
 All keybinds are remappable in Minecraft controls.
 
-### Runtime Support
+### Privacy and Diagnostics
 
-- Client: required
-- Server: required on dedicated servers
-- Singleplayer: primary target
-- Integrated server: supported
-- Dedicated server: supported for the Zones workflow when Lumi is installed on both client and server
-- Dedicated server actions require operator-level permission; use `/lumi save <message>` to save tracked work from the server side
+Lumi has diagnostic telemetry for crashes, failed operations, rejected actions, and severe performance problems. It is technical-only and can be turned off in Lumi settings.
+
+Telemetry does not send raw logs, screen views, clicks, world names, project names, coordinates, seeds, exception messages, raw file paths, raw NBT, or block/entity payloads.
 
 ## For Developers
 
-### Stack
+### Build and Test
 
-- Minecraft `1.21.11`
-- Fabric Loader `0.19.2`
-- Fabric API `0.141.3+1.21.11`
-- Java `21`
-- owo-lib `0.13.0+1.21.11`
-- cloth-config `21.11.153`
-- lz4-java `1.8.1`
-- JUnit 5 and Fabric GameTest
-
-### Build
+Build the mod:
 
 ```powershell
 .\gradlew.bat build --no-daemon
@@ -112,15 +116,28 @@ Run the local test-client profile:
 .\scripts\run-test-client.ps1
 ```
 
-The runtime smoke behavior contract is tracked in [SMOKE_BEHAVIOR.md](SMOKE_BEHAVIOR.md).
-
 Run the alpha gate:
 
 ```powershell
 .\scripts\run-alpha-release-check.ps1
 ```
 
-### Project Shape
+The runtime smoke behavior contract is tracked in [SMOKE_BEHAVIOR.md](SMOKE_BEHAVIOR.md). Developer workflow details are in [docs/development.md](docs/development.md).
+
+### Stack
+
+- Minecraft `1.21.11`
+- Fabric Loader `0.19.2`
+- Fabric API `0.141.3+1.21.11`
+- Java `21`
+- owo-lib `0.13.0+1.21.11`
+- cloth-config `21.11.153`
+- lz4-java `1.8.1`
+- JUnit 5 and Fabric GameTest
+
+### Code Map
+
+Start with [modules.md](modules.md) before opening broad source trees.
 
 | Area | Responsibility |
 | --- | --- |
@@ -131,37 +148,51 @@ Run the alpha gate:
 | `src/main/java/io/github/luma/storage` | Paths, JSON manifests, binary payloads, archives, atomic writes |
 | `src/main/java/io/github/luma/integration` | Optional builder-tool adapters |
 | `src/client/java/io/github/luma` | UI controllers, screens, previews, overlays |
-| `src/main/resources/assets/lumi/special-thanks.json` | Special Thanks entries preloaded at client startup, refreshed from GitHub raw, and rendered as animated full-body showcases |
 | `src/main/java/io/github/luma/mixin` | Thin server-side Minecraft hook entrypoints |
 | `src/client/java/io/github/luma/mixin` | Thin client-side Minecraft hook entrypoints |
 | `src/test`, `src/gametest` | Unit tests, runtime tests, GameTests |
 
-High-level rules:
+Layer rules:
 
 - Domain services own product rules.
 - Minecraft APIs stay in the Minecraft adapter layer.
 - Repositories own storage layout and serialization.
 - UI controllers coordinate services; they do not own domain logic.
 
-### History Model
+### Storage Model
 
-Lumi stores project data under:
+World-level Lumi data lives under:
+
+```text
+<world>/lumi/
+```
+
+Project data lives under:
 
 ```text
 <world>/lumi/projects/<project>.mbp/
 ```
 
-Main records:
+Important records:
 
-- `project.json`: project metadata
-- `versions/*.json`: saved version manifests
+- `world-origin.json`: shared world origin and restore-safety baseline
+- `project.json`: project metadata and settings
 - `variants.json`: branch heads
-- `patches/*.meta.json`: patch metadata and indexes
+- `history-tombstones.json`: soft-deleted saves and branches
+- `work-zones.json`: named work-zone metadata and active selections
+- `versions/*.json`: saved version manifests
+- `patches/*.meta.json`: patch metadata, indexes, and stats
 - `patches/*.bin.lz4`: chunk-addressable block/entity deltas
 - `snapshots/*.bin.lz4`: checkpoint anchors
-- `recovery/*.lz4`: crash-safe working drafts
-- `recovery/expected-draft.marker`: pending draft marker for clean exits and expected unsaved work
-- `cache/baseline-chunks/`: first-touch baseline chunks
+- `preview-requests/*.json`: queued client preview work
+- `recovery/draft.bin.lz4`: compacted recovery draft
+- `recovery/draft.wal.lz4`: append-only recovery draft log
+- `recovery/expected-draft.marker`: clean pending-work marker
+- `recovery/operation-draft.bin.lz4`: isolated in-progress save/amend draft
+- `payloads/baseline-chunks/`: durable first-touch baseline chunks
+- `cache/`: disposable UI and diagnostic cache
+
+Current writers create patch payload schema v9 and snapshot payload schema v8. Current readers intentionally support patch payload schema v9 and snapshot payload schemas v7-v8. See [docs/storage-format.md](docs/storage-format.md) for exact layout and compatibility rules.
 
 ### Runtime Model
 
@@ -174,7 +205,9 @@ Hard rules:
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
 
-### Useful Diagnostics
+### Diagnostics
+
+Useful JVM flags:
 
 ```text
 -Dlumi.debug=true
@@ -187,8 +220,6 @@ Hard rules:
 ```
 
 Runtime logs are written under the normal Minecraft `logs/` directory or the world-local `lumi/test-logs/` directory for test profiles.
-
-Diagnostic telemetry sends technical failure payloads with operation/stage, exception class, bounded Lumi stack frames, and cause class chain. It does not send raw logs, exception messages, world names, coordinates, seeds, or raw NBT.
 
 ## License
 
