@@ -26,15 +26,17 @@ class SpecialThanksScreenTest {
     }
 
     @Test
-    void specialThanksPageRendersNamedSkinCards() throws IOException {
+    void specialThanksPageLoadsCatalogAndMinecraftSkinHeads() throws IOException {
         String source = Files.readString(
                 Path.of("src/client/java/io/github/luma/ui/screen/SpecialThanksScreen.java"),
                 StandardCharsets.UTF_8
         );
 
-        assertTrue(source.contains("SpecialThanksEntry"));
+        assertTrue(source.contains("SpecialThanksCatalogSource"));
+        assertTrue(source.contains("MinecraftSpecialThanksSkinResolver"));
+        assertTrue(source.contains("rebuildPreservingScroll"));
         assertTrue(source.contains("UIComponents.texture"));
-        assertTrue(source.contains("textures/entity/player/wide/steve.png"));
-        assertTrue(source.contains("\"ImZlo\""));
+        assertTrue(source.contains("entry.skinName()"));
+        assertTrue(source.contains("entry.description()"));
     }
 }
