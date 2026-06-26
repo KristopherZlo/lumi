@@ -22,6 +22,7 @@ import io.github.luma.client.telemetry.TelemetryNoticeController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.client.selection.LumiRegionSelectionTeachingController;
+import io.github.luma.client.specialthanks.SpecialThanksClientCache;
 import io.github.luma.client.update.MinecraftUpdateNoticeSink;
 import io.github.luma.client.update.UpdateWorldJoinNotifier;
 import io.github.luma.debug.StartupProfiler;
@@ -181,6 +182,7 @@ public final class LumaClient implements ClientModInitializer {
         OverlayDiagnostics.getInstance().clientRenderCallbacksRegistered("END_MAIN");
         StartupProfiler.logElapsed("client.fabric-events", eventRegistrationStartedAt);
         this.updateWorldJoinNotifier.requestStartupCheck();
+        SpecialThanksClientCache.getInstance().preload(Minecraft.getInstance());
         long hudStartedAt = StartupProfiler.start();
         WorkspaceHudCoordinator.getInstance().registerHud();
         CompareOverlayHotkeyHud.registerHud();

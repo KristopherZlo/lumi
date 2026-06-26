@@ -1,7 +1,6 @@
 package io.github.luma.ui.screen;
 
-import io.github.luma.client.specialthanks.MinecraftSpecialThanksSkinResolver;
-import io.github.luma.client.specialthanks.SpecialThanksCatalogSource;
+import io.github.luma.client.specialthanks.SpecialThanksClientCache;
 import io.github.luma.client.specialthanks.SpecialThanksEntry;
 import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
@@ -18,14 +17,10 @@ import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.VerticalAlignment;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.Util;
 
 public final class SpecialThanksScreen extends LumaScreen {
 
@@ -34,17 +29,15 @@ public final class SpecialThanksScreen extends LumaScreen {
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectHomeScreenController controller = new ProjectHomeScreenController();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
-    private final SpecialThanksCatalogSource catalogSource = new SpecialThanksCatalogSource();
-    private final MinecraftSpecialThanksSkinResolver skinResolver;
-    private List<SpecialThanksEntry> entries = new ArrayList<>(this.catalogSource.loadBundled());
-    private CompletableFuture<List<SpecialThanksEntry>> remoteCatalog;
+    private final SpecialThanksClientCache specialThanks = SpecialThanksClientCache.getInstance();
+    private final Runnable refreshListener = this::rebuild;
     private LumaScrollContainer<FlowLayout> bodyScroll;
 
     public SpecialThanksScreen(Screen parent, String projectName) {
         super(Component.translatable("luma.screen.special_thanks.title"));
         this.parent = parent;
         this.projectName = projectName;
-        this.skinResolver = new MinecraftSpecialThanksSkinResolver(this.client, this::rebuild);
+        this.specialThanks.addListener(this.refreshListener);
     }
 
     @Override
@@ -78,7 +71,7 @@ public final class SpecialThanksScreen extends LumaScreen {
         );
         root.child(window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.MORE);
-        this.loadRemoteCatalog();
+        this.specialThanks.preload(this.client);
         window.content().child(LumaUi.caption(Component.translatable("luma.special_thanks.help")));
 
         FlowLayout body = LumaUi.screenBody();
@@ -90,7 +83,14 @@ public final class SpecialThanksScreen extends LumaScreen {
 
     @Override
     public void onClose() {
+        this.specialThanks.removeListener(this.refreshListener);
         this.client.setScreen(this.parent);
+    }
+
+    @Override
+    public void removed() {
+        super.removed();
+        this.specialThanks.removeListener(this.refreshListener);
     }
 
     @Override
@@ -103,7 +103,7 @@ public final class SpecialThanksScreen extends LumaScreen {
                 Component.translatable("luma.special_thanks.people_title"),
                 Component.translatable("luma.special_thanks.people_help")
         );
-        for (SpecialThanksEntry entry : this.entries) {
+        for (SpecialThanksEntry entry : this.specialThanks.entries()) {
             section.child(this.entryCard(entry));
         }
         return section;
@@ -114,7 +114,7 @@ public final class SpecialThanksScreen extends LumaScreen {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(7);
         row.verticalAlignment(VerticalAlignment.CENTER);
-        row.child(this.skinFace(this.skinResolver.textureFor(entry.skinName())));
+        row.child(this.skinFace(this.specialThanks.textureFor(this.client, entry.skinName())));
 
         FlowLayout text = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
         text.gap(2);
@@ -130,22 +130,6 @@ public final class SpecialThanksScreen extends LumaScreen {
         face.blend(true);
         face.sizing(Sizing.fixed(32), Sizing.fixed(32));
         return face;
-    }
-
-    private void loadRemoteCatalog() {
-        if (this.remoteCatalog != null) {
-            return;
-        }
-        this.remoteCatalog = CompletableFuture.supplyAsync(this.catalogSource::loadRemoteOrBundled, Util.backgroundExecutor());
-        this.remoteCatalog.thenAccept(entries -> this.client.execute(() -> {
-            if (this.client.screen != this) {
-                return;
-            }
-            if (!entries.equals(this.entries)) {
-                this.entries = new ArrayList<>(entries);
-                this.rebuild();
-            }
-        }));
     }
 
     private void rebuild() {

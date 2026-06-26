@@ -32,11 +32,13 @@ class SpecialThanksScreenTest {
                 StandardCharsets.UTF_8
         );
 
-        assertTrue(source.contains("SpecialThanksCatalogSource"));
-        assertTrue(source.contains("MinecraftSpecialThanksSkinResolver"));
+        assertTrue(source.contains("SpecialThanksClientCache"));
+        assertTrue(source.contains("addListener"));
+        assertTrue(source.contains("removeListener"));
         assertTrue(source.contains("rebuildPreservingScroll"));
         assertTrue(source.contains("UIComponents.texture"));
         assertTrue(source.contains("entry.skinName()"));
         assertTrue(source.contains("entry.description()"));
+        assertTrue(source.contains("specialThanks.textureFor"));
     }
 }
