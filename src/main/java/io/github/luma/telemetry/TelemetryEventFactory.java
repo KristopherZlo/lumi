@@ -12,6 +12,9 @@ import java.util.function.Supplier;
 
 final class TelemetryEventFactory {
 
+    private static final int FAILURE_TRACE_LIMIT = 8;
+    private static final int FAILURE_CAUSE_LIMIT = 4;
+
     private final TelemetryEnvironmentProvider environmentProvider;
     private final Supplier<Instant> clock;
 
@@ -95,6 +98,8 @@ final class TelemetryEventFactory {
     private static void putFailure(Map<String, String> payload, Throwable failure) {
         put(payload, "failureClass", failure == null ? "" : failure.getClass().getName());
         put(payload, "failureFrame", firstLumiFrame(failure));
+        put(payload, "failureTrace", lumiTrace(failure));
+        put(payload, "failureCauseChain", causeChain(failure));
     }
 
     private static void put(Map<String, String> payload, String key, String value) {
@@ -115,9 +120,55 @@ final class TelemetryEventFactory {
         }
         for (StackTraceElement element : failure.getStackTrace()) {
             if (element.getClassName().startsWith("io.github.luma")) {
-                return element.getClassName() + "#" + element.getMethodName();
+                return formatFrame(element);
             }
         }
         return "";
+    }
+
+    private static String lumiTrace(Throwable failure) {
+        if (failure == null) {
+            return "";
+        }
+        StringBuilder trace = new StringBuilder();
+        int added = 0;
+        for (StackTraceElement element : failure.getStackTrace()) {
+            if (!element.getClassName().startsWith("io.github.luma")) {
+                continue;
+            }
+            if (trace.length() > 0) {
+                trace.append('\n');
+            }
+            trace.append(formatFrame(element));
+            added++;
+            if (added >= FAILURE_TRACE_LIMIT) {
+                break;
+            }
+        }
+        return trace.toString();
+    }
+
+    private static String causeChain(Throwable failure) {
+        StringBuilder chain = new StringBuilder();
+        Throwable cursor = failure;
+        int added = 0;
+        while (cursor != null && added < FAILURE_CAUSE_LIMIT) {
+            if (chain.length() > 0) {
+                chain.append(" -> ");
+            }
+            chain.append(cursor.getClass().getName());
+            Throwable next = cursor.getCause();
+            if (next == cursor) {
+                break;
+            }
+            cursor = next;
+            added++;
+        }
+        return chain.toString();
+    }
+
+    private static String formatFrame(StackTraceElement element) {
+        String frame = element.getClassName() + "#" + element.getMethodName();
+        return element.getLineNumber() < 0 ? frame : frame + ":" + element.getLineNumber();
     }
 }

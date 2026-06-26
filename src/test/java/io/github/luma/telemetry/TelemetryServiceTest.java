@@ -103,7 +103,7 @@ class TelemetryServiceTest {
         service.recordOperationFailed(
                 handle,
                 snapshot,
-                new IllegalStateException("Failed block write at x=12 y=64 z=-4 in C:\\Users\\Alex\\Castle World")
+                failureWithPrivateMessage()
         );
         service.flushNow();
 
@@ -117,6 +117,16 @@ class TelemetryServiceTest {
         assertEquals("42", payload.get("totalUnits"));
         assertEquals("chunks", payload.get("unitLabel"));
         assertEquals("java.lang.IllegalStateException", payload.get("failureClass"));
+        assertEquals("io.github.luma.minecraft.world.BlockChangeApplier#apply:42", payload.get("failureFrame"));
+        assertEquals(
+                "io.github.luma.minecraft.world.BlockChangeApplier#apply:42\n"
+                        + "io.github.luma.domain.service.RestoreService#restore:77",
+                payload.get("failureTrace")
+        );
+        assertEquals(
+                "java.lang.IllegalStateException -> java.lang.IllegalArgumentException",
+                payload.get("failureCauseChain")
+        );
         assertFalse(payload.containsKey("detail"));
         assertFalse(payload.containsKey("failure"));
 
@@ -127,6 +137,23 @@ class TelemetryServiceTest {
         assertFalse(payloadText.contains("snap-456"));
         assertFalse(payloadText.contains("C:\\Users"));
         assertFalse(payloadText.contains("x=12"));
+    }
+
+    private static IllegalStateException failureWithPrivateMessage() {
+        IllegalArgumentException cause = new IllegalArgumentException("Nested C:\\Users\\Alex\\Castle World failure");
+        cause.setStackTrace(new StackTraceElement[]{
+                new StackTraceElement("io.github.luma.storage.repository.SnapshotRepository", "load", "SnapshotRepository.java", 31)
+        });
+        IllegalStateException failure = new IllegalStateException(
+                "Failed block write at x=12 y=64 z=-4 in C:\\Users\\Alex\\Castle World",
+                cause
+        );
+        failure.setStackTrace(new StackTraceElement[]{
+                new StackTraceElement("io.github.luma.minecraft.world.BlockChangeApplier", "apply", "BlockChangeApplier.java", 42),
+                new StackTraceElement("net.minecraft.world.level.Level", "setBlock", "Level.java", 123),
+                new StackTraceElement("io.github.luma.domain.service.RestoreService", "restore", "RestoreService.java", 77)
+        });
+        return failure;
     }
 
     @Test

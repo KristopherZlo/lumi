@@ -183,6 +183,8 @@ Hard rules:
 
 Runtime logs are written under the normal Minecraft `logs/` directory or the world-local `lumi/test-logs/` directory for test profiles.
 
+Diagnostic telemetry sends technical failure payloads with operation/stage, exception class, bounded Lumi stack frames, and cause class chain. It does not send raw logs, exception messages, world names, coordinates, seeds, or raw NBT.
+
 ## License
 
 GPL-3.0-only. See [LICENSE](LICENSE).

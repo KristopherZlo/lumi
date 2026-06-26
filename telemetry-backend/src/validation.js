@@ -31,6 +31,8 @@ const PAYLOAD_KEYS = new Set([
   'durationMs',
   'failureClass',
   'failureFrame',
+  'failureTrace',
+  'failureCauseChain',
   'overlay',
   'elapsedMicros',
   'budgetMicros',

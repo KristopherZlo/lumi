@@ -29,6 +29,8 @@ test('accepts a valid batch and stores allowlisted events', async () => {
             stage: 'APPLYING',
             failureClass: 'java.lang.IllegalStateException',
             failureFrame: 'io.github.luma.telemetry.TelemetryService#recordOperationFailed',
+            failureTrace: 'io.github.luma.minecraft.world.BlockChangeApplier#apply:42\nio.github.luma.domain.service.RestoreService#restore:77',
+            failureCauseChain: 'java.lang.IllegalStateException -> java.lang.IllegalArgumentException',
           },
         },
       ],
@@ -42,6 +44,8 @@ test('accepts a valid batch and stores allowlisted events', async () => {
     stage: 'APPLYING',
     failureClass: 'java.lang.IllegalStateException',
     failureFrame: 'io.github.luma.telemetry.TelemetryService#recordOperationFailed',
+    failureTrace: 'io.github.luma.minecraft.world.BlockChangeApplier#apply:42\nio.github.luma.domain.service.RestoreService#restore:77',
+    failureCauseChain: 'java.lang.IllegalStateException -> java.lang.IllegalArgumentException',
   });
   assert.equal(repository.lastIp, null);
 });
