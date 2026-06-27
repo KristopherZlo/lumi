@@ -46,8 +46,6 @@ public final class LumaUi {
     private static final int STATUS_FILL = 0xFF211F18;
     private static final int STATUS_BORDER = 0xFF5A4724;
     private static final int BUTTON_WRAP_BOTTOM_MARGIN = 4;
-    private static final int ICON_BUTTON_WIDTH = 19;
-    private static final int ICON_BUTTON_HEIGHT = 12;
     private static final int VALUE_WRAP_WIDTH = 420;
     private static final int BODY_WRAP_WIDTH = 360;
 
@@ -374,7 +372,7 @@ public final class LumaUi {
         if (tooltip.getContents() instanceof TranslatableContents translatable) {
             button.id(translatable.getKey());
         }
-        button.sizing(Sizing.fixed(ICON_BUTTON_WIDTH), Sizing.fixed(ICON_BUTTON_HEIGHT));
+        button.sizing(Sizing.fixed(LumaUiScale.iconButtonWidth()), Sizing.fixed(LumaUiScale.iconButtonHeight()));
         button.tooltip(tooltip);
         button.renderer(new IconButtonRenderer(icon, disabledIcon, fill, hover, BUTTON_DISABLED));
         return button;

@@ -56,10 +56,10 @@ class LumaIconAssetsTest {
         String uiSource = Files.readString(Path.of("src/client/java/io/github/luma/ui/LumaUi.java"));
         String rendererSource = Files.readString(Path.of("src/client/java/io/github/luma/ui/IconButtonRenderer.java"));
 
-        Assertions.assertTrue(uiSource.contains("private static final int ICON_BUTTON_WIDTH = 19;"));
-        Assertions.assertTrue(uiSource.contains("private static final int ICON_BUTTON_HEIGHT = 12;"));
+        Assertions.assertTrue(uiSource.contains("LumaUiScale.iconButtonWidth()"));
+        Assertions.assertTrue(uiSource.contains("LumaUiScale.iconButtonHeight()"));
         Assertions.assertTrue(rendererSource.contains("private static final int TEXTURE_SIZE = 24;"));
-        Assertions.assertTrue(rendererSource.contains("private static final int DRAW_SIZE = 11;"));
+        Assertions.assertTrue(rendererSource.contains("LumaUiScale.iconDrawSize()"));
     }
 
     private List<Path> iconPngs() throws IOException {
