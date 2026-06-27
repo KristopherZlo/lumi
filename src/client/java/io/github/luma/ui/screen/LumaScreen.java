@@ -33,8 +33,10 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
 
     @Override
     protected void init() {
+        int currentGuiScale = this.currentGuiScale();
+        this.width = LumaUiScale.virtualSize(this.width, currentGuiScale);
+        this.height = LumaUiScale.virtualSize(this.height, currentGuiScale);
         super.init();
-        this.resizeLumaUi();
     }
 
     @Override
@@ -147,19 +149,6 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
     private static double scrollProgress(Supplier<? extends LumaScrollContainer<?>> scrollProvider) {
         LumaScrollContainer<?> scroll = scrollProvider == null ? null : scrollProvider.get();
         return scroll == null ? 0.0D : scroll.progress();
-    }
-
-    private void resizeLumaUi() {
-        if (this.uiAdapter == null) {
-            return;
-        }
-        int currentGuiScale = this.currentGuiScale();
-        this.uiAdapter.moveAndResize(
-                0,
-                0,
-                LumaUiScale.virtualSize(this.width, currentGuiScale),
-                LumaUiScale.virtualSize(this.height, currentGuiScale)
-        );
     }
 
     private MouseButtonEvent virtualClick(MouseButtonEvent click) {
