@@ -51,6 +51,16 @@ class LumaIconAssetsTest {
         Assertions.assertFalse(source.contains("styledButton(tooltip"));
     }
 
+    @Test
+    void iconButtonsUseCompactLayoutWithNativeTextureRegion() throws IOException {
+        String uiSource = Files.readString(Path.of("src/client/java/io/github/luma/ui/LumaUi.java"));
+        String rendererSource = Files.readString(Path.of("src/client/java/io/github/luma/ui/IconButtonRenderer.java"));
+
+        Assertions.assertTrue(uiSource.contains("private static final int ICON_BUTTON_HEIGHT = 18;"));
+        Assertions.assertTrue(rendererSource.contains("private static final int TEXTURE_SIZE = 24;"));
+        Assertions.assertTrue(rendererSource.contains("private static final int DRAW_SIZE = 16;"));
+    }
+
     private List<Path> iconPngs() throws IOException {
         try (var paths = Files.list(ICON_DIR)) {
             return paths

@@ -47,7 +47,7 @@ public final class LumaUi {
     private static final int STATUS_BORDER = 0xFF5A4724;
     private static final int BUTTON_WRAP_BOTTOM_MARGIN = 4;
     private static final int ICON_BUTTON_WIDTH = 28;
-    private static final int ICON_BUTTON_HEIGHT = 24;
+    private static final int ICON_BUTTON_HEIGHT = 18;
     private static final int VALUE_WRAP_WIDTH = 420;
     private static final int BODY_WRAP_WIDTH = 360;
 
