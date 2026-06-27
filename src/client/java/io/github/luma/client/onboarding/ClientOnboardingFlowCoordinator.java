@@ -1,19 +1,24 @@
 package io.github.luma.client.onboarding;
 
 import io.github.luma.LumaMod;
+import io.github.luma.client.input.KeyBindingState;
+import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.state.ProjectHomeViewState;
+import io.github.luma.ui.state.OnboardingHoldGate;
 import java.util.Objects;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.Util;
 
 /**
  * Owns the no-screen part of onboarding where the player must interact with the
@@ -27,18 +32,23 @@ public final class ClientOnboardingFlowCoordinator {
     );
     private static final int REFRESH_INTERVAL_TICKS = 10;
     private static final int PANEL_WIDTH = 330;
+    private static final int REQUIRED_WORLD_EDITS = 5;
     private static final ClientOnboardingFlowCoordinator INSTANCE = new ClientOnboardingFlowCoordinator();
 
     private final ProjectHomeScreenController stateController = new ProjectHomeScreenController();
     private final OnboardingWorldPreviewShortcutController worldPreviewShortcuts;
     private final OnboardingWorldPreviewDelay worldPreviewDelay = new OnboardingWorldPreviewDelay();
+    private final KeyBindingState keyBindingState = new KeyBindingState();
+    private final OnboardingHoldGate holdGate = new OnboardingHoldGate();
     private String projectName = "";
     private String variantId = "";
     private String statusKey = "luma.status.project_ready";
     private ClientOnboardingService onboardingService;
     private OnboardingTour tour;
     private int baselinePendingBlocks = -1;
+    private int worldEditCount;
     private int refreshCooldown;
+    private long lastHoldSampleMillis;
     private OnboardingTour.Transition worldPreviewTransition = OnboardingTour.Transition.NONE;
 
     private ClientOnboardingFlowCoordinator() {
@@ -74,7 +84,9 @@ public final class ClientOnboardingFlowCoordinator {
         this.onboardingService = onboardingService == null ? new ClientOnboardingService() : onboardingService;
         this.tour = tour;
         this.baselinePendingBlocks = -1;
+        this.worldEditCount = 0;
         this.refreshCooldown = 0;
+        this.resetHoldGate();
         this.worldPreviewTransition = OnboardingTour.Transition.NONE;
         this.worldPreviewShortcuts.clear();
         this.worldPreviewDelay.clear();
@@ -94,7 +106,9 @@ public final class ClientOnboardingFlowCoordinator {
         this.onboardingService = onboardingService == null ? new ClientOnboardingService() : onboardingService;
         this.tour = tour;
         this.baselinePendingBlocks = -1;
+        this.worldEditCount = 0;
         this.refreshCooldown = 0;
+        this.resetHoldGate();
         this.worldPreviewTransition = transition == null ? OnboardingTour.Transition.NONE : transition;
         this.worldPreviewShortcuts.start(this.worldPreviewTransition);
         this.worldPreviewDelay.start();
@@ -115,6 +129,10 @@ public final class ClientOnboardingFlowCoordinator {
         if (client.screen != null) {
             return;
         }
+        if ("preview_changes".equals(this.tour.currentPageId())) {
+            this.tickPendingPreview(client);
+            return;
+        }
         if (!"break_block".equals(this.tour.currentPageId())) {
             this.clear();
             return;
@@ -130,28 +148,32 @@ public final class ClientOnboardingFlowCoordinator {
         int pendingBlocks = this.pendingBlocks();
         if (this.baselinePendingBlocks < 0) {
             this.baselinePendingBlocks = pendingBlocks;
+            this.worldEditCount = 0;
             return;
         }
-        if (pendingBlocks <= this.baselinePendingBlocks) {
+        this.worldEditCount = trackedWorldEdits(this.baselinePendingBlocks, pendingBlocks);
+        if (this.worldEditCount < REQUIRED_WORLD_EDITS) {
             return;
         }
 
         this.tour.advanceAfterWorldEdit();
-        OnboardingTour activeTour = this.tour;
-        String activeProjectName = this.projectName;
-        String activeVariantId = this.variantId;
-        String activeStatusKey = this.statusKey;
-        ClientOnboardingService activeService = this.onboardingService;
-        this.clear();
-        client.setScreen(new OnboardingScreen(
-                null,
-                activeProjectName,
-                activeVariantId,
-                activeStatusKey,
-                activeService,
-                activeTour,
-                false
-        ));
+        this.returnToOnboarding(client);
+    }
+
+    private void tickPendingPreview(Minecraft client) {
+        KeyMapping actionKey = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
+        boolean held = this.keyBindingState.isDown(client, actionKey);
+        long now = Util.getMillis();
+        long elapsedMillis = held && this.lastHoldSampleMillis > 0L
+                ? Math.min(100L, now - this.lastHoldSampleMillis)
+                : 0L;
+        this.lastHoldSampleMillis = held ? now : 0L;
+        if (!this.holdGate.update(held, elapsedMillis)) {
+            return;
+        }
+
+        this.tour.advanceAfterPendingPreview();
+        this.returnToOnboarding(client);
     }
 
     private void tickWorldPreview(Minecraft client) {
@@ -191,19 +213,34 @@ public final class ClientOnboardingFlowCoordinator {
             this.renderWorldPreview(drawContext);
             return;
         }
-        if (!"break_block".equals(this.tour.currentPageId())) {
+        if (!"break_block".equals(this.tour.currentPageId())
+                && !"preview_changes".equals(this.tour.currentPageId())) {
             return;
         }
 
         Font font = client.font;
         int x = Math.max(8, (drawContext.guiWidth() - PANEL_WIDTH) / 2);
-        int y = Math.max(8, drawContext.guiHeight() - 88);
-        int height = 58;
+        int y = Math.max(8, drawContext.guiHeight() - 98);
+        int height = "break_block".equals(this.tour.currentPageId()) ? 68 : 58;
         drawContext.fill(x, y, x + PANEL_WIDTH, y + height, 0xF0171B1E);
         drawContext.renderOutline(x, y, PANEL_WIDTH, height, 0xFF3B4147);
         drawContext.drawString(font, this.tour.headerText(), x + 8, y + 8, 0xFF98A6B3, false);
         drawContext.drawString(font, this.tour.pageName(), x + 8, y + 20, 0xFF4ADE80, false);
         drawContext.drawString(font, this.tour.helpText(), x + 8, y + 34, 0xFFF3F7FA, false);
+        if ("break_block".equals(this.tour.currentPageId())) {
+            drawContext.drawString(
+                    font,
+                    Component.translatable(
+                            "luma.onboarding.world_edit_counter",
+                            Math.min(REQUIRED_WORLD_EDITS, this.worldEditCount),
+                            REQUIRED_WORLD_EDITS
+                    ),
+                    x + 8,
+                    y + 48,
+                    0xFF98A6B3,
+                    false
+            );
+        }
     }
 
     private void renderWorldPreview(GuiGraphics drawContext) {
@@ -263,6 +300,31 @@ public final class ClientOnboardingFlowCoordinator {
         }
     }
 
+    static int trackedWorldEdits(int baselinePendingBlocks, int pendingBlocks) {
+        if (baselinePendingBlocks < 0) {
+            return 0;
+        }
+        return Math.max(0, pendingBlocks - baselinePendingBlocks);
+    }
+
+    private void returnToOnboarding(Minecraft client) {
+        OnboardingTour activeTour = this.tour;
+        String activeProjectName = this.projectName;
+        String activeVariantId = this.variantId;
+        String activeStatusKey = this.statusKey;
+        ClientOnboardingService activeService = this.onboardingService;
+        this.clear();
+        client.setScreen(new OnboardingScreen(
+                null,
+                activeProjectName,
+                activeVariantId,
+                activeStatusKey,
+                activeService,
+                activeTour,
+                false
+        ));
+    }
+
     private void clear() {
         this.projectName = "";
         this.variantId = "";
@@ -270,9 +332,16 @@ public final class ClientOnboardingFlowCoordinator {
         this.onboardingService = null;
         this.tour = null;
         this.baselinePendingBlocks = -1;
+        this.worldEditCount = 0;
         this.refreshCooldown = 0;
+        this.resetHoldGate();
         this.worldPreviewTransition = OnboardingTour.Transition.NONE;
         this.worldPreviewShortcuts.clear();
         this.worldPreviewDelay.clear();
+    }
+
+    private void resetHoldGate() {
+        this.holdGate.reset();
+        this.lastHoldSampleMillis = 0L;
     }
 }

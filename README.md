@@ -61,11 +61,10 @@ For dedicated servers, install Lumi on both the server and every client that use
 
 ### Quick Start
 
-1. Press `U` to open Build History.
-2. Create or open a project for the current build area.
-3. Build normally.
-4. Press `Left Alt+S` to save the current work.
-5. Use compare, restore, branches, or undo/redo when an idea goes wrong.
+1. Create or open a project for the current build area.
+2. Follow the quick tour: make 5 block edits, preview them with `Left Alt`, undo/redo with `Left Alt+Z` and `Left Alt+Y`, then save with `Left Alt+S`.
+3. Press `U` to open Build History.
+4. Use save cards for compare, restore, branches, or older checkpoints when an idea goes wrong.
 
 ### Default Controls
 

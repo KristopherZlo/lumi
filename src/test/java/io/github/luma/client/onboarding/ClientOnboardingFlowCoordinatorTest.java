@@ -48,6 +48,13 @@ class ClientOnboardingFlowCoordinatorTest {
         Assertions.assertFalse(coordinator.suppressesLumiShortcuts());
     }
 
+    @Test
+    void trackedWorldEditsCountsOnlyChangesAfterBaseline() {
+        Assertions.assertEquals(0, ClientOnboardingFlowCoordinator.trackedWorldEdits(-1, 4));
+        Assertions.assertEquals(0, ClientOnboardingFlowCoordinator.trackedWorldEdits(5, 3));
+        Assertions.assertEquals(3, ClientOnboardingFlowCoordinator.trackedWorldEdits(5, 8));
+    }
+
     private ClientOnboardingService service() {
         return new ClientOnboardingService(new ClientOnboardingStateRepository(this.tempDir.resolve("lumi-client.json")));
     }

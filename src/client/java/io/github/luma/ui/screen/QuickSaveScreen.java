@@ -17,6 +17,7 @@ import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.List;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -28,6 +29,8 @@ public final class QuickSaveScreen extends LumaScreen {
 
     private final Minecraft client = Minecraft.getInstance();
     private final QuickSaveScreenController controller = new QuickSaveScreenController();
+    private final Screen parent;
+    private final Runnable onSaved;
     private String saveMessage = "";
     private String saveTags = "";
     private String status = "luma.status.quick_save_ready";
@@ -36,7 +39,13 @@ public final class QuickSaveScreen extends LumaScreen {
     private TextBoxComponent saveTagsInput;
 
     public QuickSaveScreen() {
+        this(null, null);
+    }
+
+    public QuickSaveScreen(Screen parent, Runnable onSaved) {
         super(Component.translatable("luma.screen.quick_save.title"));
+        this.parent = parent;
+        this.onSaved = onSaved;
     }
 
     @Override
@@ -79,7 +88,11 @@ public final class QuickSaveScreen extends LumaScreen {
 
     @Override
     public void onClose() {
-        this.closeLumaUi();
+        if (this.parent == null) {
+            this.closeLumaUi();
+        } else {
+            this.client.setScreen(this.parent);
+        }
     }
 
     private FlowLayout messageField() {
@@ -140,7 +153,11 @@ public final class QuickSaveScreen extends LumaScreen {
         String result = this.controller.saveCurrentWorkspace(this.saveMessage, ProjectVersionTags.parse(this.saveTags));
         if ("luma.status.save_started".equals(result)) {
             this.client.gui.setOverlayMessage(ActionBarMessagePresenter.info(result), false);
-            this.closeLumaUi();
+            if (this.onSaved == null) {
+                this.closeLumaUi();
+            } else {
+                this.onSaved.run();
+            }
             return;
         }
         this.refresh(result);

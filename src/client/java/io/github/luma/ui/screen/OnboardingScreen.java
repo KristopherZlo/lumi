@@ -122,6 +122,7 @@ public final class OnboardingScreen extends LumaScreen implements LumiShortcutSu
             case OPEN_WORKSPACE -> this.openWorkspaceWithOnboarding();
             case CLOSE_WORKSPACE -> this.closeWorkspaceForWorldStep();
             case OPEN_CONTROLS -> this.openControls();
+            case OPEN_QUICK_SAVE -> this.openQuickSaveDialog();
             case EXECUTE_UNDO, EXECUTE_REDO -> this.executeWorldPreview(transition);
             case COMPLETE -> this.completeAndOpenWorkspace();
             case NONE -> {
@@ -152,6 +153,22 @@ public final class OnboardingScreen extends LumaScreen implements LumiShortcutSu
                 this.onboardingService,
                 this.tour
         ));
+    }
+
+    private void openQuickSaveDialog() {
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(new QuickSaveScreen(this, () -> {
+            this.tour.advanceAfterQuickSave();
+            client.setScreen(new OnboardingScreen(
+                    null,
+                    this.projectName,
+                    this.variantId,
+                    this.statusKey,
+                    this.onboardingService,
+                    this.tour,
+                    false
+            ));
+        }));
     }
 
     private void closeWorkspaceForWorldStep() {

@@ -29,6 +29,29 @@ public final class OnboardingTour {
     private static final int MAX_DIALOG_WIDTH = 320;
     private static final List<Page> PAGES = List.of(
             Page.info("welcome"),
+            Page.world("break_block"),
+            Page.world("preview_changes"),
+            Page.hold(
+                    "undo_world",
+                    Transition.EXECUTE_UNDO,
+                    "luma.onboarding.hold_undo",
+                    LumiClientKeyBindings.Role.ACTION,
+                    LumiClientKeyBindings.Role.UNDO
+            ),
+            Page.hold(
+                    "redo_world",
+                    Transition.EXECUTE_REDO,
+                    "luma.onboarding.hold_redo",
+                    LumiClientKeyBindings.Role.ACTION,
+                    LumiClientKeyBindings.Role.REDO
+            ),
+            Page.hold(
+                    "save_shortcut",
+                    Transition.OPEN_QUICK_SAVE,
+                    "luma.onboarding.hold_quick_save",
+                    LumiClientKeyBindings.Role.ACTION,
+                    LumiClientKeyBindings.Role.QUICK_SAVE
+            ),
             Page.hold(
                     "open",
                     Transition.OPEN_WORKSPACE,
@@ -37,7 +60,7 @@ public final class OnboardingTour {
             ),
             Page.spotlight("save_spotlight", SpotlightTarget.SAVE_BUILD),
             Page.spotlight("changes_spotlight", SpotlightTarget.SEE_CHANGES),
-            Page.info("fix_mistakes"),
+            Page.info("commit_navigation"),
             Page.info("finish")
     );
 
@@ -126,6 +149,24 @@ public final class OnboardingTour {
 
     public Transition advanceAfterWorldEdit() {
         if (!"break_block".equals(this.currentPage().id())) {
+            return Transition.NONE;
+        }
+        this.flow = this.flow.next();
+        this.resetHoldGate();
+        return Transition.REBUILD;
+    }
+
+    public Transition advanceAfterPendingPreview() {
+        if (!"preview_changes".equals(this.currentPage().id())) {
+            return Transition.NONE;
+        }
+        this.flow = this.flow.next();
+        this.resetHoldGate();
+        return Transition.REBUILD;
+    }
+
+    public Transition advanceAfterQuickSave() {
+        if (!"save_shortcut".equals(this.currentPage().id())) {
             return Transition.NONE;
         }
         this.flow = this.flow.next();
@@ -319,6 +360,10 @@ public final class OnboardingTour {
         if (!this.canAdvance(page)) {
             return Transition.NONE;
         }
+        if (page.worldStep()) {
+            this.resetHoldGate();
+            return Transition.CLOSE_WORKSPACE;
+        }
         if (this.flow.lastPage()) {
             return Transition.COMPLETE;
         }
@@ -338,6 +383,10 @@ public final class OnboardingTour {
     private Transition advanceAfterHold(Page page) {
         if (this.flow.lastPage()) {
             return Transition.COMPLETE;
+        }
+        if (page.onHold() == Transition.OPEN_QUICK_SAVE) {
+            this.resetHoldGate();
+            return page.onHold();
         }
         this.flow = this.flow.next();
         this.resetHoldGate();
@@ -397,6 +446,7 @@ public final class OnboardingTour {
         OPEN_WORKSPACE,
         CLOSE_WORKSPACE,
         OPEN_CONTROLS,
+        OPEN_QUICK_SAVE,
         EXECUTE_UNDO,
         EXECUTE_REDO,
         COMPLETE
@@ -411,6 +461,7 @@ public final class OnboardingTour {
             ShortcutCheck shortcutCheck,
             Transition onHold,
             SpotlightTarget spotlightTarget,
+            boolean worldStep,
             boolean shortcutsTable
     ) {
         private String helpKey() {
@@ -422,7 +473,11 @@ public final class OnboardingTour {
         }
 
         private static Page info(String id, boolean shortcutsTable) {
-            return new Page(id, null, Transition.NONE, SpotlightTarget.NONE, shortcutsTable);
+            return new Page(id, null, Transition.NONE, SpotlightTarget.NONE, false, shortcutsTable);
+        }
+
+        private static Page world(String id) {
+            return new Page(id, null, Transition.NONE, SpotlightTarget.NONE, true, false);
         }
 
         private static Page hold(
@@ -436,12 +491,13 @@ public final class OnboardingTour {
                     new ShortcutCheck(instructionKey, new Shortcut(List.of(roles))),
                     onHold,
                     SpotlightTarget.NONE,
+                    false,
                     false
             );
         }
 
         private static Page spotlight(String id, SpotlightTarget target) {
-            return new Page(id, null, Transition.NONE, target, false);
+            return new Page(id, null, Transition.NONE, target, false, false);
         }
     }
 
