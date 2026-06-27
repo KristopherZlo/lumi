@@ -89,4 +89,14 @@ class ProjectScreenHistoryBranchSelectionTest {
                 "Build History restore should preserve the branch whose history card started the restore"
         );
     }
+
+    @Test
+    void onboardingHistorySpotlightTargetsLatestRestoreButton() throws IOException {
+        String sections = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectScreenSections.java"));
+        String card = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectSaveCardView.java"));
+
+        assertTrue(sections.contains("onboardingLatestRestoreButton"));
+        assertTrue(sections.contains("this.saveCardView.onboardingRestoreButton()"));
+        assertTrue(card.contains("onboardingRestoreButton"));
+    }
 }

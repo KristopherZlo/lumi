@@ -29,6 +29,7 @@ public final class ProjectSaveCardView {
 
     private final PreviewFactory previewFactory;
     private final Actions actions;
+    private UIComponent onboardingRestoreButton;
 
     ProjectSaveCardView(ProjectScreenController previewController, ProjectScreenSections.Actions actions) {
         this(
@@ -99,6 +100,9 @@ public final class ProjectSaveCardView {
     }
 
     public FlowLayout render(Model model) {
+        if (model.onboardingRestoreTarget()) {
+            this.onboardingRestoreButton = null;
+        }
         FlowLayout card = model.current()
                 ? LumaUi.activeInsetPanel(Sizing.fill(100), Sizing.content())
                 : LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
@@ -114,6 +118,10 @@ public final class ProjectSaveCardView {
             card.child(this.tagEditor(model));
         }
         return card;
+    }
+
+    UIComponent onboardingRestoreButton() {
+        return this.onboardingRestoreButton;
     }
 
     private FlowLayout wideRow(Model model) {
@@ -259,6 +267,9 @@ public final class ProjectSaveCardView {
                     pressed -> this.actions.openBranchDialog(model.version())
             );
         };
+        if (actionState.action() == ProjectSaveCardLayout.Action.RESTORE && model.onboardingRestoreTarget()) {
+            this.onboardingRestoreButton = button;
+        }
         button.active(actionState.active());
         return button;
     }
@@ -273,7 +284,8 @@ public final class ProjectSaveCardView {
             boolean createVariantAction,
             boolean tagEditorVisible,
             String tagEditorText,
-            List<String> knownTags
+            List<String> knownTags,
+            boolean onboardingRestoreTarget
     ) {
         public Model(
                 String projectName,
@@ -283,7 +295,7 @@ public final class ProjectSaveCardView {
                 boolean operationActive,
                 int width
         ) {
-            this(projectName, version, versionVariant, current, operationActive, width, true, false, "", List.of());
+            this(projectName, version, versionVariant, current, operationActive, width, true, false, "", List.of(), false);
         }
 
         public Model(
@@ -295,7 +307,7 @@ public final class ProjectSaveCardView {
                 int width,
                 boolean createVariantAction
         ) {
-            this(projectName, version, versionVariant, current, operationActive, width, createVariantAction, false, "", List.of());
+            this(projectName, version, versionVariant, current, operationActive, width, createVariantAction, false, "", List.of(), false);
         }
 
         public Model {

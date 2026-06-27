@@ -41,7 +41,7 @@ public final class ProjectScreenSections {
     private OnboardingTour.SpotlightTarget onboardingSpotlightTarget = OnboardingTour.SpotlightTarget.NONE;
     private ButtonComponent onboardingSaveButton;
     private ButtonComponent onboardingChangesButton;
-    private UIComponent onboardingLatestSaveCard;
+    private UIComponent onboardingLatestRestoreButton;
 
     public ProjectScreenSections(ProjectScreenController previewController, Actions actions) {
         this.previewController = Objects.requireNonNull(previewController, "previewController");
@@ -53,14 +53,14 @@ public final class ProjectScreenSections {
         this.onboardingSpotlightTarget = target == null ? OnboardingTour.SpotlightTarget.NONE : target;
         this.onboardingSaveButton = null;
         this.onboardingChangesButton = null;
-        this.onboardingLatestSaveCard = null;
+        this.onboardingLatestRestoreButton = null;
     }
 
     public UIComponent onboardingTargetComponent(OnboardingTour.SpotlightTarget target) {
         return switch (target == null ? OnboardingTour.SpotlightTarget.NONE : target) {
             case SAVE_BUILD -> this.onboardingSaveButton;
             case SEE_CHANGES -> this.onboardingChangesButton;
-            case LATEST_SAVE -> this.onboardingLatestSaveCard;
+            case LATEST_SAVE_RESTORE -> this.onboardingLatestRestoreButton;
             case NONE -> null;
         };
     }
@@ -343,10 +343,11 @@ public final class ProjectScreenSections {
                 true,
                 entry.version().id().equals(model.tagEditorVersionId()),
                 model.tagEditorText(),
-                TagInputSupport.knownTags(model.state().versions())
+                TagInputSupport.knownTags(model.state().versions()),
+                this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.LATEST_SAVE_RESTORE && entry.current()
         ));
-        if (this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.LATEST_SAVE && entry.current()) {
-            this.onboardingLatestSaveCard = card;
+        if (this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.LATEST_SAVE_RESTORE && entry.current()) {
+            this.onboardingLatestRestoreButton = this.saveCardView.onboardingRestoreButton();
         }
         return card;
     }

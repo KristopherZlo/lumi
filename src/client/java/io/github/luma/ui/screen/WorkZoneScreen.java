@@ -639,7 +639,8 @@ public final class WorkZoneScreen extends LumaScreen {
                 true,
                 version.id().equals(this.tagEditorVersionId),
                 this.tagEditorText,
-                TagInputSupport.knownTags(this.state.versions())
+                TagInputSupport.knownTags(this.state.versions()),
+                false
         ));
     }
 

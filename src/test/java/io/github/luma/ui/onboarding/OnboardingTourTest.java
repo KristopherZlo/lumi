@@ -1,5 +1,8 @@
 package io.github.luma.ui.onboarding;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -70,7 +73,7 @@ class OnboardingTourTest {
     }
 
     @Test
-    void commitNavigationHighlightsLatestSaveCard() {
+    void commitNavigationHighlightsLatestSaveRestoreButton() {
         OnboardingTour tour = new OnboardingTour();
         tour.next();
         tour.advanceAfterWorldEdit();
@@ -83,6 +86,15 @@ class OnboardingTourTest {
         tour.next();
 
         Assertions.assertEquals("commit_navigation", tour.currentPageId());
-        Assertions.assertEquals(OnboardingTour.SpotlightTarget.LATEST_SAVE, tour.workspaceSpotlightTarget());
+        Assertions.assertEquals(OnboardingTour.SpotlightTarget.LATEST_SAVE_RESTORE, tour.workspaceSpotlightTarget());
+    }
+
+    @Test
+    void previewAndFinishPagesRenderRealShortcutRows() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/onboarding/OnboardingTour.java"));
+
+        Assertions.assertTrue(source.contains("previewShortcutRow("));
+        Assertions.assertTrue(source.contains("finishInfoRow("));
+        Assertions.assertTrue(source.contains("LumiClientKeyBindings.Role.INFO"));
     }
 }
