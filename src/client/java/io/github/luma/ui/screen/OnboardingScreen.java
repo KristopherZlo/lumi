@@ -172,7 +172,30 @@ public final class OnboardingScreen extends LumaScreen implements LumiShortcutSu
     }
 
     private void closeWorkspaceForWorldStep() {
+        startWorldStepCoordinator(
+                this.projectName,
+                this.variantId,
+                this.statusKey,
+                this.onboardingService,
+                this.tour
+        );
         Minecraft.getInstance().setScreen(null);
+    }
+
+    static void startWorldStepCoordinator(
+            String projectName,
+            String variantId,
+            String statusKey,
+            ClientOnboardingService onboardingService,
+            OnboardingTour tour
+    ) {
+        ClientOnboardingFlowCoordinator.getInstance().startBreakBlockStep(
+                projectName,
+                variantId,
+                statusKey,
+                onboardingService,
+                tour
+        );
     }
 
     private void executeWorldPreview(OnboardingTour.Transition transition) {

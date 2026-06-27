@@ -118,6 +118,11 @@ public final class ClientOnboardingFlowCoordinator {
         return this.worldPreviewActive();
     }
 
+    public boolean trackingWorldStep() {
+        return this.active() && ("break_block".equals(this.tour.currentPageId())
+                || "preview_changes".equals(this.tour.currentPageId()));
+    }
+
     public void tick(Minecraft client) {
         if (!this.active() || client == null) {
             return;
