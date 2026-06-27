@@ -26,11 +26,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.function.BiConsumer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 public final class ProjectUiSupport {
 
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
+    private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/image.png");
 
     private ProjectUiSupport() {
     }
@@ -250,7 +252,11 @@ public final class ProjectUiSupport {
         if (loading) {
             placeholder.child(new LoadingAnimationComponent(Math.min(32, Math.max(16, height / 3))));
         } else {
-            placeholder.child(LumaUi.caption(Component.translatable("luma.history.no_preview")));
+            int iconSize = Math.min(32, Math.max(16, height / 3));
+            var icon = UIComponents.texture(NO_PREVIEW_ICON, 0, 0, 16, 16, 16, 16);
+            icon.blend(true);
+            icon.sizing(Sizing.fixed(iconSize), Sizing.fixed(iconSize));
+            placeholder.child(icon);
         }
         return placeholder;
     }

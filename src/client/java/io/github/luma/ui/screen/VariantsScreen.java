@@ -113,7 +113,7 @@ public final class VariantsScreen extends LumaScreen {
                 this.zoneMode() ? this.zoneColorArgb() : null
         );
         if (this.zoneMode()) {
-            window.titleBar().child(LumaUi.iconButton("arrow-left", Component.translatable("luma.action.back"), button ->
+            window.titleBar().child(LumaUi.iconButton("chevron-left", Component.translatable("luma.action.back"), button ->
                     this.router.openVariantsIgnoringActiveZone(this.parent, this.projectName)));
         }
         if (this.shouldShowStatusBanner()) {
@@ -288,7 +288,7 @@ public final class VariantsScreen extends LumaScreen {
         }
 
         boolean protectedMain = variant.main() || Objects.equals("main", variant.id());
-        ButtonComponent deleteButton = LumaUi.iconButton("trash-2", Component.translatable("luma.action.delete_branch"), button -> {
+        ButtonComponent deleteButton = LumaUi.iconButton("trash", Component.translatable("luma.action.delete_branch"), button -> {
             this.pendingDeleteVariantId = variant.id();
             this.deleteVariantName = "";
             this.rebuild();

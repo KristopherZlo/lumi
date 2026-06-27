@@ -129,7 +129,7 @@ public final class ProjectScreenSections {
         amendButton.active(activeHead != null && !pending.isEmpty() && !operationActive);
         actions.child(amendButton);
 
-        ButtonComponent changesButton = LumaUi.button(Component.translatable("luma.action.see_changes"), button -> this.actions.openCompare(
+        ButtonComponent changesButton = LumaUi.iconButton("see-changes", Component.translatable("luma.action.see_changes"), button -> this.actions.openCompare(
                 activeHead == null ? "" : activeHead.id(),
                 CompareScreenController.CURRENT_WORLD_REFERENCE,
                 activeHead == null ? "" : activeHead.id()
@@ -234,7 +234,7 @@ public final class ProjectScreenSections {
         viewToggle.gap(4);
 
         ButtonComponent cards = LumaUi.iconButton(
-                "view-cards",
+                "unordered-list",
                 Component.translatable("luma.history.view_cards"),
                 !model.historyGraphVisible(),
                 button -> this.actions.setHistoryGraphVisible(false)
@@ -242,7 +242,7 @@ public final class ProjectScreenSections {
         viewToggle.child(cards);
 
         ButtonComponent graph = LumaUi.iconButton(
-                "view-graph",
+                "graph",
                 Component.translatable("luma.history.view_graph"),
                 model.historyGraphVisible(),
                 button -> this.actions.setHistoryGraphVisible(true)

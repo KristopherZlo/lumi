@@ -265,7 +265,7 @@ public final class ShareScreen extends LumaScreen {
         )));
 
         FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.iconButton("folder-open", Component.translatable("luma.action.open_project"), button -> this.router.openProjectIgnoringRecovery(
+        actions.child(LumaUi.iconButton("folder", Component.translatable("luma.action.open_project"), button -> this.router.openProjectIgnoringRecovery(
                 this,
                 importedProject.projectName()
         )));
@@ -278,7 +278,7 @@ public final class ShareScreen extends LumaScreen {
         });
         reviewButton.active(true);
         actions.child(reviewButton);
-        ButtonComponent deleteButton = LumaUi.iconButton("trash-2", Component.translatable("luma.action.delete_package"), button -> this.deleteImportedProject(importedProject));
+        ButtonComponent deleteButton = LumaUi.iconButton("trash", Component.translatable("luma.action.delete_package"), button -> this.deleteImportedProject(importedProject));
         deleteButton.active(!this.operationActive());
         actions.child(deleteButton);
         card.child(actions);

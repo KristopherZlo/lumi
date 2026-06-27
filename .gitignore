@@ -8,6 +8,7 @@ logs/
 bin/
 site/
 structures/
+src/main/resources/assets/lumi/textures/gui/new-icons/
 
 *.log
 *.tmp

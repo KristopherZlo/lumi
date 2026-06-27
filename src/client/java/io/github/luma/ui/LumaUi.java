@@ -214,7 +214,7 @@ public final class LumaUi {
         header.verticalAlignment(VerticalAlignment.CENTER);
         header.child(accent(Component.translatable(hint.titleKey())));
         header.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
-        ButtonComponent dismiss = iconButton("missing-close", Component.translatable("luma.action.dismiss_hint"), onDismiss);
+        ButtonComponent dismiss = iconButton("close", Component.translatable("luma.action.dismiss_hint"), onDismiss);
         header.child(dismiss);
         panel.child(header);
         panel.child(caption(Component.translatable(hint.bodyKey())));
@@ -366,7 +366,7 @@ public final class LumaUi {
         Identifier disabledIcon = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/" + iconName + "_disabled.png");
         int fill = selected ? STATUS_FILL : BUTTON_FILL;
         int hover = selected ? STATUS_FILL : BUTTON_HOVER;
-        ButtonComponent button = styledButton(Component.empty(), selected ? pressed -> {
+        ButtonComponent button = styledButton(tooltip, selected ? pressed -> {
         } : onPress, fill, hover, BUTTON_DISABLED);
         button.sizing(Sizing.fixed(28), Sizing.fixed(18));
         button.tooltip(tooltip);
@@ -375,7 +375,7 @@ public final class LumaUi {
     }
 
     public static ButtonComponent closeButton(Consumer<ButtonComponent> onPress) {
-        return iconButton("missing-close", Component.translatable("luma.action.close"), onPress);
+        return iconButton("close", Component.translatable("luma.action.close"), onPress);
     }
 
     private static ButtonComponent styledButton(

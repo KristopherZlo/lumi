@@ -195,7 +195,7 @@ public final class ProjectSaveCardView {
             row.child(LumaUi.caption(Component.literal("#" + tag)));
         }
         row.child(LumaUi.iconButton(
-                "missing-tag",
+                "tags",
                 Component.translatable("luma.action.edit_tags"),
                 button -> this.actions.toggleTagEditor(model.version())
         ));
@@ -248,12 +248,12 @@ public final class ProjectSaveCardView {
     private ButtonComponent actionButton(Model model, ProjectSaveCardLayout.ActionState actionState) {
         ButtonComponent button = switch (actionState.action()) {
             case OPEN -> LumaUi.iconButton(
-                    "folder-open",
+                    "folder",
                     Component.translatable("luma.action.open_save"),
                     pressed -> this.actions.openSaveDetails(model.version().id())
             );
             case RESTORE -> LumaUi.iconButton(
-                    "rotate-ccw",
+                    "rollback",
                     Component.translatable("luma.action.restore_this_save"),
                     pressed -> {
                         if (model.versionVariant() != null) {
@@ -262,7 +262,7 @@ public final class ProjectSaveCardView {
                     }
             );
             case CREATE_VARIANT -> LumaUi.iconButton(
-                    "git-branch",
+                    "branch",
                     Component.translatable("luma.action.create_idea"),
                     pressed -> this.actions.openBranchDialog(model.version())
             );

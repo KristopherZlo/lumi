@@ -262,7 +262,7 @@ public final class SaveDetailsScreen extends LumaScreen {
                 row.child(LumaUi.chip(Component.literal("#" + tag)));
             }
         }
-        row.child(LumaUi.iconButton("missing-tag", Component.translatable("luma.action.edit_tags"), button -> {
+        row.child(LumaUi.iconButton("tags", Component.translatable("luma.action.edit_tags"), button -> {
             this.tagEditorVisible = !this.tagEditorVisible;
             this.rebuild();
         }));
@@ -335,20 +335,20 @@ public final class SaveDetailsScreen extends LumaScreen {
         ));
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent zoomOut = LumaUi.iconButton("zoom-out", Component.translatable("luma.action.zoom_out"), button -> {
+        ButtonComponent zoomOut = LumaUi.iconButton("minus", Component.translatable("luma.action.zoom_out"), button -> {
             this.previewZoomStep = Math.max(0, this.previewZoomStep - 1);
             this.rebuild();
         });
         zoomOut.active(this.previewZoomStep > 0);
         actions.child(zoomOut);
 
-        ButtonComponent zoomIn = LumaUi.iconButton("zoom-in", Component.translatable("luma.action.zoom_in"), button -> {
+        ButtonComponent zoomIn = LumaUi.iconButton("plus", Component.translatable("luma.action.zoom_in"), button -> {
             this.previewZoomStep = Math.min(MAX_PREVIEW_ZOOM_STEP, this.previewZoomStep + 1);
             this.rebuild();
         });
         zoomIn.active(this.previewZoomStep < MAX_PREVIEW_ZOOM_STEP);
         actions.child(zoomIn);
-        ButtonComponent left = LumaUi.iconButton("arrow-left", Component.translatable("luma.action.back"), button -> this.panPreview(-24, 0));
+        ButtonComponent left = LumaUi.iconButton("chevron-left", Component.translatable("luma.action.back"), button -> this.panPreview(-24, 0));
         left.active(this.previewZoomStep > 0);
         actions.child(left);
         ButtonComponent up = LumaUi.iconButton("chevron-up", Component.translatable("luma.action.preview_pan_up"), button -> this.panPreview(0, -24));
@@ -357,7 +357,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         ButtonComponent down = LumaUi.iconButton("chevron-down", Component.translatable("luma.action.preview_pan_down"), button -> this.panPreview(0, 24));
         down.active(this.previewZoomStep > 0);
         actions.child(down);
-        ButtonComponent right = LumaUi.iconButton("arrow-right", Component.translatable("luma.action.next"), button -> this.panPreview(24, 0));
+        ButtonComponent right = LumaUi.iconButton("chevron-right", Component.translatable("luma.action.next"), button -> this.panPreview(24, 0));
         right.active(this.previewZoomStep > 0);
         actions.child(right);
         panel.child(actions);
@@ -419,7 +419,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         actions.child(restoreButton);
 
         ButtonComponent branchButton = LumaUi.iconButton(
-                "git-branch",
+                "branch",
                 Component.translatable("luma.save_details.create_idea"),
                 button -> this.openBranchDialog(version)
         );
@@ -468,7 +468,7 @@ public final class SaveDetailsScreen extends LumaScreen {
             this.rebuild();
         }));
 
-        ButtonComponent deleteButton = LumaUi.iconButton("trash-2", Component.translatable("luma.action.delete_save"), button -> {
+        ButtonComponent deleteButton = LumaUi.iconButton("trash", Component.translatable("luma.action.delete_save"), button -> {
             this.pendingDeleteConfirmation = true;
             this.refresh("luma.status.version_delete_confirm");
         });

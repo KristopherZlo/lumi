@@ -139,7 +139,7 @@ public final class WorkZoneScreen extends LumaScreen {
         this.sidebarNavigation.attach(window, this, this.effectiveProjectName(), ProjectWorkspaceTab.ZONES, this.activeZoneColor());
         WorkZone focused = this.focusedZone();
         if (focused != null && !this.zonePickerVisible) {
-            window.titleBar().child(LumaUi.iconButton("arrow-left", Component.translatable("luma.action.back"), button -> {
+            window.titleBar().child(LumaUi.iconButton("chevron-left", Component.translatable("luma.action.back"), button -> {
                 this.zonePickerVisible = true;
                 this.openedZoneId = "";
                 this.rebuild();
@@ -297,7 +297,7 @@ public final class WorkZoneScreen extends LumaScreen {
         actions.gap(4);
         actions.verticalAlignment(VerticalAlignment.CENTER);
         ButtonComponent enterOrLeave = LumaUi.iconButton(
-                active ? "log-out" : "log-in",
+                active ? "leave" : "join",
                 Component.translatable(active ? "luma.zones.leave" : "luma.zones.enter"),
                 button -> {
                     if (active) {
@@ -308,7 +308,7 @@ public final class WorkZoneScreen extends LumaScreen {
                 }
         );
         actions.child(enterOrLeave);
-        actions.child(LumaUi.iconButton("folder-open", Component.translatable("luma.action.open_details"), button -> this.openZone(zone.id())));
+        actions.child(LumaUi.iconButton("folder", Component.translatable("luma.action.open_details"), button -> this.openZone(zone.id())));
         header.child(actions);
         card.child(header);
         if (zone.cells().isEmpty()) {
@@ -332,7 +332,7 @@ public final class WorkZoneScreen extends LumaScreen {
         }
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent enter = LumaUi.iconButton(
-                active ? "log-out" : "log-in",
+                active ? "leave" : "join",
                 Component.translatable(active ? "luma.zones.leave" : "luma.zones.enter"),
                 button -> {
                     if (active) {
@@ -409,7 +409,7 @@ public final class WorkZoneScreen extends LumaScreen {
         amend.active(active && activeHead != null && !pending.isEmpty());
         actions.child(amend);
 
-        ButtonComponent changes = LumaUi.button(Component.translatable("luma.action.see_changes"), button -> this.requestCompareOverlay(
+        ButtonComponent changes = LumaUi.iconButton("see-changes", Component.translatable("luma.action.see_changes"), button -> this.requestCompareOverlay(
                 activeHead == null ? "" : activeHead.id(),
                 CompareScreenController.CURRENT_WORLD_REFERENCE
         ));
@@ -549,13 +549,13 @@ public final class WorkZoneScreen extends LumaScreen {
 
         FlowLayout viewToggle = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         viewToggle.gap(4);
-        ButtonComponent cards = LumaUi.iconButton("view-cards", Component.translatable("luma.history.view_cards"), !this.zoneHistoryGraphVisible, button -> {
+        ButtonComponent cards = LumaUi.iconButton("unordered-list", Component.translatable("luma.history.view_cards"), !this.zoneHistoryGraphVisible, button -> {
             this.zoneHistoryGraphVisible = false;
             this.rebuild();
         });
         viewToggle.child(cards);
 
-        ButtonComponent graph = LumaUi.iconButton("view-graph", Component.translatable("luma.history.view_graph"), this.zoneHistoryGraphVisible, button -> {
+        ButtonComponent graph = LumaUi.iconButton("graph", Component.translatable("luma.history.view_graph"), this.zoneHistoryGraphVisible, button -> {
             this.zoneHistoryGraphVisible = true;
             this.rebuild();
         });

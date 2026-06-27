@@ -232,8 +232,8 @@ public final class CompareScreenSections {
                 model.state().leftResolvedVersionId(),
                 model.state().rightResolvedVersionId()
         )
-                ? "eye-off"
-                : "eye";
+                ? "eye-closed"
+                : "eye-open";
     }
 
     private boolean overlayMatches(Model model) {
