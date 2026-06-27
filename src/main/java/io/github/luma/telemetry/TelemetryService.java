@@ -15,7 +15,7 @@ import java.util.function.Supplier;
 
 public final class TelemetryService {
 
-    public static final String DEFAULT_ENDPOINT_URL = "https://telemetry.lumimod.example/v1/events/batch";
+    public static final String DEFAULT_ENDPOINT_URL = "https://lumi.zloyxp.cc/v1/events/batch";
     private static final int DEFAULT_SPOOL_CAPACITY = 200;
     private static final int DEFAULT_BATCH_SIZE = 25;
 

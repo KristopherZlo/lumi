@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { createTelemetryServer } from '../src/server.js';
+import { RateLimiter } from '../src/rate-limiter.js';
+import { hashPassword } from '../src/admin-auth.js';
 
 test('returns json problem response when repository insert fails', { timeout: 2_000 }, async () => {
   const server = createTelemetryServer({
@@ -85,25 +87,129 @@ test('starts and stops retention scheduler with server lifecycle', async () => {
   assert.equal(retentionScheduler.stopCount, 1);
 });
 
-function post(server, body) {
+test('protects the admin dashboard with basic auth', async () => {
+  const server = createTelemetryServer({
+    repository: new FakeRepository(),
+    rateLimiter: null,
+    admin: {
+      username: 'owner',
+      passwordHash: hashPassword('correct-password', Buffer.alloc(16, 1)),
+    },
+  });
+
+  try {
+    const unauthenticated = await get(server, '/');
+    const rejected = await get(server, '/', {
+      authorization: basicAuth('owner', 'wrong-password'),
+    });
+
+    assert.equal(unauthenticated.status, 401);
+    assert.match(unauthenticated.headers['www-authenticate'], /Basic realm="Lumi telemetry"/);
+    assert.equal(unauthenticated.headers['x-content-type-options'], 'nosniff');
+    assert.equal(rejected.status, 401);
+  } finally {
+    await close(server);
+  }
+});
+
+test('renders escaped aggregate stats without raw event data', async () => {
+  const server = createTelemetryServer({
+    repository: new FakeRepository({
+      dashboardStats: {
+        summary: {
+          totalEvents: 3,
+          distinctInstallations: 2,
+          firstReceivedAt: '2026-06-01T00:00:00.000Z',
+          lastReceivedAt: '2026-06-08T00:00:00.000Z',
+        },
+        eventTypes: [{ label: 'operation_failed<script>', count: 2 }],
+        lumiVersions: [{ label: '1.0.0', count: 3 }],
+        dailyEvents: [{ label: '2026-06-08', count: 3 }],
+      },
+    }),
+    rateLimiter: null,
+    admin: {
+      username: 'owner',
+      passwordHash: hashPassword('correct-password', Buffer.alloc(16, 2)),
+    },
+  });
+
+  try {
+    const response = await get(server, '/admin', {
+      authorization: basicAuth('owner', 'correct-password'),
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers['x-frame-options'], 'DENY');
+    assert.match(response.body, /Total events/);
+    assert.match(response.body, /operation_failed&lt;script&gt;/);
+    assert.doesNotMatch(response.body, /operation_failed<script>/);
+    assert.doesNotMatch(response.body, /installation-a/);
+  } finally {
+    await close(server);
+  }
+});
+
+test('uses forwarded client ip for rate limiting behind a trusted proxy', async () => {
+  const repository = new FakeRepository();
+  const server = createTelemetryServer({
+    repository,
+    rateLimiter: new RateLimiter({ windowMs: 1_000, maxRequests: 1, now: () => 0 }),
+    maxRequestBytes: 4096,
+    trustProxy: true,
+  });
+  const body = JSON.stringify({
+    schemaVersion: 1,
+    events: [validEvent('event-a')],
+  });
+
+  try {
+    const first = await post(server, body, { 'x-forwarded-for': '198.51.100.1' });
+    const second = await post(server, body, { 'x-forwarded-for': '203.0.113.2' });
+    const repeated = await post(server, body, { 'x-forwarded-for': '198.51.100.1' });
+
+    assert.equal(first.status, 202);
+    assert.equal(second.status, 202);
+    assert.equal(repeated.status, 429);
+    assert.equal(repository.insertCount, 2);
+  } finally {
+    await close(server);
+  }
+});
+
+function post(server, body, headers = {}) {
+  return request(server, {
+    path: '/v1/events/batch',
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'content-length': Buffer.byteLength(body),
+      ...headers,
+    },
+  }, body);
+}
+
+function get(server, path, headers = {}) {
+  return request(server, { path, method: 'GET', headers });
+}
+
+function request(server, options, body = '') {
   return new Promise((resolve, reject) => {
-    server.listen(0, '127.0.0.1', () => {
+    const send = () => {
       const address = server.address();
       const request = http.request({
         hostname: '127.0.0.1',
         port: address.port,
-        path: '/v1/events/batch',
-        method: 'POST',
+        path: options.path,
+        method: options.method,
         agent: false,
-        headers: {
-          'content-type': 'application/json',
-          'content-length': Buffer.byteLength(body),
-        },
+        headers: options.headers,
       }, response => {
         const chunks = [];
         response.on('data', chunk => chunks.push(Buffer.from(chunk)));
         response.on('end', () => resolve({
           status: response.statusCode,
+          headers: response.headers,
           body: Buffer.concat(chunks).toString('utf8'),
         }));
       });
@@ -116,7 +222,13 @@ function post(server, body) {
       });
       request.on('close', () => clearTimeout(timeout));
       request.end(body);
-    });
+    };
+
+    if (server.listening) {
+      send();
+    } else {
+      server.listen(0, '127.0.0.1', send);
+    }
   });
 }
 
@@ -132,8 +244,19 @@ function close(server) {
 }
 
 class FakeRepository {
-  constructor() {
+  constructor({ dashboardStats = null } = {}) {
     this.insertCount = 0;
+    this.dashboardStatsValue = dashboardStats ?? {
+      summary: {
+        totalEvents: 0,
+        distinctInstallations: 0,
+        firstReceivedAt: null,
+        lastReceivedAt: null,
+      },
+      eventTypes: [],
+      lumiVersions: [],
+      dailyEvents: [],
+    };
   }
 
   async insertEvents() {
@@ -142,6 +265,10 @@ class FakeRepository {
 
   async deleteEventsBefore() {
     return undefined;
+  }
+
+  async dashboardStats() {
+    return this.dashboardStatsValue;
   }
 }
 
@@ -158,4 +285,28 @@ class FakeRetentionScheduler {
   stop() {
     this.stopCount += 1;
   }
+}
+
+function validEvent(id) {
+  return {
+    id,
+    type: 'operation_failed',
+    occurredAt: '2026-06-08T00:00:00Z',
+    installationId: 'install-a',
+    environment: {
+      lumiVersion: '1',
+      minecraftVersion: '2',
+      fabricLoaderVersion: '3',
+      javaVersion: '4',
+      osFamily: 'windows',
+      osArch: 'x64',
+      mods: [],
+    },
+    fingerprint: 'fp-a',
+    payload: {},
+  };
+}
+
+function basicAuth(username, password) {
+  return `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 }

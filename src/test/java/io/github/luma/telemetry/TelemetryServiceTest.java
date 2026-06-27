@@ -157,7 +157,7 @@ class TelemetryServiceTest {
     }
 
     @Test
-    void placeholderEndpointDropsEventsWithoutSending() {
+    void defaultEndpointSendsToProductionTelemetryHost() {
         TelemetrySpoolRepository spool = new TelemetrySpoolRepository(this.tempDir.resolve("telemetry-spool.json"), 10);
         CountingSender sender = new CountingSender(TelemetrySendResult.success(1));
         TelemetryService service = TelemetryService.testing(
@@ -171,7 +171,8 @@ class TelemetryServiceTest {
         service.recordPerformanceOutlier("restore-version", 100_000L, 10_000L, "APPLYING");
         service.flushNow();
 
-        assertEquals(0, sender.calls());
+        assertEquals("https://lumi.zloyxp.cc/v1/events/batch", TelemetryService.DEFAULT_ENDPOINT_URL);
+        assertEquals(1, sender.calls());
         assertEquals(0, service.pendingEventCount());
         assertTrue(spool.load().isEmpty());
     }

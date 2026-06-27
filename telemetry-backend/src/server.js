@@ -11,6 +11,8 @@ import { TelemetryIngestService } from './service.js';
 import { PgTelemetryRepository } from './pg-repository.js';
 import { RetentionJob } from './retention-job.js';
 import { RetentionScheduler } from './retention-scheduler.js';
+import { AdminDashboard } from './admin-dashboard.js';
+import { BasicAuth, adminAuthFromEnv } from './admin-auth.js';
 
 export function createTelemetryServer({
   repository = new PgTelemetryRepository({ connectionString: process.env.DATABASE_URL }),
@@ -22,15 +24,23 @@ export function createTelemetryServer({
   now = () => new Date(),
   maxRequestBytes = MAX_REQUEST_BYTES,
   retentionScheduler = null,
+  admin = adminAuthFromEnv(),
+  trustProxy = process.env.TRUST_PROXY === '1',
 } = {}) {
   const service = new TelemetryIngestService({ repository, rateLimiter, now, maxRequestBytes });
   const scheduler = retentionScheduler ?? new RetentionScheduler(
     new RetentionJob(repository, now, DEFAULT_RETENTION_DAYS)
   );
+  const adminAuth = normalizeAdminAuth(admin);
+  const dashboard = adminAuth ? new AdminDashboard(repository) : null;
   const server = http.createServer(async (req, res) => {
+    if (req.method === 'GET' && (req.url === '/' || req.url === '/admin')) {
+      await handleAdminRequest(req, res, adminAuth, dashboard);
+      return;
+    }
+
     if (req.method !== 'POST' || req.url !== '/v1/events/batch') {
-      res.writeHead(404, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'not_found' }));
+      writeJson(res, 404, { error: 'not_found' });
       return;
     }
 
@@ -42,9 +52,9 @@ export function createTelemetryServer({
       }
       const result = await service.handleBatch({
         body: body.value,
-        ip: req.socket.remoteAddress ?? '',
+        ip: requestIp(req, trustProxy),
       });
-      res.writeHead(result.status, { 'content-type': 'application/json' });
+      res.writeHead(result.status, jsonHeaders());
       res.end(result.body);
     } catch (error) {
       writeJson(res, 500, { error: 'internal_error' });
@@ -82,13 +92,73 @@ async function readRequestBody(req, maxRequestBytes) {
 }
 
 function writeJson(res, status, body) {
-  res.writeHead(status, { 'content-type': 'application/json' });
+  res.writeHead(status, jsonHeaders());
   res.end(JSON.stringify(body));
+}
+
+async function handleAdminRequest(req, res, adminAuth, dashboard) {
+  if (!adminAuth || !dashboard) {
+    writeJson(res, 404, { error: 'not_found' });
+    return;
+  }
+  if (!adminAuth.verifyHeader(req.headers.authorization)) {
+    res.writeHead(401, {
+      ...securityHeaders(),
+      'content-type': 'application/json',
+      'www-authenticate': 'Basic realm="Lumi telemetry", charset="UTF-8"',
+    });
+    res.end(JSON.stringify({ error: 'unauthorized' }));
+    return;
+  }
+  const html = await dashboard.render();
+  res.writeHead(200, {
+    ...securityHeaders(),
+    'content-type': 'text/html; charset=utf-8',
+  });
+  res.end(html);
+}
+
+function normalizeAdminAuth(admin) {
+  if (!admin) {
+    return null;
+  }
+  if (typeof admin.verifyHeader === 'function') {
+    return admin;
+  }
+  return new BasicAuth(admin);
+}
+
+function requestIp(req, trustProxy) {
+  if (trustProxy) {
+    const forwardedFor = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+    if (forwardedFor) {
+      return forwardedFor.slice(0, 128);
+    }
+  }
+  return req.socket.remoteAddress ?? '';
+}
+
+function jsonHeaders() {
+  return {
+    ...securityHeaders(),
+    'content-type': 'application/json',
+  };
+}
+
+function securityHeaders() {
+  return {
+    'cache-control': 'no-store',
+    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    'referrer-policy': 'no-referrer',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
+  };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const port = Number(process.env.PORT ?? 8787);
-  createTelemetryServer().listen(port, () => {
-    console.log(`Lumi telemetry backend listening on ${port}`);
+  const host = process.env.HOST ?? '127.0.0.1';
+  createTelemetryServer().listen(port, host, () => {
+    console.log(`Lumi telemetry backend listening on ${host}:${port}`);
   });
 }

@@ -87,6 +87,8 @@ Lumi has diagnostic telemetry for crashes, failed operations, rejected actions, 
 
 Telemetry does not send raw logs, screen views, clicks, world names, project names, coordinates, seeds, exception messages, raw file paths, raw NBT, or block/entity payloads.
 
+The default endpoint is `https://lumi.zloyxp.cc/v1/events/batch`. The receiver stores allowlisted diagnostic fields only, keeps raw events for 90 days, and exposes only an authenticated aggregate dashboard.
+
 ## For Developers
 
 ### Build and Test
@@ -107,6 +109,41 @@ Run unit tests:
 
 ```powershell
 .\gradlew.bat test --no-daemon
+```
+
+Run telemetry backend tests:
+
+```powershell
+cd telemetry-backend
+npm test
+```
+
+### Telemetry Backend
+
+The self-hosted telemetry receiver lives in `telemetry-backend`. It is a small Node/Postgres service with:
+
+- public ingest at `POST /v1/events/batch`
+- strict JSON schema, key allowlists, body size limits, and per-client rate limiting
+- no IP storage
+- a Basic Auth admin dashboard at `/` and `/admin`
+- aggregate dashboard queries only; raw events are not exposed through the UI
+- 90-day retention for stored raw events
+
+Required runtime environment:
+
+```text
+DATABASE_URL=postgres://...
+ADMIN_USERNAME=...
+ADMIN_PASSWORD_HASH=scrypt$...
+HOST=127.0.0.1
+PORT=8787
+TRUST_PROXY=1
+```
+
+Generate a random admin password and `ADMIN_PASSWORD_HASH`:
+
+```powershell
+node --input-type=module -e "import { randomBytes } from 'node:crypto'; import { hashPassword } from './src/admin-auth.js'; const password = randomBytes(24).toString('base64url'); console.log('password=' + password); console.log('hash=' + hashPassword(password));"
 ```
 
 Run the local test-client profile:
