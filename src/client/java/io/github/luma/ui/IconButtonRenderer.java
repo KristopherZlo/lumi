@@ -8,7 +8,7 @@ import net.minecraft.resources.Identifier;
 final class IconButtonRenderer implements ButtonComponent.Renderer {
 
     private static final int TEXTURE_SIZE = 24;
-    private static final int DRAW_SIZE = 16;
+    private static final int DRAW_SIZE = 11;
 
     private final Identifier icon;
     private final Identifier disabledIcon;
