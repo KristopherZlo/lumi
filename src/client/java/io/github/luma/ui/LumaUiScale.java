@@ -9,7 +9,7 @@ public final class LumaUiScale {
 
     private static final int DEFAULT_TARGET_GUI_SCALE = 2;
     private static final int DEFAULT_ICON_BUTTON_WIDTH = 26;
-    private static final int DEFAULT_ICON_BUTTON_HEIGHT = 16;
+    private static final int DEFAULT_ICON_BUTTON_HEIGHT = 18;
     private static final int DEFAULT_ICON_DRAW_SIZE = 12;
 
     private LumaUiScale() {

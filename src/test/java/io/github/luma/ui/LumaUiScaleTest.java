@@ -25,7 +25,7 @@ class LumaUiScaleTest {
     @Test
     void defaultIconButtonsStayNearNativePixelSizeAtTargetScale() {
         Assertions.assertEquals(26, LumaUiScale.iconButtonWidth());
-        Assertions.assertEquals(16, LumaUiScale.iconButtonHeight());
+        Assertions.assertEquals(18, LumaUiScale.iconButtonHeight());
         Assertions.assertEquals(12, LumaUiScale.iconDrawSize());
     }
 

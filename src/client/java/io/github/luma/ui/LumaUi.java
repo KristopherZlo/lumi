@@ -45,7 +45,9 @@ public final class LumaUi {
     private static final int PRIMARY_BUTTON_HOVER = 0xFF936D29;
     private static final int STATUS_FILL = 0xFF211F18;
     private static final int STATUS_BORDER = 0xFF5A4724;
-    private static final int BUTTON_WRAP_BOTTOM_MARGIN = 4;
+    private static final int CONTROL_HEIGHT = 18;
+    private static final int INLINE_WRAP_BOTTOM_MARGIN = 4;
+    private static final int SIDEBAR_TAB_BORDER_INSET = 2;
     private static final int VALUE_WRAP_WIDTH = 420;
     private static final int BODY_WRAP_WIDTH = 360;
 
@@ -175,11 +177,12 @@ public final class LumaUi {
     }
 
     public static FlowLayout chip(Component text) {
-        FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+        FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.fixed(CONTROL_HEIGHT));
         chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
-        chip.padding(Insets.of(1));
+        chip.padding(Insets.of(2));
+        chip.verticalAlignment(VerticalAlignment.CENTER);
         chip.child(compactCaption(text));
-        return chip;
+        return inlineControl(chip);
     }
 
     public static FlowLayout stepBadge(Component text) {
@@ -277,13 +280,14 @@ public final class LumaUi {
     }
 
     public static FlowLayout statChip(Component label, Component value) {
-        FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+        FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.fixed(CONTROL_HEIGHT));
         chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
         chip.padding(Insets.of(3));
         chip.gap(4);
+        chip.verticalAlignment(VerticalAlignment.CENTER);
         chip.child(statValue(value));
         chip.child(statLabel(label));
-        return chip;
+        return inlineControl(chip);
     }
 
     public static FlowLayout sidebarTabs() {
@@ -327,10 +331,10 @@ public final class LumaUi {
             int fill = selected ? selectedFill : component.isHovered() ? withAlpha(innerBorder, 0x52) : withAlpha(innerBorder, 0x30);
             graphics.fill(component.getX(), component.getY(), component.getX() + component.getWidth(), component.getY() + component.getHeight(), fill);
             graphics.drawRectOutline(
-                    component.getX() + 1,
-                    component.getY() + 1,
-                    component.getWidth() - 2,
-                    component.getHeight() - 2,
+                    component.getX() + SIDEBAR_TAB_BORDER_INSET,
+                    component.getY() + SIDEBAR_TAB_BORDER_INSET,
+                    component.getWidth() - (SIDEBAR_TAB_BORDER_INSET * 2),
+                    component.getHeight() - (SIDEBAR_TAB_BORDER_INSET * 2),
                     innerBorder
             );
         });
@@ -392,10 +396,15 @@ public final class LumaUi {
         ButtonComponent button = UIComponents.button(text, onPress);
         button.renderer(ButtonComponent.Renderer.flat(fill, hover, disabled));
         button.textShadow(false);
-        button.sizing(Sizing.content(5), Sizing.fixed(18));
-        button.margins(Insets.bottom(BUTTON_WRAP_BOTTOM_MARGIN));
+        button.sizing(Sizing.content(5), Sizing.fixed(CONTROL_HEIGHT));
+        button.margins(Insets.bottom(INLINE_WRAP_BOTTOM_MARGIN));
         button.cursorStyle(CursorStyle.HAND);
         return button;
+    }
+
+    private static <T extends UIComponent> T inlineControl(T control) {
+        control.margins(Insets.bottom(INLINE_WRAP_BOTTOM_MARGIN));
+        return control;
     }
 
     private static int withAlpha(int color, int alpha) {
