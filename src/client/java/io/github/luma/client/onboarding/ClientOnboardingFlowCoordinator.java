@@ -6,9 +6,11 @@ import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.onboarding.OnboardingTour;
+import io.github.luma.ui.overlay.RoundedHudRenderer;
 import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.github.luma.ui.state.OnboardingHoldGate;
+import java.util.List;
 import java.util.Objects;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -19,6 +21,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
+import net.minecraft.util.FormattedCharSequence;
 
 /**
  * Owns the no-screen part of onboarding where the player must interact with the
@@ -32,6 +35,8 @@ public final class ClientOnboardingFlowCoordinator {
     );
     private static final int REFRESH_INTERVAL_TICKS = 10;
     private static final int PANEL_WIDTH = 330;
+    private static final int PANEL_PADDING = 8;
+    private static final int MAX_HELP_LINES = 3;
     private static final int REQUIRED_WORLD_EDITS = 5;
     private static final ClientOnboardingFlowCoordinator INSTANCE = new ClientOnboardingFlowCoordinator();
 
@@ -224,14 +229,24 @@ public final class ClientOnboardingFlowCoordinator {
         }
 
         Font font = client.font;
+        boolean previewStep = "preview_changes".equals(this.tour.currentPageId());
+        List<FormattedCharSequence> helpLines = this.helpLines(font, previewStep);
+        int height = this.promptHeight(previewStep, helpLines.size());
         int x = Math.max(8, (drawContext.guiWidth() - PANEL_WIDTH) / 2);
-        int y = Math.max(8, drawContext.guiHeight() - 98);
-        int height = "break_block".equals(this.tour.currentPageId()) ? 68 : 58;
-        drawContext.fill(x, y, x + PANEL_WIDTH, y + height, 0xF0171B1E);
-        drawContext.renderOutline(x, y, PANEL_WIDTH, height, 0xFF3B4147);
-        drawContext.drawString(font, this.tour.headerText(), x + 8, y + 8, 0xFF98A6B3, false);
-        drawContext.drawString(font, this.tour.pageName(), x + 8, y + 20, 0xFF4ADE80, false);
-        drawContext.drawString(font, this.tour.helpText(), x + 8, y + 34, 0xFFF3F7FA, false);
+        int y = Math.max(8, drawContext.guiHeight() - height - 30);
+
+        RoundedHudRenderer.card(drawContext, x, y, PANEL_WIDTH, height);
+        drawContext.drawString(font, this.tour.headerText(), x + PANEL_PADDING, y + PANEL_PADDING, 0xFF98A6B3, false);
+        drawContext.drawString(font, this.tour.pageName(), x + PANEL_PADDING, y + 20, 0xFF4ADE80, false);
+
+        int cursorY = y + 34;
+        if (previewStep) {
+            cursorY = this.drawPreviewShortcut(drawContext, font, x + PANEL_PADDING, cursorY);
+        }
+        for (FormattedCharSequence line : helpLines) {
+            drawContext.drawString(font, line, x + PANEL_PADDING, cursorY, 0xFFF3F7FA, false);
+            cursorY += 10;
+        }
         if ("break_block".equals(this.tour.currentPageId())) {
             drawContext.drawString(
                     font,
@@ -240,8 +255,8 @@ public final class ClientOnboardingFlowCoordinator {
                             Math.min(REQUIRED_WORLD_EDITS, this.worldEditCount),
                             REQUIRED_WORLD_EDITS
                     ),
-                    x + 8,
-                    y + 48,
+                    x + PANEL_PADDING,
+                    cursorY + 2,
                     0xFF98A6B3,
                     false
             );
@@ -251,27 +266,63 @@ public final class ClientOnboardingFlowCoordinator {
     private void renderWorldPreview(GuiGraphics drawContext) {
         Minecraft client = Minecraft.getInstance();
         Font font = client.font;
+        List<FormattedCharSequence> helpLines = font.split(
+                        Component.translatable(this.worldPreviewHelpKey()),
+                        PANEL_WIDTH - (PANEL_PADDING * 2)
+                )
+                .stream()
+                .limit(2)
+                .toList();
+        int height = PANEL_PADDING + 12 + (helpLines.size() * 10) + PANEL_PADDING;
         int x = Math.max(8, (drawContext.guiWidth() - PANEL_WIDTH) / 2);
-        int y = Math.max(8, drawContext.guiHeight() - 70);
-        int height = 42;
-        drawContext.fill(x, y, x + PANEL_WIDTH, y + height, 0xF0171B1E);
-        drawContext.renderOutline(x, y, PANEL_WIDTH, height, 0xFF3B4147);
+        int y = Math.max(8, drawContext.guiHeight() - height - 30);
+        RoundedHudRenderer.card(drawContext, x, y, PANEL_WIDTH, height);
         drawContext.drawString(
                 font,
                 Component.translatable(this.worldPreviewTitleKey()),
-                x + 8,
-                y + 8,
+                x + PANEL_PADDING,
+                y + PANEL_PADDING,
                 0xFF4ADE80,
                 false
         );
-        drawContext.drawString(
-                font,
-                Component.translatable(this.worldPreviewHelpKey()),
-                x + 8,
-                y + 24,
-                0xFFF3F7FA,
-                false
+        int cursorY = y + 20;
+        for (FormattedCharSequence line : helpLines) {
+            drawContext.drawString(font, line, x + PANEL_PADDING, cursorY, 0xFFF3F7FA, false);
+            cursorY += 10;
+        }
+    }
+
+    private List<FormattedCharSequence> helpLines(Font font, boolean previewStep) {
+        Component text = previewStep
+                ? Component.translatable("luma.onboarding.preview_changes_suffix")
+                : this.tour.helpText();
+        return font.split(text, PANEL_WIDTH - (PANEL_PADDING * 2))
+                .stream()
+                .limit(MAX_HELP_LINES)
+                .toList();
+    }
+
+    private int promptHeight(boolean previewStep, int helpLineCount) {
+        int shortcutHeight = previewStep ? 25 : 0;
+        int counterHeight = previewStep ? 0 : 14;
+        return PANEL_PADDING + 26 + shortcutHeight + (helpLineCount * 10) + counterHeight + PANEL_PADDING;
+    }
+
+    private int drawPreviewShortcut(GuiGraphics drawContext, Font font, int x, int y) {
+        Component hold = Component.translatable("luma.onboarding.preview_changes_hold");
+        drawContext.drawString(font, hold, x, y + 6, 0xFFF3F7FA, false);
+        int cursorX = x + font.width(hold) + 5;
+        KeyMapping actionKey = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
+        RoundedHudRenderer.key(
+                drawContext,
+                actionKey,
+                cursorX,
+                y,
+                "Alt",
+                false,
+                this.keyBindingState.isDown(Minecraft.getInstance(), actionKey)
         );
+        return y + 25;
     }
 
     private boolean active() {

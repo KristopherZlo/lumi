@@ -68,4 +68,21 @@ class OnboardingTourTest {
         Assertions.assertEquals(OnboardingTour.Transition.REBUILD, tour.advanceAfterQuickSave());
         Assertions.assertEquals("open", tour.currentPageId());
     }
+
+    @Test
+    void commitNavigationHighlightsLatestSaveCard() {
+        OnboardingTour tour = new OnboardingTour();
+        tour.next();
+        tour.advanceAfterWorldEdit();
+        tour.advanceAfterPendingPreview();
+        tour.next();
+        tour.next();
+        tour.advanceAfterQuickSave();
+        tour.next();
+        tour.next();
+        tour.next();
+
+        Assertions.assertEquals("commit_navigation", tour.currentPageId());
+        Assertions.assertEquals(OnboardingTour.SpotlightTarget.LATEST_SAVE, tour.workspaceSpotlightTarget());
+    }
 }

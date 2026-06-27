@@ -45,17 +45,30 @@ public final class RoundedHudRenderer {
     }
 
     public static int key(GuiGraphics graphics, KeyMapping key, int x, int y, String fallback, boolean compact) {
+        return key(graphics, key, x, y, fallback, compact, false);
+    }
+
+    public static int key(
+            GuiGraphics graphics,
+            KeyMapping key,
+            int x,
+            int y,
+            String fallback,
+            boolean compact,
+            boolean pressed
+    ) {
         if (compact) {
             return textChip(graphics, keyLabel(key, fallback), x, y, true);
         }
         return KeyGlyphResolver.resolve(key)
                 .map(glyph -> {
+                    int frame = pressed ? 2 : 0;
                     graphics.blit(
                             RenderPipelines.GUI_TEXTURED,
                             glyph.textureId(),
                             x,
                             y,
-                            0,
+                            frame * glyph.frameWidth(),
                             0,
                             glyph.frameWidth(),
                             glyph.height(),

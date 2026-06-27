@@ -60,7 +60,7 @@ public final class OnboardingTour {
             ),
             Page.spotlight("save_spotlight", SpotlightTarget.SAVE_BUILD),
             Page.spotlight("changes_spotlight", SpotlightTarget.SEE_CHANGES),
-            Page.info("commit_navigation"),
+            Page.spotlight("commit_navigation", SpotlightTarget.LATEST_SAVE),
             Page.info("finish")
     );
 
@@ -437,7 +437,8 @@ public final class OnboardingTour {
     public enum SpotlightTarget {
         NONE,
         SAVE_BUILD,
-        SEE_CHANGES
+        SEE_CHANGES,
+        LATEST_SAVE
     }
 
     public enum Transition {

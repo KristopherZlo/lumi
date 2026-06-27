@@ -41,6 +41,7 @@ public final class ProjectScreenSections {
     private OnboardingTour.SpotlightTarget onboardingSpotlightTarget = OnboardingTour.SpotlightTarget.NONE;
     private ButtonComponent onboardingSaveButton;
     private ButtonComponent onboardingChangesButton;
+    private UIComponent onboardingLatestSaveCard;
 
     public ProjectScreenSections(ProjectScreenController previewController, Actions actions) {
         this.previewController = Objects.requireNonNull(previewController, "previewController");
@@ -52,12 +53,14 @@ public final class ProjectScreenSections {
         this.onboardingSpotlightTarget = target == null ? OnboardingTour.SpotlightTarget.NONE : target;
         this.onboardingSaveButton = null;
         this.onboardingChangesButton = null;
+        this.onboardingLatestSaveCard = null;
     }
 
     public UIComponent onboardingTargetComponent(OnboardingTour.SpotlightTarget target) {
         return switch (target == null ? OnboardingTour.SpotlightTarget.NONE : target) {
             case SAVE_BUILD -> this.onboardingSaveButton;
             case SEE_CHANGES -> this.onboardingChangesButton;
+            case LATEST_SAVE -> this.onboardingLatestSaveCard;
             case NONE -> null;
         };
     }
@@ -330,7 +333,7 @@ public final class ProjectScreenSections {
 
     private FlowLayout saveCard(Model model, BranchHistoryVersions.Entry entry) {
         boolean operationActive = model.state().operationSnapshot() != null && !model.state().operationSnapshot().terminal();
-        return this.saveCardView.render(new ProjectSaveCardView.Model(
+        FlowLayout card = this.saveCardView.render(new ProjectSaveCardView.Model(
                 model.projectName(),
                 entry.version(),
                 entry.variant(),
@@ -342,6 +345,10 @@ public final class ProjectScreenSections {
                 model.tagEditorText(),
                 TagInputSupport.knownTags(model.state().versions())
         ));
+        if (this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.LATEST_SAVE && entry.current()) {
+            this.onboardingLatestSaveCard = card;
+        }
+        return card;
     }
 
     private boolean operationActive(Model model) {
