@@ -12,10 +12,10 @@ import org.junit.jupiter.api.Test;
 class LumaIconAssetsTest {
 
     private static final Path ICON_DIR = Path.of("src/main/resources/assets/lumi/textures/gui/icons");
-    private static final int ICON_SIZE = 16;
+    private static final int ICON_SIZE = 24;
 
     @Test
-    void iconsStayPixelFriendlyAt16Pixels() throws IOException {
+    void iconsStayPixelFriendlyAt24Pixels() throws IOException {
         List<Path> icons = this.iconPngs();
 
         Assertions.assertFalse(icons.isEmpty(), "No icon PNGs found in " + ICON_DIR);
@@ -41,6 +41,14 @@ class LumaIconAssetsTest {
                     "Missing disabled icon texture for " + fileName
             );
         }
+    }
+
+    @Test
+    void iconButtonsKeepVisibleLabelEmpty() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/LumaUi.java"));
+
+        Assertions.assertTrue(source.contains("styledButton(Component.empty()"));
+        Assertions.assertFalse(source.contains("styledButton(tooltip"));
     }
 
     private List<Path> iconPngs() throws IOException {

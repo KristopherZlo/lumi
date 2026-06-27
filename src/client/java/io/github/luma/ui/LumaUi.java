@@ -17,6 +17,7 @@ import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.function.Consumer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
 
 public final class LumaUi {
@@ -45,6 +46,8 @@ public final class LumaUi {
     private static final int STATUS_FILL = 0xFF211F18;
     private static final int STATUS_BORDER = 0xFF5A4724;
     private static final int BUTTON_WRAP_BOTTOM_MARGIN = 4;
+    private static final int ICON_BUTTON_WIDTH = 28;
+    private static final int ICON_BUTTON_HEIGHT = 24;
     private static final int VALUE_WRAP_WIDTH = 420;
     private static final int BODY_WRAP_WIDTH = 360;
 
@@ -366,9 +369,12 @@ public final class LumaUi {
         Identifier disabledIcon = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/" + iconName + "_disabled.png");
         int fill = selected ? STATUS_FILL : BUTTON_FILL;
         int hover = selected ? STATUS_FILL : BUTTON_HOVER;
-        ButtonComponent button = styledButton(tooltip, selected ? pressed -> {
+        ButtonComponent button = styledButton(Component.empty(), selected ? pressed -> {
         } : onPress, fill, hover, BUTTON_DISABLED);
-        button.sizing(Sizing.fixed(28), Sizing.fixed(18));
+        if (tooltip.getContents() instanceof TranslatableContents translatable) {
+            button.id(translatable.getKey());
+        }
+        button.sizing(Sizing.fixed(ICON_BUTTON_WIDTH), Sizing.fixed(ICON_BUTTON_HEIGHT));
         button.tooltip(tooltip);
         button.renderer(new IconButtonRenderer(icon, disabledIcon, fill, hover, BUTTON_DISABLED));
         return button;

@@ -32,6 +32,7 @@ public final class ProjectUiSupport {
 
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .withZone(ZoneId.systemDefault());
+    private static final int NO_PREVIEW_ICON_SIZE = 24;
     private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/image.png");
 
     private ProjectUiSupport() {
@@ -252,10 +253,9 @@ public final class ProjectUiSupport {
         if (loading) {
             placeholder.child(new LoadingAnimationComponent(Math.min(32, Math.max(16, height / 3))));
         } else {
-            int iconSize = Math.min(32, Math.max(16, height / 3));
-            var icon = UIComponents.texture(NO_PREVIEW_ICON, 0, 0, 16, 16, 16, 16);
+            var icon = UIComponents.texture(NO_PREVIEW_ICON, 0, 0, NO_PREVIEW_ICON_SIZE, NO_PREVIEW_ICON_SIZE, NO_PREVIEW_ICON_SIZE, NO_PREVIEW_ICON_SIZE);
             icon.blend(true);
-            icon.sizing(Sizing.fixed(iconSize), Sizing.fixed(iconSize));
+            icon.sizing(Sizing.fixed(NO_PREVIEW_ICON_SIZE), Sizing.fixed(NO_PREVIEW_ICON_SIZE));
             placeholder.child(icon);
         }
         return placeholder;

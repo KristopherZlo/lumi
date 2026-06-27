@@ -95,6 +95,7 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         this.assertActive(section, "luma.action.save_build");
         this.assertActive(section, "luma.action.amend_version");
         this.assertActive(section, "luma.action.see_changes");
+        this.assertIconButtonHasNoVisibleMessage(section, "luma.action.see_changes");
 
         this.press(section, "luma.action.save_build");
         this.assertEquals("openSave", actions.lastAction, "save action");
@@ -395,6 +396,12 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         }
     }
 
+    private void assertIconButtonHasNoVisibleMessage(FlowLayout root, String key) {
+        if (!this.button(root, key).getMessage().getString().isBlank()) {
+            throw new AssertionError("Expected icon-only button " + key);
+        }
+    }
+
     private ButtonComponent button(FlowLayout root, String key) {
         return this.buttons(root).stream()
                 .filter(button -> this.matches(button, key))
@@ -436,6 +443,9 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
     }
 
     private boolean matches(ButtonComponent button, String key) {
+        if (key.equals(button.id())) {
+            return true;
+        }
         return button.getMessage().getContents() instanceof TranslatableContents translatable
                 ? key.equals(translatable.getKey())
                 : key.equals(button.getMessage().getString());

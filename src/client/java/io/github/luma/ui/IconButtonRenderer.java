@@ -7,6 +7,8 @@ import net.minecraft.resources.Identifier;
 
 final class IconButtonRenderer implements ButtonComponent.Renderer {
 
+    private static final int ICON_SIZE = 24;
+
     private final Identifier icon;
     private final Identifier disabledIcon;
     private final int fill;
@@ -27,8 +29,8 @@ final class IconButtonRenderer implements ButtonComponent.Renderer {
                 ? button.isHovered() ? this.hover : this.fill
                 : this.disabled;
         context.fill(button.getX(), button.getY(), button.getX() + button.getWidth(), button.getY() + button.getHeight(), color);
-        int iconX = button.getX() + ((button.getWidth() - 16) / 2);
-        int iconY = button.getY() + ((button.getHeight() - 16) / 2);
-        context.blit(RenderPipelines.GUI_TEXTURED, button.active() ? this.icon : this.disabledIcon, iconX, iconY, 0, 0, 16, 16, 16, 16, 16, 16);
+        int iconX = button.getX() + ((button.getWidth() - ICON_SIZE) / 2);
+        int iconY = button.getY() + ((button.getHeight() - ICON_SIZE) / 2);
+        context.blit(RenderPipelines.GUI_TEXTURED, button.active() ? this.icon : this.disabledIcon, iconX, iconY, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
     }
 }
