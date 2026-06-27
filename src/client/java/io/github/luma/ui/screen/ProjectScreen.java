@@ -726,6 +726,10 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             String result = this.compareController.showOverlay(this.projectName, compare);
             this.pendingCompareLeftReference = "";
             this.pendingCompareRightReference = "";
+            if ("luma.status.compare_no_changes".equals(result) || "luma.status.compare_failed".equals(result)) {
+                this.refresh(result);
+                return;
+            }
             this.statusKey = result;
             this.client.setScreen(null);
             return;

@@ -238,7 +238,7 @@ Capture writes working drafts while the player builds. Save turns a draft into p
 Hard rules:
 
 - One world operation runs per world at a time.
-- Long operations publish progress.
+- Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
 

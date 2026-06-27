@@ -68,7 +68,7 @@ class ScreenOperationStateSupportTest {
                 null,
                 "luma.status.project_ready"
         ));
-        assertFalse(ScreenOperationStateSupport.shouldShowStatusBanner(
+        assertTrue(ScreenOperationStateSupport.shouldShowStatusBanner(
                 "luma.status.project_ready",
                 snapshot(OperationStage.COMPLETED, "Done"),
                 "luma.status.project_ready"
@@ -78,6 +78,25 @@ class ScreenOperationStateSupportTest {
                 snapshot(OperationStage.FAILED, "Failed"),
                 "luma.status.project_ready"
         ));
+    }
+
+    @Test
+    void completedOperationShowsDoneBanner() {
+        OperationSnapshot completed = snapshot(OperationStage.COMPLETED, "Done");
+
+        assertTrue(ScreenOperationStateSupport.shouldShowStatusBanner(
+                "luma.status.project_ready",
+                completed,
+                "luma.status.project_ready"
+        ));
+        assertEquals(
+                "luma.status.operation_completed",
+                ScreenOperationStateSupport.bannerText(
+                        "luma.status.project_ready",
+                        completed,
+                        "luma.status.project_ready"
+                ).getString()
+        );
     }
 
     private static OperationSnapshot snapshot(OperationStage stage, String detail) {

@@ -139,7 +139,7 @@ public final class SaveDetailsScreen extends LumaScreen {
                 ProjectUiSupport.displayMessage(version)
         ), button -> this.onClose()));
         if (this.shouldShowStatusBanner()) {
-            frame.child(LumaUi.statusBanner(Component.translatable(this.state.status())));
+            frame.child(LumaUi.statusBanner(this.bannerText()));
         }
 
         FlowLayout body = LumaUi.screenBody();
@@ -165,7 +165,7 @@ public final class SaveDetailsScreen extends LumaScreen {
                     this.projectName,
                     this.width,
                     branchDialog,
-                    this.shouldShowStatusBanner() ? Component.translatable(this.state.status()) : null
+                    this.shouldShowStatusBanner() ? this.bannerText() : null
             )));
         } else if (this.pendingRestoreConfirmation && version != null && versionVariant != null) {
             stack.child(this.restoreDialogView.overlay(this.restoreDialogModel(version, versionVariant, operationActive)));
@@ -743,6 +743,14 @@ public final class SaveDetailsScreen extends LumaScreen {
 
     private boolean shouldShowStatusBanner() {
         return ScreenOperationStateSupport.shouldShowStatusBanner(
+                this.state.status(),
+                this.state.operationSnapshot(),
+                "luma.status.project_ready"
+        );
+    }
+
+    private Component bannerText() {
+        return ScreenOperationStateSupport.bannerText(
                 this.state.status(),
                 this.state.operationSnapshot(),
                 "luma.status.project_ready"

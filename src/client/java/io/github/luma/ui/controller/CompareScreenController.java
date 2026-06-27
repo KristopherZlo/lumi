@@ -251,6 +251,10 @@ public final class CompareScreenController {
         if (state.diff() == null) {
             return "luma.status.compare_failed";
         }
+        if (state.diff().changedBlocks().isEmpty()) {
+            CompareOverlayRenderer.clear();
+            return "luma.status.compare_no_changes";
+        }
 
         if (CompareOverlayRenderer.shouldPrepareInBackground(state.diff().changedBlocks())) {
             CompareOverlayPreparationService.getInstance().prepareAndShow(

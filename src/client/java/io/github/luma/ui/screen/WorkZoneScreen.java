@@ -870,6 +870,19 @@ public final class WorkZoneScreen extends LumaScreen {
         if (this.hasPendingCompareOverlay() && ++this.refreshCooldown >= 10) {
             this.refreshCooldown = 0;
             this.continuePendingCompareOverlay();
+            return;
+        }
+        if (this.hasPendingCompareOverlay()) {
+            return;
+        }
+        if (++this.refreshCooldown < 10) {
+            return;
+        }
+        this.refreshCooldown = 0;
+        WorkZoneViewState refreshed = this.controller.load(this.projectName, this.status);
+        if (!refreshed.equals(this.state)) {
+            this.state = refreshed;
+            this.rebuild();
         }
     }
 
@@ -894,6 +907,10 @@ public final class WorkZoneScreen extends LumaScreen {
             String result = this.compareController.showOverlay(this.effectiveProjectName(), compare);
             this.pendingCompareLeftReference = "";
             this.pendingCompareRightReference = "";
+            if ("luma.status.compare_no_changes".equals(result) || "luma.status.compare_failed".equals(result)) {
+                this.refresh(result);
+                return;
+            }
             this.status = result;
             this.client.setScreen(null);
             return;

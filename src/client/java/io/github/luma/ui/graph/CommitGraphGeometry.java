@@ -115,20 +115,24 @@ final class CommitGraphGeometry {
     List<LaneRun> laneRuns() {
         List<LaneRun> runs = new ArrayList<>();
         for (int lane = 0; lane < this.laneCount; lane++) {
-            int previousRowIndex = -1;
+            int firstRowIndex = -1;
+            int lastRowIndex = -1;
             for (CommitGraphNode node : this.nodes) {
-                if (!node.activeLanes().contains(lane)) {
+                if (node.lane() != lane) {
                     continue;
                 }
-                if (previousRowIndex >= 0) {
-                    runs.add(new LaneRun(
-                            lane,
-                            this.laneX(lane),
-                            this.rowCenterY(previousRowIndex),
-                            this.rowCenterY(node.rowIndex())
-                    ));
+                if (firstRowIndex < 0) {
+                    firstRowIndex = node.rowIndex();
                 }
-                previousRowIndex = node.rowIndex();
+                lastRowIndex = node.rowIndex();
+            }
+            if (firstRowIndex >= 0 && lastRowIndex > firstRowIndex) {
+                runs.add(new LaneRun(
+                        lane,
+                        this.laneX(lane),
+                        this.rowCenterY(firstRowIndex),
+                        this.rowCenterY(lastRowIndex)
+                ));
             }
         }
         return List.copyOf(runs);

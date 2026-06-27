@@ -102,6 +102,17 @@ class WorkZoneScreenZoneActionsTest {
         assertTrue(quickSaveSource.contains("\"luma.screen.save.title\""));
     }
 
+    @Test
+    void workZoneScreenPollsLocalStateOnTicks() {
+        String methodBody = methodBody(
+                "    protected void onLumaTick() {",
+                "    private void requestCompareOverlay(String leftReference, String rightReference) {"
+        );
+
+        assertTrue(methodBody.contains("this.controller.load(this.projectName, this.status)"));
+        assertTrue(methodBody.contains("!refreshed.equals(this.state)"));
+    }
+
     private String methodBody(String start, String end) {
         int methodIndex = this.source.indexOf(start);
         int nextMethodIndex = this.source.indexOf(end, methodIndex);

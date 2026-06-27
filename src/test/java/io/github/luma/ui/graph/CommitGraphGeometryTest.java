@@ -63,6 +63,25 @@ class CommitGraphGeometryTest {
         assertFalse(segments.stream().anyMatch(segment -> segment.x1() != segment.x2() && segment.y1() != segment.y2()));
     }
 
+    @Test
+    void laneRunSpansEveryCommitInTheLane() {
+        Instant baseTime = Instant.parse("2026-04-21T00:00:00Z");
+        List<ProjectVersion> versions = List.of(
+                this.version("v0001", "main", "", baseTime),
+                this.version("v0002", "main", "v0001", baseTime.plusSeconds(1)),
+                this.version("v0003", "main", "v0002", baseTime.plusSeconds(2))
+        );
+        List<ProjectVariant> variants = List.of(new ProjectVariant("main", "main", "v0001", "v0003", true, baseTime));
+        List<CommitGraphNode> nodes = CommitGraphLayout.build(versions, variants, "main");
+        CommitGraphGeometry geometry = new CommitGraphGeometry(0, 0, 320, 1, true, nodes);
+
+        List<CommitGraphGeometry.LaneRun> runs = geometry.laneRuns();
+
+        assertEquals(1, runs.size());
+        assertEquals(geometry.rowCenterY(0), runs.getFirst().y1());
+        assertEquals(geometry.rowCenterY(2), runs.getFirst().y2());
+    }
+
     private ProjectVersion version(String id, String variantId, String parentId, Instant createdAt) {
         return new ProjectVersion(
                 id,

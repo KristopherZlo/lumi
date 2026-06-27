@@ -35,7 +35,7 @@ public final class ScreenOperationStateSupport {
     public static boolean shouldShowStatusBanner(String statusKey, OperationSnapshot snapshot, String readyStatusKey) {
         String resolvedStatus = normalizeStatusKey(statusKey, snapshot, readyStatusKey);
         if (snapshot != null && snapshot.terminal()) {
-            return snapshot.failed();
+            return true;
         }
         return !resolvedStatus.equals(readyStatusKey);
     }
@@ -50,6 +50,6 @@ public final class ScreenOperationStateSupport {
                     ? Component.translatable("luma.status.operation_failed")
                     : Component.literal(snapshot.detail());
         }
-        return Component.translatable(readyStatusKey);
+        return Component.translatable("luma.status.operation_completed");
     }
 }

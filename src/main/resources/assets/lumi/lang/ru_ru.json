@@ -498,6 +498,7 @@
   "luma.status.project_open_failed": "Lumi не смогла открыть текущее рабочее пространство.",
   "luma.status.project_failed": "Не удалось загрузить историю постройки.",
   "luma.status.operation_failed": "Операция завершилась ошибкой.",
+  "luma.status.operation_completed": "Готово.",
   "luma.status.quick_save_ready": "Назови сохранение, затем сохрани его в текущий workspace.",
   "luma.status.quick_save_name_required": "Сначала введи название сохранения.",
   "luma.status.no_changes_to_save": "Нет несохранённых изменений для сохранения.",
@@ -556,6 +557,7 @@
   "luma.status.compare_loading": "Building compare in the background.",
   "luma.status.compare_overlay_loading": "Preparing world highlight in the background.",
   "luma.status.compare_failed": "Просмотр изменений завершился ошибкой.",
+  "luma.status.compare_no_changes": "Нечего сравнивать.",
   "luma.status.compare_overlay_enabled": "Подсветка в мире включена.",
   "luma.status.compare_overlay_hidden": "World highlight hidden.",
   "luma.status.compare_overlay_cleared": "Подсветка в мире очищена."
