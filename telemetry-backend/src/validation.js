@@ -10,6 +10,14 @@ const EVENT_KEYS = new Set([
   'fingerprint',
   'payload',
 ]);
+const EVENT_TYPES = new Set([
+  'OPERATION_FAILED',
+  'OPERATION_REJECTED',
+  'CLIENT_CRASH_CANDIDATE',
+  'RENDER_OVERLAY_DISABLED',
+  'PERFORMANCE_OUTLIER',
+  'INSTALLATION_SEEN',
+]);
 const ENVIRONMENT_KEYS = new Set([
   'lumiVersion',
   'minecraftVersion',
@@ -131,7 +139,7 @@ function validEventFieldTypes(event) {
       return false;
     }
   }
-  return true;
+  return typeof event.type === 'string' && EVENT_TYPES.has(event.type);
 }
 
 function validJsonShape(value, depth) {

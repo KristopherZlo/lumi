@@ -87,7 +87,7 @@ Lumi has diagnostic telemetry for crashes, failed operations, rejected actions, 
 
 Telemetry does not send raw logs, screen views, clicks, world names, project names, coordinates, seeds, exception messages, raw file paths, raw NBT, or block/entity payloads.
 
-The default endpoint is `https://lumi.zloyxp.cc/v1/events/batch`. The receiver stores allowlisted diagnostic fields only, keeps raw events for 90 days, and exposes only an authenticated aggregate dashboard.
+The default endpoint is `https://lumi.zloyxp.cc/v1/events/batch`. The receiver stores allowlisted diagnostic fields only, keeps raw events for 90 days, and exposes diagnostics through an authenticated Grafana dashboard.
 
 ## For Developers
 
@@ -120,20 +120,21 @@ npm test
 
 ### Telemetry Backend
 
-The self-hosted telemetry receiver lives in `telemetry-backend`. It is a small Node/Postgres service with:
+The self-hosted telemetry receiver lives in `telemetry-backend`. It is a small Node/Postgres ingest service used with Grafana OSS for investigation:
 
 - public ingest at `POST /v1/events/batch`
-- strict JSON schema, key allowlists, body size limits, and per-client rate limiting
+- strict JSON schema, event type allowlists, key allowlists, body size limits, and per-client rate limiting
 - no IP storage
-- a Basic Auth admin dashboard at `/` and `/admin`
-- aggregate dashboard queries only; raw events are not exposed through the UI
+- Grafana at `https://lumi.zloyxp.cc/` with sign-up and anonymous access disabled
+- a read-only Grafana database user
+- default dashboard panels for installs, failures, event types, versions, and sanitized recent events
 - 90-day retention for stored raw events
 
-Required runtime environment:
+The Node service should stay behind nginx on localhost. Required runtime environment:
 
 ```text
 DATABASE_URL=postgres://...
-ADMIN_USERNAME=...
+ADMIN_USERNAME=ZloyExperience
 ADMIN_PASSWORD_HASH=scrypt$...
 HOST=127.0.0.1
 PORT=8787

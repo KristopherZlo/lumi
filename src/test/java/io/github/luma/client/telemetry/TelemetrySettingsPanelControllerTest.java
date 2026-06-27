@@ -19,7 +19,7 @@ class TelemetrySettingsPanelControllerTest {
         AtomicBoolean cleared = new AtomicBoolean(false);
         AtomicBoolean toggled = new AtomicBoolean(false);
         TelemetrySettingsPanelController controller = new TelemetrySettingsPanelController(
-                () -> new TelemetrySettings(1, enabled.get(), 1, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.now()),
+                () -> new TelemetrySettings(1, enabled.get(), 1, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.now(), false),
                 value -> {
                     enabled.set(value);
                     toggled.set(true);

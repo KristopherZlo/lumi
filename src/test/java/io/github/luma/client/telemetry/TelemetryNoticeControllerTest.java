@@ -13,7 +13,7 @@ class TelemetryNoticeControllerTest {
     @Test
     void hiddenWhenNoticeHasAlreadyBeenSeen() {
         TelemetryNoticeController controller = new TelemetryNoticeController(
-                () -> new TelemetrySettings(1, true, 1, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.now()),
+                () -> new TelemetrySettings(1, true, 1, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.now(), false),
                 () -> {
                 }
         );
@@ -25,7 +25,7 @@ class TelemetryNoticeControllerTest {
     void acknowledgeMarksNoticeAsSeen() {
         AtomicBoolean acknowledged = new AtomicBoolean(false);
         TelemetryNoticeController controller = new TelemetryNoticeController(
-                () -> new TelemetrySettings(1, true, 0, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.now()),
+                () -> new TelemetrySettings(1, true, 0, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.now(), false),
                 () -> acknowledged.set(true)
         );
 
@@ -37,7 +37,7 @@ class TelemetryNoticeControllerTest {
     @Test
     void disabledTelemetryDoesNotShowNotice() {
         TelemetryNoticeController controller = new TelemetryNoticeController(
-                () -> new TelemetrySettings(1, false, 0, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.now()),
+                () -> new TelemetrySettings(1, false, 0, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.now(), false),
                 () -> {
                 }
         );

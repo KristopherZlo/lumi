@@ -11,7 +11,8 @@ public record TelemetrySettings(
         int noticeSeenVersion,
         String endpointUrl,
         String installationId,
-        Instant rotatedAt
+        Instant rotatedAt,
+        boolean installationReported
 ) {
 
     public static final int CURRENT_SCHEMA_VERSION = 1;
@@ -29,7 +30,8 @@ public record TelemetrySettings(
                 0,
                 endpointUrl,
                 nextInstallationId(installationIds),
-                Instant.now()
+                Instant.now(),
+                false
         );
     }
 
@@ -40,7 +42,8 @@ public record TelemetrySettings(
                 Math.max(0, this.noticeSeenVersion),
                 blank(this.endpointUrl) ? defaultEndpointUrl : this.endpointUrl,
                 blank(this.installationId) ? nextInstallationId(installationIds) : this.installationId,
-                this.rotatedAt == null ? Instant.now() : this.rotatedAt
+                this.rotatedAt == null ? Instant.now() : this.rotatedAt,
+                this.installationReported
         );
     }
 
@@ -56,7 +59,8 @@ public record TelemetrySettings(
                 this.noticeSeenVersion,
                 this.endpointUrl,
                 nextInstallationId(installationIds),
-                effectiveNow
+                effectiveNow,
+                this.installationReported
         );
     }
 
@@ -67,7 +71,8 @@ public record TelemetrySettings(
                 this.noticeSeenVersion,
                 this.endpointUrl,
                 this.installationId,
-                this.rotatedAt
+                this.rotatedAt,
+                this.installationReported
         );
     }
 
@@ -78,7 +83,20 @@ public record TelemetrySettings(
                 CURRENT_NOTICE_VERSION,
                 this.endpointUrl,
                 this.installationId,
-                this.rotatedAt
+                this.rotatedAt,
+                this.installationReported
+        );
+    }
+
+    public TelemetrySettings withInstallationReported() {
+        return new TelemetrySettings(
+                this.schemaVersion,
+                this.enabled,
+                this.noticeSeenVersion,
+                this.endpointUrl,
+                this.installationId,
+                this.rotatedAt,
+                true
         );
     }
 

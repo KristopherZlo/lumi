@@ -25,7 +25,7 @@ class TelemetryServiceTest {
         TelemetrySpoolRepository spool = new TelemetrySpoolRepository(this.tempDir.resolve("telemetry-spool.json"), 10);
         spool.save(List.of(event("queued")));
         TelemetryService service = TelemetryService.testing(
-                new TelemetrySettings(1, false, 0, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.parse("2026-01-01T00:00:00Z")),
+                new TelemetrySettings(1, false, 0, "https://telemetry.example.test/v1/events/batch", "install-a", Instant.parse("2026-01-01T00:00:00Z"), false),
                 spool,
                 new TelemetryEnvironmentProvider.Static(new TelemetryEnvironment("lumi", "mc", "loader", "java", "os", "arch", List.of())),
                 Runnable::run,
@@ -175,6 +175,26 @@ class TelemetryServiceTest {
         assertEquals(1, sender.calls());
         assertEquals(0, service.pendingEventCount());
         assertTrue(spool.load().isEmpty());
+    }
+
+    @Test
+    void clientRuntimeReportsInstallationOnce() {
+        TelemetrySpoolRepository spool = new TelemetrySpoolRepository(this.tempDir.resolve("telemetry-spool.json"), 10);
+        TelemetryService service = TelemetryService.testing(
+                TelemetrySettings.defaults("https://telemetry.lumimod.dev/v1/events/batch", () -> "install-a"),
+                spool,
+                new TelemetryEnvironmentProvider.Static(new TelemetryEnvironment("lumi", "mc", "loader", "java", "os", "arch", List.of())),
+                Runnable::run,
+                (endpoint, events) -> TelemetrySendResult.failure("offline")
+        );
+
+        service.enableClientRuntime();
+        service.enableClientRuntime();
+
+        List<TelemetryEvent> events = spool.load();
+        assertEquals(1, events.size());
+        assertEquals(TelemetryEventType.INSTALLATION_SEEN, events.getFirst().type());
+        assertTrue(events.getFirst().payload().isEmpty());
     }
 
     @Test

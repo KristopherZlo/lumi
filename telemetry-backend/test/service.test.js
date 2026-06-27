@@ -19,7 +19,7 @@ test('accepts a valid batch and stores allowlisted events', async () => {
       events: [
         {
           id: 'event-a',
-          type: 'operation_failed',
+          type: 'OPERATION_FAILED',
           occurredAt: '2026-06-08T00:00:00Z',
           installationId: 'install-a',
           environment: { lumiVersion: '1', minecraftVersion: '2', fabricLoaderVersion: '3', javaVersion: '4', osFamily: 'windows', osArch: 'x64', mods: [] },
@@ -91,7 +91,7 @@ test('rejects payload fields outside the telemetry allowlist before storage', as
       events: [
         {
           id: 'event-a',
-          type: 'operation_failed',
+          type: 'OPERATION_FAILED',
           occurredAt: '2026-06-08T00:00:00Z',
           installationId: 'install-a',
           environment: { lumiVersion: '1', minecraftVersion: '2', fabricLoaderVersion: '3', javaVersion: '4', osFamily: 'windows', osArch: 'x64', mods: [] },
@@ -105,6 +105,60 @@ test('rejects payload fields outside the telemetry allowlist before storage', as
   assert.equal(result.status, 400);
   assert.equal(JSON.parse(result.body).error, 'invalid_payload');
   assert.equal(repository.events.length, 0);
+});
+
+test('rejects event types outside the telemetry allowlist before storage', async () => {
+  const repository = new FakeRepository();
+  const service = new TelemetryIngestService({ repository, rateLimiter: null, maxRequestBytes: 4096 });
+
+  const result = await service.handleBatch({
+    ip: '127.0.0.1',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      events: [
+        {
+          id: 'event-a',
+          type: 'RAW_LOG_UPLOAD',
+          occurredAt: '2026-06-08T00:00:00Z',
+          installationId: 'install-a',
+          environment: { lumiVersion: '1', minecraftVersion: '2', fabricLoaderVersion: '3', javaVersion: '4', osFamily: 'windows', osArch: 'x64', mods: [] },
+          fingerprint: 'fp-a',
+          payload: {},
+        },
+      ],
+    }),
+  });
+
+  assert.equal(result.status, 400);
+  assert.equal(JSON.parse(result.body).error, 'invalid_event');
+  assert.equal(repository.events.length, 0);
+});
+
+test('accepts the installation counter event', async () => {
+  const repository = new FakeRepository();
+  const service = new TelemetryIngestService({ repository, rateLimiter: null, maxRequestBytes: 4096 });
+
+  const result = await service.handleBatch({
+    ip: '127.0.0.1',
+    body: JSON.stringify({
+      schemaVersion: 1,
+      events: [
+        {
+          id: 'event-a',
+          type: 'INSTALLATION_SEEN',
+          occurredAt: '2026-06-08T00:00:00Z',
+          installationId: 'install-a',
+          environment: { lumiVersion: '1', minecraftVersion: '2', fabricLoaderVersion: '3', javaVersion: '4', osFamily: 'windows', osArch: 'x64', mods: [] },
+          fingerprint: 'fp-a',
+          payload: {},
+        },
+      ],
+    }),
+  });
+
+  assert.equal(result.status, 202);
+  assert.equal(repository.events.length, 1);
+  assert.equal(repository.events[0].type, 'INSTALLATION_SEEN');
 });
 
 test('rate limits malformed request floods before parsing', async () => {

@@ -70,7 +70,7 @@ public final class TelemetryService {
             this.clientRuntimeEnabled = true;
             this.rotateSettingsIfNeeded();
         }
-        this.schedule(this::flushCurrent);
+        this.schedule(this::recordInstallationSeen);
     }
 
     public TelemetrySettings settings() {
@@ -267,6 +267,30 @@ public final class TelemetryService {
             List<TelemetryEvent> updated = new ArrayList<>(this.queue);
             updated.add(eventBuilder.create(this.settings));
             this.queue = List.copyOf(updated);
+            this.spoolRepository.save(this.queue);
+        }
+        this.flushCurrent();
+    }
+
+    private void recordInstallationSeen() {
+        synchronized (this.lock) {
+            if (!this.readyToSendLocked()) {
+                this.clearLocalQueueLocked();
+                return;
+            }
+            if (this.settings.installationReported()) {
+                return;
+            }
+            this.rotateSettingsIfNeeded();
+            if (!this.endpointPolicy.sendable(this.settings.endpointUrl())) {
+                this.clearLocalQueueLocked();
+                return;
+            }
+            List<TelemetryEvent> updated = new ArrayList<>(this.queue);
+            updated.add(this.eventFactory.installationSeen(this.settings));
+            this.queue = List.copyOf(updated);
+            this.settings = this.settings.withInstallationReported();
+            this.saveSettings();
             this.spoolRepository.save(this.queue);
         }
         this.flushCurrent();

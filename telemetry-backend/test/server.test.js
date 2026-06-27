@@ -25,7 +25,7 @@ test('returns json problem response when repository insert fails', { timeout: 2_
       events: [
         {
           id: 'event-a',
-          type: 'operation_failed',
+          type: 'OPERATION_FAILED',
           occurredAt: '2026-06-08T00:00:00Z',
           installationId: 'install-a',
           environment: {
@@ -290,7 +290,7 @@ class FakeRetentionScheduler {
 function validEvent(id) {
   return {
     id,
-    type: 'operation_failed',
+    type: 'OPERATION_FAILED',
     occurredAt: '2026-06-08T00:00:00Z',
     installationId: 'install-a',
     environment: {

@@ -82,6 +82,10 @@ final class TelemetryEventFactory {
         return this.event(settings, TelemetryEventType.PERFORMANCE_OUTLIER, payload);
     }
 
+    TelemetryEvent installationSeen(TelemetrySettings settings) {
+        return this.event(settings, TelemetryEventType.INSTALLATION_SEEN, Map.of());
+    }
+
     private TelemetryEvent event(TelemetrySettings settings, TelemetryEventType type, Map<String, String> payload) {
         return new TelemetryEvent(
                 UUID.randomUUID().toString(),

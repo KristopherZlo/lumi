@@ -28,7 +28,8 @@ class TelemetrySettingsTest {
                 1,
                 "https://telemetry.example.test/v1/events/batch",
                 "install-a",
-                created
+                created,
+                false
         );
 
         TelemetrySettings stable = settings.rotateIfExpired(created.plusSeconds(29L * 24L * 60L * 60L), () -> "install-b");
