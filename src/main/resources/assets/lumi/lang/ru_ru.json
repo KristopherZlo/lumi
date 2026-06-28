@@ -10,7 +10,7 @@
   "key.lumi.hotkey_info": "Hotkey information",
   "luma.action.expand": "Expand",
   "luma.action.collapse": "Collapse",
-  "luma.restore.entities_title": "Entities in save: %s",
+  "luma.restore.entities_title": "Сущности в области восстановления: %s",
   "luma.restore.entities_help": "Unchecked types are skipped for this restore only. The save itself is not changed.",
 
   "luma.common.yes": "Да",
@@ -287,6 +287,8 @@
   "luma.restore.initial_confirm_target": "Целевой бренч: %s | сохранение: %s",
   "luma.restore.confirm_title": "Восстановить %s?",
   "luma.restore.confirm_help": "Это изменит блоки в текущей постройке.",
+  "luma.restore.confirm_selected_help": "Будет восстановлена только выделенная область из этого save.",
+  "luma.restore.confirm_outside_help": "Будет восстановлено всё, кроме выделенной области, из этого save.",
   "luma.restore.confirm_zone_help": "Это изменит только ячейки этой зоны.",
   "luma.restore.selection_choice_help": "У тебя есть выделение Lumi. Выбери: восстановить весь save, только выделенную область или всё вокруг неё, не трогая выделение.",
   "luma.restore.confirm_safety": "Если есть несохранённая работа, сначала будет создано safety-сохранение.",

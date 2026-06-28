@@ -139,4 +139,34 @@ class ProjectScreenHistoryBranchSelectionTest {
         assertTrue(sections.contains("this.saveCardView.onboardingRestoreButton()"));
         assertTrue(card.contains("onboardingRestoreButton"));
     }
+
+    @Test
+    void partialRestoreConfirmationsUseScopedEntitySummaries() throws IOException {
+        String projectScreen = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java"));
+        String saveDetails = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/SaveDetailsScreen.java"));
+
+        assertTrue(projectScreen.contains("this.actionController::restoreEntityTypes"));
+        assertTrue(projectScreen.contains("pendingRestoreMode"));
+        assertTrue(saveDetails.contains("this.controller.restoreEntityTypes(partialRequest)"));
+        assertTrue(saveDetails.contains("pendingPartialRestoreRequest"));
+    }
+
+    @Test
+    void saveDetailsPartialRestoreApplyOpensRestoreConfirmation() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/SaveDetailsScreen.java"));
+        int methodIndex = source.indexOf("        public void apply(PartialRestoreRequest request) {");
+        int nextMethodIndex = source.indexOf("        @Override", methodIndex + 1);
+
+        assertTrue(methodIndex >= 0, "Save details should keep the partial restore apply action");
+        assertTrue(nextMethodIndex > methodIndex, "The partial restore apply action should be bounded by the next override");
+
+        String methodBody = source.substring(methodIndex, nextMethodIndex);
+
+        assertTrue(methodBody.contains("pendingPartialRestoreRequest = request"));
+        assertTrue(methodBody.contains("pendingRestoreConfirmation = true"));
+        assertFalse(
+                methodBody.contains("controller.partialRestore(request)"),
+                "Partial restore apply must go through restore confirmation so entity types can be excluded"
+        );
+    }
 }

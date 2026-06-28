@@ -86,6 +86,7 @@ public final class SaveDetailsScreen extends LumaScreen {
     private boolean pendingRestoreConfirmation = false;
     private boolean pendingDeleteConfirmation = false;
     private boolean showPartialRestore = false;
+    private PartialRestoreRequest pendingPartialRestoreRequest;
     private String renameVersionId = "";
     private String renameMessage = "";
     private String tagVersionId = "";
@@ -610,10 +611,14 @@ public final class SaveDetailsScreen extends LumaScreen {
             boolean operationActive
     ) {
         boolean zoneScoped = !this.versionVisibility.workZoneId(version).isBlank();
+        PartialRestoreRequest partialRequest = this.pendingPartialRestoreRequest;
+        boolean hasSelectionChoice = partialRequest == null && !zoneScoped && this.selectedLumiBounds().isPresent();
         return new RestoreConfirmationDialogView.Model(
                 this.width,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
-                Component.translatable(zoneScoped ? "luma.restore.confirm_zone_help" : "luma.restore.confirm_help"),
+                partialRequest == null
+                        ? Component.translatable(zoneScoped ? "luma.restore.confirm_zone_help" : "luma.restore.confirm_help")
+                        : this.restoreConfirmHelp(partialRequest.restoreMode()),
                 Component.translatable(
                         "luma.restore.confirm_target",
                         ProjectUiSupport.displayVariantName(versionVariant),
@@ -621,16 +626,19 @@ public final class SaveDetailsScreen extends LumaScreen {
                 ),
                 !zoneScoped && this.state.project().settings().safetySnapshotBeforeRestore(),
                 version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
-                !zoneScoped && this.selectedLumiBounds().isPresent(),
+                hasSelectionChoice,
                 operationActive,
                 this.restoreEntitySelection.expanded(),
-                this.restoreEntitySelection.options(zoneScoped
+                this.restoreEntitySelection.options(partialRequest != null
+                        ? this.controller.restoreEntityTypes(partialRequest)
+                        : zoneScoped
                         ? this.controller.restoreEntityTypes(this.zoneRestoreRequest(
                                 version,
                                 this.versionVisibility.workZoneId(version),
                                 RestoreEntityTypeSelection.includeAll()
                         ))
-                        : this.controller.restoreEntityTypes(this.projectName, version.id()))
+                        : this.controller.restoreEntityTypes(this.projectName, version.id())),
+                this.primaryRestoreAction(partialRequest == null ? null : partialRequest.restoreMode(), hasSelectionChoice)
         );
     }
 
@@ -651,6 +659,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         }
 
         this.pendingRestoreConfirmation = true;
+        this.pendingPartialRestoreRequest = null;
         this.restoreEntitySelection.reset();
         this.refresh("luma.status.restore_confirmation_required");
     }
@@ -697,29 +706,73 @@ public final class SaveDetailsScreen extends LumaScreen {
         );
     }
 
-    private void executeSelectedRestore(
-            ProjectVersion version,
-            PartialRestoreMode mode,
-            Bounds3i bounds,
-            RestoreEntityTypeSelection selection
-    ) {
-        if (version == null || bounds == null) {
+    private void openSelectedRestoreConfirmation(ProjectVersion version, PartialRestoreMode mode) {
+        if (version == null || mode == null) {
+            this.pendingRestoreConfirmation = false;
+            this.pendingPartialRestoreRequest = null;
+            this.restoreEntitySelection.reset();
             this.refresh("luma.status.operation_failed");
             return;
         }
+        this.selectedLumiBounds().ifPresentOrElse(bounds -> {
+            this.pendingPartialRestoreRequest = new PartialRestoreRequest(
+                    this.projectName,
+                    version.id(),
+                    bounds,
+                    mode,
+                    PartialRestoreRegionSource.LUMI_REGION,
+                    RestoreEntityTypeSelection.includeAll(),
+                    this.client.getUser().getName(),
+                    this.restoreMetadata(version)
+            );
+            this.restoreEntitySelection.reset();
+            this.refresh("luma.status.restore_confirmation_required");
+        }, () -> this.refresh("luma.status.operation_failed"));
+    }
+
+    private void executePendingPartialRestore(RestoreEntityTypeSelection selection) {
+        PartialRestoreRequest request = this.withEntityTypeSelection(this.pendingPartialRestoreRequest, selection);
         this.pendingRestoreConfirmation = false;
-        PartialRestoreRequest request = new PartialRestoreRequest(
-                this.projectName,
-                version.id(),
-                bounds,
-                mode,
-                PartialRestoreRegionSource.LUMI_REGION,
-                selection,
-                this.client.getUser().getName(),
-                this.restoreMetadata(version)
-        );
+        this.pendingPartialRestoreRequest = null;
+        this.restoreEntitySelection.reset();
         String result = this.controller.partialRestore(request);
         this.router.openProjectIgnoringRecovery(this.parent, this.projectName, result);
+    }
+
+    private PartialRestoreRequest withEntityTypeSelection(
+            PartialRestoreRequest request,
+            RestoreEntityTypeSelection selection
+    ) {
+        return new PartialRestoreRequest(
+                request.projectName(),
+                request.targetVersionId(),
+                request.bounds(),
+                request.restoreMode(),
+                request.regionSource(),
+                selection,
+                request.actor(),
+                request.metadata()
+        );
+    }
+
+    private Component restoreConfirmHelp(PartialRestoreMode mode) {
+        if (mode == PartialRestoreMode.SELECTED_AREA) {
+            return Component.translatable("luma.restore.confirm_selected_help");
+        }
+        if (mode == PartialRestoreMode.OUTSIDE_SELECTED_AREA) {
+            return Component.translatable("luma.restore.confirm_outside_help");
+        }
+        return Component.translatable("luma.restore.confirm_help");
+    }
+
+    private Component primaryRestoreAction(PartialRestoreMode mode, boolean hasSelectionChoice) {
+        if (mode == PartialRestoreMode.SELECTED_AREA) {
+            return Component.translatable("luma.action.restore_only_selected_area");
+        }
+        if (mode == PartialRestoreMode.OUTSIDE_SELECTED_AREA) {
+            return Component.translatable("luma.action.restore_everything_except_selection");
+        }
+        return Component.translatable(hasSelectionChoice ? "luma.action.restore_whole_save" : "luma.action.restore");
     }
 
     private Map<String, String> restoreMetadata(ProjectVersion version) {
@@ -824,6 +877,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         @Override
         public void cancel() {
             pendingRestoreConfirmation = false;
+            pendingPartialRestoreRequest = null;
             restoreEntitySelection.reset();
             rebuild();
         }
@@ -835,6 +889,10 @@ public final class SaveDetailsScreen extends LumaScreen {
                     ? null
                     : ProjectUiSupport.variantFor(state.variants(), version.variantId());
             RestoreEntityTypeSelection selection = restoreEntitySelection.selection();
+            if (pendingPartialRestoreRequest != null) {
+                executePendingPartialRestore(selection);
+                return;
+            }
             pendingRestoreConfirmation = false;
             restoreEntitySelection.reset();
             executeRestore(version, versionVariant, selection);
@@ -842,24 +900,12 @@ public final class SaveDetailsScreen extends LumaScreen {
 
         @Override
         public void restoreSelectedArea() {
-            RestoreEntityTypeSelection selection = restoreEntitySelection.selection();
-            pendingRestoreConfirmation = false;
-            restoreEntitySelection.reset();
-            selectedLumiBounds().ifPresentOrElse(
-                    bounds -> executeSelectedRestore(state.selectedVersion(), PartialRestoreMode.SELECTED_AREA, bounds, selection),
-                    () -> refresh("luma.status.operation_failed")
-            );
+            openSelectedRestoreConfirmation(state.selectedVersion(), PartialRestoreMode.SELECTED_AREA);
         }
 
         @Override
         public void restoreOutsideSelection() {
-            RestoreEntityTypeSelection selection = restoreEntitySelection.selection();
-            pendingRestoreConfirmation = false;
-            restoreEntitySelection.reset();
-            selectedLumiBounds().ifPresentOrElse(
-                    bounds -> executeSelectedRestore(state.selectedVersion(), PartialRestoreMode.OUTSIDE_SELECTED_AREA, bounds, selection),
-                    () -> refresh("luma.status.operation_failed")
-            );
+            openSelectedRestoreConfirmation(state.selectedVersion(), PartialRestoreMode.OUTSIDE_SELECTED_AREA);
         }
 
         @Override
@@ -911,8 +957,10 @@ public final class SaveDetailsScreen extends LumaScreen {
 
         @Override
         public void apply(PartialRestoreRequest request) {
-            String result = controller.partialRestore(request);
-            router.openProjectIgnoringRecovery(parent, projectName, result);
+            pendingPartialRestoreRequest = request;
+            pendingRestoreConfirmation = true;
+            restoreEntitySelection.reset();
+            refresh("luma.status.restore_confirmation_required");
         }
 
         @Override

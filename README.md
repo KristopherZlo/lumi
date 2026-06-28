@@ -246,7 +246,7 @@ Hard rules:
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
 - Saved commits keep entity checkpoints for entities present at save time. Restore can skip selected entity types for a single run without changing the saved commit.
-- Zone-scoped restore entity summaries count only entities inside the resolved restore scope.
+- Restore confirmation entity summaries count only entities inside the resolved restore scope for zones and selected/outside partial restores.
 - Live undo may track transient entities to clean up active fallout, but redo replays final deltas instead of respawning transient primed TNT; recovery drafts and saved commits must not persist undo-only transient entities.
 
 ### Diagnostics

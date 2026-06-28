@@ -118,6 +118,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private TextBoxComponent activeTagInput;
     private String pendingCompareLeftReference = "";
     private String pendingCompareRightReference = "";
+    private PartialRestoreMode pendingRestoreMode;
     private int refreshCooldown = 0;
 
     public ProjectScreen(Screen parent, String projectName) {
@@ -347,10 +348,18 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         }
 
         boolean operationActive = model.state().operationSnapshot() != null && !model.state().operationSnapshot().terminal();
+        Optional<PartialRestoreRequest> partialRequest = this.pendingRestoreMode == null
+                ? Optional.empty()
+                : model.lumiSelection().map(bounds -> this.selectedRestoreRequest(version, this.pendingRestoreMode, bounds, RestoreEntityTypeSelection.includeAll()));
+        if (this.pendingRestoreMode != null && partialRequest.isEmpty()) {
+            this.clearPendingRestore();
+            return Optional.empty();
+        }
+        boolean hasSelectionChoice = this.pendingRestoreMode == null && model.lumiSelection().isPresent();
         return Optional.of(new RestoreConfirmationDialogView.Model(
                 this.width,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
-                Component.translatable("luma.restore.confirm_help"),
+                this.restoreConfirmHelp(this.pendingRestoreMode),
                 Component.translatable(
                         "luma.restore.confirm_target",
                         ProjectUiSupport.displayVariantName(variant),
@@ -358,10 +367,13 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 ),
                 model.state().project().settings().safetySnapshotBeforeRestore(),
                 version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
-                model.lumiSelection().isPresent(),
+                hasSelectionChoice,
                 operationActive,
                 this.restoreEntitySelection.expanded(),
-                this.restoreEntitySelection.options(this.actionController.restoreEntityTypes(this.projectName, version.id()))
+                this.restoreEntitySelection.options(partialRequest
+                        .map(this.actionController::restoreEntityTypes)
+                        .orElseGet(() -> this.actionController.restoreEntityTypes(this.projectName, version.id()))),
+                this.primaryRestoreAction(this.pendingRestoreMode, hasSelectionChoice)
         ));
     }
 
@@ -519,6 +531,10 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     }
 
     private void confirmPendingRestore() {
+        if (this.pendingRestoreMode != null) {
+            this.confirmPendingSelectedRestore(this.pendingRestoreMode);
+            return;
+        }
         Optional<ProjectVersion> version = this.pendingRestoreVersion();
         Optional<ProjectVariant> variant = version.flatMap(this::pendingRestoreVariant);
         if (version.isEmpty() || variant.isEmpty()) {
@@ -552,6 +568,17 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         this.executeSelectedRestore(version.get(), mode, bounds.get(), selection);
     }
 
+    private void confirmSelectedRestoreMode(PartialRestoreMode mode) {
+        if (mode == null || this.selectedLumiBounds().isEmpty()) {
+            this.clearPendingRestore();
+            this.refresh("luma.status.operation_failed");
+            return;
+        }
+        this.pendingRestoreMode = mode;
+        this.restoreEntitySelection.reset();
+        this.refresh("luma.status.restore_confirmation_required");
+    }
+
     private final class RestoreDialogActions implements RestoreConfirmationDialogView.Actions {
 
         @Override
@@ -567,12 +594,12 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
 
         @Override
         public void restoreSelectedArea() {
-            confirmPendingSelectedRestore(PartialRestoreMode.SELECTED_AREA);
+            confirmSelectedRestoreMode(PartialRestoreMode.SELECTED_AREA);
         }
 
         @Override
         public void restoreOutsideSelection() {
-            confirmPendingSelectedRestore(PartialRestoreMode.OUTSIDE_SELECTED_AREA);
+            confirmSelectedRestoreMode(PartialRestoreMode.OUTSIDE_SELECTED_AREA);
         }
 
         @Override
@@ -669,9 +696,48 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         this.refresh(this.actionController.partialRestore(request));
     }
 
+    private PartialRestoreRequest selectedRestoreRequest(
+            ProjectVersion version,
+            PartialRestoreMode mode,
+            Bounds3i bounds,
+            RestoreEntityTypeSelection selection
+    ) {
+        return new PartialRestoreRequest(
+                this.projectName,
+                version.id(),
+                bounds,
+                mode,
+                PartialRestoreRegionSource.LUMI_REGION,
+                selection,
+                this.client.getUser().getName(),
+                Map.of()
+        );
+    }
+
+    private Component restoreConfirmHelp(PartialRestoreMode mode) {
+        if (mode == PartialRestoreMode.SELECTED_AREA) {
+            return Component.translatable("luma.restore.confirm_selected_help");
+        }
+        if (mode == PartialRestoreMode.OUTSIDE_SELECTED_AREA) {
+            return Component.translatable("luma.restore.confirm_outside_help");
+        }
+        return Component.translatable("luma.restore.confirm_help");
+    }
+
+    private Component primaryRestoreAction(PartialRestoreMode mode, boolean hasSelectionChoice) {
+        if (mode == PartialRestoreMode.SELECTED_AREA) {
+            return Component.translatable("luma.action.restore_only_selected_area");
+        }
+        if (mode == PartialRestoreMode.OUTSIDE_SELECTED_AREA) {
+            return Component.translatable("luma.action.restore_everything_except_selection");
+        }
+        return Component.translatable(hasSelectionChoice ? "luma.action.restore_whole_save" : "luma.action.restore");
+    }
+
     private void clearPendingRestore() {
         this.pendingRestoreVariantId = "";
         this.pendingRestoreVersionId = "";
+        this.pendingRestoreMode = null;
         this.restoreEntitySelection.reset();
     }
 

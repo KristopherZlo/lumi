@@ -48,7 +48,7 @@ public final class RestoreConfirmationDialogView {
         FlowLayout actionsRow = LumaUi.actionRow();
         actionsRow.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.actions.cancel()));
         ButtonComponent wholeRestore = LumaUi.primaryButton(
-                Component.translatable(model.hasSelection() ? "luma.action.restore_whole_save" : "luma.action.restore"),
+                model.primaryAction(),
                 button -> this.actions.restoreWhole()
         );
         wholeRestore.active(!model.operationActive());
@@ -123,7 +123,8 @@ public final class RestoreConfirmationDialogView {
             boolean hasSelection,
             boolean operationActive,
             boolean entityListExpanded,
-            List<EntityTypeOption> entityTypes
+            List<EntityTypeOption> entityTypes,
+            Component primaryAction
     ) {
 
         public Model(
@@ -146,7 +147,35 @@ public final class RestoreConfirmationDialogView {
                     hasSelection,
                     operationActive,
                     false,
-                    List.of()
+                    List.of(),
+                    Component.translatable(hasSelection ? "luma.action.restore_whole_save" : "luma.action.restore")
+            );
+        }
+
+        public Model(
+                int width,
+                Component title,
+                Component help,
+                Component target,
+                boolean safetySnapshot,
+                boolean initialRestore,
+                boolean hasSelection,
+                boolean operationActive,
+                boolean entityListExpanded,
+                List<EntityTypeOption> entityTypes
+        ) {
+            this(
+                    width,
+                    title,
+                    help,
+                    target,
+                    safetySnapshot,
+                    initialRestore,
+                    hasSelection,
+                    operationActive,
+                    entityListExpanded,
+                    entityTypes,
+                    Component.translatable(hasSelection ? "luma.action.restore_whole_save" : "luma.action.restore")
             );
         }
 
@@ -155,6 +184,9 @@ public final class RestoreConfirmationDialogView {
             help = Objects.requireNonNull(help, "help");
             target = Objects.requireNonNull(target, "target");
             entityTypes = entityTypes == null ? List.of() : List.copyOf(entityTypes);
+            primaryAction = primaryAction == null
+                    ? Component.translatable(hasSelection ? "luma.action.restore_whole_save" : "luma.action.restore")
+                    : primaryAction;
         }
 
         public boolean hasEntityTypes() {
