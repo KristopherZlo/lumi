@@ -77,7 +77,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 | `R` | Quick rollback |
 | `H` | Toggle compare overlay |
 | `Left Alt+I` | Show Lumi hotkeys |
-| Wooden sword | Select a region; hold `Left Alt` to resize/switch/clear, hold `Ctrl` to add/remove active-zone cells |
+| Wooden sword | Select a region; `Left Alt+MMB` resizes, `Left Alt+LMB` switches mode, `Left Alt+RMB` clears, `Ctrl` adds/removes active-zone cells |
 
 Wooden sword hints appear under the crosshair; only `LMB`, `MMB`, and `RMB` use mouse icons, while keyboard inputs render as `[KEY]` text.
 
