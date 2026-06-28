@@ -321,10 +321,10 @@ public final class PreparedChunkBatchCollapser {
         private final List<CompoundTag> spawns = new ArrayList<>();
         private final List<String> removals = new ArrayList<>();
         private final List<CompoundTag> updates = new ArrayList<>();
-        private boolean replacePlacedEntities;
+        private boolean replaceEntities;
 
         private EntityBatch toBatch() {
-            return new EntityBatch(this.spawns, this.removals, this.updates, this.replacePlacedEntities);
+            return new EntityBatch(this.spawns, this.removals, this.updates, this.replaceEntities);
         }
     }
 
@@ -334,14 +334,14 @@ public final class PreparedChunkBatchCollapser {
         private int anonymousIndex;
 
         private void add(ChunkPoint chunk, EntityBatch batch) {
-            if (batch.replacePlacedEntities()) {
+            if (batch.replaceEntities()) {
                 this.markReplace(chunk);
             }
             for (String entityId : batch.entityIdsToRemove()) {
                 this.addRemoval(chunk, entityId);
             }
             for (CompoundTag tag : batch.entitiesToUpdate()) {
-                ChunkPoint targetChunk = batch.replacePlacedEntities() ? chunk : chunkFor(tag, chunk);
+                ChunkPoint targetChunk = batch.replaceEntities() ? chunk : chunkFor(tag, chunk);
                 this.addTarget(targetChunk, tag, EntityOperationKind.UPDATE);
             }
             for (CompoundTag tag : batch.entitiesToSpawn()) {
@@ -378,7 +378,7 @@ public final class PreparedChunkBatchCollapser {
         private Map<ChunkPoint, EntityAccumulator> toBatchesByChunk() {
             Map<ChunkPoint, EntityAccumulator> chunks = new LinkedHashMap<>();
             for (ChunkPoint chunk : this.replaceChunks) {
-                chunks.computeIfAbsent(chunk, ignored -> new EntityAccumulator()).replacePlacedEntities = true;
+                chunks.computeIfAbsent(chunk, ignored -> new EntityAccumulator()).replaceEntities = true;
             }
             for (EntityOperation operation : this.operations.values()) {
                 EntityAccumulator accumulator = chunks.computeIfAbsent(operation.chunk(), ignored -> new EntityAccumulator());

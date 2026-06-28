@@ -60,7 +60,7 @@ class WorldChangeBatchPreparerTest {
         assertEquals(1, batches.size());
         assertEquals(1, batches.getFirst().entityBatch().entitiesToSpawn().size());
         assertEquals(2, batches.getFirst().chunk().x());
-        assertEquals(false, batches.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(false, batches.getFirst().entityBatch().replaceEntities());
     }
 
     @Test
@@ -94,7 +94,7 @@ class WorldChangeBatchPreparerTest {
         );
 
         assertEquals(1, batches.size());
-        assertEquals(true, batches.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(true, batches.getFirst().entityBatch().replaceEntities());
     }
 
     @Test

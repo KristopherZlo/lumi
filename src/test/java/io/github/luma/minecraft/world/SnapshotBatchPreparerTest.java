@@ -125,7 +125,7 @@ class SnapshotBatchPreparerTest {
         List<PreparedChunkBatch> batches = preparer.prepare(snapshot, null);
 
         assertEquals(1, batches.size());
-        assertEquals(true, batches.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(true, batches.getFirst().entityBatch().replaceEntities());
         assertEquals(1, batches.getFirst().entityBatch().entitiesToUpdate().size());
         assertEquals("minecraft:armor_stand", batches.getFirst()
                 .entityBatch()
@@ -171,7 +171,7 @@ class SnapshotBatchPreparerTest {
         assertEquals(1, batches.size());
         assertEquals(3, batches.getFirst().placements().size());
         assertEquals(0, batches.getFirst().nativeSections().size());
-        assertEquals(false, batches.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(false, batches.getFirst().entityBatch().replaceEntities());
         assertEquals(true, batches.getFirst().placements().get(0).state().is(Blocks.GOLD_BLOCK));
         assertEquals(true, batches.getFirst().placements().get(1).state().is(Blocks.GOLD_BLOCK));
         assertEquals(true, batches.getFirst().placements().get(2).state().is(Blocks.AIR));

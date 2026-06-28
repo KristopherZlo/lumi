@@ -334,9 +334,9 @@ public final class SnapshotBatchPreparer {
 
     private EntityBatch prepareEntitySnapshots(List<EntityPayload> entitySnapshots) {
         if (entitySnapshots == null || entitySnapshots.isEmpty()) {
-            return EntityBatch.replacePlacedEntities(List.of());
+            return EntityBatch.replaceEntities(List.of());
         }
-        return EntityBatch.replacePlacedEntities(
+        return EntityBatch.replaceEntities(
                 entitySnapshots.stream()
                         .map(EntityPayload::copyTag)
                         .toList()

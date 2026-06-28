@@ -624,7 +624,13 @@ public final class SaveDetailsScreen extends LumaScreen {
                 !zoneScoped && this.selectedLumiBounds().isPresent(),
                 operationActive,
                 this.restoreEntitySelection.expanded(),
-                this.restoreEntitySelection.options(this.controller.restoreEntityTypes(this.projectName, version.id()))
+                this.restoreEntitySelection.options(zoneScoped
+                        ? this.controller.restoreEntityTypes(this.zoneRestoreRequest(
+                                version,
+                                this.versionVisibility.workZoneId(version),
+                                RestoreEntityTypeSelection.includeAll()
+                        ))
+                        : this.controller.restoreEntityTypes(this.projectName, version.id()))
         );
     }
 
@@ -670,7 +676,16 @@ public final class SaveDetailsScreen extends LumaScreen {
     }
 
     private void executeZoneRestore(ProjectVersion version, String zoneId, RestoreEntityTypeSelection selection) {
-        PartialRestoreRequest request = new PartialRestoreRequest(
+        String result = this.controller.partialRestore(this.zoneRestoreRequest(version, zoneId, selection));
+        this.router.openProjectIgnoringRecovery(this.parent, this.projectName, version.variantId(), result);
+    }
+
+    private PartialRestoreRequest zoneRestoreRequest(
+            ProjectVersion version,
+            String zoneId,
+            RestoreEntityTypeSelection selection
+    ) {
+        return new PartialRestoreRequest(
                 this.projectName,
                 version.id(),
                 null,
@@ -680,8 +695,6 @@ public final class SaveDetailsScreen extends LumaScreen {
                 this.client.getUser().getName(),
                 Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
         );
-        String result = this.controller.partialRestore(request);
-        this.router.openProjectIgnoringRecovery(this.parent, this.projectName, version.variantId(), result);
     }
 
     private void executeSelectedRestore(

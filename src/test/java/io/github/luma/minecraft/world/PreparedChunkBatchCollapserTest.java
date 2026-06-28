@@ -116,13 +116,13 @@ class PreparedChunkBatchCollapserTest {
         PreparedChunkBatch batch = new PreparedChunkBatch(
                 new ChunkPoint(2, 3),
                 List.of(),
-                EntityBatch.replacePlacedEntities(List.of(entity))
+                EntityBatch.replaceEntities(List.of(entity))
         );
 
         List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(batch));
 
         assertEquals(1, collapsed.size());
-        assertTrue(collapsed.getFirst().entityBatch().replacePlacedEntities());
+        assertTrue(collapsed.getFirst().entityBatch().replaceEntities());
         assertEquals(1, collapsed.getFirst().entityBatch().entitiesToUpdate().size());
     }
 

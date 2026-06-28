@@ -1,6 +1,7 @@
 package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
+import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RestoreEntityTypeCount;
@@ -242,6 +243,21 @@ public final class ProjectScreenController {
     }
 
     public List<RestoreEntityTypeCount> restoreEntityTypes(String projectName, String versionId) {
+        return this.restoreEntityTypes(projectName, versionId, null);
+    }
+
+    public List<RestoreEntityTypeCount> restoreEntityTypes(PartialRestoreRequest request) {
+        if (request == null) {
+            return List.of();
+        }
+        return this.restoreEntityTypes(request.projectName(), request.targetVersionId(), request);
+    }
+
+    private List<RestoreEntityTypeCount> restoreEntityTypes(
+            String projectName,
+            String versionId,
+            PartialRestoreRequest request
+    ) {
         if (projectName == null || projectName.isBlank() || versionId == null || versionId.isBlank()) {
             return List.of();
         }
@@ -252,7 +268,9 @@ public final class ProjectScreenController {
                     .filter(candidate -> versionId.equals(candidate.id()))
                     .findFirst()
                     .orElse(null);
-            return this.restoreEntitySummaryService.summarize(layout, version);
+            return request == null
+                    ? this.restoreEntitySummaryService.summarize(layout, version)
+                    : this.restoreEntitySummaryService.summarize(layout, version, request);
         } catch (Exception exception) {
             LumaMod.LOGGER.warn(
                     "Failed to summarize restore entities for project {} version {}",

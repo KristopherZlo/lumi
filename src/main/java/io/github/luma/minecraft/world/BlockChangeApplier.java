@@ -286,12 +286,12 @@ public final class BlockChangeApplier {
         int updateCount = entityBatch.entitiesToUpdate().size();
         for (int index = startIndex; index < endIndex; index++) {
             try {
-                if (entityBatch.replacePlacedEntities() && index == 0) {
+                if (entityBatch.replaceEntities() && index == 0) {
                     removeExtraEntities(level, chunk, entityBatch);
                     continue;
                 }
 
-                int entityIndex = index - (entityBatch.replacePlacedEntities() ? 1 : 0);
+                int entityIndex = index - (entityBatch.replaceEntities() ? 1 : 0);
                 if (entityIndex < removalCount) {
                     removeEntity(level, entityBatch.entityIdsToRemove().get(entityIndex));
                     continue;
@@ -320,7 +320,7 @@ public final class BlockChangeApplier {
         return entityBatch.entityIdsToRemove().size()
                 + entityBatch.entitiesToUpdate().size()
                 + entityBatch.entitiesToSpawn().size()
-                + (entityBatch.replacePlacedEntities() ? 1 : 0);
+                + (entityBatch.replaceEntities() ? 1 : 0);
     }
 
     public static void applyBlockState(ServerLevel level, BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
@@ -465,7 +465,7 @@ public final class BlockChangeApplier {
     }
 
     private static void removeExtraEntities(ServerLevel level, ChunkPoint chunk, EntityBatch targetBatch) {
-        if (level == null || chunk == null || targetBatch == null || !targetBatch.replacePlacedEntities()) {
+        if (level == null || chunk == null || targetBatch == null || !targetBatch.replaceEntities()) {
             return;
         }
         Set<String> targetIds = new HashSet<>();

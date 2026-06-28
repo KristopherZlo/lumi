@@ -822,7 +822,11 @@ public final class WorkZoneScreen extends LumaScreen {
                 false,
                 false,
                 this.restoreEntitySelection.expanded(),
-                this.restoreEntitySelection.options(this.projectController.restoreEntityTypes(this.effectiveProjectName(), version.id()))
+                this.restoreEntitySelection.options(this.projectController.restoreEntityTypes(this.zoneRestoreRequest(
+                        version,
+                        this.versionVisibility.workZoneId(version),
+                        RestoreEntityTypeSelection.includeAll()
+                )))
         );
     }
 
@@ -845,7 +849,15 @@ public final class WorkZoneScreen extends LumaScreen {
     }
 
     private void executeZoneRestore(ProjectVersion version, String zoneId, RestoreEntityTypeSelection selection) {
-        PartialRestoreRequest request = new PartialRestoreRequest(
+        this.refresh(this.projectController.partialRestore(this.zoneRestoreRequest(version, zoneId, selection)));
+    }
+
+    private PartialRestoreRequest zoneRestoreRequest(
+            ProjectVersion version,
+            String zoneId,
+            RestoreEntityTypeSelection selection
+    ) {
+        return new PartialRestoreRequest(
                 this.effectiveProjectName(),
                 version.id(),
                 null,
@@ -855,7 +867,6 @@ public final class WorkZoneScreen extends LumaScreen {
                 this.client.getUser().getName(),
                 Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
         );
-        this.refresh(this.projectController.partialRestore(request));
     }
 
     private void clearPendingRestore() {

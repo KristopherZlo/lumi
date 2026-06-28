@@ -33,8 +33,8 @@ class EntityBatchTest {
     }
 
     @Test
-    void replacePlacedEntitiesCountsAsEntityWorkEvenWithoutTargets() {
-        EntityBatch batch = EntityBatch.replacePlacedEntities(List.of());
+    void replaceEntitiesCountsAsEntityWorkEvenWithoutTargets() {
+        EntityBatch batch = EntityBatch.replaceEntities(List.of());
 
         assertFalse(batch.isEmpty());
         assertEquals(1, BlockChangeApplier.entityOperationCount(batch));

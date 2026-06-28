@@ -746,7 +746,7 @@ class RestoreServiceTest {
 
         assertEquals(1, batches.size());
         assertEquals(new ChunkPoint(0, 0), batches.getFirst().chunk());
-        assertEquals(true, batches.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(true, batches.getFirst().entityBatch().replaceEntities());
         assertEquals(0, batches.getFirst().entityBatch().entitiesToUpdate().size());
     }
 
@@ -780,7 +780,7 @@ class RestoreServiceTest {
 
         assertEquals(1, batches.size());
         assertEquals(new ChunkPoint(0, 0), batches.getFirst().chunk());
-        assertEquals(true, batches.getFirst().entityBatch().replacePlacedEntities());
+        assertEquals(true, batches.getFirst().entityBatch().replaceEntities());
         assertEquals(0, batches.getFirst().entityBatch().entitiesToUpdate().size());
     }
 

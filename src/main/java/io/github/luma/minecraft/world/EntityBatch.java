@@ -16,7 +16,7 @@ public record EntityBatch(
         List<CompoundTag> entitiesToSpawn,
         List<String> entityIdsToRemove,
         List<CompoundTag> entitiesToUpdate,
-        boolean replacePlacedEntities,
+        boolean replaceEntities,
         Set<String> excludedEntityTypes
 ) {
 
@@ -43,16 +43,16 @@ public record EntityBatch(
             List<CompoundTag> entitiesToSpawn,
             List<String> entityIdsToRemove,
             List<CompoundTag> entitiesToUpdate,
-            boolean replacePlacedEntities
+            boolean replaceEntities
     ) {
-        this(entitiesToSpawn, entityIdsToRemove, entitiesToUpdate, replacePlacedEntities, Set.of());
+        this(entitiesToSpawn, entityIdsToRemove, entitiesToUpdate, replaceEntities, Set.of());
     }
 
     public static EntityBatch empty() {
         return new EntityBatch(List.of(), List.of(), List.of(), false, Set.of());
     }
 
-    public static EntityBatch replacePlacedEntities(List<CompoundTag> entitiesToUpdate) {
+    public static EntityBatch replaceEntities(List<CompoundTag> entitiesToUpdate) {
         return replaceEntities(entitiesToUpdate, Set.of());
     }
 
@@ -64,7 +64,7 @@ public record EntityBatch(
         return this.entitiesToSpawn.isEmpty()
                 && this.entityIdsToRemove.isEmpty()
                 && this.entitiesToUpdate.isEmpty()
-                && !this.replacePlacedEntities;
+                && !this.replaceEntities;
     }
 
     private static List<CompoundTag> copyTags(List<CompoundTag> tags) {
