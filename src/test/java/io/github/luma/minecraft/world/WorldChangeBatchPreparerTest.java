@@ -124,6 +124,37 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void redoSkipsPrimedTntSpawnButUndoCanRemoveIt() throws Exception {
+        String entityId = "00000000-0000-0000-0000-000000000024";
+        List<StoredEntityChange> changes = List.of(new StoredEntityChange(
+                entityId,
+                "minecraft:tnt",
+                null,
+                entity("minecraft:tnt", entityId, 1.0D)
+        ));
+
+        List<PreparedChunkBatch> redoBatches = this.preparer.prepareUndoRedo(
+                null,
+                List.of(),
+                changes,
+                true,
+                null,
+                EntityApplyMode.DELTA
+        );
+        List<PreparedChunkBatch> undoBatches = this.preparer.prepareUndoRedo(
+                null,
+                List.of(),
+                changes,
+                false,
+                null,
+                EntityApplyMode.DELTA
+        );
+
+        assertTrue(redoBatches.isEmpty());
+        assertEquals(List.of(entityId), undoBatches.getFirst().entityBatch().entityIdsToRemove());
+    }
+
+    @Test
     void decodedDenseSectionsUseNativeSectionBatches() {
         List<PreparedBlockPlacement> placements = java.util.stream.IntStream
                 .range(0, SectionApplySafetyClassifier.NATIVE_DENSE_THRESHOLD)
@@ -709,8 +740,12 @@ class WorldChangeBatchPreparerTest {
     }
 
     private static EntityPayload entity(String entityId, double x) {
+        return entity("minecraft:block_display", entityId, x);
+    }
+
+    private static EntityPayload entity(String type, String entityId, double x) {
         CompoundTag tag = new CompoundTag();
-        tag.putString("id", "minecraft:block_display");
+        tag.putString("id", type);
         tag.putString("UUID", entityId);
         ListTag pos = new ListTag();
         pos.add(DoubleTag.valueOf(x));

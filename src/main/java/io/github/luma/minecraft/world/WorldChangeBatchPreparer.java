@@ -27,6 +27,8 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public final class WorldChangeBatchPreparer {
 
+    private static final String PRIMED_TNT_ENTITY_TYPE = "minecraft:tnt";
+
     private final ConnectedBlockPlacementExpander connectedBlockPlacementExpander = new ConnectedBlockPlacementExpander();
     private final PistonMechanismPlacementExpander pistonMechanismPlacementExpander = new PistonMechanismPlacementExpander();
     private final SectionApplySafetyClassifier sectionApplySafetyClassifier = new SectionApplySafetyClassifier();
@@ -173,6 +175,7 @@ public final class WorldChangeBatchPreparer {
             EntityApplyMode entityApplyMode
     ) throws IOException {
         changes = changes == null ? List.of() : changes;
+        entityChanges = undoRedoReplayEntityChanges(entityChanges, applyNewValues);
         if (changes.size() < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD) {
             return this.prepare(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode);
         }
@@ -201,6 +204,7 @@ public final class WorldChangeBatchPreparer {
             EntityApplyMode entityApplyMode
     ) throws IOException {
         changes = changes == null ? List.of() : changes;
+        entityChanges = undoRedoReplayEntityChanges(entityChanges, applyNewValues);
         if (changes.size() < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD) {
             return this.prepareAnalyzed(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode);
         }
@@ -744,6 +748,25 @@ public final class WorldChangeBatchPreparer {
                 updates,
                 entityApplyMode == EntityApplyMode.REPLACE_PLACED_IN_CHUNK
         );
+    }
+
+    private static List<StoredEntityChange> undoRedoReplayEntityChanges(
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues
+    ) {
+        entityChanges = entityChanges == null ? List.of() : entityChanges;
+        if (!applyNewValues || entityChanges.isEmpty()) {
+            return entityChanges;
+        }
+        return entityChanges.stream()
+                .filter(change -> !isPrimedTntSpawn(change))
+                .toList();
+    }
+
+    private static boolean isPrimedTntSpawn(StoredEntityChange change) {
+        return change != null
+                && change.isSpawn()
+                && PRIMED_TNT_ENTITY_TYPE.equals(change.entityType());
     }
 
     @FunctionalInterface

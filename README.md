@@ -244,7 +244,7 @@ Hard rules:
 - Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
-- Live undo/redo may track transient entities for replay, but recovery drafts and saved commits must not persist undo-only transient entities.
+- Live undo may track transient entities to clean up active fallout, but redo replays final deltas instead of respawning transient primed TNT; recovery drafts and saved commits must not persist undo-only transient entities.
 
 ### Diagnostics
 
