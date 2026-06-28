@@ -151,6 +151,22 @@ public final class LumiRegionSelectionController {
         return this.currentState(client).map(LumiRegionSelectionState::mode);
     }
 
+    public boolean handleUndoRedo(Minecraft client, boolean undo) {
+        if (!this.canHandleWorldInput(client) || this.selectionToolHand(client.player).isEmpty()) {
+            return false;
+        }
+        Optional<LumiRegionSelectionState> state = this.currentState(client);
+        if (state.isEmpty()) {
+            this.notify(client.player, "luma.selection.no_project");
+            return true;
+        }
+        boolean changed = undo ? state.get().undo() : state.get().redo();
+        this.notify(client.player, changed
+                ? undo ? "luma.selection.undo" : "luma.selection.redo"
+                : undo ? "luma.selection.no_undo" : "luma.selection.no_redo");
+        return true;
+    }
+
     public boolean shouldRenderSelection(Minecraft client) {
         return client != null
                 && client.player != null

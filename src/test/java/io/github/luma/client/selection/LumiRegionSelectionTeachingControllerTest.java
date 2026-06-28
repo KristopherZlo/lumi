@@ -24,4 +24,11 @@ class LumiRegionSelectionTeachingControllerTest {
         assertEquals("[Ctrl]", LumiRegionSelectionTeachingController.keyLabel("Ctrl"));
         assertEquals("[Wheel]", LumiRegionSelectionTeachingController.keyLabel("Wheel"));
     }
+
+    @Test
+    void hintScaleKeepsGuiScaleTwoAsTheReferenceSize() {
+        assertEquals(1.0F, LumiRegionSelectionTeachingController.hintScale(2));
+        assertEquals(2.0F, LumiRegionSelectionTeachingController.hintScale(1));
+        assertEquals(2.0F / 3.0F, LumiRegionSelectionTeachingController.hintScale(3));
+    }
 }

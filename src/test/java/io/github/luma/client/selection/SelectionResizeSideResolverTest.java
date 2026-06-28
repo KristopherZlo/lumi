@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class SelectionResizeSideResolverTest {
 
     @Test
-    void choosesNearestFaceFromTargetInsideSelection() {
+    void choosesLookedFaceBeforeNearestTargetFace() {
         Bounds3i bounds = new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(10, 74, 10));
 
         LumiRegionSelectionState.Side side = SelectionResizeSideResolver.resolve(
@@ -19,17 +19,17 @@ class SelectionResizeSideResolverTest {
                 new Vec3(0.0D, 0.0D, 1.0D)
         );
 
-        assertEquals(LumiRegionSelectionState.Side.MAX_X, side);
+        assertEquals(LumiRegionSelectionState.Side.MIN_Z, side);
     }
 
     @Test
-    void choosesOutsideAxisBeforeViewDirection() {
+    void fallsBackToOutsideAxisWithoutViewDirection() {
         Bounds3i bounds = new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(10, 74, 10));
 
         LumiRegionSelectionState.Side side = SelectionResizeSideResolver.resolve(
                 bounds,
                 new BlockPoint(-2, 68, 5),
-                new Vec3(0.0D, 0.0D, 1.0D)
+                null
         );
 
         assertEquals(LumiRegionSelectionState.Side.MIN_X, side);

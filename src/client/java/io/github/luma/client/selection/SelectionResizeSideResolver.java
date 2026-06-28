@@ -10,11 +10,14 @@ final class SelectionResizeSideResolver {
     }
 
     static LumiRegionSelectionState.Side resolve(Bounds3i bounds, BlockPoint target, Vec3 view) {
+        if (view != null) {
+            return lookedFace(view);
+        }
         if (bounds != null && target != null) {
             LumiRegionSelectionState.Side outside = outsideSide(bounds, target);
             return outside == null ? nearestFace(bounds, target) : outside;
         }
-        return lookedFace(view);
+        return LumiRegionSelectionState.Side.MAX_Z;
     }
 
     private static LumiRegionSelectionState.Side outsideSide(Bounds3i bounds, BlockPoint target) {

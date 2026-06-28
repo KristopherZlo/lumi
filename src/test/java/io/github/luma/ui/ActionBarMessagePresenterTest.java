@@ -5,6 +5,8 @@ import io.github.luma.domain.model.OperationProgress;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.OperationStage;
 import java.time.Instant;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +36,15 @@ class ActionBarMessagePresenterTest {
         Assertions.assertFalse(ActionBarMessagePresenter.shouldShowOperationPercent(
                 snapshot(OperationStage.COMPLETED, 128, 128)
         ));
+    }
+
+    @Test
+    void selectionModeMessageColorsLabelAndModeSeparately() {
+        Component message = ActionBarMessagePresenter.selection("luma.selection.mode_corners");
+
+        Assertions.assertEquals("Lumi | Selection mode: corners", message.getString());
+        Assertions.assertEquals(ChatFormatting.WHITE.getColor(), message.getSiblings().get(2).getStyle().getColor().getValue());
+        Assertions.assertEquals(ChatFormatting.GOLD.getColor(), message.getSiblings().get(4).getStyle().getColor().getValue());
     }
 
     private static OperationSnapshot snapshot(OperationStage stage, int completed, int total) {

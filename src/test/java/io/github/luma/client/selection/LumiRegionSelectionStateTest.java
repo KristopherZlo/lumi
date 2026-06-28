@@ -87,6 +87,20 @@ class LumiRegionSelectionStateTest {
     }
 
     @Test
+    void selectionChangesCanBeUndoneAndRedone() {
+        LumiRegionSelectionState state = new LumiRegionSelectionState();
+        state.selectPrimary(new BlockPoint(2, 64, 4));
+        state.selectSecondary(new BlockPoint(8, 70, 8));
+        state.resize(LumiRegionSelectionState.Side.MAX_X, 1);
+
+        assertTrue(state.undo());
+        assertEquals(new BlockPoint(8, 70, 8), state.bounds().orElseThrow().max());
+
+        assertTrue(state.redo());
+        assertEquals(new BlockPoint(9, 70, 8), state.bounds().orElseThrow().max());
+    }
+
+    @Test
     void emptySelectionHasNoBounds() {
         assertTrue(new LumiRegionSelectionState().bounds().isEmpty());
     }

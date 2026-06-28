@@ -11,6 +11,7 @@ import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.Easing;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
+import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.UIComponent;
@@ -81,7 +82,7 @@ public final class LumaUi {
     }
 
     public static Surface windowSurface() {
-        return Surface.flat(WINDOW_FILL).and(Surface.outline(WINDOW_BORDER));
+        return outlinedSurface(WINDOW_FILL, WINDOW_BORDER);
     }
 
     public static FlowLayout windowShell() {
@@ -93,7 +94,7 @@ public final class LumaUi {
 
     public static FlowLayout windowSidebar(int width) {
         FlowLayout sidebar = UIContainers.verticalFlow(Sizing.fixed(width), Sizing.fill(100));
-        sidebar.surface(Surface.flat(SIDEBAR_FILL).and(Surface.outline(0xFF272528)));
+        sidebar.surface(outlinedSurface(SIDEBAR_FILL, 0xFF272528));
         sidebar.padding(Insets.of(6));
         sidebar.gap(5);
         return sidebar;
@@ -108,7 +109,7 @@ public final class LumaUi {
 
     public static FlowLayout titleBar() {
         FlowLayout titleBar = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-        titleBar.surface(Surface.flat(TITLEBAR_FILL).and(Surface.outline(PANEL_BORDER)));
+        titleBar.surface(outlinedSurface(TITLEBAR_FILL, PANEL_BORDER));
         titleBar.padding(Insets.of(5));
         titleBar.gap(5);
         return titleBar;
@@ -154,7 +155,7 @@ public final class LumaUi {
 
     public static FlowLayout panel(Sizing horizontal, Sizing vertical) {
         FlowLayout layout = UIContainers.verticalFlow(horizontal, vertical);
-        layout.surface(Surface.flat(PANEL_FILL).and(Surface.outline(PANEL_BORDER)));
+        layout.surface(outlinedSurface(PANEL_FILL, PANEL_BORDER));
         layout.padding(Insets.of(6));
         layout.gap(5);
         return layout;
@@ -162,7 +163,7 @@ public final class LumaUi {
 
     public static FlowLayout insetPanel(Sizing horizontal, Sizing vertical) {
         FlowLayout layout = UIContainers.verticalFlow(horizontal, vertical);
-        layout.surface(Surface.flat(INSET_FILL).and(Surface.outline(INSET_BORDER)));
+        layout.surface(outlinedSurface(INSET_FILL, INSET_BORDER));
         layout.padding(Insets.of(4));
         layout.gap(4);
         return layout;
@@ -170,7 +171,7 @@ public final class LumaUi {
 
     public static FlowLayout activeInsetPanel(Sizing horizontal, Sizing vertical) {
         FlowLayout layout = UIContainers.verticalFlow(horizontal, vertical);
-        layout.surface(Surface.flat(INSET_FILL).and(Surface.outline(ACTIVE_PANEL_BORDER)));
+        layout.surface(outlinedSurface(INSET_FILL, ACTIVE_PANEL_BORDER));
         layout.padding(Insets.of(4));
         layout.gap(4);
         return layout;
@@ -178,7 +179,7 @@ public final class LumaUi {
 
     public static FlowLayout chip(Component text) {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.fixed(CONTROL_HEIGHT));
-        chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
+        chip.surface(outlinedSurface(CHIP_FILL, CHIP_BORDER));
         chip.padding(Insets.of(2));
         chip.verticalAlignment(VerticalAlignment.CENTER);
         chip.child(compactCaption(text));
@@ -187,7 +188,7 @@ public final class LumaUi {
 
     public static FlowLayout stepBadge(Component text) {
         FlowLayout badge = UIContainers.horizontalFlow(Sizing.fixed(50), Sizing.fixed(22));
-        badge.surface(Surface.flat(STATUS_FILL).and(Surface.outline(STATUS_BORDER)));
+        badge.surface(outlinedSurface(STATUS_FILL, STATUS_BORDER));
         badge.horizontalAlignment(HorizontalAlignment.CENTER);
         badge.verticalAlignment(VerticalAlignment.CENTER);
         badge.padding(Insets.of(3));
@@ -197,7 +198,7 @@ public final class LumaUi {
 
     public static FlowLayout statusBanner(Component text) {
         FlowLayout banner = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        banner.surface(Surface.flat(STATUS_FILL).and(Surface.outline(STATUS_BORDER)));
+        banner.surface(outlinedSurface(STATUS_FILL, STATUS_BORDER));
         banner.padding(Insets.of(5));
         banner.gap(3);
         banner.child(accent(text));
@@ -209,7 +210,7 @@ public final class LumaUi {
             Consumer<ButtonComponent> onDismiss
     ) {
         FlowLayout panel = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        panel.surface(Surface.flat(0xEF171B1E).and(Surface.outline(STATUS_BORDER)));
+        panel.surface(outlinedSurface(0xEF171B1E, STATUS_BORDER));
         panel.padding(Insets.of(5));
         panel.gap(4);
 
@@ -281,7 +282,7 @@ public final class LumaUi {
 
     public static FlowLayout statChip(Component label, Component value) {
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.fixed(CONTROL_HEIGHT));
-        chip.surface(Surface.flat(CHIP_FILL).and(Surface.outline(CHIP_BORDER)));
+        chip.surface(outlinedSurface(CHIP_FILL, CHIP_BORDER));
         chip.padding(Insets.of(3));
         chip.gap(4);
         chip.verticalAlignment(VerticalAlignment.CENTER);
@@ -303,7 +304,7 @@ public final class LumaUi {
 
     public static FlowLayout sidebarFooter() {
         FlowLayout footer = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-        footer.surface(Surface.flat(INSET_FILL).and(Surface.outline(INSET_BORDER)));
+        footer.surface(outlinedSurface(INSET_FILL, INSET_BORDER));
         footer.padding(Insets.of(4));
         footer.gap(4);
         return footer;
@@ -330,7 +331,8 @@ public final class LumaUi {
             int selectedFill = withAlpha(innerBorder, 0x78);
             int fill = selected ? selectedFill : component.isHovered() ? withAlpha(innerBorder, 0x52) : withAlpha(innerBorder, 0x30);
             graphics.fill(component.getX(), component.getY(), component.getX() + component.getWidth(), component.getY() + component.getHeight(), fill);
-            graphics.drawRectOutline(
+            drawInsetOutline(
+                    graphics,
                     component.getX() + SIDEBAR_TAB_BORDER_INSET,
                     component.getY() + SIDEBAR_TAB_BORDER_INSET,
                     component.getWidth() - (SIDEBAR_TAB_BORDER_INSET * 2),
@@ -405,6 +407,23 @@ public final class LumaUi {
     private static <T extends UIComponent> T inlineControl(T control) {
         control.margins(Insets.bottom(INLINE_WRAP_BOTTOM_MARGIN));
         return control;
+    }
+
+    private static Surface outlinedSurface(int fill, int border) {
+        return (context, component) -> {
+            context.fill(component.x(), component.y(), component.x() + component.width(), component.y() + component.height(), fill);
+            drawInsetOutline(context, component.x(), component.y(), component.width(), component.height(), border);
+        };
+    }
+
+    private static void drawInsetOutline(OwoUIGraphics graphics, int x, int y, int width, int height, int color) {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        graphics.fill(x, y, x + width, y + 1, color);
+        graphics.fill(x, y + height - 1, x + width, y + height, color);
+        graphics.fill(x, y, x + 1, y + height, color);
+        graphics.fill(x + width - 1, y, x + width, y + height, color);
     }
 
     private static int withAlpha(int color, int alpha) {

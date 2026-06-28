@@ -49,9 +49,17 @@ public final class ActionBarMessagePresenter {
     }
 
     public static Component selection(String key) {
+        if ("luma.selection.mode_corners".equals(key)) {
+            return selectionMode("corners");
+        }
+        if ("luma.selection.mode_extend".equals(key)) {
+            return selectionMode("extend");
+        }
         if ("luma.selection.no_project".equals(key)
                 || "luma.selection.no_target".equals(key)
                 || "luma.selection.no_selection".equals(key)
+                || "luma.selection.no_undo".equals(key)
+                || "luma.selection.no_redo".equals(key)
                 || "luma.selection.zone_no_active".equals(key)
                 || "luma.selection.zone_failed".equals(key)) {
             return warning(key);
@@ -61,11 +69,20 @@ public final class ActionBarMessagePresenter {
                 || "luma.selection.reset".equals(key)
                 || "luma.selection.cleared".equals(key)
                 || "luma.selection.resized".equals(key)
+                || "luma.selection.undo".equals(key)
+                || "luma.selection.redo".equals(key)
                 || "luma.selection.zone_added".equals(key)
                 || "luma.selection.zone_removed".equals(key)) {
             return success(key);
         }
         return info(key);
+    }
+
+    private static Component selectionMode(String mode) {
+        return baseMessage()
+                .append(Component.literal("Selection mode").withStyle(ChatFormatting.WHITE))
+                .append(Component.literal(": ").withStyle(ChatFormatting.DARK_GRAY))
+                .append(Component.literal(mode).withStyle(ChatFormatting.GOLD));
     }
 
     public static Component selectionToolHint(Component actionKey) {
