@@ -19,6 +19,7 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.RestorePlanSummary;
+import io.github.luma.domain.model.RestoreEntityTypeSelection;
 import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
@@ -136,7 +137,16 @@ public final class RestoreService {
      * checkpoint so the player can return to the pre-restore state.
      */
     public OperationHandle restore(ServerLevel level, String projectName, String versionId) throws IOException {
-        return this.restore(level, projectName, versionId, "", false);
+        return this.restore(level, projectName, versionId, RestoreEntityTypeSelection.includeAll());
+    }
+
+    public OperationHandle restore(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
+        return this.restore(level, projectName, versionId, "", false, entityTypeSelection);
     }
 
     public OperationHandle restore(
@@ -145,7 +155,7 @@ public final class RestoreService {
             String versionId,
             boolean trustedImportedPackage
     ) throws IOException {
-        return this.restore(level, projectName, versionId, "", trustedImportedPackage);
+        return this.restore(level, projectName, versionId, "", trustedImportedPackage, RestoreEntityTypeSelection.includeAll());
     }
 
     /**
@@ -185,7 +195,23 @@ public final class RestoreService {
             String versionId,
             String targetVariantId
     ) throws IOException {
-        return this.restore(level, projectName, versionId, targetVariantId, false);
+        return this.restoreToVariant(
+                level,
+                projectName,
+                versionId,
+                targetVariantId,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    public OperationHandle restoreToVariant(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            String targetVariantId,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
+        return this.restore(level, projectName, versionId, targetVariantId, false, entityTypeSelection);
     }
 
     private OperationHandle restore(
@@ -195,7 +221,33 @@ public final class RestoreService {
             String targetVariantId,
             boolean trustedImportedPackage
     ) throws IOException {
-        return this.restore(level, projectName, versionId, targetVariantId, trustedImportedPackage, false);
+        return this.restore(
+                level,
+                projectName,
+                versionId,
+                targetVariantId,
+                trustedImportedPackage,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    private OperationHandle restore(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            String targetVariantId,
+            boolean trustedImportedPackage,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
+        return this.restore(
+                level,
+                projectName,
+                versionId,
+                targetVariantId,
+                trustedImportedPackage,
+                false,
+                entityTypeSelection
+        );
     }
 
     private OperationHandle restore(
@@ -205,6 +257,26 @@ public final class RestoreService {
             String targetVariantId,
             boolean trustedImportedPackage,
             boolean recordUndoRedoAction
+    ) throws IOException {
+        return this.restore(
+                level,
+                projectName,
+                versionId,
+                targetVariantId,
+                trustedImportedPackage,
+                recordUndoRedoAction,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    private OperationHandle restore(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            String targetVariantId,
+            boolean trustedImportedPackage,
+            boolean recordUndoRedoAction,
+            RestoreEntityTypeSelection entityTypeSelection
     ) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
@@ -224,6 +296,7 @@ public final class RestoreService {
                         targetVariantId,
                         trustedImportedPackage,
                         recordUndoRedoAction,
+                        entityTypeSelection,
                         progressSink
                 )
         );
@@ -237,6 +310,7 @@ public final class RestoreService {
             String targetVariantId,
             boolean trustedImportedPackage,
             boolean recordUndoRedoAction,
+            RestoreEntityTypeSelection entityTypeSelection,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing restore request");
@@ -374,7 +448,13 @@ public final class RestoreService {
             }
         });
         List<PreparedChunkBatch> finalBatches =
-                this.withAuthoritativeEntityReplacementBatches(layout, versions, version.id(), batches);
+                this.withAuthoritativeEntityReplacementBatches(
+                        layout,
+                        versions,
+                        version.id(),
+                        batches,
+                        entityTypeSelection
+                );
         return new WorldOperationManager.PreparedApplyOperation(
                 finalBatches,
                 () -> this.completionCoordinator.completeRestore(
@@ -516,7 +596,7 @@ public final class RestoreService {
                 activeVariant.id()
         ));
 
-        PartialRestoreDraft partialDraft = this.buildPartialRestoreDraft(
+        PartialRestoreDraft partialDraft = this.applyEntityTypeSelection(this.buildPartialRestoreDraft(
                 layout,
                 project,
                 versions,
@@ -529,7 +609,7 @@ public final class RestoreService {
                 level.getMinY(),
                 level.getMaxY(),
                 progressSink
-        );
+        ), request.entityTypeSelection());
         this.partialRestoreDiagnosticsLog.logPlannedDraft(
                 project,
                 activeVariant,
@@ -765,6 +845,36 @@ public final class RestoreService {
                 partialChanges.size() + partialEntityChanges.size()
         );
         return new PartialRestoreDraft(RestorePlanMode.PATCH_REPLAY, draft);
+    }
+
+    private PartialRestoreDraft applyEntityTypeSelection(
+            PartialRestoreDraft draft,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) {
+        RestoreEntityTypeSelection selection = entityTypeSelection == null
+                ? RestoreEntityTypeSelection.includeAll()
+                : entityTypeSelection;
+        if (draft == null || draft.draft() == null || selection.excludedEntityTypes().isEmpty()) {
+            return draft;
+        }
+        List<StoredEntityChange> filteredEntities = draft.draft().entityChanges().stream()
+                .filter(change -> change == null || selection.includes(change.entityType()))
+                .toList();
+        if (filteredEntities.size() == draft.draft().entityChanges().size()) {
+            return draft;
+        }
+        RecoveryDraft filteredDraft = new RecoveryDraft(
+                draft.draft().projectId(),
+                draft.draft().variantId(),
+                draft.draft().baseVersionId(),
+                draft.draft().actor(),
+                draft.draft().mutationSource(),
+                draft.draft().startedAt(),
+                draft.draft().updatedAt(),
+                draft.draft().changes(),
+                filteredEntities
+        );
+        return new PartialRestoreDraft(draft.mode(), filteredDraft);
     }
 
     private PartialRestoreDraft buildTargetStatePartialRestoreDraft(
@@ -1071,6 +1181,22 @@ public final class RestoreService {
                 versions,
                 targetVersionId,
                 batches
+        );
+    }
+
+    private List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatches(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            String targetVersionId,
+            List<PreparedChunkBatch> batches,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
+        return this.entityStateResolver.withAuthoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                targetVersionId,
+                batches,
+                entityTypeSelection
         );
     }
 

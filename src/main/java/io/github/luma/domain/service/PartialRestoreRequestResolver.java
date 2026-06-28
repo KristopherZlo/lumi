@@ -40,6 +40,7 @@ final class PartialRestoreRequestResolver {
                         bounds,
                         request.restoreMode(),
                         request.regionSource(),
+                        request.entityTypeSelection(),
                         request.actor(),
                         request.metadata()
                 ),

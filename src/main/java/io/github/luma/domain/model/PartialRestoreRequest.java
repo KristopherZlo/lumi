@@ -8,6 +8,7 @@ public record PartialRestoreRequest(
         Bounds3i bounds,
         PartialRestoreMode restoreMode,
         PartialRestoreRegionSource regionSource,
+        RestoreEntityTypeSelection entityTypeSelection,
         String actor,
         Map<String, String> metadata
 ) {
@@ -17,8 +18,30 @@ public record PartialRestoreRequest(
         targetVersionId = targetVersionId == null ? "" : targetVersionId;
         restoreMode = restoreMode == null ? PartialRestoreMode.SELECTED_AREA : restoreMode;
         regionSource = regionSource == null ? PartialRestoreRegionSource.MANUAL_BOUNDS : regionSource;
+        entityTypeSelection = entityTypeSelection == null ? RestoreEntityTypeSelection.includeAll() : entityTypeSelection;
         actor = actor == null ? "" : actor;
         metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
+    }
+
+    public PartialRestoreRequest(
+            String projectName,
+            String targetVersionId,
+            Bounds3i bounds,
+            PartialRestoreMode restoreMode,
+            PartialRestoreRegionSource regionSource,
+            String actor,
+            Map<String, String> metadata
+    ) {
+        this(
+                projectName,
+                targetVersionId,
+                bounds,
+                restoreMode,
+                regionSource,
+                RestoreEntityTypeSelection.includeAll(),
+                actor,
+                metadata
+        );
     }
 
     public PartialRestoreRequest(
