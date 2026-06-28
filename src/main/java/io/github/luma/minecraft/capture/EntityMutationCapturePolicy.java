@@ -103,6 +103,14 @@ public final class EntityMutationCapturePolicy {
         return change.isNoOp() ? Optional.empty() : Optional.of(change);
     }
 
+    boolean shouldPersistUndoRedoAdjustment(StoredEntityChange change) {
+        if (change == null) {
+            return false;
+        }
+        return this.placedEntityHistoryPolicy.shouldPersist(change.oldValue())
+                || this.placedEntityHistoryPolicy.shouldPersist(change.newValue());
+    }
+
     boolean shouldInspectMutation(WorldMutationSource source, String entityType) {
         if (source == null || source == WorldMutationSource.RESTORE || source == WorldMutationSource.SYSTEM) {
             return false;

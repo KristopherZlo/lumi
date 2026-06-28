@@ -84,7 +84,6 @@ public final class HistoryCaptureManager {
 
     private HistoryCaptureManager() {
     }
-
     public record BlockChangeInput(
             BlockPos pos,
             BlockState oldState,
@@ -900,6 +899,7 @@ public final class HistoryCaptureManager {
             }
         }
         for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
+            if (!ENTITY_CAPTURE_POLICY.shouldPersistUndoRedoAdjustment(change)) continue;
             buffer.addEntityChange(change, now);
             if (session != null) {
                 session.addRootChunk(change.chunk());

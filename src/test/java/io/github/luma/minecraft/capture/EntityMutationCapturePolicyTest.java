@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
@@ -137,6 +138,32 @@ class EntityMutationCapturePolicyTest {
 
         assertFalse(this.policy.capture(WorldMutationSource.PLAYER, null, primedTnt).isPresent());
         assertTrue(this.policy.captureUndoOnly(WorldMutationSource.PLAYER, null, primedTnt).isPresent());
+    }
+
+    @Test
+    void primedTntUndoRedoAdjustmentStaysOutOfDurableDraft() {
+        EntityPayload primedTnt = entity("minecraft:tnt", "00000000-0000-0000-0000-000000000051", 1.0D);
+        StoredEntityChange undoAdjustment = new StoredEntityChange(
+                primedTnt.entityId(),
+                primedTnt.entityType(),
+                primedTnt,
+                null
+        );
+
+        assertFalse(this.policy.shouldPersistUndoRedoAdjustment(undoAdjustment));
+    }
+
+    @Test
+    void placedEntityUndoRedoAdjustmentStaysInDurableDraft() {
+        EntityPayload display = entity("minecraft:block_display", "00000000-0000-0000-0000-000000000052", 1.0D);
+        StoredEntityChange undoAdjustment = new StoredEntityChange(
+                display.entityId(),
+                display.entityType(),
+                display,
+                null
+        );
+
+        assertTrue(this.policy.shouldPersistUndoRedoAdjustment(undoAdjustment));
     }
 
     private static EntityPayload entity(String type, String uuid, double x) {
