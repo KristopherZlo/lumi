@@ -8,14 +8,15 @@ import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.ui.controller.ClientProjectAccess;
-import io.github.luma.ui.overlay.RoundedHudRenderer;
 import java.util.List;
+import java.util.Locale;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
@@ -32,6 +33,15 @@ public final class LumiRegionSelectionTeachingController {
             LumaMod.MOD_ID,
             "selection_tool_hint"
     );
+    private static final int TITLE_COLOR = 0xAAF3F7FA;
+    private static final int KEY_COLOR = 0xAADBE6F2;
+    private static final int TEXT_COLOR = 0x99F3F7FA;
+    private static final int ROW_HEIGHT = 15;
+    private static final int MOUSE_ICON_SIZE = 12;
+    private static final int MOUSE_TEXTURE_SIZE = 24;
+    private static final int KEY_GAP = 3;
+    private static final int TEXT_GAP = 4;
+    private static final int SHORTCUT_GAP = 12;
 
     private final ProjectService projectService;
     private final WorkZoneService workZoneService;
@@ -122,32 +132,25 @@ public final class LumiRegionSelectionTeachingController {
         Font font = client.font;
         Hint hint = this.hint(client);
         List<Row> rows = hint.rows();
-        int lineHeight = 18;
-        int width = Math.max(
-                font.width(hint.title()),
-                rows.stream()
-                .mapToInt(row -> this.rowWidth(font, row))
-                .max()
-                .orElse(1)
-        ) + 14;
-        int height = 22 + (rows.size() * lineHeight);
-        int x = Math.max(8, (graphics.guiWidth() - width) / 2);
+        int height = 11 + (rows.size() * ROW_HEIGHT);
         int y = Math.max(8, Math.min(graphics.guiHeight() - height - 8, (graphics.guiHeight() / 2) + 16));
 
-        RoundedHudRenderer.card(graphics, x, y, width, height);
-        graphics.drawString(font, Component.literal(hint.title()), x + 7, y + 6, RoundedHudRenderer.TEXT, false);
+        int titleX = Math.max(8, (graphics.guiWidth() - font.width(hint.title())) / 2);
+        graphics.drawString(font, Component.literal(hint.title()), titleX, y, TITLE_COLOR, false);
         for (int index = 0; index < rows.size(); index++) {
-            this.drawRow(graphics, font, rows.get(index), x + 7, y + 19 + (index * lineHeight));
+            Row row = rows.get(index);
+            int rowX = Math.max(8, (graphics.guiWidth() - this.rowWidth(font, row)) / 2);
+            this.drawRow(graphics, font, row, rowX, y + 12 + (index * ROW_HEIGHT));
         }
     }
 
     private Hint hint(Minecraft client) {
         if (LumiRegionSelectionController.controlDown(client)) {
             return new Hint(
-                    this.activeZoneName.isBlank() ? "Zone edit" : "Zone edit · " + this.activeZoneName,
+                    this.activeZoneName.isBlank() ? "Zone edit" : "Zone edit - " + this.activeZoneName,
                     List.of(
-                            new Row(List.of(new Shortcut("hint_zone_add", List.of("Ctrl", "LMB"), "Add selection/box"))),
-                            new Row(List.of(new Shortcut("hint_zone_erase", List.of("Ctrl", "RMB"), "Erase selection/box")))
+                            new Row(List.of(new Shortcut(List.of("Ctrl", "LMB"), "Add selection/box"))),
+                            new Row(List.of(new Shortcut(List.of("Ctrl", "RMB"), "Erase selection/box")))
                     )
             );
         }
@@ -155,10 +158,10 @@ public final class LumiRegionSelectionTeachingController {
             return new Hint(
                     "Selection adjust",
                     List.of(
-                            new Row(List.of(new Shortcut("hint_resize", List.of("ACTION", "Wheel"), "Resize looked side"))),
+                            new Row(List.of(new Shortcut(List.of("ACTION", "Wheel"), "Resize looked side"))),
                             new Row(List.of(
-                                    new Shortcut("hint_mode", List.of("ACTION", "LMB"), "Switch mode"),
-                                    new Shortcut("hint_clear", List.of("ACTION", "RMB"), "Clear")
+                                    new Shortcut(List.of("ACTION", "LMB"), "Switch mode"),
+                                    new Shortcut(List.of("ACTION", "RMB"), "Clear")
                             ))
                     )
             );
@@ -166,19 +169,19 @@ public final class LumiRegionSelectionTeachingController {
         LumiRegionSelectionMode mode = LumiRegionSelectionController.getInstance()
                 .currentMode(client)
                 .orElse(LumiRegionSelectionMode.CORNERS);
-        String title = mode == LumiRegionSelectionMode.EXTEND ? "Wooden Sword · Extend" : "Wooden Sword · Corners";
+        String title = mode == LumiRegionSelectionMode.EXTEND ? "Wooden Sword - Extend" : "Wooden Sword - Corners";
         String primary = mode == LumiRegionSelectionMode.EXTEND ? "Extend to block" : "First corner";
         String secondary = mode == LumiRegionSelectionMode.EXTEND ? "Move to block" : "Second corner";
         return new Hint(
                 title,
                 List.of(
                         new Row(List.of(
-                                new Shortcut("hint_lmb", List.of("LMB"), primary),
-                                new Shortcut("hint_rmb", List.of("RMB"), secondary)
+                                new Shortcut(List.of("LMB"), primary),
+                                new Shortcut(List.of("RMB"), secondary)
                         )),
                         new Row(List.of(
-                                new Shortcut("hint_alt", List.of("ACTION"), "Hold: resize / clear / switch"),
-                                new Shortcut("hint_ctrl", List.of("Ctrl"), "Hold: edit zone")
+                                new Shortcut(List.of("ACTION"), "Hold: resize / clear / switch"),
+                                new Shortcut(List.of("Ctrl"), "Hold: edit zone")
                         ))
                 )
         );
@@ -188,24 +191,22 @@ public final class LumiRegionSelectionTeachingController {
         int width = 0;
         for (int index = 0; index < row.shortcuts().size(); index++) {
             if (index > 0) {
-                width += 10;
+                width += SHORTCUT_GAP;
             }
             Shortcut shortcut = row.shortcuts().get(index);
-            width += 12 + this.keyGroupWidth(shortcut.keys()) + 3 + font.width(shortcut.text());
+            width += this.keyGroupWidth(font, shortcut.keys()) + TEXT_GAP + font.width(shortcut.text());
         }
         return width;
     }
 
-    private int keyGroupWidth(List<String> keys) {
+    private int keyGroupWidth(Font font, List<String> keys) {
         int width = 0;
         for (int index = 0; index < keys.size(); index++) {
             if (index > 0) {
-                width += 3;
+                width += KEY_GAP;
             }
             String key = keys.get(index);
-            width += "ACTION".equals(key)
-                    ? RoundedHudRenderer.keyWidth(this.cachedActionKey, "Alt", true)
-                    : RoundedHudRenderer.textChipWidth(key, true);
+            width += usesMouseIcon(key) ? MOUSE_ICON_SIZE : font.width(this.displayKeyLabel(key));
         }
         return width;
     }
@@ -214,34 +215,66 @@ public final class LumiRegionSelectionTeachingController {
         int cursor = x;
         for (int shortcutIndex = 0; shortcutIndex < row.shortcuts().size(); shortcutIndex++) {
             if (shortcutIndex > 0) {
-                cursor += 10;
+                cursor += SHORTCUT_GAP;
             }
             Shortcut shortcut = row.shortcuts().get(shortcutIndex);
-            this.drawIconSlot(graphics, cursor, y + 3, shortcut.iconName());
-            cursor += 12;
             for (int keyIndex = 0; keyIndex < shortcut.keys().size(); keyIndex++) {
                 if (keyIndex > 0) {
-                    cursor += 2;
+                    cursor += KEY_GAP;
                 }
-                String key = shortcut.keys().get(keyIndex);
-                cursor += "ACTION".equals(key)
-                        ? RoundedHudRenderer.key(graphics, this.cachedActionKey, cursor, y, "Alt", true)
-                        : RoundedHudRenderer.textChip(graphics, key, cursor, y, true);
+                cursor += this.drawKey(graphics, font, shortcut.keys().get(keyIndex), cursor, y);
             }
-            graphics.drawString(font, Component.literal(shortcut.text()), cursor + 3, y + 3, RoundedHudRenderer.MUTED, false);
-            cursor += 3 + font.width(shortcut.text());
+            graphics.drawString(font, Component.literal(shortcut.text()), cursor + TEXT_GAP, y + 2, TEXT_COLOR, false);
+            cursor += TEXT_GAP + font.width(shortcut.text());
         }
     }
 
-    private void drawIconSlot(GuiGraphics graphics, int x, int y, String iconName) {
-        int color = switch (iconName == null ? "" : iconName) {
-            case "hint_zone_erase", "hint_clear" -> 0xFFE76868;
-            case "hint_zone_add" -> 0xFF4ADE80;
-            case "hint_resize" -> 0xFF60A5FA;
-            default -> 0xFF98A6B3;
+    private int drawKey(GuiGraphics graphics, Font font, String key, int x, int y) {
+        if (usesMouseIcon(key)) {
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    mouseIcon(key),
+                    x,
+                    y,
+                    0,
+                    0,
+                    MOUSE_ICON_SIZE,
+                    MOUSE_ICON_SIZE,
+                    MOUSE_TEXTURE_SIZE,
+                    MOUSE_TEXTURE_SIZE,
+                    MOUSE_TEXTURE_SIZE,
+                    MOUSE_TEXTURE_SIZE
+            );
+            return MOUSE_ICON_SIZE;
+        }
+        String label = this.displayKeyLabel(key);
+        graphics.drawString(font, Component.literal(label), x, y + 2, KEY_COLOR, false);
+        return font.width(label);
+    }
+
+    static boolean usesMouseIcon(String key) {
+        return switch (key == null ? "" : key.toUpperCase(Locale.ROOT)) {
+            case "LMB", "MMB", "RMB" -> true;
+            default -> false;
         };
-        RoundedHudRenderer.roundedRect(graphics, x, y, 9, 9, 2, 0x45101820, color);
-        graphics.fill(x + 3, y + 3, x + 6, y + 6, color);
+    }
+
+    static String keyLabel(String key) {
+        return "[" + ("ACTION".equals(key) ? "Alt" : key) + "]";
+    }
+
+    private String displayKeyLabel(String key) {
+        if ("ACTION".equals(key) && this.cachedActionKey != null) {
+            return "[" + this.cachedActionKey.getTranslatedKeyMessage().getString() + "]";
+        }
+        return keyLabel(key);
+    }
+
+    private static Identifier mouseIcon(String key) {
+        return Identifier.fromNamespaceAndPath(
+                LumaMod.MOD_ID,
+                "textures/gui/hints/hint_" + key.toLowerCase(Locale.ROOT) + ".png"
+        );
     }
 
     private KeyMapping actionKey() {
@@ -282,6 +315,6 @@ public final class LumiRegionSelectionTeachingController {
     private record Row(List<Shortcut> shortcuts) {
     }
 
-    private record Shortcut(String iconName, List<String> keys, String text) {
+    private record Shortcut(List<String> keys, String text) {
     }
 }

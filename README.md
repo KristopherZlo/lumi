@@ -79,6 +79,8 @@ For dedicated servers, install Lumi on both the server and every client that use
 | `Left Alt+I` | Show Lumi hotkeys |
 | Wooden sword | Select a region; hold `Left Alt` to resize/switch/clear, hold `Ctrl` to add/remove active-zone cells |
 
+Wooden sword hints appear under the crosshair; only `LMB`, `MMB`, and `RMB` use mouse icons, while keyboard inputs render as `[KEY]` text.
+
 All keybinds are remappable in Minecraft controls.
 
 ### Privacy and Diagnostics
