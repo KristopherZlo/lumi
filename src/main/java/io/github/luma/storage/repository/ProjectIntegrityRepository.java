@@ -36,6 +36,14 @@ public final class ProjectIntegrityRepository {
                 }
             }
 
+            if (version.entityCheckpointId() != null && !version.entityCheckpointId().isBlank()) {
+                if (!Files.exists(layout.entityCheckpointFile(version.entityCheckpointId()))) {
+                    errors.add("Missing entity checkpoint file for " + version.id());
+                } else if (!this.snapshotReader.hasReadableHeader(layout.entityCheckpointFile(version.entityCheckpointId()))) {
+                    errors.add("Corrupt entity checkpoint header for " + version.id());
+                }
+            }
+
             for (String patchId : version.patchIds()) {
                 if (!Files.exists(layout.patchMetaFile(patchId))) {
                     errors.add("Missing patch metadata " + patchId + " for " + version.id());

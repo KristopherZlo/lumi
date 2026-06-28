@@ -66,6 +66,7 @@ class ProjectArchiveRepositoryTest {
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/project.json")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/work-zones.json")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/cache/baseline-chunks/chunk_0_0.bin.lz4")));
+        assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/entity-checkpoints/entity-checkpoint-0001.bin.lz4")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/recovery/journal.json")));
         assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().startsWith("project/previews/")));
         assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().contains("draft")));
@@ -75,6 +76,7 @@ class ProjectArchiveRepositoryTest {
             assertTrue(zip.getEntry("manifest.json") != null);
             assertTrue(zip.getEntry("project/project.json") != null);
             assertTrue(zip.getEntry("project/work-zones.json") != null);
+            assertTrue(zip.getEntry("project/entity-checkpoints/entity-checkpoint-0001.bin.lz4") != null);
             assertTrue(zip.getEntry("project/recovery/journal.json") != null);
             assertTrue(zip.getEntry("project/cache/baseline-chunks/chunk_0_0.bin.lz4") != null);
             assertTrue(zip.getEntry("project/previews/v0001.png") == null);
@@ -108,6 +110,7 @@ class ProjectArchiveRepositoryTest {
         assertTrue(Files.exists(importedLayout.patchMetaFile("patch-0001")));
         assertTrue(Files.exists(importedLayout.patchDataFile("patch-0001")));
         assertTrue(Files.exists(importedLayout.snapshotFile("snapshot-0001")));
+        assertTrue(Files.exists(importedLayout.entityCheckpointFile("entity-checkpoint-0001")));
         assertTrue(Files.exists(importedLayout.previewFile("v0001")));
         assertTrue(Files.exists(importedLayout.cacheDir().resolve("baseline-chunks").resolve("chunk_0_0.bin.lz4")));
         assertTrue(Files.exists(importedLayout.recoveryJournalFile()));
@@ -144,7 +147,10 @@ class ProjectArchiveRepositoryTest {
         assertEquals("roof-pass", manifest.scopeOrDefault().variantId());
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/versions/v0001.json")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/versions/v0002.json")));
+        assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/entity-checkpoints/entity-checkpoint-0001.bin.lz4")));
+        assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/entity-checkpoints/entity-checkpoint-0002.bin.lz4")));
         assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/versions/v0003.json")));
+        assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/entity-checkpoints/entity-checkpoint-0003.bin.lz4")));
     }
 
     @Test
@@ -242,6 +248,7 @@ class ProjectArchiveRepositoryTest {
                 "main",
                 "",
                 "snapshot-0001",
+                "entity-checkpoint-0001",
                 List.of("patch-0001"),
                 VersionKind.INITIAL,
                 "tester",
@@ -319,6 +326,7 @@ class ProjectArchiveRepositoryTest {
         Files.writeString(layout.patchMetaFile("patch-0001"), "{\"id\":\"patch-0001\"}", StandardCharsets.UTF_8);
         Files.write(layout.patchDataFile("patch-0001"), new byte[]{1, 2, 3});
         Files.write(layout.snapshotFile("snapshot-0001"), new byte[]{4, 5, 6});
+        Files.write(layout.entityCheckpointFile("entity-checkpoint-0001"), new byte[]{4, 5, 6});
         Files.write(layout.previewFile("v0001"), new byte[]{7, 8, 9});
         Files.writeString(
                 layout.workZonesFile(),
@@ -395,6 +403,9 @@ class ProjectArchiveRepositoryTest {
         Files.writeString(layout.patchMetaFile("patch-0003"), "{\"id\":\"patch-0003\"}", StandardCharsets.UTF_8);
         Files.write(layout.patchDataFile("patch-0003"), new byte[]{3});
         Files.write(layout.snapshotFile("snapshot-0001"), new byte[]{4});
+        Files.write(layout.entityCheckpointFile("entity-checkpoint-0001"), new byte[]{4});
+        Files.write(layout.entityCheckpointFile("entity-checkpoint-0002"), new byte[]{5});
+        Files.write(layout.entityCheckpointFile("entity-checkpoint-0003"), new byte[]{6});
         Files.createDirectories(layout.cacheDir().resolve("baseline-chunks"));
         Files.write(layout.cacheDir().resolve("baseline-chunks").resolve("chunk_0_0.bin.lz4"), new byte[]{10});
         Files.writeString(layout.recoveryJournalFile(), "[]", StandardCharsets.UTF_8);
@@ -415,6 +426,7 @@ class ProjectArchiveRepositoryTest {
                 variantId,
                 parentVersionId,
                 "v0001".equals(id) ? "snapshot-0001" : "",
+                "entity-checkpoint-" + id.substring(1),
                 List.of("patch-" + id.substring(1)),
                 versionKind,
                 "tester",

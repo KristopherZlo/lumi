@@ -27,12 +27,14 @@ class ProjectCleanupRepositoryTest {
 
         var candidates = this.repository.inspect(layout, new ProjectCleanupPolicy(
                 Set.of("snapshot-0001.bin.lz4"),
+                Set.of("entity-checkpoint-0001.bin.lz4"),
                 Set.of("v0001.png"),
                 true
         ));
 
-        assertEquals(4, candidates.size());
+        assertEquals(5, candidates.size());
         assertTrue(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("snapshots/snapshot-9999.bin.lz4")));
+        assertTrue(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("entity-checkpoints/entity-checkpoint-9999.bin.lz4")));
         assertTrue(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("previews/stale.png")));
         assertTrue(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("cache/render-cache.bin")));
         assertTrue(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("recovery/operation-draft.bin.lz4")));
@@ -47,13 +49,16 @@ class ProjectCleanupRepositoryTest {
 
         var deleted = this.repository.apply(layout, new ProjectCleanupPolicy(
                 Set.of("snapshot-0001.bin.lz4"),
+                Set.of("entity-checkpoint-0001.bin.lz4"),
                 Set.of("v0001.png"),
                 true
         ));
 
-        assertEquals(4, deleted.size());
+        assertEquals(5, deleted.size());
         assertTrue(Files.exists(layout.snapshotFile("snapshot-0001")));
         assertFalse(Files.exists(layout.snapshotFile("snapshot-9999")));
+        assertTrue(Files.exists(layout.entityCheckpointFile("entity-checkpoint-0001")));
+        assertFalse(Files.exists(layout.entityCheckpointFile("entity-checkpoint-9999")));
         assertTrue(Files.exists(layout.previewFile("v0001")));
         assertFalse(Files.exists(layout.previewsDir().resolve("stale.png")));
         assertFalse(Files.exists(layout.cacheDir().resolve("render-cache.bin")));
@@ -69,11 +74,12 @@ class ProjectCleanupRepositoryTest {
 
         var candidates = this.repository.inspect(layout, new ProjectCleanupPolicy(
                 Set.of("snapshot-0001.bin.lz4"),
+                Set.of("entity-checkpoint-0001.bin.lz4"),
                 Set.of("v0001.png"),
                 false
         ));
 
-        assertEquals(3, candidates.size());
+        assertEquals(4, candidates.size());
         assertFalse(candidates.stream().anyMatch(candidate -> candidate.relativePath().equals("recovery/operation-draft.bin.lz4")));
     }
 
@@ -93,6 +99,7 @@ class ProjectCleanupRepositoryTest {
 
         this.repository.apply(layout, new ProjectCleanupPolicy(
                 Set.of("snapshot-0001.bin.lz4"),
+                Set.of("entity-checkpoint-0001.bin.lz4"),
                 Set.of("v0001.png"),
                 true
         ));
@@ -108,6 +115,8 @@ class ProjectCleanupRepositoryTest {
 
         Files.write(layout.snapshotFile("snapshot-0001"), new byte[]{1});
         Files.write(layout.snapshotFile("snapshot-9999"), new byte[]{2});
+        Files.write(layout.entityCheckpointFile("entity-checkpoint-0001"), new byte[]{1});
+        Files.write(layout.entityCheckpointFile("entity-checkpoint-9999"), new byte[]{2});
         Files.write(layout.previewFile("v0001"), new byte[]{3});
         Files.write(layout.previewsDir().resolve("stale.png"), new byte[]{4});
         Files.write(layout.cacheDir().resolve("render-cache.bin"), new byte[]{5});

@@ -19,6 +19,7 @@ public final class ProjectRepository {
         Files.createDirectories(layout.versionsDir());
         Files.createDirectories(layout.patchesDir());
         Files.createDirectories(layout.snapshotsDir());
+        Files.createDirectories(layout.entityCheckpointsDir());
         Files.createDirectories(layout.previewsDir());
         Files.createDirectories(layout.previewRequestsDir());
         Files.createDirectories(layout.recoveryDir());

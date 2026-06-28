@@ -85,10 +85,25 @@ class ProjectIntegrityServiceTest {
     }
 
     @Test
+    void acceptsCurrentEntityCheckpointPayloadSchema() throws Exception {
+        ProjectLayout layout = this.layout();
+        this.writeProjectMetadata(layout);
+        this.snapshotWriter.writeFile(
+                layout.entityCheckpointFile("entity-checkpoint-current"),
+                new SnapshotData("project", Instant.parse("2026-04-28T08:00:00Z"), 0, 0, List.of())
+        );
+        this.versionRepository.save(layout, version("v0001", "", "entity-checkpoint-current", List.of()));
+
+        ProjectIntegrityReport report = this.service.inspect(layout);
+
+        assertTrue(report.valid());
+    }
+
+    @Test
     void reportsCorruptPatchAndSnapshotHeadersWithoutFullRestore() throws Exception {
         ProjectLayout layout = this.layout();
         this.writeProjectMetadata(layout);
-        this.versionRepository.save(layout, version("v0001", "snapshot-corrupt", List.of("patch-corrupt")));
+        this.versionRepository.save(layout, version("v0001", "snapshot-corrupt", "entity-checkpoint-corrupt", List.of("patch-corrupt")));
         Files.createDirectories(layout.patchesDir());
         Files.writeString(layout.patchMetaFile("patch-corrupt"), "{}", StandardCharsets.UTF_8);
         try (DataOutputStream output = new DataOutputStream(Files.newOutputStream(layout.patchDataFile("patch-corrupt")))) {
@@ -102,11 +117,19 @@ class ProjectIntegrityServiceTest {
             output.writeInt(0);
             output.writeInt(5);
         }
+        Files.createDirectories(layout.entityCheckpointsDir());
+        try (DataOutputStream output = new DataOutputStream(new LZ4FrameOutputStream(
+                new BufferedOutputStream(Files.newOutputStream(layout.entityCheckpointFile("entity-checkpoint-corrupt")))
+        ))) {
+            output.writeInt(0);
+            output.writeInt(5);
+        }
 
         ProjectIntegrityReport report = this.service.inspect(layout);
 
         assertTrue(report.errors().stream().anyMatch(error -> error.contains("Corrupt patch payload header patch-corrupt")));
         assertTrue(report.errors().stream().anyMatch(error -> error.contains("Corrupt snapshot header")));
+        assertTrue(report.errors().stream().anyMatch(error -> error.contains("Corrupt entity checkpoint header")));
     }
 
     @Test
@@ -150,12 +173,17 @@ class ProjectIntegrityServiceTest {
     }
 
     private static ProjectVersion version(String id, String snapshotId, List<String> patchIds) {
+        return version(id, snapshotId, "", patchIds);
+    }
+
+    private static ProjectVersion version(String id, String snapshotId, String entityCheckpointId, List<String> patchIds) {
         return new ProjectVersion(
                 id,
                 "project",
                 "main",
                 "",
                 snapshotId,
+                entityCheckpointId,
                 patchIds,
                 VersionKind.MANUAL,
                 "tester",

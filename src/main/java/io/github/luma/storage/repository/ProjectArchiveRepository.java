@@ -38,6 +38,7 @@ public final class ProjectArchiveRepository {
     private static final String MANIFEST_ENTRY = "manifest.json";
     private static final String PROJECT_PREFIX = "project/";
     private static final String BASELINE_PREFIX = PROJECT_PREFIX + "cache/baseline-chunks/";
+    private static final String ENTITY_CHECKPOINT_PREFIX = PROJECT_PREFIX + "entity-checkpoints/";
     private static final String TRANSIENT_STORAGE_SUFFIX = ".tmp";
     private static final int MAX_MANIFEST_BYTES = 1024 * 1024;
     private static final int MAX_ARCHIVE_ENTRIES = 20_000;
@@ -234,6 +235,7 @@ public final class ProjectArchiveRepository {
         this.collectDirectoryEntries(layout.versionsDir(), PROJECT_PREFIX + "versions/", entries);
         this.collectDirectoryEntries(layout.patchesDir(), PROJECT_PREFIX + "patches/", entries);
         this.collectDirectoryEntries(layout.snapshotsDir(), PROJECT_PREFIX + "snapshots/", entries);
+        this.collectDirectoryEntries(layout.entityCheckpointsDir(), ENTITY_CHECKPOINT_PREFIX, entries);
         this.collectDirectoryEntries(layout.cacheDir().resolve("baseline-chunks"), BASELINE_PREFIX, entries);
         Path journalFile = layout.recoveryJournalFile();
         if (Files.exists(journalFile)) {
@@ -270,6 +272,12 @@ public final class ProjectArchiveRepository {
             }
             if (version.snapshotId() != null && !version.snapshotId().isBlank()) {
                 this.putEntry(entries, this.requiredEntry(layout.snapshotFile(version.snapshotId()), PROJECT_PREFIX + "snapshots/" + version.snapshotId() + ".bin.lz4"));
+            }
+            if (version.entityCheckpointId() != null && !version.entityCheckpointId().isBlank()) {
+                this.putEntry(entries, this.requiredEntry(
+                        layout.entityCheckpointFile(version.entityCheckpointId()),
+                        ENTITY_CHECKPOINT_PREFIX + version.entityCheckpointId() + ".bin.lz4"
+                ));
             }
             if (includePreviews && version.preview() != null && version.preview().fileName() != null && !version.preview().fileName().isBlank()) {
                 Path previewFile = layout.previewFile(version.id());
@@ -422,6 +430,7 @@ public final class ProjectArchiveRepository {
         if (archivePath.startsWith(PROJECT_PREFIX + "versions/")
                 || archivePath.startsWith(PROJECT_PREFIX + "patches/")
                 || archivePath.startsWith(PROJECT_PREFIX + "snapshots/")
+                || archivePath.startsWith(ENTITY_CHECKPOINT_PREFIX)
                 || archivePath.startsWith(PROJECT_PREFIX + "previews/")
                 || archivePath.startsWith(BASELINE_PREFIX)) {
             return;
@@ -495,6 +504,12 @@ public final class ProjectArchiveRepository {
                 Path snapshot = layout.snapshotFile(version.snapshotId());
                 if (!Files.exists(snapshot, LinkOption.NOFOLLOW_LINKS)) {
                     throw new IOException("Imported archive is missing snapshot " + version.snapshotId());
+                }
+            }
+            if (version.entityCheckpointId() != null && !version.entityCheckpointId().isBlank()) {
+                Path entityCheckpoint = layout.entityCheckpointFile(version.entityCheckpointId());
+                if (!Files.exists(entityCheckpoint, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new IOException("Imported archive is missing entity checkpoint " + version.entityCheckpointId());
                 }
             }
             if (version.preview() != null && version.preview().fileName() != null && !version.preview().fileName().isBlank()) {

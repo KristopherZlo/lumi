@@ -1,21 +1,37 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.ExternalSourceInfo;
+import io.github.luma.domain.model.PreviewInfo;
+import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.SnapshotChunkData;
+import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
+import io.github.luma.domain.model.VersionKind;
+import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.SnapshotReader;
+import io.github.luma.storage.repository.SnapshotWriter;
+import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HistoryPackageSafetyScannerTest {
+
+    @TempDir
+    Path tempDir;
 
     private final HistoryPackageSafetyScanner scanner = new HistoryPackageSafetyScanner();
 
@@ -88,6 +104,48 @@ class HistoryPackageSafetyScannerTest {
         assertFalse(report.safe());
         assertTrue(report.dangerousBlockEntityTypes().contains("minecraft:future_block_entity"));
         assertTrue(report.dangerousEntityTypes().contains("minecraft:future_entity"));
+    }
+
+    @Test
+    void scansEntityCheckpointPayloads() throws Exception {
+        String entityId = "00000000-0000-0000-0000-000000000003";
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Checkpoint Safety");
+        new SnapshotWriter().writeFile(
+                layout.entityCheckpointFile("entity-checkpoint-0001"),
+                new SnapshotData(
+                        "project",
+                        Instant.parse("2026-04-28T08:00:00Z"),
+                        0,
+                        0,
+                        List.of(new SnapshotChunkData(
+                                0,
+                                0,
+                                List.of(),
+                                Map.of(),
+                                List.of(entityTag(entityId, "minecraft:command_block_minecart"))
+                        ))
+                )
+        );
+
+        var report = this.scanner.scanProjectHistory(layout, List.of(new ProjectVersion(
+                "v0001",
+                "project",
+                "main",
+                "",
+                "",
+                "entity-checkpoint-0001",
+                List.of(),
+                VersionKind.MANUAL,
+                "tester",
+                "Version",
+                ChangeStats.empty(),
+                PreviewInfo.none(),
+                ExternalSourceInfo.manual(),
+                Instant.parse("2026-04-28T08:00:00Z")
+        )));
+
+        assertFalse(report.safe());
+        assertTrue(report.dangerousEntityTypes().contains("minecraft:command_block_minecart"));
     }
 
     private static CompoundTag stateTag(String blockId) {

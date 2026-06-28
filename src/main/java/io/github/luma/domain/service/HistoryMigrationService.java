@@ -18,6 +18,7 @@ import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -137,35 +138,38 @@ public final class HistoryMigrationService {
     }
 
     private int migrateSnapshots(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
-        Set<String> snapshotIds = new LinkedHashSet<>();
+        Set<Path> snapshotFiles = new LinkedHashSet<>();
         for (ProjectVersion version : versions) {
             if (version.snapshotId() != null && !version.snapshotId().isBlank()) {
-                snapshotIds.add(version.snapshotId());
+                snapshotFiles.add(layout.snapshotFile(version.snapshotId()));
+            }
+            if (version.entityCheckpointId() != null && !version.entityCheckpointId().isBlank()) {
+                snapshotFiles.add(layout.entityCheckpointFile(version.entityCheckpointId()));
             }
         }
 
         int migrated = 0;
-        for (String snapshotId : snapshotIds) {
-            if (!Files.exists(layout.snapshotFile(snapshotId)) || !this.snapshotNeedsMigration(layout, snapshotId)) {
+        for (Path snapshotFile : snapshotFiles) {
+            if (!Files.exists(snapshotFile) || !this.snapshotNeedsMigration(snapshotFile)) {
                 continue;
             }
-            SnapshotData snapshot = this.snapshotReader.readFile(layout.snapshotFile(snapshotId));
-            this.snapshotWriter.writeFile(layout, layout.snapshotFile(snapshotId), snapshot);
+            SnapshotData snapshot = this.snapshotReader.readFile(snapshotFile);
+            this.snapshotWriter.writeFile(layout, snapshotFile, snapshot);
             migrated += 1;
         }
         return migrated;
     }
 
-    private boolean snapshotNeedsMigration(ProjectLayout layout, String snapshotId) throws IOException {
-        if (!this.isSnapshotContentRefVersion(layout.snapshotFile(snapshotId))) {
+    private boolean snapshotNeedsMigration(Path snapshotFile) throws IOException {
+        if (!this.isSnapshotContentRefVersion(snapshotFile)) {
             return true;
         }
-        var metadata = this.snapshotReader.loadSectionIndex(layout.snapshotFile(snapshotId));
+        var metadata = this.snapshotReader.loadSectionIndex(snapshotFile);
         return metadata.sectionCount() > 0 && metadata.chunks().stream()
                 .anyMatch(chunk -> chunk.contentRefs().isEmpty());
     }
 
-    private boolean isSnapshotContentRefVersion(java.nio.file.Path snapshotFile) throws IOException {
+    private boolean isSnapshotContentRefVersion(Path snapshotFile) throws IOException {
         if (!Files.exists(snapshotFile) || Files.size(snapshotFile) < 8L) {
             return false;
         }

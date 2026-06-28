@@ -101,6 +101,7 @@ public final class HistoryPackageSafetyScanner {
         SafetyAccumulator accumulator = new SafetyAccumulator();
         Set<String> scannedPatchIds = new LinkedHashSet<>();
         Set<String> scannedSnapshotIds = new LinkedHashSet<>();
+        Set<String> scannedEntityCheckpointIds = new LinkedHashSet<>();
         for (ProjectVersion version : versions == null ? List.<ProjectVersion>of() : versions) {
             for (String patchId : version.patchIds()) {
                 if (patchId == null || patchId.isBlank() || !scannedPatchIds.add(patchId)) {
@@ -113,10 +114,15 @@ public final class HistoryPackageSafetyScanner {
                 this.scanEntityChanges(changes.entityChanges(), accumulator);
             }
             String snapshotId = version.snapshotId();
-            if (snapshotId == null || snapshotId.isBlank() || !scannedSnapshotIds.add(snapshotId)) {
-                continue;
+            if (snapshotId != null && !snapshotId.isBlank() && scannedSnapshotIds.add(snapshotId)) {
+                this.scanSnapshot(this.snapshotReader.readFile(layout.snapshotFile(snapshotId)), accumulator);
             }
-            this.scanSnapshot(this.snapshotReader.readFile(layout.snapshotFile(snapshotId)), accumulator);
+            String entityCheckpointId = version.entityCheckpointId();
+            if (entityCheckpointId != null
+                    && !entityCheckpointId.isBlank()
+                    && scannedEntityCheckpointIds.add(entityCheckpointId)) {
+                this.scanSnapshot(this.snapshotReader.readFile(layout.entityCheckpointFile(entityCheckpointId)), accumulator);
+            }
         }
         return accumulator.toReport();
     }

@@ -17,6 +17,7 @@ import java.util.Set;
 public final class ProjectCleanupRepository {
 
     private static final String REASON_UNREFERENCED_SNAPSHOT = "unreferenced snapshot";
+    private static final String REASON_UNREFERENCED_ENTITY_CHECKPOINT = "unreferenced entity checkpoint";
     private static final String REASON_ORPHANED_PREVIEW = "orphaned preview";
     private static final String REASON_ORPHANED_CACHE = "orphaned cache";
     private static final String REASON_STALE_OPERATION_DRAFT = "stale operation draft";
@@ -24,6 +25,7 @@ public final class ProjectCleanupRepository {
     public List<ProjectCleanupCandidate> inspect(ProjectLayout layout, ProjectCleanupPolicy policy) throws IOException {
         List<ProjectCleanupCandidate> candidates = new ArrayList<>();
         this.collectSnapshots(layout, policy, candidates);
+        this.collectEntityCheckpoints(layout, policy, candidates);
         this.collectPreviews(layout, policy, candidates);
         this.collectCache(layout, candidates);
         if (policy.deleteOperationDraft() && Files.exists(layout.recoveryOperationDraftFile())) {
@@ -50,6 +52,23 @@ public final class ProjectCleanupRepository {
             for (Path file : stream.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)).toList()) {
                 if (!policy.referencedSnapshotFiles().contains(file.getFileName().toString())) {
                     candidates.add(this.candidate(layout, file, REASON_UNREFERENCED_SNAPSHOT));
+                }
+            }
+        }
+    }
+
+    private void collectEntityCheckpoints(
+            ProjectLayout layout,
+            ProjectCleanupPolicy policy,
+            List<ProjectCleanupCandidate> candidates
+    ) throws IOException {
+        if (!Files.exists(layout.entityCheckpointsDir())) {
+            return;
+        }
+        try (var stream = Files.list(layout.entityCheckpointsDir())) {
+            for (Path file : stream.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)).toList()) {
+                if (!policy.referencedEntityCheckpointFiles().contains(file.getFileName().toString())) {
+                    candidates.add(this.candidate(layout, file, REASON_UNREFERENCED_ENTITY_CHECKPOINT));
                 }
             }
         }

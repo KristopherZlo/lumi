@@ -57,6 +57,7 @@ public final class ProjectCleanupService {
                 layout,
                 new ProjectCleanupPolicy(
                         referencedSnapshotFiles(versions),
+                        referencedEntityCheckpointFiles(versions),
                         referencedPreviewFiles(versions),
                         !activeOperation && !unresolvedOperationDraft
                 ),
@@ -91,6 +92,16 @@ public final class ProjectCleanupService {
         for (ProjectVersion version : versions) {
             if (version.preview() != null && version.preview().fileName() != null && !version.preview().fileName().isBlank()) {
                 referenced.add(version.preview().fileName());
+            }
+        }
+        return Set.copyOf(referenced);
+    }
+
+    private static Set<String> referencedEntityCheckpointFiles(List<ProjectVersion> versions) {
+        Set<String> referenced = new LinkedHashSet<>();
+        for (ProjectVersion version : versions) {
+            if (version.entityCheckpointId() != null && !version.entityCheckpointId().isBlank()) {
+                referenced.add(version.entityCheckpointId() + ".bin.lz4");
             }
         }
         return Set.copyOf(referenced);
