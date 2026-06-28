@@ -21,6 +21,8 @@
   "luma.action.next": "Next",
   "luma.action.refresh": "Refresh",
   "luma.action.more": "More",
+  "luma.action.expand": "Expand",
+  "luma.action.collapse": "Collapse",
   "luma.action.create_project": "Create project",
   "luma.action.save": "Save",
   "luma.action.save_build": "Save build",
@@ -300,6 +302,8 @@
   "luma.restore.selection_choice_help": "You have a Lumi selection. Choose whether to restore the whole save, only that selected area, or everything around it while keeping the selection unchanged.",
   "luma.restore.confirm_safety": "Safety save will be created first when there is unsaved work.",
   "luma.restore.confirm_target": "Branch: %s | save: %s",
+  "luma.restore.entities_title": "Entities in save: %s",
+  "luma.restore.entities_help": "Unchecked types are skipped for this restore only. The save itself is not changed.",
 
   "luma.history.message_input": "Message",
   "luma.history.message_required": "Message (required)",

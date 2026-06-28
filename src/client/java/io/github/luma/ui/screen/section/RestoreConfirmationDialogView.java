@@ -9,6 +9,7 @@ import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
+import java.util.List;
 import java.util.Objects;
 import net.minecraft.network.chat.Component;
 
@@ -40,6 +41,9 @@ public final class RestoreConfirmationDialogView {
             frame.child(LumaUi.caption(Component.translatable("luma.restore.selection_choice_help")));
         }
         frame.child(LumaUi.caption(model.target()));
+        if (model.hasEntityTypes()) {
+            frame.child(this.entityTypes(model));
+        }
 
         FlowLayout actionsRow = LumaUi.actionRow();
         actionsRow.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.actions.cancel()));
@@ -72,6 +76,43 @@ public final class RestoreConfirmationDialogView {
         return overlay;
     }
 
+    private FlowLayout entityTypes(Model model) {
+        FlowLayout section = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        header.gap(4);
+        header.verticalAlignment(VerticalAlignment.CENTER);
+        header.child(LumaUi.value(Component.translatable(
+                "luma.restore.entities_title",
+                model.totalEntityCount()
+        )));
+        header.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
+        header.child(LumaUi.button(
+                Component.translatable(model.entityListExpanded()
+                        ? "luma.action.collapse"
+                        : "luma.action.expand"),
+                button -> this.actions.toggleEntityList()
+        ));
+        section.child(header);
+        section.child(LumaUi.caption(Component.translatable("luma.restore.entities_help")));
+        if (model.entityListExpanded()) {
+            FlowLayout list = LumaUi.revealGroup();
+            for (EntityTypeOption option : model.entityTypes()) {
+                ButtonComponent toggle = LumaUi.button(
+                        Component.literal((option.included() ? "[x] " : "[ ] ")
+                                + option.entityType()
+                                + " (x"
+                                + option.count()
+                                + ")"),
+                        button -> this.actions.toggleEntityType(option.entityType())
+                );
+                toggle.active(!model.operationActive());
+                list.child(toggle);
+            }
+            section.child(list);
+        }
+        return section;
+    }
+
     public record Model(
             int width,
             Component title,
@@ -80,13 +121,64 @@ public final class RestoreConfirmationDialogView {
             boolean safetySnapshot,
             boolean initialRestore,
             boolean hasSelection,
-            boolean operationActive
+            boolean operationActive,
+            boolean entityListExpanded,
+            List<EntityTypeOption> entityTypes
     ) {
+
+        public Model(
+                int width,
+                Component title,
+                Component help,
+                Component target,
+                boolean safetySnapshot,
+                boolean initialRestore,
+                boolean hasSelection,
+                boolean operationActive
+        ) {
+            this(
+                    width,
+                    title,
+                    help,
+                    target,
+                    safetySnapshot,
+                    initialRestore,
+                    hasSelection,
+                    operationActive,
+                    false,
+                    List.of()
+            );
+        }
 
         public Model {
             title = Objects.requireNonNull(title, "title");
             help = Objects.requireNonNull(help, "help");
             target = Objects.requireNonNull(target, "target");
+            entityTypes = entityTypes == null ? List.of() : List.copyOf(entityTypes);
+        }
+
+        public boolean hasEntityTypes() {
+            return !this.entityTypes.isEmpty();
+        }
+
+        public int totalEntityCount() {
+            int total = 0;
+            for (EntityTypeOption option : this.entityTypes) {
+                total += option.count();
+            }
+            return total;
+        }
+    }
+
+    public record EntityTypeOption(
+            String entityType,
+            int count,
+            boolean included
+    ) {
+
+        public EntityTypeOption {
+            entityType = entityType == null || entityType.isBlank() ? "unknown:entity" : entityType;
+            count = Math.max(0, count);
         }
     }
 
@@ -99,5 +191,11 @@ public final class RestoreConfirmationDialogView {
         void restoreSelectedArea();
 
         void restoreOutsideSelection();
+
+        default void toggleEntityList() {
+        }
+
+        default void toggleEntityType(String entityType) {
+        }
     }
 }

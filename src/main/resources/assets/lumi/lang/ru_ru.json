@@ -8,6 +8,10 @@
   "key.lumi.quick_rollback": "Quick rollback",
   "key.lumi.compare_overlay_xray": "Lumi action button",
   "key.lumi.hotkey_info": "Hotkey information",
+  "luma.action.expand": "Expand",
+  "luma.action.collapse": "Collapse",
+  "luma.restore.entities_title": "Entities in save: %s",
+  "luma.restore.entities_help": "Unchecked types are skipped for this restore only. The save itself is not changed.",
 
   "luma.common.yes": "Да",
   "luma.common.no": "Нет",

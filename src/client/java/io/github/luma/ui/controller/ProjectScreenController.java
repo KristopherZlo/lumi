@@ -2,11 +2,15 @@ package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.RestoreEntityTypeCount;
+import io.github.luma.domain.model.RestoreEntityTypeSelection;
 import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.domain.service.HistoryEditService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.RecoveryService;
+import io.github.luma.domain.service.RestoreEntitySummaryService;
 import io.github.luma.domain.service.RestoreService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VariantMergeService;
@@ -28,6 +32,7 @@ public final class ProjectScreenController {
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
     private final RestoreService restoreService = new RestoreService();
+    private final RestoreEntitySummaryService restoreEntitySummaryService = new RestoreEntitySummaryService();
     private final QuickRollbackService quickRollbackService = new QuickRollbackService();
     private final HistoryEditService historyEditService = new HistoryEditService();
     private final VariantService variantService = new VariantService();
@@ -208,12 +213,21 @@ public final class ProjectScreenController {
     }
 
     public String restoreVersion(String projectName, String versionId, String targetVariantId) {
+        return this.restoreVersion(projectName, versionId, targetVariantId, RestoreEntityTypeSelection.includeAll());
+    }
+
+    public String restoreVersion(
+            String projectName,
+            String versionId,
+            String targetVariantId,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) {
         try {
             var level = ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName);
             if (targetVariantId == null || targetVariantId.isBlank()) {
-                this.restoreService.restore(level, projectName, versionId);
+                this.restoreService.restore(level, projectName, versionId, entityTypeSelection);
             } else {
-                this.restoreService.restoreToVariant(level, projectName, versionId, targetVariantId);
+                this.restoreService.restoreToVariant(level, projectName, versionId, targetVariantId, entityTypeSelection);
             }
             return "luma.status.restore_started";
         } catch (IllegalStateException exception) {
@@ -224,6 +238,29 @@ public final class ProjectScreenController {
             LumaMod.LOGGER.warn("Restore request failed for project {}", projectName, exception);
             this.reportFailedAction(exception);
             return "luma.status.operation_failed";
+        }
+    }
+
+    public List<RestoreEntityTypeCount> restoreEntityTypes(String projectName, String versionId) {
+        if (projectName == null || projectName.isBlank() || versionId == null || versionId.isBlank()) {
+            return List.of();
+        }
+        try {
+            var server = ClientProjectAccess.requireSingleplayerServer(this.client);
+            var layout = this.projectService.resolveLayout(server, projectName);
+            ProjectVersion version = this.projectService.loadVersions(server, projectName).stream()
+                    .filter(candidate -> versionId.equals(candidate.id()))
+                    .findFirst()
+                    .orElse(null);
+            return this.restoreEntitySummaryService.summarize(layout, version);
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn(
+                    "Failed to summarize restore entities for project {} version {}",
+                    projectName,
+                    versionId,
+                    exception
+            );
+            return List.of();
         }
     }
 

@@ -16,6 +16,7 @@ import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
+import io.github.luma.domain.model.RestoreEntityTypeSelection;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.ui.ContextualHelpPresenter;
 import io.github.luma.ui.LumaScrollContainer;
@@ -43,6 +44,7 @@ import io.github.luma.ui.state.BranchCreationDialogState;
 import io.github.luma.ui.state.CompareLoadState;
 import io.github.luma.ui.state.CompareViewState;
 import io.github.luma.ui.state.ProjectHomeViewState;
+import io.github.luma.ui.state.RestoreEntitySelectionState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -82,6 +84,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private final ProjectScreenSections sections = new ProjectScreenSections(this.actionController, new SectionActions());
     private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.actionController, new BranchDialogActions());
     private final RestoreConfirmationDialogView restoreDialogView = new RestoreConfirmationDialogView(new RestoreDialogActions());
+    private final RestoreEntitySelectionState restoreEntitySelection = new RestoreEntitySelectionState();
     private final UpdateNoticeDialogView updateDialogView = new UpdateNoticeDialogView(new UpdateDialogActions());
     private final ClientOnboardingService onboardingService;
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
@@ -356,7 +359,9 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 model.state().project().settings().safetySnapshotBeforeRestore(),
                 version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
                 model.lumiSelection().isPresent(),
-                operationActive
+                operationActive,
+                this.restoreEntitySelection.expanded(),
+                this.restoreEntitySelection.options(this.actionController.restoreEntityTypes(this.projectName, version.id()))
         ));
     }
 
@@ -521,8 +526,9 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             this.refresh("luma.status.operation_failed");
             return;
         }
+        RestoreEntityTypeSelection selection = this.restoreEntitySelection.selection();
         this.clearPendingRestore();
-        this.executeRestore(variant.get(), version.get());
+        this.executeRestore(variant.get(), version.get(), selection);
     }
 
     private void confirmPendingSelectedRestore(PartialRestoreMode mode) {
@@ -533,8 +539,9 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             this.refresh("luma.status.operation_failed");
             return;
         }
+        RestoreEntityTypeSelection selection = this.restoreEntitySelection.selection();
         this.clearPendingRestore();
-        this.executeSelectedRestore(version.get(), mode, bounds.get());
+        this.executeSelectedRestore(version.get(), mode, bounds.get(), selection);
     }
 
     private final class RestoreDialogActions implements RestoreConfirmationDialogView.Actions {
@@ -558,6 +565,18 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         @Override
         public void restoreOutsideSelection() {
             confirmPendingSelectedRestore(PartialRestoreMode.OUTSIDE_SELECTED_AREA);
+        }
+
+        @Override
+        public void toggleEntityList() {
+            restoreEntitySelection.toggleExpanded();
+            refresh("luma.status.restore_confirmation_required");
+        }
+
+        @Override
+        public void toggleEntityType(String entityType) {
+            restoreEntitySelection.toggleEntityType(entityType);
+            refresh("luma.status.restore_confirmation_required");
         }
     }
 
@@ -597,16 +616,21 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         }
     }
 
-    private void executeRestore(ProjectVariant variant, ProjectVersion version) {
+    private void executeRestore(ProjectVariant variant, ProjectVersion version, RestoreEntityTypeSelection selection) {
         if (variant == null || version == null) {
             this.refresh("luma.status.operation_failed");
             return;
         }
 
-        this.refresh(this.actionController.restoreVersion(this.projectName, version.id(), variant.id()));
+        this.refresh(this.actionController.restoreVersion(this.projectName, version.id(), variant.id(), selection));
     }
 
-    private void executeSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds) {
+    private void executeSelectedRestore(
+            ProjectVersion version,
+            PartialRestoreMode mode,
+            Bounds3i bounds,
+            RestoreEntityTypeSelection selection
+    ) {
         if (version == null || bounds == null) {
             this.refresh("luma.status.operation_failed");
             return;
@@ -617,6 +641,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 bounds,
                 mode,
                 PartialRestoreRegionSource.LUMI_REGION,
+                selection,
                 this.client.getUser().getName(),
                 Map.of()
         );
@@ -626,6 +651,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     private void clearPendingRestore() {
         this.pendingRestoreVariantId = "";
         this.pendingRestoreVersionId = "";
+        this.restoreEntitySelection.reset();
     }
 
     private void ensureSelectedVariant() {
@@ -921,6 +947,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             if (variant == null || version == null) {
                 return;
             }
+            restoreEntitySelection.reset();
             pendingRestoreVariantId = variant.id();
             pendingRestoreVersionId = version.id();
             refresh("luma.status.restore_confirmation_required");

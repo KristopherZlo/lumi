@@ -7,6 +7,7 @@ import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
+import io.github.luma.domain.model.RestoreEntityTypeSelection;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorkZoneCell;
@@ -36,6 +37,7 @@ import io.github.luma.ui.screen.section.RestoreConfirmationDialogView;
 import io.github.luma.ui.state.BranchCreationDialogState;
 import io.github.luma.ui.state.CompareLoadState;
 import io.github.luma.ui.state.CompareViewState;
+import io.github.luma.ui.state.RestoreEntitySelectionState;
 import io.github.luma.ui.state.WorkZoneViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
@@ -73,6 +75,7 @@ public final class WorkZoneScreen extends LumaScreen {
     private final ProjectSaveCardView saveCardView = new ProjectSaveCardView(this.projectController, new ZoneSaveCardActions());
     private final BranchCreationDialogView branchDialogView = new BranchCreationDialogView(this.projectController, new BranchDialogActions());
     private final RestoreConfirmationDialogView restoreDialogView = new RestoreConfirmationDialogView(new RestoreDialogActions());
+    private final RestoreEntitySelectionState restoreEntitySelection = new RestoreEntitySelectionState();
     private WorkZoneViewState state;
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private String status = "luma.status.zones_ready";
@@ -817,7 +820,9 @@ public final class WorkZoneScreen extends LumaScreen {
                 false,
                 version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
                 false,
-                false
+                false,
+                this.restoreEntitySelection.expanded(),
+                this.restoreEntitySelection.options(this.projectController.restoreEntityTypes(this.effectiveProjectName(), version.id()))
         );
     }
 
@@ -834,17 +839,19 @@ public final class WorkZoneScreen extends LumaScreen {
             this.refresh("luma.status.operation_failed");
             return;
         }
+        RestoreEntityTypeSelection selection = this.restoreEntitySelection.selection();
         this.clearPendingRestore();
-        this.executeZoneRestore(version, zoneId);
+        this.executeZoneRestore(version, zoneId, selection);
     }
 
-    private void executeZoneRestore(ProjectVersion version, String zoneId) {
+    private void executeZoneRestore(ProjectVersion version, String zoneId, RestoreEntityTypeSelection selection) {
         PartialRestoreRequest request = new PartialRestoreRequest(
                 this.effectiveProjectName(),
                 version.id(),
                 null,
                 PartialRestoreMode.SELECTED_AREA,
                 PartialRestoreRegionSource.LUMI_REGION,
+                selection,
                 this.client.getUser().getName(),
                 Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
         );
@@ -854,6 +861,7 @@ public final class WorkZoneScreen extends LumaScreen {
     private void clearPendingRestore() {
         this.pendingRestoreVariantId = "";
         this.pendingRestoreVersionId = "";
+        this.restoreEntitySelection.reset();
     }
 
     private void rebuild() {
@@ -1036,6 +1044,18 @@ public final class WorkZoneScreen extends LumaScreen {
         public void restoreOutsideSelection() {
             confirmPendingRestore();
         }
+
+        @Override
+        public void toggleEntityList() {
+            restoreEntitySelection.toggleExpanded();
+            refresh("luma.status.restore_confirmation_required");
+        }
+
+        @Override
+        public void toggleEntityType(String entityType) {
+            restoreEntitySelection.toggleEntityType(entityType);
+            refresh("luma.status.restore_confirmation_required");
+        }
     }
 
     private final class BranchDialogActions implements BranchCreationDialogView.Actions {
@@ -1073,6 +1093,7 @@ public final class WorkZoneScreen extends LumaScreen {
             if (variant == null || version == null) {
                 return;
             }
+            restoreEntitySelection.reset();
             pendingRestoreVariantId = variant.id();
             pendingRestoreVersionId = version.id();
             refresh("luma.status.restore_confirmation_required");
