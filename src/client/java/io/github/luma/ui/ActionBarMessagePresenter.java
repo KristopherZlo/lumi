@@ -49,13 +49,20 @@ public final class ActionBarMessagePresenter {
     }
 
     public static Component selection(String key) {
-        if ("luma.selection.no_project".equals(key) || "luma.selection.no_target".equals(key)) {
+        if ("luma.selection.no_project".equals(key)
+                || "luma.selection.no_target".equals(key)
+                || "luma.selection.no_selection".equals(key)
+                || "luma.selection.zone_no_active".equals(key)
+                || "luma.selection.zone_failed".equals(key)) {
             return warning(key);
         }
         if ("luma.selection.corner_a".equals(key)
                 || "luma.selection.corner_b".equals(key)
                 || "luma.selection.reset".equals(key)
-                || "luma.selection.cleared".equals(key)) {
+                || "luma.selection.cleared".equals(key)
+                || "luma.selection.resized".equals(key)
+                || "luma.selection.zone_added".equals(key)
+                || "luma.selection.zone_removed".equals(key)) {
             return success(key);
         }
         return info(key);

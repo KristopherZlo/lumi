@@ -1,14 +1,22 @@
 package io.github.luma.client.selection;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.WorkZone;
+import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.client.input.KeyBindingState;
+import io.github.luma.storage.ProjectLayout;
 import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.controller.ClientProjectAccess;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.client.KeyMapping;
@@ -19,6 +27,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 public final class LumiRegionSelectionController {
@@ -27,6 +36,7 @@ public final class LumiRegionSelectionController {
     private static final int MAX_SCOPES = 32;
 
     private final ProjectService projectService = new ProjectService();
+    private final WorkZoneService workZoneService = new WorkZoneService();
     private final LoadedChunkBlockRaycaster raycaster = new LoadedChunkBlockRaycaster();
     private final Map<SelectionScope, LumiRegionSelectionState> states = new LinkedHashMap<>() {
         @Override
@@ -67,6 +77,12 @@ public final class LumiRegionSelectionController {
             return false;
         }
 
+        if ((button == GLFW.GLFW_MOUSE_BUTTON_LEFT || button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) && controlDown(client)) {
+            return this.handleZoneEdit(client, button == GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        }
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && this.actionButtonDown(client)) {
+            return this.toggleMode(client);
+        }
         if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT && this.actionButtonDown(client)) {
             return this.clearSelection(client);
         }
@@ -102,10 +118,22 @@ public final class LumiRegionSelectionController {
             return true;
         }
 
-        state.get().toggleMode();
-        this.notify(client.player, state.get().mode() == LumiRegionSelectionMode.CORNERS
-                ? "luma.selection.mode_corners"
-                : "luma.selection.mode_extend");
+        Optional<Bounds3i> bounds = state.get().bounds();
+        if (bounds.isEmpty()) {
+            this.notify(client.player, "luma.selection.no_selection");
+            return true;
+        }
+
+        Optional<BlockPos> target = this.raycaster.findTargetBlock(client);
+        Vec3 view = client.player.getViewVector(1.0F).normalize();
+        LumiRegionSelectionState.Side side = SelectionResizeSideResolver.resolve(
+                bounds.get(),
+                target.map(BlockPoint::from).orElse(null),
+                view
+        );
+        double scroll = verticalAmount == 0.0D ? horizontalAmount : verticalAmount;
+        state.get().resize(side, scroll > 0.0D ? 1 : -1);
+        this.notify(client.player, "luma.selection.resized");
         return true;
     }
 
@@ -117,6 +145,10 @@ public final class LumiRegionSelectionController {
             LumiRegionSelectionState state = this.states.get(new SelectionScope(projectName, dimensionId));
             return state == null ? Optional.empty() : state.bounds();
         }
+    }
+
+    public Optional<LumiRegionSelectionMode> currentMode(Minecraft client) {
+        return this.currentState(client).map(LumiRegionSelectionState::mode);
     }
 
     public boolean shouldRenderSelection(Minecraft client) {
@@ -158,6 +190,19 @@ public final class LumiRegionSelectionController {
         return true;
     }
 
+    private boolean toggleMode(Minecraft client) {
+        Optional<LumiRegionSelectionState> state = this.currentState(client);
+        if (state.isEmpty()) {
+            this.notify(client.player, "luma.selection.no_project");
+            return true;
+        }
+        state.get().toggleMode();
+        this.notify(client.player, state.get().mode() == LumiRegionSelectionMode.CORNERS
+                ? "luma.selection.mode_corners"
+                : "luma.selection.mode_extend");
+        return true;
+    }
+
     private boolean clearSelection(Minecraft client) {
         Optional<LumiRegionSelectionState> state = this.currentState(client);
         if (state.isEmpty()) {
@@ -167,6 +212,41 @@ public final class LumiRegionSelectionController {
         state.get().clear();
         this.notify(client.player, "luma.selection.cleared");
         return true;
+    }
+
+    private boolean handleZoneEdit(Minecraft client, boolean add) {
+        Optional<SelectionContext> context = this.currentContext(client);
+        if (context.isEmpty()) {
+            this.notify(client.player, "luma.selection.no_project");
+            return true;
+        }
+        Optional<BlockPos> target = this.raycaster.findTargetBlock(client);
+        List<WorkZoneCell> cells = this.zoneEditCells(context.get(), target);
+        if (cells.isEmpty()) {
+            this.notify(client.player, "luma.selection.no_target");
+            return true;
+        }
+        try {
+            Optional<WorkZone> zone = add
+                    ? this.workZoneService.addCells(context.get().layout(), context.get().actor(), cells, Instant.now())
+                    : this.workZoneService.removeCells(context.get().layout(), context.get().actor(), cells, Instant.now());
+            this.notify(client.player, zone.isEmpty()
+                    ? "luma.selection.zone_no_active"
+                    : add ? "luma.selection.zone_added" : "luma.selection.zone_removed");
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Lumi zone edit failed", exception);
+            this.notify(client.player, "luma.selection.zone_failed");
+        }
+        return true;
+    }
+
+    private List<WorkZoneCell> zoneEditCells(SelectionContext context, Optional<BlockPos> target) {
+        LumiRegionSelectionState state = this.stateFor(context.scope());
+        Optional<Bounds3i> bounds = state.bounds();
+        if (bounds.isPresent()) {
+            return cellsIn(bounds.get());
+        }
+        return target.map(pos -> List.of(WorkZoneCell.from(BlockPoint.from(pos)))).orElseGet(List::of);
     }
 
     private Optional<LumiRegionSelectionState> currentState(Minecraft client) {
@@ -181,6 +261,10 @@ public final class LumiRegionSelectionController {
     }
 
     private Optional<SelectionScope> currentScope(Minecraft client) {
+        return this.currentContext(client).map(SelectionContext::scope);
+    }
+
+    private Optional<SelectionContext> currentContext(Minecraft client) {
         if (!client.hasSingleplayerServer() || client.level == null) {
             return Optional.empty();
         }
@@ -191,7 +275,15 @@ public final class LumiRegionSelectionController {
                 return Optional.empty();
             }
             Optional<BuildProject> project = this.projectService.findWorldProject(level);
-            return project.map(value -> new SelectionScope(value.name(), value.dimensionId()));
+            if (project.isEmpty()) {
+                return Optional.empty();
+            }
+            BuildProject value = project.get();
+            return Optional.of(new SelectionContext(
+                    new SelectionScope(value.name(), value.dimensionId()),
+                    this.projectService.resolveLayout(server, value.name()),
+                    this.actor(client)
+            ));
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Lumi region selection could not resolve current project", exception);
             return Optional.empty();
@@ -230,6 +322,33 @@ public final class LumiRegionSelectionController {
         return this.keyBindingState.isDown(client, this.actionButton);
     }
 
+    static boolean controlDown(Minecraft client) {
+        if (client == null || client.getWindow() == null) {
+            return false;
+        }
+        var window = client.getWindow();
+        return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_CONTROL)
+                || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
+    }
+
+    private String actor(Minecraft client) {
+        return client.getUser() == null ? "player" : client.getUser().getName();
+    }
+
+    private static List<WorkZoneCell> cellsIn(Bounds3i bounds) {
+        WorkZoneCell min = WorkZoneCell.from(bounds.min());
+        WorkZoneCell max = WorkZoneCell.from(bounds.max());
+        List<WorkZoneCell> cells = new ArrayList<>();
+        for (int x = min.x(); x <= max.x(); x++) {
+            for (int y = min.y(); y <= max.y(); y++) {
+                for (int z = min.z(); z <= max.z(); z++) {
+                    cells.add(new WorkZoneCell(x, y, z));
+                }
+            }
+        }
+        return cells;
+    }
+
     private void notify(Player player, String key) {
         player.displayClientMessage(ActionBarMessagePresenter.selection(key), true);
     }
@@ -240,5 +359,8 @@ public final class LumiRegionSelectionController {
     }
 
     private record SelectionScope(String projectName, String dimensionId) {
+    }
+
+    private record SelectionContext(SelectionScope scope, ProjectLayout layout, String actor) {
     }
 }
