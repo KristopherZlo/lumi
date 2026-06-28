@@ -4,6 +4,7 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.RestoreEntityTypeSelection;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.world.EntityBatch;
@@ -108,6 +109,22 @@ final class RestoreEntityStateResolver {
             String targetVersionId,
             List<PreparedChunkBatch> batches
     ) throws IOException {
+        return this.withAuthoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                targetVersionId,
+                batches,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatches(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            String targetVersionId,
+            List<PreparedChunkBatch> batches,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
         List<ChunkPoint> chunks = this.chunkCollector.batchChunks(batches);
         if (chunks.isEmpty()) {
             return batches == null ? List.of() : batches;
@@ -116,7 +133,8 @@ final class RestoreEntityStateResolver {
                 layout,
                 versions,
                 targetVersionId,
-                chunks
+                chunks,
+                entityTypeSelection
         );
         if (replacementBatches.isEmpty()) {
             return batches == null ? List.of() : batches;
@@ -131,6 +149,22 @@ final class RestoreEntityStateResolver {
             List<ProjectVersion> versions,
             String targetVersionId,
             List<ChunkPoint> chunks
+    ) throws IOException {
+        return this.authoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                targetVersionId,
+                chunks,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    List<PreparedChunkBatch> authoritativeEntityReplacementBatches(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            String targetVersionId,
+            List<ChunkPoint> chunks,
+            RestoreEntityTypeSelection entityTypeSelection
     ) throws IOException {
         if (targetVersionId == null || targetVersionId.isBlank() || chunks == null || chunks.isEmpty()) {
             return List.of();
@@ -159,7 +193,8 @@ final class RestoreEntityStateResolver {
                     layout,
                     versions,
                     targetVersion,
-                    selectedChunks
+                    selectedChunks,
+                    entityTypeSelection
             );
         } catch (IllegalArgumentException exception) {
             return List.of();
@@ -183,7 +218,10 @@ final class RestoreEntityStateResolver {
             batches.add(new PreparedChunkBatch(
                     chunk,
                     List.of(),
-                    EntityBatch.replacePlacedEntities(entitiesByChunk.getOrDefault(chunk, List.of()))
+                    EntityBatch.replaceEntities(
+                            entitiesByChunk.getOrDefault(chunk, List.of()),
+                            this.excludedEntityTypes(entityTypeSelection)
+                    )
             ));
         }
         return batches;
@@ -202,6 +240,10 @@ final class RestoreEntityStateResolver {
 
         RestoreChain chain = this.restorePlanBuilder.resolveChain(versions, targetVersion);
         Map<String, EntityPayload> states = new LinkedHashMap<>();
+        if (this.hasEntityCheckpoint(targetVersion)) {
+            this.seedEntityCheckpointStates(layout, targetVersion, entityIds, candidateChunks, states, RestoreEntityTypeSelection.includeAll());
+            return states;
+        }
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
             var snapshot = candidateChunks == null || candidateChunks.isEmpty()
                     ? this.snapshotReader.readFile(layout.snapshotFile(chain.anchor().snapshotId()))
@@ -276,6 +318,22 @@ final class RestoreEntityStateResolver {
             ProjectVersion targetVersion,
             Iterable<ChunkPoint> selectedChunks
     ) throws IOException {
+        return this.targetEntityStatesForChunks(
+                layout,
+                versions,
+                targetVersion,
+                selectedChunks,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    private Map<String, EntityPayload> targetEntityStatesForChunks(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            ProjectVersion targetVersion,
+            Iterable<ChunkPoint> selectedChunks,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
         if (targetVersion == null || selectedChunks == null) {
             return Map.of();
         }
@@ -292,6 +350,10 @@ final class RestoreEntityStateResolver {
 
         RestoreChain chain = this.restorePlanBuilder.resolveChain(versions, targetVersion);
         Map<String, EntityPayload> states = new LinkedHashMap<>();
+        if (this.hasEntityCheckpoint(targetVersion)) {
+            this.seedEntityCheckpointStates(layout, targetVersion, null, selected, states, entityTypeSelection);
+            return states;
+        }
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
             for (var chunk : this.snapshotReader.readFile(
                     layout.snapshotFile(chain.anchor().snapshotId()),
@@ -315,5 +377,56 @@ final class RestoreEntityStateResolver {
             }
         }
         return states;
+    }
+
+    private void seedEntityCheckpointStates(
+            ProjectLayout layout,
+            ProjectVersion targetVersion,
+            Set<String> entityIds,
+            Iterable<ChunkPoint> chunks,
+            Map<String, EntityPayload> states,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
+        if (states == null) {
+            return;
+        }
+        var checkpoint = chunks == null
+                ? this.snapshotReader.readFile(layout.entityCheckpointFile(targetVersion.entityCheckpointId()))
+                : this.snapshotReader.readFile(layout.entityCheckpointFile(targetVersion.entityCheckpointId()), this.toChunkSet(chunks));
+        RestoreEntityTypeSelection selection = entityTypeSelection == null
+                ? RestoreEntityTypeSelection.includeAll()
+                : entityTypeSelection;
+        for (var chunk : checkpoint.chunks()) {
+            for (EntityPayload entity : chunk.entitySnapshots()) {
+                if (entity == null || entity.entityId().isBlank()) {
+                    continue;
+                }
+                if (entityIds != null && !entityIds.contains(entity.entityId())) {
+                    continue;
+                }
+                if (!selection.includes(entity.entityType())) {
+                    continue;
+                }
+                states.put(entity.entityId(), entity);
+            }
+        }
+    }
+
+    private Set<ChunkPoint> toChunkSet(Iterable<ChunkPoint> chunks) {
+        Set<ChunkPoint> selected = new LinkedHashSet<>();
+        for (ChunkPoint chunk : chunks == null ? List.<ChunkPoint>of() : chunks) {
+            if (chunk != null) {
+                selected.add(chunk);
+            }
+        }
+        return selected;
+    }
+
+    private boolean hasEntityCheckpoint(ProjectVersion version) {
+        return version != null && version.entityCheckpointId() != null && !version.entityCheckpointId().isBlank();
+    }
+
+    private Set<String> excludedEntityTypes(RestoreEntityTypeSelection entityTypeSelection) {
+        return entityTypeSelection == null ? Set.of() : entityTypeSelection.excludedEntityTypes();
     }
 }

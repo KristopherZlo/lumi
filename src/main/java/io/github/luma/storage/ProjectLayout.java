@@ -46,6 +46,10 @@ public record ProjectLayout(Path root) {
         return this.root.resolve("snapshots");
     }
 
+    public Path entityCheckpointsDir() {
+        return this.root.resolve("entity-checkpoints");
+    }
+
     public Path previewsDir() {
         return this.root.resolve("previews");
     }
@@ -112,6 +116,15 @@ public record ProjectLayout(Path root) {
 
     public Path snapshotFile(String snapshotId) {
         return StoragePathPolicy.resolveStorageFile(this.snapshotsDir(), snapshotId, ".bin.lz4", "snapshot id");
+    }
+
+    public Path entityCheckpointFile(String entityCheckpointId) {
+        return StoragePathPolicy.resolveStorageFile(
+                this.entityCheckpointsDir(),
+                entityCheckpointId,
+                ".bin.lz4",
+                "entity checkpoint id"
+        );
     }
 
     public Path contentFile(String sha256) {

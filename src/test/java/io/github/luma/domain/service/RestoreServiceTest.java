@@ -18,6 +18,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestorePlanMode;
+import io.github.luma.domain.model.RestoreEntityTypeSelection;
 import io.github.luma.domain.model.SectionChangeMask;
 import io.github.luma.domain.model.SnapshotChunkData;
 import io.github.luma.domain.model.SnapshotData;
@@ -656,6 +657,66 @@ class RestoreServiceTest {
     }
 
     @Test
+    void authoritativeEntityReplacementUsesEntityCheckpointOverPatchChain(@TempDir Path tempDir) throws Exception {
+        RestoreEntityStateResolver resolver = this.entityStateResolver();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        String entityId = "00000000-0000-0000-0000-000000000080";
+        EntityPayload tnt = entity("minecraft:tnt", entityId, 1.0D);
+        this.snapshotWriter.writeFile(layout.entityCheckpointFile("entity-checkpoint-0002"), snapshot(List.of()));
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(),
+                List.of(new StoredEntityChange(entityId, "minecraft:tnt", null, tnt))
+        ));
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT),
+                version("v0002", "main", "v0001", "", "entity-checkpoint-0002", List.of("patch-0002"))
+        );
+
+        List<PreparedChunkBatch> batches = resolver.authoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                "v0002",
+                List.of(new ChunkPoint(0, 0))
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(0, batches.getFirst().entityBatch().entitiesToUpdate().size());
+    }
+
+    @Test
+    void authoritativeEntityReplacementCanSkipEntityTypesFromCheckpoint(@TempDir Path tempDir) throws Exception {
+        RestoreEntityStateResolver resolver = this.entityStateResolver();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        String tntId = "00000000-0000-0000-0000-000000000081";
+        String displayId = "00000000-0000-0000-0000-000000000082";
+        this.snapshotWriter.writeFile(layout.entityCheckpointFile("entity-checkpoint-0002"), snapshot(List.of(
+                entity("minecraft:tnt", tntId, 1.0D),
+                entity("minecraft:block_display", displayId, 2.0D)
+        )));
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT),
+                version("v0002", "main", "v0001", "", "entity-checkpoint-0002", List.of())
+        );
+
+        List<PreparedChunkBatch> batches = resolver.authoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                "v0002",
+                List.of(new ChunkPoint(0, 0)),
+                RestoreEntityTypeSelection.excludeTypes(List.of("minecraft:tnt"))
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(1, batches.getFirst().entityBatch().entitiesToUpdate().size());
+        assertEquals("minecraft:block_display", batches.getFirst().entityBatch().entitiesToUpdate().getFirst().getString("id").orElse(""));
+        assertTrue(batches.getFirst().entityBatch().excludedEntityTypes().contains("minecraft:tnt"));
+    }
+
+    @Test
     void authoritativeEntityReplacementKeepsEmptyTargetChunkAuthoritative(@TempDir Path tempDir) throws Exception {
         RestoreEntityStateResolver resolver = this.entityStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
@@ -860,12 +921,36 @@ class RestoreServiceTest {
             List<String> patchIds,
             VersionKind versionKind
     ) {
+        return version(id, variantId, parentVersionId, snapshotId, "", patchIds, versionKind);
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String variantId,
+            String parentVersionId,
+            String snapshotId,
+            String entityCheckpointId,
+            List<String> patchIds
+    ) {
+        return version(id, variantId, parentVersionId, snapshotId, entityCheckpointId, patchIds, VersionKind.MANUAL);
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String variantId,
+            String parentVersionId,
+            String snapshotId,
+            String entityCheckpointId,
+            List<String> patchIds,
+            VersionKind versionKind
+    ) {
         return new ProjectVersion(
                 id,
                 "project",
                 variantId,
                 parentVersionId,
                 snapshotId,
+                entityCheckpointId,
                 patchIds,
                 versionKind,
                 "tester",
@@ -1011,8 +1096,12 @@ class RestoreServiceTest {
     }
 
     private static EntityPayload entity(String entityId, double x) {
+        return entity("minecraft:block_display", entityId, x);
+    }
+
+    private static EntityPayload entity(String entityType, String entityId, double x) {
         CompoundTag tag = new CompoundTag();
-        tag.putString("id", "minecraft:block_display");
+        tag.putString("id", entityType);
         tag.putString("UUID", entityId);
         ListTag pos = new ListTag();
         pos.add(DoubleTag.valueOf(x));

@@ -88,13 +88,49 @@ class VersionRepositoryIndexTest {
         assertEquals(VersionKind.MANUAL, loaded.versionKind());
     }
 
+    @Test
+    void entityCheckpointIdRoundTripsAndMissingValueNormalizesToBlank() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Entity Checkpoint");
+        this.repository.save(layout, version("v0001", "With checkpoint", 0, "entity-checkpoint-0001"));
+
+        ProjectVersion stored = this.repository.load(layout, "v0001").orElseThrow();
+        assertEquals("entity-checkpoint-0001", stored.entityCheckpointId());
+
+        String legacyJson = """
+                {
+                  "id": "v0002",
+                  "projectId": "project",
+                  "variantId": "main",
+                  "parentVersionId": "",
+                  "snapshotId": "snapshot",
+                  "patchIds": [],
+                  "versionKind": "MANUAL",
+                  "author": "tester",
+                  "message": "Legacy",
+                  "stats": {},
+                  "preview": {},
+                  "sourceInfo": {},
+                  "createdAt": "2026-04-28T08:00:01Z"
+                }
+                """;
+        Files.writeString(layout.versionFile("v0002"), legacyJson, StandardCharsets.UTF_8);
+
+        ProjectVersion legacy = this.repository.load(layout, "v0002").orElseThrow();
+        assertEquals("", legacy.entityCheckpointId());
+    }
+
     private static ProjectVersion version(String id, String message, int offsetSeconds) {
+        return version(id, message, offsetSeconds, "");
+    }
+
+    private static ProjectVersion version(String id, String message, int offsetSeconds, String entityCheckpointId) {
         return new ProjectVersion(
                 id,
                 "project",
                 "main",
                 "",
                 "snapshot",
+                entityCheckpointId,
                 List.of(),
                 VersionKind.MANUAL,
                 "tester",

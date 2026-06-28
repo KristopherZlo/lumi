@@ -54,6 +54,7 @@ public final class ProjectVersionTags {
                 version.variantId(),
                 version.parentVersionId(),
                 version.snapshotId(),
+                version.entityCheckpointId(),
                 version.patchIds(),
                 version.versionKind(),
                 version.author(),

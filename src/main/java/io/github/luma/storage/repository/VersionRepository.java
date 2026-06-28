@@ -114,6 +114,7 @@ public final class VersionRepository {
                 ),
                 StoragePathPolicy.requireOptionalStorageId(version.parentVersionId(), "parent version id"),
                 StoragePathPolicy.requireOptionalStorageId(version.snapshotId(), "snapshot id"),
+                StoragePathPolicy.requireOptionalStorageId(version.entityCheckpointId(), "entity checkpoint id"),
                 version.patchIds() == null
                         ? List.of()
                         : version.patchIds().stream()
