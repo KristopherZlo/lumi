@@ -9,7 +9,6 @@ import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchSectionWorldChanges;
-import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRequest;
@@ -54,7 +53,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Predicate;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -83,12 +81,7 @@ public final class RestoreService {
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final VersionService versionService = new VersionService();
-    private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
-    private final PartialRestoreEntityPlanner partialRestoreEntityPlanner = new PartialRestoreEntityPlanner();
     private final PartialRestoreRequestResolver partialRestoreRequestResolver = new PartialRestoreRequestResolver();
-    private final PartialRestoreTargetStatePlanner partialRestoreTargetStatePlanner = new PartialRestoreTargetStatePlanner();
-    private final PartialRestorePendingDraftProvider partialRestorePendingDraftProvider =
-            new PartialRestorePendingDraftProvider();
     private final RestoreCompletionCoordinator completionCoordinator = new RestoreCompletionCoordinator();
     private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
@@ -129,6 +122,8 @@ public final class RestoreService {
             this.baselineChunkRepository
     );
     private final RestoreUndoActionFactory restoreUndoActionFactory = new RestoreUndoActionFactory();
+    private final PartialRestoreOperationPreparer partialRestoreOperationPreparer =
+            new PartialRestoreOperationPreparer(this.partialRestoreDiagnosticsLog);
 
     /**
      * Starts a restore operation for the given project and target version.
@@ -447,14 +442,13 @@ public final class RestoreService {
                 throw new RuntimeException(exception);
             }
         });
-        List<PreparedChunkBatch> finalBatches =
-                this.withAuthoritativeEntityReplacementBatches(
-                        layout,
-                        versions,
-                        version.id(),
-                        batches,
-                        entityTypeSelection
-                );
+        List<PreparedChunkBatch> finalBatches = this.entityStateResolver.withAuthoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                version.id(),
+                batches,
+                entityTypeSelection
+        );
         return new WorldOperationManager.PreparedApplyOperation(
                 finalBatches,
                 () -> this.completionCoordinator.completeRestore(
@@ -555,7 +549,7 @@ public final class RestoreService {
                 "partial-restore",
                 "blocks",
                 LumaDebugLog.enabled(project),
-                progressSink -> this.preparePartialRestoreOperation(
+                progressSink -> this.partialRestoreOperationPreparer.prepare(
                         level,
                         layout,
                         project,
@@ -563,104 +557,6 @@ public final class RestoreService {
                         resolvedRequest.hardScope(),
                         progressSink
                 )
-        );
-    }
-
-    private WorldOperationManager.PreparedApplyOperation preparePartialRestoreOperation(
-            ServerLevel level,
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            PartialRestoreRequest request,
-            Predicate<BlockPoint> hardScope,
-            WorldOperationManager.ProgressSink progressSink
-    ) throws IOException {
-        progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing partial restore request");
-        List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
-        ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, request.targetVersionId());
-        ProjectVariant activeVariant = this.requestResolver.activeVariant(project, variants);
-        RecoveryDraft pendingDraft = this.partialRestorePendingDraftProvider.freeze(level, layout, project.id().toString())
-                .orElse(null);
-
-        LumaMod.LOGGER.info(
-                "Starting partial restore for project {} to version {} over {}",
-                project.name(),
-                targetVersion.id(),
-                request.bounds()
-        );
-        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                Instant.now(),
-                "partial-restore-started",
-                "Started partial restore to version " + targetVersion.id(),
-                targetVersion.id(),
-                activeVariant.id()
-        ));
-
-        PartialRestoreDraft partialDraft = this.applyEntityTypeSelection(this.buildPartialRestoreDraft(
-                layout,
-                project,
-                versions,
-                variants,
-                activeVariant,
-                targetVersion,
-                pendingDraft,
-                request,
-                hardScope,
-                level.getMinY(),
-                level.getMaxY(),
-                progressSink
-        ), request.entityTypeSelection());
-        this.partialRestoreDiagnosticsLog.logPlannedDraft(
-                project,
-                activeVariant,
-                targetVersion,
-                request,
-                partialDraft.mode(),
-                partialDraft.draft()
-        );
-        if (partialDraft.draft().isEmpty()) {
-            throw new IllegalArgumentException(request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA
-                    ? "Partial restore has no changes outside the selected region"
-                    : "Partial restore has no changes inside the selected region");
-        }
-        List<PreparedChunkBatch> decodedBatches = this.decodeStoredChanges(
-                level,
-                partialDraft.draft().changes(),
-                partialDraft.draft().entityChanges(),
-                true
-        );
-        List<PreparedChunkBatch> batches;
-        try (var ignored = LumaLoadLog.measure(
-                "restore",
-                "PreparedChunkBatchCollapser.collapse",
-                "source=partial-restore, batches=" + decodedBatches.size()
-        )) {
-            batches = this.batchCollapser.collapse(decodedBatches);
-        }
-        boolean partialRestoreDiagnostics = this.partialRestoreDiagnosticsLog.enabled(request);
-        return new WorldOperationManager.PreparedApplyOperation(
-                batches,
-                () -> {
-                    if (partialRestoreDiagnostics) {
-                        this.partialRestoreDiagnosticsLog.logPostApplyRemaining(
-                                level,
-                                project,
-                                request,
-                                partialDraft.mode(),
-                                partialDraft.draft()
-                        );
-                    }
-                    this.completionCoordinator.completePartialRestore(
-                            level,
-                            layout,
-                            project,
-                            pendingDraft,
-                            request,
-                            partialDraft.draft(),
-                            batches.size()
-                    );
-                },
-                partialRestoreDiagnostics
         );
     }
 
@@ -675,260 +571,13 @@ public final class RestoreService {
         String projectName = request.projectName();
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
-        List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
-        ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, request.targetVersionId());
-        ProjectVariant activeVariant = this.requestResolver.activeVariant(project, variants);
-        Optional<RecoveryDraft> pendingDraft = this.partialRestorePendingDraftProvider.snapshot(
+        return this.partialRestoreOperationPreparer.summarize(
                 level,
                 layout,
-                project.id().toString()
-        );
-
-        PartialRestoreDraft draft = this.buildPartialRestoreDraft(
-                layout,
                 project,
-                versions,
-                variants,
-                activeVariant,
-                targetVersion,
-                pendingDraft.orElse(null),
                 request,
-                resolvedRequest.hardScope(),
-                level.getMinY(),
-                level.getMaxY(),
-                (stage, completed, total, detail) -> {
-                }
+                resolvedRequest.hardScope()
         );
-
-        return new PartialRestorePlanSummary(
-                draft.draft().isEmpty() ? RestorePlanMode.NO_OP : draft.mode(),
-                request.bounds(),
-                request.restoreMode(),
-                request.regionSource(),
-                ChunkSelectionFactory.fromStoredChanges(draft.draft().changes()),
-                activeVariant.id(),
-                activeVariant.headVersionId(),
-                targetVersion.id(),
-                draft.draft().changes().size(),
-                draft.draft().entityChanges().size()
-        );
-    }
-
-    private PartialRestoreDraft buildPartialRestoreDraft(
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            List<ProjectVersion> versions,
-            List<ProjectVariant> variants,
-            ProjectVariant activeVariant,
-            ProjectVersion targetVersion,
-            RecoveryDraft pendingDraft,
-            PartialRestoreRequest request,
-            Predicate<BlockPoint> hardScope,
-            int worldMinY,
-            int worldMaxY,
-            WorldOperationManager.ProgressSink progressSink
-    ) throws IOException {
-        DirectRestorePatchPlan directPlan = this.directRestorePatchPlanner.applicablePlan(project, versions, variants, targetVersion);
-        if (directPlan == null) {
-            return this.buildTargetStatePartialRestoreDraft(
-                    layout,
-                    project,
-                    versions,
-                    activeVariant,
-                    targetVersion,
-                    pendingDraft,
-                    request,
-                    hardScope,
-                    worldMinY,
-                    worldMaxY,
-                    progressSink
-            );
-        }
-
-        List<ChunkPoint> selectedChunks = request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA
-                ? null
-                : this.chunkCollector.chunksIntersecting(request.bounds());
-        PatchWorldChanges reverseChanges = this.payloadLoader.loadVersionWorldChanges(
-                layout,
-                directPlan.reverseVersions(),
-                selectedChunks
-        );
-        PatchWorldChanges forwardChanges = this.payloadLoader.loadVersionWorldChanges(
-                layout,
-                directPlan.forwardVersions(),
-                selectedChunks
-        );
-        if (this.mechanismReconciliationPlanner.containsMechanismState(pendingDraft == null ? List.of() : pendingDraft.changes())
-                || this.mechanismReconciliationPlanner.containsMechanismState(reverseChanges.blockChanges())
-                || this.mechanismReconciliationPlanner.containsMechanismState(forwardChanges.blockChanges())) {
-            LumaDebugLog.log(
-                    project,
-                    "restore",
-                    "Partial restore for project {} target {} switched to target-state planning because direct path contains mechanism state",
-                    project.name(),
-                    targetVersion.id()
-            );
-            try {
-                return this.buildTargetStatePartialRestoreDraft(
-                        layout,
-                        project,
-                        versions,
-                        activeVariant,
-                        targetVersion,
-                        pendingDraft,
-                        request,
-                        hardScope,
-                        worldMinY,
-                        worldMaxY,
-                        progressSink
-                );
-            } catch (PartialRestoreTargetStateUnavailableException exception) {
-                LumaMod.LOGGER.info(
-                        "Partial restore for project {} to {} could not safely build target-state plan ({}); aborting instead of bounded patch replay",
-                        project.name(),
-                        targetVersion.id(),
-                        exception.getMessage()
-                );
-                LumaDebugLog.log(
-                        project,
-                        "restore",
-                        "Partial restore for project {} target {} aborted instead of bounded patch replay after target-state planning was unavailable: {}",
-                        project.name(),
-                        targetVersion.id(),
-                        exception.getMessage()
-                );
-                throw exception;
-            }
-        }
-        int lineageChangeCount = reverseChanges.blockChanges().size()
-                + reverseChanges.entityChanges().size()
-                + forwardChanges.blockChanges().size()
-                + forwardChanges.entityChanges().size();
-        progressSink.update(OperationStage.PREPARING, 0, Math.max(1, lineageChangeCount), "Filtering partial restore region");
-        List<StoredBlockChange> partialChanges = this.partialRestorePlanner.plan(
-                pendingDraft == null ? List.of() : pendingDraft.changes(),
-                reverseChanges.blockChanges(),
-                forwardChanges.blockChanges(),
-                request.bounds(),
-                request.restoreMode(),
-                request.bounds()::contains,
-                hardScope
-        );
-        List<StoredEntityChange> partialEntityChanges = this.partialRestoreEntityPlanner.plan(
-                pendingDraft == null ? List.of() : pendingDraft.entityChanges(),
-                reverseChanges.entityChanges(),
-                forwardChanges.entityChanges(),
-                request.bounds(),
-                request.restoreMode(),
-                hardScope
-        );
-        Instant now = Instant.now();
-        RecoveryDraft draft = new RecoveryDraft(
-                project.id().toString(),
-                activeVariant.id(),
-                activeVariant.headVersionId(),
-                request.actor() == null || request.actor().isBlank() ? "Lumi" : request.actor(),
-                io.github.luma.domain.model.WorldMutationSource.RESTORE,
-                now,
-                now,
-                partialChanges,
-                partialEntityChanges
-        );
-        LumaDebugLog.log(
-                project,
-                "restore",
-                "Partial restore for project {} target {} filtered {} lineage changes to {} region changes",
-                project.name(),
-                targetVersion.id(),
-                lineageChangeCount,
-                partialChanges.size() + partialEntityChanges.size()
-        );
-        return new PartialRestoreDraft(RestorePlanMode.PATCH_REPLAY, draft);
-    }
-
-    private PartialRestoreDraft applyEntityTypeSelection(
-            PartialRestoreDraft draft,
-            RestoreEntityTypeSelection entityTypeSelection
-    ) {
-        RestoreEntityTypeSelection selection = entityTypeSelection == null
-                ? RestoreEntityTypeSelection.includeAll()
-                : entityTypeSelection;
-        if (draft == null || draft.draft() == null || selection.excludedEntityTypes().isEmpty()) {
-            return draft;
-        }
-        List<StoredEntityChange> filteredEntities = draft.draft().entityChanges().stream()
-                .filter(change -> change == null || selection.includes(change.entityType()))
-                .toList();
-        if (filteredEntities.size() == draft.draft().entityChanges().size()) {
-            return draft;
-        }
-        RecoveryDraft filteredDraft = new RecoveryDraft(
-                draft.draft().projectId(),
-                draft.draft().variantId(),
-                draft.draft().baseVersionId(),
-                draft.draft().actor(),
-                draft.draft().mutationSource(),
-                draft.draft().startedAt(),
-                draft.draft().updatedAt(),
-                draft.draft().changes(),
-                filteredEntities
-        );
-        return new PartialRestoreDraft(draft.mode(), filteredDraft);
-    }
-
-    private PartialRestoreDraft buildTargetStatePartialRestoreDraft(
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            List<ProjectVersion> versions,
-            ProjectVariant activeVariant,
-            ProjectVersion targetVersion,
-            RecoveryDraft pendingDraft,
-            PartialRestoreRequest request,
-            Predicate<BlockPoint> hardScope,
-            int worldMinY,
-            int worldMaxY,
-            WorldOperationManager.ProgressSink progressSink
-    ) throws IOException {
-        ProjectVersion currentHead = versions.stream()
-                .filter(version -> version.id().equals(activeVariant.headVersionId()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Active variant head is missing: " + activeVariant.headVersionId()));
-        PartialRestoreTargetStatePlanner.Plan plan = this.partialRestoreTargetStatePlanner.plan(
-                layout,
-                project,
-                versions,
-                currentHead,
-                targetVersion,
-                pendingDraft,
-                request.bounds(),
-                request.restoreMode(),
-                worldMinY,
-                worldMaxY,
-                progressSink,
-                hardScope
-        );
-        Instant now = Instant.now();
-        RecoveryDraft draft = new RecoveryDraft(
-                project.id().toString(),
-                activeVariant.id(),
-                activeVariant.headVersionId(),
-                request.actor() == null || request.actor().isBlank() ? "Lumi" : request.actor(),
-                io.github.luma.domain.model.WorldMutationSource.RESTORE,
-                now,
-                now,
-                plan.blockChanges(),
-                plan.entityChanges()
-        );
-        LumaDebugLog.log(
-                project,
-                "restore",
-                "Partial restore for project {} target {} used target-state planning with {} changes",
-                project.name(),
-                targetVersion.id(),
-                plan.blockChanges().size() + plan.entityChanges().size()
-        );
-        return new PartialRestoreDraft(RestorePlanMode.TARGET_STATE, draft);
     }
 
     private List<PreparedChunkBatch> decodeWorldRootRestore(
@@ -1170,36 +819,6 @@ public final class RestoreService {
         return Optional.of(collapsed);
     }
 
-    private List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatches(
-            ProjectLayout layout,
-            List<ProjectVersion> versions,
-            String targetVersionId,
-            List<PreparedChunkBatch> batches
-    ) throws IOException {
-        return this.entityStateResolver.withAuthoritativeEntityReplacementBatches(
-                layout,
-                versions,
-                targetVersionId,
-                batches
-        );
-    }
-
-    private List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatches(
-            ProjectLayout layout,
-            List<ProjectVersion> versions,
-            String targetVersionId,
-            List<PreparedChunkBatch> batches,
-            RestoreEntityTypeSelection entityTypeSelection
-    ) throws IOException {
-        return this.entityStateResolver.withAuthoritativeEntityReplacementBatches(
-                layout,
-                versions,
-                targetVersionId,
-                batches,
-                entityTypeSelection
-        );
-    }
-
     private List<ChunkPoint> worldRootFallbackBaselineScope(
             ProjectLayout layout,
             io.github.luma.domain.model.BuildProject project,
@@ -1380,15 +999,6 @@ public final class RestoreService {
         }
     }
 
-    private List<PreparedChunkBatch> decodeStoredChanges(
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            boolean applyNewValues
-    ) throws IOException {
-        return this.decodeStoredChangesAnalyzed(level, changes, entityChanges, applyNewValues).batches();
-    }
-
     private PreparedWorldChangeBatches decodeStoredChangesAnalyzed(
             ServerLevel level,
             List<StoredBlockChange> changes,
@@ -1465,9 +1075,6 @@ public final class RestoreService {
             }
         }
         return total;
-    }
-
-    private record PartialRestoreDraft(RestorePlanMode mode, RecoveryDraft draft) {
     }
 
 }

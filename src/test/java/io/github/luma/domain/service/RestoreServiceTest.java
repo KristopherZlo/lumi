@@ -38,6 +38,7 @@ import io.github.luma.minecraft.world.PreparedSectionApplyBatch;
 import io.github.luma.minecraft.world.SectionApplyPath;
 import io.github.luma.minecraft.world.SectionApplySafetyProfile;
 import io.github.luma.minecraft.world.WorldOperationManager;
+import io.github.luma.minecraft.debug.PartialRestoreDiagnosticsLog;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchDataRepository;
@@ -816,42 +817,21 @@ class RestoreServiceTest {
             RecoveryDraft pendingDraft,
             PartialRestoreRequest request
     ) throws Throwable {
-        Method method = RestoreService.class.getDeclaredMethod(
-                "buildPartialRestoreDraft",
-                ProjectLayout.class,
-                BuildProject.class,
-                List.class,
-                List.class,
-                ProjectVariant.class,
-                ProjectVersion.class,
-                RecoveryDraft.class,
-                PartialRestoreRequest.class,
-                Predicate.class,
-                int.class,
-                int.class,
-                io.github.luma.minecraft.world.WorldOperationManager.ProgressSink.class
+        return new PartialRestoreOperationPreparer(new PartialRestoreDiagnosticsLog()).buildDraft(
+                layout,
+                project,
+                versions,
+                variants,
+                activeVariant,
+                targetVersion,
+                pendingDraft,
+                request,
+                (Predicate<BlockPoint>) point -> request.bounds() == null || request.bounds().contains(point),
+                64,
+                64,
+                (io.github.luma.minecraft.world.WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
+                }
         );
-        method.setAccessible(true);
-        try {
-            return method.invoke(
-                    service,
-                    layout,
-                    project,
-                    versions,
-                    variants,
-                    activeVariant,
-                    targetVersion,
-                    pendingDraft,
-                    request,
-                    (Predicate<BlockPoint>) point -> request.bounds() == null || request.bounds().contains(point),
-                    64,
-                    64,
-                    (io.github.luma.minecraft.world.WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
-                    }
-            );
-        } catch (InvocationTargetException exception) {
-            throw exception.getCause();
-        }
     }
 
     @SuppressWarnings("unchecked")

@@ -528,6 +528,10 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         }
         RestoreEntityTypeSelection selection = this.restoreEntitySelection.selection();
         this.clearPendingRestore();
+        if (selection.excludedEntityTypes().isEmpty()) {
+            this.executeRestore(variant.get(), version.get());
+            return;
+        }
         this.executeRestore(variant.get(), version.get(), selection);
     }
 
@@ -541,6 +545,10 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         }
         RestoreEntityTypeSelection selection = this.restoreEntitySelection.selection();
         this.clearPendingRestore();
+        if (selection.excludedEntityTypes().isEmpty()) {
+            this.executeSelectedRestore(version.get(), mode, bounds.get());
+            return;
+        }
         this.executeSelectedRestore(version.get(), mode, bounds.get(), selection);
     }
 
@@ -623,6 +631,19 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         }
 
         this.refresh(this.actionController.restoreVersion(this.projectName, version.id(), variant.id(), selection));
+    }
+
+    private void executeRestore(ProjectVariant variant, ProjectVersion version) {
+        if (variant == null || version == null) {
+            this.refresh("luma.status.operation_failed");
+            return;
+        }
+
+        this.refresh(this.actionController.restoreVersion(this.projectName, version.id(), variant.id()));
+    }
+
+    private void executeSelectedRestore(ProjectVersion version, PartialRestoreMode mode, Bounds3i bounds) {
+        this.executeSelectedRestore(version, mode, bounds, RestoreEntityTypeSelection.includeAll());
     }
 
     private void executeSelectedRestore(
