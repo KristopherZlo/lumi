@@ -36,10 +36,9 @@ public final class LumiRegionSelectionTeachingController {
     private static final int TITLE_COLOR = 0xAAF3F7FA;
     private static final int KEY_COLOR = 0xAADBE6F2;
     private static final int TEXT_COLOR = 0x99F3F7FA;
-    private static final float HINT_SCALE = 0.65F;
     private static final int ROW_HEIGHT = 15;
-    private static final int MOUSE_ICON_SIZE = 12;
     private static final int MOUSE_TEXTURE_SIZE = 24;
+    private static final int MOUSE_ICON_SIZE = MOUSE_TEXTURE_SIZE / 2;
     private static final int KEY_GAP = 3;
     private static final int TEXT_GAP = 4;
     private static final int SHORTCUT_GAP = 12;
@@ -136,18 +135,12 @@ public final class LumiRegionSelectionTeachingController {
         int height = 11 + (rows.size() * ROW_HEIGHT);
         int y = Math.max(8, Math.min(graphics.guiHeight() - height - 8, (graphics.guiHeight() / 2) + 16));
 
-        graphics.pose().pushMatrix();
-        graphics.pose().scaleAround(HINT_SCALE, graphics.guiWidth() / 2.0F, y);
-        try {
-            int titleX = Math.max(8, (graphics.guiWidth() - font.width(hint.title())) / 2);
-            graphics.drawString(font, Component.literal(hint.title()), titleX, y, TITLE_COLOR, false);
-            for (int index = 0; index < rows.size(); index++) {
-                Row row = rows.get(index);
-                int rowX = Math.max(8, (graphics.guiWidth() - this.rowWidth(font, row)) / 2);
-                this.drawRow(graphics, font, row, rowX, y + 12 + (index * ROW_HEIGHT));
-            }
-        } finally {
-            graphics.pose().popMatrix();
+        int titleX = Math.max(8, (graphics.guiWidth() - font.width(hint.title())) / 2);
+        graphics.drawString(font, Component.literal(hint.title()), titleX, y, TITLE_COLOR, false);
+        for (int index = 0; index < rows.size(); index++) {
+            Row row = rows.get(index);
+            int rowX = Math.max(8, (graphics.guiWidth() - this.rowWidth(font, row)) / 2);
+            this.drawRow(graphics, font, row, rowX, y + 12 + (index * ROW_HEIGHT));
         }
     }
 
