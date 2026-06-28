@@ -597,6 +597,30 @@ public final class VersionService {
         );
 
         progressSink.update(OperationStage.PREPARING, 0, draft.totalChangeCount(), "Preparing version payload");
+        String entityCheckpointId = "";
+        List<ChunkPoint> entityCheckpointChunks = List.of();
+        if (level != null) {
+            entityCheckpointId = ProjectService.entityCheckpointId(nextIndex);
+            progressSink.update(OperationStage.WRITING, 0, draft.totalChangeCount(), "Capturing entity checkpoint");
+            sectionStartedAt = System.nanoTime();
+            try (var ignored = LumaLoadLog.measure(
+                    "save",
+                    "SnapshotCaptureService.captureEntityCheckpoint",
+                    "project=" + project.name()
+            )) {
+                entityCheckpointChunks = this.snapshotPlanner.collectSnapshotChunks(layout, project, versions, draft);
+                this.snapshotCaptureService.captureEntityCheckpoint(
+                        layout,
+                        project.id().toString(),
+                        entityCheckpointId,
+                        entityCheckpointChunks,
+                        level,
+                        now
+                );
+            } finally {
+                recordTiming(timing, VersionSaveTiming.ENTITY_CHECKPOINT_CAPTURE, sectionStartedAt);
+            }
+        }
         PatchMetadata patchMetadata;
         sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure(
@@ -649,7 +673,9 @@ public final class VersionService {
             List<ChunkPoint> snapshotChunks;
             sectionStartedAt = System.nanoTime();
             try (var ignored = LumaLoadLog.measure("save", "VersionService.collectSnapshotChunks", "project=" + project.name())) {
-                snapshotChunks = this.snapshotPlanner.collectSnapshotChunks(layout, project, versions, draft);
+                snapshotChunks = entityCheckpointChunks.isEmpty()
+                        ? this.snapshotPlanner.collectSnapshotChunks(layout, project, versions, draft)
+                        : entityCheckpointChunks;
             } finally {
                 recordTiming(timing, VersionSaveTiming.SNAPSHOT_PREPARATION, sectionStartedAt);
             }
@@ -686,6 +712,7 @@ public final class VersionService {
                 activeVariant.id(),
                 parentVersionId == null ? "" : parentVersionId,
                 snapshotId,
+                entityCheckpointId,
                 List.of(patchMetadata.id()),
                 versionKind,
                 author,
@@ -724,11 +751,12 @@ public final class VersionService {
             HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
         }
         LumaMod.LOGGER.info(
-                "{} version {} for project {} with snapshot={} and patch={}",
+                "{} version {} for project {} with snapshot={}, entityCheckpoint={}, and patch={}",
                 publishHead ? "Committed" : "Staged",
                 version.id(),
                 project.name(),
                 version.snapshotId(),
+                version.entityCheckpointId(),
                 patchMetadata.id()
         );
 

@@ -22,6 +22,7 @@ public record VersionSaveTiming(
     public static final String PATCH_PAYLOAD_WRITE = "PatchPayload";
     public static final String PATCH_META_WRITE = "PatchMeta";
     public static final String SNAPSHOT_POLICY = "SnapshotPolicy";
+    public static final String ENTITY_CHECKPOINT_CAPTURE = "EntityCheckpoint";
     public static final String SNAPSHOT_PREPARATION = "SnapshotPreparation";
     public static final String SNAPSHOT_CAPTURE = "SnapshotCapture";
     public static final String MANIFEST_WRITE = "ManifestWrite";
@@ -42,6 +43,7 @@ public record VersionSaveTiming(
             PATCH_PAYLOAD_WRITE,
             PATCH_META_WRITE,
             SNAPSHOT_POLICY,
+            ENTITY_CHECKPOINT_CAPTURE,
             SNAPSHOT_PREPARATION,
             SNAPSHOT_CAPTURE,
             MANIFEST_WRITE,

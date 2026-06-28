@@ -22,6 +22,7 @@ import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -228,6 +229,47 @@ class VersionServiceTest {
         assertEquals(1, summary.addedBlocks());
         assertEquals(1, summary.removedBlocks());
         assertEquals(0, summary.changedBlocks());
+    }
+
+    @Test
+    void chunkSelectionIncludesStoredEntityChanges() {
+        String entityId = "00000000-0000-0000-0000-000000000103";
+
+        List<ChunkPoint> chunks = ChunkSelectionFactory.fromStoredEntityChanges(List.of(
+                entityChange(entityId, 1.0D, 32.0D)
+        ));
+
+        assertEquals(List.of(new ChunkPoint(2, 0)), chunks);
+    }
+
+    @Test
+    void wholeDimensionSnapshotChunksIncludeDraftEntityChunks() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("entity-chunks.mbp"));
+        VersionSnapshotPlanner planner = new VersionSnapshotPlanner(
+                new BaselineChunkRepository(),
+                this.patchMetaRepository
+        );
+        String entityId = "00000000-0000-0000-0000-000000000104";
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                instant(10),
+                instant(20),
+                List.of(),
+                List.of(entityChange(entityId, 1.0D, 32.0D))
+        );
+
+        List<ChunkPoint> chunks = planner.collectSnapshotChunks(
+                layout,
+                BuildProject.createWorldWorkspace("project", "minecraft:overworld", instant(0)),
+                List.of(),
+                draft
+        );
+
+        assertTrue(chunks.contains(new ChunkPoint(2, 0)));
     }
 
     @Test

@@ -86,8 +86,18 @@ public final class SnapshotWriter {
             Collection<ChunkSnapshotPayload> chunks,
             Instant now
     ) throws IOException {
+        return this.writePreparedSnapshot(layout, layout.snapshotFile(snapshotId), projectId, snapshotId, chunks, now);
+    }
+
+    public SnapshotRef writePreparedSnapshot(
+            ProjectLayout layout,
+            Path snapshotFile,
+            String projectId,
+            String snapshotId,
+            Collection<ChunkSnapshotPayload> chunks,
+            Instant now
+    ) throws IOException {
         SnapshotData snapshot = this.withContentRefs(layout, this.materializePreparedSnapshot(projectId, chunks, now));
-        Path snapshotFile = layout.snapshotFile(snapshotId);
         this.writeFile(snapshotFile, snapshot);
         return new SnapshotRef(
                 snapshotId,

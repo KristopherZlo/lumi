@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -41,6 +42,16 @@ public final class ChunkSelectionFactory {
         LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
         for (StoredBlockChange change : changes) {
             chunks.add(ChunkPoint.from(change.pos()));
+        }
+        return List.copyOf(chunks);
+    }
+
+    public static List<ChunkPoint> fromStoredEntityChanges(Collection<StoredEntityChange> changes) {
+        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
+        for (StoredEntityChange change : changes) {
+            if (change != null) {
+                chunks.add(change.chunk());
+            }
         }
         return List.copyOf(chunks);
     }

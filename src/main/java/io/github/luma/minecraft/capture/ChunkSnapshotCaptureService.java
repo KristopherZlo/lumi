@@ -63,6 +63,22 @@ public final class ChunkSnapshotCaptureService {
         return Optional.of(this.capture(level, levelChunk, null, null, null, EntitySnapshotOverride.none()));
     }
 
+    public Optional<ChunkSnapshotPayload> captureEntityCheckpointChunk(ServerLevel level, ChunkPoint chunk) {
+        if (level == null || chunk == null) {
+            return Optional.empty();
+        }
+        LevelChunk levelChunk = level.getChunk(chunk.x(), chunk.z());
+        return Optional.of(new ChunkSnapshotPayload(
+                chunk.x(),
+                chunk.z(),
+                level.getMinY(),
+                level.getMaxY(),
+                List.of(),
+                Map.of(),
+                this.captureEntities(level, levelChunk, EntitySnapshotOverride.none())
+        ));
+    }
+
     public Optional<ChunkSnapshotPayload> captureLoadedChunk(
             ServerLevel level,
             ChunkPoint chunk,

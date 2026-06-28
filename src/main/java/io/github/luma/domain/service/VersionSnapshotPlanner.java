@@ -144,14 +144,16 @@ final class VersionSnapshotPlanner {
         }
 
         this.addChunks(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
+        this.addChunks(chunks, ChunkSelectionFactory.fromStoredEntityChanges(draft.entityChanges()));
         List<ChunkPoint> merged = List.copyOf(chunks);
         LumaDebugLog.log(
                 project,
                 "save",
-                "Collected {} snapshot chunks for project {} including {} draft changes",
+                "Collected {} snapshot chunks for project {} including {} draft changes and {} entity changes",
                 merged.size(),
                 project.name(),
-                draft.changes().size()
+                draft.changes().size(),
+                draft.entityChanges().size()
         );
         return merged;
     }
@@ -180,8 +182,12 @@ final class VersionSnapshotPlanner {
 
         List<ChunkPoint> knownChunks = new ArrayList<>(this.baselineChunkRepository.listChunks(layout));
         knownChunks = ChunkSelectionFactory.merge(knownChunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
+        knownChunks = ChunkSelectionFactory.merge(knownChunks, ChunkSelectionFactory.fromStoredEntityChanges(draft.entityChanges()));
         int knownChunkCount = Math.max(1, knownChunks.size());
-        int changedChunkCount = ChunkSelectionFactory.fromStoredChanges(draft.changes()).size();
+        int changedChunkCount = ChunkSelectionFactory.merge(
+                ChunkSelectionFactory.fromStoredChanges(draft.changes()),
+                ChunkSelectionFactory.fromStoredEntityChanges(draft.entityChanges())
+        ).size();
         double fraction = (double) changedChunkCount / (double) knownChunkCount;
         LumaDebugLog.log(
                 project,

@@ -35,6 +35,25 @@ public final class SnapshotCaptureService {
         return this.snapshotWriter.writePreparedSnapshot(layout, projectId, snapshotId, payloads, now);
     }
 
+    public SnapshotRef captureEntityCheckpoint(
+            ProjectLayout layout,
+            String projectId,
+            String entityCheckpointId,
+            Collection<ChunkPoint> chunks,
+            ServerLevel level,
+            Instant now
+    ) throws IOException {
+        List<ChunkSnapshotPayload> payloads = this.captureEntityCheckpointPayloads(level, chunks);
+        return this.snapshotWriter.writePreparedSnapshot(
+                layout,
+                layout.entityCheckpointFile(entityCheckpointId),
+                projectId,
+                entityCheckpointId,
+                payloads,
+                now
+        );
+    }
+
     private List<ChunkSnapshotPayload> capturePayloads(ServerLevel level, Collection<ChunkPoint> chunks) throws IOException {
         return this.serverThreadExecutor.call(level.getServer(), () -> {
             List<ChunkSnapshotPayload> payloads = new ArrayList<>();
@@ -42,6 +61,20 @@ public final class SnapshotCaptureService {
                 this.chunkSnapshotCaptureService.captureChunk(level, chunk).ifPresent(payloads::add);
             }
             LumaMod.LOGGER.info("Captured {} snapshot chunks on the server thread", payloads.size());
+            return List.copyOf(payloads);
+        });
+    }
+
+    private List<ChunkSnapshotPayload> captureEntityCheckpointPayloads(
+            ServerLevel level,
+            Collection<ChunkPoint> chunks
+    ) throws IOException {
+        return this.serverThreadExecutor.call(level.getServer(), () -> {
+            List<ChunkSnapshotPayload> payloads = new ArrayList<>();
+            for (ChunkPoint chunk : new LinkedHashSet<>(chunks == null ? List.<ChunkPoint>of() : chunks)) {
+                this.chunkSnapshotCaptureService.captureEntityCheckpointChunk(level, chunk).ifPresent(payloads::add);
+            }
+            LumaMod.LOGGER.info("Captured {} entity checkpoint chunks on the server thread", payloads.size());
             return List.copyOf(payloads);
         });
     }

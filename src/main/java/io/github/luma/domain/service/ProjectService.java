@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeStats;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectSettings;
@@ -174,11 +175,21 @@ public final class ProjectService {
 
         String versionId = versionId(1);
         String snapshotId = snapshotId(1);
+        String entityCheckpointId = entityCheckpointId(1);
+        List<ChunkPoint> initialChunks = ChunkSelectionFactory.fromBounds(bounds);
         this.snapshotCaptureService.capture(
                 layout,
                 project.id().toString(),
                 snapshotId,
-                ChunkSelectionFactory.fromBounds(bounds),
+                initialChunks,
+                level,
+                now
+        );
+        this.snapshotCaptureService.captureEntityCheckpoint(
+                layout,
+                project.id().toString(),
+                entityCheckpointId,
+                initialChunks,
                 level,
                 now
         );
@@ -190,6 +201,7 @@ public final class ProjectService {
                 "main",
                 "",
                 snapshotId,
+                entityCheckpointId,
                 List.of(),
                 VersionKind.INITIAL,
                 author,
@@ -306,6 +318,10 @@ public final class ProjectService {
 
     public static String snapshotId(int number) {
         return String.format(Locale.ROOT, "snapshot-%04d", number);
+    }
+
+    public static String entityCheckpointId(int number) {
+        return String.format(Locale.ROOT, "entity-checkpoint-%04d", number);
     }
 
     public static String patchId(int number) {
