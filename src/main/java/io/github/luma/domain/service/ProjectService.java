@@ -28,9 +28,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -253,7 +256,19 @@ public final class ProjectService {
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout).stream()
                 .filter(variant -> !tombstones.variantDeleted(variant.id()))
                 .toList();
-        return this.versionLineageService.reachableVersions(versions, variants);
+        Set<String> visibleVersionIds = new LinkedHashSet<>(this.versionLineageService.reachableVersionIds(versions, variants));
+        Map<String, ProjectVersion> versionMap = this.versionLineageService.versionMap(versions);
+        for (ProjectVariant variant : variants) {
+            for (ProjectVersion version : versions) {
+                if (variant.id().equals(version.variantId())
+                        && this.versionLineageService.isAncestor(versionMap, variant.headVersionId(), version.id())) {
+                    visibleVersionIds.add(version.id());
+                }
+            }
+        }
+        return versions.stream()
+                .filter(version -> visibleVersionIds.contains(version.id()))
+                .toList();
     }
 
     public List<ProjectVersion> loadDeletedVersions(MinecraftServer server, String projectName) throws IOException {

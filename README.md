@@ -53,7 +53,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 - Shows changed blocks with an in-world overlay.
 - Restores a whole save, a selected area, or everything outside a selected area.
 - Lets you branch risky ideas and merge local branches back into the active branch.
-- Shows each branch history from its current head through reachable parent saves.
+- Shows each branch history from its current head through reachable parent saves and restorable forward descendants.
 - Imports and exports project history packages.
 - Adds live undo/redo for recent tracked edits.
 - Keeps recovery drafts for interrupted work.

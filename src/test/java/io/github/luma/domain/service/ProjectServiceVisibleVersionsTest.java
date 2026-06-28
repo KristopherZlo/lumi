@@ -39,6 +39,27 @@ class ProjectServiceVisibleVersionsTest {
     }
 
     @Test
+    void visibleVersionsKeepForwardDescendantsAfterRestoreReset() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("restore-history.mbp"));
+        this.saveVersions(layout, List.of(
+                version("v0001", "", 0),
+                version("v0002", "v0001", 60),
+                version("v0003", "v0002", 120),
+                version("v0004", "v0003", 180),
+                version("v0005", "v0004", 240),
+                version("v0006", "v0005", 300)
+        ));
+        new VariantRepository().save(layout, List.of(new ProjectVariant("main", "Main", "v0001", "v0004", true, instant(0))));
+
+        List<ProjectVersion> visible = new ProjectService().loadVisibleVersions(layout);
+
+        assertEquals(
+                List.of("v0001", "v0002", "v0003", "v0004", "v0005", "v0006"),
+                visible.stream().map(ProjectVersion::id).toList()
+        );
+    }
+
+    @Test
     void visibleVersionsHideDetachedZoneHeadAfterAmend() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("zones.mbp"));
         this.saveVersions(layout, List.of(
