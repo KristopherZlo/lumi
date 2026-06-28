@@ -6,6 +6,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.service.WorkZoneService;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 
 final class ActiveWorkZoneTouchRecorder {
@@ -22,6 +23,12 @@ final class ActiveWorkZoneTouchRecorder {
     void record(TrackedProject trackedProject, BlockPos pos, Instant now) {
         if (pos != null) {
             this.record(trackedProject, BlockPoint.from(pos), now);
+        }
+    }
+
+    void record(TrackedProject trackedProject, List<BlockPos> positions, Instant now) {
+        for (BlockPos pos : positions == null ? List.<BlockPos>of() : positions) {
+            this.record(trackedProject, pos, now);
         }
     }
 

@@ -732,7 +732,7 @@ public final class HistoryCaptureManager {
 
                 int pendingBefore = buffer.size();
                 buffer.addEntityChange(capturedChange, now);
-                this.activeWorkZoneTouchRecorder.record(trackedProject, pos, now);
+                this.activeWorkZoneTouchRecorder.record(trackedProject, mutationPositions, now);
                 this.liveUndoRedoActionRecorder.recordEntityAction(trackedProject, level, capturedChange, now, actionStartedAt);
                 int pendingAfter = buffer.size();
                 this.workingDrafts.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
