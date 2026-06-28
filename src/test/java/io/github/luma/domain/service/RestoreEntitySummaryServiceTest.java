@@ -69,6 +69,49 @@ class RestoreEntitySummaryServiceTest {
     }
 
     @Test
+    void restoreScopeSummaryIncludesCurrentOnlyEntityTypes() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("project.mbp"));
+        this.snapshotWriter.writeFile(layout.entityCheckpointFile("target-entities"), new SnapshotData(
+                "project",
+                Instant.parse("2026-06-28T00:00:00Z"),
+                0,
+                0,
+                List.of(new SnapshotChunkData(
+                        0,
+                        0,
+                        List.of(),
+                        Map.of(),
+                        List.of(entity("minecraft:block_display"))
+                ))
+        ));
+        this.snapshotWriter.writeFile(layout.entityCheckpointFile("current-entities"), new SnapshotData(
+                "project",
+                Instant.parse("2026-06-28T00:00:00Z"),
+                0,
+                0,
+                List.of(new SnapshotChunkData(
+                        0,
+                        0,
+                        List.of(),
+                        Map.of(),
+                        List.of(entity("minecraft:tnt"))
+                ))
+        ));
+
+        List<RestoreEntityTypeCount> counts = this.service.summarize(
+                layout,
+                version("v0001", "target-entities"),
+                version("v0002", "current-entities"),
+                null
+        );
+
+        assertEquals(List.of(
+                new RestoreEntityTypeCount("minecraft:block_display", 1),
+                new RestoreEntityTypeCount("minecraft:tnt", 1)
+        ), counts);
+    }
+
+    @Test
     void selectedAreaSummaryCountsOnlyEntitiesInsideScope() throws Exception {
         ProjectLayout layout = this.writeScopedCheckpoint();
 
@@ -120,8 +163,12 @@ class RestoreEntitySummaryServiceTest {
     }
 
     private static ProjectVersion version(String entityCheckpointId) {
+        return version("v0001", entityCheckpointId);
+    }
+
+    private static ProjectVersion version(String id, String entityCheckpointId) {
         return new ProjectVersion(
-                "v0001",
+                id,
                 "project",
                 "main",
                 "",

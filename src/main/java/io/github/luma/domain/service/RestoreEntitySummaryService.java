@@ -36,6 +36,26 @@ public final class RestoreEntitySummaryService {
 
     public List<RestoreEntityTypeCount> summarize(
             ProjectLayout layout,
+            ProjectVersion targetVersion,
+            ProjectVersion currentVersion,
+            PartialRestoreRequest request
+    ) throws IOException {
+        if (request == null) {
+            return this.summarize(layout, targetVersion, currentVersion, null, null, point -> true);
+        }
+        PartialRestoreRequestResolver.Resolved resolved = this.partialRestoreRequestResolver.resolve(layout, request);
+        return this.summarize(
+                layout,
+                targetVersion,
+                currentVersion,
+                resolved.request().bounds(),
+                resolved.request().restoreMode(),
+                resolved.hardScope()
+        );
+    }
+
+    public List<RestoreEntityTypeCount> summarize(
+            ProjectLayout layout,
             ProjectVersion version,
             PartialRestoreRequest request
     ) throws IOException {
@@ -59,8 +79,33 @@ public final class RestoreEntitySummaryService {
             PartialRestoreMode mode,
             Predicate<BlockPoint> hardScope
     ) throws IOException {
+        return this.toSummary(this.readCounts(layout, version, bounds, mode, hardScope));
+    }
+
+    private List<RestoreEntityTypeCount> summarize(
+            ProjectLayout layout,
+            ProjectVersion targetVersion,
+            ProjectVersion currentVersion,
+            Bounds3i bounds,
+            PartialRestoreMode mode,
+            Predicate<BlockPoint> hardScope
+    ) throws IOException {
+        Map<String, Integer> counts = new LinkedHashMap<>(this.readCounts(layout, targetVersion, bounds, mode, hardScope));
+        if (currentVersion != null && (targetVersion == null || !currentVersion.id().equals(targetVersion.id()))) {
+            this.mergeMax(counts, this.readCounts(layout, currentVersion, bounds, mode, hardScope));
+        }
+        return this.toSummary(counts);
+    }
+
+    private Map<String, Integer> readCounts(
+            ProjectLayout layout,
+            ProjectVersion version,
+            Bounds3i bounds,
+            PartialRestoreMode mode,
+            Predicate<BlockPoint> hardScope
+    ) throws IOException {
         if (layout == null || version == null || version.entityCheckpointId() == null || version.entityCheckpointId().isBlank()) {
-            return List.of();
+            return Map.of();
         }
         Predicate<EntityPayload> filter = this.entityFilter(bounds, mode, hardScope);
         Map<String, Integer> counts = new LinkedHashMap<>();
@@ -75,6 +120,16 @@ public final class RestoreEntitySummaryService {
                 counts.merge(type, 1, Integer::sum);
             }
         }
+        return counts;
+    }
+
+    private void mergeMax(Map<String, Integer> counts, Map<String, Integer> currentCounts) {
+        for (Map.Entry<String, Integer> entry : currentCounts.entrySet()) {
+            counts.merge(entry.getKey(), entry.getValue(), Integer::max);
+        }
+    }
+
+    private List<RestoreEntityTypeCount> toSummary(Map<String, Integer> counts) {
         return counts.entrySet().stream()
                 .map(entry -> new RestoreEntityTypeCount(entry.getKey(), entry.getValue()))
                 .sorted(Comparator.comparingInt(RestoreEntityTypeCount::count).reversed()

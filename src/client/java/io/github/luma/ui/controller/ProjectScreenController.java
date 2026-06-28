@@ -264,13 +264,19 @@ public final class ProjectScreenController {
         try {
             var server = ClientProjectAccess.requireSingleplayerServer(this.client);
             var layout = this.projectService.resolveLayout(server, projectName);
-            ProjectVersion version = this.projectService.loadVersions(server, projectName).stream()
+            var project = this.projectService.loadProject(server, projectName);
+            List<ProjectVersion> versions = this.projectService.loadVersions(server, projectName);
+            List<ProjectVariant> variants = this.projectService.loadVariants(server, projectName);
+            ProjectVersion version = versions.stream()
                     .filter(candidate -> versionId.equals(candidate.id()))
                     .findFirst()
                     .orElse(null);
-            return request == null
-                    ? this.restoreEntitySummaryService.summarize(layout, version)
-                    : this.restoreEntitySummaryService.summarize(layout, version, request);
+            return this.restoreEntitySummaryService.summarize(
+                    layout,
+                    version,
+                    this.activeHeadVersion(versions, variants, project.activeVariantId()),
+                    request
+            );
         } catch (Exception exception) {
             LumaMod.LOGGER.warn(
                     "Failed to summarize restore entities for project {} version {}",
@@ -280,6 +286,25 @@ public final class ProjectScreenController {
             );
             return List.of();
         }
+    }
+
+    private ProjectVersion activeHeadVersion(
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            String activeVariantId
+    ) {
+        String headVersionId = variants.stream()
+                .filter(variant -> variant.id().equals(activeVariantId))
+                .map(ProjectVariant::headVersionId)
+                .findFirst()
+                .orElse("");
+        if (headVersionId.isBlank()) {
+            return null;
+        }
+        return versions.stream()
+                .filter(version -> version.id().equals(headVersionId))
+                .findFirst()
+                .orElse(null);
     }
 
     public String quickRollback(String projectName) {
