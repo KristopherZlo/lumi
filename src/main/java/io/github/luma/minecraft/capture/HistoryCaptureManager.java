@@ -142,13 +142,12 @@ public final class HistoryCaptureManager {
                 CaptureSessionState.DeferredActionContext deferredActionContext =
                         this.deferredActionContext(existingSession, chunk, source);
                 if (!explicitRootSource
-                        && (existingSession == null
-                        || !ELIGIBILITY.canCaptureDeferredPreMutationBaseline(
+                        && !ELIGIBILITY.canCaptureDeferredPreMutationBaseline(
                                 trackedProject.project(),
                                 source,
                                 activeSessionRegion,
                                 actionId(deferredActionContext)
-                        ))) {
+                        )) {
                     continue;
                 }
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {

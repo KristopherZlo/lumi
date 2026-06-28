@@ -124,6 +124,12 @@ final class MutationSourcePolicy {
             boolean activeSessionRegion,
             String actionId
     ) {
+        if (project == null || source == null) {
+            return false;
+        }
+        if (source == WorldMutationSource.GROWTH) {
+            return this.hasCausalAction(actionId);
+        }
         return activeSessionRegion
                 && this.requiresActiveRegionMembership(source)
                 && this.usesDeferredStabilization(project, source)

@@ -129,6 +129,28 @@ class MutationSourcePolicyTest {
     }
 
     @Test
+    void causalGrowthCanCapturePreMutationBaselineBeforeDraftExists() {
+        BuildProject wholeDimension = BuildProject.createWorldWorkspace(
+                "World",
+                "minecraft:overworld",
+                Instant.parse("2026-04-28T10:00:00Z")
+        );
+
+        assertTrue(this.policy.canCaptureDeferredPreMutationBaseline(
+                wholeDimension,
+                WorldMutationSource.GROWTH,
+                false,
+                "bonemeal-growth"
+        ));
+        assertFalse(this.policy.canCaptureDeferredPreMutationBaseline(
+                wholeDimension,
+                WorldMutationSource.GROWTH,
+                false,
+                ""
+        ));
+    }
+
+    @Test
     void deferredPreMutationBaselineRequiresCausalPhysicsInsideActiveSessionRegion() {
         BuildProject wholeDimension = BuildProject.createWorldWorkspace(
                 "World",
