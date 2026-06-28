@@ -273,6 +273,37 @@ class VersionServiceTest {
     }
 
     @Test
+    void wholeDimensionEntityCheckpointChunksIncludeLiveEntityChunks() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("live-entity-checkpoint-chunks.mbp"));
+        VersionSnapshotPlanner planner = new VersionSnapshotPlanner(
+                new BaselineChunkRepository(),
+                this.patchMetaRepository
+        );
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                instant(10),
+                instant(20),
+                List.of(change(1, "minecraft:stone", "minecraft:gold_block")),
+                List.of()
+        );
+
+        List<ChunkPoint> chunks = planner.collectEntityCheckpointChunks(
+                layout,
+                BuildProject.createWorldWorkspace("project", "minecraft:overworld", instant(0)),
+                List.of(),
+                draft,
+                List.of(new ChunkPoint(12, -3))
+        );
+
+        assertTrue(chunks.contains(new ChunkPoint(0, 0)));
+        assertTrue(chunks.contains(new ChunkPoint(12, -3)));
+    }
+
+    @Test
     void failedOperationDraftWriteKeepsOperationDraftHidden() throws Exception {
         VersionService service = new VersionService();
         RecoveryRepository recoveryRepository = new RecoveryRepository();

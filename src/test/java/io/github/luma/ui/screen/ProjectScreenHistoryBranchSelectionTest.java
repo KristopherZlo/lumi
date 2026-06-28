@@ -169,4 +169,13 @@ class ProjectScreenHistoryBranchSelectionTest {
                 "Partial restore apply must go through restore confirmation so entity types can be excluded"
         );
     }
+
+    @Test
+    void restoreEntityTypeSelectionUsesCheckboxComponent() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/RestoreConfirmationDialogView.java"));
+
+        assertTrue(source.contains("UIComponents.checkbox"));
+        assertFalse(source.contains("\"[x] \""));
+        assertFalse(source.contains("\"[ ] \""));
+    }
 }

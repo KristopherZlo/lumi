@@ -245,7 +245,7 @@ Hard rules:
 - Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
-- Saved commits keep entity checkpoints for entities present at save time. Restore can skip selected entity types for a single run without changing the saved commit.
+- Saved commits keep entity checkpoints for entities present at save time. Whole-dimension saves include chunks with currently loaded live non-player entities, and player-spawned non-player entities make durable pending work so entity-only saves are possible. Restore can skip selected entity types for a single run without changing the saved commit.
 - Restore confirmation entity summaries count only entities inside the resolved restore scope for zones and selected/outside partial restores.
 - Live undo may track transient entities to clean up active fallout, but redo replays final deltas instead of respawning transient primed TNT; recovery drafts and saved commits must not persist undo-only transient entities.
 

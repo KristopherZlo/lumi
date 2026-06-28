@@ -28,7 +28,9 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.VersionSaveTiming;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorkZoneCell;
+import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.LiveEntityChunkCollector;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
 import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -64,6 +66,7 @@ public final class VersionService {
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final SnapshotCaptureService snapshotCaptureService = new SnapshotCaptureService();
+    private final LiveEntityChunkCollector liveEntityChunkCollector = new LiveEntityChunkCollector();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
@@ -308,6 +311,7 @@ public final class VersionService {
 
         sectionStartedAt = System.nanoTime();
         progressSink.update(OperationStage.PREPARING, 0, 0, "Isolating pending changes");
+        EntityMutationTracker.drainPendingSpawns(level.getServer());
         Optional<TrackedChangeBuffer> liveSession = HistoryCaptureManager.getInstance()
                 .consumeWorkingDraft(level.getServer(), project.id().toString());
         recordTiming(timing, VersionSaveTiming.CONSUME_WORKING_DRAFT, sectionStartedAt);
@@ -608,7 +612,13 @@ public final class VersionService {
                     "SnapshotCaptureService.captureEntityCheckpoint",
                     "project=" + project.name()
             )) {
-                entityCheckpointChunks = this.snapshotPlanner.collectSnapshotChunks(layout, project, versions, draft);
+                entityCheckpointChunks = this.snapshotPlanner.collectEntityCheckpointChunks(
+                        layout,
+                        project,
+                        versions,
+                        draft,
+                        this.liveEntityChunkCollector.collect(level)
+                );
                 this.snapshotCaptureService.captureEntityCheckpoint(
                         layout,
                         project.id().toString(),

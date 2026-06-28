@@ -110,6 +110,15 @@ public final class EntityMutationCapturePolicy {
         return false;
     }
 
+    boolean shouldInspectSpawnMutation(WorldMutationSource source, String entityType) {
+        if (source == WorldMutationSource.PLAYER) {
+            return entityType != null
+                    && !entityType.isBlank()
+                    && !EXCLUDED_ENTITY_TYPES.contains(entityType);
+        }
+        return this.shouldInspectMutation(source, entityType);
+    }
+
     boolean shouldInspectExternalToolFallback(String entityType) {
         return FALLBACK_INSPECTED_ENTITY_TYPES.contains(entityType)
                 || this.placedEntityHistoryPolicy.shouldPersist(entityType);

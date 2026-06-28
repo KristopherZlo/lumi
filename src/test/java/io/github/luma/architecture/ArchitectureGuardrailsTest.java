@@ -220,6 +220,25 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
+    void saveVersionDraftIsolationDrainsPendingEntitySpawnsFirst() throws IOException {
+        Path versionService = MAIN_SOURCES.resolve("io/github/luma/domain/service/VersionService.java");
+        String source = Files.readString(versionService);
+
+        String drainCall = "EntityMutationTracker.drainPendingSpawns(level.getServer());";
+        int drainIndex = source.indexOf(drainCall);
+        int consumeDraftIndex = source.indexOf("consumeWorkingDraft(level.getServer(), project.id().toString())");
+
+        assertTrue(
+                drainIndex >= 0,
+                "Save must drain pending entity spawn captures before isolating the durable draft"
+        );
+        assertTrue(
+                drainIndex < consumeDraftIndex,
+                "Save must not consume the working draft before pending entity spawns are attached"
+        );
+    }
+
+    @Test
     void pendingEntitySpawnQueueKeepsInitialPayloadForImmediateUndo() throws IOException {
         Path queue = MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/EntitySpawnCaptureQueue.java");
         Path tracker = MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/EntityMutationTracker.java");

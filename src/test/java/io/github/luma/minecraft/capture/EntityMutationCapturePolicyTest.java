@@ -90,6 +90,14 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
+    void playerSpawnInspectsOrdinaryEntitiesForDurableHistory() {
+        assertTrue(this.policy.shouldInspectSpawnMutation(WorldMutationSource.PLAYER, "minecraft:llama"));
+        assertTrue(this.policy.shouldInspectSpawnMutation(WorldMutationSource.PLAYER, "minecraft:tnt"));
+        assertFalse(this.policy.shouldInspectSpawnMutation(WorldMutationSource.PLAYER, "minecraft:player"));
+        assertFalse(this.policy.shouldInspectSpawnMutation(WorldMutationSource.ENTITY, "minecraft:llama"));
+    }
+
+    @Test
     void blockUpdateInspectionSkipsTransientEntitiesForDurableHistory() {
         assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.BLOCK_UPDATE, "minecraft:minecart"));
         assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.BLOCK_UPDATE, "minecraft:chest_minecart"));

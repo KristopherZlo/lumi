@@ -2,6 +2,7 @@ package io.github.luma.ui.screen.section;
 
 import io.github.luma.ui.LumaUi;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
@@ -97,15 +98,13 @@ public final class RestoreConfirmationDialogView {
         if (model.entityListExpanded()) {
             FlowLayout list = LumaUi.revealGroup();
             for (EntityTypeOption option : model.entityTypes()) {
-                ButtonComponent toggle = LumaUi.button(
-                        Component.literal((option.included() ? "[x] " : "[ ] ")
-                                + option.entityType()
-                                + " (x"
-                                + option.count()
-                                + ")"),
-                        button -> this.actions.toggleEntityType(option.entityType())
-                );
-                toggle.active(!model.operationActive());
+                var toggle = UIComponents.checkbox(Component.literal(option.entityType() + " (x" + option.count() + ")"));
+                toggle.checked(option.included());
+                toggle.onChanged(checked -> {
+                    if (!model.operationActive()) {
+                        this.actions.toggleEntityType(option.entityType());
+                    }
+                });
                 list.child(toggle);
             }
             section.child(list);

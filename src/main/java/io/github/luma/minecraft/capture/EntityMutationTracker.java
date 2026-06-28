@@ -89,7 +89,7 @@ public final class EntityMutationTracker {
         String entityType = entityType(entity);
         WorldMutationSource source = WorldMutationContext.currentSource();
         ObservedExternalToolOperation operation = null;
-        if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
+        if (!CAPTURE_POLICY.shouldInspectSpawnMutation(source, entityType)) {
             if (CAPTURE_POLICY.shouldInspectUndoOnlyMutation(source, entityType)) {
                 SPAWN_CAPTURE_QUEUE.enqueue(level, entity, CaptureFrame.current(null), true);
                 return;

@@ -158,6 +158,22 @@ final class VersionSnapshotPlanner {
         return merged;
     }
 
+    List<ChunkPoint> collectEntityCheckpointChunks(
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            RecoveryDraft draft,
+            List<ChunkPoint> liveEntityChunks
+    ) throws IOException {
+        if (!project.tracksWholeDimension()) {
+            return this.collectSnapshotChunks(layout, project, versions, draft);
+        }
+        return ChunkSelectionFactory.merge(
+                this.collectSnapshotChunks(layout, project, versions, draft),
+                liveEntityChunks == null ? List.of() : liveEntityChunks
+        );
+    }
+
     private boolean exceedsSnapshotVolumeThreshold(
             BuildProject project,
             ProjectLayout layout,
