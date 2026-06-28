@@ -292,6 +292,32 @@ class PartialRestoreTargetStatePlannerTest {
     }
 
     @Test
+    void entityCheckpointOverridesPatchEntityDeltas() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        BuildProject project = boundedProject();
+        EntityPayload spawnedByPatch = entity("00000000-0000-0000-0000-000000000005", 1.0D);
+        writeSnapshot(layout, "current", Map.of(), List.of());
+        writeSnapshot(layout, "target-root", Map.of(), List.of());
+        this.snapshotWriter.writeFile(layout.entityCheckpointFile("entity-checkpoint-target"), snapshot(Map.of(), List.of()));
+        writePatch(layout, "target-patch", "target",
+                List.of(),
+                List.of(new StoredEntityChange(spawnedByPatch.entityId(), spawnedByPatch.entityType(), null, spawnedByPatch)));
+        ProjectVersion current = version("current", "", "current", List.of(), VersionKind.INITIAL);
+        ProjectVersion targetRoot = version("target-root", "", "target-root", List.of(), VersionKind.INITIAL);
+        ProjectVersion target = version(
+                "target",
+                "target-root",
+                "",
+                "entity-checkpoint-target",
+                List.of("target-patch"),
+                VersionKind.MANUAL);
+
+        PartialRestoreTargetStatePlanner.Plan plan = this.plan(layout, project, List.of(current, targetRoot, target), current, target);
+
+        assertEquals(List.of(), plan.entityChanges());
+    }
+
+    @Test
     void rejectsMissingSnapshotOrBaselineTargetStateForBoundedProject() {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         BuildProject project = boundedProject();
@@ -386,12 +412,23 @@ class PartialRestoreTargetStatePlannerTest {
             String snapshotId,
             List<String> patchIds,
             VersionKind kind) {
+        return version(id, parentVersionId, snapshotId, "", patchIds, kind);
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String parentVersionId,
+            String snapshotId,
+            String entityCheckpointId,
+            List<String> patchIds,
+            VersionKind kind) {
         return new ProjectVersion(
                 id,
                 "project",
                 "main",
                 parentVersionId,
                 snapshotId,
+                entityCheckpointId,
                 patchIds,
                 kind,
                 "tester",

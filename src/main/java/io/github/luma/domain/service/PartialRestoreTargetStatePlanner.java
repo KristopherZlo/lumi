@@ -318,7 +318,11 @@ final class PartialRestoreTargetStatePlanner {
             this.materializeBaselineGaps(layout, scope, state, seededChunks);
         }
         this.requireSeededChunks(scope, seededChunks, version);
-        this.applyPatchChain(layout, chain.patchVersions(), scope, state);
+        boolean entityCheckpoint = this.hasEntityCheckpoint(version);
+        if (entityCheckpoint) {
+            this.materializeEntityCheckpoint(layout, version, scope, state);
+        }
+        this.applyPatchChain(layout, chain.patchVersions(), scope, state, !entityCheckpoint);
         return state;
     }
 
@@ -456,7 +460,8 @@ final class PartialRestoreTargetStatePlanner {
             ProjectLayout layout,
             List<ProjectVersion> versions,
             Scope scope,
-            VersionState state
+            VersionState state,
+            boolean applyEntityChanges
     ) throws IOException {
         for (ProjectVersion version : versions) {
             for (String patchId : version.patchIds()) {
@@ -467,6 +472,9 @@ final class PartialRestoreTargetStatePlanner {
                     if (scope.includesBlock(change.pos())) {
                         state.blocks.put(change.pos(), change.newValue());
                     }
+                }
+                if (!applyEntityChanges) {
+                    continue;
                 }
                 for (StoredEntityChange change : changes.entityChanges()) {
                     if (!scope.entityMayMatter(change)) {
@@ -480,6 +488,33 @@ final class PartialRestoreTargetStatePlanner {
                 }
             }
         }
+    }
+
+    private void materializeEntityCheckpoint(
+            ProjectLayout layout,
+            ProjectVersion version,
+            Scope scope,
+            VersionState state
+    ) throws IOException {
+        state.entities.entrySet().removeIf(entry -> scope.includesEntityChunk(entry.getValue()));
+        SnapshotData checkpoint = this.snapshotReader.readFile(
+                layout.entityCheckpointFile(version.entityCheckpointId()),
+                scope.chunks()
+        );
+        for (SnapshotChunkData chunk : checkpoint.chunks()) {
+            if (!scope.includesChunk(chunk.chunk())) {
+                continue;
+            }
+            for (EntityPayload entity : chunk.entitySnapshots()) {
+                if (entity != null && !entity.entityId().isBlank() && scope.includesEntityChunk(entity)) {
+                    state.entities.put(entity.entityId(), entity);
+                }
+            }
+        }
+    }
+
+    private boolean hasEntityCheckpoint(ProjectVersion version) {
+        return version != null && version.entityCheckpointId() != null && !version.entityCheckpointId().isBlank();
     }
 
     private void applyPendingDraft(VersionState state, RecoveryDraft pendingDraft, Scope scope) {
