@@ -178,4 +178,19 @@ class ProjectScreenHistoryBranchSelectionTest {
         assertFalse(source.contains("\"[x] \""));
         assertFalse(source.contains("\"[ ] \""));
     }
+
+    @Test
+    void restoreConfirmationDoesNotReplayModalOpenAnimationOnCheckboxToggle() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/RestoreConfirmationDialogView.java"));
+        String ui = Files.readString(Path.of("src/client/java/io/github/luma/ui/LumaUi.java"));
+
+        assertTrue(
+                source.contains("LumaUi.modalFrame(Math.max(280, Math.min(420, model.width() - 24)), false)"),
+                "Restore confirmation rebuilds while checkbox state changes, so its frame must not restart open animation"
+        );
+        assertTrue(
+                ui.contains("modalFrame(int width, boolean animate)"),
+                "LumaUi should expose the existing modal frame without forcing animation"
+        );
+    }
 }

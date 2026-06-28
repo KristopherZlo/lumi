@@ -29,7 +29,7 @@ public final class RestoreConfirmationDialogView {
         overlay.horizontalAlignment(HorizontalAlignment.CENTER);
         overlay.verticalAlignment(VerticalAlignment.CENTER);
 
-        FlowLayout frame = LumaUi.modalFrame(Math.max(280, Math.min(420, model.width() - 24)));
+        FlowLayout frame = LumaUi.modalFrame(Math.max(280, Math.min(420, model.width() - 24)), false);
         frame.child(LumaUi.value(model.title()));
         frame.child(LumaUi.caption(model.help()));
         if (model.safetySnapshot()) {

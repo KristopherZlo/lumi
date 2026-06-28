@@ -64,11 +64,15 @@ public final class LumaUi {
     }
 
     public static FlowLayout modalFrame(int width) {
+        return modalFrame(width, true);
+    }
+
+    public static FlowLayout modalFrame(int width, boolean animate) {
         FlowLayout layout = UIContainers.verticalFlow(Sizing.fixed(width), Sizing.content());
         layout.surface(windowSurface());
         layout.padding(Insets.of(6));
         layout.gap(5);
-        return animateOpen(layout);
+        return animate ? animateOpen(layout) : layout;
     }
 
     public static <T extends UIComponent> T animateOpen(T component) {
