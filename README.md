@@ -224,6 +224,7 @@ Important records:
 - `patches/*.meta.json`: patch metadata, indexes, and stats
 - `patches/*.bin.lz4`: chunk-addressable block/entity deltas
 - `snapshots/*.bin.lz4`: checkpoint anchors
+- `entity-checkpoints/*.bin.lz4`: per-save entity snapshots used as the authoritative restore target
 - `preview-requests/*.json`: queued client preview work
 - `recovery/draft.bin.lz4`: compacted recovery draft
 - `recovery/draft.wal.lz4`: append-only recovery draft log
@@ -244,6 +245,7 @@ Hard rules:
 - Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
+- Saved commits keep entity checkpoints for entities present at save time. Restore can skip selected entity types for a single run without changing the saved commit.
 - Live undo may track transient entities to clean up active fallout, but redo replays final deltas instead of respawning transient primed TNT; recovery drafts and saved commits must not persist undo-only transient entities.
 
 ### Diagnostics
