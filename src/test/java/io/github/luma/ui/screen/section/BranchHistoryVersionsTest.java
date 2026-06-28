@@ -31,8 +31,8 @@ class BranchHistoryVersionsTest {
                 branch
         );
 
-        assertEquals(List.of("v0002"), entries.stream().map(entry -> entry.version().id()).toList());
-        assertEquals("feature", entries.getFirst().variant().id());
+        assertEquals(List.of("v0002", "v0001"), entries.stream().map(entry -> entry.version().id()).toList());
+        assertEquals(List.of("feature", "feature"), entries.stream().map(entry -> entry.variant().id()).toList());
         assertTrue(entries.getFirst().current());
     }
 
@@ -51,9 +51,29 @@ class BranchHistoryVersionsTest {
                 branch
         );
 
-        assertEquals(List.of("v0003", "v0002"), entries.stream().map(entry -> entry.version().id()).toList());
-        assertEquals(List.of("feature", "feature"), entries.stream().map(entry -> entry.variant().id()).toList());
-        assertEquals(List.of(true, false), entries.stream().map(BranchHistoryVersions.Entry::current).toList());
+        assertEquals(List.of("v0003", "v0002", "v0001"), entries.stream().map(entry -> entry.version().id()).toList());
+        assertEquals(List.of("feature", "feature", "feature"), entries.stream().map(entry -> entry.variant().id()).toList());
+        assertEquals(List.of(true, false, false), entries.stream().map(BranchHistoryVersions.Entry::current).toList());
+    }
+
+    @Test
+    void includesReachableParentCommitsFromBranchHead() {
+        ProjectVariant branch = new ProjectVariant("feature", "Feature", "v0003", "v0003", false, instant(180));
+        BranchHistoryVersions history = new BranchHistoryVersions();
+
+        List<BranchHistoryVersions.Entry> entries = history.forVariant(
+                List.of(
+                        version("v0003", "main", "v0002", 180),
+                        version("v0002", "main", "v0001", 120),
+                        version("v0001", "main", "", 60)
+                ),
+                List.of(new ProjectVariant("main", "Main", "v0001", "v0003", true, instant(0)), branch),
+                branch
+        );
+
+        assertEquals(List.of("v0003", "v0002", "v0001"), entries.stream().map(entry -> entry.version().id()).toList());
+        assertEquals(List.of("feature", "feature", "feature"), entries.stream().map(entry -> entry.variant().id()).toList());
+        assertEquals(List.of(true, false, false), entries.stream().map(BranchHistoryVersions.Entry::current).toList());
     }
 
     @Test

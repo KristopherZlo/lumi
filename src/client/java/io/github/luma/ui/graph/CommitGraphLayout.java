@@ -66,10 +66,10 @@ public final class CommitGraphLayout {
         int nextLane = 0;
 
         for (ProjectVariant variant : orderedVariants) {
-            if (!visibleVariantIds.contains(variant.id())) {
+            if (variant.headVersionId() == null || variant.headVersionId().isBlank()) {
                 continue;
             }
-            if (variant.headVersionId() == null || variant.headVersionId().isBlank()) {
+            if (!visibleVariantIds.contains(variant.id()) && !versionMap.containsKey(variant.headVersionId())) {
                 continue;
             }
             headVariantsByVersion.computeIfAbsent(variant.headVersionId(), ignored -> new ArrayList<>()).add(variant.id());
