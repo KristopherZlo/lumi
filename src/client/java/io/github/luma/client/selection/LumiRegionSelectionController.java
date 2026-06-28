@@ -125,6 +125,7 @@ public final class LumiRegionSelectionController {
         }
 
         Optional<BlockPos> target = this.raycaster.findTargetBlock(client);
+        Vec3 eye = client.player.getEyePosition(1.0F);
         Vec3 view = client.player.getViewVector(1.0F).normalize();
         LumiRegionSelectionState.Side side = SelectionResizeSideResolver.resolve(
                 bounds.get(),
@@ -132,7 +133,7 @@ public final class LumiRegionSelectionController {
                 view
         );
         double scroll = verticalAmount == 0.0D ? horizontalAmount : verticalAmount;
-        state.get().resize(side, scroll > 0.0D ? 1 : -1);
+        state.get().resize(side, SelectionResizeSideResolver.amountForScroll(bounds.get(), eye, view, scroll));
         this.notify(client.player, "luma.selection.resized");
         return true;
     }

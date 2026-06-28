@@ -15,6 +15,9 @@ public final class LumiRegionSelectionState {
     private BlockPoint cornerB;
     private final Deque<Snapshot> undo = new ArrayDeque<>();
     private final Deque<Snapshot> redo = new ArrayDeque<>();
+    private Side lastResizeSide;
+    private int lastResizeAmount;
+    private boolean lastResizeCornerA;
 
     public enum Side {
         MIN_X,
@@ -30,7 +33,10 @@ public final class LumiRegionSelectionState {
     }
 
     public void toggleMode() {
-        this.change(() -> this.mode = this.mode.toggled());
+        this.change(() -> {
+            this.mode = this.mode.toggled();
+            this.clearResizeDrag();
+        });
     }
 
     public void selectPrimary(BlockPoint point) {
@@ -43,6 +49,7 @@ public final class LumiRegionSelectionState {
             } else {
                 this.cornerA = point;
             }
+            this.clearResizeDrag();
         });
     }
 
@@ -56,6 +63,7 @@ public final class LumiRegionSelectionState {
             } else {
                 this.cornerB = point;
             }
+            this.clearResizeDrag();
         });
     }
 
@@ -63,13 +71,17 @@ public final class LumiRegionSelectionState {
         if (point == null) {
             return;
         }
-        this.change(() -> this.resetToInternal(point));
+        this.change(() -> {
+            this.resetToInternal(point);
+            this.clearResizeDrag();
+        });
     }
 
     public void clear() {
         this.change(() -> {
             this.cornerA = null;
             this.cornerB = null;
+            this.clearResizeDrag();
         });
     }
 
@@ -83,22 +95,23 @@ public final class LumiRegionSelectionState {
         }
         Bounds3i bounds = current.get();
         this.change(() -> {
-            int minX = bounds.min().x();
-            int minY = bounds.min().y();
-            int minZ = bounds.min().z();
-            int maxX = bounds.max().x();
-            int maxY = bounds.max().y();
-            int maxZ = bounds.max().z();
-            switch (side) {
-                case MIN_X -> minX = Math.min(maxX, minX - amount);
-                case MAX_X -> maxX = Math.max(minX, maxX + amount);
-                case MIN_Y -> minY = Math.min(maxY, minY - amount);
-                case MAX_Y -> maxY = Math.max(minY, maxY + amount);
-                case MIN_Z -> minZ = Math.min(maxZ, minZ - amount);
-                case MAX_Z -> maxZ = Math.max(minZ, maxZ + amount);
+            if (this.cornerA == null) {
+                this.cornerA = bounds.min();
             }
-            this.cornerA = new BlockPoint(minX, minY, minZ);
-            this.cornerB = new BlockPoint(maxX, maxY, maxZ);
+            if (this.cornerB == null) {
+                this.cornerB = bounds.max();
+            }
+            boolean moveCornerA = this.lastResizeSide == side && this.lastResizeAmount == amount
+                    ? this.lastResizeCornerA
+                    : this.cornerAOn(side);
+            if (moveCornerA) {
+                this.cornerA = move(this.cornerA, side, amount);
+            } else {
+                this.cornerB = move(this.cornerB, side, amount);
+            }
+            this.lastResizeSide = side;
+            this.lastResizeAmount = amount;
+            this.lastResizeCornerA = moveCornerA;
         });
     }
 
@@ -177,6 +190,35 @@ public final class LumiRegionSelectionState {
         this.mode = snapshot.mode();
         this.cornerA = snapshot.cornerA();
         this.cornerB = snapshot.cornerB();
+        this.clearResizeDrag();
+    }
+
+    private boolean cornerAOn(Side side) {
+        return switch (side) {
+            case MIN_X -> this.cornerA.x() <= this.cornerB.x();
+            case MAX_X -> this.cornerA.x() >= this.cornerB.x();
+            case MIN_Y -> this.cornerA.y() <= this.cornerB.y();
+            case MAX_Y -> this.cornerA.y() >= this.cornerB.y();
+            case MIN_Z -> this.cornerA.z() <= this.cornerB.z();
+            case MAX_Z -> this.cornerA.z() >= this.cornerB.z();
+        };
+    }
+
+    private static BlockPoint move(BlockPoint point, Side side, int amount) {
+        return switch (side) {
+            case MIN_X -> new BlockPoint(point.x() - amount, point.y(), point.z());
+            case MAX_X -> new BlockPoint(point.x() + amount, point.y(), point.z());
+            case MIN_Y -> new BlockPoint(point.x(), point.y() - amount, point.z());
+            case MAX_Y -> new BlockPoint(point.x(), point.y() + amount, point.z());
+            case MIN_Z -> new BlockPoint(point.x(), point.y(), point.z() - amount);
+            case MAX_Z -> new BlockPoint(point.x(), point.y(), point.z() + amount);
+        };
+    }
+
+    private void clearResizeDrag() {
+        this.lastResizeSide = null;
+        this.lastResizeAmount = 0;
+        this.lastResizeCornerA = false;
     }
 
     private static Bounds3i normalize(BlockPoint first, BlockPoint second) {

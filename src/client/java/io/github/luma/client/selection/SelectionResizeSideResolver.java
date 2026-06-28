@@ -20,6 +20,11 @@ final class SelectionResizeSideResolver {
         return LumiRegionSelectionState.Side.MAX_Z;
     }
 
+    static int amountForScroll(Bounds3i bounds, Vec3 eye, Vec3 view, double scroll) {
+        int amount = scroll < 0.0D ? 1 : -1;
+        return looksTowardSelection(bounds, eye, view) ? amount : -amount;
+    }
+
     private static LumiRegionSelectionState.Side outsideSide(Bounds3i bounds, BlockPoint target) {
         Candidate best = null;
         best = closer(best, target.x() < bounds.min().x(), bounds.min().x() - target.x(), LumiRegionSelectionState.Side.MIN_X);
@@ -56,6 +61,18 @@ final class SelectionResizeSideResolver {
             return view.y >= 0.0D ? LumiRegionSelectionState.Side.MIN_Y : LumiRegionSelectionState.Side.MAX_Y;
         }
         return view.z >= 0.0D ? LumiRegionSelectionState.Side.MIN_Z : LumiRegionSelectionState.Side.MAX_Z;
+    }
+
+    private static boolean looksTowardSelection(Bounds3i bounds, Vec3 eye, Vec3 view) {
+        if (bounds == null || eye == null || view == null) {
+            return true;
+        }
+        Vec3 center = new Vec3(
+                (bounds.min().x() + bounds.max().x() + 1.0D) / 2.0D,
+                (bounds.min().y() + bounds.max().y() + 1.0D) / 2.0D,
+                (bounds.min().z() + bounds.max().z() + 1.0D) / 2.0D
+        );
+        return center.subtract(eye).dot(view) >= 0.0D;
     }
 
     private static Candidate closer(

@@ -47,4 +47,32 @@ class SelectionResizeSideResolverTest {
 
         assertEquals(LumiRegionSelectionState.Side.MAX_Z, side);
     }
+
+    @Test
+    void scrollDownPullsTowardPlayerWhenLookingAtSelection() {
+        Bounds3i bounds = new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(10, 74, 10));
+
+        int amount = SelectionResizeSideResolver.amountForScroll(
+                bounds,
+                new Vec3(5.0D, 69.0D, -10.0D),
+                new Vec3(0.0D, 0.0D, 1.0D),
+                -1.0D
+        );
+
+        assertEquals(1, amount);
+    }
+
+    @Test
+    void scrollDownStillPullsTowardPlayerWhenLookingAwayFromSelection() {
+        Bounds3i bounds = new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(10, 74, 10));
+
+        int amount = SelectionResizeSideResolver.amountForScroll(
+                bounds,
+                new Vec3(5.0D, 69.0D, -10.0D),
+                new Vec3(0.0D, 0.0D, -1.0D),
+                -1.0D
+        );
+
+        assertEquals(-1, amount);
+    }
 }
