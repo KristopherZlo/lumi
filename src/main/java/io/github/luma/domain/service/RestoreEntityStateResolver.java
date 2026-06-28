@@ -337,6 +337,9 @@ final class RestoreEntityStateResolver {
         if (targetVersion == null || selectedChunks == null) {
             return Map.of();
         }
+        RestoreEntityTypeSelection selection = entityTypeSelection == null
+                ? RestoreEntityTypeSelection.includeAll()
+                : entityTypeSelection;
 
         Set<ChunkPoint> selected = new LinkedHashSet<>();
         for (ChunkPoint chunk : selectedChunks) {
@@ -351,7 +354,7 @@ final class RestoreEntityStateResolver {
         RestoreChain chain = this.restorePlanBuilder.resolveChain(versions, targetVersion);
         Map<String, EntityPayload> states = new LinkedHashMap<>();
         if (this.hasEntityCheckpoint(targetVersion)) {
-            this.seedEntityCheckpointStates(layout, targetVersion, null, selected, states, entityTypeSelection);
+            this.seedEntityCheckpointStates(layout, targetVersion, null, selected, states, selection);
             return states;
         }
         if (chain.anchor().snapshotId() != null && !chain.anchor().snapshotId().isBlank()) {
@@ -363,12 +366,18 @@ final class RestoreEntityStateResolver {
                     continue;
                 }
                 for (EntityPayload entity : chunk.entitySnapshots()) {
+                    if (entity == null || !selection.includes(entity.entityType())) {
+                        continue;
+                    }
                     states.put(entity.entityId(), entity);
                 }
             }
         }
         for (ProjectVersion version : chain.patchVersions()) {
             for (StoredEntityChange change : this.payloadLoader.loadVersionEntityChangesForChunks(layout, version, selected)) {
+                if (change == null || !selection.includes(change.entityType())) {
+                    continue;
+                }
                 if (change.newValue() == null) {
                     states.remove(change.entityId());
                 } else {

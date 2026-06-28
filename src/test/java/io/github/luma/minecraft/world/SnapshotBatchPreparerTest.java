@@ -136,6 +136,41 @@ class SnapshotBatchPreparerTest {
     }
 
     @Test
+    void snapshotEntityRestoreCanExcludeSelectedEntityTypes() throws Exception {
+        CountingBlockStateDecoder decoder = new CountingBlockStateDecoder();
+        SnapshotBatchPreparer preparer = new SnapshotBatchPreparer(decoder);
+        SnapshotData snapshot = new SnapshotData(
+                "project",
+                Instant.EPOCH,
+                0,
+                15,
+                List.of(new SnapshotChunkData(
+                        0,
+                        0,
+                        List.of(),
+                        null,
+                        List.of(
+                                new EntityPayload(entityTag("minecraft:tnt", "00000000-0000-0000-0000-000000000081")),
+                                new EntityPayload(entityTag("minecraft:block_display", "00000000-0000-0000-0000-000000000082"))
+                        )
+                ))
+        );
+
+        List<PreparedChunkBatch> batches = preparer.prepare(snapshot, null, List.of("minecraft:tnt"));
+
+        assertEquals(1, batches.size());
+        assertEquals(true, batches.getFirst().entityBatch().replaceEntities());
+        assertEquals(1, batches.getFirst().entityBatch().entitiesToUpdate().size());
+        assertEquals("minecraft:block_display", batches.getFirst()
+                .entityBatch()
+                .entitiesToUpdate()
+                .getFirst()
+                .getString("id")
+                .orElse(""));
+        assertEquals(true, batches.getFirst().entityBatch().excludedEntityTypes().contains("minecraft:tnt"));
+    }
+
+    @Test
     void selectedSnapshotPositionsStaySparseAndUseAirForMissingSections() throws Exception {
         CountingBlockStateDecoder decoder = new CountingBlockStateDecoder();
         SnapshotBatchPreparer preparer = new SnapshotBatchPreparer(decoder);

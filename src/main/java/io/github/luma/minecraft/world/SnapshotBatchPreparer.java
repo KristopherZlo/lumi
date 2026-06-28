@@ -10,6 +10,7 @@ import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.domain.model.SnapshotSectionData;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,11 +42,19 @@ public final class SnapshotBatchPreparer {
     }
 
     public List<PreparedChunkBatch> prepare(SnapshotData snapshot, ServerLevel level) throws IOException {
+        return this.prepare(snapshot, level, List.of());
+    }
+
+    public List<PreparedChunkBatch> prepare(
+            SnapshotData snapshot,
+            ServerLevel level,
+            Collection<String> excludedEntityTypes
+    ) throws IOException {
         List<PreparedChunkBatch> batches = new ArrayList<>();
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
         BlockState airState = blockStateDecoder.decode(level, AIR_TAG);
         for (SnapshotChunkData chunk : snapshot.chunks()) {
-            batches.add(this.prepareChunk(snapshot, chunk, level, blockStateDecoder, airState));
+            batches.add(this.prepareChunk(snapshot, chunk, level, blockStateDecoder, airState, excludedEntityTypes));
         }
         return batches;
     }
@@ -98,7 +107,8 @@ public final class SnapshotBatchPreparer {
             SnapshotChunkData chunk,
             ServerLevel level,
             BlockStateDecoder blockStateDecoder,
-            BlockState airState
+            BlockState airState,
+            Collection<String> excludedEntityTypes
     ) throws IOException {
         Map<Integer, SnapshotSectionData> sections = new HashMap<>();
         for (SnapshotSectionData section : chunk.sections()) {
@@ -172,7 +182,7 @@ public final class SnapshotBatchPreparer {
                 chunkPoint,
                 List.of(),
                 nativeSections,
-                this.prepareEntitySnapshots(chunk.entitySnapshots())
+                this.prepareEntitySnapshots(chunk.entitySnapshots(), excludedEntityTypes)
         );
     }
 
@@ -332,15 +342,26 @@ public final class SnapshotBatchPreparer {
         return chunkX + ":" + chunkZ;
     }
 
-    private EntityBatch prepareEntitySnapshots(List<EntityPayload> entitySnapshots) {
+    private EntityBatch prepareEntitySnapshots(
+            List<EntityPayload> entitySnapshots,
+            Collection<String> excludedEntityTypes
+    ) {
         if (entitySnapshots == null || entitySnapshots.isEmpty()) {
-            return EntityBatch.replaceEntities(List.of());
+            return EntityBatch.replaceEntities(List.of(), excludedEntityTypes);
         }
         return EntityBatch.replaceEntities(
                 entitySnapshots.stream()
+                        .filter(entity -> !this.excluded(entity, excludedEntityTypes))
                         .map(EntityPayload::copyTag)
-                        .toList()
+                        .toList(),
+                excludedEntityTypes
         );
+    }
+
+    private boolean excluded(EntityPayload entity, Collection<String> excludedEntityTypes) {
+        return entity != null
+                && excludedEntityTypes != null
+                && excludedEntityTypes.contains(entity.entityType());
     }
 
     private static CompoundTag createAirTag() {

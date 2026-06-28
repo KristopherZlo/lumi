@@ -34,6 +34,7 @@ import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
+import io.github.luma.minecraft.world.PreparedWorldChangeBatches;
 import io.github.luma.minecraft.world.PreparedSectionApplyBatch;
 import io.github.luma.minecraft.world.SectionApplyPath;
 import io.github.luma.minecraft.world.SectionApplySafetyProfile;
@@ -120,6 +121,24 @@ class RestoreServiceTest {
 
         assertEquals(1, collapsed.size());
         assertEquals(1, collapsed.getFirst().entityBatch().entitiesToSpawn().size());
+    }
+
+    @Test
+    void preparedBatchCollapserKeepsEntityTypeExclusions() {
+        CompoundTag entity = new CompoundTag();
+        entity.putString("id", "minecraft:block_display");
+        entity.putString("UUID", "00000000-0000-0000-0000-000000000051");
+        PreparedChunkBatch batch = new PreparedChunkBatch(
+                new ChunkPoint(2, 3),
+                List.of(),
+                EntityBatch.replaceEntities(List.of(entity), List.of("minecraft:tnt"))
+        );
+
+        List<PreparedChunkBatch> collapsed = new PreparedChunkBatchCollapser().collapse(List.of(batch));
+
+        assertEquals(1, collapsed.size());
+        assertEquals(true, collapsed.getFirst().entityBatch().replaceEntities());
+        assertTrue(collapsed.getFirst().entityBatch().excludedEntityTypes().contains("minecraft:tnt"));
     }
 
     @Test
@@ -320,6 +339,47 @@ class RestoreServiceTest {
         );
 
         assertTrue(decoded.isPresent());
+    }
+
+    @Test
+    void directRestoreFiltersExcludedEntityPatchDeltas(@TempDir Path tempDir) throws Throwable {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        String tntId = "00000000-0000-0000-0000-000000000090";
+        String displayId = "00000000-0000-0000-0000-000000000091";
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(),
+                List.of(
+                        new StoredEntityChange(tntId, "minecraft:tnt", null, entity("minecraft:tnt", tntId, 1.0D)),
+                        new StoredEntityChange(displayId, "minecraft:block_display", null, entity("minecraft:block_display", displayId, 2.0D))
+                )
+        ));
+        BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW)
+                .withActiveVariantId("main", NOW);
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion target = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        ProjectVariant activeVariant = new ProjectVariant("main", "main", "v0001", "v0001", true, NOW);
+
+        Optional<List<PreparedChunkBatch>> decoded = invokeTryDecodeDirectRestore(
+                service,
+                layout,
+                project,
+                List.of(root, target),
+                List.of(activeVariant),
+                target,
+                RestoreEntityTypeSelection.excludeTypes(List.of("minecraft:tnt"))
+        );
+
+        assertTrue(decoded.isPresent());
+        List<String> spawnedTypes = decoded.orElseThrow().stream()
+                .flatMap(batch -> batch.entityBatch().entitiesToSpawn().stream())
+                .map(tag -> tag.getString("id").orElse(""))
+                .toList();
+        assertEquals(List.of("minecraft:block_display"), spawnedTypes);
     }
 
     @Test
@@ -718,6 +778,76 @@ class RestoreServiceTest {
     }
 
     @Test
+    void authoritativeEntityReplacementCanSkipEntityTypesFromSnapshotAndPatchChain(@TempDir Path tempDir)
+            throws Exception {
+        RestoreEntityStateResolver resolver = this.entityStateResolver();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        String snapshotTntId = "00000000-0000-0000-0000-000000000083";
+        String displayId = "00000000-0000-0000-0000-000000000084";
+        String patchTntId = "00000000-0000-0000-0000-000000000085";
+        String armorStandId = "00000000-0000-0000-0000-000000000086";
+        this.snapshotWriter.writeFile(layout.snapshotFile("snapshot-0001"), snapshot(List.of(
+                entity("minecraft:tnt", snapshotTntId, 1.0D),
+                entity("minecraft:block_display", displayId, 2.0D)
+        )));
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(),
+                List.of(
+                        new StoredEntityChange(patchTntId, "minecraft:tnt", null, entity("minecraft:tnt", patchTntId, 3.0D)),
+                        new StoredEntityChange(armorStandId, "minecraft:armor_stand", null, entity("minecraft:armor_stand", armorStandId, 4.0D))
+                )
+        ));
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL),
+                version("v0002", "main", "v0001", "", List.of("patch-0002"))
+        );
+
+        List<PreparedChunkBatch> batches = resolver.authoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                "v0002",
+                List.of(new ChunkPoint(0, 0)),
+                RestoreEntityTypeSelection.excludeTypes(List.of("minecraft:tnt"))
+        );
+
+        List<String> updatedTypes = batches.getFirst().entityBatch().entitiesToUpdate().stream()
+                .map(tag -> tag.getString("id").orElse(""))
+                .toList();
+        assertEquals(List.of("minecraft:block_display", "minecraft:armor_stand"), updatedTypes);
+        assertTrue(batches.getFirst().entityBatch().excludedEntityTypes().contains("minecraft:tnt"));
+    }
+
+    @Test
+    void restoreEntitySelectionFiltersStoredEntityDeltasBeforeApply() throws Throwable {
+        RestoreService service = new RestoreService();
+        String tntId = "00000000-0000-0000-0000-000000000087";
+        String displayId = "00000000-0000-0000-0000-000000000088";
+
+        PreparedWorldChangeBatches analyzed = invokeDecodeStoredChangesAnalyzed(
+                service,
+                List.of(
+                        new StoredEntityChange(tntId, "minecraft:tnt", null, entity("minecraft:tnt", tntId, 1.0D)),
+                        new StoredEntityChange(displayId, "minecraft:block_display", null, entity("minecraft:block_display", displayId, 2.0D))
+                ),
+                RestoreEntityTypeSelection.excludeTypes(List.of("minecraft:tnt"))
+        );
+
+        assertEquals(1, analyzed.batches().size());
+        assertEquals(1, analyzed.batches().getFirst().entityBatch().entitiesToSpawn().size());
+        assertEquals("minecraft:block_display", analyzed.batches()
+                .getFirst()
+                .entityBatch()
+                .entitiesToSpawn()
+                .getFirst()
+                .getString("id")
+                .orElse(""));
+    }
+
+    @Test
     void authoritativeEntityReplacementKeepsEmptyTargetChunkAuthoritative(@TempDir Path tempDir) throws Exception {
         RestoreEntityStateResolver resolver = this.entityStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
@@ -843,6 +973,27 @@ class RestoreServiceTest {
             List<ProjectVariant> variants,
             ProjectVersion targetVersion
     ) throws Throwable {
+        return invokeTryDecodeDirectRestore(
+                service,
+                layout,
+                project,
+                versions,
+                variants,
+                targetVersion,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<List<PreparedChunkBatch>> invokeTryDecodeDirectRestore(
+            RestoreService service,
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVersion targetVersion,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws Throwable {
         Method method = RestoreService.class.getDeclaredMethod(
                 "tryDecodeDirectRestore",
                 ProjectLayout.class,
@@ -852,6 +1003,7 @@ class RestoreServiceTest {
                 ProjectVersion.class,
                 RecoveryDraft.class,
                 net.minecraft.server.level.ServerLevel.class,
+                RestoreEntityTypeSelection.class,
                 WorldOperationManager.ProgressSink.class
         );
         method.setAccessible(true);
@@ -865,8 +1017,37 @@ class RestoreServiceTest {
                     targetVersion,
                     null,
                     null,
+                    entityTypeSelection,
                     (WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
                     }
+            );
+        } catch (InvocationTargetException exception) {
+            throw exception.getCause();
+        }
+    }
+
+    private static PreparedWorldChangeBatches invokeDecodeStoredChangesAnalyzed(
+            RestoreService service,
+            List<StoredEntityChange> entityChanges,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws Throwable {
+        Method method = RestoreService.class.getDeclaredMethod(
+                "decodeStoredChangesAnalyzed",
+                net.minecraft.server.level.ServerLevel.class,
+                List.class,
+                List.class,
+                boolean.class,
+                RestoreEntityTypeSelection.class
+        );
+        method.setAccessible(true);
+        try {
+            return (PreparedWorldChangeBatches) method.invoke(
+                    service,
+                    null,
+                    List.of(),
+                    entityChanges,
+                    true,
+                    entityTypeSelection
             );
         } catch (InvocationTargetException exception) {
             throw exception.getCause();

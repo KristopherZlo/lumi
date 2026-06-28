@@ -309,6 +309,7 @@ public final class RestoreService {
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing restore request");
+        RestoreEntityTypeSelection selection = this.effectiveEntityTypeSelection(entityTypeSelection);
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion version = this.requestResolver.resolveVersion(project, versions, variants, versionId);
@@ -411,13 +412,14 @@ public final class RestoreService {
                 version,
                 pendingDraft,
                 level,
+                selection,
                 progressSink
         );
 
         List<PreparedChunkBatch> batches = prepared.orElseGet(() -> {
             try {
                 if (version.versionKind() == VersionKind.WORLD_ROOT) {
-                    return this.decodeWorldRootRestore(layout, project, level, progressSink);
+                    return this.decodeWorldRootRestore(layout, project, level, selection, progressSink);
                 }
                 progressSink.update(OperationStage.PREPARING, 0, 1, "Planning restore");
                 RestorePlan plan = this.restorePlanBuilder.build(
@@ -437,7 +439,7 @@ public final class RestoreService {
                         plan.patchChain().size(),
                         plan.baselineGaps().size()
                 );
-                return this.decodePlan(layout, level, plan, progressSink);
+                return this.decodePlan(layout, level, plan, selection, progressSink);
             } catch (IOException exception) {
                 throw new RuntimeException(exception);
             }
@@ -447,7 +449,7 @@ public final class RestoreService {
                 versions,
                 version.id(),
                 batches,
-                entityTypeSelection
+                selection
         );
         return new WorldOperationManager.PreparedApplyOperation(
                 finalBatches,
@@ -584,6 +586,7 @@ public final class RestoreService {
             ProjectLayout layout,
             io.github.luma.domain.model.BuildProject project,
             ServerLevel level,
+            RestoreEntityTypeSelection entityTypeSelection,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         List<ChunkPoint> trackedChunks = this.baselineChunkRepository.listChunks(layout);
@@ -603,7 +606,8 @@ public final class RestoreService {
             )) {
                 batches.addAll(this.snapshotBatchPreparer.prepare(
                         this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
-                        level
+                        level,
+                        entityTypeSelection.excludedEntityTypes()
                 ));
             }
             index += 1;
@@ -639,6 +643,7 @@ public final class RestoreService {
             ProjectVersion targetVersion,
             RecoveryDraft pendingDraft,
             ServerLevel level,
+            RestoreEntityTypeSelection entityTypeSelection,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         DirectRestorePatchPlan directPlan = this.directRestorePatchPlanner.applicablePlan(project, versions, variants, targetVersion);
@@ -683,7 +688,8 @@ public final class RestoreService {
                         level,
                         rollbackChanges,
                         rollbackEntityChanges,
-                        false
+                        false,
+                        entityTypeSelection
                 );
                 batches.addAll(analyzed.batches());
                 mechanismScope.addAll(analyzed.mechanismReplayScope());
@@ -701,7 +707,13 @@ public final class RestoreService {
 
         for (ProjectVersion version : directPlan.reverseVersions()) {
             int before = batches.size();
-            PreparedWorldChangeBatches analyzed = this.decodeVersionChangesAnalyzed(layout, level, version, false);
+            PreparedWorldChangeBatches analyzed = this.decodeVersionChangesAnalyzed(
+                    layout,
+                    level,
+                    version,
+                    false,
+                    entityTypeSelection
+            );
             batches.addAll(analyzed.batches());
             mechanismScope.addAll(analyzed.mechanismReplayScope());
             completedSources += 1;
@@ -717,7 +729,13 @@ public final class RestoreService {
 
         for (ProjectVersion version : directPlan.forwardVersions()) {
             int before = batches.size();
-            PreparedWorldChangeBatches analyzed = this.decodeVersionChangesAnalyzed(layout, level, version, true);
+            PreparedWorldChangeBatches analyzed = this.decodeVersionChangesAnalyzed(
+                    layout,
+                    level,
+                    version,
+                    true,
+                    entityTypeSelection
+            );
             batches.addAll(analyzed.batches());
             mechanismScope.addAll(analyzed.mechanismReplayScope());
             completedSources += 1;
@@ -840,6 +858,7 @@ public final class RestoreService {
             ProjectLayout layout,
             ServerLevel level,
             RestorePlan plan,
+            RestoreEntityTypeSelection entityTypeSelection,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         int totalSources = plan.baselineGaps().size()
@@ -856,7 +875,8 @@ public final class RestoreService {
             )) {
                 batches.addAll(this.snapshotBatchPreparer.prepare(
                         this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
-                        level
+                        level,
+                        entityTypeSelection.excludedEntityTypes()
                 ));
             }
             completedSources += 1;
@@ -871,7 +891,8 @@ public final class RestoreService {
             )) {
                 batches.addAll(this.snapshotBatchPreparer.prepare(
                         this.snapshotReader.readFile(layout.snapshotFile(plan.anchor().snapshotId())),
-                        level
+                        level,
+                        entityTypeSelection.excludedEntityTypes()
                 ));
             }
             completedSources += 1;
@@ -886,7 +907,10 @@ public final class RestoreService {
             )) {
                 batches.addAll(this.batchPreparer.prepare(
                         level,
-                        this.patchDataRepository.loadSectionWorldChanges(layout, patch),
+                        this.selectedEntityChanges(
+                                this.patchDataRepository.loadSectionWorldChanges(layout, patch),
+                                entityTypeSelection
+                        ),
                         true,
                         (completed, total) -> {
                         },
@@ -932,6 +956,22 @@ public final class RestoreService {
             ProjectVersion version,
             boolean applyNewValues
     ) throws IOException {
+        return this.decodeVersionChangesAnalyzed(
+                layout,
+                level,
+                version,
+                applyNewValues,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    private PreparedWorldChangeBatches decodeVersionChangesAnalyzed(
+            ProjectLayout layout,
+            ServerLevel level,
+            ProjectVersion version,
+            boolean applyNewValues,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
         List<PreparedChunkBatch> batches = new ArrayList<>();
         MechanismReplayScope.Builder mechanismScope = MechanismReplayScope.builder();
         for (String patchId : version.patchIds()) {
@@ -949,7 +989,10 @@ public final class RestoreService {
                     "WorldChangeBatchPreparer.preparePatch",
                     "patch=" + patchId + ", applyNewValues=" + applyNewValues
             )) {
-                PatchSectionWorldChanges changes = this.patchDataRepository.loadSectionWorldChanges(layout, metadata);
+                PatchSectionWorldChanges changes = this.selectedEntityChanges(
+                        this.patchDataRepository.loadSectionWorldChanges(layout, metadata),
+                        entityTypeSelection
+                );
                 if (changes.sectionFrames().isEmpty() && changes.entityChanges().isEmpty()) {
                     continue;
                 }
@@ -1005,18 +1048,35 @@ public final class RestoreService {
             List<StoredEntityChange> entityChanges,
             boolean applyNewValues
     ) throws IOException {
+        return this.decodeStoredChangesAnalyzed(
+                level,
+                changes,
+                entityChanges,
+                applyNewValues,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    private PreparedWorldChangeBatches decodeStoredChangesAnalyzed(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
         List<PreparedChunkBatch> batches;
+        List<StoredEntityChange> selectedEntityChanges = this.selectedEntityChanges(entityChanges, entityTypeSelection);
         try (var ignored = LumaLoadLog.measure(
                 "restore",
                 "WorldChangeBatchPreparer.prepareStoredChanges",
                 "blocks=" + changes.size()
-                        + ", entities=" + (entityChanges == null ? 0 : entityChanges.size())
+                        + ", entities=" + selectedEntityChanges.size()
                         + ", applyNewValues=" + applyNewValues
         )) {
             PreparedWorldChangeBatches analyzed = this.batchPreparer.prepareAnalyzed(
                     level,
                     changes,
-                    entityChanges,
+                    selectedEntityChanges,
                     applyNewValues,
                     WorldChangeBatchPreparer.ProgressListener.NO_OP,
                     EntityApplyMode.DELTA
@@ -1026,12 +1086,46 @@ public final class RestoreService {
                     "restore",
                     "Decoded {} block and {} entity stored changes into {} grouped chunk batches using {} values",
                     changes.size(),
-                    entityChanges == null ? 0 : entityChanges.size(),
+                    selectedEntityChanges.size(),
                     batches.size(),
                     applyNewValues ? "new" : "old"
             );
             return analyzed;
         }
+    }
+
+    private PatchSectionWorldChanges selectedEntityChanges(
+            PatchSectionWorldChanges changes,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) {
+        if (changes == null) {
+            return new PatchSectionWorldChanges(List.of(), List.of());
+        }
+        List<StoredEntityChange> selected = this.selectedEntityChanges(changes.entityChanges(), entityTypeSelection);
+        if (selected.size() == changes.entityChanges().size()) {
+            return changes;
+        }
+        return new PatchSectionWorldChanges(changes.sectionFrames(), selected);
+    }
+
+    private List<StoredEntityChange> selectedEntityChanges(
+            List<StoredEntityChange> entityChanges,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) {
+        RestoreEntityTypeSelection selection = this.effectiveEntityTypeSelection(entityTypeSelection);
+        if (entityChanges == null || entityChanges.isEmpty()) {
+            return List.of();
+        }
+        if (selection.excludedEntityTypes().isEmpty()) {
+            return entityChanges;
+        }
+        return entityChanges.stream()
+                .filter(change -> change != null && selection.includes(change.entityType()))
+                .toList();
+    }
+
+    private RestoreEntityTypeSelection effectiveEntityTypeSelection(RestoreEntityTypeSelection entityTypeSelection) {
+        return entityTypeSelection == null ? RestoreEntityTypeSelection.includeAll() : entityTypeSelection;
     }
 
     private List<ChunkPoint> touchedChunksForPlan(RestorePlan plan) {

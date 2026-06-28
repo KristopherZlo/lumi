@@ -321,10 +321,17 @@ public final class PreparedChunkBatchCollapser {
         private final List<CompoundTag> spawns = new ArrayList<>();
         private final List<String> removals = new ArrayList<>();
         private final List<CompoundTag> updates = new ArrayList<>();
+        private final LinkedHashSet<String> excludedEntityTypes = new LinkedHashSet<>();
         private boolean replaceEntities;
 
         private EntityBatch toBatch() {
-            return new EntityBatch(this.spawns, this.removals, this.updates, this.replaceEntities);
+            return new EntityBatch(
+                    this.spawns,
+                    this.removals,
+                    this.updates,
+                    this.replaceEntities,
+                    this.excludedEntityTypes
+            );
         }
     }
 
@@ -335,7 +342,7 @@ public final class PreparedChunkBatchCollapser {
 
         private void add(ChunkPoint chunk, EntityBatch batch) {
             if (batch.replaceEntities()) {
-                this.markReplace(chunk);
+                this.markReplace(chunk, batch.excludedEntityTypes());
             }
             for (String entityId : batch.entityIdsToRemove()) {
                 this.addRemoval(chunk, entityId);
@@ -377,8 +384,10 @@ public final class PreparedChunkBatchCollapser {
 
         private Map<ChunkPoint, EntityAccumulator> toBatchesByChunk() {
             Map<ChunkPoint, EntityAccumulator> chunks = new LinkedHashMap<>();
-            for (ChunkPoint chunk : this.replaceChunks) {
-                chunks.computeIfAbsent(chunk, ignored -> new EntityAccumulator()).replaceEntities = true;
+            for (Map.Entry<ChunkPoint, LinkedHashSet<String>> entry : this.replaceChunks.entrySet()) {
+                EntityAccumulator accumulator = chunks.computeIfAbsent(entry.getKey(), ignored -> new EntityAccumulator());
+                accumulator.replaceEntities = true;
+                accumulator.excludedEntityTypes.addAll(entry.getValue());
             }
             for (EntityOperation operation : this.operations.values()) {
                 EntityAccumulator accumulator = chunks.computeIfAbsent(operation.chunk(), ignored -> new EntityAccumulator());
@@ -391,11 +400,17 @@ public final class PreparedChunkBatchCollapser {
             return chunks;
         }
 
-        private final LinkedHashSet<ChunkPoint> replaceChunks = new LinkedHashSet<>();
+        private final Map<ChunkPoint, LinkedHashSet<String>> replaceChunks = new LinkedHashMap<>();
 
-        private void markReplace(ChunkPoint chunk) {
+        private void markReplace(ChunkPoint chunk, Iterable<String> excludedEntityTypes) {
             if (chunk != null) {
-                this.replaceChunks.add(chunk);
+                LinkedHashSet<String> exclusions = new LinkedHashSet<>();
+                for (String entityType : excludedEntityTypes == null ? List.<String>of() : excludedEntityTypes) {
+                    if (entityType != null && !entityType.isBlank()) {
+                        exclusions.add(entityType);
+                    }
+                }
+                this.replaceChunks.put(chunk, exclusions);
             }
         }
 
