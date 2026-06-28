@@ -20,26 +20,6 @@ public final class EntityMutationCapturePolicy {
             "minecraft:text_display"
     );
     private static final Set<String> EXCLUDED_ENTITY_TYPES = Set.of("minecraft:player");
-    private static final Set<String> MECHANISM_ENTITY_TYPES = Set.of(
-            "minecraft:arrow",
-            "minecraft:breeze_wind_charge",
-            "minecraft:chest_minecart",
-            "minecraft:command_block_minecart",
-            "minecraft:egg",
-            "minecraft:experience_bottle",
-            "minecraft:fireball",
-            "minecraft:firework_rocket",
-            "minecraft:furnace_minecart",
-            "minecraft:hopper_minecart",
-            "minecraft:minecart",
-            "minecraft:potion",
-            "minecraft:small_fireball",
-            "minecraft:spawner_minecart",
-            "minecraft:snowball",
-            "minecraft:spectral_arrow",
-            "minecraft:trident",
-            "minecraft:tnt_minecart"
-    );
     private static final Set<WorldMutationSource> UNDO_ONLY_ITEM_DROP_SOURCES = EnumSet.of(
             WorldMutationSource.EXPLOSION,
             WorldMutationSource.EXPLOSIVE,
@@ -117,9 +97,6 @@ public final class EntityMutationCapturePolicy {
         }
         if (EXCLUDED_ENTITY_TYPES.contains(entityType)) {
             return false;
-        }
-        if (source == WorldMutationSource.BLOCK_UPDATE && MECHANISM_ENTITY_TYPES.contains(entityType)) {
-            return true;
         }
         if (source == WorldMutationSource.PLAYER || source == WorldMutationSource.ENTITY) {
             return this.placedEntityHistoryPolicy.shouldPersist(entityType);

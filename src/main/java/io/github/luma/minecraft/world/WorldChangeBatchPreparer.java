@@ -746,7 +746,7 @@ public final class WorldChangeBatchPreparer {
                 spawns,
                 removals,
                 updates,
-                entityApplyMode == EntityApplyMode.REPLACE_PLACED_IN_CHUNK
+                entityApplyMode == EntityApplyMode.REPLACE_ENTITIES_IN_CHUNK
         );
     }
 

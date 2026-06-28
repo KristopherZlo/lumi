@@ -90,7 +90,7 @@ class WorldChangeBatchPreparerTest {
                 List.of(new StoredEntityChange(entityId, "minecraft:block_display", null, entity(entityId, 32.0D))),
                 true,
                 NO_OP,
-                EntityApplyMode.REPLACE_PLACED_IN_CHUNK
+                EntityApplyMode.REPLACE_ENTITIES_IN_CHUNK
         );
 
         assertEquals(1, batches.size());
