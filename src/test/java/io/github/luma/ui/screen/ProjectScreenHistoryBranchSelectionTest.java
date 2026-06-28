@@ -14,12 +14,12 @@ class ProjectScreenHistoryBranchSelectionTest {
     void historyGraphToggleDoesNotSwitchTheActiveBranch() throws IOException {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java"));
         int toggleIndex = source.indexOf("        public void setHistoryGraphVisible(boolean visible) {");
-        int restoreIndex = source.indexOf("        public void requestRestore(ProjectVariant variant, ProjectVersion version) {", toggleIndex);
+        int selectIndex = source.indexOf("        public void selectHistoryVariant(String variantId) {", toggleIndex);
 
         assertTrue(toggleIndex >= 0, "ProjectScreen should keep a History cards/graph toggle action");
-        assertTrue(restoreIndex > toggleIndex, "The History view toggle action should be bounded by the next action");
+        assertTrue(selectIndex > toggleIndex, "The History view toggle action should be bounded by the next action");
 
-        String methodBody = source.substring(toggleIndex, restoreIndex);
+        String methodBody = source.substring(toggleIndex, selectIndex);
 
         assertTrue(
                 methodBody.contains("historyGraphVisible = visible"),
@@ -28,6 +28,46 @@ class ProjectScreenHistoryBranchSelectionTest {
         assertFalse(
                 methodBody.contains("switchVariant("),
                 "Build History view toggle should not switch the active branch"
+        );
+    }
+
+    @Test
+    void historyKeepsBranchViewButtonsAndLocalSelection() throws IOException {
+        String sections = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectScreenSections.java"));
+        String screen = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java"));
+
+        assertTrue(
+                sections.contains("section.child(this.historyBranchStrip(model));"),
+                "Build History should render branch view buttons independent of active branch switching"
+        );
+        assertTrue(
+                sections.contains("this.actions.selectHistoryVariant(variant.id())"),
+                "Branch view buttons should update the local selected history branch"
+        );
+        assertTrue(
+                screen.contains("selectedVariantId = variantId == null ? \"\" : variantId"),
+                "ProjectScreen should store the local selected history branch"
+        );
+    }
+
+    @Test
+    void historyGraphUsesTheSameSelectedBranchProjectionAsCards() throws IOException {
+        String sections = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectScreenSections.java"));
+
+        assertTrue(
+                sections.contains("this.graphView(model, selectedVariant, entries)"),
+                "Build History graph should use the same selected-branch entries as cards"
+        );
+    }
+
+    @Test
+    void selectedHistoryBranchFollowsActiveBranchSwitchWhenItWasShowingTheOldActiveBranch() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java"));
+
+        assertTrue(source.contains("lastActiveVariantId"));
+        assertTrue(
+                source.contains("this.selectedVariantId.equals(this.lastActiveVariantId)"),
+                "ProjectScreen should switch the viewed history branch when the active branch changes"
         );
     }
 

@@ -512,6 +512,11 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         }
 
         @Override
+        public void selectHistoryVariant(String variantId) {
+            this.lastAction = "selectHistoryVariant";
+        }
+
+        @Override
         public void setHistoryTagFilter(String filter) {
             this.lastAction = "setHistoryTagFilter";
         }

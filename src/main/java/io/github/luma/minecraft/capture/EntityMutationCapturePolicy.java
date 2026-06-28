@@ -51,6 +51,10 @@ public final class EntityMutationCapturePolicy {
             WorldMutationSource.EXPLOSIVE,
             WorldMutationSource.BLOCK_UPDATE
     );
+    private static final Set<WorldMutationSource> UNDO_ONLY_TRANSIENT_ENTITY_SOURCES = EnumSet.of(
+            WorldMutationSource.PLAYER,
+            WorldMutationSource.ENTITY
+    );
     private static final String PRIMED_TNT_ENTITY_TYPE = "minecraft:tnt";
     private final PlacedEntityHistoryPolicy placedEntityHistoryPolicy = new PlacedEntityHistoryPolicy();
 
@@ -109,12 +113,13 @@ public final class EntityMutationCapturePolicy {
         if (source == WorldMutationSource.BLOCK_UPDATE && MECHANISM_ENTITY_TYPES.contains(entityType)) {
             return true;
         }
+        if (source == WorldMutationSource.PLAYER || source == WorldMutationSource.ENTITY) {
+            return this.placedEntityHistoryPolicy.shouldPersist(entityType);
+        }
         if (source == WorldMutationSource.EXTERNAL_TOOL
                 || source == WorldMutationSource.WORLDEDIT
                 || source == WorldMutationSource.FAWE
-                || source == WorldMutationSource.AXIOM
-                || source == WorldMutationSource.PLAYER
-                || source == WorldMutationSource.ENTITY) {
+                || source == WorldMutationSource.AXIOM) {
             return true;
         }
         return false;
@@ -127,7 +132,12 @@ public final class EntityMutationCapturePolicy {
 
     boolean shouldInspectUndoOnlyMutation(WorldMutationSource source, String entityType) {
         return (UNDO_ONLY_ITEM_DROP_SOURCES.contains(source) && "minecraft:item".equals(entityType))
-                || (UNDO_ONLY_PRIMED_TNT_SOURCES.contains(source) && PRIMED_TNT_ENTITY_TYPE.equals(entityType));
+                || (UNDO_ONLY_PRIMED_TNT_SOURCES.contains(source) && PRIMED_TNT_ENTITY_TYPE.equals(entityType))
+                || (UNDO_ONLY_TRANSIENT_ENTITY_SOURCES.contains(source)
+                && entityType != null
+                && !entityType.isBlank()
+                && !EXCLUDED_ENTITY_TYPES.contains(entityType)
+                && !this.placedEntityHistoryPolicy.shouldPersist(entityType));
     }
 
     boolean shouldCaptureMutation(WorldMutationSource source, EntityPayload oldValue, EntityPayload newValue) {

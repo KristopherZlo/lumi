@@ -25,18 +25,18 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
-    void playerCapturesAnyNonPlayerEntity() {
+    void playerCapturesPlacedEntitiesOnlyForDurableHistory() {
         assertTrue(this.policy.capture(
                 WorldMutationSource.PLAYER,
                 null,
                 entity("minecraft:armor_stand", "00000000-0000-0000-0000-000000000041", 1.0D)
         ).isPresent());
-        assertTrue(this.policy.capture(
+        assertFalse(this.policy.capture(
                 WorldMutationSource.PLAYER,
                 null,
                 entity("minecraft:zombie", "00000000-0000-0000-0000-000000000042", 1.0D)
         ).isPresent());
-        assertTrue(this.policy.capture(
+        assertFalse(this.policy.capture(
                 WorldMutationSource.PLAYER,
                 null,
                 entity("minecraft:item", "00000000-0000-0000-0000-000000000045", 1.0D)
@@ -49,7 +49,7 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
-    void playerEntityRemovalKeepsFullOldPayloadForReplay() {
+    void playerTransientEntityRemovalIsUndoOnlyWithFullOldPayloadForReplay() {
         EntityPayload cow = entityWithVariant(
                 "minecraft:cow",
                 "00000000-0000-0000-0000-000000000047",
@@ -57,7 +57,7 @@ class EntityMutationCapturePolicyTest {
                 "minecraft:cold"
         );
 
-        var captured = this.policy.capture(WorldMutationSource.PLAYER, cow, null);
+        var captured = this.policy.captureUndoOnly(WorldMutationSource.PLAYER, cow, null);
 
         assertTrue(captured.isPresent());
         assertEquals("minecraft:cow", captured.get().entityType());
@@ -83,8 +83,8 @@ class EntityMutationCapturePolicyTest {
     @Test
     void inspectionKeepsExplicitRootAndExternalToolEntities() {
         assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.PLAYER, "minecraft:armor_stand"));
-        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.PLAYER, "minecraft:zombie"));
-        assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.ENTITY, "minecraft:item"));
+        assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.PLAYER, "minecraft:zombie"));
+        assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.ENTITY, "minecraft:item"));
         assertTrue(this.policy.shouldInspectMutation(WorldMutationSource.AXIOM, "minecraft:zombie"));
     }
 
@@ -112,7 +112,7 @@ class EntityMutationCapturePolicyTest {
         assertFalse(this.policy.capture(WorldMutationSource.EXPLOSION, null, item).isPresent());
         assertTrue(this.policy.captureUndoOnly(WorldMutationSource.EXPLOSION, null, item).isPresent());
         assertTrue(this.policy.captureUndoOnly(WorldMutationSource.FLUID, null, item).isPresent());
-        assertFalse(this.policy.captureUndoOnly(WorldMutationSource.PLAYER, null, item).isPresent());
+        assertTrue(this.policy.captureUndoOnly(WorldMutationSource.PLAYER, null, item).isPresent());
     }
 
     @Test
@@ -129,6 +129,14 @@ class EntityMutationCapturePolicyTest {
 
         assertFalse(this.policy.capture(WorldMutationSource.BLOCK_UPDATE, null, primedTnt).isPresent());
         assertTrue(this.policy.captureUndoOnly(WorldMutationSource.BLOCK_UPDATE, null, primedTnt).isPresent());
+    }
+
+    @Test
+    void playerPrimedTntSpawnIsUndoOnly() {
+        EntityPayload primedTnt = entity("minecraft:tnt", "00000000-0000-0000-0000-000000000050", 1.0D);
+
+        assertFalse(this.policy.capture(WorldMutationSource.PLAYER, null, primedTnt).isPresent());
+        assertTrue(this.policy.captureUndoOnly(WorldMutationSource.PLAYER, null, primedTnt).isPresent());
     }
 
     private static EntityPayload entity(String type, String uuid, double x) {

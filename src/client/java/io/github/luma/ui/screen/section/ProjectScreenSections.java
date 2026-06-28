@@ -174,8 +174,9 @@ public final class ProjectScreenSections {
                 )
         );
         section.child(this.historyToolbar(model));
+        section.child(this.historyBranchStrip(model));
         if (model.historyGraphVisible()) {
-            section.child(this.graphView(model, selectedVariant));
+            section.child(this.graphView(model, selectedVariant, entries));
             return section;
         }
 
@@ -252,6 +253,20 @@ public final class ProjectScreenSections {
         return row;
     }
 
+    private FlowLayout historyBranchStrip(Model model) {
+        FlowLayout row = LumaUi.actionRow();
+        ProjectVariant selectedVariant = this.selectedVariant(model);
+        for (ProjectVariant variant : model.state().variants()) {
+            ButtonComponent button = LumaUi.button(
+                    Component.literal(ProjectUiSupport.displayVariantName(variant)),
+                    pressed -> this.actions.selectHistoryVariant(variant.id())
+            );
+            button.active(selectedVariant == null || !variant.id().equals(selectedVariant.id()));
+            row.child(button);
+        }
+        return row;
+    }
+
     private FlowLayout tagFilter(Model model) {
         FlowLayout row = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
         row.gap(2);
@@ -282,14 +297,15 @@ public final class ProjectScreenSections {
         return row;
     }
 
-    private FlowLayout graphView(Model model, ProjectVariant selectedVariant) {
+    private FlowLayout graphView(Model model, ProjectVariant selectedVariant, List<BranchHistoryVersions.Entry> entries) {
         FlowLayout graph = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
         if (selectedVariant == null) {
             graph.child(LumaUi.caption(Component.translatable("luma.history.empty")));
             return graph;
         }
 
-        List<ProjectVersion> visibleVersions = model.state().versions().stream()
+        List<ProjectVersion> visibleVersions = entries.stream()
+                .map(BranchHistoryVersions.Entry::version)
                 .filter(version -> this.matchesTagFilter(version, model.historyTagFilter()))
                 .toList();
         List<CommitGraphNode> nodes = CommitGraphLayout.build(
@@ -413,6 +429,8 @@ public final class ProjectScreenSections {
         void openBranchDialog(ProjectVersion version);
 
         void setHistoryGraphVisible(boolean visible);
+
+        void selectHistoryVariant(String variantId);
 
         void setHistoryTagFilter(String filter);
 

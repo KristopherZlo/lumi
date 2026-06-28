@@ -100,6 +100,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     );
     private String statusKey;
     private String selectedVariantId = "";
+    private String lastActiveVariantId = "";
     private boolean historyGraphVisible = false;
     private String historyTagFilter = "";
     private String tagEditorVersionId = "";
@@ -632,11 +633,16 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             return;
         }
 
-        if (!this.selectedVariantId.isBlank()
-                && ProjectUiSupport.variantFor(this.state.variants(), this.selectedVariantId) != null) {
-            return;
+        String activeVariantId = this.state.project().activeVariantId() == null
+                ? ""
+                : this.state.project().activeVariantId();
+        boolean selectedMissing = this.selectedVariantId.isBlank()
+                || ProjectUiSupport.variantFor(this.state.variants(), this.selectedVariantId) == null;
+        boolean activeVariantChanged = !activeVariantId.equals(this.lastActiveVariantId);
+        if (selectedMissing || activeVariantChanged && this.selectedVariantId.equals(this.lastActiveVariantId)) {
+            this.selectedVariantId = activeVariantId;
         }
-        this.selectedVariantId = this.state.project().activeVariantId();
+        this.lastActiveVariantId = activeVariantId;
     }
 
     private void refresh(String statusKey) {
@@ -853,6 +859,12 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         @Override
         public void setHistoryGraphVisible(boolean visible) {
             historyGraphVisible = visible;
+            refresh("luma.status.project_ready");
+        }
+
+        @Override
+        public void selectHistoryVariant(String variantId) {
+            selectedVariantId = variantId == null ? "" : variantId;
             refresh("luma.status.project_ready");
         }
 
