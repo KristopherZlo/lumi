@@ -49,6 +49,34 @@ class LumiRegionSelectionStateTest {
     }
 
     @Test
+    void resizeLookedSideGrowsAndShrinksSelectedFace() {
+        LumiRegionSelectionState state = new LumiRegionSelectionState();
+        state.selectPrimary(new BlockPoint(2, 64, 4));
+        state.selectSecondary(new BlockPoint(8, 70, 8));
+
+        state.resize(LumiRegionSelectionState.Side.MIN_X, 1);
+        state.resize(LumiRegionSelectionState.Side.MAX_Y, -1);
+
+        var bounds = state.bounds().orElseThrow();
+        assertEquals(new BlockPoint(1, 64, 4), bounds.min());
+        assertEquals(new BlockPoint(8, 69, 8), bounds.max());
+    }
+
+    @Test
+    void resizeCannotInvertSelection() {
+        LumiRegionSelectionState state = new LumiRegionSelectionState();
+        state.selectPrimary(new BlockPoint(2, 64, 4));
+        state.selectSecondary(new BlockPoint(2, 64, 4));
+
+        state.resize(LumiRegionSelectionState.Side.MIN_X, -1);
+        state.resize(LumiRegionSelectionState.Side.MAX_Y, -1);
+
+        var bounds = state.bounds().orElseThrow();
+        assertEquals(new BlockPoint(2, 64, 4), bounds.min());
+        assertEquals(new BlockPoint(2, 64, 4), bounds.max());
+    }
+
+    @Test
     void clearRemovesSelectionBounds() {
         LumiRegionSelectionState state = new LumiRegionSelectionState();
         state.selectPrimary(new BlockPoint(8, 70, 8));

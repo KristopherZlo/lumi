@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -59,6 +60,23 @@ class WorkZoneServiceTest {
 
         assertTrue(service.touchBlock(layout, "Max", new BlockPoint(0, 64, 0), NOW).isEmpty());
         assertTrue(new WorkZoneRepository().load(layout).zones().isEmpty());
+    }
+
+    @Test
+    void addAndRemoveCellsUpdatesActiveZone() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Castle");
+        WorkZoneService service = new WorkZoneService();
+        WorkZone zone = service.createZone(layout, "project-1", "Gate", "Kate", NOW);
+
+        service.addCells(layout, "Kate", List.of(
+                new WorkZoneCell(1, 4, -1),
+                new WorkZoneCell(2, 4, -1)
+        ), NOW.plusSeconds(1));
+        service.removeCells(layout, "Kate", List.of(new WorkZoneCell(1, 4, -1)), NOW.plusSeconds(2));
+
+        WorkZone saved = new WorkZoneRepository().load(layout).zones().getFirst();
+        assertEquals(zone.id(), saved.id());
+        assertEquals(List.of(new WorkZoneCell(2, 4, -1)), saved.cells());
     }
 
     @Test

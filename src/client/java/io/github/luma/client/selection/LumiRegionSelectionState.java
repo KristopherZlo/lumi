@@ -10,6 +10,15 @@ public final class LumiRegionSelectionState {
     private BlockPoint cornerA;
     private BlockPoint cornerB;
 
+    public enum Side {
+        MIN_X,
+        MAX_X,
+        MIN_Y,
+        MAX_Y,
+        MIN_Z,
+        MAX_Z
+    }
+
     public LumiRegionSelectionMode mode() {
         return this.mode;
     }
@@ -51,6 +60,33 @@ public final class LumiRegionSelectionState {
     public void clear() {
         this.cornerA = null;
         this.cornerB = null;
+    }
+
+    public void resize(Side side, int amount) {
+        if (side == null || amount == 0) {
+            return;
+        }
+        Optional<Bounds3i> current = this.bounds();
+        if (current.isEmpty()) {
+            return;
+        }
+        Bounds3i bounds = current.get();
+        int minX = bounds.min().x();
+        int minY = bounds.min().y();
+        int minZ = bounds.min().z();
+        int maxX = bounds.max().x();
+        int maxY = bounds.max().y();
+        int maxZ = bounds.max().z();
+        switch (side) {
+            case MIN_X -> minX = Math.min(maxX, minX - amount);
+            case MAX_X -> maxX = Math.max(minX, maxX + amount);
+            case MIN_Y -> minY = Math.min(maxY, minY - amount);
+            case MAX_Y -> maxY = Math.max(minY, maxY + amount);
+            case MIN_Z -> minZ = Math.min(maxZ, minZ - amount);
+            case MAX_Z -> maxZ = Math.max(minZ, maxZ + amount);
+        }
+        this.cornerA = new BlockPoint(minX, minY, minZ);
+        this.cornerB = new BlockPoint(maxX, maxY, maxZ);
     }
 
     public Optional<Bounds3i> bounds() {

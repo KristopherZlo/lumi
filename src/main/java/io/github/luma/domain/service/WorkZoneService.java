@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -100,10 +101,28 @@ public final class WorkZoneService {
     }
 
     public Optional<WorkZone> touchCell(ProjectLayout layout, String actor, WorkZoneCell cell, Instant now) throws IOException {
+        return this.addCells(layout, actor, cell == null ? List.of() : List.of(cell), now);
+    }
+
+    public Optional<WorkZone> addCells(ProjectLayout layout, String actor, Collection<WorkZoneCell> cells, Instant now) throws IOException {
+        return this.updateCells(layout, actor, cells, now, true);
+    }
+
+    public Optional<WorkZone> removeCells(ProjectLayout layout, String actor, Collection<WorkZoneCell> cells, Instant now) throws IOException {
+        return this.updateCells(layout, actor, cells, now, false);
+    }
+
+    private Optional<WorkZone> updateCells(
+            ProjectLayout layout,
+            String actor,
+            Collection<WorkZoneCell> cells,
+            Instant now,
+            boolean add
+    ) throws IOException {
         synchronized (STATE_LOCK) {
             WorkZoneState state = this.loadCached(layout);
             String activeZoneId = state.activeZoneId(actor);
-            if (activeZoneId.isBlank() || cell == null) {
+            if (activeZoneId.isBlank() || cells == null || cells.isEmpty()) {
                 return Optional.empty();
             }
 
@@ -113,7 +132,7 @@ public final class WorkZoneService {
                 if (!zone.id().equals(activeZoneId)) {
                     continue;
                 }
-                WorkZone next = zone.withCell(cell, now);
+                WorkZone next = add ? zone.withCells(cells, now) : zone.withoutCells(cells, now);
                 if (next != zone) {
                     zones.set(index, next);
                     this.save(layout, state.withZones(zones));

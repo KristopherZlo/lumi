@@ -2,6 +2,7 @@ package io.github.luma.domain.model;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.TreeSet;
 
@@ -34,18 +35,23 @@ public record WorkZone(
         if (cell == null || this.contains(cell)) {
             return this;
         }
-        List<WorkZoneCell> next = new ArrayList<>(this.cells);
-        next.add(cell);
-        return new WorkZone(
-                this.id,
-                this.projectId,
-                this.name,
-                this.color,
-                next,
-                this.createdBy,
-                this.createdAt,
-                now
-        );
+        return this.withCells(List.of(cell), now);
+    }
+
+    public WorkZone withCells(Collection<WorkZoneCell> cells, Instant now) {
+        TreeSet<WorkZoneCell> next = new TreeSet<>(this.cells);
+        if (cells == null || !next.addAll(cells)) {
+            return this;
+        }
+        return new WorkZone(this.id, this.projectId, this.name, this.color, new ArrayList<>(next), this.createdBy, this.createdAt, now);
+    }
+
+    public WorkZone withoutCells(Collection<WorkZoneCell> cells, Instant now) {
+        TreeSet<WorkZoneCell> next = new TreeSet<>(this.cells);
+        if (cells == null || !next.removeAll(cells)) {
+            return this;
+        }
+        return new WorkZone(this.id, this.projectId, this.name, this.color, new ArrayList<>(next), this.createdBy, this.createdAt, now);
     }
 
     public WorkZone withName(String name, Instant now) {
