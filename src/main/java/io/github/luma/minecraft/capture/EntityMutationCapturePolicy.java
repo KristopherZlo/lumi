@@ -112,6 +112,9 @@ public final class EntityMutationCapturePolicy {
 
     boolean shouldInspectSpawnMutation(WorldMutationSource source, String entityType) {
         if (source == WorldMutationSource.PLAYER) {
+            if ("minecraft:item".equals(entityType) || PRIMED_TNT_ENTITY_TYPE.equals(entityType)) {
+                return false;
+            }
             return entityType != null
                     && !entityType.isBlank()
                     && !EXCLUDED_ENTITY_TYPES.contains(entityType);

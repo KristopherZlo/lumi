@@ -92,9 +92,16 @@ class EntityMutationCapturePolicyTest {
     @Test
     void playerSpawnInspectsOrdinaryEntitiesForDurableHistory() {
         assertTrue(this.policy.shouldInspectSpawnMutation(WorldMutationSource.PLAYER, "minecraft:llama"));
-        assertTrue(this.policy.shouldInspectSpawnMutation(WorldMutationSource.PLAYER, "minecraft:tnt"));
         assertFalse(this.policy.shouldInspectSpawnMutation(WorldMutationSource.PLAYER, "minecraft:player"));
         assertFalse(this.policy.shouldInspectSpawnMutation(WorldMutationSource.ENTITY, "minecraft:llama"));
+    }
+
+    @Test
+    void playerTransientSpawnsUseUndoOnlyInspection() {
+        assertFalse(this.policy.shouldInspectSpawnMutation(WorldMutationSource.PLAYER, "minecraft:item"));
+        assertFalse(this.policy.shouldInspectSpawnMutation(WorldMutationSource.PLAYER, "minecraft:tnt"));
+        assertTrue(this.policy.shouldInspectUndoOnlyMutation(WorldMutationSource.PLAYER, "minecraft:item"));
+        assertTrue(this.policy.shouldInspectUndoOnlyMutation(WorldMutationSource.PLAYER, "minecraft:tnt"));
     }
 
     @Test
