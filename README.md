@@ -77,7 +77,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 | `R` | Quick rollback |
 | `H` | Toggle compare overlay |
 | `Left Alt+I` | Show Lumi hotkeys |
-| Wooden sword | Select a region for partial restore |
+| Wooden sword | Select a region; hold `Left Alt` to resize/switch/clear, hold `Ctrl` to add/remove active-zone cells |
 
 All keybinds are remappable in Minecraft controls.
 

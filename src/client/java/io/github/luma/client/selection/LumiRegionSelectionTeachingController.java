@@ -4,9 +4,10 @@ import io.github.luma.LumaMod;
 import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
+import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.ui.controller.ClientProjectAccess;
-import io.github.luma.ui.overlay.CompareOverlayHotkeyHud;
 import io.github.luma.ui.overlay.RoundedHudRenderer;
 import java.util.List;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -23,7 +24,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 
 /**
- * Shows the low-noise first-use teaching hint for Lumi's wooden-sword region selector.
+ * Shows the crosshair hint for Lumi's wooden-sword region selector.
  */
 public final class LumiRegionSelectionTeachingController {
 
@@ -33,21 +34,25 @@ public final class LumiRegionSelectionTeachingController {
     );
 
     private final ProjectService projectService;
+    private final WorkZoneService workZoneService;
     private final ClientContextualHelpService helpService;
     private final SelectionToolTeachingState teachingState;
     private boolean hudVisible;
     private KeyMapping cachedActionKey;
+    private String activeZoneName = "";
 
     public LumiRegionSelectionTeachingController() {
-        this(new ProjectService(), new ClientContextualHelpService(), new SelectionToolTeachingState());
+        this(new ProjectService(), new WorkZoneService(), new ClientContextualHelpService(), new SelectionToolTeachingState());
     }
 
     LumiRegionSelectionTeachingController(
             ProjectService projectService,
+            WorkZoneService workZoneService,
             ClientContextualHelpService helpService,
             SelectionToolTeachingState teachingState
     ) {
         this.projectService = projectService;
+        this.workZoneService = workZoneService;
         this.helpService = helpService;
         this.teachingState = teachingState;
     }
@@ -65,6 +70,7 @@ public final class LumiRegionSelectionTeachingController {
         boolean toolHeld = inputActive && this.selectionToolHeld(client.player);
         this.hudVisible = toolHeld;
         this.cachedActionKey = this.actionKey();
+        this.activeZoneName = toolHeld ? this.activeZoneName(client) : "";
         if (!toolHeld) {
             return;
         }
@@ -114,29 +120,68 @@ public final class LumiRegionSelectionTeachingController {
         }
 
         Font font = client.font;
-        List<Row> rows = List.of(
-                new Row(List.of(
-                        new Shortcut(List.of("LMB"), "First"),
-                        new Shortcut(List.of("RMB"), "Second")
-                )),
-                new Row(List.of(
-                        new Shortcut(List.of("ACTION", "RMB"), "Clear"),
-                        new Shortcut(List.of("ACTION", "Scroll"), "Mode")
-                ))
-        );
+        Hint hint = this.hint(client);
+        List<Row> rows = hint.rows();
         int lineHeight = 18;
-        int width = rows.stream()
+        int width = Math.max(
+                font.width(hint.title()),
+                rows.stream()
                 .mapToInt(row -> this.rowWidth(font, row))
                 .max()
-                .orElse(1) + 14;
-        int height = (rows.size() * lineHeight) + 10;
-        int x = 8;
-        int y = Math.max(8, graphics.guiHeight() - height - 8 - CompareOverlayHotkeyHud.reservedBottomHeight());
+                .orElse(1)
+        ) + 14;
+        int height = 22 + (rows.size() * lineHeight);
+        int x = Math.max(8, (graphics.guiWidth() - width) / 2);
+        int y = Math.max(8, Math.min(graphics.guiHeight() - height - 8, (graphics.guiHeight() / 2) + 16));
 
         RoundedHudRenderer.card(graphics, x, y, width, height);
+        graphics.drawString(font, Component.literal(hint.title()), x + 7, y + 6, RoundedHudRenderer.TEXT, false);
         for (int index = 0; index < rows.size(); index++) {
-            this.drawRow(graphics, font, rows.get(index), x + 7, y + 5 + (index * lineHeight));
+            this.drawRow(graphics, font, rows.get(index), x + 7, y + 19 + (index * lineHeight));
         }
+    }
+
+    private Hint hint(Minecraft client) {
+        if (LumiRegionSelectionController.controlDown(client)) {
+            return new Hint(
+                    this.activeZoneName.isBlank() ? "Zone edit" : "Zone edit · " + this.activeZoneName,
+                    List.of(
+                            new Row(List.of(new Shortcut("hint_zone_add", List.of("Ctrl", "LMB"), "Add selection/box"))),
+                            new Row(List.of(new Shortcut("hint_zone_erase", List.of("Ctrl", "RMB"), "Erase selection/box")))
+                    )
+            );
+        }
+        if (this.actionKeyDown()) {
+            return new Hint(
+                    "Selection adjust",
+                    List.of(
+                            new Row(List.of(new Shortcut("hint_resize", List.of("ACTION", "Wheel"), "Resize looked side"))),
+                            new Row(List.of(
+                                    new Shortcut("hint_mode", List.of("ACTION", "LMB"), "Switch mode"),
+                                    new Shortcut("hint_clear", List.of("ACTION", "RMB"), "Clear")
+                            ))
+                    )
+            );
+        }
+        LumiRegionSelectionMode mode = LumiRegionSelectionController.getInstance()
+                .currentMode(client)
+                .orElse(LumiRegionSelectionMode.CORNERS);
+        String title = mode == LumiRegionSelectionMode.EXTEND ? "Wooden Sword · Extend" : "Wooden Sword · Corners";
+        String primary = mode == LumiRegionSelectionMode.EXTEND ? "Extend to block" : "First corner";
+        String secondary = mode == LumiRegionSelectionMode.EXTEND ? "Move to block" : "Second corner";
+        return new Hint(
+                title,
+                List.of(
+                        new Row(List.of(
+                                new Shortcut("hint_lmb", List.of("LMB"), primary),
+                                new Shortcut("hint_rmb", List.of("RMB"), secondary)
+                        )),
+                        new Row(List.of(
+                                new Shortcut("hint_alt", List.of("ACTION"), "Hold: resize / clear / switch"),
+                                new Shortcut("hint_ctrl", List.of("Ctrl"), "Hold: edit zone")
+                        ))
+                )
+        );
     }
 
     private int rowWidth(Font font, Row row) {
@@ -146,7 +191,7 @@ public final class LumiRegionSelectionTeachingController {
                 width += 10;
             }
             Shortcut shortcut = row.shortcuts().get(index);
-            width += this.keyGroupWidth(shortcut.keys()) + 3 + font.width(shortcut.text());
+            width += 12 + this.keyGroupWidth(shortcut.keys()) + 3 + font.width(shortcut.text());
         }
         return width;
     }
@@ -172,6 +217,8 @@ public final class LumiRegionSelectionTeachingController {
                 cursor += 10;
             }
             Shortcut shortcut = row.shortcuts().get(shortcutIndex);
+            this.drawIconSlot(graphics, cursor, y + 3, shortcut.iconName());
+            cursor += 12;
             for (int keyIndex = 0; keyIndex < shortcut.keys().size(); keyIndex++) {
                 if (keyIndex > 0) {
                     cursor += 2;
@@ -186,13 +233,55 @@ public final class LumiRegionSelectionTeachingController {
         }
     }
 
+    private void drawIconSlot(GuiGraphics graphics, int x, int y, String iconName) {
+        int color = switch (iconName == null ? "" : iconName) {
+            case "hint_zone_erase", "hint_clear" -> 0xFFE76868;
+            case "hint_zone_add" -> 0xFF4ADE80;
+            case "hint_resize" -> 0xFF60A5FA;
+            default -> 0xFF98A6B3;
+        };
+        RoundedHudRenderer.roundedRect(graphics, x, y, 9, 9, 2, 0x45101820, color);
+        graphics.fill(x + 3, y + 3, x + 6, y + 6, color);
+    }
+
     private KeyMapping actionKey() {
         return LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
+    }
+
+    private boolean actionKeyDown() {
+        return this.cachedActionKey != null && this.cachedActionKey.isDown();
+    }
+
+    private String activeZoneName(Minecraft client) {
+        try {
+            ServerLevel level = ClientProjectAccess.requireSingleplayerServer(client).getLevel(client.level.dimension());
+            if (level == null) {
+                return "";
+            }
+            return this.projectService.findWorldProject(level)
+                    .flatMap(project -> {
+                        try {
+                            return this.workZoneService.activeZone(
+                                    this.projectService.resolveLayout(ClientProjectAccess.requireSingleplayerServer(client), project.name()),
+                                    client.getUser() == null ? "player" : client.getUser().getName()
+                            );
+                        } catch (Exception exception) {
+                            return java.util.Optional.<WorkZone>empty();
+                        }
+                    })
+                    .map(WorkZone::name)
+                    .orElse("");
+        } catch (Exception exception) {
+            return "";
+        }
+    }
+
+    private record Hint(String title, List<Row> rows) {
     }
 
     private record Row(List<Shortcut> shortcuts) {
     }
 
-    private record Shortcut(List<String> keys, String text) {
+    private record Shortcut(String iconName, List<String> keys, String text) {
     }
 }
