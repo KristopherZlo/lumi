@@ -1,19 +1,16 @@
 package io.github.luma.storage.repository;
 
 import io.github.luma.domain.model.BuildProject;
-import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.storage.GsonProvider;
 import io.github.luma.storage.ProjectLayout;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 public final class ProjectRepository {
 
@@ -42,12 +39,7 @@ public final class ProjectRepository {
             return Optional.empty();
         }
 
-        String json = Files.readString(layout.projectFile());
-        return Optional.of(this.normalize(
-                GsonProvider.gson().fromJson(json, BuildProject.class),
-                GsonProvider.gson().fromJson(json, LegacyProject.class),
-                layout
-        ));
+        return Optional.of(this.normalize(GsonProvider.gson().fromJson(Files.readString(layout.projectFile()), BuildProject.class)));
     }
 
     public List<BuildProject> loadAll(Path projectsRoot) throws IOException {
@@ -102,55 +94,26 @@ public final class ProjectRepository {
         return Optional.empty();
     }
 
-    private BuildProject normalize(BuildProject project, LegacyProject legacy, ProjectLayout layout) {
-        String mainVariantId = firstNonBlank(project.mainVariantId(), legacy.mainBranchId(), "main");
-        Instant createdAt = project.createdAt() == null ? Instant.EPOCH : project.createdAt();
+    private BuildProject normalize(BuildProject project) {
         return new BuildProject(
                 project.schemaVersion(),
-                project.id() == null ? legacyProjectId(legacy, layout) : project.id(),
-                firstNonBlank(project.name(), projectNameFromFolder(layout), "Project"),
-                firstNonBlank(project.description(), ""),
-                firstNonBlank(project.minecraftVersion(), "1.21.11"),
-                firstNonBlank(project.modLoader(), "fabric"),
+                project.id(),
+                project.name(),
+                project.description(),
+                project.minecraftVersion(),
+                project.modLoader(),
                 project.dimensionId() == null || project.dimensionId().isBlank() ? "minecraft:overworld" : project.dimensionId(),
                 project.bounds(),
                 project.origin(),
-                mainVariantId,
-                firstNonBlank(project.activeVariantId(), legacy.activeBranchId(), mainVariantId),
-                createdAt,
-                project.updatedAt() == null ? createdAt : project.updatedAt(),
-                ProjectSettings.sanitize(project.settings()),
+                project.mainVariantId() == null || project.mainVariantId().isBlank() ? "main" : project.mainVariantId(),
+                project.activeVariantId() == null || project.activeVariantId().isBlank()
+                        ? (project.mainVariantId() == null || project.mainVariantId().isBlank() ? "main" : project.mainVariantId())
+                        : project.activeVariantId(),
+                project.createdAt(),
+                project.updatedAt(),
+                io.github.luma.domain.model.ProjectSettings.sanitize(project.settings()),
                 project.favorite(),
                 project.archived()
         );
-    }
-
-    private static UUID legacyProjectId(LegacyProject legacy, ProjectLayout layout) {
-        String projectId = legacy == null ? "" : legacy.projectId();
-        if (projectId != null && !projectId.isBlank()) {
-            return UUID.fromString(projectId);
-        }
-        return UUID.nameUUIDFromBytes(layout.root().toAbsolutePath().normalize().toString().getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String projectNameFromFolder(ProjectLayout layout) {
-        String folder = layout.root().getFileName().toString();
-        return folder.endsWith(".mbp") ? folder.substring(0, folder.length() - 4) : folder;
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        return "";
-    }
-
-    private record LegacyProject(
-            String projectId,
-            String mainBranchId,
-            String activeBranchId
-    ) {
     }
 }
