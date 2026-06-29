@@ -77,16 +77,23 @@ public final class LumiClientGameTests implements FabricClientGameTest {
     }
 
     private boolean modeIs(String... acceptedModes) {
-        String mode = System.getProperty(
-                "lumi.singleplayerTest.mode",
-                System.getenv().getOrDefault("LUMI_SINGLEPLAYER_TEST_MODE", "")
-        );
+        String mode = singleplayerTestMode();
         for (String acceptedMode : acceptedModes) {
             if (acceptedMode.equalsIgnoreCase(mode)) {
                 return true;
             }
         }
         return false;
+    }
+
+    static String singleplayerTestMode() {
+        String mode = System.getProperty("lumi.singleplayerTest.mode");
+        if (mode == null || mode.isBlank()) {
+            mode = System.getProperty("lumi.singleplayerTestMode");
+        }
+        return mode == null || mode.isBlank()
+                ? System.getenv().getOrDefault("LUMI_SINGLEPLAYER_TEST_MODE", "")
+                : mode;
     }
 
     private void waitForSingleplayerRuntimeSuite(

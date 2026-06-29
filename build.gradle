@@ -416,6 +416,7 @@ tasks.named('runClientGameTest').configure {
     jvmArgs('-Dlumi.testing.enabled=true')
     jvmArgs('-Dlumi.clientLoadLog=true')
     def singleplayerTestMode = System.getProperty('lumi.singleplayerTest.mode')
+            ?: System.getProperty('lumi.singleplayerTestMode')
             ?: System.getenv('LUMI_SINGLEPLAYER_TEST_MODE')
     if (singleplayerTestMode != null && !singleplayerTestMode.isBlank()) {
         jvmArgs("-Dlumi.singleplayerTest.mode=${singleplayerTestMode}")
