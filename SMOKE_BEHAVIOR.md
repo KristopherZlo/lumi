@@ -51,6 +51,9 @@ history behavior changes.
 
 - Singleplayer smoke tests run in an integrated server and exercise real domain,
   storage, capture, and world-apply services.
+- Saved structure fixtures treat entity-only movement without a live undo action
+  as explicit unsupported dynamic fixture coverage; generated fixtures and block
+  diffs remain strict failures.
 - `load-smoke` runs the singleplayer smoke route through the first history
   operations, records JVM load samples, and fails on large heap, direct/mapped
   buffer, thread, or first-world-interaction CPU/wall regressions.

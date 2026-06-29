@@ -66,6 +66,36 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
+    void explosiveTransientEntityRemovalIsUndoOnlyWithFullOldPayloadForReplay() {
+        EntityPayload cow = entityWithVariant(
+                "minecraft:cow",
+                "00000000-0000-0000-0000-000000000053",
+                1.0D,
+                "minecraft:cold"
+        );
+
+        var captured = this.policy.captureUndoOnly(WorldMutationSource.EXPLOSIVE, cow, null);
+
+        assertTrue(captured.isPresent());
+        assertEquals("minecraft:cow", captured.get().entityType());
+        assertEquals("minecraft:cold", captured.get().oldValue().copyTag().getString("variant").orElse(""));
+    }
+
+    @Test
+    void explosivePlacedEntityRemovalStaysDurable() {
+        EntityPayload stand = entity(
+                "minecraft:armor_stand",
+                "00000000-0000-0000-0000-000000000054",
+                1.0D
+        );
+
+        var captured = this.policy.capture(WorldMutationSource.EXPLOSIVE, stand, null);
+
+        assertTrue(captured.isPresent());
+        assertEquals("minecraft:armor_stand", captured.get().entityType());
+    }
+
+    @Test
     void systemSourceDoesNotCaptureChunkLoadNoise() {
         assertFalse(this.policy.capture(
                 WorldMutationSource.SYSTEM,

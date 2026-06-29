@@ -33,7 +33,8 @@ public final class EntityMutationCapturePolicy {
     );
     private static final Set<WorldMutationSource> UNDO_ONLY_TRANSIENT_ENTITY_SOURCES = EnumSet.of(
             WorldMutationSource.PLAYER,
-            WorldMutationSource.ENTITY
+            WorldMutationSource.ENTITY,
+            WorldMutationSource.EXPLOSIVE
     );
     private static final String PRIMED_TNT_ENTITY_TYPE = "minecraft:tnt";
     private final PlacedEntityHistoryPolicy placedEntityHistoryPolicy = new PlacedEntityHistoryPolicy();
@@ -98,7 +99,9 @@ public final class EntityMutationCapturePolicy {
         if (EXCLUDED_ENTITY_TYPES.contains(entityType)) {
             return false;
         }
-        if (source == WorldMutationSource.PLAYER || source == WorldMutationSource.ENTITY) {
+        if (source == WorldMutationSource.PLAYER
+                || source == WorldMutationSource.ENTITY
+                || source == WorldMutationSource.EXPLOSIVE) {
             return this.placedEntityHistoryPolicy.shouldPersist(entityType);
         }
         if (source == WorldMutationSource.EXTERNAL_TOOL

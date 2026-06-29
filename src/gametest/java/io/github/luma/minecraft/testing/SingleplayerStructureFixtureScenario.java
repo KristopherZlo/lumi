@@ -343,6 +343,16 @@ final class SingleplayerStructureFixtureScenario {
                 this.stage = Stage.WAIT_AFTER_CONTROL;
                 return null;
             }
+            if (this.isNoUndoAction(exception) && this.savedFixtureChangedOnlyEntities()) {
+                this.record(true, this.currentFixture.name() + " " + this.currentControl.label()
+                        + " changed only saved-fixture entities without a live undo action after "
+                        + this.currentWaitTicks + " ticks");
+                messages.add("Skipped undo for saved structure fixture " + this.currentFixture.name()
+                        + " because only entity snapshots changed without a live action");
+                this.advanceCase();
+                this.stage = Stage.LOAD_CONTROL_CASE;
+                return null;
+            }
             this.record(false, this.currentFixture.name() + " " + this.currentControl.label()
                     + " queued undo after " + this.currentWaitTicks
                     + " ticks: " + this.errorMessage(exception));
@@ -535,6 +545,15 @@ final class SingleplayerStructureFixtureScenario {
         return this.isGeneratedFixture(this.currentFixture);
     }
 
+    private boolean savedFixtureChangedOnlyEntities() {
+        if (this.requiresExactSnapshots() || this.baseline == null || this.changedSnapshot == null) {
+            return false;
+        }
+        StructureFixtureSnapshot.ComparisonPolicy comparisonPolicy = this.comparisonPolicy();
+        return this.baseline.firstBlockMismatch(this.changedSnapshot, comparisonPolicy) == null
+                && !this.baseline.matches(this.changedSnapshot, comparisonPolicy);
+    }
+
     private void clearVolume() {
         try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression();
              WorldMutationContext.SourceFrame source = WorldMutationContext.pushSource(WorldMutationSource.RESTORE)) {
@@ -590,6 +609,11 @@ final class SingleplayerStructureFixtureScenario {
     private boolean isSettling(Throwable throwable) {
         String message = throwable == null ? "" : throwable.getMessage();
         return message != null && message.contains("still settling");
+    }
+
+    private boolean isNoUndoAction(Throwable throwable) {
+        String message = throwable == null ? "" : throwable.getMessage();
+        return message != null && message.contains("No Lumi action is available to undo");
     }
 
     private record FixtureSpec(String name, Identifier id) {

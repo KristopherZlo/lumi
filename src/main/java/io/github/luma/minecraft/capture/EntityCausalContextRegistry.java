@@ -105,8 +105,13 @@ public final class EntityCausalContextRegistry {
         if (WorldMutationContext.captureSuppressed()) {
             return false;
         }
-        return WorldMutationContext.currentSource() == WorldMutationSource.PLAYER
-                && !WorldMutationContext.currentActionId().isBlank();
+        return this.canRememberSource(WorldMutationContext.currentSource(), WorldMutationContext.currentActionId());
+    }
+
+    boolean canRememberSource(WorldMutationSource source, String actionId) {
+        return (source == WorldMutationSource.PLAYER || source == WorldMutationSource.EXPLOSIVE)
+                && actionId != null
+                && !actionId.isBlank();
     }
 
     private synchronized EntityCausalContext context(Entity entity, ServerLevel level) {
