@@ -5,10 +5,7 @@ import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.HorizontalAlignment;
-import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.List;
 import java.util.Objects;
@@ -23,11 +20,7 @@ public final class RestoreConfirmationDialogView {
     }
 
     public FlowLayout overlay(Model model) {
-        FlowLayout overlay = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
-        overlay.surface(Surface.flat(0x99000000));
-        overlay.padding(Insets.of(10));
-        overlay.horizontalAlignment(HorizontalAlignment.CENTER);
-        overlay.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout overlay = LumaUi.modalOverlay();
 
         FlowLayout frame = LumaUi.modalFrame(Math.max(280, Math.min(420, model.width() - 24)), false);
         frame.child(LumaUi.value(model.title()));
@@ -87,10 +80,9 @@ public final class RestoreConfirmationDialogView {
                 model.totalEntityCount()
         )));
         header.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
-        header.child(LumaUi.button(
-                Component.translatable(model.entityListExpanded()
-                        ? "luma.action.collapse"
-                        : "luma.action.expand"),
+        header.child(LumaUi.iconButton(
+                model.entityListExpanded() ? "chevron-up" : "chevron-down",
+                Component.translatable(model.entityListExpanded() ? "luma.action.collapse" : "luma.action.expand"),
                 button -> this.actions.toggleEntityList()
         ));
         section.child(header);

@@ -378,11 +378,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     }
 
     private FlowLayout saveDialogOverlay(ProjectScreenSections.Model model) {
-        FlowLayout overlay = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
-        overlay.surface(Surface.flat(0x99000000));
-        overlay.padding(Insets.of(10));
-        overlay.horizontalAlignment(HorizontalAlignment.CENTER);
-        overlay.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout overlay = LumaUi.modalOverlay();
 
         FlowLayout modal = LumaUi.modalFrame(Math.min(380, Math.max(280, this.width - 40)));
         modal.child(LumaUi.closeHeader(Component.translatable("luma.screen.save.title"), button -> this.closeSaveDialog()));
@@ -863,11 +859,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
     }
 
     private FlowLayout onboardingOverlay() {
-        FlowLayout overlay = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
-        overlay.surface(Surface.flat(0x99000000));
-        overlay.padding(Insets.of(10));
-        overlay.horizontalAlignment(HorizontalAlignment.CENTER);
-        overlay.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout overlay = LumaUi.modalOverlay();
         overlay.child(this.onboardingTour.panel(this.width, this::handleOnboardingTransition));
         return overlay;
     }

@@ -17,6 +17,7 @@ import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.function.Consumer;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
@@ -61,6 +62,15 @@ public final class LumaUi {
         layout.padding(Insets.of(5));
         layout.gap(5);
         return layout;
+    }
+
+    public static FlowLayout modalOverlay() {
+        FlowLayout overlay = new BlockingModalOverlay();
+        overlay.surface(Surface.flat(0x99000000));
+        overlay.padding(Insets.of(10));
+        overlay.horizontalAlignment(HorizontalAlignment.CENTER);
+        overlay.verticalAlignment(VerticalAlignment.CENTER);
+        return overlay;
     }
 
     public static FlowLayout modalFrame(int width) {
@@ -432,6 +442,37 @@ public final class LumaUi {
 
     private static int withAlpha(int color, int alpha) {
         return (alpha << 24) | (color & 0x00FFFFFF);
+    }
+
+    private static final class BlockingModalOverlay extends FlowLayout {
+
+        private BlockingModalOverlay() {
+            super(Sizing.fill(100), Sizing.fill(100), FlowLayout.Algorithm.VERTICAL);
+        }
+
+        @Override
+        public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
+            super.onMouseDown(click, doubled);
+            return true;
+        }
+
+        @Override
+        public boolean onMouseUp(MouseButtonEvent click) {
+            super.onMouseUp(click);
+            return true;
+        }
+
+        @Override
+        public boolean onMouseScroll(double mouseX, double mouseY, double amount) {
+            super.onMouseScroll(mouseX, mouseY, amount);
+            return true;
+        }
+
+        @Override
+        public boolean onMouseDrag(MouseButtonEvent click, double deltaX, double deltaY) {
+            super.onMouseDrag(click, deltaX, deltaY);
+            return true;
+        }
     }
 
     public static LabelComponent title(Component text) {

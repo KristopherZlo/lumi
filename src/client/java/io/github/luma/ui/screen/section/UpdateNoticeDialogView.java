@@ -4,11 +4,7 @@ import io.github.luma.client.update.UpdateProjectNotice;
 import io.github.luma.ui.LumaUi;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.HorizontalAlignment;
-import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
-import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.Objects;
 import net.minecraft.network.chat.Component;
 
@@ -21,11 +17,7 @@ public final class UpdateNoticeDialogView {
     }
 
     public FlowLayout overlay(Model model) {
-        FlowLayout overlay = UIContainers.verticalFlow(Sizing.fill(100), Sizing.fill(100));
-        overlay.surface(Surface.flat(0x99000000));
-        overlay.padding(Insets.of(10));
-        overlay.horizontalAlignment(HorizontalAlignment.CENTER);
-        overlay.verticalAlignment(VerticalAlignment.CENTER);
+        FlowLayout overlay = LumaUi.modalOverlay();
 
         UpdateProjectNotice notice = model.notice();
         FlowLayout frame = LumaUi.modalFrame(Math.max(280, Math.min(420, model.width() - 24)));
