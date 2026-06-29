@@ -15,6 +15,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.List;
@@ -155,7 +156,7 @@ public final class ProjectSaveCardView {
     private FlowLayout text(Model model, Sizing horizontalSizing) {
         FlowLayout text = UIContainers.verticalFlow(horizontalSizing, Sizing.content());
         text.gap(3);
-        text.child(LumaUi.value(Component.literal(ProjectUiSupport.displayMessage(model.version()))));
+        text.child(this.zoneTitle(model));
         text.child(LumaUi.caption(Component.translatable(
                 "luma.history.version_meta",
                 ProjectUiSupport.safeText(model.version().author()),
@@ -172,6 +173,23 @@ public final class ProjectSaveCardView {
             text.child(meta);
         }
         return text;
+    }
+
+    private FlowLayout zoneTitle(Model model) {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(4);
+        row.verticalAlignment(VerticalAlignment.CENTER);
+        if (model.zoneColor() != null) {
+            row.child(this.zoneColorDot(model.zoneColor()));
+        }
+        row.child(LumaUi.value(Component.literal(ProjectUiSupport.displayMessage(model.version()))));
+        return row;
+    }
+
+    private FlowLayout zoneColorDot(int color) {
+        FlowLayout dot = UIContainers.verticalFlow(Sizing.fixed(7), Sizing.fixed(7));
+        dot.surface(Surface.flat(0xFF000000 | color));
+        return dot;
     }
 
     private FlowLayout actionRow(Model model) {
@@ -285,7 +303,8 @@ public final class ProjectSaveCardView {
             boolean tagEditorVisible,
             String tagEditorText,
             List<String> knownTags,
-            boolean onboardingRestoreTarget
+            boolean onboardingRestoreTarget,
+            Integer zoneColor
     ) {
         public Model(
                 String projectName,
@@ -295,7 +314,7 @@ public final class ProjectSaveCardView {
                 boolean operationActive,
                 int width
         ) {
-            this(projectName, version, versionVariant, current, operationActive, width, true, false, "", List.of(), false);
+            this(projectName, version, versionVariant, current, operationActive, width, true, false, "", List.of(), false, null);
         }
 
         public Model(
@@ -307,7 +326,23 @@ public final class ProjectSaveCardView {
                 int width,
                 boolean createVariantAction
         ) {
-            this(projectName, version, versionVariant, current, operationActive, width, createVariantAction, false, "", List.of(), false);
+            this(projectName, version, versionVariant, current, operationActive, width, createVariantAction, false, "", List.of(), false, null);
+        }
+
+        public Model(
+                String projectName,
+                ProjectVersion version,
+                ProjectVariant versionVariant,
+                boolean current,
+                boolean operationActive,
+                int width,
+                boolean createVariantAction,
+                boolean tagEditorVisible,
+                String tagEditorText,
+                List<String> knownTags,
+                boolean onboardingRestoreTarget
+        ) {
+            this(projectName, version, versionVariant, current, operationActive, width, createVariantAction, tagEditorVisible, tagEditorText, knownTags, onboardingRestoreTarget, null);
         }
 
         public Model {

@@ -113,6 +113,18 @@ class WorkZoneScreenZoneActionsTest {
         assertTrue(methodBody.contains("!refreshed.equals(this.state)"));
     }
 
+    @Test
+    void renderModeButtonLabelsCurrentMode() {
+        String methodBody = methodBody(
+                "    private String renderModeToggleLabelKey() {",
+                "    private FlowLayout zoneCard(WorkZone zone, boolean active) {"
+        );
+
+        assertTrue(methodBody.contains("case FOCUSED -> \"luma.zones.render_focused\";"));
+        assertTrue(methodBody.contains("case ALL -> \"luma.zones.render_all\";"));
+        assertTrue(methodBody.contains("case HIDDEN -> \"luma.zones.render_hidden\";"));
+    }
+
     private String methodBody(String start, String end) {
         int methodIndex = this.source.indexOf(start);
         int nextMethodIndex = this.source.indexOf(end, methodIndex);

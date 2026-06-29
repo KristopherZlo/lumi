@@ -50,10 +50,13 @@ public final class CommitGraphComponent extends BaseUIComponent {
     private static final int HOVER_CARD_HEIGHT = 52;
     private static final int HOVER_PREVIEW_WIDTH = 54;
     private static final int HOVER_PREVIEW_HEIGHT = 40;
+    private static final int ZONE_MARKER_SIZE = 7;
+    private static final int ZONE_MARKER_GAP = 4;
 
     private final List<CommitGraphNode> nodes;
     private final Map<String, ProjectVariant> variantById;
     private final Map<Integer, List<ProjectVariant>> headVariantsByLane;
+    private final Map<String, Integer> zoneColorByVersionId;
     private final int laneCount;
     private final int preferredHeight;
     private final Consumer<String> openVersionDetails;
@@ -79,9 +82,21 @@ public final class CommitGraphComponent extends BaseUIComponent {
             String projectName,
             Function<ProjectVersion, String> previewPathResolver
     ) {
+        this(nodes, variants, openVersionDetails, projectName, previewPathResolver, Map.of());
+    }
+
+    public CommitGraphComponent(
+            List<CommitGraphNode> nodes,
+            List<ProjectVariant> variants,
+            Consumer<String> openVersionDetails,
+            String projectName,
+            Function<ProjectVersion, String> previewPathResolver,
+            Map<String, Integer> zoneColorByVersionId
+    ) {
         this.nodes = nodes == null ? List.of() : List.copyOf(nodes);
         this.variantById = this.indexVariants(variants);
         this.headVariantsByLane = this.indexHeadVariants(this.nodes, this.variantById);
+        this.zoneColorByVersionId = zoneColorByVersionId == null ? Map.of() : Map.copyOf(zoneColorByVersionId);
         this.laneCount = this.nodes.stream()
                 .mapToInt(CommitGraphNode::laneCount)
                 .max()
@@ -210,8 +225,15 @@ public final class CommitGraphComponent extends BaseUIComponent {
             this.drawNode(graphics, nodeX, rowY, laneColor, node.activeHead(), hovered);
             ProjectVersion version = node.version();
             int maxTextWidth = Math.max(24, textRight - textX);
+            Integer zoneColor = this.zoneColorByVersionId.get(version.id());
+            int titleX = textX;
+            if (zoneColor != null) {
+                graphics.fill(textX, rowY - 9, textX + ZONE_MARKER_SIZE, rowY - 2, 0xFF000000 | zoneColor);
+                titleX += ZONE_MARKER_SIZE + ZONE_MARKER_GAP;
+                maxTextWidth = Math.max(24, textRight - titleX);
+            }
             String title = this.trim(font, ProjectUiSupport.displayMessage(version), maxTextWidth);
-            graphics.drawString(font, title, textX, rowY - 11, TEXT_PRIMARY, false);
+            graphics.drawString(font, title, titleX, rowY - 11, TEXT_PRIMARY, false);
 
             String meta = ProjectUiSupport.safeText(version.author())
                     + " | "
@@ -220,7 +242,7 @@ public final class CommitGraphComponent extends BaseUIComponent {
                     + version.id();
             graphics.drawString(font, this.trim(font, meta, maxTextWidth), textX, rowY + 1, TEXT_MUTED, false);
 
-            int badgeX = textX + font.width(title) + 6;
+            int badgeX = titleX + font.width(title) + 6;
             for (String variantId : node.headVariants()) {
                 ProjectVariant variant = this.variantById.get(variantId);
                 if (variant == null || badgeX >= textRight - 18) {

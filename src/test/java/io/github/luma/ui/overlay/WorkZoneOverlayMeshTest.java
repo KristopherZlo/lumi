@@ -2,11 +2,15 @@ package io.github.luma.ui.overlay;
 
 import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.service.WorkZoneShellPlanner;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkZoneOverlayMeshTest {
 
@@ -23,5 +27,12 @@ class WorkZoneOverlayMeshTest {
         OverlayMeshBatch batch = builder.build();
 
         assertEquals(6, batch.primitiveCountForTest());
+    }
+
+    @Test
+    void rendererKeepsShellOutsetNonZeroForVisibleOutlines() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/overlay/WorkZoneOverlayRenderer.java"));
+
+        assertTrue(source.contains("private static final float OUTSET = 0.01F;"));
     }
 }

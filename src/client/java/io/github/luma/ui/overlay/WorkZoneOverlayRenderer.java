@@ -27,7 +27,7 @@ public final class WorkZoneOverlayRenderer {
     private static final int REFRESH_TICKS = 1;
     private static final int FILL_ALPHA = 30;
     private static final float OUTLINE_WIDTH = 2.0F;
-    private static final float OUTSET = 0.0F;
+    private static final float OUTSET = 0.01F;
     private static State activeState;
     private static ShellState cachedShell;
     private static MeshState cachedMesh;

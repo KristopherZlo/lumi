@@ -322,7 +322,8 @@ public final class ProjectScreenSections {
                 model.state().variants(),
                 versionId -> this.actions.openSaveDetails(versionId),
                 model.projectName(),
-                version -> this.previewController.resolvePreviewPath(model.projectName(), version.id())
+                version -> this.previewController.resolvePreviewPath(model.projectName(), version.id()),
+                model.state().zoneColorByVersionId()
         ));
         return graph;
     }
@@ -360,7 +361,8 @@ public final class ProjectScreenSections {
                 entry.version().id().equals(model.tagEditorVersionId()),
                 model.tagEditorText(),
                 TagInputSupport.knownTags(model.state().versions()),
-                this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.LATEST_SAVE_RESTORE && entry.current()
+                this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.LATEST_SAVE_RESTORE && entry.current(),
+                model.state().zoneColor(entry.version())
         ));
         if (this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.LATEST_SAVE_RESTORE && entry.current()) {
             this.onboardingLatestRestoreButton = this.saveCardView.onboardingRestoreButton();

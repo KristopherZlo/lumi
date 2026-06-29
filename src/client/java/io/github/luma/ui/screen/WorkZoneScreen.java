@@ -280,9 +280,9 @@ public final class WorkZoneScreen extends LumaScreen {
 
     private String renderModeToggleLabelKey() {
         return switch (WorkZoneOverlayRenderer.displayMode()) {
-            case FOCUSED -> "luma.zones.render_all";
-            case ALL -> "luma.zones.render_hidden";
-            case HIDDEN -> "luma.zones.render_focused";
+            case FOCUSED -> "luma.zones.render_focused";
+            case ALL -> "luma.zones.render_all";
+            case HIDDEN -> "luma.zones.render_hidden";
         };
     }
 

@@ -113,6 +113,23 @@ class ProjectHomeScreenControllerTest {
     }
 
     @Test
+    void loadStateExposesZoneColorsForShownHiddenCommits() {
+        FakeQuery query = new FakeQuery();
+        query.settings = new ProjectSettings(false, 10, 5, 10, 0.20D, true, true, false, false, 512, true, true);
+        query.versions = List.of(
+                version("v0001", 0),
+                version("v0002", 60, "zone-a")
+        );
+        query.workZones = WorkZoneState.empty().withZones(List.of(zone("zone-a", 0x55CCFF)));
+        ProjectHomeScreenController controller = new ProjectHomeScreenController(query);
+
+        var state = controller.loadState("Tower", "luma.status.project_ready", false);
+
+        assertEquals(0x55CCFF, state.zoneColor(state.versions().getFirst()));
+        assertNull(state.zoneColor(state.versions().getLast()));
+    }
+
+    @Test
     void loadStateShowsCommitsFromDeletedZonesInGlobalHistory() {
         FakeQuery query = new FakeQuery();
         query.versions = List.of(
@@ -268,11 +285,15 @@ class ProjectHomeScreenControllerTest {
     }
 
     private static WorkZone zone(String id) {
+        return zone(id, 0xFFFFFF);
+    }
+
+    private static WorkZone zone(String id, int color) {
         return new WorkZone(
                 id,
                 "11111111-1111-1111-1111-111111111111",
                 id,
-                0xFFFFFF,
+                color,
                 List.of(),
                 "tester",
                 instant(0),

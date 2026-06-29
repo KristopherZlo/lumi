@@ -21,7 +21,9 @@ import io.github.luma.ui.state.ProjectAdvancedViewState;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 
@@ -62,6 +64,7 @@ public final class ProjectHomeScreenController {
                     workZones.zones(),
                     project.settings().hiddenCommitsVisible()
             ));
+            Map<String, Integer> zoneColorByVersionId = this.zoneColorByVersionId(loadedVersions, workZones);
             loadedVersions.sort(Comparator.comparing(io.github.luma.domain.model.ProjectVersion::createdAt).reversed());
             RecoveryDraft draft = this.query.loadDraft(projectName);
             boolean interruptedDraft = this.query.hasInterruptedDraft(projectName);
@@ -83,7 +86,8 @@ public final class ProjectHomeScreenController {
                     this.query.loadOperationSnapshot(project),
                     advanced,
                     status == null || status.isBlank() ? "luma.status.project_ready" : status,
-                    this.query.hasRestoreReturnPoint(projectName)
+                    this.query.hasRestoreReturnPoint(projectName),
+                    zoneColorByVersionId
             );
         } catch (Exception exception) {
             return new ProjectHomeViewState(
@@ -97,6 +101,21 @@ public final class ProjectHomeScreenController {
                     "luma.status.project_failed"
             );
         }
+    }
+
+    private Map<String, Integer> zoneColorByVersionId(List<ProjectVersion> versions, WorkZoneState workZones) {
+        Map<String, Integer> colorByZoneId = new LinkedHashMap<>();
+        for (var zone : workZones.zones()) {
+            colorByZoneId.put(zone.id(), zone.color());
+        }
+        Map<String, Integer> result = new LinkedHashMap<>();
+        for (ProjectVersion version : versions) {
+            Integer color = colorByZoneId.get(this.versionVisibility.workZoneId(version));
+            if (color != null) {
+                result.put(version.id(), color);
+            }
+        }
+        return result;
     }
 
     public List<ProjectVersion> loadDeletedVersions(String projectName) {
