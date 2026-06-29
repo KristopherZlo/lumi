@@ -8,11 +8,13 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
+import io.github.luma.domain.model.WorkZoneState;
 import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.domain.service.RecoveryService;
+import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.integration.common.IntegrationStatus;
 import io.github.luma.integration.common.ExternalToolIntegrationRegistry;
 import io.github.luma.ui.state.ProjectAdvancedViewState;
@@ -53,7 +55,13 @@ public final class ProjectHomeScreenController {
         try {
             BuildProject project = this.query.loadProject(projectName);
             var loadedVariants = new ArrayList<>(this.query.loadVariants(projectName));
-            var loadedVersions = new ArrayList<>(this.query.loadVersions(projectName, loadedVariants));
+            WorkZoneState workZones = this.query.loadWorkZones(projectName);
+            workZones = workZones == null ? WorkZoneState.empty() : workZones;
+            var loadedVersions = new ArrayList<>(this.versionVisibility.globalHistory(
+                    this.query.loadVersions(projectName, loadedVariants),
+                    workZones.zones(),
+                    project.settings().hiddenCommitsVisible()
+            ));
             loadedVersions.sort(Comparator.comparing(io.github.luma.domain.model.ProjectVersion::createdAt).reversed());
             RecoveryDraft draft = this.query.loadDraft(projectName);
             boolean interruptedDraft = this.query.hasInterruptedDraft(projectName);
@@ -114,6 +122,8 @@ public final class ProjectHomeScreenController {
 
         List<ProjectVersion> loadVersions(String projectName, List<ProjectVariant> variants) throws Exception;
 
+        WorkZoneState loadWorkZones(String projectName) throws Exception;
+
         List<ProjectVersion> loadDeletedVersions(String projectName) throws Exception;
 
         RecoveryDraft loadDraft(String projectName) throws Exception;
@@ -137,6 +147,7 @@ public final class ProjectHomeScreenController {
         private final ProjectService projectService = new ProjectService();
         private final RecoveryService recoveryService = new RecoveryService();
         private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
+        private final WorkZoneService workZoneService = new WorkZoneService();
         private final ExternalToolIntegrationRegistry integrationRegistry = new ExternalToolIntegrationRegistry();
         private final OperationSnapshotViewService operationSnapshotViewService = new OperationSnapshotViewService();
 
@@ -158,6 +169,11 @@ public final class ProjectHomeScreenController {
         @Override
         public List<ProjectVersion> loadVersions(String projectName, List<ProjectVariant> variants) throws Exception {
             return this.projectService.loadVersions(this.server(), projectName);
+        }
+
+        @Override
+        public WorkZoneState loadWorkZones(String projectName) throws Exception {
+            return this.workZoneService.load(this.projectService.resolveLayout(this.server(), projectName));
         }
 
         @Override

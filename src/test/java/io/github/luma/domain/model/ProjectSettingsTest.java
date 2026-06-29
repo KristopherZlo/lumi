@@ -23,6 +23,7 @@ class ProjectSettingsTest {
         assertFalse(settings.autoCheckpointEnabled());
         assertEquals(ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD, settings.autoCheckpointLargeChangeThreshold());
         assertTrue(settings.workspaceHudVisible());
+        assertFalse(settings.hiddenCommitsVisible());
     }
 
     @Test
@@ -52,6 +53,7 @@ class ProjectSettingsTest {
         assertTrue(settings.autoCheckpointEnabled());
         assertEquals(ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD, settings.autoCheckpointLargeChangeThreshold());
         assertTrue(settings.workspaceHudVisible());
+        assertFalse(settings.hiddenCommitsVisible());
     }
 
     @Test
@@ -72,5 +74,26 @@ class ProjectSettingsTest {
 
         assertEquals(256, settings.autoCheckpointLargeChangeThreshold());
         assertFalse(settings.workspaceHudVisible());
+    }
+
+    @Test
+    void sanitizePreservesHiddenCommitVisibility() {
+        ProjectSettings settings = ProjectSettings.sanitize(new ProjectSettings(
+                false,
+                10,
+                5,
+                10,
+                0.20D,
+                true,
+                true,
+                false,
+                false,
+                256,
+                true,
+                true
+        ));
+
+        assertTrue(settings.workspaceHudVisible());
+        assertTrue(settings.hiddenCommitsVisible());
     }
 }

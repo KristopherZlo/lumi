@@ -1,8 +1,10 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.WorkZone;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Keeps project-level and zone-scoped version lists from leaking into each other.
@@ -14,6 +16,22 @@ public final class ProjectVersionVisibility {
     public List<ProjectVersion> globalHistory(List<ProjectVersion> versions) {
         return safe(versions).stream()
                 .filter(version -> this.workZoneId(version).isBlank())
+                .toList();
+    }
+
+    public List<ProjectVersion> globalHistory(List<ProjectVersion> versions, List<WorkZone> zones, boolean showHiddenCommits) {
+        if (showHiddenCommits) {
+            return safe(versions);
+        }
+        Set<String> activeZoneIds = (zones == null ? List.<WorkZone>of() : zones).stream()
+                .map(WorkZone::id)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(java.util.stream.Collectors.toSet());
+        return safe(versions).stream()
+                .filter(version -> {
+                    String workZoneId = this.workZoneId(version);
+                    return workZoneId.isBlank() || !activeZoneIds.contains(workZoneId);
+                })
                 .toList();
     }
 

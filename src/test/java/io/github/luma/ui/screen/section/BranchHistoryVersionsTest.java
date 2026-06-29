@@ -77,7 +77,7 @@ class BranchHistoryVersionsTest {
     }
 
     @Test
-    void globalHistoryCardsSkipZoneScopedVersionsEvenWhenTheyAreTheStoredHead() {
+    void globalHistoryCardsKeepZoneScopedVersionsProvidedByController() {
         ProjectVariant main = new ProjectVariant("main", "Main", "v0001", "v0003", true, instant(0));
         List<ProjectVersion> versions = List.of(
                 version("v0001", "main", "", 60),
@@ -89,7 +89,7 @@ class BranchHistoryVersionsTest {
                 .map(entry -> entry.version().id())
                 .toList();
 
-        assertEquals(List.of("v0001"), visibleIds);
+        assertEquals(List.of("v0003", "v0002", "v0001"), visibleIds);
     }
 
     private static ProjectVersion version(String id, String variantId, String parentVersionId, long offsetSeconds) {

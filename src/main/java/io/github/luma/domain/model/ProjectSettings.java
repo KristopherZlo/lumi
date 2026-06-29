@@ -11,9 +11,39 @@ public record ProjectSettings(
         boolean debugLoggingEnabled,
         boolean autoCheckpointEnabled,
         int autoCheckpointLargeChangeThreshold,
-        Boolean workspaceHudEnabled
+        Boolean workspaceHudEnabled,
+        Boolean showHiddenCommits
 ) {
     public static final int DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD = 512;
+
+    public ProjectSettings(
+            boolean autoVersionsEnabled,
+            int autoVersionMinutes,
+            int sessionIdleSeconds,
+            int snapshotEveryVersions,
+            double snapshotVolumeThreshold,
+            boolean safetySnapshotBeforeRestore,
+            boolean previewGenerationEnabled,
+            boolean debugLoggingEnabled,
+            boolean autoCheckpointEnabled,
+            int autoCheckpointLargeChangeThreshold,
+            Boolean workspaceHudEnabled
+    ) {
+        this(
+                autoVersionsEnabled,
+                autoVersionMinutes,
+                sessionIdleSeconds,
+                snapshotEveryVersions,
+                snapshotVolumeThreshold,
+                safetySnapshotBeforeRestore,
+                previewGenerationEnabled,
+                debugLoggingEnabled,
+                autoCheckpointEnabled,
+                autoCheckpointLargeChangeThreshold,
+                workspaceHudEnabled,
+                false
+        );
+    }
 
     public static ProjectSettings defaults() {
         return new ProjectSettings(
@@ -27,7 +57,8 @@ public record ProjectSettings(
                 false,
                 false,
                 DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD,
-                true
+                true,
+                false
         );
     }
 
@@ -49,11 +80,16 @@ public record ProjectSettings(
                 settings.autoCheckpointLargeChangeThreshold() <= 0
                         ? DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD
                         : settings.autoCheckpointLargeChangeThreshold(),
-                settings.workspaceHudEnabled() == null ? true : settings.workspaceHudEnabled()
+                settings.workspaceHudEnabled() == null ? true : settings.workspaceHudEnabled(),
+                settings.showHiddenCommits() == null ? false : settings.showHiddenCommits()
         );
     }
 
     public boolean workspaceHudVisible() {
         return !Boolean.FALSE.equals(this.workspaceHudEnabled);
+    }
+
+    public boolean hiddenCommitsVisible() {
+        return Boolean.TRUE.equals(this.showHiddenCommits);
     }
 }

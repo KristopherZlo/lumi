@@ -15,7 +15,10 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.WorkZone;
+import io.github.luma.domain.model.WorkZoneState;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.domain.service.ProjectVersionVisibility;
 import net.minecraft.nbt.CompoundTag;
 import io.github.luma.integration.common.IntegrationStatus;
 import java.time.Instant;
@@ -76,6 +79,54 @@ class ProjectHomeScreenControllerTest {
         assertTrue(state.hasRecoveryDraft());
     }
 
+    @Test
+    void loadStateHidesActiveZoneCommitsFromGlobalHistoryByDefault() {
+        FakeQuery query = new FakeQuery();
+        query.versions = List.of(
+                version("v0001", 0),
+                version("v0002", 60, "zone-a"),
+                version("v0003", 120)
+        );
+        query.workZones = WorkZoneState.empty().withZones(List.of(zone("zone-a")));
+        ProjectHomeScreenController controller = new ProjectHomeScreenController(query);
+
+        var state = controller.loadState("Tower", "luma.status.project_ready", false);
+
+        assertEquals(List.of("v0003", "v0001"), state.versions().stream().map(ProjectVersion::id).toList());
+    }
+
+    @Test
+    void loadStateShowsHiddenCommitsWhenProjectSettingIsEnabled() {
+        FakeQuery query = new FakeQuery();
+        query.settings = new ProjectSettings(false, 10, 5, 10, 0.20D, true, true, false, false, 512, true, true);
+        query.versions = List.of(
+                version("v0001", 0),
+                version("v0002", 60, "zone-a"),
+                version("v0003", 120)
+        );
+        query.workZones = WorkZoneState.empty().withZones(List.of(zone("zone-a")));
+        ProjectHomeScreenController controller = new ProjectHomeScreenController(query);
+
+        var state = controller.loadState("Tower", "luma.status.project_ready", false);
+
+        assertEquals(List.of("v0003", "v0002", "v0001"), state.versions().stream().map(ProjectVersion::id).toList());
+    }
+
+    @Test
+    void loadStateShowsCommitsFromDeletedZonesInGlobalHistory() {
+        FakeQuery query = new FakeQuery();
+        query.versions = List.of(
+                version("v0001", 0),
+                version("v0002", 60, "zone-deleted"),
+                version("v0003", 120)
+        );
+        ProjectHomeScreenController controller = new ProjectHomeScreenController(query);
+
+        var state = controller.loadState("Tower", "luma.status.project_ready", false);
+
+        assertEquals(List.of("v0003", "v0002", "v0001"), state.versions().stream().map(ProjectVersion::id).toList());
+    }
+
     private static final class FakeQuery implements ProjectHomeScreenController.Query {
 
         private int totalIntegrityLoads;
@@ -83,6 +134,9 @@ class ProjectHomeScreenControllerTest {
         private int totalIntegrationLoads;
         private RecoveryDraft draft;
         private boolean interruptedDraft;
+        private ProjectSettings settings = ProjectSettings.defaults();
+        private List<ProjectVersion> versions = List.of(version("v0001", 0), version("v0002", 60));
+        private WorkZoneState workZones = WorkZoneState.empty();
 
         @Override
         public boolean hasSingleplayerServer() {
@@ -91,7 +145,7 @@ class ProjectHomeScreenControllerTest {
 
         @Override
         public BuildProject loadProject(String projectName) {
-            return project(projectName);
+            return project(projectName, this.settings);
         }
 
         @Override
@@ -101,7 +155,12 @@ class ProjectHomeScreenControllerTest {
 
         @Override
         public List<ProjectVersion> loadVersions(String projectName, List<ProjectVariant> variants) {
-            return List.of(version("v0001", 0), version("v0002", 60));
+            return this.versions;
+        }
+
+        @Override
+        public WorkZoneState loadWorkZones(String projectName) {
+            return this.workZones;
         }
 
         @Override
@@ -154,7 +213,7 @@ class ProjectHomeScreenControllerTest {
         }
     }
 
-    private static BuildProject project(String name) {
+    private static BuildProject project(String name, ProjectSettings settings) {
         return new BuildProject(
                 BuildProject.CURRENT_SCHEMA_VERSION,
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
@@ -169,13 +228,17 @@ class ProjectHomeScreenControllerTest {
                 "main",
                 instant(0),
                 instant(0),
-                ProjectSettings.defaults(),
+                settings,
                 false,
                 false
         );
     }
 
     private static ProjectVersion version(String id, long offsetSeconds) {
+        return version(id, offsetSeconds, "");
+    }
+
+    private static ProjectVersion version(String id, long offsetSeconds, String zoneId) {
         return new ProjectVersion(
                 id,
                 "11111111-1111-1111-1111-111111111111",
@@ -188,8 +251,32 @@ class ProjectHomeScreenControllerTest {
                 id,
                 io.github.luma.domain.model.ChangeStats.empty(),
                 io.github.luma.domain.model.PreviewInfo.none(),
-                io.github.luma.domain.model.ExternalSourceInfo.manual(),
+                zoneId == null || zoneId.isBlank()
+                        ? io.github.luma.domain.model.ExternalSourceInfo.manual()
+                        : io.github.luma.domain.model.ExternalSourceInfo.external(
+                                "MANUAL",
+                                "manual",
+                                "Manual Save",
+                                "",
+                                null,
+                                false,
+                                false,
+                                java.util.Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
+                        ),
                 instant(offsetSeconds)
+        );
+    }
+
+    private static WorkZone zone(String id) {
+        return new WorkZone(
+                id,
+                "11111111-1111-1111-1111-111111111111",
+                id,
+                0xFFFFFF,
+                List.of(),
+                "tester",
+                instant(0),
+                instant(0)
         );
     }
 

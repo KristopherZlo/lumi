@@ -41,6 +41,7 @@ public final class SettingsScreen extends LumaScreen {
     private boolean debugLoggingEnabled;
     private boolean autoCheckpointEnabled;
     private boolean workspaceHudEnabled = true;
+    private boolean hiddenCommitsVisible;
     private boolean archived;
     private String autoVersionMinutes = "10";
     private String sessionIdleSeconds = "5";
@@ -73,6 +74,7 @@ public final class SettingsScreen extends LumaScreen {
             this.debugLoggingEnabled = project.settings().debugLoggingEnabled();
             this.autoCheckpointEnabled = project.settings().autoCheckpointEnabled();
             this.workspaceHudEnabled = project.settings().workspaceHudVisible();
+            this.hiddenCommitsVisible = project.settings().hiddenCommitsVisible();
             this.archived = project.archived();
             this.autoVersionMinutes = Integer.toString(project.settings().autoVersionMinutes());
             this.sessionIdleSeconds = Integer.toString(project.settings().sessionIdleSeconds());
@@ -116,6 +118,7 @@ public final class SettingsScreen extends LumaScreen {
         body.child(this.safetySection());
         body.child(this.previewSection());
         body.child(this.hudSection());
+        body.child(this.historySection());
         body.child(this.storageSection());
         body.child(this.performanceSection());
         body.child(this.debugSection());
@@ -217,6 +220,20 @@ public final class SettingsScreen extends LumaScreen {
                 Component.translatable("luma.settings.workspace_hud"),
                 Component.translatable("luma.settings.workspace_hud_help"),
                 this.toggleControl(this.workspaceHudEnabled, value -> this.workspaceHudEnabled = value),
+                ""
+        ));
+        return section;
+    }
+
+    private FlowLayout historySection() {
+        FlowLayout section = LumaUi.sectionCard(
+                Component.translatable("luma.settings.history_title"),
+                Component.translatable("luma.settings.history_help")
+        );
+        section.child(this.fieldWithError(
+                Component.translatable("luma.settings.show_hidden_commits"),
+                Component.translatable("luma.settings.show_hidden_commits_help"),
+                this.toggleControl(this.hiddenCommitsVisible, value -> this.hiddenCommitsVisible = value),
                 ""
         ));
         return section;
@@ -343,7 +360,8 @@ public final class SettingsScreen extends LumaScreen {
                         this.debugLoggingEnabled,
                         this.autoCheckpointEnabled,
                         parsedAutoCheckpointLargeChangeThreshold,
-                        this.workspaceHudEnabled
+                        this.workspaceHudEnabled,
+                        this.hiddenCommitsVisible
                 ),
                 this.archived
         );
