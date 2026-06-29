@@ -91,7 +91,7 @@ Lumi has diagnostic telemetry for crashes, failed operations, rejected actions, 
 
 Telemetry does not send raw logs, screen views, clicks, world names, project names, coordinates, seeds, exception messages, raw file paths, raw NBT, or block/entity payloads.
 
-The default endpoint is `https://lumi.zloyxp.cc/v1/events/batch`. The receiver stores allowlisted diagnostic fields only, keeps raw events for 90 days, and exposes diagnostics through an authenticated Grafana dashboard.
+The default endpoint is the Lumi project telemetry receiver. The receiver stores allowlisted diagnostic fields only, keeps raw events for 90 days, and exposes diagnostics through a private authenticated dashboard.
 
 ## For Developers
 
@@ -129,27 +129,12 @@ The self-hosted telemetry receiver lives in `telemetry-backend`. It is a small N
 - public ingest at `POST /v1/events/batch`
 - strict JSON schema, event type allowlists, key allowlists, body size limits, and per-client rate limiting
 - no IP storage
-- Grafana at `https://lumi.zloyxp.cc/` with sign-up and anonymous access disabled
+- private Grafana access with sign-up and anonymous access disabled
 - a read-only Grafana database user
 - default dashboard panels for installs, failures, event types, versions, and sanitized recent events
 - 90-day retention for stored raw events
 
-The Node service should stay behind nginx on localhost. Required runtime environment:
-
-```text
-DATABASE_URL=postgres://...
-ADMIN_USERNAME=ZloyExperience
-ADMIN_PASSWORD_HASH=scrypt$...
-HOST=127.0.0.1
-PORT=8787
-TRUST_PROXY=1
-```
-
-Generate a random admin password and `ADMIN_PASSWORD_HASH`:
-
-```powershell
-node --input-type=module -e "import { randomBytes } from 'node:crypto'; import { hashPassword } from './src/admin-auth.js'; const password = randomBytes(24).toString('base64url'); console.log('password=' + password); console.log('hash=' + hashPassword(password));"
-```
+Keep deployment-specific hosts, credentials, hashes, and connection strings out of public docs.
 
 Run the local test-client profile:
 
