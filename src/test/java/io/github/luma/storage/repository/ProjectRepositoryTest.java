@@ -69,6 +69,42 @@ class ProjectRepositoryTest {
     }
 
     @Test
+    void loadsLegacyProjectIdAndBranchFields() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "LegacyWorld");
+        this.repository.initializeLayout(layout);
+        Files.writeString(layout.projectFile(), """
+                {
+                  "schemaVersion": 1,
+                  "projectId": "26a07bfb-214b-43ae-ba74-6eba3580f12b",
+                  "name": "GameTest Restore",
+                  "dimensionId": "minecraft:overworld",
+                  "mainBranchId": "main",
+                  "activeBranchId": "main",
+                  "settings": {
+                    "autoVersionsEnabled": false,
+                    "autoVersionMinutes": 15,
+                    "sessionIdleSeconds": 300,
+                    "snapshotEveryVersions": 5,
+                    "snapshotVolumeThreshold": 32768,
+                    "safetySnapshotBeforeRestore": true,
+                    "previewGenerationEnabled": true,
+                    "debugLoggingEnabled": false,
+                    "autoCheckpointEnabled": false,
+                    "workspaceHudEnabled": true
+                  }
+                }
+                """, StandardCharsets.UTF_8);
+
+        BuildProject loaded = this.repository.load(layout).orElseThrow();
+
+        assertEquals("26a07bfb-214b-43ae-ba74-6eba3580f12b", loaded.id().toString());
+        assertEquals("main", loaded.mainVariantId());
+        assertEquals("main", loaded.activeVariantId());
+        assertEquals(Instant.EPOCH, loaded.createdAt());
+        assertEquals(Instant.EPOCH, loaded.updatedAt());
+    }
+
+    @Test
     void savesProjectMetadataAtomicallyWithoutLeavingTempFile() throws Exception {
         ProjectLayout layout = ProjectLayout.of(this.tempDir, "Atomic Project");
         BuildProject project = BuildProject.createWorldWorkspace(
