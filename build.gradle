@@ -122,6 +122,12 @@ fabricApi {
 
 def serverGameTestEulaFile = layout.buildDirectory.file('run/gameTest/eula.txt')
 
+tasks.named('deleteGameTestRunDir').configure {
+    doLast {
+        project.delete(layout.buildDirectory.dir('run/gameTest/world').get().asFile)
+    }
+}
+
 tasks.register('acceptServerGameTestEula') {
     dependsOn(tasks.named('deleteGameTestRunDir'))
     outputs.file(serverGameTestEulaFile)

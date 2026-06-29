@@ -163,6 +163,8 @@ Run the server GameTest smoke suite:
 .\gradlew.bat runGameTest --no-daemon
 ```
 
+This task clears `build/run/gameTest/world` before launch so server GameTests do not reuse stale local projects.
+
 Run the alpha gate:
 
 ```powershell
