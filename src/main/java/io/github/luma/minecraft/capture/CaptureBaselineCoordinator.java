@@ -3,6 +3,7 @@ package io.github.luma.minecraft.capture;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import net.minecraft.core.BlockPos;
@@ -53,6 +54,17 @@ final class CaptureBaselineCoordinator {
                         oldBlockEntity
                 )
         );
+    }
+
+    void captureSessionChunkBaseline(
+            CaptureSessionState session,
+            ChunkPoint chunk,
+            ChunkSnapshotPayload snapshot
+    ) {
+        if (session == null || chunk == null || snapshot == null || session.hasBaselineChunk(chunk)) {
+            return;
+        }
+        session.captureBaselineChunk(chunk, snapshot);
     }
 
     void recordBaselineCorrection(

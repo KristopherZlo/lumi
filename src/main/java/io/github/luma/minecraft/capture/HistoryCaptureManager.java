@@ -156,28 +156,38 @@ public final class HistoryCaptureManager {
 
                 this.getOrCreateWorkingDraft(trackedProject, source, now);
                 CaptureSessionState session = this.workingDrafts.session(projectId);
-                if (session == null || !this.ensureTrackedChunk(
+                if (session == null) {
+                    continue;
+                }
+                TrackedChunkBaseline trackedChunk = this.ensureTrackedChunkBaseline(
                         trackedProject,
                         level,
                         pos,
                         oldState,
                         oldBlockEntity,
+                        null,
+                        null,
                         source,
                         activeSessionRegion,
                         now
-                )) {
+                );
+                if (!trackedChunk.tracked()) {
                     continue;
                 }
 
-                this.baselineCoordinator.captureSessionChunkBaseline(
-                        trackedProject,
-                        level,
-                        session,
-                        chunk,
-                        pos,
-                        oldState,
-                        oldBlockEntity
-                );
+                if (trackedChunk.capturedBaseline() == null) {
+                    this.baselineCoordinator.captureSessionChunkBaseline(
+                            trackedProject,
+                            level,
+                            session,
+                            chunk,
+                            pos,
+                            oldState,
+                            oldBlockEntity
+                    );
+                } else {
+                    this.baselineCoordinator.captureSessionChunkBaseline(session, chunk, trackedChunk.capturedBaseline());
+                }
                 if (!explicitRootSource) {
                     this.baselineCoordinator.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
                 }
@@ -1342,7 +1352,7 @@ public final class HistoryCaptureManager {
         return this.trackedProjectCatalog.matching(level, pos);
     }
 
-    private void captureChunkBaseline(
+    private ChunkSnapshotPayload captureChunkBaseline(
             TrackedProject trackedProject,
             ServerLevel level,
             BlockPos pos,
@@ -1350,10 +1360,10 @@ public final class HistoryCaptureManager {
             CompoundTag oldBlockEntity,
             Instant now
     ) throws IOException {
-        this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, null, null, now);
+        return this.captureChunkBaseline(trackedProject, level, pos, oldState, oldBlockEntity, null, null, now);
     }
 
-    private void captureChunkBaseline(
+    private ChunkSnapshotPayload captureChunkBaseline(
             TrackedProject trackedProject,
             ServerLevel level,
             BlockPos pos,
@@ -1373,7 +1383,7 @@ public final class HistoryCaptureManager {
                     chunk.z(),
                     trackedProject.project().name()
             );
-            return;
+            return null;
         }
         if (this.persistenceCoordinator.hasPendingBaselineWrite(trackedProject.project().id().toString(), chunk)) {
             LumaDebugLog.log(
@@ -1384,7 +1394,7 @@ public final class HistoryCaptureManager {
                     chunk.z(),
                     trackedProject.project().name()
             );
-            return;
+            return null;
         }
 
         ChunkSnapshotPayload chunkSnapshot = this.chunkSnapshotCaptureService.captureLoadedChunk(
@@ -1403,13 +1413,15 @@ public final class HistoryCaptureManager {
                                 level.dimension().identifier()
                         )
                 ));
-        this.persistenceCoordinator.enqueueBaselineWrite(
+        if (!this.persistenceCoordinator.enqueueBaselineWrite(
                 trackedProject.layout(),
                 trackedProject.project().id().toString(),
                 trackedProject.project().name(),
                 chunkSnapshot,
                 now
-        );
+        )) {
+            return null;
+        }
         LumaDebugLog.log(
                 trackedProject.project(),
                 "capture",
@@ -1419,6 +1431,7 @@ public final class HistoryCaptureManager {
                 trackedProject.project().name(),
                 pos
         );
+        return chunkSnapshot;
     }
 
     private boolean ensureTrackedChunk(
@@ -1431,7 +1444,7 @@ public final class HistoryCaptureManager {
             boolean activeSessionRegion,
             Instant now
     ) throws IOException {
-        return this.ensureTrackedChunk(
+        return this.ensureTrackedChunkBaseline(
                 trackedProject,
                 level,
                 pos,
@@ -1442,7 +1455,7 @@ public final class HistoryCaptureManager {
                 source,
                 activeSessionRegion,
                 now
-        );
+        ).tracked();
     }
 
     private boolean ensureTrackedChunk(
@@ -1457,16 +1470,42 @@ public final class HistoryCaptureManager {
             boolean activeSessionRegion,
             Instant now
     ) throws IOException {
+        return this.ensureTrackedChunkBaseline(
+                trackedProject,
+                level,
+                pos,
+                oldState,
+                oldBlockEntity,
+                oldEntityPayload,
+                newEntityPayload,
+                source,
+                activeSessionRegion,
+                now
+        ).tracked();
+    }
+
+    private TrackedChunkBaseline ensureTrackedChunkBaseline(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            EntityPayload oldEntityPayload,
+            EntityPayload newEntityPayload,
+            io.github.luma.domain.model.WorldMutationSource source,
+            boolean activeSessionRegion,
+            Instant now
+    ) throws IOException {
         ChunkPoint chunk = new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4);
         CaptureSessionState session = this.workingDrafts.session(trackedProject.project().id().toString());
         if (session != null && session.hasBaselineChunk(chunk)) {
-            return true;
+            return new TrackedChunkBaseline(true, null);
         }
         if (this.persistenceCoordinator.hasPendingBaselineWrite(trackedProject.project().id().toString(), chunk)) {
-            return true;
+            return new TrackedChunkBaseline(true, null);
         }
         if (this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
-            return true;
+            return new TrackedChunkBaseline(true, null);
         }
         if (!ELIGIBILITY.allowsTrackedChunkExpansion(source, activeSessionRegion)) {
             this.diagnosticsLogger.logSkippedCapture(
@@ -1477,10 +1516,10 @@ public final class HistoryCaptureManager {
                     "chunk " + chunk.x() + ":" + chunk.z()
                             + " is not tracked yet and the source cannot expand tracking"
             );
-            return false;
+            return new TrackedChunkBaseline(false, null);
         }
 
-        this.captureChunkBaseline(
+        return new TrackedChunkBaseline(true, this.captureChunkBaseline(
                 trackedProject,
                 level,
                 pos,
@@ -1489,8 +1528,10 @@ public final class HistoryCaptureManager {
                 oldEntityPayload,
                 newEntityPayload,
                 now
-        );
-        return true;
+        ));
+    }
+
+    private record TrackedChunkBaseline(boolean tracked, ChunkSnapshotPayload capturedBaseline) {
     }
 
     private boolean canCaptureIntoSession(
