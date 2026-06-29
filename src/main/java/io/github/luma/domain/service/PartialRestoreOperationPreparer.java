@@ -73,7 +73,9 @@ final class PartialRestoreOperationPreparer {
             Predicate<BlockPoint> hardScope,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
-        progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing partial restore request");
+        boolean zoneRestore = zoneRestoreRequest(request);
+        String restoreName = zoneRestore ? "zone restore" : "partial restore";
+        progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing " + restoreName + " request");
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, request.targetVersionId());
@@ -82,15 +84,16 @@ final class PartialRestoreOperationPreparer {
                 .orElse(null);
 
         LumaMod.LOGGER.info(
-                "Starting partial restore for project {} to version {} over {}",
+                "Starting {} for project {} to version {} over {}",
+                restoreName,
                 project.name(),
                 targetVersion.id(),
                 request.bounds()
         );
         this.recoveryRepository.appendJournalEntry(layout, new io.github.luma.domain.model.RecoveryJournalEntry(
                 Instant.now(),
-                "partial-restore-started",
-                "Started partial restore to version " + targetVersion.id(),
+                zoneRestore ? "zone-restore-started" : "partial-restore-started",
+                "Started " + restoreName + " to version " + targetVersion.id(),
                 targetVersion.id(),
                 activeVariant.id()
         ));
@@ -132,7 +135,7 @@ final class PartialRestoreOperationPreparer {
         try (var ignored = LumaLoadLog.measure(
                 "restore",
                 "PreparedChunkBatchCollapser.collapse",
-                "source=partial-restore, batches=" + decodedBatches.size()
+                "source=" + (zoneRestore ? "zone-restore" : "partial-restore") + ", batches=" + decodedBatches.size()
         )) {
             batches = this.batchCollapser.collapse(decodedBatches);
         }
@@ -161,6 +164,11 @@ final class PartialRestoreOperationPreparer {
                 },
                 diagnosticsEnabled
         );
+    }
+
+    private static boolean zoneRestoreRequest(PartialRestoreRequest request) {
+        return request != null
+                && !request.metadata().getOrDefault(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, "").isBlank();
     }
 
     PartialRestorePlanSummary summarize(

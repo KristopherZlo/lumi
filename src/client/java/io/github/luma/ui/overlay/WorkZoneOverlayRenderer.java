@@ -27,13 +27,13 @@ public final class WorkZoneOverlayRenderer {
     private static final int REFRESH_TICKS = 1;
     private static final int FILL_ALPHA = 30;
     private static final float OUTLINE_WIDTH = 2.0F;
-    private static final float OUTSET = 0.01F;
+    private static final float OUTSET = 0.0F;
     private static State activeState;
     private static ShellState cachedShell;
     private static MeshState cachedMesh;
     private static String lastEnteredZoneId = "";
     private static int refreshCooldown;
-    private static boolean showAllZones;
+    private static DisplayMode displayMode = DisplayMode.FOCUSED;
 
     private WorkZoneOverlayRenderer() {
     }
@@ -61,7 +61,11 @@ public final class WorkZoneOverlayRenderer {
 
     public static void render(WorldRenderContext context) {
         State state = activeState;
-        if (context == null || context.matrices() == null || state == null || state.faces().isEmpty()) {
+        if (displayMode == DisplayMode.HIDDEN
+                || context == null
+                || context.matrices() == null
+                || state == null
+                || state.faces().isEmpty()) {
             clearCachedMesh();
             return;
         }
@@ -76,11 +80,23 @@ public final class WorkZoneOverlayRenderer {
     }
 
     public static boolean showAllZones() {
-        return showAllZones;
+        return displayMode == DisplayMode.ALL;
     }
 
     public static void toggleShowAllZones() {
-        showAllZones = !showAllZones;
+        cycleDisplayMode();
+    }
+
+    public static DisplayMode displayMode() {
+        return displayMode;
+    }
+
+    public static void cycleDisplayMode() {
+        displayMode = switch (displayMode) {
+            case FOCUSED -> DisplayMode.ALL;
+            case ALL -> DisplayMode.HIDDEN;
+            case HIDDEN -> DisplayMode.FOCUSED;
+        };
         clearCachedMesh();
     }
 
@@ -118,7 +134,7 @@ public final class WorkZoneOverlayRenderer {
                 .findFirst()
                 .orElse(null);
         WorkZone enteredZone = enteredZone(zones.zones(), activeZone, playerCell);
-        if (showAllZones) {
+        if (displayMode == DisplayMode.ALL) {
             return new State(
                     renderFaces(zones.zones()),
                     enteredZone == null ? "" : enteredZone.id(),
@@ -133,6 +149,12 @@ public final class WorkZoneOverlayRenderer {
                 enteredZone == null ? "" : enteredZone.id(),
                 enteredZone == null ? "" : enteredZone.name()
         );
+    }
+
+    public enum DisplayMode {
+        FOCUSED,
+        ALL,
+        HIDDEN
     }
 
     private static WorkZone enteredZone(List<WorkZone> zones, WorkZone activeZone, WorkZoneCell playerCell) {

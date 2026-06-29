@@ -49,6 +49,14 @@ class ScreenOperationStateSupportTest {
                         "luma.status.project_ready"
                 )
         );
+        assertEquals(
+                "luma.status.project_ready",
+                ScreenOperationStateSupport.normalizeStatusKey(
+                        "luma.status.zone_restore_started",
+                        null,
+                        "luma.status.project_ready"
+                )
+        );
     }
 
     @Test

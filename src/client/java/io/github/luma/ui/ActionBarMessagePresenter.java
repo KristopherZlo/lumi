@@ -128,6 +128,7 @@ public final class ActionBarMessagePresenter {
             case "amend-version" -> "luma.actionbar.operation.amend";
             case "restore-version" -> "luma.actionbar.operation.restore";
             case "partial-restore" -> "luma.actionbar.operation.partial_restore";
+            case "zone-restore" -> "luma.actionbar.operation.zone_restore";
             case "restore-draft" -> "luma.actionbar.operation.restore_draft";
             case "quick-rollback" -> "luma.actionbar.operation.quick_rollback";
             case "undo-action" -> "luma.actionbar.operation.undo";

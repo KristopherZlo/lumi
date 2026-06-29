@@ -548,7 +548,7 @@ public final class RestoreService {
         return this.worldOperationManager.startPreparedApplyOperation(
                 level,
                 project.id().toString(),
-                "partial-restore",
+                zoneRestoreRequest(resolvedRequest.request()) ? "zone-restore" : "partial-restore",
                 "blocks",
                 LumaDebugLog.enabled(project),
                 progressSink -> this.partialRestoreOperationPreparer.prepare(
@@ -560,6 +560,11 @@ public final class RestoreService {
                         progressSink
                 )
         );
+    }
+
+    private static boolean zoneRestoreRequest(PartialRestoreRequest request) {
+        return request != null
+                && !request.metadata().getOrDefault(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, "").isBlank();
     }
 
     public PartialRestorePlanSummary summarizePartialRestorePlan(ServerLevel level, PartialRestoreRequest request) throws IOException {

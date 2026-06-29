@@ -7,6 +7,7 @@ import io.github.luma.domain.model.OperationStage;
 import java.time.Instant;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -47,9 +48,22 @@ class ActionBarMessagePresenterTest {
         Assertions.assertEquals(ChatFormatting.GOLD.getColor(), message.getSiblings().get(4).getStyle().getColor().getValue());
     }
 
+    @Test
+    void zoneRestoreUsesSpecificOperationLabel() {
+        Component message = ActionBarMessagePresenter.operation(snapshot("zone-restore", OperationStage.APPLYING, 1, 2));
+        var label = message.getSiblings().get(2).getContents();
+
+        Assertions.assertInstanceOf(TranslatableContents.class, label);
+        Assertions.assertEquals("luma.actionbar.operation.zone_restore", ((TranslatableContents) label).getKey());
+    }
+
     private static OperationSnapshot snapshot(OperationStage stage, int completed, int total) {
+        return snapshot("restore-version", stage, completed, total);
+    }
+
+    private static OperationSnapshot snapshot(String label, OperationStage stage, int completed, int total) {
         return new OperationSnapshot(
-                new OperationHandle("op", "project", "restore-version", NOW, false),
+                new OperationHandle("op", "project", label, NOW, false),
                 stage,
                 new OperationProgress(completed, total, "blocks"),
                 "",

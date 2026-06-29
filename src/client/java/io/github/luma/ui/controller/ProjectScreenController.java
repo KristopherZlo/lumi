@@ -9,6 +9,7 @@ import io.github.luma.domain.model.RestoreEntityTypeSelection;
 import io.github.luma.domain.service.ChangeStatsFactory;
 import io.github.luma.domain.service.HistoryEditService;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreEntitySummaryService;
@@ -363,7 +364,7 @@ public final class ProjectScreenController {
                 return status;
             }
             this.restoreService.partialRestore(level, request);
-            return "luma.status.partial_restore_started";
+            return zoneRestoreRequest(request) ? "luma.status.zone_restore_started" : "luma.status.partial_restore_started";
         } catch (IllegalStateException exception) {
             LumaMod.LOGGER.warn("Partial restore request rejected for project {}", request.projectName(), exception);
             this.reportRejectedAction("partial_restore", "luma.status.world_operation_busy", exception);
@@ -406,6 +407,11 @@ public final class ProjectScreenController {
             return "luma.status.partial_restore_started";
         }
         return partialRestoreNoChangesStatus(summary.partialRestoreMode());
+    }
+
+    private static boolean zoneRestoreRequest(PartialRestoreRequest request) {
+        return request != null
+                && !request.metadata().getOrDefault(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, "").isBlank();
     }
 
     public static String partialRestorePreviewStatus(io.github.luma.domain.model.PartialRestorePlanSummary summary) {
