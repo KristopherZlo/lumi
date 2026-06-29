@@ -305,13 +305,10 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
     }
 
     private static int defaultBaselineWriterThreads() {
-        return baselineWriterThreads(
-                Runtime.getRuntime().availableProcessors(),
-                System.getProperty(BASELINE_THREADS_PROPERTY)
-        );
+        return baselineWriterThreads(System.getProperty(BASELINE_THREADS_PROPERTY));
     }
 
-    static int baselineWriterThreads(int availableProcessors, String configuredValue) {
+    static int baselineWriterThreads(String configuredValue) {
         if (configuredValue != null && !configuredValue.isBlank()) {
             try {
                 int configured = Integer.parseInt(configuredValue.trim());
@@ -319,15 +316,11 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                     return Math.min(configured, MAX_BASELINE_THREAD_LIMIT);
                 }
             } catch (NumberFormatException ignored) {
-                // Invalid values fall back to the conservative CPU-based default.
+                // Invalid values fall back to the conservative single-writer default.
             }
         }
 
-        int processors = Math.max(1, availableProcessors);
-        if (processors == 1) {
-            return 1;
-        }
-        return Math.min(DEFAULT_BASELINE_THREAD_LIMIT, Math.max(2, processors / 2));
+        return DEFAULT_BASELINE_THREAD_LIMIT;
     }
 
     private static long elapsedMillis(long startedAt) {

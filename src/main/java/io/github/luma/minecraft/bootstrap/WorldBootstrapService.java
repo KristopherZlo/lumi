@@ -15,7 +15,7 @@ import net.minecraft.server.MinecraftServer;
  */
 public final class WorldBootstrapService implements AutoCloseable {
 
-    private static final int PLAYER_JOIN_BOOTSTRAP_DELAY_TICKS = 20;
+    private static final int PLAYER_JOIN_BOOTSTRAP_DELAY_TICKS = 20 * 10;
     private static final AtomicInteger NEXT_BOOTSTRAP_THREAD_INDEX = new AtomicInteger(1);
 
     private final ProjectService projectService;

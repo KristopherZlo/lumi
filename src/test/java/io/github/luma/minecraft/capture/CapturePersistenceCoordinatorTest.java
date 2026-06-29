@@ -204,15 +204,13 @@ class CapturePersistenceCoordinatorTest {
     }
 
     @Test
-    void baselineWriterThreadCountUsesBoundedCpuDefaultAndExplicitOverride() {
-        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(1, null));
-        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(2, null));
-        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(16, null));
-
-        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(16, "1"));
-        assertEquals(8, CapturePersistenceCoordinator.baselineWriterThreads(16, "64"));
-        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(16, "invalid"));
-        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(16, "0"));
+    void baselineWriterThreadCountUsesSingleDefaultAndClampedOverride() {
+        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(null));
+        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(""));
+        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads("1"));
+        assertEquals(8, CapturePersistenceCoordinator.baselineWriterThreads("64"));
+        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads("invalid"));
+        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads("0"));
     }
 
     private static ChunkSnapshotPayload chunkSnapshot() {
