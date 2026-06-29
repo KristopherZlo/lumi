@@ -26,5 +26,6 @@ class VariantsScreenBranchActionsTest {
         assertTrue(this.source.contains("luma.action.bind_branch"));
         assertTrue(this.source.contains("branchBindDialogOverlay()"));
         assertTrue(this.source.contains("setVariantSwitchKey"));
+        assertTrue(this.source.contains("LumaUi.keybindChip"));
     }
 }

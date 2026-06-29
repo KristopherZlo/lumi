@@ -1,6 +1,8 @@
 package io.github.luma.ui;
 
 import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.ui.onboarding.KeyGlyphComponent;
+import io.github.luma.ui.onboarding.KeyGlyphResolver;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -303,6 +305,24 @@ public final class LumaUi {
         chip.child(statValue(value));
         chip.child(statLabel(label));
         return inlineControl(chip);
+    }
+
+    public static FlowLayout keybindChip(String saveString, Component fallback) {
+        if (saveString == null || saveString.isBlank()) {
+            return chip(fallback);
+        }
+        var alt = KeyGlyphResolver.resolve("key.keyboard.left.alt");
+        var key = KeyGlyphResolver.resolve(saveString);
+        if (alt.isEmpty() || key.isEmpty()) {
+            return chip(fallback);
+        }
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.fixed(21));
+        row.gap(3);
+        row.verticalAlignment(VerticalAlignment.CENTER);
+        row.child(new KeyGlyphComponent(alt.get(), () -> false));
+        row.child(compactCaption(Component.literal("+")));
+        row.child(new KeyGlyphComponent(key.get(), () -> false));
+        return inlineControl(row);
     }
 
     public static FlowLayout sidebarTabs() {

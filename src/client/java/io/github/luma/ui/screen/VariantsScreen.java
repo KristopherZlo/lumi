@@ -291,7 +291,7 @@ public final class VariantsScreen extends LumaScreen {
         if (active) {
             meta.child(LumaUi.chip(Component.translatable("luma.idea.current_badge")));
         }
-        meta.child(LumaUi.chip(this.switchKeyLabel(variant)));
+        meta.child(this.switchKeyChip(variant));
         card.child(meta);
 
         FlowLayout actions = LumaUi.actionRow();
@@ -407,7 +407,7 @@ public final class VariantsScreen extends LumaScreen {
                 button -> this.closeBranchBindDialog()
         ));
         modal.child(LumaUi.caption(Component.translatable("luma.ideas.bind_help")));
-        modal.child(LumaUi.chip(this.switchKeyLabel(variant)));
+        modal.child(this.switchKeyChip(variant));
 
         FlowLayout actions = LumaUi.actionRow();
         actions.child(LumaUi.button(Component.translatable("luma.action.clear_bind"), button -> this.setBranchSwitchKey(variant, "")));
@@ -500,8 +500,13 @@ public final class VariantsScreen extends LumaScreen {
         this.refresh(result);
     }
 
-    private Component switchKeyLabel(ProjectVariant variant) {
+    private FlowLayout switchKeyChip(ProjectVariant variant) {
         String key = ProjectVariantSwitchKeys.normalize(variant == null ? "" : variant.switchKey());
+        return LumaUi.keybindChip(key, this.switchKeyLabel(key));
+    }
+
+    private Component switchKeyLabel(String key) {
+        key = ProjectVariantSwitchKeys.normalize(key);
         if (key.isBlank()) {
             return Component.translatable("luma.ideas.switch_key_unassigned");
         }

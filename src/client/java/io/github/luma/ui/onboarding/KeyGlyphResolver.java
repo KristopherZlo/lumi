@@ -74,7 +74,7 @@ public final class KeyGlyphResolver {
         return resolve(key.saveString());
     }
 
-    static Optional<KeyGlyph> resolve(String saveString) {
+    public static Optional<KeyGlyph> resolve(String saveString) {
         String spriteName = spriteName(saveString);
         Integer frameWidth = FRAME_WIDTHS.get(spriteName);
         if (frameWidth == null) {
