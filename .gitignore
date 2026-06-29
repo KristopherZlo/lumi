@@ -8,11 +8,14 @@ logs/
 bin/
 site/
 structures/
+graphify-out/
 src/main/resources/assets/lumi/textures/gui/new-icons/
 
 *.log
 *.tmp
 *.class
+.graphify_*.json
+.graphify_*.txt
 hs_err_pid*
 replay_pid*
 
