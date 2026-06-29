@@ -37,6 +37,23 @@ public record WorkZoneState(
         return new WorkZoneState(this.schemaVersion, this.zones, next);
     }
 
+    public WorkZoneState withoutZone(String zoneId) {
+        String removedZoneId = zoneId == null ? "" : zoneId;
+        if (removedZoneId.isBlank()) {
+            return this;
+        }
+        List<WorkZone> nextZones = this.zones.stream()
+                .filter(zone -> !removedZoneId.equals(zone.id()))
+                .toList();
+        LinkedHashMap<String, String> nextActiveZones = new LinkedHashMap<>();
+        this.activeZoneByActor.forEach((actor, activeZoneId) -> {
+            if (!removedZoneId.equals(activeZoneId)) {
+                nextActiveZones.put(actor, activeZoneId);
+            }
+        });
+        return new WorkZoneState(this.schemaVersion, nextZones, nextActiveZones);
+    }
+
     public String activeZoneId(String actor) {
         return this.activeZoneByActor.getOrDefault(normalizeActor(actor), "");
     }

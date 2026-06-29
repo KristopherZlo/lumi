@@ -49,6 +49,7 @@ public final class WorkZoneServerNetworking {
             BuildProject project = this.project(request, server, player, "open-state".equals(action)
                     || "create".equals(action)
                     || "select".equals(action)
+                    || "delete".equals(action)
                     || "save".equals(action)
                     || "amend".equals(action));
             if (project == null) {
@@ -62,6 +63,10 @@ public final class WorkZoneServerNetworking {
                 this.workZoneService.createZone(layout, project.id().toString(), request.zoneName(), actor, Instant.now());
             } else if ("select".equals(action)) {
                 this.workZoneService.selectZone(layout, actor, request.zoneId());
+            } else if ("delete".equals(action)) {
+                this.workZoneService.deleteZone(layout, request.zoneId());
+                this.send(player, this.snapshot(server, player, project, actor, "luma.status.zone_deleted"));
+                return;
             } else if ("save".equals(action) || "amend".equals(action)) {
                 boolean amend = "amend".equals(action);
                 this.save(request, player, layout, project, actor, amend);

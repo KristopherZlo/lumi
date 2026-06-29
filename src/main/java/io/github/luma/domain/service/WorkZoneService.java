@@ -112,6 +112,42 @@ public final class WorkZoneService {
         return this.updateCells(layout, actor, cells, now, false);
     }
 
+    public Optional<WorkZone> addCellsToZone(
+            ProjectLayout layout,
+            String zoneId,
+            Collection<WorkZoneCell> cells,
+            Instant now
+    ) throws IOException {
+        return this.updateZoneCells(layout, zoneId, cells, now, true);
+    }
+
+    public Optional<WorkZone> zoneContainingCell(ProjectLayout layout, WorkZoneCell cell) throws IOException {
+        if (cell == null) {
+            return Optional.empty();
+        }
+        synchronized (STATE_LOCK) {
+            return this.loadCached(layout).zones().stream()
+                    .filter(zone -> zone.contains(cell))
+                    .findFirst();
+        }
+    }
+
+    public WorkZoneState deleteZone(ProjectLayout layout, String zoneId) throws IOException {
+        String removedZoneId = zoneId == null ? "" : zoneId;
+        if (removedZoneId.isBlank()) {
+            throw new IllegalArgumentException("Unknown zone");
+        }
+        synchronized (STATE_LOCK) {
+            WorkZoneState state = this.loadCached(layout);
+            if (state.zones().stream().noneMatch(zone -> removedZoneId.equals(zone.id()))) {
+                throw new IllegalArgumentException("Unknown zone");
+            }
+            WorkZoneState next = state.withoutZone(removedZoneId);
+            this.save(layout, next);
+            return next;
+        }
+    }
+
     private Optional<WorkZone> updateCells(
             ProjectLayout layout,
             String actor,
@@ -130,6 +166,36 @@ public final class WorkZoneService {
             for (int index = 0; index < zones.size(); index++) {
                 WorkZone zone = zones.get(index);
                 if (!zone.id().equals(activeZoneId)) {
+                    continue;
+                }
+                WorkZone next = add ? zone.withCells(cells, now) : zone.withoutCells(cells, now);
+                if (next != zone) {
+                    zones.set(index, next);
+                    this.save(layout, state.withZones(zones));
+                }
+                return Optional.of(next);
+            }
+            return Optional.empty();
+        }
+    }
+
+    private Optional<WorkZone> updateZoneCells(
+            ProjectLayout layout,
+            String zoneId,
+            Collection<WorkZoneCell> cells,
+            Instant now,
+            boolean add
+    ) throws IOException {
+        String targetZoneId = zoneId == null ? "" : zoneId;
+        if (targetZoneId.isBlank() || cells == null || cells.isEmpty()) {
+            return Optional.empty();
+        }
+        synchronized (STATE_LOCK) {
+            WorkZoneState state = this.loadCached(layout);
+            List<WorkZone> zones = new ArrayList<>(state.zones());
+            for (int index = 0; index < zones.size(); index++) {
+                WorkZone zone = zones.get(index);
+                if (!zone.id().equals(targetZoneId)) {
                     continue;
                 }
                 WorkZone next = add ? zone.withCells(cells, now) : zone.withoutCells(cells, now);

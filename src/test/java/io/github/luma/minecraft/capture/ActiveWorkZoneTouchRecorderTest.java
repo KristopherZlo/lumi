@@ -41,4 +41,28 @@ class ActiveWorkZoneTouchRecorderTest {
                 new WorkZoneService().load(layout).zones().getFirst().cells()
         );
     }
+
+    @Test
+    void growthActionExpandsZoneItStartedInsideEvenWhenNoZoneIsActive() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Castle");
+        BuildProject project = BuildProject.createWorldWorkspace("Castle", "minecraft:overworld", NOW);
+        WorkZoneService service = new WorkZoneService();
+        var zone = service.createZone(layout, project.id().toString(), "Orchard", "builder", NOW);
+        service.addCellsToZone(layout, zone.id(), List.of(new WorkZoneCell(0, 4, 0)), NOW.plusSeconds(1));
+        service.selectZone(layout, "builder", "");
+
+        try (WorldMutationContext.SourceFrame ignored =
+                     WorldMutationContext.pushSource(WorldMutationSource.GROWTH, "builder", "bonemeal-tree", true)) {
+            new ActiveWorkZoneTouchRecorder().record(
+                    new TrackedProject(layout, project, List.of()),
+                    List.of(new BlockPos(1, 64, 1), new BlockPos(32, 70, 48)),
+                    NOW.plusSeconds(2)
+            );
+        }
+
+        assertEquals(
+                List.of(new WorkZoneCell(0, 4, 0), new WorkZoneCell(2, 4, 3)),
+                service.load(layout).zones().getFirst().cells()
+        );
+    }
 }

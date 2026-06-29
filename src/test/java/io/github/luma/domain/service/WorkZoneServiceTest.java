@@ -80,6 +80,35 @@ class WorkZoneServiceTest {
     }
 
     @Test
+    void addCellsToZoneUpdatesRequestedZoneWithoutActorSelection() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Castle");
+        WorkZoneService service = new WorkZoneService();
+        WorkZone zone = service.createZone(layout, "project-1", "Gate", "Kate", NOW);
+        service.selectZone(layout, "Kate", "");
+
+        service.addCellsToZone(layout, zone.id(), List.of(new WorkZoneCell(2, 4, 3)), NOW.plusSeconds(1));
+
+        WorkZone saved = new WorkZoneRepository().load(layout).zones().getFirst();
+        assertEquals(List.of(new WorkZoneCell(2, 4, 3)), saved.cells());
+        assertTrue(new WorkZoneRepository().load(layout).activeZoneId("Kate").isBlank());
+    }
+
+    @Test
+    void deleteZoneRemovesZoneAndActiveSelectionsOnly() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Castle");
+        WorkZoneService service = new WorkZoneService();
+        WorkZone zone = service.createZone(layout, "project-1", "Gate", "Kate", NOW);
+        service.selectZone(layout, "Max", zone.id());
+
+        service.deleteZone(layout, zone.id());
+
+        WorkZoneState saved = new WorkZoneRepository().load(layout);
+        assertTrue(saved.zones().isEmpty());
+        assertTrue(saved.activeZoneId("Kate").isBlank());
+        assertTrue(saved.activeZoneId("Max").isBlank());
+    }
+
+    @Test
     void loadQuarantinesMalformedZoneFile() throws Exception {
         ProjectLayout layout = ProjectLayout.of(this.tempDir, "Castle");
         Files.createDirectories(layout.root());

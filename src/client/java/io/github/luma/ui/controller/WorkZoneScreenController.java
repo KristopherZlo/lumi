@@ -94,6 +94,23 @@ public final class WorkZoneScreenController {
         }
     }
 
+    public String deleteZone(String projectName, String zoneId) {
+        if (!this.client.hasSingleplayerServer()) {
+            WorkZoneClientNetworking.getInstance().delete(projectName, zoneId);
+            return "luma.status.zones_loading";
+        }
+        try {
+            MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(this.client);
+            this.workZoneService.deleteZone(this.projectService.resolveLayout(server, projectName), zoneId);
+            return "luma.status.zone_deleted";
+        } catch (IllegalArgumentException exception) {
+            return this.illegalArgumentStatus(exception);
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to delete work zone {} for project {}", zoneId, projectName, exception);
+            return "luma.status.operation_failed";
+        }
+    }
+
     public String saveZone(String projectName, String zoneId, String message) {
         return this.saveZone(projectName, zoneId, message, List.of());
     }

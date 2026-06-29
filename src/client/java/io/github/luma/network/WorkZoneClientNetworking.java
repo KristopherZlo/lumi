@@ -51,6 +51,10 @@ public final class WorkZoneClientNetworking {
         this.request("select", projectName, zoneId, "");
     }
 
+    public void delete(String projectName, String zoneId) {
+        this.request("delete", projectName, zoneId, "");
+    }
+
     public void save(String projectName, String zoneId, String message) {
         this.save(projectName, zoneId, message, List.of());
     }
