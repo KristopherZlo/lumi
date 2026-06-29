@@ -239,7 +239,7 @@ Project settings include `showHiddenCommits` for showing live-zone commits in gl
 
 ### Runtime Model
 
-Capture writes working drafts while the player builds. Save turns a draft into patch metadata plus compressed chunk frames. Restore prepares file I/O, LZ4, block-state decode, and planning off the server tick thread, then applies prepared batches on the server thread with tick budgets.
+Capture writes working drafts while the player builds. Startup metadata bootstrap runs shortly after player join on a low-priority background thread, and first-touch baseline chunk writes default to one low-priority writer to reduce client CPU and disk contention. Save turns a draft into patch metadata plus compressed chunk frames. Restore prepares file I/O, LZ4, block-state decode, and planning off the server tick thread, then applies prepared batches on the server thread with tick budgets.
 
 Hard rules:
 
