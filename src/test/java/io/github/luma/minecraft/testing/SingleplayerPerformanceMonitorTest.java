@@ -181,6 +181,24 @@ class SingleplayerPerformanceMonitorTest {
     }
 
     @Test
+    void reportsMaxProcessCpuPeakWindow() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordLoadSample("start", loadSample(256, 64, 8, 0, 32, 0L, 0L));
+        monitor.recordLoadSample("warmup", loadSample(256, 64, 8, 0, 32, Duration.ofMillis(50).toNanos(), Duration.ofMillis(50).toNanos()));
+        monitor.recordLoadSample("capture", loadSample(256, 64, 8, 0, 32, Duration.ofMillis(450).toNanos(), Duration.ofMillis(100).toNanos()));
+
+        String summary = monitor.summaryLines().stream()
+                .filter(line -> line.startsWith("Load summary:"))
+                .findFirst()
+                .orElseThrow();
+
+        assertTrue(summary.contains("maxProcessCpuCores=8.00"));
+        assertTrue(summary.contains("maxProcessCpuWindow=warmup -> capture"));
+        assertTrue(summary.contains("maxProcessCpuWallMs=50"));
+        assertTrue(summary.contains("maxProcessCpuTimeMs=400"));
+    }
+
+    @Test
     void flagsSlowFirstWorldInteractionCpuProbe() {
         SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
         monitor.recordFirstInteraction("capture draft", Duration.ofMillis(75).toNanos(), Duration.ofMillis(1_250).toNanos());

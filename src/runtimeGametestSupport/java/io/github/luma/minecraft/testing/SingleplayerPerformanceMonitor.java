@@ -41,6 +41,11 @@ final class SingleplayerPerformanceMonitor {
     private long firstInteractionCpuNanos = -1L;
     private String firstInteractionPhase = "";
     private boolean firstInteractionRecorded;
+    private double maxProcessCpuCores;
+    private String maxProcessCpuStartLabel = "";
+    private String maxProcessCpuEndLabel = "";
+    private long maxProcessCpuWallNanos = -1L;
+    private long maxProcessCpuTimeNanos = -1L;
 
     void recordSyncSlice(String phase, long elapsedNanos) {
         if (elapsedNanos <= 0L) {
@@ -79,7 +84,11 @@ final class SingleplayerPerformanceMonitor {
         if (sample == null) {
             return;
         }
-        this.loadSamples.add(new LabeledLoadSample(normalize(label), sample));
+        LabeledLoadSample labeledSample = new LabeledLoadSample(normalize(label), sample);
+        if (!this.loadSamples.isEmpty()) {
+            this.recordProcessCpuPeak(this.loadSamples.getLast(), labeledSample);
+        }
+        this.loadSamples.add(labeledSample);
     }
 
     void recordFirstInteraction(String phase, long wallNanos, long cpuNanos) {
@@ -112,7 +121,10 @@ final class SingleplayerPerformanceMonitor {
                 + ", heapGrowthMiB=" + this.heapGrowthMiB()
                 + ", bufferGrowthMiB=" + this.bufferGrowthMiB()
                 + ", threadGrowth=" + this.threadGrowth()
-                + ", maxProcessCpuCores=" + this.number(this.maxProcessCpuCores())
+                + ", maxProcessCpuCores=" + this.number(this.maxProcessCpuCores)
+                + ", maxProcessCpuWindow=" + this.maxProcessCpuWindow()
+                + ", maxProcessCpuWallMs=" + this.millisText(this.maxProcessCpuWallNanos)
+                + ", maxProcessCpuTimeMs=" + this.millisText(this.maxProcessCpuTimeNanos)
                 + ", firstInteractionWallMs=" + this.millisText(this.firstInteractionWallNanos)
                 + ", firstInteractionCpuMs=" + this.millisText(this.firstInteractionCpuNanos)
                 + ", firstInteractionPhase=" + this.firstInteractionPhase);
@@ -256,21 +268,29 @@ final class SingleplayerPerformanceMonitor {
         return Math.max(0, this.loadSamples.getLast().sample.liveThreads() - baseline);
     }
 
-    private double maxProcessCpuCores() {
-        double max = 0.0D;
-        LabeledLoadSample previous = null;
-        for (LabeledLoadSample sample : this.loadSamples) {
-            if (previous != null
-                    && previous.sample.processCpuTimeNanos() >= 0L
-                    && sample.sample.processCpuTimeNanos() >= previous.sample.processCpuTimeNanos()
-                    && sample.sample.wallNanos() > previous.sample.wallNanos()) {
-                long cpuDelta = sample.sample.processCpuTimeNanos() - previous.sample.processCpuTimeNanos();
-                long wallDelta = sample.sample.wallNanos() - previous.sample.wallNanos();
-                max = Math.max(max, (double) cpuDelta / (double) wallDelta);
-            }
-            previous = sample;
+    private void recordProcessCpuPeak(LabeledLoadSample previous, LabeledLoadSample sample) {
+        if (previous.sample.processCpuTimeNanos() < 0L
+                || sample.sample.processCpuTimeNanos() < previous.sample.processCpuTimeNanos()
+                || sample.sample.wallNanos() <= previous.sample.wallNanos()) {
+            return;
         }
-        return max;
+        long cpuDelta = sample.sample.processCpuTimeNanos() - previous.sample.processCpuTimeNanos();
+        long wallDelta = sample.sample.wallNanos() - previous.sample.wallNanos();
+        double cores = (double) cpuDelta / (double) wallDelta;
+        if (cores <= this.maxProcessCpuCores) {
+            return;
+        }
+        this.maxProcessCpuCores = cores;
+        this.maxProcessCpuStartLabel = previous.label;
+        this.maxProcessCpuEndLabel = sample.label;
+        this.maxProcessCpuWallNanos = wallDelta;
+        this.maxProcessCpuTimeNanos = cpuDelta;
+    }
+
+    private String maxProcessCpuWindow() {
+        return this.maxProcessCpuStartLabel.isBlank()
+                ? "na"
+                : this.maxProcessCpuStartLabel + " -> " + this.maxProcessCpuEndLabel;
     }
 
     private long bufferMiB(LoadSample sample) {

@@ -368,16 +368,19 @@ final class SingleplayerTestRun {
     }
 
     private void captureDraft(MinecraftServer server) throws Exception {
-        long interactionStartedAt = System.nanoTime();
-        long interactionCpuStartedAt = SingleplayerPerformanceMonitor.currentThreadCpuNanos();
         WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
         try {
-            this.level.setBlock(this.volume.markerA(), Blocks.STONE.defaultBlockState(), 3);
+            long interactionStartedAt = System.nanoTime();
+            long interactionCpuStartedAt = SingleplayerPerformanceMonitor.currentThreadCpuNanos();
+            try {
+                this.level.setBlock(this.volume.markerA(), Blocks.STONE.defaultBlockState(), 3);
+            } finally {
+                this.recordFirstInteraction("First capture setBlock", interactionStartedAt, interactionCpuStartedAt);
+            }
             this.level.setBlock(this.volume.markerB(), Blocks.BARREL.defaultBlockState(), 3);
             this.level.setBlock(this.volume.markerC(), Blocks.GLASS.defaultBlockState(), 3);
         } finally {
             WorldMutationContext.popSource();
-            this.recordFirstInteraction("Capture and pending diff", interactionStartedAt, interactionCpuStartedAt);
         }
 
         RecoveryDraft draft = this.value("Recovery draft can be loaded after builder edits", () ->
