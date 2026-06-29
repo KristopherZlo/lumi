@@ -157,6 +157,12 @@ Run the local test-client profile:
 .\scripts\run-test-client.ps1
 ```
 
+Run the server GameTest smoke suite:
+
+```powershell
+.\gradlew.bat runGameTest --no-daemon
+```
+
 Run the alpha gate:
 
 ```powershell
@@ -275,7 +281,7 @@ The `lumi.ui.*` flags are dev-only tuning knobs for Lumi's in-game menus.
 to 2, and the icon button flags tune the button box and the 24x24 texture draw
 size.
 
-Runtime logs are written under the normal Minecraft `logs/` directory or the world-local `lumi/test-logs/` directory for test profiles.
+Runtime logs are written under the normal Minecraft `logs/` directory or the world-local `lumi/test-logs/` directory for test profiles, including multiplayer work-zone smoke behavior logs.
 
 ## License
 

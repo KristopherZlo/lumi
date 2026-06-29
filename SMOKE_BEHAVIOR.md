@@ -35,6 +35,9 @@ history behavior changes.
   zone. Out-of-zone changes remain pending.
 - Zone amend follows the same replacement-head rule as normal amend.
 - Zone history shows only visible zone versions.
+- Multiplayer work-zone smoke runs on the dedicated GameTest server with two
+  actor-scoped zones, randomized block edits, scoped quick rollback, and a
+  world-local behavior log.
 
 ## Settings And Operations
 
@@ -51,5 +54,5 @@ history behavior changes.
 - `load-smoke` runs the singleplayer smoke route through the first history
   operations, records JVM load samples, and fails on large heap, direct/mapped
   buffer, thread, or first-world-interaction CPU/wall regressions.
-- Dedicated multiplayer smoke is limited to the dedicated Zones workflow unless
-  a dedicated GameTest runner is added.
+- Dedicated multiplayer smoke uses the server GameTest runner for work-zone
+  save isolation and scoped rollback behavior.
