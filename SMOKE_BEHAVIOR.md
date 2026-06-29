@@ -48,5 +48,8 @@ history behavior changes.
 
 - Singleplayer smoke tests run in an integrated server and exercise real domain,
   storage, capture, and world-apply services.
+- `load-smoke` runs the singleplayer smoke route through the first history
+  operations, records JVM load samples, and fails on large heap, direct/mapped
+  buffer, thread, or first-world-interaction CPU/wall regressions.
 - Dedicated multiplayer smoke is limited to the dedicated Zones workflow unless
   a dedicated GameTest runner is added.

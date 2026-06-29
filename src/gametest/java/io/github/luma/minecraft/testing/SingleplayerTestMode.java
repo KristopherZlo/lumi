@@ -2,6 +2,7 @@ package io.github.luma.minecraft.testing;
 
 enum SingleplayerTestMode {
     FULL("singleplayer testing"),
+    LOAD_SMOKE("singleplayer load-smoke testing"),
     PLAYER_FLOW("singleplayer player-flow testing"),
     SMOKE("singleplayer smoke testing"),
     STRUCTURE_FIXTURES("singleplayer structure fixture testing"),

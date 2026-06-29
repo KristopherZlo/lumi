@@ -168,6 +168,7 @@ final class SingleplayerTestRun {
                 ? Phase.PREPARE_PLAYER_AREA
                 : Phase.CREATE_PROJECT;
         this.log.info("Reserved test volume " + this.describeVolume());
+        this.recordLoadSample("test-run-start");
     }
 
     boolean matches(MinecraftServer server) {
@@ -367,6 +368,8 @@ final class SingleplayerTestRun {
     }
 
     private void captureDraft(MinecraftServer server) throws Exception {
+        long interactionStartedAt = System.nanoTime();
+        long interactionCpuStartedAt = SingleplayerPerformanceMonitor.currentThreadCpuNanos();
         WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true);
         try {
             this.level.setBlock(this.volume.markerA(), Blocks.STONE.defaultBlockState(), 3);
@@ -374,6 +377,7 @@ final class SingleplayerTestRun {
             this.level.setBlock(this.volume.markerC(), Blocks.GLASS.defaultBlockState(), 3);
         } finally {
             WorldMutationContext.popSource();
+            this.recordFirstInteraction("Capture and pending diff", interactionStartedAt, interactionCpuStartedAt);
         }
 
         RecoveryDraft draft = this.value("Recovery draft can be loaded after builder edits", () ->
@@ -800,6 +804,7 @@ final class SingleplayerTestRun {
         this.check("Concurrent save consumed the draft once", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
 
         Phase next = switch (this.mode) {
+            case LOAD_SMOKE -> Phase.CHECK_PERFORMANCE;
             case SMOKE, CRASH_SAFETY -> Phase.CLEANUP;
             case EXTERNAL_TOOLS -> Phase.START_EXTERNAL_TOOL_STRESS;
             default -> Phase.CHECK_PLAYER_INTERACTIONS;
@@ -1354,13 +1359,16 @@ final class SingleplayerTestRun {
     }
 
     private void checkPerformanceBudget(MinecraftServer server) {
+        this.recordLoadSample("performance-check");
         for (String line : this.performanceMonitor.summaryLines()) {
             this.log.info(line);
         }
         for (SingleplayerPerformanceMonitor.PerformanceCheck check : this.performanceMonitor.checks()) {
             this.check(check.passed(), check.label() + " (" + check.detail() + ")");
         }
-        this.completePhase(server, Phase.START_LARGE_HISTORY_DIAGNOSTICS);
+        this.completePhase(server, this.mode == SingleplayerTestMode.LOAD_SMOKE
+                ? Phase.CLEANUP
+                : Phase.START_LARGE_HISTORY_DIAGNOSTICS);
     }
 
     private void startLargeHistoryDiagnostics(MinecraftServer server) {
@@ -1578,6 +1586,7 @@ final class SingleplayerTestRun {
         String status = failed == 0 ? "passed" : "completed with " + failed + " failure(s)";
         this.message(server, "Lumi testing [" + this.phaseStepNumber() + "/" + this.phaseTotalSteps() + "] "
                 + this.phase.title() + " " + status + " (" + passed + " pass, " + failed + " fail)");
+        this.recordLoadSample(this.phase.title() + " complete");
         this.phase = nextPhase;
     }
 
@@ -1829,6 +1838,24 @@ final class SingleplayerTestRun {
 
     private String format(BlockPos pos) {
         return pos.getX() + " " + pos.getY() + " " + pos.getZ();
+    }
+
+    private void recordLoadSample(String label) {
+        if (this.mode == SingleplayerTestMode.LOAD_SMOKE) {
+            this.performanceMonitor.recordLoadSample(label);
+        }
+    }
+
+    private void recordFirstInteraction(String label, long startedAtNanos, long startedCpuNanos) {
+        if (this.mode != SingleplayerTestMode.LOAD_SMOKE) {
+            return;
+        }
+        long cpuNanos = -1L;
+        long finishedCpuNanos = SingleplayerPerformanceMonitor.currentThreadCpuNanos();
+        if (startedCpuNanos >= 0L && finishedCpuNanos >= startedCpuNanos) {
+            cpuNanos = finishedCpuNanos - startedCpuNanos;
+        }
+        this.performanceMonitor.recordFirstInteraction(label, System.nanoTime() - startedAtNanos, cpuNanos);
     }
 
     private String errorMessage(Throwable throwable) {

@@ -34,6 +34,10 @@ public final class SingleplayerTestingService {
         return this.start(server, level, player, SingleplayerTestMode.SMOKE);
     }
 
+    public synchronized int startLoadSmoke(MinecraftServer server, ServerLevel level, ServerPlayer player) {
+        return this.start(server, level, player, SingleplayerTestMode.LOAD_SMOKE);
+    }
+
     public synchronized int startPlayerFlow(MinecraftServer server, ServerLevel level, ServerPlayer player) {
         return this.start(server, level, player, SingleplayerTestMode.PLAYER_FLOW);
     }
