@@ -1,6 +1,10 @@
 package io.github.luma.minecraft.testing;
 
 import io.github.luma.domain.model.OperationSnapshot;
+import java.lang.management.BufferPoolMXBean;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryUsage;
+import java.lang.management.ThreadMXBean;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -19,15 +23,24 @@ final class SingleplayerPerformanceMonitor {
     private static final int MAX_ACTION_APPLY_BLOCKS = 64;
     private static final int MAX_PARTIAL_RESTORE_BLOCKS = 16;
     private static final int MAX_FULL_RESTORE_BLOCKS = 512;
+    private static final long MAX_HEAP_GROWTH_MIB = 1024;
+    private static final long MAX_BUFFER_GROWTH_MIB = 128;
+    private static final int MAX_THREAD_GROWTH = 16;
+    private static final long MAX_FIRST_INTERACTION_NANOS = Duration.ofSeconds(1).toNanos();
     private static final Set<String> WARMUP_SYNC_PHASES = Set.of("Project setup");
 
     private final Map<String, OperationMetric> operations = new LinkedHashMap<>();
+    private final List<LabeledLoadSample> loadSamples = new ArrayList<>();
     private long totalSyncNanos;
     private long maxSyncSliceNanos;
     private String maxSyncSlicePhase = "";
     private long maxBudgetedSyncSliceNanos;
     private String maxBudgetedSyncSlicePhase = "";
     private int syncSliceCount;
+    private long firstInteractionWallNanos;
+    private long firstInteractionCpuNanos = -1L;
+    private String firstInteractionPhase = "";
+    private boolean firstInteractionRecorded;
 
     void recordSyncSlice(String phase, long elapsedNanos) {
         if (elapsedNanos <= 0L) {
@@ -58,6 +71,27 @@ final class SingleplayerPerformanceMonitor {
         metric.record(snapshot);
     }
 
+    void recordLoadSample(String label) {
+        this.recordLoadSample(label, LoadSample.capture());
+    }
+
+    void recordLoadSample(String label, LoadSample sample) {
+        if (sample == null) {
+            return;
+        }
+        this.loadSamples.add(new LabeledLoadSample(normalize(label), sample));
+    }
+
+    void recordFirstInteraction(String phase, long wallNanos, long cpuNanos) {
+        if (wallNanos <= 0L) {
+            return;
+        }
+        this.firstInteractionRecorded = true;
+        this.firstInteractionWallNanos = Math.max(this.firstInteractionWallNanos, wallNanos);
+        this.firstInteractionCpuNanos = Math.max(this.firstInteractionCpuNanos, cpuNanos);
+        this.firstInteractionPhase = normalize(phase);
+    }
+
     List<String> summaryLines() {
         List<String> lines = new ArrayList<>();
         lines.add("Performance summary: syncSlices=" + this.syncSliceCount
@@ -73,6 +107,23 @@ final class SingleplayerPerformanceMonitor {
                     + ", maxUnits=" + metric.maxTotalUnits
                     + ", terminal=" + metric.terminal
                     + ", failed=" + metric.failed);
+        }
+        lines.add("Load summary: samples=" + this.loadSamples.size()
+                + ", heapGrowthMiB=" + this.heapGrowthMiB()
+                + ", bufferGrowthMiB=" + this.bufferGrowthMiB()
+                + ", threadGrowth=" + this.threadGrowth()
+                + ", maxProcessCpuCores=" + this.number(this.maxProcessCpuCores())
+                + ", firstInteractionWallMs=" + this.millisText(this.firstInteractionWallNanos)
+                + ", firstInteractionCpuMs=" + this.millisText(this.firstInteractionCpuNanos)
+                + ", firstInteractionPhase=" + this.firstInteractionPhase);
+        for (LabeledLoadSample sample : this.loadSamples) {
+            lines.add("Load sample: label=" + sample.label
+                    + ", heapUsedMiB=" + sample.sample.heapUsedMiB()
+                    + ", nonHeapUsedMiB=" + sample.sample.nonHeapUsedMiB()
+                    + ", directBufferUsedMiB=" + sample.sample.directBufferUsedMiB()
+                    + ", mappedBufferUsedMiB=" + sample.sample.mappedBufferUsedMiB()
+                    + ", liveThreads=" + sample.sample.liveThreads()
+                    + ", processCpuTimeMs=" + this.millisText(sample.sample.processCpuTimeNanos()));
         }
         return List.copyOf(lines);
     }
@@ -110,6 +161,33 @@ final class SingleplayerPerformanceMonitor {
                 "Lineage full restore used patch replay unless exact initial snapshot replay was required",
                 this.maxRestoreUnitsWithoutInitialSnapshot() <= MAX_FULL_RESTORE_BLOCKS,
                 "maxLineageRestoreUnits=" + this.maxRestoreUnitsWithoutInitialSnapshot()
+        ));
+        checks.add(new PerformanceCheck(
+                "JVM heap growth during Lumi smoke stayed below " + MAX_HEAP_GROWTH_MIB + " MiB",
+                this.loadSamples.size() < 2 || this.heapGrowthMiB() <= MAX_HEAP_GROWTH_MIB,
+                "heapGrowthMiB=" + this.heapGrowthMiB() + ", samples=" + this.loadSamples.size()
+        ));
+        checks.add(new PerformanceCheck(
+                "Direct and mapped buffer growth during Lumi smoke stayed below " + MAX_BUFFER_GROWTH_MIB + " MiB",
+                this.loadSamples.size() < 2 || this.bufferGrowthMiB() <= MAX_BUFFER_GROWTH_MIB,
+                "bufferGrowthMiB=" + this.bufferGrowthMiB() + ", samples=" + this.loadSamples.size()
+        ));
+        checks.add(new PerformanceCheck(
+                "Live thread growth during Lumi smoke stayed below " + MAX_THREAD_GROWTH + " threads",
+                this.loadSamples.size() < 2 || this.threadGrowth() <= MAX_THREAD_GROWTH,
+                "threadGrowth=" + this.threadGrowth() + ", samples=" + this.loadSamples.size()
+        ));
+        checks.add(new PerformanceCheck(
+                "First world interaction wall time stayed below " + this.millis(MAX_FIRST_INTERACTION_NANOS) + " ms",
+                !this.firstInteractionRecorded || this.firstInteractionWallNanos <= MAX_FIRST_INTERACTION_NANOS,
+                "wallMs=" + this.millisText(this.firstInteractionWallNanos) + ", phase=" + this.firstInteractionPhase
+        ));
+        checks.add(new PerformanceCheck(
+                "First world interaction CPU stayed below " + this.millis(MAX_FIRST_INTERACTION_NANOS) + " ms",
+                !this.firstInteractionRecorded
+                        || this.firstInteractionCpuNanos < 0L
+                        || this.firstInteractionCpuNanos <= MAX_FIRST_INTERACTION_NANOS,
+                "cpuMs=" + this.millisText(this.firstInteractionCpuNanos) + ", phase=" + this.firstInteractionPhase
         ));
         return List.copyOf(checks);
     }
@@ -150,11 +228,139 @@ final class SingleplayerPerformanceMonitor {
         return Duration.ofNanos(Math.max(0L, nanos)).toMillis();
     }
 
+    private String millisText(long nanos) {
+        return nanos < 0L ? "na" : String.valueOf(this.millis(nanos));
+    }
+
+    private long heapGrowthMiB() {
+        if (this.loadSamples.size() < 2) {
+            return 0L;
+        }
+        long baseline = this.loadSamples.getFirst().sample.heapUsedMiB();
+        return Math.max(0L, this.loadSamples.getLast().sample.heapUsedMiB() - baseline);
+    }
+
+    private long bufferGrowthMiB() {
+        if (this.loadSamples.size() < 2) {
+            return 0L;
+        }
+        long baseline = this.bufferMiB(this.loadSamples.getFirst().sample);
+        return Math.max(0L, this.bufferMiB(this.loadSamples.getLast().sample) - baseline);
+    }
+
+    private int threadGrowth() {
+        if (this.loadSamples.size() < 2) {
+            return 0;
+        }
+        int baseline = this.loadSamples.getFirst().sample.liveThreads();
+        return Math.max(0, this.loadSamples.getLast().sample.liveThreads() - baseline);
+    }
+
+    private double maxProcessCpuCores() {
+        double max = 0.0D;
+        LabeledLoadSample previous = null;
+        for (LabeledLoadSample sample : this.loadSamples) {
+            if (previous != null
+                    && previous.sample.processCpuTimeNanos() >= 0L
+                    && sample.sample.processCpuTimeNanos() >= previous.sample.processCpuTimeNanos()
+                    && sample.sample.wallNanos() > previous.sample.wallNanos()) {
+                long cpuDelta = sample.sample.processCpuTimeNanos() - previous.sample.processCpuTimeNanos();
+                long wallDelta = sample.sample.wallNanos() - previous.sample.wallNanos();
+                max = Math.max(max, (double) cpuDelta / (double) wallDelta);
+            }
+            previous = sample;
+        }
+        return max;
+    }
+
+    private long bufferMiB(LoadSample sample) {
+        return Math.max(0L, sample.directBufferUsedMiB()) + Math.max(0L, sample.mappedBufferUsedMiB());
+    }
+
+    private String number(double value) {
+        return Double.isFinite(value) ? String.format(java.util.Locale.ROOT, "%.2f", value) : "na";
+    }
+
     private boolean warmupPhase(String phase) {
         return phase != null && WARMUP_SYNC_PHASES.contains(phase);
     }
 
+    static long currentThreadCpuNanos() {
+        ThreadMXBean threads = ManagementFactory.getThreadMXBean();
+        if (!threads.isCurrentThreadCpuTimeSupported()) {
+            return -1L;
+        }
+        if (!threads.isThreadCpuTimeEnabled()) {
+            try {
+                threads.setThreadCpuTimeEnabled(true);
+            } catch (UnsupportedOperationException | SecurityException ignored) {
+                return -1L;
+            }
+        }
+        return threads.isThreadCpuTimeEnabled() ? threads.getCurrentThreadCpuTime() : -1L;
+    }
+
+    private static String normalize(String value) {
+        return value == null || value.isBlank() ? "unknown" : value;
+    }
+
     record PerformanceCheck(String label, boolean passed, String detail) {
+    }
+
+    record LoadSample(
+            long heapUsedMiB,
+            long nonHeapUsedMiB,
+            long directBufferUsedMiB,
+            long mappedBufferUsedMiB,
+            int liveThreads,
+            long processCpuTimeNanos,
+            long wallNanos,
+            int availableProcessors
+    ) {
+
+        private static LoadSample capture() {
+            MemoryUsage heap = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+            MemoryUsage nonHeap = ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage();
+            return new LoadSample(
+                    toMiB(heap.getUsed()),
+                    toMiB(nonHeap.getUsed()),
+                    bufferMiB("direct"),
+                    bufferMiB("mapped"),
+                    ManagementFactory.getThreadMXBean().getThreadCount(),
+                    currentProcessCpuTimeNanos(),
+                    System.nanoTime(),
+                    Runtime.getRuntime().availableProcessors()
+            );
+        }
+
+        private static long currentProcessCpuTimeNanos() {
+            java.lang.management.OperatingSystemMXBean bean = ManagementFactory.getOperatingSystemMXBean();
+            return bean instanceof com.sun.management.OperatingSystemMXBean os ? os.getProcessCpuTime() : -1L;
+        }
+
+        private static long bufferMiB(String name) {
+            for (BufferPoolMXBean pool : ManagementFactory.getPlatformMXBeans(BufferPoolMXBean.class)) {
+                if (pool.getName().equalsIgnoreCase(name)) {
+                    return toMiB(pool.getMemoryUsed());
+                }
+            }
+            return -1L;
+        }
+
+        private static long toMiB(long bytes) {
+            return bytes < 0L ? -1L : bytes / (1024L * 1024L);
+        }
+    }
+
+    private static final class LabeledLoadSample {
+
+        private final String label;
+        private final LoadSample sample;
+
+        private LabeledLoadSample(String label, LoadSample sample) {
+            this.label = label;
+            this.sample = sample;
+        }
     }
 
     private static final class OperationMetric {

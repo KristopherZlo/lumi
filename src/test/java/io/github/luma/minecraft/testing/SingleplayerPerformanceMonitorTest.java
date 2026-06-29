@@ -150,6 +150,50 @@ class SingleplayerPerformanceMonitorTest {
         assertTrue(restoreCheck.passed());
     }
 
+    @Test
+    void flagsHeapGrowthAcrossRuntimeLoadSamples() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordLoadSample("start", loadSample(256, 64, 8, 0, 32, 0L, 0L));
+        monitor.recordLoadSample("after first interaction", loadSample(1_400, 70, 8, 0, 33, 10_000_000L, 100_000_000L));
+
+        SingleplayerPerformanceMonitor.PerformanceCheck heapCheck = checkContaining(
+                monitor,
+                "JVM heap growth"
+        );
+
+        assertFalse(heapCheck.passed());
+        assertTrue(heapCheck.detail().contains("1144"));
+    }
+
+    @Test
+    void flagsLiveThreadGrowthAcrossRuntimeLoadSamples() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordLoadSample("start", loadSample(256, 64, 8, 0, 32, 0L, 0L));
+        monitor.recordLoadSample("after first interaction", loadSample(260, 64, 8, 0, 54, 10_000_000L, 100_000_000L));
+
+        SingleplayerPerformanceMonitor.PerformanceCheck threadCheck = checkContaining(
+                monitor,
+                "Live thread growth"
+        );
+
+        assertFalse(threadCheck.passed());
+        assertTrue(threadCheck.detail().contains("22"));
+    }
+
+    @Test
+    void flagsSlowFirstWorldInteractionCpuProbe() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordFirstInteraction("capture draft", Duration.ofMillis(75).toNanos(), Duration.ofMillis(1_250).toNanos());
+
+        SingleplayerPerformanceMonitor.PerformanceCheck cpuCheck = checkContaining(
+                monitor,
+                "First world interaction CPU"
+        );
+
+        assertFalse(cpuCheck.passed());
+        assertTrue(cpuCheck.detail().contains("1250"));
+    }
+
     private static OperationSnapshot snapshot(String label, int totalUnits) {
         return snapshot(label, totalUnits, OperationStage.COMPLETED, "Completed");
     }
@@ -161,6 +205,27 @@ class SingleplayerPerformanceMonitorTest {
                 new OperationProgress(totalUnits, totalUnits, "blocks"),
                 detail,
                 NOW.plusMillis(10)
+        );
+    }
+
+    private static SingleplayerPerformanceMonitor.LoadSample loadSample(
+            long heapUsedMiB,
+            long nonHeapUsedMiB,
+            long directBufferUsedMiB,
+            long mappedBufferUsedMiB,
+            int liveThreads,
+            long processCpuTimeNanos,
+            long wallNanos
+    ) {
+        return new SingleplayerPerformanceMonitor.LoadSample(
+                heapUsedMiB,
+                nonHeapUsedMiB,
+                directBufferUsedMiB,
+                mappedBufferUsedMiB,
+                liveThreads,
+                processCpuTimeNanos,
+                wallNanos,
+                8
         );
     }
 
