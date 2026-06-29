@@ -58,6 +58,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 - Adds live undo/redo for recent tracked edits.
 - Keeps recovery drafts for interrupted work.
 - Lets you mark active work zones, save a zone separately, and keep unrelated pending work.
+- Lets work zones grow from causal tree growth, hide boundary boxes, delete zone metadata without deleting commits, and optionally show zone commits in global history.
 - Captures normal Minecraft edits plus supported WorldEdit, FAWE, and Axiom mutation paths on a best-effort basis.
 
 ### Quick Start
@@ -234,6 +235,7 @@ Important records:
 - `cache/`: disposable UI and diagnostic cache
 
 Current writers create patch payload schema v9 and snapshot payload schema v8. Current readers intentionally support patch payload schema v9 and snapshot payload schemas v7-v8. See [docs/storage-format.md](docs/storage-format.md) for exact layout and compatibility rules.
+Project settings include `showHiddenCommits` for showing live-zone commits in global history; deleted-zone commits return to global history because deleting a zone only removes `work-zones.json` metadata.
 
 ### Runtime Model
 

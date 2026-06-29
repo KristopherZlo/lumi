@@ -84,6 +84,8 @@ public final class WorkZoneScreen extends LumaScreen {
     private String saveTags = "";
     private boolean saveDialogVisible;
     private String pendingSaveZoneId = "";
+    private String pendingDeleteZoneId = "";
+    private String deleteZoneName = "";
     private String pendingRestoreVariantId = "";
     private String pendingRestoreVersionId = "";
     private String pendingBranchBaseVersionId = "";
@@ -180,6 +182,8 @@ public final class WorkZoneScreen extends LumaScreen {
             if (dialog != null) {
                 stack.child(this.restoreDialogView.overlay(dialog));
             }
+        } else if (!this.pendingDeleteZoneId.isBlank()) {
+            stack.child(this.zoneDeleteDialogOverlay());
         } else if (this.saveDialogVisible) {
             stack.child(this.zoneSaveDialogOverlay());
         }
@@ -199,6 +203,10 @@ public final class WorkZoneScreen extends LumaScreen {
     public boolean keyPressed(KeyEvent event) {
         if (this.saveDialogVisible && OnboardingScreen.isEscapeKey(event)) {
             this.closeZoneSaveDialog();
+            return true;
+        }
+        if (!this.pendingDeleteZoneId.isBlank() && OnboardingScreen.isEscapeKey(event)) {
+            this.closeZoneDeleteDialog();
             return true;
         }
         if (this.saveDialogVisible && event.key() == GLFW.GLFW_KEY_TAB && this.acceptSaveDialogTagCompletion()) {
@@ -251,11 +259,9 @@ public final class WorkZoneScreen extends LumaScreen {
         header.child(LumaUi.value(Component.translatable("luma.zones.list_title")));
         header.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
         header.child(LumaUi.button(
-                Component.translatable(WorkZoneOverlayRenderer.showAllZones()
-                        ? "luma.zones.render_focused"
-                        : "luma.zones.render_all"),
+                Component.translatable(this.renderModeToggleLabelKey()),
                 button -> {
-                    WorkZoneOverlayRenderer.toggleShowAllZones();
+                    WorkZoneOverlayRenderer.cycleDisplayMode();
                     this.rebuild();
                 }
         ));
@@ -270,6 +276,14 @@ public final class WorkZoneScreen extends LumaScreen {
             section.child(this.zoneCard(zone, zone.id().equals(activeZoneId)));
         }
         return section;
+    }
+
+    private String renderModeToggleLabelKey() {
+        return switch (WorkZoneOverlayRenderer.displayMode()) {
+            case FOCUSED -> "luma.zones.render_all";
+            case ALL -> "luma.zones.render_hidden";
+            case HIDDEN -> "luma.zones.render_focused";
+        };
     }
 
     private FlowLayout zoneCard(WorkZone zone, boolean active) {
@@ -312,6 +326,7 @@ public final class WorkZoneScreen extends LumaScreen {
         );
         actions.child(enterOrLeave);
         actions.child(LumaUi.iconButton("folder", Component.translatable("luma.action.open_details"), button -> this.openZone(zone.id())));
+        actions.child(LumaUi.iconButton("trash", Component.translatable("luma.zones.delete"), button -> this.openZoneDeleteDialog(zone.id())));
         header.child(actions);
         card.child(header);
         if (zone.cells().isEmpty()) {
@@ -346,6 +361,7 @@ public final class WorkZoneScreen extends LumaScreen {
                 }
         );
         actions.child(enter);
+        actions.child(LumaUi.iconButton("trash", Component.translatable("luma.zones.delete"), button -> this.openZoneDeleteDialog(zone.id())));
         section.child(actions);
         return section;
     }
@@ -491,6 +507,49 @@ public final class WorkZoneScreen extends LumaScreen {
         amend.active(!this.pendingSaveZoneId.isBlank() && activeHead != null);
         actions.child(amend);
         actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.closeZoneSaveDialog()));
+        modal.child(actions);
+
+        overlay.child(modal);
+        return overlay;
+    }
+
+    private FlowLayout zoneDeleteDialogOverlay() {
+        FlowLayout overlay = LumaUi.modalOverlay();
+        WorkZone zone = this.deleteDialogZone();
+        if (zone == null) {
+            this.pendingDeleteZoneId = "";
+            this.deleteZoneName = "";
+            return overlay;
+        }
+
+        FlowLayout modal = LumaUi.modalFrame(Math.min(360, Math.max(260, this.width - 40)));
+        modal.child(LumaUi.closeHeader(Component.translatable("luma.zones.delete_title"), button -> this.closeZoneDeleteDialog()));
+        modal.child(LumaUi.caption(Component.translatable("luma.zones.delete_help", zone.name())));
+
+        ButtonComponent[] deleteButton = new ButtonComponent[1];
+        TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.deleteZoneName);
+        input.setHint(Component.translatable("luma.zones.delete_input"));
+        input.onChanged().subscribe(value -> {
+            this.deleteZoneName = value == null ? "" : value;
+            if (deleteButton[0] != null) {
+                deleteButton[0].active(this.deleteZoneName.trim().equals(zone.name()));
+            }
+        });
+        modal.child(LumaUi.formField(
+                Component.translatable("luma.zones.delete_input"),
+                null,
+                input
+        ));
+
+        FlowLayout actions = LumaUi.actionRow();
+        ButtonComponent delete = LumaUi.button(
+                Component.translatable("luma.zones.delete_confirm"),
+                button -> this.confirmZoneDelete(zone)
+        );
+        deleteButton[0] = delete;
+        delete.active(this.deleteZoneName.trim().equals(zone.name()));
+        actions.child(delete);
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.closeZoneDeleteDialog()));
         modal.child(actions);
 
         overlay.child(modal);
@@ -710,6 +769,45 @@ public final class WorkZoneScreen extends LumaScreen {
     private void openZone(String zoneId) {
         this.openedZoneId = zoneId == null ? "" : zoneId;
         this.zonePickerVisible = false;
+        this.rebuild();
+    }
+
+    private void openZoneDeleteDialog(String zoneId) {
+        this.pendingDeleteZoneId = zoneId == null ? "" : zoneId;
+        this.deleteZoneName = "";
+        this.refresh("luma.status.zones_ready");
+    }
+
+    private void closeZoneDeleteDialog() {
+        this.pendingDeleteZoneId = "";
+        this.deleteZoneName = "";
+        this.refresh("luma.status.zones_ready");
+    }
+
+    private WorkZone deleteDialogZone() {
+        if (this.state == null || this.pendingDeleteZoneId.isBlank()) {
+            return null;
+        }
+        return this.state.zones().zones().stream()
+                .filter(zone -> zone.id().equals(this.pendingDeleteZoneId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void confirmZoneDelete(WorkZone zone) {
+        if (zone == null || !this.deleteZoneName.trim().equals(zone.name())) {
+            this.refresh("luma.status.zone_delete_name_mismatch");
+            return;
+        }
+        this.status = this.controller.deleteZone(this.effectiveProjectName(), zone.id());
+        if ("luma.status.zone_deleted".equals(this.status) || "luma.status.zones_loading".equals(this.status)) {
+            if (zone.id().equals(this.openedZoneId)) {
+                this.openedZoneId = "";
+            }
+            this.pendingDeleteZoneId = "";
+            this.deleteZoneName = "";
+            this.zonePickerVisible = true;
+        }
         this.rebuild();
     }
 
