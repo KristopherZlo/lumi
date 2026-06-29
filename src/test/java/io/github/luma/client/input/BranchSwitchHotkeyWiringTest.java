@@ -14,6 +14,8 @@ class BranchSwitchHotkeyWiringTest {
         String mixin = Files.readString(Path.of("src/client/java/io/github/luma/mixin/client/KeyboardHandlerMixin.java"));
 
         assertTrue(mixins.contains("client.KeyboardHandlerMixin"));
-        assertTrue(mixin.contains("BranchSwitchHotkeyController.getInstance().handleKeyPress"));
+        assertTrue(mixin.contains("int action"));
+        assertTrue(mixin.contains("KeyEvent event"));
+        assertTrue(mixin.contains("BranchSwitchHotkeyController.getInstance().handleKeyPress(client, action, event)"));
     }
 }

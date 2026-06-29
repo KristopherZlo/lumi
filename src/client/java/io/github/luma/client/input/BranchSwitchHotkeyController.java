@@ -30,12 +30,12 @@ public final class BranchSwitchHotkeyController {
         return INSTANCE;
     }
 
-    public boolean handleKeyPress(Minecraft client, int key, int scanCode, int action, int modifiers) {
-        if (!this.canHandle(client, key, action, modifiers)) {
+    public boolean handleKeyPress(Minecraft client, int action, KeyEvent event) {
+        if (!this.canHandle(client, action, event)) {
             return false;
         }
 
-        String switchKey = InputConstants.getKey(new KeyEvent(key, scanCode, modifiers)).getName();
+        String switchKey = InputConstants.getKey(event).getName();
         try {
             Optional<BuildProject> project = ClientProjectAccess.findCurrentWorldProject(client, this.projectService);
             if (project.isEmpty()) {
@@ -66,16 +66,17 @@ public final class BranchSwitchHotkeyController {
         }
     }
 
-    private boolean canHandle(Minecraft client, int key, int action, int modifiers) {
+    private boolean canHandle(Minecraft client, int action, KeyEvent event) {
         return client != null
                 && client.screen == null
                 && client.player != null
                 && client.level != null
+                && event != null
                 && action == GLFW.GLFW_PRESS
-                && key != GLFW.GLFW_KEY_UNKNOWN
-                && key != GLFW.GLFW_KEY_LEFT_ALT
-                && key != GLFW.GLFW_KEY_RIGHT_ALT
-                && (modifiers & GLFW.GLFW_MOD_ALT) != 0;
+                && event.key() != GLFW.GLFW_KEY_UNKNOWN
+                && event.key() != GLFW.GLFW_KEY_LEFT_ALT
+                && event.key() != GLFW.GLFW_KEY_RIGHT_ALT
+                && (event.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
     }
 
     private void showStatus(Minecraft client, String status) {
