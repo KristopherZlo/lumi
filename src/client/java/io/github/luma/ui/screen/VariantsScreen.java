@@ -21,6 +21,7 @@ import io.github.luma.ui.controller.VariantsScreenController;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.navigation.ScreenRouter;
+import io.github.luma.ui.onboarding.KeyGlyphResolver;
 import io.github.luma.ui.state.VariantsViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
@@ -357,15 +358,16 @@ public final class VariantsScreen extends LumaScreen {
         if (variant == null) {
             return null;
         }
-        return this.zoneMode()
-                ? this.latestVersionForVariant(variant.id())
+        ProjectVersion head = this.zoneMode()
+                ? null
                 : ProjectUiSupport.versionFor(this.state.versions(), variant.headVersionId());
+        return head == null ? this.latestVersionForVariant(variant.id()) : head;
     }
 
     private ProjectVersion latestVersionForVariant(String variantId) {
         return this.state.versions().stream()
                 .filter(version -> variantId != null && variantId.equals(version.variantId()))
-                .findFirst()
+                .max(Comparator.comparing(ProjectVersion::createdAt))
                 .orElse(null);
     }
 
@@ -415,7 +417,7 @@ public final class VariantsScreen extends LumaScreen {
                 Component.translatable("luma.ideas.bind_title", ProjectUiSupport.displayVariantName(variant)),
                 button -> this.closeBranchBindDialog()
         ));
-        modal.child(LumaUi.caption(Component.translatable("luma.ideas.bind_help")));
+        modal.child(LumaUi.caption(Component.translatable("luma.ideas.bind_help", this.actionKeyText())));
         modal.child(this.switchKeyChip(variant));
 
         FlowLayout actions = LumaUi.actionRow();
@@ -525,22 +527,18 @@ public final class VariantsScreen extends LumaScreen {
         if (key.isBlank()) {
             return Component.translatable("luma.ideas.switch_key_unassigned");
         }
-        return Component.translatable("luma.ideas.switch_key", this.actionKeyDisplay(), this.keyDisplay(key));
+        return Component.translatable("luma.ideas.switch_key", this.actionKeyText(), this.keyText(key));
     }
 
-    private Component actionKeyDisplay() {
-        KeyMapping actionKey = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
-        return actionKey == null || actionKey.isUnbound()
-                ? Component.translatable("luma.onboarding.key_unbound")
-                : actionKey.getTranslatedKeyMessage();
+    private Component actionKeyText() {
+        return Component.literal(KeyGlyphResolver.bracketedLabel(
+                LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION),
+                "ACTION"
+        ));
     }
 
-    private Component keyDisplay(String key) {
-        try {
-            return InputConstants.getKey(key).getDisplayName();
-        } catch (IllegalArgumentException exception) {
-            return Component.literal(key);
-        }
+    private Component keyText(String key) {
+        return Component.literal(KeyGlyphResolver.bracketedLabel(key));
     }
 
     private boolean isActionKey(KeyEvent event) {

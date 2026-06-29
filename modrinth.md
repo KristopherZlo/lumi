@@ -36,14 +36,14 @@ Lumi helps builders and redstoners save versions of a build, compare changes, br
 
 | Key | Action |
 | --- | --- |
-| `U` | Open Build History |
-| Lumi action key + `S` | Quick save |
-| Lumi action key + `1` ... `0` | Switch to bound branch |
-| Lumi action key + `Z` | Undo |
-| Lumi action key + `Y` | Redo |
-| `R` | Quick rollback |
-| `H` | Toggle compare overlay |
-| Lumi action key + `I` | Show Lumi hotkeys |
+| [U] | Open Build History |
+| [ALT]+[S] by default | Quick save |
+| [ALT]+[1] ... [0] by default | Switch to bound branch |
+| [ALT]+[Z] by default | Undo |
+| [ALT]+[Y] by default | Redo |
+| [R] | Quick rollback |
+| [H] | Toggle compare overlay |
+| [ALT]+[I] by default | Show Lumi hotkeys |
 | Wooden sword | Select a region for partial restore |
 
 Keybinds can be changed in Minecraft controls.

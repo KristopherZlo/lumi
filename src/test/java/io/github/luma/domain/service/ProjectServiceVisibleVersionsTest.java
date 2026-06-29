@@ -74,6 +74,21 @@ class ProjectServiceVisibleVersionsTest {
         assertEquals(List.of("v0001", "v0002"), visible.stream().map(ProjectVersion::id).toList());
     }
 
+    @Test
+    void visibleVersionsKeepHistoryWhenHeadIsRestoreSafetyCheckpoint() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("restore-head-history.mbp"));
+        this.saveVersions(layout, List.of(
+                version("v0001", "", 0),
+                version("v0002", "v0001", 60),
+                version("v0003", "v0002", 120, VersionKind.RESTORE)
+        ));
+        new VariantRepository().save(layout, List.of(new ProjectVariant("main", "Main", "v0001", "v0003", true, instant(0))));
+
+        List<ProjectVersion> visible = new ProjectService().loadVisibleVersions(layout);
+
+        assertEquals(List.of("v0001", "v0002"), visible.stream().map(ProjectVersion::id).toList());
+    }
+
 
     @Test
     void visibleVersionsHideDetachedZoneHeadAfterAmend() throws Exception {

@@ -109,7 +109,7 @@ public final class VariantService {
                 baseVersionId,
                 false,
                 Instant.now(),
-                ProjectVariantSwitchKeys.defaultKey(visibleVariants.size())
+                ProjectVariantSwitchKeys.firstAvailableDefaultKey(visibleVariants)
         );
         List<ProjectVariant> nextVariants = new ArrayList<>(variants);
         nextVariants.add(variant);

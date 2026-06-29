@@ -28,6 +28,22 @@ public final class ProjectVariantSwitchKeys {
         return index >= 0 && index < DEFAULT_KEYS.size() ? DEFAULT_KEYS.get(index) : "";
     }
 
+    public static String firstAvailableDefaultKey(List<ProjectVariant> variants) {
+        Set<String> used = new HashSet<>();
+        if (variants != null) {
+            for (ProjectVariant variant : variants) {
+                String key = variant == null ? "" : variant.switchKey();
+                if (key != null && !key.isBlank()) {
+                    used.add(normalize(key));
+                }
+            }
+        }
+        return DEFAULT_KEYS.stream()
+                .filter(key -> !used.contains(key))
+                .findFirst()
+                .orElse("");
+    }
+
     public static String normalize(String key) {
         return key == null ? "" : key.trim().toLowerCase(Locale.ROOT);
     }

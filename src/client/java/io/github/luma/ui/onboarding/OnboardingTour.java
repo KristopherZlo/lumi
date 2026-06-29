@@ -111,7 +111,7 @@ public final class OnboardingTour {
         ShortcutCheck check = page.shortcutCheck();
         frame.child(this.header(page, contentWidth, actions));
         if (!this.shortcutOnlyPage(page)) {
-            frame.child(this.wrappedValue(Component.translatable(page.helpKey()), contentWidth));
+            frame.child(this.wrappedValue(this.helpText(page.helpKey()), contentWidth));
         }
         if ("preview_changes".equals(page.id())) {
             frame.child(this.previewShortcutRow(contentWidth));
@@ -207,7 +207,7 @@ public final class OnboardingTour {
     }
 
     public Component helpText() {
-        return Component.translatable(this.currentPage().helpKey());
+        return this.helpText(this.currentPage().helpKey());
     }
 
     public SpotlightTarget workspaceSpotlightTarget() {
@@ -357,11 +357,25 @@ public final class OnboardingTour {
     private FlowLayout keyChip(KeyMapping key) {
         Component label = key == null || key.isUnbound()
                 ? Component.translatable("luma.onboarding.key_unbound")
-                : key.getTranslatedKeyMessage();
+                : Component.literal(KeyGlyphResolver.bracketedLabel(key, "?"));
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.fixed(21));
         chip.verticalAlignment(VerticalAlignment.CENTER);
         chip.child(LumaUi.chip(label));
         return chip;
+    }
+
+    private Component helpText(String key) {
+        if ("luma.onboarding.selection_tool_help".equals(key)) {
+            return Component.translatable(key, this.actionKeyText());
+        }
+        return Component.translatable(key);
+    }
+
+    private Component actionKeyText() {
+        return Component.literal(KeyGlyphResolver.bracketedLabel(
+                LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION),
+                "ACTION"
+        ));
     }
 
     private FlowLayout actions(Page page, ShortcutCheck check, Actions actions) {

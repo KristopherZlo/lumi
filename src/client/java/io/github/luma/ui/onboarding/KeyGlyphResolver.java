@@ -84,6 +84,37 @@ public final class KeyGlyphResolver {
         return Optional.of(new KeyGlyph(spriteName, frameWidth, height));
     }
 
+    public static String bracketedLabel(KeyMapping key, String fallback) {
+        return key == null || key.isUnbound() ? bracket(fallback) : bracketedLabel(key.saveString(), fallback);
+    }
+
+    public static String bracketedLabel(String saveString) {
+        return bracketedLabel(saveString, saveString);
+    }
+
+    public static String bracketedLabel(String saveString, String fallback) {
+        if (saveString == null || saveString.isBlank()) {
+            return bracket(fallback);
+        }
+        try {
+            InputConstants.Key key = InputConstants.getKey(saveString);
+            String name = key.getName().toLowerCase(Locale.ROOT);
+            String special = SPECIAL_KEYS.get(name);
+            if (special != null) {
+                return bracket(special);
+            }
+            if (name.startsWith("key.keyboard.")) {
+                return bracket(name.substring("key.keyboard.".length()).replace('.', ' '));
+            }
+            if (name.startsWith("key.mouse.")) {
+                return bracket(name.substring("key.mouse.".length()).replace('.', ' '));
+            }
+        } catch (IllegalArgumentException exception) {
+            return bracket(fallback);
+        }
+        return bracket(fallback);
+    }
+
     static String spriteName(String saveString) {
         InputConstants.Key key = InputConstants.getKey(saveString);
         String name = key.getName().toLowerCase(Locale.ROOT);
@@ -96,6 +127,11 @@ public final class KeyGlyphResolver {
         }
         String suffix = name.substring("key.keyboard.".length());
         return suffix.length() == 1 && Character.isLetterOrDigit(suffix.charAt(0)) ? suffix : "";
+    }
+
+    private static String bracket(String label) {
+        String normalized = label == null || label.isBlank() ? "?" : label.trim();
+        return "[" + normalized.toUpperCase(Locale.ROOT) + "]";
     }
 
     private static Map.Entry<String, Integer> entry(String key, int value) {

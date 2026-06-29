@@ -1,6 +1,7 @@
 package io.github.luma.ui;
 
 import io.github.luma.client.onboarding.ClientContextualHelpHint;
+import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.ui.onboarding.KeyGlyphComponent;
 import io.github.luma.ui.onboarding.KeyGlyphResolver;
 import io.wispforest.owo.ui.component.ButtonComponent;
@@ -240,8 +241,21 @@ public final class LumaUi {
         ButtonComponent dismiss = iconButton("close", Component.translatable("luma.action.dismiss_hint"), onDismiss);
         header.child(dismiss);
         panel.child(header);
-        panel.child(caption(Component.translatable(hint.bodyKey())));
+        panel.child(caption(contextualHintBody(hint)));
         return panel;
+    }
+
+    private static Component contextualHintBody(ClientContextualHelpHint hint) {
+        if (hint == ClientContextualHelpHint.SELECTION_TOOL) {
+            return Component.translatable(
+                    hint.bodyKey(),
+                    Component.literal(KeyGlyphResolver.bracketedLabel(
+                            LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION),
+                            "ACTION"
+                    ))
+            );
+        }
+        return Component.translatable(hint.bodyKey());
     }
 
     public static FlowLayout emptyState(Component title, Component description) {

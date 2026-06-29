@@ -20,9 +20,9 @@ class LumiRegionSelectionTeachingControllerTest {
 
     @Test
     void nonMouseKeysUseBracketLabels() {
-        assertEquals("[Action]", LumiRegionSelectionTeachingController.keyLabel("ACTION"));
-        assertEquals("[Ctrl]", LumiRegionSelectionTeachingController.keyLabel("Ctrl"));
-        assertEquals("[Wheel]", LumiRegionSelectionTeachingController.keyLabel("Wheel"));
+        assertEquals("[ACTION]", LumiRegionSelectionTeachingController.keyLabel("ACTION"));
+        assertEquals("[CTRL]", LumiRegionSelectionTeachingController.keyLabel("Ctrl"));
+        assertEquals("[WHEEL]", LumiRegionSelectionTeachingController.keyLabel("Wheel"));
     }
 
     @Test

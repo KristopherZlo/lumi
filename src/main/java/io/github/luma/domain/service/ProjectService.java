@@ -262,25 +262,25 @@ public final class ProjectService {
 
     List<ProjectVersion> loadVisibleVersions(ProjectLayout layout) throws IOException {
         var tombstones = this.historyTombstoneRepository.load(layout);
-        List<ProjectVersion> versions = this.versionRepository.loadAll(layout).stream()
+        List<ProjectVersion> allVersions = this.versionRepository.loadAll(layout).stream()
                 .filter(version -> !tombstones.versionDeleted(version.id()))
-                .filter(version -> version.versionKind() != io.github.luma.domain.model.VersionKind.RESTORE)
                 .toList();
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout).stream()
                 .filter(variant -> !tombstones.variantDeleted(variant.id()))
                 .toList();
-        Set<String> visibleVersionIds = new LinkedHashSet<>(this.versionLineageService.reachableVersionIds(versions, variants));
-        Map<String, ProjectVersion> versionMap = this.versionLineageService.versionMap(versions);
+        Set<String> visibleVersionIds = new LinkedHashSet<>(this.versionLineageService.reachableVersionIds(allVersions, variants));
+        Map<String, ProjectVersion> versionMap = this.versionLineageService.versionMap(allVersions);
         for (ProjectVariant variant : variants) {
-            for (ProjectVersion version : versions) {
+            for (ProjectVersion version : allVersions) {
                 if (variant.id().equals(version.variantId())
                         && this.versionLineageService.isAncestor(versionMap, variant.headVersionId(), version.id())) {
                     visibleVersionIds.add(version.id());
                 }
             }
         }
-        return versions.stream()
+        return allVersions.stream()
                 .filter(version -> visibleVersionIds.contains(version.id()))
+                .filter(version -> version.versionKind() != io.github.luma.domain.model.VersionKind.RESTORE)
                 .toList();
     }
 

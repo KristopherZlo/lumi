@@ -64,25 +64,25 @@ For dedicated servers, install Lumi on both the server and every client that use
 ### Quick Start
 
 1. Create or open a project for the current build area.
-2. Follow the quick tour: make 5 block edits, preview them with the Lumi action key, undo/redo with the Lumi action key plus `Z`/`Y`, then save with the Lumi action key plus `S`.
-3. Press `U` to open Build History and inspect the created save card.
+2. Follow the quick tour: make 5 block edits, preview them with [ALT] by default, undo/redo with [ALT]+[Z]/[Y], then save with [ALT]+[S].
+3. Press [U] to open Build History and inspect the created save card.
 4. Use save cards for compare, Restore this save, branches, or older checkpoints when an idea goes wrong.
 
 ### Default Controls
 
 | Key | Action |
 | --- | --- |
-| `U` | Open Build History, or Zones when an active zone is selected |
-| Lumi action key + `S` | Open Save build, or Save zone when an active zone is selected |
-| Lumi action key + `1` ... `0` | Switch to the branch bound to that key; `main` defaults to `1`, then branches use `2` through `0` |
-| Lumi action key + `Z` | Undo |
-| Lumi action key + `Y` | Redo |
-| `R` | Quick rollback |
-| `H` | Toggle compare overlay |
-| Lumi action key + `I` | Show Lumi hotkeys |
-| Wooden sword | Select a region; the Lumi action key with mouse controls resizes, switches mode, or clears; the Lumi action key with `Z`/`Y` undo/redo selection, `Ctrl` adds/removes active-zone cells |
+| [U] | Open Build History, or Zones when an active zone is selected |
+| [ALT]+[S] by default | Open Save build, or Save zone when an active zone is selected |
+| [ALT]+[1] ... [0] by default | Switch to the branch bound to that key; `main` defaults to [1], then branches use the first free key from [1]...[0] |
+| [ALT]+[Z] by default | Undo |
+| [ALT]+[Y] by default | Redo |
+| [R] | Quick rollback |
+| [H] | Toggle compare overlay |
+| [ALT]+[I] by default | Show Lumi hotkeys |
+| Wooden sword | Select a region; the action key with mouse controls resizes, switches mode, or clears; [ALT]+[Z]/[Y] undo/redo selection by default, [CTRL] adds/removes active-zone cells |
 
-Wooden sword hints appear under the crosshair at the GUI Scale 2 visual size; only `LMB`, `MMB`, and `RMB` use mouse icons, while keyboard inputs render as `[KEY]` text.
+Wooden sword hints appear under the crosshair at the GUI Scale 2 visual size; only [LMB], [MMB], and [RMB] use mouse icons, while keyboard inputs render as [KEY] text.
 
 All keybinds are remappable in Minecraft controls.
 

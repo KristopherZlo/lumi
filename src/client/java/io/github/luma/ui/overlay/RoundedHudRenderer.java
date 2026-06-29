@@ -37,7 +37,7 @@ public final class RoundedHudRenderer {
         }
         return KeyGlyphResolver.resolve(key)
                 .map(KeyGlyph::frameWidth)
-                .orElseGet(() -> textChipWidth(fallback, compact));
+                .orElseGet(() -> textChipWidth(keyLabel(key, fallback), compact));
     }
 
     public static int key(GuiGraphics graphics, KeyMapping key, int x, int y, String fallback) {
@@ -79,7 +79,7 @@ public final class RoundedHudRenderer {
                     );
                     return glyph.frameWidth();
                 })
-                .orElseGet(() -> textChip(graphics, fallback, x, y, compact));
+                .orElseGet(() -> textChip(graphics, keyLabel(key, fallback), x, y, compact));
     }
 
     public static int textChipWidth(String text) {
@@ -105,19 +105,7 @@ public final class RoundedHudRenderer {
     }
 
     private static String keyLabel(KeyMapping key, String fallback) {
-        String resolvedFallback = fallback == null || fallback.isBlank() ? "?" : fallback.trim();
-        if (key == null || key.isUnbound()) {
-            return resolvedFallback;
-        }
-        String label = key.getTranslatedKeyMessage().getString();
-        if (label == null || label.isBlank() || label.startsWith("key.")) {
-            return resolvedFallback;
-        }
-        return label
-                .replace("Left ", "")
-                .replace("Right ", "")
-                .replace("Mouse Button ", "M")
-                .trim();
+        return KeyGlyphResolver.bracketedLabel(key, fallback);
     }
 
     public static void roundedRect(GuiGraphics graphics, int x, int y, int width, int height, int radius, int fill, int border) {

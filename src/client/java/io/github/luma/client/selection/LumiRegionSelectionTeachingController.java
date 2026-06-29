@@ -8,6 +8,7 @@ import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.ui.controller.ClientProjectAccess;
+import io.github.luma.ui.onboarding.KeyGlyphResolver;
 import java.util.List;
 import java.util.Locale;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -263,7 +264,7 @@ public final class LumiRegionSelectionTeachingController {
     }
 
     static String keyLabel(String key) {
-        return "[" + ("ACTION".equals(key) ? "Action" : key) + "]";
+        return "[" + ("ACTION".equals(key) ? "ACTION" : key).toUpperCase(Locale.ROOT) + "]";
     }
 
     static float hintScale(int guiScale) {
@@ -272,7 +273,7 @@ public final class LumiRegionSelectionTeachingController {
 
     private String displayKeyLabel(String key) {
         if ("ACTION".equals(key) && this.cachedActionKey != null) {
-            return "[" + this.cachedActionKey.getTranslatedKeyMessage().getString() + "]";
+            return KeyGlyphResolver.bracketedLabel(this.cachedActionKey, "ACTION");
         }
         return keyLabel(key);
     }

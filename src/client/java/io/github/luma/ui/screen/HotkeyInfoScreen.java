@@ -130,7 +130,7 @@ public final class HotkeyInfoScreen extends LumaScreen {
     private FlowLayout keyChip(KeyMapping key) {
         Component label = key == null || key.isUnbound()
                 ? Component.translatable("luma.onboarding.key_unbound")
-                : key.getTranslatedKeyMessage();
+                : Component.literal(KeyGlyphResolver.bracketedLabel(key, "?"));
         FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.fixed(21));
         chip.verticalAlignment(VerticalAlignment.CENTER);
         chip.child(LumaUi.chip(label));

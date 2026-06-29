@@ -18,7 +18,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 
 /**
- * Renders cumulative unsaved project changes while the Lumi action key is held.
+ * Renders cumulative unsaved project changes while the configured action key is held.
  */
 public final class PendingChangesOverlayRenderer {
 

@@ -1,11 +1,13 @@
 package io.github.luma.ui.screen.section;
 
+import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.MaterialEntryView;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.CompareScreenController;
+import io.github.luma.ui.onboarding.KeyGlyphResolver;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.CompareViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
@@ -148,9 +150,23 @@ public final class CompareScreenSections {
             manualExpanded.child(this.referenceSection(model));
             expanded.child(manualExpanded);
         }
-        expanded.child(LumaUi.caption(Component.translatable("luma.compare.hotkey_hint")));
+        expanded.child(LumaUi.caption(this.hotkeyHint()));
         section.child(expanded);
         return section;
+    }
+
+    private Component hotkeyHint() {
+        return Component.translatable(
+                "luma.compare.hotkey_hint",
+                Component.literal(KeyGlyphResolver.bracketedLabel(
+                        LumiClientKeyBindings.key(LumiClientKeyBindings.Role.COMPARE),
+                        "COMPARE"
+                )),
+                Component.literal(KeyGlyphResolver.bracketedLabel(
+                        LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION),
+                        "ACTION"
+                ))
+        );
     }
 
     public Component compareTitle(CompareViewState state) {

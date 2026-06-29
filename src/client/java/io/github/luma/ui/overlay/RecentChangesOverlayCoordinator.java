@@ -11,7 +11,7 @@ import java.util.concurrent.Executors;
 import net.minecraft.client.Minecraft;
 
 /**
- * Loads and exposes the recent action overlay while the Lumi action key is held.
+ * Loads and exposes the recent action overlay while the configured action key is held.
  */
 public final class RecentChangesOverlayCoordinator {
 

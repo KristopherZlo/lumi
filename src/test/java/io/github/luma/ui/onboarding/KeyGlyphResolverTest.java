@@ -23,4 +23,11 @@ class KeyGlyphResolverTest {
     void ignoresKeysWithoutBundledSprites() {
         Assertions.assertTrue(KeyGlyphResolver.resolve("key.keyboard.f1").isEmpty());
     }
+
+    @Test
+    void formatsTextKeyLabelsWithBrackets() {
+        Assertions.assertEquals("[ALT]", KeyGlyphResolver.bracketedLabel("key.keyboard.left.alt"));
+        Assertions.assertEquals("[K]", KeyGlyphResolver.bracketedLabel("key.keyboard.k"));
+        Assertions.assertEquals("[2]", KeyGlyphResolver.bracketedLabel("key.keyboard.2"));
+    }
 }

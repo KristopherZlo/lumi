@@ -1,6 +1,7 @@
 package io.github.luma.ui.overlay;
 
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.ui.onboarding.KeyGlyphResolver;
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.client.KeyMapping;
@@ -121,6 +122,6 @@ public final class OverlayDiagnostics {
         if (key == null) {
             return "none";
         }
-        return key.getTranslatedKeyMessage().getString();
+        return KeyGlyphResolver.bracketedLabel(key, "ACTION");
     }
 }

@@ -111,6 +111,20 @@ class VariantServiceTest {
     }
 
     @Test
+    void createVariantAssignsFirstFreeDefaultSwitchKey() throws IOException {
+        ProjectLayout layout = this.prepareProjectLayout();
+        new VariantRepository().save(layout, List.of(
+                new ProjectVariant("main", "main", "v0001", "v0001", true, NOW, "key.keyboard.2")
+        ));
+        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
+        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+
+        ProjectVariant variant = service.createVariant(null, "Tower", "Feature", "");
+
+        assertEquals("key.keyboard.1", variant.switchKey());
+    }
+
+    @Test
     void setVariantSwitchKeyClearsConflictingBranch() throws IOException {
         ProjectLayout layout = this.prepareProjectLayout();
         new VariantRepository().save(layout, List.of(
