@@ -2,6 +2,7 @@ package io.github.luma.ui.screen.section;
 
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.service.VersionLineageService;
 import io.github.luma.ui.ProjectUiSupport;
 import java.util.Comparator;
@@ -21,7 +22,7 @@ final class BranchHistoryVersions {
         Set<String> selectedLineageVersionIds = this.lineageService.reachableVersionIds(versions, variant.headVersionId());
         Set<String> visibleVersionIds = new LinkedHashSet<>();
         for (ProjectVersion version : versions) {
-            if (version != null && variant.id().equals(version.variantId())) {
+            if (this.visibleCommit(version) && variant.id().equals(version.variantId())) {
                 visibleVersionIds.add(version.id());
             }
         }
@@ -52,7 +53,7 @@ final class BranchHistoryVersions {
             String versionId
     ) {
         ProjectVersion version = ProjectUiSupport.versionFor(versions, versionId);
-        if (version == null) {
+        if (!this.visibleCommit(version)) {
             return null;
         }
         boolean selectedBranchVersion = selectedVariant.id().equals(version.variantId())
@@ -66,6 +67,10 @@ final class BranchHistoryVersions {
             return null;
         }
         return new Entry(version, entryVariant, version.id().equals(selectedVariant.headVersionId()));
+    }
+
+    private boolean visibleCommit(ProjectVersion version) {
+        return version != null && version.versionKind() != VersionKind.RESTORE;
     }
 
     record Entry(ProjectVersion version, ProjectVariant variant, boolean current) {

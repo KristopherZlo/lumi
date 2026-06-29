@@ -263,7 +263,7 @@ public final class LumiRegionSelectionTeachingController {
     }
 
     static String keyLabel(String key) {
-        return "[" + ("ACTION".equals(key) ? "Alt" : key) + "]";
+        return "[" + ("ACTION".equals(key) ? "Action" : key) + "]";
     }
 
     static float hintScale(int guiScale) {

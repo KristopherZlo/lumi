@@ -92,6 +92,22 @@ class BranchHistoryVersionsTest {
         assertEquals(List.of("v0003", "v0002", "v0001"), visibleIds);
     }
 
+    @Test
+    void restoreSafetyCheckpointsStayOutOfBranchCards() {
+        ProjectVariant main = new ProjectVariant("main", "Main", "v0001", "v0002", true, instant(0));
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", 60),
+                version("v0002", "main", "v0001", 120),
+                version("v0003", "main", "v0002", 180, Map.of(), VersionKind.RESTORE)
+        );
+
+        List<String> visibleIds = new BranchHistoryVersions().forVariant(versions, List.of(main), main).stream()
+                .map(entry -> entry.version().id())
+                .toList();
+
+        assertEquals(List.of("v0002", "v0001"), visibleIds);
+    }
+
     private static ProjectVersion version(String id, String variantId, String parentVersionId, long offsetSeconds) {
         return version(id, variantId, parentVersionId, offsetSeconds, Map.of());
     }
@@ -103,6 +119,17 @@ class BranchHistoryVersionsTest {
             long offsetSeconds,
             Map<String, String> metadata
     ) {
+        return version(id, variantId, parentVersionId, offsetSeconds, metadata, VersionKind.MANUAL);
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String variantId,
+            String parentVersionId,
+            long offsetSeconds,
+            Map<String, String> metadata,
+            VersionKind kind
+    ) {
         return new ProjectVersion(
                 id,
                 "11111111-1111-1111-1111-111111111111",
@@ -110,7 +137,7 @@ class BranchHistoryVersionsTest {
                 parentVersionId,
                 "",
                 List.of(),
-                VersionKind.MANUAL,
+                kind,
                 "tester",
                 id,
                 ChangeStats.empty(),

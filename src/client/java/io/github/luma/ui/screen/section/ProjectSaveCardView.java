@@ -166,12 +166,6 @@ public final class ProjectSaveCardView {
                 "luma.build.save_card_summary",
                 model.version().stats().changedBlocks()
         )));
-        if (model.current()) {
-            FlowLayout meta = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-            meta.gap(4);
-            meta.child(LumaUi.chip(Component.translatable("luma.history.current_badge")));
-            text.child(meta);
-        }
         return text;
     }
 

@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorkZone;
 import java.util.List;
 import java.util.Map;
@@ -15,19 +16,23 @@ public final class ProjectVersionVisibility {
 
     public List<ProjectVersion> globalHistory(List<ProjectVersion> versions) {
         return safe(versions).stream()
+                .filter(this::visibleCommit)
                 .filter(version -> this.workZoneId(version).isBlank())
                 .toList();
     }
 
     public List<ProjectVersion> globalHistory(List<ProjectVersion> versions, List<WorkZone> zones, boolean showHiddenCommits) {
         if (showHiddenCommits) {
-            return safe(versions);
+            return safe(versions).stream()
+                    .filter(this::visibleCommit)
+                    .toList();
         }
         Set<String> activeZoneIds = (zones == null ? List.<WorkZone>of() : zones).stream()
                 .map(WorkZone::id)
                 .filter(id -> id != null && !id.isBlank())
                 .collect(java.util.stream.Collectors.toSet());
         return safe(versions).stream()
+                .filter(this::visibleCommit)
                 .filter(version -> {
                     String workZoneId = this.workZoneId(version);
                     return workZoneId.isBlank() || !activeZoneIds.contains(workZoneId);
@@ -37,6 +42,7 @@ public final class ProjectVersionVisibility {
 
     public List<ProjectVersion> workZoneHistory(List<ProjectVersion> versions) {
         return safe(versions).stream()
+                .filter(this::visibleCommit)
                 .filter(version -> !this.workZoneId(version).isBlank())
                 .toList();
     }
@@ -47,6 +53,7 @@ public final class ProjectVersionVisibility {
             return List.of();
         }
         return safe(versions).stream()
+                .filter(this::visibleCommit)
                 .filter(version -> expected.equals(this.workZoneId(version)))
                 .toList();
     }
@@ -65,5 +72,9 @@ public final class ProjectVersionVisibility {
 
     private static List<ProjectVersion> safe(List<ProjectVersion> versions) {
         return versions == null ? List.of() : versions;
+    }
+
+    private boolean visibleCommit(ProjectVersion version) {
+        return version != null && version.versionKind() != VersionKind.RESTORE;
     }
 }

@@ -18,7 +18,9 @@ import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
@@ -307,21 +309,27 @@ public final class LumaUi {
         return inlineControl(chip);
     }
 
-    public static FlowLayout keybindChip(String saveString, Component fallback) {
-        if (saveString == null || saveString.isBlank()) {
+    public static FlowLayout keybindChip(
+            KeyMapping actionKey,
+            String saveString,
+            Component fallback,
+            BooleanSupplier actionPressed,
+            BooleanSupplier keyPressed
+    ) {
+        if (actionKey == null || actionKey.isUnbound() || saveString == null || saveString.isBlank()) {
             return chip(fallback);
         }
-        var alt = KeyGlyphResolver.resolve("key.keyboard.left.alt");
+        var action = KeyGlyphResolver.resolve(actionKey);
         var key = KeyGlyphResolver.resolve(saveString);
-        if (alt.isEmpty() || key.isEmpty()) {
+        if (action.isEmpty() || key.isEmpty()) {
             return chip(fallback);
         }
         FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.fixed(21));
         row.gap(3);
         row.verticalAlignment(VerticalAlignment.CENTER);
-        row.child(new KeyGlyphComponent(alt.get(), () -> false));
+        row.child(new KeyGlyphComponent(action.get(), actionPressed));
         row.child(compactCaption(Component.literal("+")));
-        row.child(new KeyGlyphComponent(key.get(), () -> false));
+        row.child(new KeyGlyphComponent(key.get(), keyPressed));
         return inlineControl(row);
     }
 

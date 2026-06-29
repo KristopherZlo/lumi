@@ -74,7 +74,7 @@ public final class CompareOverlayHotkeyHud {
                 cursor,
                 rowY,
                 LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION),
-                "Alt",
+                "Action",
                 "X-Ray"
         );
     }

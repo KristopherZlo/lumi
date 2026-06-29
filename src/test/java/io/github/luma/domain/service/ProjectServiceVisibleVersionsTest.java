@@ -60,6 +60,22 @@ class ProjectServiceVisibleVersionsTest {
     }
 
     @Test
+    void visibleVersionsHideRestoreSafetyCheckpoints() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("restore-checkpoint-history.mbp"));
+        this.saveVersions(layout, List.of(
+                version("v0001", "", 0),
+                version("v0002", "v0001", 60),
+                version("v0003", "v0002", 120, VersionKind.RESTORE)
+        ));
+        new VariantRepository().save(layout, List.of(new ProjectVariant("main", "Main", "v0001", "v0002", true, instant(0))));
+
+        List<ProjectVersion> visible = new ProjectService().loadVisibleVersions(layout);
+
+        assertEquals(List.of("v0001", "v0002"), visible.stream().map(ProjectVersion::id).toList());
+    }
+
+
+    @Test
     void visibleVersionsHideDetachedZoneHeadAfterAmend() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("zones.mbp"));
         this.saveVersions(layout, List.of(
@@ -83,7 +99,11 @@ class ProjectServiceVisibleVersionsTest {
     }
 
     private static ProjectVersion version(String id, String parentVersionId, long offsetSeconds) {
-        return version(id, parentVersionId, offsetSeconds, ExternalSourceInfo.manual());
+        return version(id, parentVersionId, offsetSeconds, VersionKind.MANUAL);
+    }
+
+    private static ProjectVersion version(String id, String parentVersionId, long offsetSeconds, VersionKind kind) {
+        return version(id, parentVersionId, offsetSeconds, ExternalSourceInfo.manual(), kind);
     }
 
     private static ProjectVersion zoneVersion(String id, String parentVersionId, long offsetSeconds) {
@@ -96,10 +116,20 @@ class ProjectServiceVisibleVersionsTest {
                 false,
                 false,
                 Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, "zone-a")
-        ));
+        ), VersionKind.MANUAL);
     }
 
     private static ProjectVersion version(String id, String parentVersionId, long offsetSeconds, ExternalSourceInfo sourceInfo) {
+        return version(id, parentVersionId, offsetSeconds, sourceInfo, VersionKind.MANUAL);
+    }
+
+    private static ProjectVersion version(
+            String id,
+            String parentVersionId,
+            long offsetSeconds,
+            ExternalSourceInfo sourceInfo,
+            VersionKind kind
+    ) {
         return new ProjectVersion(
                 id,
                 "33333333-3333-3333-3333-333333333333",
@@ -107,7 +137,7 @@ class ProjectServiceVisibleVersionsTest {
                 parentVersionId,
                 "",
                 List.of(),
-                VersionKind.MANUAL,
+                kind,
                 "tester",
                 id,
                 ChangeStats.empty(),

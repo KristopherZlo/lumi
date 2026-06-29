@@ -28,4 +28,33 @@ class VariantsScreenBranchActionsTest {
         assertTrue(this.source.contains("setVariantSwitchKey"));
         assertTrue(this.source.contains("LumaUi.keybindChip"));
     }
+
+    @Test
+    void branchCardsShowBindInTopRightAndUseActiveBorderInsteadOfCurrentBadge() {
+        String methodBody = methodBody(
+                this.source,
+                "    private FlowLayout variantCard(ProjectVariant variant) {",
+                "    private VariantsViewState loadState() {"
+        );
+
+        assertTrue(methodBody.contains("LumaUi.activeInsetPanel"));
+        assertTrue(methodBody.contains("branchCardTitleRow(variant)"));
+        assertFalse(methodBody.contains("luma.idea.current_badge"));
+    }
+
+    @Test
+    void branchBindChipUsesConfiguredActionKeySprite() {
+        assertTrue(this.source.contains("LumiClientKeyBindings.Role.ACTION"));
+        assertFalse(this.source.contains("key.keyboard.left.alt"));
+    }
+
+    private static String methodBody(String source, String start, String end) {
+        int methodIndex = source.indexOf(start);
+        int nextMethodIndex = source.indexOf(end, methodIndex);
+
+        assertTrue(methodIndex >= 0, "VariantsScreen should keep " + start.trim());
+        assertTrue(nextMethodIndex > methodIndex, "The method should be bounded by " + end.trim());
+
+        return source.substring(methodIndex, nextMethodIndex);
+    }
 }

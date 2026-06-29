@@ -351,7 +351,7 @@ public final class RestoreService {
         ));
 
         String returnVersionId = activeHeadVersionId;
-        if (pendingDraft != null && !pendingDraft.isEmpty()) {
+        if (this.shouldCreateSafetyCheckpoint(project, pendingDraft)) {
             LumaMod.LOGGER.info(
                     "Creating safety checkpoint before restore for project {} with {} pending changes",
                     project.name(),
@@ -365,7 +365,7 @@ public final class RestoreService {
                     pendingDraft.totalChangeCount()
             );
             progressSink.update(OperationStage.WRITING, 0, pendingDraft.totalChangeCount(), "Writing restore checkpoint");
-            ProjectVersion checkpoint = this.versionService.writeVersion(
+            ProjectVersion checkpoint = this.versionService.writeStagedVersion(
                     level,
                     layout,
                     project,
@@ -464,6 +464,15 @@ public final class RestoreService {
                         restoreUndoAction
                 )
         );
+    }
+
+    private boolean shouldCreateSafetyCheckpoint(
+            io.github.luma.domain.model.BuildProject project,
+            RecoveryDraft pendingDraft
+    ) {
+        return project.settings().safetySnapshotBeforeRestore()
+                && pendingDraft != null
+                && !pendingDraft.isEmpty();
     }
 
     public RestorePlanSummary summarizeRestorePlan(ServerLevel level, String projectName, String versionId) throws IOException {

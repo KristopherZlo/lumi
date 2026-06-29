@@ -237,11 +237,6 @@ public final class SaveDetailsScreen extends LumaScreen {
         text.gap(6);
         text.child(LumaUi.value(Component.literal(ProjectUiSupport.displayMessage(version))));
 
-        if (ProjectUiSupport.isVariantHead(this.state.variants(), version)) {
-            FlowLayout meta = LumaUi.actionRow();
-            meta.child(LumaUi.chip(Component.translatable("luma.history.current_badge")));
-            text.child(meta);
-        }
         text.child(LumaUi.caption(Component.translatable("luma.history.version_meta",
                 ProjectUiSupport.safeText(version.author()),
                 ProjectUiSupport.formatTimestamp(version.createdAt())

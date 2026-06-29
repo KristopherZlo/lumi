@@ -7,6 +7,7 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.HistoryTombstoneRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.VariantRepository;
@@ -34,6 +35,7 @@ public final class VariantService {
     private final VariantRepository variantRepository = new VariantRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final HistoryTombstoneRepository tombstoneRepository = new HistoryTombstoneRepository();
     private final RestoreService restoreService = new RestoreService();
     private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final CaptureSessionLifecycle captureSessionLifecycle;
@@ -80,9 +82,13 @@ public final class VariantService {
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
 
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
+        var tombstones = this.tombstoneRepository.load(layout);
+        List<ProjectVariant> visibleVariants = variants.stream()
+                .filter(variant -> !tombstones.variantDeleted(variant.id()))
+                .toList();
         String baseVersionId = fromVersionId;
         if (baseVersionId == null || baseVersionId.isBlank()) {
-            ProjectVariant activeVariant = variants.stream()
+            ProjectVariant activeVariant = visibleVariants.stream()
                     .filter(variant -> variant.id().equals(project.activeVariantId()))
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("Active variant is missing"));
@@ -91,7 +97,7 @@ public final class VariantService {
             throw new IllegalArgumentException("Version not found: " + baseVersionId);
         }
 
-        if (this.variantNameExists(variants, displayName)) {
+        if (this.variantNameExists(visibleVariants, displayName)) {
             throw new IllegalArgumentException("Variant already exists: " + displayName);
         }
 
@@ -103,7 +109,7 @@ public final class VariantService {
                 baseVersionId,
                 false,
                 Instant.now(),
-                ProjectVariantSwitchKeys.defaultKey(variants.size())
+                ProjectVariantSwitchKeys.defaultKey(visibleVariants.size())
         );
         List<ProjectVariant> nextVariants = new ArrayList<>(variants);
         nextVariants.add(variant);

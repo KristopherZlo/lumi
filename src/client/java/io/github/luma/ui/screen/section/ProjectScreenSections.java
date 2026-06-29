@@ -208,7 +208,6 @@ public final class ProjectScreenSections {
         BranchHistoryVersions.Entry latest = visibleEntries.stream()
                 .max(Comparator.comparing(entry -> entry.version().createdAt()))
                 .orElse(visibleEntries.getFirst());
-        section.child(LumaUi.caption(Component.translatable("luma.history.current_badge")));
         section.child(this.saveCard(model, latest));
 
         List<BranchHistoryVersions.Entry> olderEntries = visibleEntries.stream()

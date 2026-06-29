@@ -502,6 +502,36 @@ public final class VersionService {
         );
     }
 
+    ProjectVersion writeStagedVersion(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            RecoveryDraft draft,
+            String message,
+            String author,
+            VersionKind versionKind,
+            boolean schedulePreview,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
+        return this.writeVersion(
+                level,
+                layout,
+                project,
+                draft,
+                message,
+                author,
+                versionKind,
+                schedulePreview,
+                "",
+                progressSink,
+                false,
+                true,
+                null,
+                null,
+                List.of()
+        );
+    }
+
     private ProjectVersion writeVersion(
             ServerLevel level,
             ProjectLayout layout,

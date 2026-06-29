@@ -22,6 +22,7 @@ public final class BranchSwitchHotkeyController {
 
     private final ProjectService projectService = new ProjectService();
     private final ProjectScreenController actionController = new ProjectScreenController();
+    private final KeyBindingState keyBindingState = new KeyBindingState();
 
     private BranchSwitchHotkeyController() {
     }
@@ -67,6 +68,7 @@ public final class BranchSwitchHotkeyController {
     }
 
     private boolean canHandle(Minecraft client, int action, KeyEvent event) {
+        var actionKey = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
         return client != null
                 && client.screen == null
                 && client.player != null
@@ -74,9 +76,20 @@ public final class BranchSwitchHotkeyController {
                 && event != null
                 && action == GLFW.GLFW_PRESS
                 && event.key() != GLFW.GLFW_KEY_UNKNOWN
-                && event.key() != GLFW.GLFW_KEY_LEFT_ALT
-                && event.key() != GLFW.GLFW_KEY_RIGHT_ALT
-                && (event.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
+                && !this.sameKey(event, actionKey)
+                && this.keyBindingState.isDown(client, actionKey);
+    }
+
+    private boolean sameKey(KeyEvent event, net.minecraft.client.KeyMapping key) {
+        if (event == null || key == null || key.isUnbound()) {
+            return false;
+        }
+        try {
+            InputConstants.Key boundKey = InputConstants.getKey(key.saveString());
+            return boundKey.getType() == InputConstants.Type.KEYSYM && boundKey.getValue() == event.key();
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private void showStatus(Minecraft client, String status) {

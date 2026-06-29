@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectSaveCardViewTest {
@@ -21,6 +22,15 @@ class ProjectSaveCardViewTest {
         assertTrue(methodBody.contains("this.zoneTitle(model)"));
         assertTrue(source.contains("private FlowLayout zoneTitle(Model model)"));
         assertTrue(source.contains("model.zoneColor()"));
+    }
+
+    @Test
+    void saveCardsDoNotRenderLatestSaveTextTag() throws IOException {
+        String card = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectSaveCardView.java"));
+        String sections = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectScreenSections.java"));
+
+        assertFalse(card.contains("luma.history.current_badge"));
+        assertFalse(sections.contains("section.child(LumaUi.caption(Component.translatable(\"luma.history.current_badge\")))"));
     }
 
     private static String methodBody(String source, String start, String end) {

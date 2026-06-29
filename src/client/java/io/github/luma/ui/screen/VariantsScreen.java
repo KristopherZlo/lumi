@@ -3,6 +3,8 @@ package io.github.luma.ui.screen;
 import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
 import com.mojang.blaze3d.platform.InputConstants;
+import io.github.luma.client.input.KeyBindingState;
+import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVariantSwitchKeys;
 import io.github.luma.domain.model.ProjectVersion;
@@ -33,6 +35,7 @@ import io.wispforest.owo.ui.core.Surface;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -51,6 +54,7 @@ public final class VariantsScreen extends LumaScreen {
     private final ScreenRouter router = new ScreenRouter();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final ClientContextualHelpService contextualHelpService = new ClientContextualHelpService();
+    private final KeyBindingState keyBindingState = new KeyBindingState();
     private LumaScrollContainer<FlowLayout> bodyScroll;
     private VariantsViewState state = new VariantsViewState(null, List.of(), List.of(), null, null, "luma.status.project_ready");
     private String status = "luma.status.project_ready";
@@ -272,11 +276,13 @@ public final class VariantsScreen extends LumaScreen {
         ProjectVersion headVersion = this.headVersion(variant);
         boolean active = this.state.project() != null && variant.id().equals(this.state.project().activeVariantId());
 
-        FlowLayout card = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
-        if (this.zoneMode()) {
+        FlowLayout card = active
+                ? LumaUi.activeInsetPanel(Sizing.fill(100), Sizing.content())
+                : LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        if (this.zoneMode() && !active) {
             card.surface(Surface.flat(0xEA101113).and(Surface.outline(this.zoneColorArgb())));
         }
-        card.child(LumaUi.value(Component.literal(ProjectUiSupport.displayVariantName(variant))));
+        card.child(this.branchCardTitleRow(variant));
         if (headVersion == null) {
             card.child(LumaUi.caption(Component.translatable(this.zoneMode() ? "luma.ideas.zone_no_saves" : "luma.ideas.no_saves")));
         } else {
@@ -286,13 +292,6 @@ public final class VariantsScreen extends LumaScreen {
                     ProjectUiSupport.formatTimestamp(headVersion.createdAt())
             )));
         }
-
-        FlowLayout meta = LumaUi.actionRow();
-        if (active) {
-            meta.child(LumaUi.chip(Component.translatable("luma.idea.current_badge")));
-        }
-        meta.child(this.switchKeyChip(variant));
-        card.child(meta);
 
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent switchButton = LumaUi.primaryButton(Component.translatable("luma.action.switch_idea"), button -> {
@@ -328,6 +327,16 @@ public final class VariantsScreen extends LumaScreen {
         actions.child(deleteButton);
         card.child(actions);
         return card;
+    }
+
+    private FlowLayout branchCardTitleRow(ProjectVariant variant) {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(4);
+        row.verticalAlignment(io.wispforest.owo.ui.core.VerticalAlignment.CENTER);
+        row.child(LumaUi.value(Component.literal(ProjectUiSupport.displayVariantName(variant))));
+        row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
+        row.child(this.switchKeyChip(variant));
+        return row;
     }
 
     private VariantsViewState loadState() {
@@ -478,8 +487,7 @@ public final class VariantsScreen extends LumaScreen {
     private boolean bindPressedKey(KeyEvent event) {
         if (event == null
                 || event.key() == GLFW.GLFW_KEY_UNKNOWN
-                || event.key() == GLFW.GLFW_KEY_LEFT_ALT
-                || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
+                || this.isActionKey(event)) {
             return true;
         }
         ProjectVariant variant = this.pendingBindVariant();
@@ -502,7 +510,14 @@ public final class VariantsScreen extends LumaScreen {
 
     private FlowLayout switchKeyChip(ProjectVariant variant) {
         String key = ProjectVariantSwitchKeys.normalize(variant == null ? "" : variant.switchKey());
-        return LumaUi.keybindChip(key, this.switchKeyLabel(key));
+        KeyMapping actionKey = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
+        return LumaUi.keybindChip(
+                actionKey,
+                key,
+                this.switchKeyLabel(key),
+                () -> this.keyBindingState.isDown(this.client, actionKey),
+                () -> this.switchKeyDown(key)
+        );
     }
 
     private Component switchKeyLabel(String key) {
@@ -510,7 +525,14 @@ public final class VariantsScreen extends LumaScreen {
         if (key.isBlank()) {
             return Component.translatable("luma.ideas.switch_key_unassigned");
         }
-        return Component.translatable("luma.ideas.switch_key", this.keyDisplay(key));
+        return Component.translatable("luma.ideas.switch_key", this.actionKeyDisplay(), this.keyDisplay(key));
+    }
+
+    private Component actionKeyDisplay() {
+        KeyMapping actionKey = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
+        return actionKey == null || actionKey.isUnbound()
+                ? Component.translatable("luma.onboarding.key_unbound")
+                : actionKey.getTranslatedKeyMessage();
     }
 
     private Component keyDisplay(String key) {
@@ -519,6 +541,37 @@ public final class VariantsScreen extends LumaScreen {
         } catch (IllegalArgumentException exception) {
             return Component.literal(key);
         }
+    }
+
+    private boolean isActionKey(KeyEvent event) {
+        KeyMapping actionKey = LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION);
+        if (event == null || actionKey == null || actionKey.isUnbound()) {
+            return false;
+        }
+        try {
+            InputConstants.Key boundKey = InputConstants.getKey(actionKey.saveString());
+            return boundKey.getType() == InputConstants.Type.KEYSYM && boundKey.getValue() == event.key();
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
+    private boolean switchKeyDown(String key) {
+        if (key == null || key.isBlank() || this.client.getWindow() == null) {
+            return false;
+        }
+        try {
+            InputConstants.Key boundKey = InputConstants.getKey(key);
+            if (boundKey.getType() == InputConstants.Type.KEYSYM) {
+                return InputConstants.isKeyDown(this.client.getWindow(), boundKey.getValue());
+            }
+            if (boundKey.getType() == InputConstants.Type.MOUSE) {
+                return GLFW.glfwGetMouseButton(this.client.getWindow().handle(), boundKey.getValue()) == GLFW.GLFW_PRESS;
+            }
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+        return false;
     }
 
     private List<ProjectVariant> sortedVariants() {

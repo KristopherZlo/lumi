@@ -318,7 +318,7 @@ public final class ClientOnboardingFlowCoordinator {
                 actionKey,
                 cursorX,
                 y,
-                "Alt",
+                "Action",
                 false,
                 this.keyBindingState.isDown(Minecraft.getInstance(), actionKey)
         );

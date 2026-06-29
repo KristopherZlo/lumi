@@ -582,7 +582,6 @@ public final class WorkZoneScreen extends LumaScreen {
         }
 
         ProjectVersion latest = versions.getFirst();
-        section.child(LumaUi.caption(Component.translatable("luma.history.current_badge")));
         section.child(this.zoneSaveCard(latest, true));
 
         List<ProjectVersion> olderVersions = versions.stream()

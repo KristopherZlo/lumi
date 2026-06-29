@@ -18,4 +18,14 @@ class BranchSwitchHotkeyWiringTest {
         assertTrue(mixin.contains("KeyEvent event"));
         assertTrue(mixin.contains("BranchSwitchHotkeyController.getInstance().handleKeyPress(client, action, event)"));
     }
+
+    @Test
+    void branchSwitchHotkeysUseTheConfiguredActionKeyInsteadOfHardcodedAlt() throws Exception {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/client/input/BranchSwitchHotkeyController.java"));
+
+        assertTrue(source.contains("LumiClientKeyBindings.Role.ACTION"));
+        assertTrue(source.contains("keyBindingState.isDown(client, actionKey)"));
+        assertTrue(source.contains("!this.sameKey(event, actionKey)"));
+        assertTrue(!source.contains("GLFW_MOD_ALT"));
+    }
 }

@@ -264,6 +264,7 @@ public final class ProjectService {
         var tombstones = this.historyTombstoneRepository.load(layout);
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout).stream()
                 .filter(version -> !tombstones.versionDeleted(version.id()))
+                .filter(version -> version.versionKind() != io.github.luma.domain.model.VersionKind.RESTORE)
                 .toList();
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout).stream()
                 .filter(variant -> !tombstones.variantDeleted(variant.id()))

@@ -14,6 +14,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.HistoryTombstoneRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.VariantRepository;
@@ -91,6 +92,22 @@ class VariantServiceTest {
 
         assertEquals("key.keyboard.2", variant.switchKey());
         assertEquals("key.keyboard.2", new VariantRepository().loadAll(layout).get(1).switchKey());
+    }
+
+    @Test
+    void createVariantAssignsDefaultSwitchKeyFromVisibleBranchCount() throws IOException {
+        ProjectLayout layout = this.prepareProjectLayout();
+        new VariantRepository().save(layout, List.of(
+                ProjectVariant.main("v0001", NOW),
+                new ProjectVariant("deleted", "Deleted", "v0001", "v0001", false, NOW.plusSeconds(1), "key.keyboard.2")
+        ));
+        new HistoryTombstoneRepository().tombstoneVariant(layout, "deleted", NOW.plusSeconds(2));
+        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
+        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+
+        ProjectVariant variant = service.createVariant(null, "Tower", "Feature", "");
+
+        assertEquals("key.keyboard.2", variant.switchKey());
     }
 
     @Test
