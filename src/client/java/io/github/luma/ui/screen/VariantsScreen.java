@@ -2,7 +2,9 @@ package io.github.luma.ui.screen;
 
 import io.github.luma.client.onboarding.ClientContextualHelpHint;
 import io.github.luma.client.onboarding.ClientContextualHelpService;
+import com.mojang.blaze3d.platform.InputConstants;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectVariantSwitchKeys;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.ui.ContextualHelpPresenter;
@@ -22,6 +24,7 @@ import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
@@ -32,7 +35,9 @@ import java.util.List;
 import java.util.Objects;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 public final class VariantsScreen extends LumaScreen {
 
@@ -52,6 +57,7 @@ public final class VariantsScreen extends LumaScreen {
     private String variantName = "";
     private String pendingDeleteVariantId = "";
     private String deleteVariantName = "";
+    private String pendingBindVariantId = "";
     private TextBoxComponent variantNameInput;
     private ButtonComponent createVariantButton;
     private int refreshCooldown = 0;
@@ -96,6 +102,9 @@ public final class VariantsScreen extends LumaScreen {
             return;
         }
 
+        StackLayout stack = UIContainers.stack(Sizing.fill(100), Sizing.fill(100));
+        root.child(stack);
+
         ProjectWindowLayout window = ProjectWindowLayout.forProject(
                 this.width,
                 this.zoneMode()
@@ -104,7 +113,7 @@ public final class VariantsScreen extends LumaScreen {
                 this.state.project(),
                 this.state.variants()
         );
-        root.child(window.root());
+        stack.child(window.root());
         this.sidebarNavigation.attach(
                 window,
                 this,
@@ -130,6 +139,12 @@ public final class VariantsScreen extends LumaScreen {
         body.child(this.createSection(baseVersion));
         body.child(this.listSection());
         body.child(LumaUi.bottomSpacer());
+
+        if (!this.pendingDeleteVariantId.isBlank()) {
+            stack.child(this.branchDeleteDialogOverlay());
+        } else if (!this.pendingBindVariantId.isBlank()) {
+            stack.child(this.branchBindDialogOverlay());
+        }
     }
 
     @Override
@@ -140,6 +155,22 @@ public final class VariantsScreen extends LumaScreen {
     @Override
     public Screen navigationParent() {
         return this.parent;
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (!this.pendingDeleteVariantId.isBlank() && OnboardingScreen.isEscapeKey(event)) {
+            this.closeBranchDeleteDialog();
+            return true;
+        }
+        if (!this.pendingBindVariantId.isBlank()) {
+            if (OnboardingScreen.isEscapeKey(event)) {
+                this.closeBranchBindDialog();
+                return true;
+            }
+            return this.bindPressedKey(event);
+        }
+        return super.keyPressed(event);
     }
 
     @Override
@@ -260,6 +291,7 @@ public final class VariantsScreen extends LumaScreen {
         if (active) {
             meta.child(LumaUi.chip(Component.translatable("luma.idea.current_badge")));
         }
+        meta.child(LumaUi.chip(this.switchKeyLabel(variant)));
         card.child(meta);
 
         FlowLayout actions = LumaUi.actionRow();
@@ -287,18 +319,14 @@ public final class VariantsScreen extends LumaScreen {
             actions.child(mergeButton);
         }
 
+        actions.child(LumaUi.button(Component.translatable("luma.action.bind_branch"), button -> this.openBranchBindDialog(variant.id())));
+
         boolean protectedMain = variant.main() || Objects.equals("main", variant.id());
-        ButtonComponent deleteButton = LumaUi.iconButton("trash", Component.translatable("luma.action.delete_branch"), button -> {
-            this.pendingDeleteVariantId = variant.id();
-            this.deleteVariantName = "";
-            this.rebuild();
-        });
+        ButtonComponent deleteButton = LumaUi.iconButton("trash", Component.translatable("luma.action.delete_branch"), button ->
+                this.openBranchDeleteDialog(variant.id()));
         deleteButton.active(!active && !protectedMain && !this.operationActive());
         actions.child(deleteButton);
         card.child(actions);
-        if (variant.id().equals(this.pendingDeleteVariantId)) {
-            card.child(this.deleteConfirmation(variant));
-        }
         return card;
     }
 
@@ -332,11 +360,19 @@ public final class VariantsScreen extends LumaScreen {
                 .orElse(null);
     }
 
-    private FlowLayout deleteConfirmation(ProjectVariant variant) {
-        FlowLayout panel = LumaUi.insetSection(
+    private FlowLayout branchDeleteDialogOverlay() {
+        FlowLayout overlay = LumaUi.modalOverlay();
+        ProjectVariant variant = this.pendingDeleteVariant();
+        if (variant == null) {
+            this.closeBranchDeleteDialog();
+            return overlay;
+        }
+        FlowLayout modal = LumaUi.modalFrame(Math.min(360, Math.max(260, this.width - 40)));
+        modal.child(LumaUi.closeHeader(
                 Component.translatable("luma.ideas.delete_confirm_title", ProjectUiSupport.displayVariantName(variant)),
-                Component.translatable("luma.ideas.delete_confirm_help", ProjectUiSupport.displayVariantName(variant))
-        );
+                button -> this.closeBranchDeleteDialog()
+        ));
+        modal.child(LumaUi.caption(Component.translatable("luma.ideas.delete_confirm_help", ProjectUiSupport.displayVariantName(variant))));
         TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.deleteVariantName);
         input.setHint(Component.literal(ProjectUiSupport.displayVariantName(variant)));
         ButtonComponent confirm = LumaUi.primaryButton(Component.translatable("luma.action.delete_branch"), button -> this.confirmDeleteVariant(variant));
@@ -344,21 +380,41 @@ public final class VariantsScreen extends LumaScreen {
             this.deleteVariantName = value == null ? "" : value;
             confirm.active(this.canConfirmDelete(variant));
         });
-        panel.child(LumaUi.formField(
+        modal.child(LumaUi.formField(
                 Component.translatable("luma.idea.name_input"),
                 Component.translatable("luma.ideas.delete_confirm_input_help"),
                 input
         ));
         FlowLayout actions = LumaUi.actionRow();
-        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> {
-            this.pendingDeleteVariantId = "";
-            this.deleteVariantName = "";
-            this.rebuild();
-        }));
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.closeBranchDeleteDialog()));
         confirm.active(this.canConfirmDelete(variant));
         actions.child(confirm);
-        panel.child(actions);
-        return panel;
+        modal.child(actions);
+        overlay.child(modal);
+        return overlay;
+    }
+
+    private FlowLayout branchBindDialogOverlay() {
+        FlowLayout overlay = LumaUi.modalOverlay();
+        ProjectVariant variant = this.pendingBindVariant();
+        if (variant == null) {
+            this.closeBranchBindDialog();
+            return overlay;
+        }
+        FlowLayout modal = LumaUi.modalFrame(Math.min(360, Math.max(260, this.width - 40)));
+        modal.child(LumaUi.closeHeader(
+                Component.translatable("luma.ideas.bind_title", ProjectUiSupport.displayVariantName(variant)),
+                button -> this.closeBranchBindDialog()
+        ));
+        modal.child(LumaUi.caption(Component.translatable("luma.ideas.bind_help")));
+        modal.child(LumaUi.chip(this.switchKeyLabel(variant)));
+
+        FlowLayout actions = LumaUi.actionRow();
+        actions.child(LumaUi.button(Component.translatable("luma.action.clear_bind"), button -> this.setBranchSwitchKey(variant, "")));
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.closeBranchBindDialog()));
+        modal.child(actions);
+        overlay.child(modal);
+        return overlay;
     }
 
     private boolean canConfirmDelete(ProjectVariant variant) {
@@ -375,6 +431,89 @@ public final class VariantsScreen extends LumaScreen {
         this.pendingDeleteVariantId = "";
         this.deleteVariantName = "";
         this.refresh(result);
+    }
+
+    private void openBranchDeleteDialog(String variantId) {
+        this.pendingDeleteVariantId = variantId == null ? "" : variantId;
+        this.deleteVariantName = "";
+        this.rebuild();
+    }
+
+    private void closeBranchDeleteDialog() {
+        this.pendingDeleteVariantId = "";
+        this.deleteVariantName = "";
+        this.rebuild();
+    }
+
+    private ProjectVariant pendingDeleteVariant() {
+        if (this.pendingDeleteVariantId.isBlank()) {
+            return null;
+        }
+        return this.state.variants().stream()
+                .filter(variant -> variant.id().equals(this.pendingDeleteVariantId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void openBranchBindDialog(String variantId) {
+        this.pendingBindVariantId = variantId == null ? "" : variantId;
+        this.rebuild();
+    }
+
+    private void closeBranchBindDialog() {
+        this.pendingBindVariantId = "";
+        this.rebuild();
+    }
+
+    private ProjectVariant pendingBindVariant() {
+        if (this.pendingBindVariantId.isBlank()) {
+            return null;
+        }
+        return this.state.variants().stream()
+                .filter(variant -> variant.id().equals(this.pendingBindVariantId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean bindPressedKey(KeyEvent event) {
+        if (event == null
+                || event.key() == GLFW.GLFW_KEY_UNKNOWN
+                || event.key() == GLFW.GLFW_KEY_LEFT_ALT
+                || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
+            return true;
+        }
+        ProjectVariant variant = this.pendingBindVariant();
+        if (variant == null) {
+            this.closeBranchBindDialog();
+            return true;
+        }
+        this.setBranchSwitchKey(variant, InputConstants.getKey(event).getName());
+        return true;
+    }
+
+    private void setBranchSwitchKey(ProjectVariant variant, String switchKey) {
+        if (variant == null) {
+            return;
+        }
+        String result = this.actionController.setVariantSwitchKey(this.projectName, variant.id(), switchKey);
+        this.pendingBindVariantId = "";
+        this.refresh(result);
+    }
+
+    private Component switchKeyLabel(ProjectVariant variant) {
+        String key = ProjectVariantSwitchKeys.normalize(variant == null ? "" : variant.switchKey());
+        if (key.isBlank()) {
+            return Component.translatable("luma.ideas.switch_key_unassigned");
+        }
+        return Component.translatable("luma.ideas.switch_key", this.keyDisplay(key));
+    }
+
+    private Component keyDisplay(String key) {
+        try {
+            return InputConstants.getKey(key).getDisplayName();
+        } catch (IllegalArgumentException exception) {
+            return Component.literal(key);
+        }
     }
 
     private List<ProjectVariant> sortedVariants() {

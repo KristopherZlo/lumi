@@ -38,6 +38,7 @@ Lumi helps builders and redstoners save versions of a build, compare changes, br
 | --- | --- |
 | `U` | Open Build History |
 | `Left Alt+S` | Quick save |
+| `Left Alt+1` ... `Left Alt+0` | Switch to bound branch |
 | `Left Alt+Z` | Undo |
 | `Left Alt+Y` | Redo |
 | `R` | Quick rollback |

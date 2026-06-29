@@ -82,6 +82,36 @@ class VariantServiceTest {
     }
 
     @Test
+    void createVariantAssignsNextDefaultSwitchKey() throws IOException {
+        ProjectLayout layout = this.prepareProjectLayout();
+        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
+        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+
+        ProjectVariant variant = service.createVariant(null, "Tower", "Feature", "");
+
+        assertEquals("key.keyboard.2", variant.switchKey());
+        assertEquals("key.keyboard.2", new VariantRepository().loadAll(layout).get(1).switchKey());
+    }
+
+    @Test
+    void setVariantSwitchKeyClearsConflictingBranch() throws IOException {
+        ProjectLayout layout = this.prepareProjectLayout();
+        new VariantRepository().save(layout, List.of(
+                new ProjectVariant("main", "main", "v0001", "v0001", true, NOW, "key.keyboard.1"),
+                new ProjectVariant("feature", "Feature", "v0001", "v0001", false, NOW, "key.keyboard.2"),
+                new ProjectVariant("review", "Review", "v0001", "v0001", false, NOW, "key.keyboard.3")
+        ));
+        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
+        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+
+        service.setVariantSwitchKey(null, "Tower", "review", "key.keyboard.2");
+
+        List<ProjectVariant> variants = new VariantRepository().loadAll(layout);
+        assertEquals("", variants.stream().filter(variant -> variant.id().equals("feature")).findFirst().orElseThrow().switchKey());
+        assertEquals("key.keyboard.2", variants.stream().filter(variant -> variant.id().equals("review")).findFirst().orElseThrow().switchKey());
+    }
+
+    @Test
     void normalSwitchVariantApiDoesNotExposeMetadataOnlyBypass() {
         assertThrows(
                 NoSuchMethodException.class,

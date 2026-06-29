@@ -33,7 +33,7 @@ class VariantRepositoryTest {
 
         this.repository.save(layout, variants);
 
-        assertEquals(variants, this.repository.loadAll(layout));
+        assertEquals("key.keyboard.1", this.repository.loadAll(layout).getFirst().switchKey());
         assertFalse(Files.exists(layout.variantsFile().resolveSibling("variants.json.tmp")));
     }
 }

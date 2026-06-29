@@ -805,7 +805,8 @@ public final class VersionService {
                             activeVariant.baseVersionId(),
                             version.id(),
                             activeVariant.main(),
-                            activeVariant.createdAt()
+                            activeVariant.createdAt(),
+                            activeVariant.switchKey()
                     )
                     : variant);
         }

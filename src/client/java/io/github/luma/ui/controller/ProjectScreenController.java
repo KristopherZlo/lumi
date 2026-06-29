@@ -474,6 +474,22 @@ public final class ProjectScreenController {
         }
     }
 
+    public String setVariantSwitchKey(String projectName, String variantId, String switchKey) {
+        try {
+            this.variantService.setVariantSwitchKey(
+                    ClientProjectAccess.requireSingleplayerServer(this.client),
+                    projectName,
+                    variantId,
+                    switchKey
+            );
+            return "luma.status.variant_switch_key_updated";
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Set variant switch key request failed for project {}", projectName, exception);
+            this.reportFailedAction(exception);
+            return variantFailureStatus(exception);
+        }
+    }
+
     private ProjectVariant createBranchVariant(String projectName, String variantName, String fromVersionId) throws Exception {
         return this.variantService.createVariant(
                 ClientProjectAccess.requireSingleplayerServer(this.client),

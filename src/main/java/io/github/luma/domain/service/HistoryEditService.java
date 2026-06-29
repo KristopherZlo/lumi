@@ -146,7 +146,8 @@ public final class HistoryEditService {
                     headVariant.baseVersionId(),
                     version.parentVersionId(),
                     headVariant.main(),
-                    headVariant.createdAt()
+                    headVariant.createdAt(),
+                    headVariant.switchKey()
             ));
             variantsChanged = true;
         }
@@ -158,7 +159,8 @@ public final class HistoryEditService {
                         version.parentVersionId(),
                         variant.headVersionId(),
                         variant.main(),
-                        variant.createdAt()
+                        variant.createdAt(),
+                        variant.switchKey()
                 ));
                 variantsChanged = true;
             }
@@ -216,6 +218,10 @@ public final class HistoryEditService {
         }
 
         Instant now = Instant.now();
+        this.variantRepository.save(layout, replaceVariant(
+                this.variantRepository.loadAll(layout),
+                variant.withSwitchKey("")
+        ));
         this.tombstoneRepository.tombstoneVariant(layout, variant.id(), now);
         this.projectRepository.save(layout, project.withUpdatedAt(now).withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION));
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(

@@ -159,12 +159,21 @@ class HistoryEditServiceTest {
     @Test
     void deleteVariantTombstonesInactiveBranch() throws Exception {
         ProjectLayout layout = this.seedProject();
+        new VariantRepository().save(layout, List.of(
+                new ProjectVariant("main", "main", "v0001", "v0002", true, NOW, "key.keyboard.1"),
+                new ProjectVariant("feature", "Feature", "v0002", "v0003", false, NOW, "key.keyboard.2")
+        ));
         HistoryEditService service = new HistoryEditService((server, projectName) -> layout, (server, projectId) -> {
         });
 
         service.deleteVariant(null, "Tower", "feature");
 
         assertTrue(new HistoryTombstoneRepository().load(layout).variantDeleted("feature"));
+        assertEquals("", new VariantRepository().loadAll(layout).stream()
+                .filter(variant -> variant.id().equals("feature"))
+                .findFirst()
+                .orElseThrow()
+                .switchKey());
     }
 
     @Test

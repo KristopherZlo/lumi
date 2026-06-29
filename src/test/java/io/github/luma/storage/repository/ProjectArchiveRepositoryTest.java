@@ -11,6 +11,7 @@ import io.github.luma.domain.model.ProjectArchiveManifest;
 import io.github.luma.domain.model.ProjectArchiveScope;
 import io.github.luma.domain.model.ProjectArchiveScopeType;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectVariantSwitchKeys;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.storage.GsonProvider;
@@ -119,7 +120,8 @@ class ProjectArchiveRepositoryTest {
 
         BuildProject imported = this.projectRepository.load(importedLayout).orElseThrow();
         assertEquals("Tower", imported.name());
-        assertEquals(List.of(new ProjectVariant("main", "main", "v0001", "v0001", true, Instant.parse("2026-04-21T08:00:00Z"))),
+        assertEquals(List.of(new ProjectVariant("main", "main", "v0001", "v0001", true,
+                        Instant.parse("2026-04-21T08:00:00Z"), ProjectVariantSwitchKeys.defaultKey(0))),
                 this.variantRepository.loadAll(importedLayout));
         assertEquals("v0001", this.versionRepository.loadAll(importedLayout).getFirst().id());
     }

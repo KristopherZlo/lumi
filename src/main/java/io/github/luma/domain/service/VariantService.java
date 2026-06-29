@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectVariantSwitchKeys;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
@@ -95,7 +96,15 @@ public final class VariantService {
         }
 
         String variantId = this.uniqueVariantId(displayName, variants);
-        ProjectVariant variant = new ProjectVariant(variantId, displayName, baseVersionId, baseVersionId, false, Instant.now());
+        ProjectVariant variant = new ProjectVariant(
+                variantId,
+                displayName,
+                baseVersionId,
+                baseVersionId,
+                false,
+                Instant.now(),
+                ProjectVariantSwitchKeys.defaultKey(variants.size())
+        );
         List<ProjectVariant> nextVariants = new ArrayList<>(variants);
         nextVariants.add(variant);
         LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
@@ -109,6 +118,34 @@ public final class VariantService {
         ));
         this.captureSessionLifecycle.invalidateProjectCache(server);
         return variant;
+    }
+
+    public List<ProjectVariant> setVariantSwitchKey(
+            MinecraftServer server,
+            String projectName,
+            String variantId,
+            String switchKey
+    ) throws IOException {
+        ProjectLayout layout = this.layoutResolver.resolveLayout(server, projectName);
+        var project = this.projectRepository.load(layout)
+                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        List<ProjectVariant> variants = ProjectVariantSwitchKeys.assign(
+                this.variantRepository.loadAll(layout),
+                variantId,
+                switchKey
+        );
+        Instant now = Instant.now();
+        this.variantRepository.save(layout, variants);
+        this.projectRepository.save(layout, project.withUpdatedAt(now).withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION));
+        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
+                now,
+                "variant-switch-key-updated",
+                "Updated variant switch key for " + variantId,
+                "",
+                variantId
+        ));
+        this.captureSessionLifecycle.invalidateProjectCache(server);
+        return variants;
     }
 
     public ProjectVariant switchVariant(ServerLevel level, String projectName, String variantId) throws IOException {

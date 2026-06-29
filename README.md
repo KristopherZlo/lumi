@@ -74,6 +74,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 | --- | --- |
 | `U` | Open Build History, or Zones when an active zone is selected |
 | `Left Alt+S` | Open Save build, or Save zone when an active zone is selected |
+| `Left Alt+1` ... `Left Alt+0` | Switch to the branch bound to that key; `main` defaults to `1`, then branches use `2` through `0` |
 | `Left Alt+Z` | Undo |
 | `Left Alt+Y` | Redo |
 | `R` | Quick rollback |
@@ -211,7 +212,7 @@ Important records:
 
 - `world-origin.json`: shared world origin and restore-safety baseline
 - `project.json`: project metadata and settings
-- `variants.json`: branch heads
+- `variants.json`: branch heads and branch switch binds
 - `history-tombstones.json`: soft-deleted saves and branches
 - `work-zones.json`: named work-zone metadata and active selections
 - `versions/*.json`: saved version manifests

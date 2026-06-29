@@ -397,7 +397,8 @@ public final class ProjectService {
                             variant.baseVersionId() == null || variant.baseVersionId().isBlank() ? versionId : variant.baseVersionId(),
                             versionId,
                             variant.main(),
-                            variant.createdAt()
+                            variant.createdAt(),
+                            variant.switchKey()
                     ));
                 } else {
                     updated.add(variant);

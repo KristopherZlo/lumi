@@ -121,7 +121,8 @@ public final class HistoryShareService {
                     importedVariant.baseVersionId(),
                     importedVariant.headVersionId(),
                     true,
-                    importedVariant.createdAt()
+                    importedVariant.createdAt(),
+                    importedVariant.switchKey()
             );
             this.projectRepository.save(importedLayout, rewrittenProject);
             this.variantRepository.save(importedLayout, List.of(rewrittenVariant));

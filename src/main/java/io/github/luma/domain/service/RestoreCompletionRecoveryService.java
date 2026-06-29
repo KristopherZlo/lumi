@@ -169,7 +169,8 @@ final class RestoreCompletionRecoveryService {
                     variant.baseVersionId(),
                     versionId,
                     variant.main(),
-                    variant.createdAt()
+                    variant.createdAt(),
+                    variant.switchKey()
             ));
         }
         if (!found) {

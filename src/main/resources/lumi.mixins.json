@@ -43,6 +43,7 @@
   ],
   "client": [
     "client.EditWorldScreenMixin",
+    "client.KeyboardHandlerMixin",
     "client.MinecraftInteractionMixin",
     "client.MouseHandlerMixin",
     "client.WorldOpenFlowsMixin"

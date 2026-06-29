@@ -187,7 +187,8 @@ final class RestoreCompletionCoordinator {
                     variant.baseVersionId(),
                     targetVersionId,
                     variant.main(),
-                    variant.createdAt()
+                    variant.createdAt(),
+                    variant.switchKey()
             ));
         }
         return updated;
