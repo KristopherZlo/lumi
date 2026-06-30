@@ -32,9 +32,6 @@ public final class RoundedHudRenderer {
     }
 
     public static int keyWidth(KeyMapping key, String fallback, boolean compact) {
-        if (compact) {
-            return textChipWidth(keyLabel(key, fallback), true);
-        }
         return KeyGlyphResolver.resolve(key)
                 .map(KeyGlyph::frameWidth)
                 .orElseGet(() -> textChipWidth(keyLabel(key, fallback), compact));
@@ -57,9 +54,6 @@ public final class RoundedHudRenderer {
             boolean compact,
             boolean pressed
     ) {
-        if (compact) {
-            return textChip(graphics, keyLabel(key, fallback), x, y, true);
-        }
         return KeyGlyphResolver.resolve(key)
                 .map(glyph -> {
                     int frame = pressed ? 2 : 0;

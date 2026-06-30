@@ -103,7 +103,7 @@ public final class CompareOverlayHotkeyHud {
             String fallback,
             String action
     ) {
-        int keyWidth = RoundedHudRenderer.key(graphics, key, x, y, fallback, true);
+        int keyWidth = RoundedHudRenderer.key(graphics, key, x, y, fallback, true, key != null && key.isDown());
         int textX = x + keyWidth + 3;
         String label = action == null ? "" : action;
         graphics.drawString(font, Component.literal(label), textX, y + 3, RoundedHudRenderer.MUTED, false);

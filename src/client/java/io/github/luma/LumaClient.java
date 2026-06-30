@@ -34,6 +34,7 @@ import io.github.luma.ui.controller.ClientWorkspaceOpenService;
 import io.github.luma.ui.preview.ProjectPreviewTextureCache;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import io.github.luma.ui.overlay.CompareOverlayRenderer;
@@ -361,6 +362,9 @@ public final class LumaClient implements ClientModInitializer {
     private boolean lumiShortcutsSuppressed(Minecraft client) {
         if (client == null) {
             return false;
+        }
+        if (client.screen instanceof PauseScreen) {
+            return true;
         }
         if (ClientOnboardingFlowCoordinator.getInstance().suppressesLumiShortcuts()) {
             return true;

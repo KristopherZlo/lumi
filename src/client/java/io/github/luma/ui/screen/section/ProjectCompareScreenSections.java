@@ -2,9 +2,11 @@ package io.github.luma.ui.screen.section;
 
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.controller.ProjectScreenController;
+import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -65,13 +67,17 @@ public final class ProjectCompareScreenSections {
         List<BranchHistoryVersions.Entry> entries = this.entriesFor(model, this.selectedVariantId(model, side));
         if (entries.isEmpty()) {
             history.child(LumaUi.caption(Component.translatable("luma.history.empty")));
-            column.child(LumaUi.screenScroll(Sizing.fill(100), Sizing.expand(100), history));
+            LumaScrollContainer<FlowLayout> scroll = LumaUi.screenScroll(Sizing.fill(100), Sizing.expand(100), history);
+            this.actions.registerHistoryScroll(side, scroll);
+            column.child(scroll);
             return column;
         }
         for (BranchHistoryVersions.Entry entry : entries) {
             history.child(this.saveOptionCard(model, side, entry));
         }
-        column.child(LumaUi.screenScroll(Sizing.fill(100), Sizing.expand(100), history));
+        LumaScrollContainer<FlowLayout> scroll = LumaUi.screenScroll(Sizing.fill(100), Sizing.expand(100), history);
+        this.actions.registerHistoryScroll(side, scroll);
+        column.child(scroll);
         return column;
     }
 
@@ -150,9 +156,9 @@ public final class ProjectCompareScreenSections {
         divider.verticalAlignment(VerticalAlignment.CENTER);
         divider.gap(6);
         divider.child(this.dividerLine());
-        var icon = UIComponents.texture(COMPARE_ICON, 0, 0, 16, 16, 16, 16);
+        var icon = UIComponents.texture(COMPARE_ICON, 0, 0, 24, 24, 24, 24);
         icon.blend(true);
-        icon.sizing(Sizing.fixed(16), Sizing.fixed(16));
+        icon.sizing(Sizing.fixed(24), Sizing.fixed(24));
         divider.child(icon);
         divider.child(this.dividerLine());
         return divider;
@@ -166,11 +172,47 @@ public final class ProjectCompareScreenSections {
 
     private FlowLayout compareActionRow(Model model) {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(4);
         row.child(UIContainers.verticalFlow(Sizing.expand(100), Sizing.fixed(1)));
+        ButtonComponent visibility = LumaUi.iconButton(
+                this.overlayIcon(model),
+                this.overlayButtonLabel(model),
+                button -> this.actions.toggleOverlayVisibility()
+        );
+        visibility.active(this.overlayMatches(model));
+        row.child(visibility);
         ButtonComponent compare = LumaUi.primaryButton(Component.translatable("luma.action.compare"), button -> this.actions.runCompare());
         compare.active(this.canCompare(model));
         row.child(compare);
         return row;
+    }
+
+    private Component overlayButtonLabel(Model model) {
+        return Component.translatable(this.overlayMatches(model) && CompareOverlayRenderer.visibleFor(
+                model.projectName(),
+                model.selectedLeftVersionId(),
+                model.selectedRightVersionId()
+        )
+                ? "luma.action.hide_highlight"
+                : "luma.action.show_highlight");
+    }
+
+    private String overlayIcon(Model model) {
+        return this.overlayMatches(model) && CompareOverlayRenderer.visibleFor(
+                model.projectName(),
+                model.selectedLeftVersionId(),
+                model.selectedRightVersionId()
+        )
+                ? "eye-closed"
+                : "eye-open";
+    }
+
+    private boolean overlayMatches(Model model) {
+        return CompareOverlayRenderer.hasDataFor(
+                model.projectName(),
+                model.selectedLeftVersionId(),
+                model.selectedRightVersionId()
+        );
     }
 
     private boolean canCompare(Model model) {
@@ -206,9 +248,13 @@ public final class ProjectCompareScreenSections {
 
     public interface Actions {
 
+        void registerHistoryScroll(Side side, LumaScrollContainer<FlowLayout> scroll);
+
         void selectVariant(Side side, String variantId);
 
         void selectVersion(Side side, String versionId);
+
+        void toggleOverlayVisibility();
 
         void runCompare();
     }

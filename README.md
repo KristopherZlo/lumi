@@ -86,6 +86,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 Wooden sword hints appear under the crosshair at the GUI Scale 2 visual size; only [LMB], [MMB], and [RMB] use mouse icons, while keyboard inputs render as [KEY] text.
 
 All keybinds are remappable in Minecraft controls.
+Lumi keybinds are ignored while the Minecraft pause menu is open.
 
 ### Privacy and Diagnostics
 

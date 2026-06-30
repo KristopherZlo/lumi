@@ -1,6 +1,7 @@
 package io.github.luma.ui.screen;
 
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
@@ -36,6 +37,8 @@ public final class ProjectCompareScreen extends LumaScreen {
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final BranchHistoryVersions branchHistoryVersions = new BranchHistoryVersions();
     private final ProjectCompareScreenSections sections = new ProjectCompareScreenSections(this.projectController, new SectionActions());
+    private LumaScrollContainer<FlowLayout> leftHistoryScroll;
+    private LumaScrollContainer<FlowLayout> rightHistoryScroll;
     private ProjectHomeViewState state;
     private String status = "luma.status.compare_ready";
     private String selectedLeftVariantId = "";
@@ -240,7 +243,12 @@ public final class ProjectCompareScreen extends LumaScreen {
         } else {
             this.selectedRightVersionId = versionId == null ? "" : versionId;
         }
-        this.refresh("luma.status.compare_ready");
+        this.status = "luma.status.compare_ready";
+        this.rebuild(side);
+    }
+
+    private void toggleOverlayVisibility() {
+        this.refresh(this.compareController.toggleOverlayVisibility());
     }
 
     private void refresh(String statusKey) {
@@ -249,10 +257,31 @@ public final class ProjectCompareScreen extends LumaScreen {
     }
 
     private void rebuild() {
-        this.rebuildPreservingScroll(() -> null, false);
+        this.rebuild(null);
+    }
+
+    private void rebuild(Side preserveSide) {
+        this.rebuildPreservingScroll(() -> this.historyScroll(preserveSide), preserveSide != null);
+    }
+
+    private LumaScrollContainer<FlowLayout> historyScroll(Side side) {
+        return side == Side.LEFT ? this.leftHistoryScroll : side == Side.RIGHT ? this.rightHistoryScroll : null;
+    }
+
+    private void registerHistoryScroll(Side side, LumaScrollContainer<FlowLayout> scroll) {
+        if (side == Side.LEFT) {
+            this.leftHistoryScroll = scroll;
+        } else {
+            this.rightHistoryScroll = scroll;
+        }
     }
 
     private final class SectionActions implements ProjectCompareScreenSections.Actions {
+
+        @Override
+        public void registerHistoryScroll(Side side, LumaScrollContainer<FlowLayout> scroll) {
+            ProjectCompareScreen.this.registerHistoryScroll(side, scroll);
+        }
 
         @Override
         public void selectVariant(Side side, String variantId) {
@@ -262,6 +291,11 @@ public final class ProjectCompareScreen extends LumaScreen {
         @Override
         public void selectVersion(Side side, String versionId) {
             ProjectCompareScreen.this.selectVersion(side, versionId);
+        }
+
+        @Override
+        public void toggleOverlayVisibility() {
+            ProjectCompareScreen.this.toggleOverlayVisibility();
         }
 
         @Override
