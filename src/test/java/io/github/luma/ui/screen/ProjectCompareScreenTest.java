@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectCompareScreenTest {
@@ -53,5 +54,23 @@ class ProjectCompareScreenTest {
         assertTrue(sections.contains("see-changes.png"));
         assertTrue(source.contains("showOverlay"));
         assertTrue(source.contains("client.setScreen(null)"));
+    }
+
+    @Test
+    void comparePageKeepsFixedControlsAroundIndependentScrollableHistories() throws IOException {
+        String screen = Files.readString(
+                Path.of("src/client/java/io/github/luma/ui/screen/ProjectCompareScreen.java"),
+                StandardCharsets.UTF_8
+        );
+        String sections = Files.readString(
+                Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectCompareScreenSections.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertFalse(screen.contains("bodyScroll"), "Compare page should not wrap the whole body in one scroll");
+        assertTrue(sections.contains("LumaUi.screenScroll(Sizing.fill(100), Sizing.expand(100)"));
+        assertTrue(sections.contains("LumaUi.panel(Sizing.fill(100), Sizing.expand(100))"));
+        assertTrue(sections.contains("ProjectUiSupport.versionPreview"));
+        assertFalse(sections.contains("columns.verticalAlignment(VerticalAlignment.CENTER)"));
     }
 }

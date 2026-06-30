@@ -4,6 +4,7 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
+import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.state.ProjectHomeViewState;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -20,29 +21,32 @@ import net.minecraft.resources.Identifier;
 
 public final class ProjectCompareScreenSections {
 
+    private static final int PREVIEW_WIDTH = 72;
+    private static final int PREVIEW_MIN_HEIGHT = 48;
+    private static final int PREVIEW_MAX_HEIGHT = 64;
     private static final Identifier COMPARE_ICON = Identifier.fromNamespaceAndPath(
             "lumi",
             "textures/gui/icons/see-changes.png"
     );
 
     private final BranchHistoryVersions branchHistoryVersions = new BranchHistoryVersions();
+    private final ProjectScreenController previewController;
     private final Actions actions;
 
-    public ProjectCompareScreenSections(Actions actions) {
+    public ProjectCompareScreenSections(ProjectScreenController previewController, Actions actions) {
+        this.previewController = Objects.requireNonNull(previewController, "previewController");
         this.actions = Objects.requireNonNull(actions, "actions");
     }
 
     public FlowLayout pickerSection(Model model) {
-        FlowLayout section = LumaUi.sectionCard(
-                Component.translatable("luma.compare.pick_title"),
-                Component.translatable("luma.compare.pick_help")
-        );
+        FlowLayout section = LumaUi.panel(Sizing.fill(100), Sizing.expand(100));
+        section.child(LumaUi.value(Component.translatable("luma.compare.pick_title")));
+        section.child(LumaUi.caption(Component.translatable("luma.compare.pick_help")));
 
-        FlowLayout columns = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        FlowLayout columns = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.expand(100));
         columns.gap(8);
-        columns.verticalAlignment(VerticalAlignment.CENTER);
         columns.child(this.historyColumn(model, Side.LEFT));
-        columns.child(this.divider(model));
+        columns.child(this.divider());
         columns.child(this.historyColumn(model, Side.RIGHT));
         section.child(columns);
         section.child(this.compareActionRow(model));
@@ -50,20 +54,24 @@ public final class ProjectCompareScreenSections {
     }
 
     private FlowLayout historyColumn(Model model, Side side) {
-        FlowLayout column = LumaUi.insetPanel(Sizing.expand(50), Sizing.content());
+        FlowLayout column = LumaUi.insetPanel(Sizing.expand(50), Sizing.fill(100));
         column.child(LumaUi.value(Component.translatable(side == Side.LEFT
                 ? "luma.compare.left_column"
                 : "luma.compare.right_column")));
         column.child(this.branchSelector(model, side));
 
+        FlowLayout history = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+        history.gap(4);
         List<BranchHistoryVersions.Entry> entries = this.entriesFor(model, this.selectedVariantId(model, side));
         if (entries.isEmpty()) {
-            column.child(LumaUi.caption(Component.translatable("luma.history.empty")));
+            history.child(LumaUi.caption(Component.translatable("luma.history.empty")));
+            column.child(LumaUi.screenScroll(Sizing.fill(100), Sizing.expand(100), history));
             return column;
         }
         for (BranchHistoryVersions.Entry entry : entries) {
-            column.child(this.saveOptionCard(model, side, entry));
+            history.child(this.saveOptionCard(model, side, entry));
         }
+        column.child(LumaUi.screenScroll(Sizing.fill(100), Sizing.expand(100), history));
         return column;
     }
 
@@ -87,6 +95,20 @@ public final class ProjectCompareScreenSections {
                 ? LumaUi.activeInsetPanel(Sizing.fill(100), Sizing.content())
                 : LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
 
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        row.gap(6);
+        row.verticalAlignment(VerticalAlignment.CENTER);
+        row.child(ProjectUiSupport.versionPreview(
+                this.previewController,
+                model.projectName(),
+                version,
+                PREVIEW_WIDTH,
+                PREVIEW_MIN_HEIGHT,
+                PREVIEW_MAX_HEIGHT
+        ));
+
+        FlowLayout details = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        details.gap(3);
         FlowLayout title = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         title.gap(4);
         title.verticalAlignment(VerticalAlignment.CENTER);
@@ -95,13 +117,13 @@ public final class ProjectCompareScreenSections {
         if (entry.current()) {
             title.child(LumaUi.chip(Component.translatable("luma.project.active_head_badge")));
         }
-        card.child(title);
-        card.child(LumaUi.caption(Component.translatable(
+        details.child(title);
+        details.child(LumaUi.caption(Component.translatable(
                 "luma.history.version_meta",
                 ProjectUiSupport.safeText(version.author()),
                 ProjectUiSupport.formatTimestamp(version.createdAt())
         )));
-        card.child(LumaUi.caption(Component.translatable(
+        details.child(LumaUi.caption(Component.translatable(
                 "luma.build.save_card_summary",
                 version.stats() == null ? 0 : version.stats().changedBlocks()
         )));
@@ -113,14 +135,16 @@ public final class ProjectCompareScreenSections {
         );
         select.active(!selected);
         actions.child(select);
-        card.child(actions);
+        details.child(actions);
+        row.child(details);
+        card.child(row);
         return card;
     }
 
-    private FlowLayout divider(Model model) {
+    private FlowLayout divider() {
         FlowLayout divider = UIContainers.verticalFlow(
                 Sizing.fixed(28),
-                Sizing.fixed(Math.max(160, Math.min(420, model.height() - 150)))
+                Sizing.fill(100)
         );
         divider.horizontalAlignment(HorizontalAlignment.CENTER);
         divider.verticalAlignment(VerticalAlignment.CENTER);
@@ -171,8 +195,8 @@ public final class ProjectCompareScreenSections {
     }
 
     public record Model(
+            String projectName,
             ProjectHomeViewState state,
-            int height,
             String selectedLeftVariantId,
             String selectedRightVariantId,
             String selectedLeftVersionId,

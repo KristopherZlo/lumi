@@ -1,12 +1,12 @@
 package io.github.luma.ui.screen;
 
 import io.github.luma.domain.model.ProjectVariant;
-import io.github.luma.ui.LumaScrollContainer;
 import io.github.luma.ui.LumaUi;
 import io.github.luma.ui.ProjectUiSupport;
 import io.github.luma.ui.ProjectWindowLayout;
 import io.github.luma.ui.controller.CompareScreenController;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
+import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
 import io.github.luma.ui.screen.section.BranchHistoryVersions;
@@ -19,6 +19,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
+import io.wispforest.owo.ui.core.Sizing;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -30,11 +31,11 @@ public final class ProjectCompareScreen extends LumaScreen {
     private final String projectName;
     private final Minecraft client = Minecraft.getInstance();
     private final ProjectHomeScreenController stateController = new ProjectHomeScreenController();
+    private final ProjectScreenController projectController = new ProjectScreenController();
     private final CompareScreenController compareController = new CompareScreenController();
     private final ProjectSidebarNavigation sidebarNavigation = new ProjectSidebarNavigation();
     private final BranchHistoryVersions branchHistoryVersions = new BranchHistoryVersions();
-    private final ProjectCompareScreenSections sections = new ProjectCompareScreenSections(new SectionActions());
-    private LumaScrollContainer<FlowLayout> bodyScroll;
+    private final ProjectCompareScreenSections sections = new ProjectCompareScreenSections(this.projectController, new SectionActions());
     private ProjectHomeViewState state;
     private String status = "luma.status.compare_ready";
     private String selectedLeftVariantId = "";
@@ -87,12 +88,10 @@ public final class ProjectCompareScreen extends LumaScreen {
             window.content().child(LumaUi.statusBanner(Component.translatable(this.status)));
         }
 
-        FlowLayout body = LumaUi.screenBody();
-        this.bodyScroll = LumaUi.screenScroll(body);
-        window.content().child(this.bodyScroll);
-
+        FlowLayout body = UIContainers.verticalFlow(Sizing.fill(100), Sizing.expand(100));
+        body.gap(5);
+        window.content().child(body);
         body.child(this.sections.pickerSection(this.sectionModel()));
-        body.child(LumaUi.bottomSpacer());
     }
 
     @Override
@@ -125,8 +124,8 @@ public final class ProjectCompareScreen extends LumaScreen {
 
     private ProjectCompareScreenSections.Model sectionModel() {
         return new ProjectCompareScreenSections.Model(
+                this.projectName,
                 this.state,
-                this.height,
                 this.selectedLeftVariantId,
                 this.selectedRightVariantId,
                 this.selectedLeftVersionId,
@@ -250,7 +249,7 @@ public final class ProjectCompareScreen extends LumaScreen {
     }
 
     private void rebuild() {
-        this.rebuildPreservingScroll(() -> this.bodyScroll);
+        this.rebuildPreservingScroll(() -> null, false);
     }
 
     private final class SectionActions implements ProjectCompareScreenSections.Actions {
