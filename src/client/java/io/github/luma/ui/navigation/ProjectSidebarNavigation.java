@@ -56,6 +56,8 @@ public final class ProjectSidebarNavigation {
                 this.router.openWorkZones(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.tab.variants"), ProjectWorkspaceTab.VARIANTS, activeTab, activeZoneColor, () ->
                 this.router.openVariants(parent, projectName));
+        this.addTab(tabs, Component.translatable("luma.tab.compare"), ProjectWorkspaceTab.COMPARE, activeTab, activeZoneColor, () ->
+                this.router.openProjectCompare(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.tab.import_export"), ProjectWorkspaceTab.IMPORT_EXPORT, activeTab, activeZoneColor, () ->
                 this.router.openShare(parent, projectName));
         this.addTab(tabs, Component.translatable("luma.action.settings"), ProjectWorkspaceTab.SETTINGS, activeTab, activeZoneColor, () ->

@@ -9,6 +9,7 @@ import io.github.luma.ui.screen.DashboardScreen;
 import io.github.luma.ui.screen.DiagnosticsScreen;
 import io.github.luma.ui.screen.MoreScreen;
 import io.github.luma.ui.screen.OnboardingScreen;
+import io.github.luma.ui.screen.ProjectCompareScreen;
 import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.RecoveryScreen;
 import io.github.luma.ui.screen.SaveDetailsScreen;
@@ -125,6 +126,10 @@ public final class ScreenRouter {
 
     public void openVariantsIgnoringActiveZone(Screen parent, String projectName) {
         this.client.setScreen(new VariantsScreen(parent, projectName, "", true));
+    }
+
+    public void openProjectCompare(Screen parent, String projectName) {
+        this.client.setScreen(new ProjectCompareScreen(parent, projectName));
     }
 
     public void openShare(Screen parent, String projectName) {

@@ -50,6 +50,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 - Tracks a whole dimension or a selected build area as a project.
 - Saves named build versions with change counts and restore data.
 - Compares saved versions, branches, and current unsaved work.
+- Provides a Compare workspace page for picking two saves from branch histories before showing the overlay.
 - Shows changed blocks with an in-world overlay.
 - Restores a whole save, a selected area, or everything outside a selected area.
 - Lets you branch risky ideas and merge local branches back into the active branch.
@@ -66,7 +67,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 1. Create or open a project for the current build area.
 2. Follow the quick tour: make 5 block edits, preview them with [ALT] by default, undo/redo with [ALT]+[Z]/[Y], then save with [ALT]+[S].
 3. Press [U] to open Build History and inspect the created save card.
-4. Use save cards for compare, Restore this save, branches, or older checkpoints when an idea goes wrong.
+4. Use the Compare tab to pick two saves for the overlay, or use save cards for restore, branches, and older checkpoints when an idea goes wrong.
 
 ### Default Controls
 
