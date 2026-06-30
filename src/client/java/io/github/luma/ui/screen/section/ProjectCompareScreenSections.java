@@ -75,6 +75,7 @@ public final class ProjectCompareScreenSections {
         for (BranchHistoryVersions.Entry entry : entries) {
             history.child(this.saveOptionCard(model, side, entry));
         }
+        history.child(LumaUi.bottomSpacer());
         LumaScrollContainer<FlowLayout> scroll = LumaUi.screenScroll(Sizing.fill(100), Sizing.expand(100), history);
         this.actions.registerHistoryScroll(side, scroll);
         column.child(scroll);

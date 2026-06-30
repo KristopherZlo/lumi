@@ -113,4 +113,20 @@ class ProjectCompareScreenTest {
         assertTrue(screen.contains("this.rebuild(side)"));
         assertTrue(screen.contains("this.historyScroll(preserveSide)"));
     }
+
+    @Test
+    void compareHistoryKeepsBottomSaveCardClearOfScrollClip() throws IOException {
+        String sections = Files.readString(
+                Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectCompareScreenSections.java"),
+                StandardCharsets.UTF_8
+        );
+
+        int cardLoop = sections.indexOf("for (BranchHistoryVersions.Entry entry : entries)");
+        int spacer = sections.indexOf("history.child(LumaUi.bottomSpacer());", cardLoop);
+        int scroll = sections.indexOf("LumaScrollContainer<FlowLayout> scroll", cardLoop);
+
+        assertTrue(cardLoop >= 0);
+        assertTrue(spacer > cardLoop, "Compare history needs bottom room after the final save card");
+        assertTrue(scroll > spacer, "Bottom spacer must be inside the scroll content");
+    }
 }
