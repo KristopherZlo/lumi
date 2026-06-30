@@ -23,6 +23,14 @@ class LumaUiScaleTest {
     }
 
     @Test
+    void virtualSizeDoesNotRoundPastMinecraftViewport() {
+        int virtualSize = LumaUiScale.virtualSize(641, 3);
+
+        Assertions.assertEquals(961, virtualSize);
+        Assertions.assertTrue(virtualSize * LumaUiScale.renderScale(3) <= 641.0F);
+    }
+
+    @Test
     void defaultIconButtonsStayNearNativePixelSizeAtTargetScale() {
         Assertions.assertEquals(26, LumaUiScale.iconButtonWidth());
         Assertions.assertEquals(18, LumaUiScale.iconButtonHeight());

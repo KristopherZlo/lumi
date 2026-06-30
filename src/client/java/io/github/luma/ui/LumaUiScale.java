@@ -20,7 +20,7 @@ public final class LumaUiScale {
     }
 
     public static int virtualSize(int scaledSize, int currentGuiScale) {
-        return Math.max(1, Math.round(scaledSize / renderScale(currentGuiScale)));
+        return Math.max(1, (int) (((long) scaledSize * Math.max(1, currentGuiScale)) / targetGuiScale()));
     }
 
     public static double virtualCoordinate(double coordinate, int currentGuiScale) {

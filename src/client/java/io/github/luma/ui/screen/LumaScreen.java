@@ -62,14 +62,20 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
         UIComponent hovered = this.uiAdapter.rootComponent.childAt(virtualMouseX, virtualMouseY);
         while (hovered != null && hovered != this.uiAdapter.rootComponent) {
             if (hovered.shouldDrawTooltip(virtualMouseX, virtualMouseY)) {
-                graphics.renderTooltip(
-                        Minecraft.getInstance().font,
-                        hovered.tooltip(),
-                        mouseX,
-                        mouseY,
-                        DefaultTooltipPositioner.INSTANCE,
-                        null
-                );
+                graphics.pose().pushMatrix();
+                graphics.pose().scaleAround(this.lumaUiScale(), mouseX, mouseY);
+                try {
+                    graphics.renderTooltip(
+                            Minecraft.getInstance().font,
+                            hovered.tooltip(),
+                            mouseX,
+                            mouseY,
+                            DefaultTooltipPositioner.INSTANCE,
+                            null
+                    );
+                } finally {
+                    graphics.pose().popMatrix();
+                }
                 return;
             }
             hovered = hovered.parent();
