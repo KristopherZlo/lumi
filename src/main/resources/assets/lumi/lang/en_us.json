@@ -141,6 +141,7 @@
   "luma.tab.variants": "Branches",
   "luma.tab.ideas": "Branches",
   "luma.tab.zones": "Zones",
+  "luma.tab.compare": "Compare",
   "luma.tab.share": "Import / Export",
   "luma.tab.import_export": "Import / Export",
 
@@ -606,6 +607,7 @@
   "luma.status.project_created": "Project created.",
   "luma.status.project_invalid_name": "Project name cannot be empty.",
   "luma.status.compare_ready": "Compare view ready.",
+  "luma.status.compare_select_two": "Choose two different saves first.",
   "luma.status.compare_loading": "Building compare in the background.",
   "luma.status.compare_overlay_loading": "Preparing world highlight in the background.",
   "luma.status.compare_failed": "Compare operation failed.",
@@ -942,6 +944,12 @@
   "luma.share.zone_status_keep_local": "Keep my changes here",
   "luma.share.zone_status_use_imported": "Use imported changes here",
 
+  "luma.compare.pick_title": "Compare",
+  "luma.compare.pick_help": "Choose one save on each side, then show the changed blocks in the world.",
+  "luma.compare.left_column": "Left save",
+  "luma.compare.right_column": "Right save",
+  "luma.compare.select_save": "Select",
+  "luma.compare.selected_save": "Selected",
   "luma.compare.title_with_refs": "Comparing: %s -> %s",
   "luma.compare.summary_short": "%s changed blocks",
   "luma.compare.more_details": "More details",

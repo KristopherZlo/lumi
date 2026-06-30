@@ -10,11 +10,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-final class BranchHistoryVersions {
+public final class BranchHistoryVersions {
 
     private final VersionLineageService lineageService = new VersionLineageService();
 
-    List<Entry> forVariant(List<ProjectVersion> versions, List<ProjectVariant> variants, ProjectVariant variant) {
+    public List<Entry> forVariant(List<ProjectVersion> versions, List<ProjectVariant> variants, ProjectVariant variant) {
         if (variant == null || versions == null) {
             return List.of();
         }
@@ -73,6 +73,6 @@ final class BranchHistoryVersions {
         return version != null && version.versionKind() != VersionKind.RESTORE;
     }
 
-    record Entry(ProjectVersion version, ProjectVariant variant, boolean current) {
+    public record Entry(ProjectVersion version, ProjectVariant variant, boolean current) {
     }
 }
