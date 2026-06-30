@@ -282,7 +282,14 @@ public final class ProjectCompareScreen extends LumaScreen {
     }
 
     private void rebuild(Side preserveSide) {
+        Side otherSide = preserveSide == Side.LEFT ? Side.RIGHT : preserveSide == Side.RIGHT ? Side.LEFT : null;
+        LumaScrollContainer<FlowLayout> otherScroll = otherSide == null ? null : this.historyScroll(otherSide);
+        double otherProgress = otherScroll == null ? 0.0D : otherScroll.progress();
         this.rebuildPreservingScroll(() -> this.historyScroll(preserveSide), preserveSide != null);
+        otherScroll = otherSide == null ? null : this.historyScroll(otherSide);
+        if (otherScroll != null) {
+            otherScroll.restoreProgress(otherProgress);
+        }
     }
 
     private LumaScrollContainer<FlowLayout> historyScroll(Side side) {

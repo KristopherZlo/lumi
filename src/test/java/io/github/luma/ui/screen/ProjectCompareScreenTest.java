@@ -115,6 +115,24 @@ class ProjectCompareScreenTest {
     }
 
     @Test
+    void selectingSavePreservesOtherColumnScrollPosition() throws IOException {
+        String screen = Files.readString(
+                Path.of("src/client/java/io/github/luma/ui/screen/ProjectCompareScreen.java"),
+                StandardCharsets.UTF_8
+        );
+
+        int rebuild = screen.indexOf("private void rebuild(Side preserveSide)");
+        int otherSide = screen.indexOf("Side otherSide", rebuild);
+        int otherProgress = screen.indexOf("double otherProgress", rebuild);
+        int restoreOther = screen.indexOf("otherScroll.restoreProgress(otherProgress);", rebuild);
+
+        assertTrue(rebuild >= 0);
+        assertTrue(otherSide > rebuild, "Compare selection rebuild must track the opposite history column");
+        assertTrue(otherProgress > otherSide, "Opposite history scroll progress must be captured before rebuild");
+        assertTrue(restoreOther > otherProgress, "Opposite history scroll progress must be restored after rebuild");
+    }
+
+    @Test
     void compareHistoryKeepsBottomSaveCardClearOfScrollClip() throws IOException {
         String sections = Files.readString(
                 Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectCompareScreenSections.java"),
