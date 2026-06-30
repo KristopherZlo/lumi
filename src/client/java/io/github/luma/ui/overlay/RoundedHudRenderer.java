@@ -13,6 +13,7 @@ public final class RoundedHudRenderer {
 
     public static final int TEXT = 0xFFF3F7FA;
     public static final int MUTED = 0xFFC9CED5;
+    public static final int COMPACT_KEY_HEIGHT = 15;
     private static final int CARD_FILL = 0xD90B1016;
     private static final int CARD_BORDER = 0x803B4650;
     private static final int CHIP_FILL = 0xD20E1117;
@@ -33,7 +34,7 @@ public final class RoundedHudRenderer {
 
     public static int keyWidth(KeyMapping key, String fallback, boolean compact) {
         return KeyGlyphResolver.resolve(key)
-                .map(KeyGlyph::frameWidth)
+                .map(glyph -> glyphWidth(glyph, compact))
                 .orElseGet(() -> textChipWidth(keyLabel(key, fallback), compact));
     }
 
@@ -55,25 +56,58 @@ public final class RoundedHudRenderer {
             boolean pressed
     ) {
         return KeyGlyphResolver.resolve(key)
-                .map(glyph -> {
-                    int frame = pressed ? 2 : 0;
-                    graphics.blit(
-                            RenderPipelines.GUI_TEXTURED,
-                            glyph.textureId(),
-                            x,
-                            y,
-                            frame * glyph.frameWidth(),
-                            0,
-                            glyph.frameWidth(),
-                            glyph.height(),
-                            glyph.frameWidth(),
-                            glyph.height(),
-                            glyph.textureWidth(),
-                            glyph.height()
-                    );
-                    return glyph.frameWidth();
-                })
+                .map(glyph -> glyph(graphics, glyph, x, y, compact, pressed))
                 .orElseGet(() -> textChip(graphics, keyLabel(key, fallback), x, y, compact));
+    }
+
+    private static int glyph(GuiGraphics graphics, KeyGlyph glyph, int x, int y, boolean compact, boolean pressed) {
+        int frame = pressed ? 2 : 0;
+        if (!compact) {
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    glyph.textureId(),
+                    x,
+                    y,
+                    frame * glyph.frameWidth(),
+                    0,
+                    glyph.frameWidth(),
+                    glyph.height(),
+                    glyph.frameWidth(),
+                    glyph.height(),
+                    glyph.textureWidth(),
+                    glyph.height()
+            );
+            return glyph.frameWidth();
+        }
+
+        float scale = COMPACT_KEY_HEIGHT / (float) glyph.height();
+        graphics.pose().pushMatrix();
+        graphics.pose().scaleAround(scale, x, y);
+        try {
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED,
+                    glyph.textureId(),
+                    x,
+                    y,
+                    frame * glyph.frameWidth(),
+                    0,
+                    glyph.frameWidth(),
+                    glyph.height(),
+                    glyph.frameWidth(),
+                    glyph.height(),
+                    glyph.textureWidth(),
+                    glyph.height()
+            );
+        } finally {
+            graphics.pose().popMatrix();
+        }
+        return glyphWidth(glyph, true);
+    }
+
+    private static int glyphWidth(KeyGlyph glyph, boolean compact) {
+        return compact
+                ? Math.max(1, Math.round(glyph.frameWidth() * (COMPACT_KEY_HEIGHT / (float) glyph.height())))
+                : glyph.frameWidth();
     }
 
     public static int textChipWidth(String text) {

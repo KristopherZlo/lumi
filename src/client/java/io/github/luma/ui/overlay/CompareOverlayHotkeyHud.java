@@ -58,7 +58,7 @@ public final class CompareOverlayHotkeyHud {
 
         RoundedHudRenderer.card(graphics, x, y, CARD_WIDTH, CARD_HEIGHT);
         int cursor = x + 7;
-        int rowY = y + 7;
+        int rowY = y + ((CARD_HEIGHT - RoundedHudRenderer.COMPACT_KEY_HEIGHT) / 2);
         cursor += shortcutItem(
                 graphics,
                 font,

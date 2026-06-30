@@ -158,7 +158,7 @@ public final class ProjectCompareScreenSections {
         divider.child(this.dividerLine());
         var icon = UIComponents.texture(COMPARE_ICON, 0, 0, 24, 24, 24, 24);
         icon.blend(true);
-        icon.sizing(Sizing.fixed(24), Sizing.fixed(24));
+        icon.sizing(Sizing.fixed(12), Sizing.fixed(12));
         divider.child(icon);
         divider.child(this.dividerLine());
         return divider;
@@ -179,7 +179,7 @@ public final class ProjectCompareScreenSections {
                 this.overlayButtonLabel(model),
                 button -> this.actions.toggleOverlayVisibility()
         );
-        visibility.active(this.overlayMatches(model));
+        visibility.active(this.canCompare(model) || this.overlayMatches(model));
         row.child(visibility);
         ButtonComponent compare = LumaUi.primaryButton(Component.translatable("luma.action.compare"), button -> this.actions.runCompare());
         compare.active(this.canCompare(model));

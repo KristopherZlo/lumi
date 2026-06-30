@@ -75,7 +75,7 @@ class ProjectCompareScreenTest {
     }
 
     @Test
-    void comparePageExposesVisibilityToggleAndNativeSizedCenterIcon() throws IOException {
+    void comparePageExposesVisibilityToggleAndHalfSizedCenterIcon() throws IOException {
         String sections = Files.readString(
                 Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectCompareScreenSections.java"),
                 StandardCharsets.UTF_8
@@ -89,6 +89,10 @@ class ProjectCompareScreenTest {
         assertTrue(sections.contains("this.overlayIcon(model)"));
         assertTrue(sections.contains("CompareOverlayRenderer.visibleFor"));
         assertTrue(sections.contains("UIComponents.texture(COMPARE_ICON, 0, 0, 24, 24, 24, 24)"));
+        assertTrue(sections.contains("icon.sizing(Sizing.fixed(12), Sizing.fixed(12));"));
+        assertTrue(sections.contains("visibility.active(this.canCompare(model) || this.overlayMatches(model));"));
+        assertTrue(screen.contains("CompareOverlayRenderer.hasDataFor"));
+        assertTrue(screen.contains("closeAfterPendingCompareOverlay"));
         assertTrue(screen.contains("toggleOverlayVisibility"));
     }
 

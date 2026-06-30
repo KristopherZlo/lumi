@@ -10,6 +10,7 @@ import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.controller.ProjectScreenController;
 import io.github.luma.ui.navigation.ProjectSidebarNavigation;
 import io.github.luma.ui.navigation.ProjectWorkspaceTab;
+import io.github.luma.ui.overlay.CompareOverlayRenderer;
 import io.github.luma.ui.screen.section.BranchHistoryVersions;
 import io.github.luma.ui.screen.section.ProjectCompareScreenSections;
 import io.github.luma.ui.screen.section.ProjectCompareScreenSections.Side;
@@ -47,6 +48,7 @@ public final class ProjectCompareScreen extends LumaScreen {
     private String selectedRightVersionId = "";
     private String pendingCompareLeftReference = "";
     private String pendingCompareRightReference = "";
+    private boolean closeAfterPendingCompareOverlay = false;
     private int refreshCooldown = 0;
 
     public ProjectCompareScreen(Screen parent, String projectName) {
@@ -143,6 +145,7 @@ public final class ProjectCompareScreen extends LumaScreen {
         }
         this.pendingCompareLeftReference = this.selectedLeftVersionId;
         this.pendingCompareRightReference = this.selectedRightVersionId;
+        this.closeAfterPendingCompareOverlay = true;
         this.continuePendingCompareOverlay();
     }
 
@@ -159,18 +162,25 @@ public final class ProjectCompareScreen extends LumaScreen {
         }
         if (compare.loadState() == CompareLoadState.READY) {
             String result = this.compareController.showOverlay(this.projectName, compare);
+            boolean closeAfterOverlay = this.closeAfterPendingCompareOverlay;
             this.pendingCompareLeftReference = "";
             this.pendingCompareRightReference = "";
+            this.closeAfterPendingCompareOverlay = false;
             if ("luma.status.compare_no_changes".equals(result) || "luma.status.compare_failed".equals(result)) {
                 this.refresh(result);
                 return;
             }
             this.status = result;
-            this.client.setScreen(null);
+            if (closeAfterOverlay) {
+                this.client.setScreen(null);
+            } else {
+                this.rebuild();
+            }
             return;
         }
         this.pendingCompareLeftReference = "";
         this.pendingCompareRightReference = "";
+        this.closeAfterPendingCompareOverlay = false;
         this.refresh(compare.status());
     }
 
@@ -248,7 +258,18 @@ public final class ProjectCompareScreen extends LumaScreen {
     }
 
     private void toggleOverlayVisibility() {
-        this.refresh(this.compareController.toggleOverlayVisibility());
+        if (!this.canCompare()) {
+            this.refresh("luma.status.compare_select_two");
+            return;
+        }
+        if (CompareOverlayRenderer.hasDataFor(this.projectName, this.selectedLeftVersionId, this.selectedRightVersionId)) {
+            this.refresh(this.compareController.toggleOverlayVisibility());
+            return;
+        }
+        this.pendingCompareLeftReference = this.selectedLeftVersionId;
+        this.pendingCompareRightReference = this.selectedRightVersionId;
+        this.closeAfterPendingCompareOverlay = false;
+        this.continuePendingCompareOverlay();
     }
 
     private void refresh(String statusKey) {

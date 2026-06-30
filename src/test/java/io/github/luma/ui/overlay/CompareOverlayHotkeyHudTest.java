@@ -32,8 +32,11 @@ class CompareOverlayHotkeyHudTest {
         String renderer = Files.readString(Path.of("src/client/java/io/github/luma/ui/overlay/RoundedHudRenderer.java"));
 
         assertTrue(hud.contains("RoundedHudRenderer.key("));
+        assertTrue(hud.contains("RoundedHudRenderer.COMPACT_KEY_HEIGHT"));
         assertTrue(hud.contains("key != null && key.isDown()"));
         assertFalse(renderer.contains("if (compact) {\n            return textChip"));
         assertTrue(renderer.contains("KeyGlyphResolver.resolve(key)"));
+        assertTrue(renderer.contains("COMPACT_KEY_HEIGHT"));
+        assertTrue(renderer.contains("scaleAround(scale, x, y)"));
     }
 }
