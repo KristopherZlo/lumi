@@ -21,4 +21,18 @@ class LumaScreenScaleTest {
         Assertions.assertTrue(superIndex > heightIndex);
         Assertions.assertFalse(source.contains("resizeLumaUi()"));
     }
+
+    @Test
+    void tooltipsUseRealMousePositionAfterVirtualHoverLookup() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/LumaScreen.java"));
+
+        int virtualHoverIndex = source.indexOf("childAt(virtualMouseX, virtualMouseY)");
+        int drawIndex = source.indexOf("graphics.renderTooltip(");
+
+        Assertions.assertTrue(virtualHoverIndex >= 0);
+        Assertions.assertTrue(drawIndex > virtualHoverIndex);
+        Assertions.assertTrue(source.contains("hovered.shouldDrawTooltip(virtualMouseX, virtualMouseY)"));
+        Assertions.assertTrue(source.contains("mouseX,\n                        mouseY,"));
+        Assertions.assertFalse(source.contains("super.drawComponentTooltip(graphics, this.virtualCoordinate(mouseX), this.virtualCoordinate(mouseY), partialTick);"));
+    }
 }

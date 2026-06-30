@@ -10,6 +10,7 @@ import io.wispforest.owo.ui.core.UIComponent;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -53,13 +54,25 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
 
     @Override
     protected void drawComponentTooltip(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        float scale = this.lumaUiScale();
-        graphics.pose().pushMatrix();
-        graphics.pose().scale(scale, scale);
-        try {
-            super.drawComponentTooltip(graphics, this.virtualCoordinate(mouseX), this.virtualCoordinate(mouseY), partialTick);
-        } finally {
-            graphics.pose().popMatrix();
+        if (this.uiAdapter == null) {
+            return;
+        }
+        int virtualMouseX = this.virtualCoordinate(mouseX);
+        int virtualMouseY = this.virtualCoordinate(mouseY);
+        UIComponent hovered = this.uiAdapter.rootComponent.childAt(virtualMouseX, virtualMouseY);
+        while (hovered != null && hovered != this.uiAdapter.rootComponent) {
+            if (hovered.shouldDrawTooltip(virtualMouseX, virtualMouseY)) {
+                graphics.renderTooltip(
+                        Minecraft.getInstance().font,
+                        hovered.tooltip(),
+                        mouseX,
+                        mouseY,
+                        DefaultTooltipPositioner.INSTANCE,
+                        null
+                );
+                return;
+            }
+            hovered = hovered.parent();
         }
     }
 
