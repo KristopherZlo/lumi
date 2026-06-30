@@ -41,4 +41,17 @@ class SpecialThanksPlayerShowcaseComponentTest {
         assertFalse(source.contains("rightPants.xRot"));
         assertFalse(source.contains("leftPants.xRot"));
     }
+
+    @Test
+    void skinRenderStateUsesLumaTargetScale() throws IOException {
+        String source = Files.readString(Path.of(
+                "src/client/java/io/github/luma/client/specialthanks/SpecialThanksPlayerShowcaseComponent.java"
+        ));
+
+        assertTrue(source.contains("LumaUiScale.renderScale"));
+        assertTrue(source.contains("float lumaScale ="));
+        assertTrue(source.contains("scale * lumaScale"));
+        assertTrue(source.contains("scaled(this.x, lumaScale)"));
+        assertTrue(source.contains("scaled(this.x + this.width, lumaScale)"));
+    }
 }

@@ -1,5 +1,6 @@
 package io.github.luma.client.specialthanks;
 
+import io.github.luma.ui.LumaUiScale;
 import io.wispforest.owo.ui.base.BaseUIComponent;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
@@ -55,19 +56,24 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
         this.poseWalking(model, now);
         Identifier texture = skin.body().texturePath();
         float scale = FIT_SCALE * this.height / MODEL_HEIGHT;
+        float lumaScale = LumaUiScale.renderScale(client.getWindow().getGuiScale());
         float rotationY = this.rotationY(now);
         graphics.submitSkinRenderState(
                 model,
                 texture,
-                scale,
+                scale * lumaScale,
                 ROTATION_X,
                 rotationY,
                 PIVOT_Y,
-                this.x,
-                this.y,
-                this.x + this.width,
-                this.y + this.height
+                scaled(this.x, lumaScale),
+                scaled(this.y, lumaScale),
+                scaled(this.x + this.width, lumaScale),
+                scaled(this.y + this.height, lumaScale)
         );
+    }
+
+    private static int scaled(int coordinate, float scale) {
+        return Math.round(coordinate * scale);
     }
 
     private void poseWalking(PlayerModel model, long now) {
