@@ -5,22 +5,22 @@
 ![Minecraft 1.21.11](https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge)
 ![Fabric](https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge)
 
-**Build history for Minecraft.**
+**Save the build. Try the idea. Undo the mistake.**
 
-Lumi helps builders and redstoners save versions of a build, compare changes, branch experiments, restore older states, and recover interrupted work without copying the whole world folder every time.
+Lumi is project history for Minecraft builders. Pick a build area, save named checkpoints, compare what changed, branch risky ideas, restore older states, and recover interrupted work without copying the whole world folder every time.
 
 > GIF placeholder: overview
 
 ## Features
 
-- Named build versions with stats, previews, and restore data
-- In-world compare overlay for saves, branches, and current work
-- Restore for whole projects, selected regions, or everything outside a region
-- Branches for risky ideas and alternate designs
-- Quick save, amend, rollback, undo, and redo
-- Recovery drafts for interrupted work
-- Import and export for project history
-- Best-effort support for WorldEdit, FAWE, and Axiom edits
+- Save named checkpoints for a build, with stats, previews, and restore data
+- Compare two saves, branches, or unsaved edits with an in-world overlay
+- Restore a whole build, only a selected region, or everything outside a region
+- Branch risky ideas so alternate designs do not overwrite the main build
+- Quick save, amend the latest save, rollback, undo, and redo recent edits
+- Recover draft work after a crash or interrupted operation
+- Import and export project history packages
+- Track normal Minecraft edits plus WorldEdit, FAWE, and Axiom edits on a best-effort basis
 
 > GIF placeholder: save and restore
 
