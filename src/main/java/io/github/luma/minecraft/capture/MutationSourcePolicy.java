@@ -43,7 +43,9 @@ final class MutationSourcePolicy {
     }
 
     boolean allowsCausalSessionBootstrap(WorldMutationSource source, String actionId) {
-        return (source == WorldMutationSource.GROWTH || source == WorldMutationSource.MOB)
+        return (source == WorldMutationSource.EXPLOSION
+                || source == WorldMutationSource.GROWTH
+                || source == WorldMutationSource.MOB)
                 && this.hasCausalAction(actionId);
     }
 

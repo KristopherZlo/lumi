@@ -149,6 +149,33 @@ class MutationSourcePolicyTest {
     }
 
     @Test
+    void playerCausedExplosionsCanBootstrapTrackedSessionsWithoutCreatingProjects() {
+        BuildProject wholeDimension = BuildProject.createWorldWorkspace(
+                "World",
+                "minecraft:overworld",
+                Instant.parse("2026-04-28T10:00:00Z")
+        );
+
+        assertFalse(this.policy.allowsSessionBootstrap(WorldMutationSource.EXPLOSION));
+        assertFalse(this.policy.allowsAutomaticProjectCreation(WorldMutationSource.EXPLOSION));
+        assertTrue(this.policy.requiresActiveRegionMembership(WorldMutationSource.EXPLOSION));
+        assertFalse(this.policy.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.EXPLOSION,
+                false,
+                false,
+                null
+        ));
+        assertTrue(this.policy.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.EXPLOSION,
+                false,
+                false,
+                "action-1"
+        ));
+    }
+
+    @Test
     void bonemealGrowthDoesNotUseSectionLiveStateReconciliation() {
         assertFalse(this.policy.usesLiveStateReconciliation(WorldMutationSource.GROWTH));
         assertTrue(this.policy.usesLiveStateReconciliation(WorldMutationSource.PLAYER));

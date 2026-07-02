@@ -78,6 +78,9 @@ class HistoryCaptureManagerTest {
 
     @Test
     void causalSecondarySourcesCanBootstrapExistingTrackedSession() {
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXPLOSION));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXPLOSION, ""));
+        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXPLOSION, "action-1"));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH, ""));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH, null));

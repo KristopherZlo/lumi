@@ -244,7 +244,7 @@ Hard rules:
 - Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
-- Live undo/redo and pending overlays include mob block fallout only when the mob is causally tied to a player action; passive mob edits remain actionless.
+- Live undo/redo and pending overlays include explosion and mob block fallout only when it is causally tied to a player action; passive mob edits and ambient explosions remain actionless.
 - Client modal overlays consume pointer input so underlying workspace actions cannot fire while a modal is open.
 - Saved commits keep entity checkpoints for entities present at save time. Whole-dimension saves include chunks with currently loaded live non-player entities, and player-spawned non-player entities make durable pending work so entity-only saves are possible. Full restore and whole-dimension quick rollback treat target entity-checkpoint chunks as authoritative even when no block batch touched that chunk, so saved mobs/decorative entities return and stray dropped items in those chunks are cleaned up. Restore can skip selected entity types for a single run without changing the saved commit.
 - Restore confirmation entity summaries count only entities inside the resolved restore scope for zones and selected/outside partial restores.
