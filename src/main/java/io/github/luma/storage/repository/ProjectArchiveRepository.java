@@ -232,6 +232,9 @@ public final class ProjectArchiveRepository {
         if (Files.exists(layout.workZonesFile())) {
             entries.add(this.optionalEntry(layout.workZonesFile(), PROJECT_PREFIX + "work-zones.json"));
         }
+        if (Files.exists(layout.playerRespawnsFile())) {
+            entries.add(this.optionalEntry(layout.playerRespawnsFile(), PROJECT_PREFIX + "player-spawns.json"));
+        }
         this.collectDirectoryEntries(layout.versionsDir(), PROJECT_PREFIX + "versions/", entries);
         this.collectDirectoryEntries(layout.patchesDir(), PROJECT_PREFIX + "patches/", entries);
         this.collectDirectoryEntries(layout.snapshotsDir(), PROJECT_PREFIX + "snapshots/", entries);
@@ -263,6 +266,9 @@ public final class ProjectArchiveRepository {
         this.putEntry(entries, this.requiredEntry(layout.variantsFile(), PROJECT_PREFIX + "variants.json"));
         if (Files.exists(layout.workZonesFile())) {
             this.putEntry(entries, this.optionalEntry(layout.workZonesFile(), PROJECT_PREFIX + "work-zones.json"));
+        }
+        if (Files.exists(layout.playerRespawnsFile())) {
+            this.putEntry(entries, this.optionalEntry(layout.playerRespawnsFile(), PROJECT_PREFIX + "player-spawns.json"));
         }
         for (ProjectVersion version : this.lineageVersions(versionMap, variant.headVersionId())) {
             this.putEntry(entries, this.requiredEntry(layout.versionFile(version.id()), PROJECT_PREFIX + "versions/" + version.id() + ".json"));
@@ -424,6 +430,7 @@ public final class ProjectArchiveRepository {
         if (archivePath.equals(PROJECT_PREFIX + "project.json")
                 || archivePath.equals(PROJECT_PREFIX + "variants.json")
                 || archivePath.equals(PROJECT_PREFIX + "work-zones.json")
+                || archivePath.equals(PROJECT_PREFIX + "player-spawns.json")
                 || archivePath.equals(PROJECT_PREFIX + "recovery/journal.json")) {
             return;
         }

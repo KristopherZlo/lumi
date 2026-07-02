@@ -55,7 +55,7 @@ class HistoryCaptureManagerTest {
     }
 
     @Test
-    void shouldBootstrapSessionsOnlyFromExplicitSources() {
+    void shouldBootstrapSessionsFromExplicitSourcesAndTrackedMobs() {
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.ENTITY));
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXPLOSIVE));
@@ -70,7 +70,7 @@ class HistoryCaptureManagerTest {
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.BLOCK_UPDATE));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.PISTON));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.FALLING_BLOCK));
-        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.MOB));
+        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.MOB));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.SYSTEM));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.RESTORE));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(null));

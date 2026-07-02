@@ -34,6 +34,10 @@ public record ProjectLayout(Path root) {
         return this.root.resolve("work-zones.json");
     }
 
+    public Path playerRespawnsFile() {
+        return this.root.resolve("player-spawns.json");
+    }
+
     public Path versionsDir() {
         return this.root.resolve("versions");
     }

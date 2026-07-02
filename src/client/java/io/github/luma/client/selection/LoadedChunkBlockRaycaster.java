@@ -49,7 +49,7 @@ final class LoadedChunkBlockRaycaster {
 
         while (travelled <= maxDistance) {
             BlockPos pos = new BlockPos(x, y, z);
-            if (this.isInsideBuildHeight(level, y) && this.loadedBlockState(level, pos).filter(state -> !state.isAir()).isPresent()) {
+            if (this.isInsideBuildHeight(level, y) && this.loadedBlockState(level, pos).filter(LoadedChunkBlockRaycaster::isSelectableTarget).isPresent()) {
                 return Optional.of(pos);
             }
 
@@ -80,6 +80,10 @@ final class LoadedChunkBlockRaycaster {
 
     private boolean isInsideBuildHeight(ClientLevel level, int y) {
         return y >= level.getMinY() && y < level.getMaxY();
+    }
+
+    static boolean isSelectableTarget(BlockState state) {
+        return state != null && !state.isAir();
     }
 
     private double selectionRange(Minecraft client) {

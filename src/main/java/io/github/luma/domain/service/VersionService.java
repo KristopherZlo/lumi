@@ -20,6 +20,7 @@ import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.PatchWorldChanges;
+import io.github.luma.domain.model.PlayerRespawnPoint;
 import io.github.luma.domain.model.StoredChangeAccumulator;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
@@ -38,6 +39,7 @@ import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchDataRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
+import io.github.luma.storage.repository.PlayerRespawnRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.VariantRepository;
@@ -50,7 +52,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.storage.LevelData;
 
 /**
  * Saves tracked edits as durable project versions.
@@ -69,6 +74,7 @@ public final class VersionService {
     private final LiveEntityChunkCollector liveEntityChunkCollector = new LiveEntityChunkCollector();
     private final PatchMetaRepository patchMetaRepository = new PatchMetaRepository();
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
+    private final PlayerRespawnRepository playerRespawnRepository = new PlayerRespawnRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
     private final WorkZoneService workZoneService = new WorkZoneService();
@@ -776,6 +782,10 @@ public final class VersionService {
             version = ProjectVersionTags.withTags(version, tags);
         }
 
+        if (level != null) {
+            this.playerRespawnRepository.saveVersion(layout, version.id(), this.playerRespawns(level));
+        }
+
         progressSink.update(OperationStage.FINALIZING, draft.changes().size(), draft.changes().size(), "Finalizing version");
         sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure("save", "VersionService.writeVersionManifests", "version=" + version.id())) {
@@ -815,6 +825,38 @@ public final class VersionService {
         }
 
         return version;
+    }
+
+    private List<PlayerRespawnPoint> playerRespawns(ServerLevel level) {
+        if (level == null || level.getServer() == null) {
+            return List.of();
+        }
+        return level.getServer().getPlayerList().getPlayers().stream()
+                .map(this::playerRespawn)
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    private Optional<PlayerRespawnPoint> playerRespawn(ServerPlayer player) {
+        if (player == null) {
+            return Optional.empty();
+        }
+        ServerPlayer.RespawnConfig config = player.getRespawnConfig();
+        if (config == null || config.respawnData() == null || LevelData.RespawnData.DEFAULT.equals(config.respawnData())) {
+            return Optional.empty();
+        }
+        BlockPos pos = config.respawnData().pos();
+        return Optional.of(new PlayerRespawnPoint(
+                player.getUUID().toString(),
+                player.getName().getString(),
+                config.respawnData().dimension().identifier().toString(),
+                pos.getX(),
+                pos.getY(),
+                pos.getZ(),
+                config.respawnData().yaw(),
+                config.respawnData().pitch(),
+                config.forced()
+        ));
     }
 
     private void publishVersionMetadata(

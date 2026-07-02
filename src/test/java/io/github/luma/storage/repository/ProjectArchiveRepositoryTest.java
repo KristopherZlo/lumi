@@ -66,6 +66,7 @@ class ProjectArchiveRepositoryTest {
         assertFalse(manifest.includesPreviews());
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/project.json")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/work-zones.json")));
+        assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/player-spawns.json")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/cache/baseline-chunks/chunk_0_0.bin.lz4")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/entity-checkpoints/entity-checkpoint-0001.bin.lz4")));
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/recovery/journal.json")));
@@ -107,6 +108,7 @@ class ProjectArchiveRepositoryTest {
         assertTrue(Files.exists(importedLayout.projectFile()));
         assertTrue(Files.exists(importedLayout.variantsFile()));
         assertTrue(Files.exists(importedLayout.workZonesFile()));
+        assertTrue(Files.exists(importedLayout.playerRespawnsFile()));
         assertTrue(Files.exists(importedLayout.versionFile("v0001")));
         assertTrue(Files.exists(importedLayout.patchMetaFile("patch-0001")));
         assertTrue(Files.exists(importedLayout.patchDataFile("patch-0001")));
@@ -333,6 +335,11 @@ class ProjectArchiveRepositoryTest {
         Files.writeString(
                 layout.workZonesFile(),
                 "{\"schemaVersion\":1,\"zones\":[],\"activeZoneByActor\":{}}",
+                StandardCharsets.UTF_8
+        );
+        Files.writeString(
+                layout.playerRespawnsFile(),
+                "{\"schemaVersion\":1,\"versions\":{}}",
                 StandardCharsets.UTF_8
         );
         Files.createDirectories(layout.cacheDir().resolve("baseline-chunks"));

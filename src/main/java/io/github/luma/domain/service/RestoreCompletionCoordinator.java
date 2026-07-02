@@ -5,6 +5,7 @@ import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.PendingRestoreCompletion;
+import io.github.luma.domain.model.PlayerRespawnPoint;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -12,6 +13,7 @@ import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.storage.ProjectLayout;
+import io.github.luma.storage.repository.PlayerRespawnRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
 import io.github.luma.storage.repository.VariantRepository;
@@ -19,8 +21,19 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.LevelData;
 
 /**
  * Publishes restore metadata after prepared world apply has succeeded.
@@ -30,6 +43,7 @@ final class RestoreCompletionCoordinator {
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VariantRepository variantRepository = new VariantRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
+    private final PlayerRespawnRepository playerRespawnRepository = new PlayerRespawnRepository();
     private final PartialRestoreDraftRewriter partialRestoreDraftRewriter = new PartialRestoreDraftRewriter();
     private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
 
@@ -116,6 +130,7 @@ final class RestoreCompletionCoordinator {
         this.recoveryRepository.deleteDraft(layout);
         this.undoRedoHistoryManager.clearProject(project.id().toString());
         this.recordRestoreUndoAction(restoreUndoAction, now);
+        this.restorePlayerRespawns(level, layout, version);
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,
                 "restore-completed",
@@ -132,6 +147,58 @@ final class RestoreCompletionCoordinator {
                 targetVariant.id(),
                 batchCount
         );
+    }
+
+    private void restorePlayerRespawns(ServerLevel level, ProjectLayout layout, ProjectVersion version) throws IOException {
+        if (level == null || level.getServer() == null || version == null) {
+            return;
+        }
+        List<PlayerRespawnPoint> points = this.playerRespawnRepository.loadVersion(layout, version.id());
+        if (points.isEmpty()) {
+            return;
+        }
+        for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+            this.matchRespawn(points, player).ifPresent(point -> this.restorePlayerRespawn(level, player, point));
+        }
+    }
+
+    private Optional<PlayerRespawnPoint> matchRespawn(List<PlayerRespawnPoint> points, ServerPlayer player) {
+        if (player == null) {
+            return Optional.empty();
+        }
+        String uuid = player.getUUID().toString();
+        String name = player.getName().getString();
+        return points.stream()
+                .filter(point -> uuid.equals(point.playerUuid()) || name.equals(point.playerName()))
+                .findFirst();
+    }
+
+    private void restorePlayerRespawn(ServerLevel currentLevel, ServerPlayer player, PlayerRespawnPoint point) {
+        ResourceKey<Level> dimension = this.dimensionKey(point.dimensionId());
+        ServerLevel spawnLevel = currentLevel.getServer().getLevel(dimension);
+        if (spawnLevel == null) {
+            return;
+        }
+        BlockPos pos = new BlockPos(point.x(), point.y(), point.z());
+        if (!point.forced() && !this.isRespawnAnchorBlock(spawnLevel.getBlockState(pos))) {
+            return;
+        }
+        player.setRespawnPosition(new ServerPlayer.RespawnConfig(
+                LevelData.RespawnData.of(dimension, pos, point.yaw(), point.pitch()),
+                point.forced()
+        ), false);
+    }
+
+    private boolean isRespawnAnchorBlock(BlockState state) {
+        return state != null && (state.getBlock() instanceof BedBlock || state.is(Blocks.RESPAWN_ANCHOR));
+    }
+
+    private ResourceKey<Level> dimensionKey(String dimensionId) {
+        Identifier identifier = Identifier.tryParse(dimensionId);
+        if (identifier == null) {
+            identifier = Level.OVERWORLD.identifier();
+        }
+        return ResourceKey.create(Registries.DIMENSION, identifier);
     }
 
     private void recordPartialRestoreUndoAction(
