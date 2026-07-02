@@ -141,6 +141,9 @@ public final class ProjectService {
     public void bootstrapWorld(MinecraftServer server) throws IOException {
         WorldOriginInfo origin = this.ensureWorldOrigin(server);
         this.worldInitialBackupService.backupIfNeeded(server, origin);
+        for (var player : server.getPlayerList().getPlayers()) {
+            this.ensureWorldProject(player.level(), "Lumi");
+        }
         boolean activeOperation = this.worldOperationManager.hasActiveOperation(server);
         for (BuildProject project : this.listProjects(server)) {
             ProjectLayout layout = this.resolveLayout(server, project.name());

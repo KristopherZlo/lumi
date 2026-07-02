@@ -362,6 +362,17 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
+    void worldBootstrapCreatesPlayerWorkspaceOnWorldEntry() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/ProjectService.java"));
+
+        assertTrue(
+                source.contains("server.getPlayerList().getPlayers()")
+                        && source.contains("this.ensureWorldProject(player.level(), \"Lumi\")"),
+                "World bootstrap must initialize the current player's Lumi workspace after world entry"
+        );
+    }
+
+    @Test
     void generatedRedstoneFixtureComparisonPoliciesCoverKnownPhaseProperties() throws IOException {
         String snapshotSource = Files.readString(Path.of(
                 "src/runtimeGametestSupport/java/io/github/luma/minecraft/testing/StructureFixtureSnapshot.java"

@@ -113,8 +113,7 @@ class WorldMutationCapturePolicyTest {
                 WorldMutationSource.FLUID,
                 WorldMutationSource.FIRE,
                 WorldMutationSource.GROWTH,
-                WorldMutationSource.FALLING_BLOCK,
-                WorldMutationSource.MOB
+                WorldMutationSource.FALLING_BLOCK
         )) {
             Optional<WorldMutationCapturePolicy.CapturedMutation> mutation = this.policy.capture(
                     source,
@@ -128,6 +127,21 @@ class WorldMutationCapturePolicyTest {
             assertTrue(mutation.isPresent(), source.name());
             assertTrue(mutation.get().change().hidden(), source.name());
         }
+    }
+
+    @Test
+    void mobBreaksAreVisibleInPendingBuilderSurfaces() {
+        Optional<WorldMutationCapturePolicy.CapturedMutation> mutation = this.policy.capture(
+                WorldMutationSource.MOB,
+                POS,
+                Blocks.STONE.defaultBlockState(),
+                Blocks.AIR.defaultBlockState(),
+                null,
+                null
+        );
+
+        assertTrue(mutation.isPresent());
+        assertFalse(mutation.get().change().hidden());
     }
 
     @Test

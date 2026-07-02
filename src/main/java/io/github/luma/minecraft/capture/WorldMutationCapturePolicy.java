@@ -104,9 +104,10 @@ public final class WorldMutationCapturePolicy {
             return false;
         }
         return switch (source) {
-            case EXPLOSION, FLUID, FIRE, GROWTH, FALLING_BLOCK, MOB -> true;
+            case EXPLOSION, FLUID, FIRE, GROWTH, FALLING_BLOCK -> true;
             case PLAYER,
                     ENTITY,
+                    MOB,
                     BLOCK_UPDATE,
                     EXPLOSIVE,
                     EXTERNAL_TOOL,
