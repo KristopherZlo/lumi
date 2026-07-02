@@ -59,13 +59,17 @@ public final class EntityCausalContextRegistry {
     }
 
     public ContextFrame pushIfPresent(Entity entity, ServerLevel level) {
+        return this.pushIfPresent(entity, level, null);
+    }
+
+    public ContextFrame pushIfPresent(Entity entity, ServerLevel level, WorldMutationSource sourceOverride) {
         EntityCausalContext context = this.context(entity, level);
         if (context == null || this.currentFrameAlreadyHasAction()) {
             return ContextFrame.empty();
         }
 
         WorldMutationContext.SourceFrame sourceFrame = WorldMutationContext.pushSource(
-                context.source(),
+                sourceOverride == null ? context.source() : sourceOverride,
                 context.actor(),
                 context.actionId(),
                 context.accessAllowed()

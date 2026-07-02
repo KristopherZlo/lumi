@@ -60,7 +60,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 - Keeps recovery drafts for interrupted work.
 - Lets you mark active work zones, save a zone separately, and keep unrelated pending work.
 - Lets work zones grow from causal tree growth, hide boundary boxes, delete zone metadata without deleting commits, and optionally show zone commits in global history with zone color markers.
-- Captures normal Minecraft edits, tracked mob-caused block changes, plus supported WorldEdit, FAWE, and Axiom mutation paths on a best-effort basis.
+- Captures normal Minecraft edits, tracked player-caused mob block changes, plus supported WorldEdit, FAWE, and Axiom mutation paths on a best-effort basis.
 
 ### Quick Start
 
@@ -244,6 +244,7 @@ Hard rules:
 - Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
+- Live undo/redo owns mob block fallout only when the mob is causally tied to a player action; passive mob edits remain actionless.
 - Client modal overlays consume pointer input so underlying workspace actions cannot fire while a modal is open.
 - Saved commits keep entity checkpoints for entities present at save time. Whole-dimension saves include chunks with currently loaded live non-player entities, and player-spawned non-player entities make durable pending work so entity-only saves are possible. Full restore and whole-dimension quick rollback treat target entity-checkpoint chunks as authoritative even when no block batch touched that chunk, so saved mobs/decorative entities return and stray dropped items in those chunks are cleaned up. Restore can skip selected entity types for a single run without changing the saved commit.
 - Restore confirmation entity summaries count only entities inside the resolved restore scope for zones and selected/outside partial restores.
