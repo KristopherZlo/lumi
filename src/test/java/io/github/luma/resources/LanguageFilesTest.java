@@ -27,8 +27,45 @@ class LanguageFilesTest {
             "fr_fr.json",
             "ru_ru.json"
     );
+    private static final Set<String> LOCALIZED_LOCALES = Set.of(
+            "de_de.json",
+            "es_es.json",
+            "fi_fi.json",
+            "fr_fr.json",
+            "ru_ru.json"
+    );
+    private static final Set<String> EXACT_ENGLISH_COPY_ALLOWED_KEYS = Set.of(
+            "key.category.lumi.general",
+            "luma.action.buy_me_a_coffee",
+            "luma.history.version_header",
+            "luma.variant.entry",
+            "luma.log.entry_header",
+            "luma.integrity.error",
+            "luma.compare.block_entry",
+            "luma.compare.material_entry",
+            "luma.settings.hud_title",
+            "luma.window.mod_version",
+            "luma.cleanup.candidate",
+            "luma.variants.base_badge",
+            "luma.ideas.zone_badge",
+            "luma.ideas.switch_key",
+            "luma.onboarding.step",
+            "luma.tab.zones",
+            "luma.zones.list_title",
+            "luma.zones.history_item",
+            "luma.actionbar.zone_entered"
+    );
     private static final Pattern FORMAT_TOKEN = Pattern.compile("%(?:\\d+\\$)?[sd]|%%");
     private static final Pattern BACKTICK_TOKEN = Pattern.compile("`[^`]*`");
+    private static final Pattern ENGLISH_LETTER = Pattern.compile("[A-Za-z]");
+    private static final Pattern LOCALIZATION_ARTIFACT = Pattern.compile(
+            "LUMITOKEN|XQZ\\d+ZXQ|\\u27E6|\\u27E7|\\u0420[\\u2019\\u045F\\u0491]|\\u0421[\\u040A\\u2026]"
+    );
+    private static final Pattern STALE_ENGLISH_PHRASE = Pattern.compile(
+            "\\b(No Lumi project|Lumi selection|Hold to preview|Lumi gives this build|"
+                    + "Save build is your checkpoint|Native undo command|There is no tracked action|"
+                    + "Quick save from the world|Restore changes the world|Restore asks|workspace|Bind|From|Enter)\\b"
+    );
     private static final Pattern USER_FACING_VARIANT_TERM = Pattern.compile("\\bvariants?\\b", Pattern.CASE_INSENSITIVE);
 
     @Test
@@ -67,6 +104,36 @@ class LanguageFilesTest {
                 );
             }
         }
+    }
+
+    @Test
+    void localizedLanguagesDoNotKeepEnglishUiText() throws IOException {
+        Map<String, String> english = readLanguageFile("en_us.json");
+        List<String> failures = new ArrayList<>();
+
+        for (String fileName : LOCALIZED_LOCALES) {
+            Map<String, String> language = readLanguageFile(fileName);
+            for (Map.Entry<String, String> entry : language.entrySet()) {
+                String value = entry.getValue();
+                if (LOCALIZATION_ARTIFACT.matcher(value).find() || STALE_ENGLISH_PHRASE.matcher(value).find()) {
+                    failures.add(fileName + " " + entry.getKey() + " = " + value);
+                    continue;
+                }
+                String englishValue = english.get(entry.getKey());
+                if (englishValue != null
+                        && value.equals(englishValue)
+                        && value.length() > 2
+                        && ENGLISH_LETTER.matcher(value).find()
+                        && !EXACT_ENGLISH_COPY_ALLOWED_KEYS.contains(entry.getKey())) {
+                    failures.add(fileName + " " + entry.getKey() + " = " + value);
+                }
+            }
+        }
+
+        Assertions.assertTrue(
+                failures.isEmpty(),
+                "Localized UI text should not keep English values: " + failures
+        );
     }
 
     @Test
