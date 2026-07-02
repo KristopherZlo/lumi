@@ -2,6 +2,7 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
@@ -9,6 +10,7 @@ import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
@@ -45,6 +47,8 @@ abstract class LevelExplosionMixin {
         if (!entityContextual && !explosiveContextual) {
             fallbackFrame = WorldMutationContext.pushSource(WorldMutationSource.EXPLOSION);
         }
+        String contextKind = entityContextual ? "entity-causal" : explosiveContextual ? "explosive" : "ambient";
+        this.luma$logCreeperExplosion(entity, x, y, z, power, createFire, interaction, contextKind);
 
         try {
             original.call(entity, damageSource, calculator, x, y, z, power, createFire, interaction);
@@ -69,5 +73,33 @@ abstract class LevelExplosionMixin {
             return LUMA_ENTITY_CAUSAL_CONTEXTS.pushIfPresent(entity, level, WorldMutationSource.EXPLOSION);
         }
         return null;
+    }
+
+    @Unique
+    private void luma$logCreeperExplosion(
+            Entity entity,
+            double x,
+            double y,
+            double z,
+            float power,
+            boolean createFire,
+            Level.ExplosionInteraction interaction,
+            String contextKind
+    ) {
+        if (!(entity instanceof Creeper) || !((Object) this instanceof ServerLevel level)) {
+            return;
+        }
+        LumaLoadLog.event("creeper-explosion", "level-explode",
+                "uuid=" + entity.getUUID()
+                        + ", context=" + contextKind
+                        + ", source=" + WorldMutationContext.currentSource()
+                        + ", action=" + WorldMutationContext.currentActionId()
+                        + ", actor=" + WorldMutationContext.currentActor()
+                        + ", access=" + WorldMutationContext.currentAccessAllowed()
+                        + ", time=" + level.getGameTime()
+                        + ", pos=" + x + "," + y + "," + z
+                        + ", power=" + power
+                        + ", fire=" + createFire
+                        + ", interaction=" + interaction);
     }
 }

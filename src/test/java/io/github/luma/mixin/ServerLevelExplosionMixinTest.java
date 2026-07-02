@@ -20,11 +20,30 @@ class ServerLevelExplosionMixinTest {
     }
 
     @Test
+    void serverCreeperExplosionsLogSelectedCausalContext() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelExplosionMixin.java"));
+
+        assertTrue(source.contains("entity instanceof Creeper"));
+        assertTrue(source.contains("LumaLoadLog.event(\"creeper-explosion\", \"server-explode\""));
+        assertTrue(source.contains("context=\" + contextKind"));
+        assertTrue(source.contains("action=\" + WorldMutationContext.currentActionId()"));
+    }
+
+    @Test
     void baseLevelExplosionsUseRememberedEntityCausalContextOnServers() throws Exception {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/LevelExplosionMixin.java"));
 
         assertTrue(source.contains("EntityCausalContextRegistry"));
         assertTrue(source.contains("(Object) this instanceof ServerLevel level"));
         assertTrue(source.contains("pushIfPresent(entity, level, WorldMutationSource.EXPLOSION)"));
+    }
+
+    @Test
+    void baseLevelCreeperExplosionsLogSelectedCausalContext() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/LevelExplosionMixin.java"));
+
+        assertTrue(source.contains("entity instanceof Creeper"));
+        assertTrue(source.contains("LumaLoadLog.event(\"creeper-explosion\", \"level-explode\""));
+        assertTrue(source.contains("context=\" + contextKind"));
     }
 }

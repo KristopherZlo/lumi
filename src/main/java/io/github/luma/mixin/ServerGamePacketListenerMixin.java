@@ -2,6 +2,7 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.AutoCheckpointService;
@@ -14,6 +15,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Creeper;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -76,8 +78,25 @@ abstract class ServerGamePacketListenerMixin {
 
         Entity target = packet.getTarget(level);
         if (target != null) {
-            LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentPlayerAction(target, level);
+            boolean remembered = LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentPlayerAction(target, level);
+            this.luma$logCreeperInteractContext(target, level, remembered);
         }
+    }
+
+    @Unique
+    private void luma$logCreeperInteractContext(Entity target, ServerLevel level, boolean remembered) {
+        if (!(target instanceof Creeper) || level == null) {
+            return;
+        }
+        LumaLoadLog.event("creeper-explosion", "interact-context",
+                "remembered=" + remembered
+                        + ", player=" + (this.player == null ? "player" : this.player.getName().getString())
+                        + ", uuid=" + target.getUUID()
+                        + ", source=" + WorldMutationContext.currentSource()
+                        + ", action=" + WorldMutationContext.currentActionId()
+                        + ", access=" + WorldMutationContext.currentAccessAllowed()
+                        + ", time=" + level.getGameTime()
+                        + ", pos=" + target.blockPosition());
     }
 
     @Unique

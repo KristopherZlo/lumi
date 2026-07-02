@@ -25,6 +25,18 @@ class ServerGamePacketListenerMixinTest {
     }
 
     @Test
+    void creeperInteractPacketsLogRememberedCausalContext() throws IOException {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/mixin/ServerGamePacketListenerMixin.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertTrue(source.contains("target instanceof Creeper"));
+        assertTrue(source.contains("LumaLoadLog.event(\"creeper-explosion\", \"interact-context\""));
+        assertTrue(source.contains("remembered=\" + remembered"));
+    }
+
+    @Test
     void playerOwnedDamageSourcesCreateEntityCausalContext() throws IOException {
         String source = Files.readString(
                 Path.of("src/main/java/io/github/luma/mixin/LivingEntityCausalContextMixin.java"),

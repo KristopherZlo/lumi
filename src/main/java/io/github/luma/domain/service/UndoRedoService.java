@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
@@ -91,6 +92,16 @@ public final class UndoRedoService {
         String label = direction == Direction.UNDO ? "undo-action" : "redo-action";
         int totalChanges = targetChanges.size() + targetEntityChanges.size();
         this.deferredActionFalloutGuard.suppressAction(action.id(), level.getGameTime());
+        LumaLoadLog.event("undo-redo", "selected-action",
+                "direction=" + direction.label()
+                        + ", project=" + project.name()
+                        + ", action=" + action.id()
+                        + ", actor=" + action.actor()
+                        + ", targetBlocks=" + targetChanges.size()
+                        + ", targetEntities=" + targetEntityChanges.size()
+                        + ", adjustmentBlocks=" + pendingAdjustments.size()
+                        + ", adjustmentEntities=" + pendingEntityAdjustments.size()
+                        + ", completeOnServerThread=" + completeOnServerThread);
         this.historyDebugLog.logUndoRedoSelection(
                 project,
                 direction.label(),

@@ -2,6 +2,7 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
@@ -14,6 +15,7 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
@@ -59,6 +61,8 @@ abstract class ServerLevelExplosionMixin {
         if (!entityContextual && !explosiveContextual) {
             fallbackFrame = WorldMutationContext.pushSource(WorldMutationSource.EXPLOSION);
         }
+        String contextKind = entityContextual ? "entity-causal" : explosiveContextual ? "explosive" : "ambient";
+        this.luma$logCreeperExplosion(entity, x, y, z, power, createFire, interaction, contextKind);
 
         try {
             original.call(
@@ -89,5 +93,34 @@ abstract class ServerLevelExplosionMixin {
                 fallbackFrame.close();
             }
         }
+    }
+
+    @Unique
+    private void luma$logCreeperExplosion(
+            Entity entity,
+            double x,
+            double y,
+            double z,
+            float power,
+            boolean createFire,
+            Level.ExplosionInteraction interaction,
+            String contextKind
+    ) {
+        if (!(entity instanceof Creeper)) {
+            return;
+        }
+        ServerLevel level = (ServerLevel) (Object) this;
+        LumaLoadLog.event("creeper-explosion", "server-explode",
+                "uuid=" + entity.getUUID()
+                        + ", context=" + contextKind
+                        + ", source=" + WorldMutationContext.currentSource()
+                        + ", action=" + WorldMutationContext.currentActionId()
+                        + ", actor=" + WorldMutationContext.currentActor()
+                        + ", access=" + WorldMutationContext.currentAccessAllowed()
+                        + ", time=" + level.getGameTime()
+                        + ", pos=" + x + "," + y + "," + z
+                        + ", power=" + power
+                        + ", fire=" + createFire
+                        + ", interaction=" + interaction);
     }
 }
