@@ -155,6 +155,40 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
+    void undoRedoReplayClearsDeadAndIgnitedEntityPayloadsButKeepsMotion() throws Exception {
+        String entityId = "00000000-0000-0000-0000-000000000025";
+        CompoundTag tag = entity("minecraft:creeper", entityId, 1.0D).copyTag();
+        tag.putShort("DeathTime", (short) 18);
+        tag.putShort("HurtTime", (short) 9);
+        tag.putShort("Fire", (short) 120);
+        tag.putFloat("Health", 0.0F);
+        tag.putBoolean("ignited", true);
+        tag.putString("Motion", "keep");
+
+        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+                null,
+                List.of(),
+                List.of(new StoredEntityChange(
+                        entityId,
+                        "minecraft:creeper",
+                        new EntityPayload(tag),
+                        null
+                )),
+                false,
+                null,
+                EntityApplyMode.DELTA
+        );
+
+        CompoundTag replayTag = batches.getFirst().entityBatch().entitiesToSpawn().getFirst();
+        assertEquals(0, replayTag.getShortOr("DeathTime", (short) 0));
+        assertEquals(0, replayTag.getShortOr("HurtTime", (short) 0));
+        assertEquals(0, replayTag.getShortOr("Fire", (short) 0));
+        assertEquals(1.0F, replayTag.getFloatOr("Health", 0.0F));
+        assertFalse(replayTag.getBooleanOr("ignited", false));
+        assertEquals("keep", replayTag.getString("Motion").orElse(""));
+    }
+
+    @Test
     void decodedDenseSectionsUseNativeSectionBatches() {
         List<PreparedBlockPlacement> placements = java.util.stream.IntStream
                 .range(0, SectionApplySafetyClassifier.NATIVE_DENSE_THRESHOLD)

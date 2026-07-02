@@ -4,11 +4,13 @@ import io.github.luma.domain.model.SectionChangeMask;
 
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.PatchSectionFrame;
 import io.github.luma.domain.model.PatchSectionWorldChanges;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
+import io.github.luma.minecraft.capture.EntitySnapshotService;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -735,11 +737,11 @@ public final class WorldChangeBatchPreparer {
         for (StoredEntityChange change : changes == null ? List.<StoredEntityChange>of() : changes) {
             StoredEntityChange target = applyNewValues ? change : change.inverse();
             if (target.isSpawn()) {
-                spawns.add(target.newValue().copyTag());
+                spawns.add(replayEntityTag(target.newValue()));
             } else if (target.isRemove()) {
                 removals.add(target.entityId());
             } else if (target.isUpdate()) {
-                updates.add(target.newValue().copyTag());
+                updates.add(replayEntityTag(target.newValue()));
             }
         }
         return new EntityBatch(
@@ -748,6 +750,10 @@ public final class WorldChangeBatchPreparer {
                 updates,
                 entityApplyMode == EntityApplyMode.REPLACE_ENTITIES_IN_CHUNK
         );
+    }
+
+    private static CompoundTag replayEntityTag(EntityPayload payload) {
+        return EntitySnapshotService.normalizeForHistory(payload == null ? null : payload.copyTag());
     }
 
     private static List<StoredEntityChange> undoRedoReplayEntityChanges(
