@@ -82,6 +82,21 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
+    void playerCausedEntitySourcesRemoveTransientMobsForUndoOnlyReplay() {
+        EntityPayload cow = entityWithVariant(
+                "minecraft:cow",
+                "00000000-0000-0000-0000-000000000055",
+                1.0D,
+                "minecraft:cold"
+        );
+
+        for (WorldMutationSource source : new WorldMutationSource[]{WorldMutationSource.EXPLOSION, WorldMutationSource.MOB}) {
+            assertFalse(this.policy.capture(source, cow, null).isPresent());
+            assertTrue(this.policy.captureUndoOnly(source, cow, null).isPresent());
+        }
+    }
+
+    @Test
     void explosivePlacedEntityRemovalStaysDurable() {
         EntityPayload stand = entity(
                 "minecraft:armor_stand",

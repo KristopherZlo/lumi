@@ -4,6 +4,9 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.WorldMutationSource;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -87,6 +90,23 @@ class LiveUndoRedoActionRecorderTest {
                 WorldMutationSource.GROWTH,
                 hiddenGrowth
         ));
+    }
+
+    @Test
+    void mobAndExplosionEntityReplayRequireCausalAction() {
+        assertTrue(LiveUndoRedoActionRecorder.requiresCausalActionForEntityReplay(WorldMutationSource.EXPLOSION));
+        assertTrue(LiveUndoRedoActionRecorder.requiresCausalActionForEntityReplay(WorldMutationSource.MOB));
+        assertFalse(LiveUndoRedoActionRecorder.requiresCausalActionForEntityReplay(WorldMutationSource.FLUID));
+    }
+
+    @Test
+    void causalEntityChangesCanOpenLiveUndoActionBeforeBlockFallout() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/LiveUndoRedoActionRecorder.java"));
+        int entityMethod = source.indexOf("void recordEntityAction(");
+        int causalBranch = source.indexOf("if (actionAllowed && !actionId.isBlank())", entityMethod);
+
+        assertTrue(source.indexOf("recordCurrentCausalAction(", causalBranch) >= 0);
+        assertTrue(source.indexOf("recordDelayedEntityChange(", causalBranch) >= 0);
     }
 
     private static StatePayload state(String blockId) {

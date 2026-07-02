@@ -196,8 +196,9 @@ final class LiveUndoRedoActionRecorder {
         }
 
         String actionId = WorldMutationContext.currentActionId();
+        WorldMutationSource source = WorldMutationContext.currentSource();
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
-        if (actionAllowed && !actionId.isBlank() && this.sourcePolicy.isExplicitRootSource(WorldMutationContext.currentSource())) {
+        if (actionAllowed && !actionId.isBlank() && this.sourcePolicy.isExplicitRootSource(source)) {
             if (actionStartedAt == null) {
                 this.historyManager.recordEntityChange(
                         trackedProject.project().id().toString(),
@@ -221,16 +222,31 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
         if (actionAllowed && !actionId.isBlank()) {
-            this.historyManager.recordCausalEntityChange(
-                    trackedProject.project().id().toString(),
-                    actionId,
-                    change,
-                    now
-            );
+            if (actionStartedAt == null) {
+                this.historyManager.recordCurrentCausalAction(
+                        trackedProject.project().id().toString(),
+                        level.dimension().identifier().toString(),
+                        actionId,
+                        WorldMutationContext.currentActor(),
+                        List.of(),
+                        List.of(change),
+                        now
+                );
+            } else {
+                this.historyManager.recordDelayedEntityChange(
+                        trackedProject.project().id().toString(),
+                        level.dimension().identifier().toString(),
+                        actionId,
+                        WorldMutationContext.currentActor(),
+                        change,
+                        actionStartedAt,
+                        now
+                );
+            }
             return;
         }
 
-        if (this.sourcePolicy.isExplicitRootSource(WorldMutationContext.currentSource())) {
+        if (this.sourcePolicy.isExplicitRootSource(source) || requiresCausalActionForEntityReplay(source)) {
             return;
         }
 
@@ -239,8 +255,8 @@ final class LiveUndoRedoActionRecorder {
                 level.dimension().identifier().toString(),
                 change,
                 now,
-                relatedJoinWindowFor(WorldMutationContext.currentSource()),
-                relatedJoinRadiusFor(WorldMutationContext.currentSource())
+                relatedJoinWindowFor(source),
+                relatedJoinRadiusFor(source)
         );
     }
 
@@ -347,6 +363,10 @@ final class LiveUndoRedoActionRecorder {
 
     static boolean defersImmediateCausalChange(WorldMutationSource source, StoredBlockChange change) {
         return false;
+    }
+
+    static boolean requiresCausalActionForEntityReplay(WorldMutationSource source) {
+        return source == WorldMutationSource.EXPLOSION || source == WorldMutationSource.MOB;
     }
 
     private static boolean isSpreadingFalloutSource(WorldMutationSource source) {

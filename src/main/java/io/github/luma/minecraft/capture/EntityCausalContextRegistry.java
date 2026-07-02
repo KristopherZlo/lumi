@@ -123,6 +123,7 @@ public final class EntityCausalContextRegistry {
     boolean canRememberSource(WorldMutationSource source, String actionId) {
         return (source == WorldMutationSource.PLAYER
                 || source == WorldMutationSource.MOB
+                || source == WorldMutationSource.EXPLOSION
                 || source == WorldMutationSource.EXPLOSIVE)
                 && actionId != null
                 && !actionId.isBlank();

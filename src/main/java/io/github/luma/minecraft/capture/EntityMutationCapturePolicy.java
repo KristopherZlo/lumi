@@ -34,6 +34,8 @@ public final class EntityMutationCapturePolicy {
     private static final Set<WorldMutationSource> UNDO_ONLY_TRANSIENT_ENTITY_SOURCES = EnumSet.of(
             WorldMutationSource.PLAYER,
             WorldMutationSource.ENTITY,
+            WorldMutationSource.EXPLOSION,
+            WorldMutationSource.MOB,
             WorldMutationSource.EXPLOSIVE
     );
     private static final String PRIMED_TNT_ENTITY_TYPE = "minecraft:tnt";
