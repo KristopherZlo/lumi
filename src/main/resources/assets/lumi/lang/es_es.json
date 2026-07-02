@@ -975,7 +975,7 @@
   "luma.onboarding.topic_commit_navigation": "Historia guardada",
   "luma.onboarding.commit_navigation_help": "Después de cambiar el mundo, regrese y presione Restaurar este guardado para eliminar esos cambios y volver a esta confirmación.",
   "luma.onboarding.topic_finish": "estas listo",
-  "luma.onboarding.finish_help": "Ese es el ciclo: guardar una confirmación, cambiar el mundo, restaurar cuando sea necesario. Ramas, recuperación y limpieza están en el menú.",
+  "luma.onboarding.finish_help": "Ese es el ciclo: guarda un punto, cambia el mundo y restaura cuando haga falta. Usa la pestaña Zonas para crear áreas de restauración con nombre; ramas, recuperación y limpieza están en el menú.",
   "luma.onboarding.press_info": "Prensa",
   "luma.special_thanks.help": "Un pequeño muro para las personas que ayudaron a dar forma a Lumi.",
   "luma.special_thanks.people_title": "gente",

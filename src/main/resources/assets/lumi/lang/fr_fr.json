@@ -975,7 +975,7 @@
   "luma.onboarding.topic_commit_navigation": "Historique enregistré",
   "luma.onboarding.commit_navigation_help": "Après avoir changé le monde, revenez et appuyez sur Restaurer cette sauvegarde pour supprimer ces modifications et revenir à ce commit.",
   "luma.onboarding.topic_finish": "Tu es prêt",
-  "luma.onboarding.finish_help": "C'est la boucle : enregistrer un commit, changer le monde, restaurer si nécessaire. Les branches, la récupération et le nettoyage sont au menu.",
+  "luma.onboarding.finish_help": "C'est la boucle : enregistrez un point, modifiez le monde, restaurez si nécessaire. Utilisez l'onglet Zones pour créer des zones de restauration nommées ; les branches, la récupération et le nettoyage sont au menu.",
   "luma.onboarding.press_info": "Presse",
   "luma.special_thanks.help": "Un petit mur pour les personnes qui ont contribué à façonner le Lumi.",
   "luma.special_thanks.people_title": "Les gens",

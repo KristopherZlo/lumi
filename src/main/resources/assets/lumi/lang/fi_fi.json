@@ -975,7 +975,7 @@
   "luma.onboarding.topic_commit_navigation": "Tallennettu historia",
   "luma.onboarding.commit_navigation_help": "Kun olet muuttanut maailmaa, palaa takaisin ja paina Palauta tämä tallennus poistaaksesi muutokset ja palataksesi tähän sitoumukseen.",
   "luma.onboarding.topic_finish": "Olet valmis",
-  "luma.onboarding.finish_help": "Tämä on silmukka: tallenna sitoumus, muuta maailmaa, palauta tarvittaessa. Haarat, palautus ja puhdistus ovat valikossa.",
+  "luma.onboarding.finish_help": "Tämä on silmukka: tallenna piste, muuta maailmaa ja palauta tarvittaessa. Luo nimettyjä palautusalueita Zones-välilehdellä; haarat, palautus ja puhdistus ovat valikossa.",
   "luma.onboarding.press_info": "Paina",
   "luma.special_thanks.help": "Pieni seinä ihmisille, jotka auttoivat muotoilemaan Lumi.",
   "luma.special_thanks.people_title": "Ihmiset",

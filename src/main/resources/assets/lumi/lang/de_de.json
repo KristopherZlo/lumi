@@ -975,7 +975,7 @@
   "luma.onboarding.topic_commit_navigation": "Gespeicherter Verlauf",
   "luma.onboarding.commit_navigation_help": "Nachdem Sie die Welt verändert haben, kehren Sie zurück und klicken Sie auf „Diesen Speicher wiederherstellen“, um diese Änderungen zu entfernen und zu diesem Commit zurückzukehren.",
   "luma.onboarding.topic_finish": "Sie sind bereit",
-  "luma.onboarding.finish_help": "Das ist die Schleife: Einen Commit speichern, die Welt verändern und bei Bedarf wiederherstellen. Verzweigungen, Wiederherstellung und Bereinigung finden Sie im Menü.",
+  "luma.onboarding.finish_help": "Das ist die Schleife: Einen Punkt speichern, die Welt verändern und bei Bedarf wiederherstellen. Erstellen Sie benannte Wiederherstellungsbereiche im Tab Zones; Verzweigungen, Wiederherstellung und Bereinigung finden Sie im Menü.",
   "luma.onboarding.press_info": "Drücken Sie",
   "luma.special_thanks.help": "Eine kleine Wand für Menschen, die mitgestaltet haben Lumi.",
   "luma.special_thanks.people_title": "Menschen",

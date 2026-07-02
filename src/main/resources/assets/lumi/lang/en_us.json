@@ -1143,7 +1143,7 @@
   "luma.onboarding.topic_commit_navigation": "Saved history",
   "luma.onboarding.commit_navigation_help": "After changing the world, come back and press Restore this save to remove those changes and return to this save.",
   "luma.onboarding.topic_finish": "You are ready",
-  "luma.onboarding.finish_help": "That is the loop: save a point, change the world, restore when needed. Branches, recovery, and cleanup are in the menu.",
+  "luma.onboarding.finish_help": "That is the loop: save a point, change the world, restore when needed. Use the Zones tab to create named restore areas; branches, recovery, and cleanup are in the menu.",
   "luma.onboarding.press_info": "Press",
   "luma.special_thanks.help": "A small wall for people who helped shape Lumi.",
   "luma.special_thanks.people_title": "People",

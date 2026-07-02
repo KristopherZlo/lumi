@@ -754,8 +754,10 @@ class RestoreServiceTest {
         RestoreEntityStateResolver resolver = this.entityStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
         String entityId = "00000000-0000-0000-0000-000000000089";
+        String crystalId = "00000000-0000-0000-0000-000000000090";
         this.snapshotWriter.writeFile(layout.entityCheckpointFile("entity-checkpoint-0002"), snapshot(List.of(
-                entity("minecraft:cow", entityId, 1.0D)
+                entity("minecraft:cow", entityId, 1.0D),
+                entity("minecraft:end_crystal", crystalId, 2.0D)
         )));
         List<ProjectVersion> versions = List.of(
                 version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT),
@@ -772,7 +774,10 @@ class RestoreServiceTest {
         assertEquals(1, batches.size());
         assertEquals(new ChunkPoint(0, 0), batches.getFirst().chunk());
         assertTrue(batches.getFirst().entityBatch().replaceEntities());
-        assertEquals("minecraft:cow", batches.getFirst().entityBatch().entitiesToUpdate().getFirst().getString("id").orElse(""));
+        List<String> updatedTypes = batches.getFirst().entityBatch().entitiesToUpdate().stream()
+                .map(tag -> tag.getString("id").orElse(""))
+                .toList();
+        assertEquals(List.of("minecraft:cow", "minecraft:end_crystal"), updatedTypes);
     }
 
     @Test
