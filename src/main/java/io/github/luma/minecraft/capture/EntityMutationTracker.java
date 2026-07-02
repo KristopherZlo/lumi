@@ -38,15 +38,6 @@ public final class EntityMutationTracker {
         Instant actionStartedAt = EntityCausalContextRegistry.currentStartedAt().orElse(null);
         ObservedExternalToolOperation operation = null;
         if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
-            if (CAPTURE_POLICY.shouldInspectUndoOnlyMutation(source, entityType)) {
-                return new PendingEntityMutation(
-                        level,
-                        SNAPSHOT_SERVICE.capture(level, entity),
-                        null,
-                        true,
-                        actionStartedAt
-                );
-            }
             if (WorldMutationContext.captureSuppressed()) {
                 return PendingEntityMutation.empty();
             }
@@ -133,11 +124,31 @@ public final class EntityMutationTracker {
     public static PendingEntityMutation captureRemoval(Entity entity) {
         PendingEntityMutation pending = captureBefore(entity);
         if (pending.isEmpty()) {
+            pending = captureUndoOnlyRemoval(entity);
+        }
+        if (pending.isEmpty()) {
             return pending;
         }
         return ENTITY_CAUSAL_CONTEXTS.oldPayloadOverride(entity, pending.level())
                 .map(pending::withOldPayload)
                 .orElse(pending);
+    }
+
+    private static PendingEntityMutation captureUndoOnlyRemoval(Entity entity) {
+        if (!(entity.level() instanceof ServerLevel level) || WorldMutationContext.captureSuppressed()) {
+            return PendingEntityMutation.empty();
+        }
+        String entityType = entityType(entity);
+        if (!CAPTURE_POLICY.shouldInspectUndoOnlyMutation(WorldMutationContext.currentSource(), entityType)) {
+            return PendingEntityMutation.empty();
+        }
+        return new PendingEntityMutation(
+                level,
+                SNAPSHOT_SERVICE.capture(level, entity),
+                null,
+                true,
+                EntityCausalContextRegistry.currentStartedAt().orElse(null)
+        );
     }
 
     public static void captureCausalDeath(Entity entity) {

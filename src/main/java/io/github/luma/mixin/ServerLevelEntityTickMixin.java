@@ -33,15 +33,20 @@ abstract class ServerLevelEntityTickMixin {
             return;
         }
 
-        try (WorldMutationContext.SourceFrame ignored = this.luma$pushEntityTickSource(entity, source)) {
-            EntityCausalContextRegistry.ContextFrame causalFrame =
-                    this.luma$pushRememberedCausalMobAction(entity, source);
-            try {
-                original.call(entity);
-            } finally {
-                if (causalFrame != null) {
-                    causalFrame.close();
-                }
+        EntityCausalContextRegistry.ContextFrame causalFrame =
+                this.luma$pushRememberedCausalMobAction(entity, source);
+        WorldMutationContext.SourceFrame sourceFrame = null;
+        try {
+            if (causalFrame == null || !causalFrame.active()) {
+                sourceFrame = this.luma$pushEntityTickSource(entity, source);
+            }
+            original.call(entity);
+        } finally {
+            if (sourceFrame != null) {
+                sourceFrame.close();
+            }
+            if (causalFrame != null) {
+                causalFrame.close();
             }
         }
     }

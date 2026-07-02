@@ -147,7 +147,8 @@ public final class EntityMutationCapturePolicy {
     }
 
     boolean shouldCaptureUndoOnlyMutation(WorldMutationSource source, EntityPayload oldValue, EntityPayload newValue) {
-        return this.shouldInspectUndoOnlyMutation(source, this.entityType(oldValue, newValue));
+        return this.shouldInspectUndoOnlyMutation(source, this.entityType(oldValue, newValue))
+                && (oldValue == null || newValue == null);
     }
 
     private String entityId(EntityPayload oldValue, EntityPayload newValue) {

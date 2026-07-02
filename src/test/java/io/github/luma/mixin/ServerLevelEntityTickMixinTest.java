@@ -46,4 +46,15 @@ class ServerLevelEntityTickMixinTest {
         assertTrue(source.contains("EntityCausalContextRegistry"));
         assertTrue(source.contains("pushIfPresent(entity, (ServerLevel) (Object) this, source)"));
     }
+
+    @Test
+    void rememberedCausalMobActionIsTriedBeforeOpeningFallbackMobAction() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelEntityTickMixin.java"));
+        int tickMethod = source.indexOf("private void luma$wrapEntityTick");
+        int rememberedFrame = source.indexOf("luma$pushRememberedCausalMobAction(entity, source)", tickMethod);
+        int fallbackFrame = source.indexOf("luma$pushEntityTickSource(entity, source)", tickMethod);
+
+        assertTrue(rememberedFrame > tickMethod);
+        assertTrue(fallbackFrame > rememberedFrame);
+    }
 }

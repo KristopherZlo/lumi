@@ -163,6 +163,7 @@ class WorldChangeBatchPreparerTest {
         tag.putShort("Fire", (short) 120);
         tag.putFloat("Health", 0.0F);
         tag.putBoolean("ignited", true);
+        tag.putShort("Fuse", (short) 4);
         tag.putString("Motion", "keep");
 
         List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
@@ -185,6 +186,7 @@ class WorldChangeBatchPreparerTest {
         assertEquals(0, replayTag.getShortOr("Fire", (short) 0));
         assertEquals(1.0F, replayTag.getFloatOr("Health", 0.0F));
         assertFalse(replayTag.getBooleanOr("ignited", false));
+        assertEquals(30, replayTag.getShortOr("Fuse", (short) 0));
         assertEquals("keep", replayTag.getString("Motion").orElse(""));
     }
 

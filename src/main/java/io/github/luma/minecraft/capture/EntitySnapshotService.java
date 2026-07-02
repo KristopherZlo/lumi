@@ -11,6 +11,9 @@ import net.minecraft.world.level.storage.TagValueOutput;
 
 public final class EntitySnapshotService {
 
+    private static final String CREEPER_ENTITY_TYPE = "minecraft:creeper";
+    private static final short DEFAULT_CREEPER_FUSE = 30;
+
     private final EntitySnapshotSanitizer sanitizer = new EntitySnapshotSanitizer();
 
     public EntityPayload capture(ServerLevel level, Entity entity) {
@@ -53,8 +56,9 @@ public final class EntitySnapshotService {
         if (tag.contains("Health") && tag.getFloatOr("Health", 1.0F) <= 0.0F) {
             tag.putFloat("Health", 1.0F);
         }
-        if (tag.contains("ignited")) {
+        if (CREEPER_ENTITY_TYPE.equals(tag.getString("id").orElse(""))) {
             tag.putBoolean("ignited", false);
+            tag.putShort("Fuse", DEFAULT_CREEPER_FUSE);
         }
         return tag;
     }

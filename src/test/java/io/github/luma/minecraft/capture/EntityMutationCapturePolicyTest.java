@@ -97,6 +97,23 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
+    void transientMobMovementIsNotUndoOnlyReplay() {
+        EntityPayload oldCow = entity(
+                "minecraft:cow",
+                "00000000-0000-0000-0000-000000000056",
+                1.0D
+        );
+        EntityPayload movedCow = entity(
+                "minecraft:cow",
+                "00000000-0000-0000-0000-000000000056",
+                2.0D
+        );
+
+        assertFalse(this.policy.captureUndoOnly(WorldMutationSource.MOB, oldCow, movedCow).isPresent());
+        assertFalse(this.policy.captureUndoOnly(WorldMutationSource.EXPLOSION, oldCow, movedCow).isPresent());
+    }
+
+    @Test
     void explosivePlacedEntityRemovalStaysDurable() {
         EntityPayload stand = entity(
                 "minecraft:armor_stand",

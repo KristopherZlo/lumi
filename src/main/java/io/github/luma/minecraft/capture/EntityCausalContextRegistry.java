@@ -72,7 +72,7 @@ public final class EntityCausalContextRegistry {
 
     public ContextFrame pushIfPresent(Entity entity, ServerLevel level, WorldMutationSource sourceOverride) {
         EntityCausalContext context = this.context(entity, level);
-        if (context == null || this.currentFrameAlreadyHasAction()) {
+        if (context == null || this.currentFrameHasDifferentAction(context.actionId())) {
             return ContextFrame.empty();
         }
 
@@ -137,9 +137,9 @@ public final class EntityCausalContextRegistry {
         return this.contexts.get(entity.getUUID());
     }
 
-    private boolean currentFrameAlreadyHasAction() {
-        String actionId = WorldMutationContext.currentActionId();
-        return actionId != null && !actionId.isBlank();
+    private boolean currentFrameHasDifferentAction(String expectedActionId) {
+        String currentActionId = WorldMutationContext.currentActionId();
+        return currentActionId != null && !currentActionId.isBlank() && !currentActionId.equals(expectedActionId);
     }
 
     private void removeExpired(long gameTime) {

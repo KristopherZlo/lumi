@@ -64,7 +64,7 @@ class EntitySnapshotServiceTest {
         assertEquals(false, normalized.getBooleanOr("ignited", false));
         assertTrue(normalized.getBooleanOr("powered", false));
         assertEquals("keep", normalized.getString("Motion").orElse(""));
-        assertTrue(normalized.contains("Fuse"));
+        assertEquals(30, normalized.getShortOr("Fuse", (short) 0));
         assertTrue(normalized.contains("ExplosionRadius"));
     }
 
