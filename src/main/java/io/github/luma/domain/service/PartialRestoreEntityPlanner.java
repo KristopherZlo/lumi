@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.StoredEntityChange;
 import java.util.LinkedHashMap;
@@ -40,9 +41,7 @@ final class PartialRestoreEntityPlanner {
         Predicate<BlockPoint> hardLimit = hardScope == null ? point -> true : hardScope;
         Map<String, StoredEntityChange> planned = new LinkedHashMap<>();
         for (StoredEntityChange change : pendingChanges) {
-            if (this.includes(change, bounds, effectiveMode, hardLimit)) {
-                planned.put(change.entityId(), change);
-            }
+            this.accumulate(planned, change.inverse(), bounds, effectiveMode, hardLimit);
         }
         for (StoredEntityChange change : reverseLineageChanges) {
             this.accumulate(planned, change.inverse(), bounds, effectiveMode, hardLimit);
@@ -75,17 +74,28 @@ final class PartialRestoreEntityPlanner {
             PartialRestoreMode mode,
             Predicate<BlockPoint> hardScope
     ) {
-        BlockPoint point = this.entityPoint(change);
-        return point != null && bounds != null && hardScope.test(point) && mode.includes(bounds.contains(point));
+        if (change == null || bounds == null) {
+            return false;
+        }
+        BlockPoint oldPoint = this.entityPoint(change.oldValue());
+        BlockPoint newPoint = this.entityPoint(change.newValue());
+        return this.includes(oldPoint, bounds, mode, hardScope)
+                || this.includes(newPoint, bounds, mode, hardScope);
     }
 
-    private BlockPoint entityPoint(StoredEntityChange change) {
-        if (change == null || (change.oldValue() == null && change.newValue() == null)) {
+    private boolean includes(
+            BlockPoint point,
+            Bounds3i bounds,
+            PartialRestoreMode mode,
+            Predicate<BlockPoint> hardScope
+    ) {
+        return point != null && hardScope.test(point) && mode.includes(bounds.contains(point));
+    }
+
+    private BlockPoint entityPoint(EntityPayload payload) {
+        if (payload == null) {
             return null;
         }
-        if (change.newValue() != null) {
-            return BlockPoint.from(change.newValue().blockPos());
-        }
-        return BlockPoint.from(change.oldValue().blockPos());
+        return BlockPoint.from(payload.blockPos());
     }
 }

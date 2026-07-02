@@ -34,6 +34,21 @@ class LanguageFilesTest {
             "fr_fr.json",
             "ru_ru.json"
     );
+    private static final Set<String> CHECKLIST_HINT_KEYS = Set.of(
+            "luma.selection.hud_zone_edit",
+            "luma.selection.hud_zone_edit_named",
+            "luma.selection.hud_zone_add",
+            "luma.selection.hud_zone_erase",
+            "luma.selection.hud_adjust",
+            "luma.selection.hud_resize_side",
+            "luma.selection.hud_clear_selection",
+            "luma.selection.hud_hold_zone",
+            "luma.zones.create_title",
+            "luma.zones.create_help",
+            "luma.zones.create_button",
+            "luma.zones.list_title",
+            "luma.zones.list_help"
+    );
     private static final Set<String> EXACT_ENGLISH_COPY_ALLOWED_KEYS = Set.of(
             "key.category.lumi.general",
             "luma.action.buy_me_a_coffee",
@@ -133,6 +148,28 @@ class LanguageFilesTest {
         Assertions.assertTrue(
                 failures.isEmpty(),
                 "Localized UI text should not keep English values: " + failures
+        );
+    }
+
+    @Test
+    void russianAndSpanishSelectionAndZoneHintsAreLocalized() throws IOException {
+        Map<String, String> english = readLanguageFile("en_us.json");
+        List<String> failures = new ArrayList<>();
+
+        for (String fileName : List.of("ru_ru.json", "es_es.json")) {
+            Map<String, String> language = readLanguageFile(fileName);
+            for (String key : CHECKLIST_HINT_KEYS) {
+                String translated = language.get(key);
+                Assertions.assertNotNull(translated, fileName + " missing " + key);
+                if (translated.equals(english.get(key))) {
+                    failures.add(fileName + " " + key + " = " + translated);
+                }
+            }
+        }
+
+        Assertions.assertTrue(
+                failures.isEmpty(),
+                "Selection hints and zone UI should be localized for checklist languages: " + failures
         );
     }
 

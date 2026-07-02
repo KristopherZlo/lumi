@@ -125,6 +125,14 @@ class WorkZoneScreenZoneActionsTest {
         assertTrue(methodBody.contains("case HIDDEN -> \"luma.zones.render_hidden\";"));
     }
 
+    @Test
+    void zonePickerShowsCreateAndListGuidance() {
+        assertTrue(this.source.contains("body.child(this.createZoneSection());"));
+        assertTrue(this.source.contains("body.child(this.zoneListSection());"));
+        assertTrue(this.source.contains("Component.translatable(\"luma.zones.create_help\")"));
+        assertTrue(this.source.contains("Component.translatable(\"luma.zones.list_help\")"));
+    }
+
     private String methodBody(String start, String end) {
         int methodIndex = this.source.indexOf(start);
         int nextMethodIndex = this.source.indexOf(end, methodIndex);

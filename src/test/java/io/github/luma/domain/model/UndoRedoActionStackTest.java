@@ -398,6 +398,43 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void ambientMobChangesWithoutPlayerActionAreNotUndoable() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String dropId = "00000000-0000-0000-0000-000000000021";
+
+        stack.recordCausalAction(
+                "ambient-mob",
+                List.of(change(1, "minecraft:stone", "minecraft:air")),
+                List.of(new StoredEntityChange(dropId, "minecraft:item", null, entity("minecraft:item", dropId, 1.0D))),
+                NOW
+        );
+
+        assertFalse(stack.canUndo());
+    }
+
+    @Test
+    void playerOwnedMobBlastUndoRestoresBlocksAndRemovesDrops() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String dropId = "00000000-0000-0000-0000-000000000022";
+
+        stack.recordCurrentCausalAction(
+                "creeper-blast",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                List.of(change(1, "minecraft:stone", "minecraft:air")),
+                List.of(new StoredEntityChange(dropId, "minecraft:item", null, entity("minecraft:item", dropId, 1.0D))),
+                NOW
+        );
+
+        UndoRedoAction action = stack.selectUndo().action();
+        assertEquals("creeper-blast", action.id());
+        assertEquals("minecraft:stone", action.inverseChanges().getFirst().newValue().blockId());
+        assertTrue(action.inverseEntityChanges().getFirst().isRemove());
+        assertEquals(dropId, action.inverseEntityChanges().getFirst().entityId());
+    }
+
+    @Test
     void causalBatchDoesNotPromoteOlderRedstoneAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
