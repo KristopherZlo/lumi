@@ -178,7 +178,34 @@ public final class UndoRedoActionStack {
             Instant actionStartedAt,
             Instant now
     ) {
-        if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
+        return this.recordDelayedEntityChanges(
+                actionId,
+                actor,
+                projectId,
+                dimensionId,
+                change == null ? List.of() : List.of(change),
+                actionStartedAt,
+                now
+        );
+    }
+
+    public long recordDelayedEntityChanges(
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            List<StoredEntityChange> changes,
+            Instant actionStartedAt,
+            Instant now
+    ) {
+        if (actionId == null || actionId.isBlank() || changes == null || changes.isEmpty()) {
+            return this.revision;
+        }
+
+        List<StoredEntityChange> recordableChanges = changes.stream()
+                .filter(change -> change != null && !change.isNoOp())
+                .toList();
+        if (recordableChanges.isEmpty()) {
             return this.revision;
         }
 
@@ -190,7 +217,7 @@ public final class UndoRedoActionStack {
             this.trimUndoStack();
         }
 
-        return this.recordEntityIntoAction(action, change, now, true);
+        return this.recordSecondaryIntoExistingAction(action, List.of(), recordableChanges, now, true);
     }
 
     public long recordAction(

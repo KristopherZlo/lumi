@@ -143,6 +143,29 @@ public final class UndoRedoHistoryManager {
         );
     }
 
+    public synchronized void recordDelayedEntityChanges(
+            String projectId,
+            String dimensionId,
+            String actionId,
+            String actor,
+            List<StoredEntityChange> changes,
+            Instant actionStartedAt,
+            Instant now
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        this.stack(projectId).recordDelayedEntityChanges(
+                actionId,
+                actor,
+                projectId,
+                dimensionId,
+                changes,
+                actionStartedAt,
+                now
+        );
+    }
+
     public synchronized void recordAction(
             String projectId,
             String dimensionId,

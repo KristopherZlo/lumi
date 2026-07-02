@@ -260,6 +260,46 @@ final class LiveUndoRedoActionRecorder {
         );
     }
 
+    void recordEntityAction(
+            TrackedProject trackedProject,
+            ServerLevel level,
+            List<StoredEntityChange> changes,
+            Instant now,
+            Instant actionStartedAt
+    ) {
+        List<StoredEntityChange> recordableChanges = changes == null
+                ? List.of()
+                : changes.stream()
+                .filter(change -> change != null && !change.isNoOp())
+                .toList();
+        if (recordableChanges.isEmpty()) {
+            return;
+        }
+        if (recordableChanges.size() == 1) {
+            this.recordEntityAction(trackedProject, level, recordableChanges.getFirst(), now, actionStartedAt);
+            return;
+        }
+
+        String actionId = WorldMutationContext.currentActionId();
+        boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
+        if (actionStartedAt != null && actionAllowed && !actionId.isBlank()) {
+            this.historyManager.recordDelayedEntityChanges(
+                    trackedProject.project().id().toString(),
+                    level.dimension().identifier().toString(),
+                    actionId,
+                    WorldMutationContext.currentActor(),
+                    recordableChanges,
+                    actionStartedAt,
+                    now
+            );
+            return;
+        }
+
+        for (StoredEntityChange change : recordableChanges) {
+            this.recordEntityAction(trackedProject, level, change, now, actionStartedAt);
+        }
+    }
+
     void recordReconciledChanges(
             TrackedProject trackedProject,
             ServerLevel level,

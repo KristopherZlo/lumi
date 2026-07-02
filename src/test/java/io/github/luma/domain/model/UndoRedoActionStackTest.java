@@ -656,6 +656,33 @@ class UndoRedoActionStackTest {
         assertTrue(redo.get(1).isSpawn());
     }
 
+    @Test
+    void delayedEntityBatchRecordsOneUndoAction() throws Exception {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String cowId = "00000000-0000-0000-0000-000000000019";
+        String pigId = "00000000-0000-0000-0000-000000000020";
+
+        stack.recordDelayedEntityChanges(
+                "blast",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                List.of(
+                        new StoredEntityChange(cowId, "minecraft:cow", entity("minecraft:cow", cowId, 1.0D), null),
+                        new StoredEntityChange(pigId, "minecraft:pig", entity("minecraft:pig", pigId, 2.0D), null)
+                ),
+                NOW,
+                NOW.plusMillis(50)
+        );
+
+        UndoRedoAction action = stack.selectUndo().action();
+        assertEquals("blast", action.id());
+        assertEquals(2, action.size());
+        assertEquals(List.of(pigId, cowId), action.inverseEntityChanges().stream()
+                .map(StoredEntityChange::entityId)
+                .toList());
+    }
+
     private static StoredBlockChange change(int x, String oldBlock, String newBlock) {
         return change(x, oldBlock, newBlock, false);
     }

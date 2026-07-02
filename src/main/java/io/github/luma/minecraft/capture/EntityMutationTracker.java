@@ -5,6 +5,7 @@ import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
@@ -126,7 +127,7 @@ public final class EntityMutationTracker {
     }
 
     private static void drainPendingDeaths(MinecraftServer server) {
-        DEATH_CAPTURE_QUEUE.drain(server, EntityMutationTracker::record);
+        DEATH_CAPTURE_QUEUE.drain(server, EntityMutationTracker::recordDeaths);
     }
 
     public static PendingEntityMutation captureRemoval(Entity entity) {
@@ -157,9 +158,42 @@ public final class EntityMutationTracker {
                 .ifPresent(oldPayload -> DEATH_CAPTURE_QUEUE.enqueue(
                         level,
                         oldPayload,
-                        CaptureFrame.current(null),
-                        true
+                        CaptureFrame.current(null)
                 ));
+    }
+
+    private static void recordDeaths(
+            ServerLevel level,
+            List<EntityPayload> oldPayloads,
+            CaptureFrame frame
+    ) {
+        if (level == null || oldPayloads == null || oldPayloads.isEmpty() || frame == null) {
+            return;
+        }
+
+        if (frame.operation() != null) {
+            boolean accessAllowed = frame.operation().accessAllowed() || !level.getServer().isDedicatedServer();
+            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                    frame.operation().source(),
+                    frame.operation().actor(),
+                    frame.operation().actionId(),
+                    accessAllowed
+            )) {
+                HistoryCaptureManager.getInstance()
+                        .recordDelayedUndoOnlyEntityChanges(level, oldPayloads, frame.recordedAt());
+            }
+            return;
+        }
+
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(
+                frame.source(),
+                frame.actor(),
+                frame.actionId(),
+                frame.accessAllowed()
+        )) {
+            HistoryCaptureManager.getInstance()
+                    .recordDelayedUndoOnlyEntityChanges(level, oldPayloads, frame.recordedAt());
+        }
     }
 
     private static String entityType(Entity entity) {
@@ -305,6 +339,11 @@ public final class EntityMutationTracker {
                 CaptureFrame frame,
                 boolean undoOnly
         );
+    }
+
+    interface EntityDeathBatchRecorder {
+
+        void record(ServerLevel level, List<EntityPayload> oldPayloads, CaptureFrame frame);
     }
 
     public record PendingEntityMutation(

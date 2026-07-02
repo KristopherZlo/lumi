@@ -68,6 +68,13 @@ public final class HistoryCaptureManager {
             this.projectRepository,
             this.variantRepository
     );
+    private final UndoOnlyEntityChangeRecorder undoOnlyEntityChangeRecorder =
+            new UndoOnlyEntityChangeRecorder(
+                    ENTITY_CAPTURE_POLICY,
+                    ELIGIBILITY,
+                    this.trackedProjectCatalog,
+                    this.liveUndoRedoActionRecorder
+            );
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
     private final CaptureBaselineCoordinator baselineCoordinator =
@@ -769,7 +776,7 @@ public final class HistoryCaptureManager {
             EntityPayload oldPayload,
             EntityPayload newPayload
     ) {
-        this.recordUndoOnlyEntityChange(level, oldPayload, newPayload, null);
+        this.undoOnlyEntityChangeRecorder.record(level, oldPayload, newPayload, null);
     }
 
     public void recordDelayedUndoOnlyEntityChange(
@@ -778,43 +785,15 @@ public final class HistoryCaptureManager {
             EntityPayload newPayload,
             Instant actionStartedAt
     ) {
-        this.recordUndoOnlyEntityChange(level, oldPayload, newPayload, actionStartedAt);
+        this.undoOnlyEntityChangeRecorder.record(level, oldPayload, newPayload, actionStartedAt);
     }
 
-    private void recordUndoOnlyEntityChange(
+    public void recordDelayedUndoOnlyEntityChanges(
             ServerLevel level,
-            EntityPayload oldPayload,
-            EntityPayload newPayload,
+            List<EntityPayload> oldPayloads,
             Instant actionStartedAt
     ) {
-        io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (!this.canUseMutationSource(level.getServer(), source)) {
-            return;
-        }
-
-        try {
-            Optional<StoredEntityChange> capturedMutation = ENTITY_CAPTURE_POLICY.captureUndoOnly(source, oldPayload, newPayload);
-            if (capturedMutation.isEmpty()) {
-                return;
-            }
-            StoredEntityChange capturedChange = capturedMutation.get();
-            BlockPos pos = this.entityMutationPos(oldPayload, newPayload);
-            Instant now = Instant.now();
-            for (TrackedProject trackedProject : this.matchingProjects(level, pos)) {
-                this.liveUndoRedoActionRecorder.recordEntityAction(trackedProject, level, capturedChange, now, actionStartedAt);
-                LumaDebugLog.log(
-                        trackedProject.project(),
-                        "capture",
-                        "Tracked undo-only entity {} mutation {} for project {} at {}",
-                        source,
-                        capturedChange.entityId(),
-                        trackedProject.project().name(),
-                        pos
-                );
-            }
-        } catch (Exception exception) {
-            LumaMod.LOGGER.warn("Failed to capture undo-only entity change in {}", level.dimension().identifier(), exception);
-        }
+        this.undoOnlyEntityChangeRecorder.recordBatch(level, oldPayloads, actionStartedAt);
     }
 
     /**

@@ -109,6 +109,15 @@ class LiveUndoRedoActionRecorderTest {
         assertTrue(source.indexOf("recordDelayedEntityChange(", causalBranch) >= 0);
     }
 
+    @Test
+    void delayedEntityBatchesUseOneHistoryWrite() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/LiveUndoRedoActionRecorder.java"));
+
+        assertTrue(source.contains("void recordEntityAction(")
+                && source.contains("List<StoredEntityChange> changes"));
+        assertTrue(source.contains("recordDelayedEntityChanges("));
+    }
+
     private static StatePayload state(String blockId) {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", blockId);
