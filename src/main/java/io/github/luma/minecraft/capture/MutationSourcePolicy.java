@@ -39,11 +39,12 @@ final class MutationSourcePolicy {
     }
 
     boolean allowsSessionBootstrap(WorldMutationSource source) {
-        return source == WorldMutationSource.MOB || this.isExplicitRootSource(source);
+        return this.isExplicitRootSource(source);
     }
 
     boolean allowsCausalSessionBootstrap(WorldMutationSource source, String actionId) {
-        return source == WorldMutationSource.GROWTH && this.hasCausalAction(actionId);
+        return (source == WorldMutationSource.GROWTH || source == WorldMutationSource.MOB)
+                && this.hasCausalAction(actionId);
     }
 
     boolean allowsTrackedChunkExpansion(WorldMutationSource source) {
@@ -199,7 +200,8 @@ final class MutationSourcePolicy {
                 || source == WorldMutationSource.FIRE
                 || source == WorldMutationSource.GROWTH
                 || source == WorldMutationSource.FLUID
-                || source == WorldMutationSource.FALLING_BLOCK;
+                || source == WorldMutationSource.FALLING_BLOCK
+                || source == WorldMutationSource.MOB;
     }
 
     boolean canUseDirectCapture(WorldMutationSource source, String actionId) {

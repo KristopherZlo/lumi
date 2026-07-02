@@ -25,7 +25,9 @@ class CaptureEligibilityServiceTest {
     void ambientDirectCaptureRequiresCausalAction() {
         assertFalse(this.eligibility.canUseDirectCapture(WorldMutationSource.EXPLOSION, ""));
         assertFalse(this.eligibility.canUseDirectCapture(WorldMutationSource.FALLING_BLOCK, null));
+        assertFalse(this.eligibility.canUseDirectCapture(WorldMutationSource.MOB, null));
         assertTrue(this.eligibility.canUseDirectCapture(WorldMutationSource.EXPLOSION, "action-1"));
+        assertTrue(this.eligibility.canUseDirectCapture(WorldMutationSource.MOB, "action-1"));
         assertTrue(this.eligibility.canUseDirectCapture(WorldMutationSource.PLAYER, ""));
     }
 

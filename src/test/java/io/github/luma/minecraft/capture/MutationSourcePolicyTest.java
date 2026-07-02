@@ -112,8 +112,9 @@ class MutationSourcePolicyTest {
         assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.FALLING_BLOCK, null));
         assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.FLUID, "action-1"));
         assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.FALLING_BLOCK, "action-1"));
-        assertFalse(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.MOB));
-        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.MOB, null));
+        assertTrue(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.MOB));
+        assertFalse(this.policy.canUseDirectCapture(WorldMutationSource.MOB, null));
+        assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.MOB, "action-1"));
         assertFalse(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.PLAYER));
         assertTrue(this.policy.canUseDirectCapture(WorldMutationSource.PLAYER, ""));
         assertFalse(this.policy.requiresCausalActionForDirectCapture(WorldMutationSource.EXPLOSIVE));
@@ -121,22 +122,29 @@ class MutationSourcePolicyTest {
     }
 
     @Test
-    void mobSourcesCanBootstrapTrackedSessionsWithoutCreatingProjects() {
+    void playerCausedMobSourcesCanBootstrapTrackedSessionsWithoutCreatingProjects() {
         BuildProject wholeDimension = BuildProject.createWorldWorkspace(
                 "World",
                 "minecraft:overworld",
                 Instant.parse("2026-04-28T10:00:00Z")
         );
 
-        assertTrue(this.policy.allowsSessionBootstrap(WorldMutationSource.MOB));
+        assertFalse(this.policy.allowsSessionBootstrap(WorldMutationSource.MOB));
         assertFalse(this.policy.allowsAutomaticProjectCreation(WorldMutationSource.MOB));
         assertTrue(this.policy.requiresActiveRegionMembership(WorldMutationSource.MOB));
-        assertTrue(this.policy.canInspectBlockMutationPayload(
+        assertFalse(this.policy.canInspectBlockMutationPayload(
                 wholeDimension,
                 WorldMutationSource.MOB,
                 false,
                 true,
                 null
+        ));
+        assertTrue(this.policy.canInspectBlockMutationPayload(
+                wholeDimension,
+                WorldMutationSource.MOB,
+                false,
+                true,
+                "action-1"
         ));
     }
 

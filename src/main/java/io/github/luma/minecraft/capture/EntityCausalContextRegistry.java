@@ -58,6 +58,14 @@ public final class EntityCausalContextRegistry {
         return true;
     }
 
+    public synchronized boolean rememberCurrentPlayerActionIfAbsent(Entity entity, ServerLevel level) {
+        EntityCausalContext context = this.context(entity, level);
+        if (context != null && context.source() == WorldMutationContext.currentSource()) {
+            return false;
+        }
+        return this.rememberCurrentPlayerAction(entity, level);
+    }
+
     public ContextFrame pushIfPresent(Entity entity, ServerLevel level) {
         return this.pushIfPresent(entity, level, null);
     }
@@ -113,7 +121,9 @@ public final class EntityCausalContextRegistry {
     }
 
     boolean canRememberSource(WorldMutationSource source, String actionId) {
-        return (source == WorldMutationSource.PLAYER || source == WorldMutationSource.EXPLOSIVE)
+        return (source == WorldMutationSource.PLAYER
+                || source == WorldMutationSource.MOB
+                || source == WorldMutationSource.EXPLOSIVE)
                 && actionId != null
                 && !actionId.isBlank();
     }
@@ -164,6 +174,10 @@ public final class EntityCausalContextRegistry {
 
         private static ContextFrame empty() {
             return new ContextFrame(null, false);
+        }
+
+        public boolean active() {
+            return this.sourceFrame != null;
         }
 
         @Override

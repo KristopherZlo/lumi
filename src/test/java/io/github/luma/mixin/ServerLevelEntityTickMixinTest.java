@@ -12,32 +12,22 @@ class ServerLevelEntityTickMixinTest {
     void tracksBlockChangingMobTicksAsMobSources() throws Exception {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelEntityTickMixin.java"));
 
-        for (String entityClass : new String[]{
-                "Creeper",
-                "EnderDragon",
-                "EnderMan",
-                "Ghast",
-                "Ravager",
-                "Rabbit",
-                "Sheep",
-                "Silverfish",
-                "Villager",
-                "Vindicator",
-                "WitherBoss",
-                "WitherSkull",
-                "Zombie"
-        }) {
-            assertTrue(source.contains("instanceof " + entityClass), entityClass + " must be captured as a MOB mutation source");
-        }
+        assertTrue(source.contains("entity instanceof Mob"));
+        assertTrue(source.contains("entity instanceof EnderDragon"));
+        assertTrue(source.contains("entity instanceof WitherSkull"));
+        assertTrue(source.contains("entity instanceof Projectile projectile"));
+        assertTrue(source.contains("projectile.getOwner() instanceof Mob"));
     }
 
     @Test
     void aggroedMobTicksCarryPlayerCausalAction() throws Exception {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelEntityTickMixin.java"));
 
+        assertTrue(source.contains("entity instanceof Mob"));
         assertTrue(source.contains("entity instanceof Mob mob"));
         assertTrue(source.contains("mob.getTarget() instanceof ServerPlayer player"));
         assertTrue(source.contains("WorldMutationContext.pushPlayerSource("));
+        assertTrue(source.contains("rememberCurrentPlayerActionIfAbsent"));
     }
 
     @Test

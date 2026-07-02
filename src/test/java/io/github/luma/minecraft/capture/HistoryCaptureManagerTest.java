@@ -55,7 +55,7 @@ class HistoryCaptureManagerTest {
     }
 
     @Test
-    void shouldBootstrapSessionsFromExplicitSourcesAndTrackedMobs() {
+    void shouldBootstrapSessionsFromExplicitSourcesOnly() {
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.PLAYER));
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.ENTITY));
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.EXPLOSIVE));
@@ -70,18 +70,21 @@ class HistoryCaptureManagerTest {
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.BLOCK_UPDATE));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.PISTON));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.FALLING_BLOCK));
-        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.MOB));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.MOB));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.SYSTEM));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.RESTORE));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(null));
     }
 
     @Test
-    void causalGrowthCanBootstrapExistingTrackedSession() {
+    void causalSecondarySourcesCanBootstrapExistingTrackedSession() {
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH, ""));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH, null));
         assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.GROWTH, "action-1"));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.MOB));
+        assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.MOB, ""));
+        assertTrue(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.MOB, "action-1"));
         assertFalse(HistoryCaptureManager.allowsSessionBootstrap(WorldMutationSource.FLUID, "action-1"));
     }
 

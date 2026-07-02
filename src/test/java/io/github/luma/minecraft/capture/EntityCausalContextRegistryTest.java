@@ -13,13 +13,14 @@ class EntityCausalContextRegistryTest {
     @Test
     void remembersBuilderOwnedExplosiveDamageContexts() {
         assertTrue(this.registry.canRememberSource(WorldMutationSource.PLAYER, "action-1"));
+        assertTrue(this.registry.canRememberSource(WorldMutationSource.MOB, "action-1"));
         assertTrue(this.registry.canRememberSource(WorldMutationSource.EXPLOSIVE, "action-1"));
     }
 
     @Test
     void ignoresAmbientDamageContextsWithoutBuilderAction() {
         assertFalse(this.registry.canRememberSource(WorldMutationSource.EXPLOSION, ""));
-        assertFalse(this.registry.canRememberSource(WorldMutationSource.MOB, "action-1"));
+        assertFalse(this.registry.canRememberSource(WorldMutationSource.MOB, ""));
         assertFalse(this.registry.canRememberSource(WorldMutationSource.SYSTEM, "action-1"));
     }
 }

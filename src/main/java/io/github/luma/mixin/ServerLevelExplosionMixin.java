@@ -3,6 +3,7 @@ package io.github.luma.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.core.Holder;
@@ -25,6 +26,10 @@ abstract class ServerLevelExplosionMixin {
     private static final ExplosiveEntityContextRegistry LUMA_EXPLOSIVE_CONTEXTS =
             ExplosiveEntityContextRegistry.getInstance();
 
+    @Unique
+    private static final EntityCausalContextRegistry LUMA_ENTITY_CAUSAL_CONTEXTS =
+            EntityCausalContextRegistry.getInstance();
+
     @WrapMethod(method = "explode(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/damagesource/DamageSource;Lnet/minecraft/world/level/ExplosionDamageCalculator;DDDFZLnet/minecraft/world/level/Level$ExplosionInteraction;Lnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/util/random/WeightedList;Lnet/minecraft/core/Holder;)V")
     private void luma$wrapServerExplosion(
             Entity entity,
@@ -42,9 +47,16 @@ abstract class ServerLevelExplosionMixin {
             Holder<SoundEvent> sound,
             Operation<Void> original
     ) {
-        boolean contextual = LUMA_EXPLOSIVE_CONTEXTS.pushContext(entity);
+        EntityCausalContextRegistry.ContextFrame entityFrame =
+                LUMA_ENTITY_CAUSAL_CONTEXTS.pushIfPresent(
+                        entity,
+                        (ServerLevel) (Object) this,
+                        WorldMutationSource.EXPLOSION
+                );
+        boolean entityContextual = entityFrame.active();
+        boolean explosiveContextual = !entityContextual && LUMA_EXPLOSIVE_CONTEXTS.pushContext(entity);
         WorldMutationContext.SourceFrame fallbackFrame = null;
-        if (!contextual) {
+        if (!entityContextual && !explosiveContextual) {
             fallbackFrame = WorldMutationContext.pushSource(WorldMutationSource.EXPLOSION);
         }
 
@@ -65,7 +77,9 @@ abstract class ServerLevelExplosionMixin {
                     sound
             );
         } finally {
-            if (contextual) {
+            if (entityContextual) {
+                entityFrame.close();
+            } else if (explosiveContextual) {
                 try {
                     LUMA_EXPLOSIVE_CONTEXTS.forget(entity);
                 } finally {
