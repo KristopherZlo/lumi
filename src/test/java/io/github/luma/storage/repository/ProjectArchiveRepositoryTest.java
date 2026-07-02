@@ -155,6 +155,7 @@ class ProjectArchiveRepositoryTest {
         assertTrue(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/entity-checkpoints/entity-checkpoint-0002.bin.lz4")));
         assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/versions/v0003.json")));
         assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/entity-checkpoints/entity-checkpoint-0003.bin.lz4")));
+        assertFalse(manifest.entries().stream().anyMatch(entry -> entry.path().equals("project/player-spawns.json")));
     }
 
     @Test
@@ -417,6 +418,11 @@ class ProjectArchiveRepositoryTest {
         Files.write(layout.entityCheckpointFile("entity-checkpoint-0003"), new byte[]{6});
         Files.createDirectories(layout.cacheDir().resolve("baseline-chunks"));
         Files.write(layout.cacheDir().resolve("baseline-chunks").resolve("chunk_0_0.bin.lz4"), new byte[]{10});
+        Files.writeString(
+                layout.playerRespawnsFile(),
+                "{\"schemaVersion\":1,\"versions\":{\"v0003\":[]}}",
+                StandardCharsets.UTF_8
+        );
         Files.writeString(layout.recoveryJournalFile(), "[]", StandardCharsets.UTF_8);
         return layout;
     }

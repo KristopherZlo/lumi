@@ -267,9 +267,6 @@ public final class ProjectArchiveRepository {
         if (Files.exists(layout.workZonesFile())) {
             this.putEntry(entries, this.optionalEntry(layout.workZonesFile(), PROJECT_PREFIX + "work-zones.json"));
         }
-        if (Files.exists(layout.playerRespawnsFile())) {
-            this.putEntry(entries, this.optionalEntry(layout.playerRespawnsFile(), PROJECT_PREFIX + "player-spawns.json"));
-        }
         for (ProjectVersion version : this.lineageVersions(versionMap, variant.headVersionId())) {
             this.putEntry(entries, this.requiredEntry(layout.versionFile(version.id()), PROJECT_PREFIX + "versions/" + version.id() + ".json"));
             for (String patchId : version.patchIds()) {

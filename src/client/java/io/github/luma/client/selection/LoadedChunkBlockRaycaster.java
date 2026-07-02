@@ -6,6 +6,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
@@ -83,7 +84,7 @@ final class LoadedChunkBlockRaycaster {
     }
 
     static boolean isSelectableTarget(BlockState state) {
-        return state != null && !state.isAir();
+        return state != null && (!state.isAir() || state.is(Blocks.NETHER_PORTAL) || state.is(Blocks.END_PORTAL));
     }
 
     private double selectionRange(Minecraft client) {

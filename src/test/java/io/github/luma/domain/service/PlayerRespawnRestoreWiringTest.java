@@ -11,11 +11,15 @@ class PlayerRespawnRestoreWiringTest {
     @Test
     void versionsSaveAndFullRestoreApplyPlayerRespawnCheckpoints() throws Exception {
         String versionService = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/VersionService.java"));
+        String captureService = Files.readString(Path.of(
+                "src/main/java/io/github/luma/minecraft/capture/PlayerRespawnCaptureService.java"
+        ));
         String restoreCompletion = Files.readString(Path.of(
                 "src/main/java/io/github/luma/domain/service/RestoreCompletionCoordinator.java"
         ));
 
-        assertTrue(versionService.contains("playerRespawnRepository.saveVersion"));
+        assertTrue(versionService.contains("playerRespawnCaptureService.capture(level)"));
+        assertTrue(captureService.contains("serverThreadExecutor.call"));
         assertTrue(restoreCompletion.contains("playerRespawnRepository.loadVersion"));
         assertTrue(restoreCompletion.contains("setRespawnPosition"));
     }

@@ -217,7 +217,7 @@ Important records:
 - `variants.json`: branch heads and branch switch binds
 - `history-tombstones.json`: soft-deleted saves and branches
 - `work-zones.json`: named work-zone metadata and active selections
-- `player-spawns.json`: per-version player respawn points restored after full restore
+- `player-spawns.json`: per-version player respawn points restored after full restore; full project exports include it, variant exports omit it until lineage-filtered export exists
 - `versions/*.json`: saved version manifests
 - `patches/*.meta.json`: patch metadata, indexes, and stats
 - `patches/*.bin.lz4`: chunk-addressable block/entity deltas
