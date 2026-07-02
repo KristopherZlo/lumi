@@ -105,8 +105,8 @@ public final class UndoRedoActionStack {
             return this.revision;
         }
 
-        UndoRedoAction action = this.undoStack.peekFirst();
-        if (action == null || !action.id().equals(actionId)) {
+        UndoRedoAction action = this.findUndoAction(actionId);
+        if (action == null) {
             action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
             this.undoStack.addFirst(action);
             this.trimUndoStack();
@@ -274,8 +274,8 @@ public final class UndoRedoActionStack {
             return this.revision;
         }
 
-        UndoRedoAction action = this.undoStack.peekFirst();
-        if (action == null || !action.id().equals(actionId)) {
+        UndoRedoAction action = this.findUndoAction(actionId);
+        if (action == null) {
             action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
             this.undoStack.addFirst(action);
             this.trimUndoStack();

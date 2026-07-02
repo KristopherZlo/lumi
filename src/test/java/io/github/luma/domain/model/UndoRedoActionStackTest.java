@@ -360,6 +360,44 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void currentCausalPiecesMergeExistingActionWithoutPromotion() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+
+        stack.recordCurrentCausalChange(
+                "creeper-blast",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                hiddenChange(1, "minecraft:sand", "minecraft:air"),
+                NOW
+        );
+        stack.recordChange("latest-placement", "Alex", "project", "minecraft:overworld",
+                change(30, "minecraft:air", "minecraft:stone"), NOW.plusSeconds(1));
+
+        stack.recordCurrentCausalAction(
+                "creeper-blast",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                List.of(hiddenChange(2, "minecraft:sand", "minecraft:air")),
+                List.of(),
+                NOW.plusSeconds(2)
+        );
+        stack.recordCurrentCausalChange(
+                "creeper-blast",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                hiddenChange(3, "minecraft:sand", "minecraft:air"),
+                NOW.plusSeconds(3)
+        );
+
+        List<UndoRedoAction> recent = stack.recentUndoActions(2);
+        assertEquals(List.of("latest-placement", "creeper-blast"), recent.stream().map(UndoRedoAction::id).toList());
+        assertEquals(3, recent.get(1).redoChanges().size());
+    }
+
+    @Test
     void causalBatchDoesNotPromoteOlderRedstoneAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
