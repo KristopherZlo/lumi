@@ -39,7 +39,7 @@ final class MutationSourcePolicy {
     }
 
     boolean allowsSessionBootstrap(WorldMutationSource source) {
-        return this.isExplicitRootSource(source);
+        return source == WorldMutationSource.MOB || this.isExplicitRootSource(source);
     }
 
     boolean allowsCausalSessionBootstrap(WorldMutationSource source, String actionId) {
@@ -199,8 +199,7 @@ final class MutationSourcePolicy {
                 || source == WorldMutationSource.FIRE
                 || source == WorldMutationSource.GROWTH
                 || source == WorldMutationSource.FLUID
-                || source == WorldMutationSource.FALLING_BLOCK
-                || source == WorldMutationSource.MOB;
+                || source == WorldMutationSource.FALLING_BLOCK;
     }
 
     boolean canUseDirectCapture(WorldMutationSource source, String actionId) {

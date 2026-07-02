@@ -141,7 +141,7 @@ public final class LumiRegionSelectionTeachingController {
         graphics.pose().scaleAround(hintScale(client), graphics.guiWidth() / 2.0F, y);
         try {
             int titleX = Math.max(8, (graphics.guiWidth() - font.width(hint.title())) / 2);
-            graphics.drawString(font, Component.literal(hint.title()), titleX, y, TITLE_COLOR, false);
+            graphics.drawString(font, hint.title(), titleX, y, TITLE_COLOR, false);
             for (int index = 0; index < rows.size(); index++) {
                 Row row = rows.get(index);
                 int rowX = Math.max(8, (graphics.guiWidth() - this.rowWidth(font, row)) / 2);
@@ -155,38 +155,46 @@ public final class LumiRegionSelectionTeachingController {
     private Hint hint(Minecraft client) {
         if (LumiRegionSelectionController.controlDown(client)) {
             return new Hint(
-                    this.activeZoneName.isBlank() ? "Zone edit" : "Zone edit: " + this.activeZoneName,
+                    this.activeZoneName.isBlank()
+                            ? Component.translatable("luma.selection.hud_zone_edit")
+                            : Component.translatable("luma.selection.hud_zone_edit_named", this.activeZoneName),
                     List.of(
-                            new Row(List.of(new Shortcut(List.of("Ctrl", "LMB"), "Add selection/box"))),
-                            new Row(List.of(new Shortcut(List.of("Ctrl", "RMB"), "Erase selection/box")))
+                            new Row(List.of(new Shortcut(List.of("Ctrl", "LMB"), Component.translatable("luma.selection.hud_zone_add")))),
+                            new Row(List.of(new Shortcut(List.of("Ctrl", "RMB"), Component.translatable("luma.selection.hud_zone_erase"))))
                     )
             );
         }
         if (this.actionKeyDown()) {
             return new Hint(
-                    "Selection adjust",
+                    Component.translatable("luma.selection.hud_adjust"),
                     List.of(
-                            new Row(List.of(new Shortcut(List.of("ACTION", "MMB"), "Resize looked side"))),
-                            new Row(List.of(new Shortcut(List.of("ACTION", "LMB"), "Switch mode"))),
-                            new Row(List.of(new Shortcut(List.of("ACTION", "RMB"), "Clear selection"))),
-                            new Row(List.of(new Shortcut(List.of("ACTION", "Z"), "Undo selection"))),
-                            new Row(List.of(new Shortcut(List.of("ACTION", "Y"), "Redo selection")))
+                            new Row(List.of(new Shortcut(List.of("ACTION", "MMB"), Component.translatable("luma.selection.hud_resize_side")))),
+                            new Row(List.of(new Shortcut(List.of("ACTION", "LMB"), Component.translatable("luma.selection.hud_switch_mode")))),
+                            new Row(List.of(new Shortcut(List.of("ACTION", "RMB"), Component.translatable("luma.selection.hud_clear_selection")))),
+                            new Row(List.of(new Shortcut(List.of("ACTION", "Z"), Component.translatable("luma.selection.hud_undo_selection")))),
+                            new Row(List.of(new Shortcut(List.of("ACTION", "Y"), Component.translatable("luma.selection.hud_redo_selection"))))
                     )
             );
         }
         LumiRegionSelectionMode mode = LumiRegionSelectionController.getInstance()
                 .currentMode(client)
                 .orElse(LumiRegionSelectionMode.CORNERS);
-        String title = mode == LumiRegionSelectionMode.EXTEND ? "Mode: Extend" : "Mode: Corners";
-        String primary = mode == LumiRegionSelectionMode.EXTEND ? "Extend to block" : "First corner";
-        String secondary = mode == LumiRegionSelectionMode.EXTEND ? "Move to block" : "Second corner";
+        Component title = mode == LumiRegionSelectionMode.EXTEND
+                ? Component.translatable("luma.selection.hud_mode_extend_title")
+                : Component.translatable("luma.selection.hud_mode_corners_title");
+        Component primary = mode == LumiRegionSelectionMode.EXTEND
+                ? Component.translatable("luma.selection.hud_extend_to_block")
+                : Component.translatable("luma.selection.hud_first_corner");
+        Component secondary = mode == LumiRegionSelectionMode.EXTEND
+                ? Component.translatable("luma.selection.hud_move_to_block")
+                : Component.translatable("luma.selection.hud_second_corner");
         return new Hint(
                 title,
                 List.of(
                         new Row(List.of(new Shortcut(List.of("LMB"), primary))),
                         new Row(List.of(new Shortcut(List.of("RMB"), secondary))),
-                        new Row(List.of(new Shortcut(List.of("ACTION"), "Hold: resize / clear / switch"))),
-                        new Row(List.of(new Shortcut(List.of("Ctrl"), "Hold: edit zone")))
+                        new Row(List.of(new Shortcut(List.of("ACTION"), Component.translatable("luma.selection.hud_hold_adjust")))),
+                        new Row(List.of(new Shortcut(List.of("Ctrl"), Component.translatable("luma.selection.hud_hold_zone"))))
                 )
         );
     }
@@ -228,7 +236,7 @@ public final class LumiRegionSelectionTeachingController {
                 }
                 cursor += this.drawKey(graphics, font, shortcut.keys().get(keyIndex), cursor, y);
             }
-            graphics.drawString(font, Component.literal(shortcut.text()), cursor + TEXT_GAP, y + 2, TEXT_COLOR, false);
+            graphics.drawString(font, shortcut.text(), cursor + TEXT_GAP, y + 2, TEXT_COLOR, false);
             cursor += TEXT_GAP + font.width(shortcut.text());
         }
     }
@@ -321,12 +329,12 @@ public final class LumiRegionSelectionTeachingController {
         }
     }
 
-    private record Hint(String title, List<Row> rows) {
+    private record Hint(Component title, List<Row> rows) {
     }
 
     private record Row(List<Shortcut> shortcuts) {
     }
 
-    private record Shortcut(List<String> keys, String text) {
+    private record Shortcut(List<String> keys, Component text) {
     }
 }

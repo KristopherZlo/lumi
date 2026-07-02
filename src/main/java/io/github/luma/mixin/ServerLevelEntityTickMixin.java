@@ -7,11 +7,19 @@ import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.rabbit.Rabbit;
+import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Ghast;
 import net.minecraft.world.entity.monster.Ravager;
+import net.minecraft.world.entity.monster.Silverfish;
+import net.minecraft.world.entity.monster.illager.Vindicator;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import org.spongepowered.asm.mixin.Mixin;
@@ -46,9 +54,17 @@ abstract class ServerLevelEntityTickMixin {
         }
         if (entity instanceof EnderMan
                 || entity instanceof Creeper
+                || entity instanceof EnderDragon
+                || entity instanceof Ghast
                 || entity instanceof Ravager
+                || entity instanceof Rabbit
+                || entity instanceof Sheep
+                || entity instanceof Silverfish
+                || entity instanceof Villager
+                || entity instanceof Vindicator
                 || entity instanceof WitherBoss
-                || entity instanceof WitherSkull) {
+                || entity instanceof WitherSkull
+                || entity instanceof Zombie) {
             return WorldMutationSource.MOB;
         }
         return null;

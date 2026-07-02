@@ -749,6 +749,33 @@ class RestoreServiceTest {
     }
 
     @Test
+    void authoritativeEntityReplacementAddsEntityCheckpointChunksWithoutBlockBatches(@TempDir Path tempDir)
+            throws Exception {
+        RestoreEntityStateResolver resolver = this.entityStateResolver();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        String entityId = "00000000-0000-0000-0000-000000000089";
+        this.snapshotWriter.writeFile(layout.entityCheckpointFile("entity-checkpoint-0002"), snapshot(List.of(
+                entity("minecraft:cow", entityId, 1.0D)
+        )));
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT),
+                version("v0002", "main", "v0001", "", "entity-checkpoint-0002", List.of())
+        );
+
+        List<PreparedChunkBatch> batches = resolver.withAuthoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                "v0002",
+                List.of()
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(new ChunkPoint(0, 0), batches.getFirst().chunk());
+        assertTrue(batches.getFirst().entityBatch().replaceEntities());
+        assertEquals("minecraft:cow", batches.getFirst().entityBatch().entitiesToUpdate().getFirst().getString("id").orElse(""));
+    }
+
+    @Test
     void authoritativeEntityReplacementCanSkipEntityTypesFromCheckpoint(@TempDir Path tempDir) throws Exception {
         RestoreEntityStateResolver resolver = this.entityStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));

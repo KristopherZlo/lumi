@@ -125,15 +125,16 @@ final class RestoreEntityStateResolver {
             List<PreparedChunkBatch> batches,
             RestoreEntityTypeSelection entityTypeSelection
     ) throws IOException {
-        List<ChunkPoint> chunks = this.chunkCollector.batchChunks(batches);
-        if (chunks.isEmpty()) {
+        Set<ChunkPoint> selectedChunks = new LinkedHashSet<>(this.chunkCollector.batchChunks(batches));
+        selectedChunks.addAll(this.entityCheckpointChunks(layout, versions, targetVersionId));
+        if (selectedChunks.isEmpty()) {
             return batches == null ? List.of() : batches;
         }
         List<PreparedChunkBatch> replacementBatches = this.authoritativeEntityReplacementBatches(
                 layout,
                 versions,
                 targetVersionId,
-                chunks,
+                List.copyOf(selectedChunks),
                 entityTypeSelection
         );
         if (replacementBatches.isEmpty()) {
@@ -433,6 +434,23 @@ final class RestoreEntityStateResolver {
 
     private boolean hasEntityCheckpoint(ProjectVersion version) {
         return version != null && version.entityCheckpointId() != null && !version.entityCheckpointId().isBlank();
+    }
+
+    private List<ChunkPoint> entityCheckpointChunks(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            String targetVersionId
+    ) throws IOException {
+        ProjectVersion targetVersion = versions == null
+                ? null
+                : versions.stream()
+                        .filter(version -> version.id().equals(targetVersionId))
+                        .findFirst()
+                        .orElse(null);
+        if (layout == null || !this.hasEntityCheckpoint(targetVersion)) {
+            return List.of();
+        }
+        return this.snapshotReader.loadChunks(layout.entityCheckpointFile(targetVersion.entityCheckpointId()));
     }
 
     private Set<String> excludedEntityTypes(RestoreEntityTypeSelection entityTypeSelection) {
