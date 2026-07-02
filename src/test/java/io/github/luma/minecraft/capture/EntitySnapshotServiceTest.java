@@ -41,6 +41,32 @@ class EntitySnapshotServiceTest {
     }
 
     @Test
+    void normalizationClearsTransientDeathAndIgnitionStateForReplay() {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", "minecraft:creeper");
+        tag.putString("UUID", "00000000-0000-0000-0000-000000000002");
+        tag.putShort("DeathTime", (short) 18);
+        tag.putShort("HurtTime", (short) 9);
+        tag.putShort("Fire", (short) 120);
+        tag.putFloat("Health", 0.0F);
+        tag.putBoolean("ignited", true);
+        tag.putBoolean("powered", true);
+        tag.putShort("Fuse", (short) 4);
+        tag.putShort("ExplosionRadius", (short) 3);
+
+        CompoundTag normalized = EntitySnapshotService.normalizeForHistory(tag);
+
+        assertEquals(0, normalized.getShortOr("DeathTime", (short) -1));
+        assertEquals(0, normalized.getShortOr("HurtTime", (short) -1));
+        assertEquals(0, normalized.getShortOr("Fire", (short) -1));
+        assertEquals(1.0F, normalized.getFloatOr("Health", 0.0F));
+        assertEquals(false, normalized.getBooleanOr("ignited", true));
+        assertTrue(normalized.getBooleanOr("powered", false));
+        assertTrue(normalized.contains("Fuse"));
+        assertTrue(normalized.contains("ExplosionRadius"));
+    }
+
+    @Test
     void sanitizerDefaultsNullArrowPickupBeforeVanillaSave() {
         Arrow arrow = new Arrow(EntityType.ARROW, null);
         arrow.pickup = null;

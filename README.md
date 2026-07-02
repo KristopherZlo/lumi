@@ -248,7 +248,7 @@ Hard rules:
 - Client modal overlays consume pointer input so underlying workspace actions cannot fire while a modal is open.
 - Saved commits keep entity checkpoints for entities present at save time. Whole-dimension saves include chunks with currently loaded live non-player entities, and player-spawned non-player entities make durable pending work so entity-only saves are possible. Full restore and whole-dimension quick rollback treat target entity-checkpoint chunks as authoritative even when no block batch touched that chunk, so saved mobs/decorative entities return and stray dropped items in those chunks are cleaned up. Restore can skip selected entity types for a single run without changing the saved commit.
 - Restore confirmation entity summaries count only entities inside the resolved restore scope for zones and selected/outside partial restores.
-- Live undo may track transient entities to clean up active fallout, including killed mobs from player-caused explosion and mob actions, but redo replays final deltas instead of respawning transient primed TNT; recovery drafts and saved commits must not persist undo-only transient entities.
+- Live undo may track transient entities to clean up active fallout, including killed mobs from player-caused explosion and mob actions, but replay clears transient death, hurt, fire, and creeper ignition state so restored entities do not immediately disappear or explode again; recovery drafts and saved commits must not persist undo-only transient entities.
 
 ### Diagnostics
 
