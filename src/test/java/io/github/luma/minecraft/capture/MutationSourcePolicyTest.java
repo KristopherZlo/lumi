@@ -131,7 +131,7 @@ class MutationSourcePolicyTest {
 
         assertFalse(this.policy.allowsSessionBootstrap(WorldMutationSource.MOB));
         assertFalse(this.policy.allowsAutomaticProjectCreation(WorldMutationSource.MOB));
-        assertTrue(this.policy.requiresActiveRegionMembership(WorldMutationSource.MOB));
+        assertFalse(this.policy.requiresActiveRegionMembership(WorldMutationSource.MOB));
         assertFalse(this.policy.canInspectBlockMutationPayload(
                 wholeDimension,
                 WorldMutationSource.MOB,
@@ -158,7 +158,7 @@ class MutationSourcePolicyTest {
 
         assertFalse(this.policy.allowsSessionBootstrap(WorldMutationSource.EXPLOSION));
         assertFalse(this.policy.allowsAutomaticProjectCreation(WorldMutationSource.EXPLOSION));
-        assertTrue(this.policy.requiresActiveRegionMembership(WorldMutationSource.EXPLOSION));
+        assertFalse(this.policy.requiresActiveRegionMembership(WorldMutationSource.EXPLOSION));
         assertFalse(this.policy.canInspectBlockMutationPayload(
                 wholeDimension,
                 WorldMutationSource.EXPLOSION,
@@ -173,6 +173,25 @@ class MutationSourcePolicyTest {
                 false,
                 "action-1"
         ));
+    }
+
+    @Test
+    void playerCausedEntitySourcesCanContinueActiveSessionsOutsideExistingEnvelope() {
+        BuildProject wholeDimension = BuildProject.createWorldWorkspace(
+                "World",
+                "minecraft:overworld",
+                Instant.parse("2026-04-28T10:00:00Z")
+        );
+
+        for (WorldMutationSource source : new WorldMutationSource[]{WorldMutationSource.EXPLOSION, WorldMutationSource.MOB}) {
+            assertTrue(this.policy.canInspectBlockMutationPayload(
+                    wholeDimension,
+                    source,
+                    true,
+                    false,
+                    "action-1"
+            ));
+        }
     }
 
     @Test

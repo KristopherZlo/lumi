@@ -121,10 +121,11 @@ class RecentChangesOverlayRendererStateTest {
     }
 
     @Test
-    void hiddenRecentChangesAreNotPreviewed() {
+    void hiddenRecentChangesArePreviewed() {
         UndoRedoAction action = action();
+        BlockPoint pos = new BlockPoint(10, 64, 10);
         action.recordChange(new StoredBlockChange(
-                new BlockPoint(10, 64, 10),
+                pos,
                 new StatePayload(state("minecraft:air"), null),
                 new StatePayload(state("minecraft:wheat"), null),
                 true
@@ -135,7 +136,7 @@ class RecentChangesOverlayRendererStateTest {
                 RecentChangesOverlayCoordinator.PreviewTarget.UNDO
         );
 
-        assertTrue(positions.isEmpty());
+        assertEquals(List.of(pos), positions);
     }
 
     @Test

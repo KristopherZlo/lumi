@@ -115,14 +115,14 @@ class HistoryCaptureManagerTest {
 
     @Test
     void shouldGateSecondarySourcesByActiveRegion() {
-        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.EXPLOSION));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.EXPLOSION));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FLUID));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FIRE));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.GROWTH));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.BLOCK_UPDATE));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.PISTON));
         assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.FALLING_BLOCK));
-        assertTrue(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.MOB));
+        assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.MOB));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.PLAYER));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.ENTITY));
         assertFalse(HistoryCaptureManager.requiresActiveRegionMembership(WorldMutationSource.EXPLOSIVE));

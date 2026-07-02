@@ -1,6 +1,5 @@
 package io.github.luma.ui.overlay;
 
-import io.github.luma.domain.model.BuilderChangeSurfacePolicy;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import java.util.List;
@@ -13,7 +12,6 @@ import java.util.function.Supplier;
 final class RecentChangesPreviewSession {
 
     private static final long UNTRACKED_STREAM_REVISION = Long.MIN_VALUE;
-    private static final BuilderChangeSurfacePolicy BUILDER_SURFACE = new BuilderChangeSurfacePolicy();
 
     private PinnedPreview pinnedPreview;
 
@@ -117,7 +115,7 @@ final class RecentChangesPreviewSession {
 
         private static boolean hasUndoBlockPreview(List<UndoRedoAction> actions) {
             for (UndoRedoAction action : actions) {
-                if (action != null && hasVisibleBlockChanges(action.undoChanges())) {
+                if (action != null && hasBlockChanges(action.undoChanges())) {
                     return true;
                 }
             }
@@ -126,15 +124,20 @@ final class RecentChangesPreviewSession {
 
         private static boolean hasRedoBlockPreview(List<UndoRedoAction> actions) {
             for (UndoRedoAction action : actions) {
-                if (action != null && hasVisibleBlockChanges(action.redoChanges())) {
+                if (action != null && hasBlockChanges(action.redoChanges())) {
                     return true;
                 }
             }
             return false;
         }
 
-        private static boolean hasVisibleBlockChanges(List<StoredBlockChange> changes) {
-            return BUILDER_SURFACE.hasVisibleBlockChanges(changes);
+        private static boolean hasBlockChanges(List<StoredBlockChange> changes) {
+            for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
+                if (change != null && !change.isNoOp()) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

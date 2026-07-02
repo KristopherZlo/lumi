@@ -173,7 +173,7 @@ class RecentChangesPreviewSessionTest {
     }
 
     @Test
-    void hiddenHeldActionButtonPreviewDoesNotClaimOverlay() {
+    void hiddenHeldActionButtonPreviewClaimsOverlay() {
         RecentChangesPreviewSession session = new RecentChangesPreviewSession();
 
         RecentChangesPreviewSession.PinnedPreview preview = session.request(
@@ -186,7 +186,7 @@ class RecentChangesPreviewSessionTest {
                 )
         );
 
-        assertFalse(preview.hasBlockPreview());
+        assertTrue(preview.hasBlockPreview());
     }
 
     private static RecentChangesPreviewSession.ActionSnapshot snapshot(long revision, UndoRedoAction action) {

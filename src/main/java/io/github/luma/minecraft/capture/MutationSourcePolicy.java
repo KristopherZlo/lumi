@@ -83,17 +83,17 @@ final class MutationSourcePolicy {
             return false;
         }
         return switch (source) {
-            case EXPLOSION,
-                    FLUID,
+            case FLUID,
                     FIRE,
                     BLOCK_UPDATE,
                     PISTON,
-                    FALLING_BLOCK,
-                    MOB -> true;
+                    FALLING_BLOCK -> true;
             case PLAYER,
                     ENTITY,
+                    EXPLOSION,
                     GROWTH,
                     EXPLOSIVE,
+                    MOB,
                     EXTERNAL_TOOL,
                     WORLDEDIT,
                     FAWE,
