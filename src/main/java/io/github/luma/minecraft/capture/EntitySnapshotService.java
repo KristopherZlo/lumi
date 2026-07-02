@@ -40,23 +40,7 @@ public final class EntitySnapshotService {
     }
 
     static CompoundTag normalizeForHistory(CompoundTag source) {
-        CompoundTag tag = source == null ? new CompoundTag() : source.copy();
-        if (tag.contains("DeathTime")) {
-            tag.putShort("DeathTime", (short) 0);
-        }
-        if (tag.contains("HurtTime")) {
-            tag.putShort("HurtTime", (short) 0);
-        }
-        if (tag.contains("Fire")) {
-            tag.putShort("Fire", (short) 0);
-        }
-        if (tag.contains("ignited")) {
-            tag.putBoolean("ignited", false);
-        }
-        if (tag.contains("Health") && tag.getFloatOr("Health", 1.0F) <= 0.0F) {
-            tag.putFloat("Health", 1.0F);
-        }
-        return tag;
+        return source == null ? new CompoundTag() : source.copy();
     }
 
     private String entityType(Entity entity) {

@@ -16,6 +16,7 @@ public final class EntityMutationTracker {
     private static final EntitySnapshotService SNAPSHOT_SERVICE = new EntitySnapshotService();
     private static final EntityMutationCapturePolicy CAPTURE_POLICY = new EntityMutationCapturePolicy();
     private static final EntitySpawnCaptureQueue SPAWN_CAPTURE_QUEUE = new EntitySpawnCaptureQueue(SNAPSHOT_SERVICE);
+    private static final PendingEntityDeathCaptureQueue DEATH_CAPTURE_QUEUE = new PendingEntityDeathCaptureQueue();
     private static final ExternalToolMutationOriginDetector TOOL_DETECTOR = ExternalToolMutationOriginDetector.getInstance();
     private static final EntityCausalContextRegistry ENTITY_CAUSAL_CONTEXTS =
             EntityCausalContextRegistry.getInstance();
@@ -112,14 +113,20 @@ public final class EntityMutationTracker {
 
     public static void tick(MinecraftServer server) {
         drainPendingSpawns(server, false);
+        drainPendingDeaths(server);
     }
 
     public static void drainPendingSpawns(MinecraftServer server) {
         drainPendingSpawns(server, true);
+        drainPendingDeaths(server);
     }
 
     private static void drainPendingSpawns(MinecraftServer server, boolean allowInitialPayloadFallback) {
         SPAWN_CAPTURE_QUEUE.drain(server, EntityMutationTracker::record, allowInitialPayloadFallback);
+    }
+
+    private static void drainPendingDeaths(MinecraftServer server) {
+        DEATH_CAPTURE_QUEUE.drain(server, EntityMutationTracker::record);
     }
 
     public static PendingEntityMutation captureRemoval(Entity entity) {
@@ -130,6 +137,29 @@ public final class EntityMutationTracker {
         return ENTITY_CAUSAL_CONTEXTS.oldPayloadOverride(entity, pending.level())
                 .map(pending::withOldPayload)
                 .orElse(pending);
+    }
+
+    public static void captureCausalDeath(Entity entity) {
+        if (!(entity.level() instanceof ServerLevel level)) {
+            return;
+        }
+        if (WorldMutationContext.captureSuppressed()) {
+            return;
+        }
+
+        String entityType = entityType(entity);
+        WorldMutationSource source = WorldMutationContext.currentSource();
+        if (!CAPTURE_POLICY.shouldInspectUndoOnlyMutation(source, entityType)) {
+            return;
+        }
+
+        ENTITY_CAUSAL_CONTEXTS.oldPayloadOverride(entity, level)
+                .ifPresent(oldPayload -> DEATH_CAPTURE_QUEUE.enqueue(
+                        level,
+                        oldPayload,
+                        CaptureFrame.current(null),
+                        true
+                ));
     }
 
     private static String entityType(Entity entity) {

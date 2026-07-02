@@ -60,7 +60,7 @@ public final class EntityCausalContextRegistry {
 
     public synchronized boolean rememberCurrentPlayerActionIfAbsent(Entity entity, ServerLevel level) {
         EntityCausalContext context = this.context(entity, level);
-        if (context != null && context.source() == WorldMutationContext.currentSource()) {
+        if (context != null) {
             return false;
         }
         return this.rememberCurrentPlayerAction(entity, level);

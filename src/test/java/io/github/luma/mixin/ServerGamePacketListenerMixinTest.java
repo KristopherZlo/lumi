@@ -47,4 +47,18 @@ class ServerGamePacketListenerMixinTest {
         assertTrue(source.contains("attacker instanceof ServerPlayer player"));
         assertTrue(source.contains("WorldMutationContext.pushPlayerSource"));
     }
+
+    @Test
+    void lethalDamageQueuesPreDeathEntityReplay() throws IOException {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/mixin/LivingEntityCausalContextMixin.java"),
+                StandardCharsets.UTF_8
+        );
+
+        int vanillaDamage = source.indexOf("original.call(serverLevel, damageSource, amount)");
+        int deathCapture = source.indexOf("EntityMutationTracker.captureCausalDeath(entity)");
+
+        assertTrue(source.contains("entity.isDeadOrDying()"));
+        assertTrue(deathCapture > vanillaDamage);
+    }
 }

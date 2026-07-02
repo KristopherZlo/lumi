@@ -41,7 +41,7 @@ class EntitySnapshotServiceTest {
     }
 
     @Test
-    void normalizationClearsTransientDeathAndIgnitionStateForReplay() {
+    void normalizationPreservesTransientDeathAndIgnitionState() {
         CompoundTag tag = new CompoundTag();
         tag.putString("id", "minecraft:creeper");
         tag.putString("UUID", "00000000-0000-0000-0000-000000000002");
@@ -56,11 +56,11 @@ class EntitySnapshotServiceTest {
 
         CompoundTag normalized = EntitySnapshotService.normalizeForHistory(tag);
 
-        assertEquals(0, normalized.getShortOr("DeathTime", (short) -1));
-        assertEquals(0, normalized.getShortOr("HurtTime", (short) -1));
-        assertEquals(0, normalized.getShortOr("Fire", (short) -1));
-        assertEquals(1.0F, normalized.getFloatOr("Health", 0.0F));
-        assertEquals(false, normalized.getBooleanOr("ignited", true));
+        assertEquals(18, normalized.getShortOr("DeathTime", (short) -1));
+        assertEquals(9, normalized.getShortOr("HurtTime", (short) -1));
+        assertEquals(120, normalized.getShortOr("Fire", (short) -1));
+        assertEquals(0.0F, normalized.getFloatOr("Health", 1.0F));
+        assertEquals(true, normalized.getBooleanOr("ignited", false));
         assertTrue(normalized.getBooleanOr("powered", false));
         assertTrue(normalized.contains("Fuse"));
         assertTrue(normalized.contains("ExplosionRadius"));

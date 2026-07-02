@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
+import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -31,7 +32,11 @@ abstract class LivingEntityCausalContextMixin {
         LivingEntity entity = (LivingEntity) (Object) this;
         boolean remembered = this.luma$rememberDamageContext(entity, serverLevel, damageSource);
         try {
-            return original.call(serverLevel, damageSource, amount);
+            boolean damaged = original.call(serverLevel, damageSource, amount);
+            if (remembered && entity.isDeadOrDying() && !entity.isRemoved()) {
+                EntityMutationTracker.captureCausalDeath(entity);
+            }
+            return damaged;
         } finally {
             if (remembered && !entity.isDeadOrDying() && !entity.isRemoved()) {
                 LUMA_ENTITY_CAUSAL_CONTEXTS.clear(entity);
