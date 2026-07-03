@@ -50,17 +50,6 @@ public final class UndoRedoHistoryManager {
     public synchronized void recordRelatedChange(
             String projectId,
             String dimensionId,
-            StoredBlockChange change,
-            Instant now,
-            Duration maxIdle,
-            int chunkRadius
-    ) {
-        this.recordRelatedChange(projectId, dimensionId, null, change, now, maxIdle, chunkRadius);
-    }
-
-    public synchronized void recordRelatedChange(
-            String projectId,
-            String dimensionId,
             String actor,
             StoredBlockChange change,
             Instant now,
@@ -112,17 +101,6 @@ public final class UndoRedoHistoryManager {
         long revision = stack.revision();
         stack.recordCurrentCausalChange(actionId, actor, projectId, dimensionId, change, now);
         this.finishStackMutation(projectId, stack, revision);
-    }
-
-    public synchronized void recordRelatedEntityChange(
-            String projectId,
-            String dimensionId,
-            StoredEntityChange change,
-            Instant now,
-            Duration maxIdle,
-            int chunkRadius
-    ) {
-        this.recordRelatedEntityChange(projectId, dimensionId, null, change, now, maxIdle, chunkRadius);
     }
 
     public synchronized void recordRelatedEntityChange(

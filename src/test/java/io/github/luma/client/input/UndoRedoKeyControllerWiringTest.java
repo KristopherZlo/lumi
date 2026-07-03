@@ -37,6 +37,19 @@ class UndoRedoKeyControllerWiringTest {
     }
 
     @Test
+    void nativeExternalUndoRedoVerifiesWorldBeforeCompletingHistory() throws Exception {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/client/input/UndoRedoKeyController.java"));
+        String nativePath = source.substring(source.indexOf("private boolean tryNativeExternalUndoRedo"));
+
+        assertTrue(nativePath.contains("this.awaitQueuedServerWork(level.getServer())"));
+        assertTrue(nativePath.contains("this.nativeUndoRedoVerifier.matches(level, action, undo)"));
+        assertTrue(
+                nativePath.indexOf("this.nativeUndoRedoVerifier.matches(level, action, undo)")
+                        < nativePath.indexOf("this.historyManager.completeUndo(project.id().toString(), selection)")
+        );
+    }
+
+    @Test
     void undoRedoServiceStillScopesLumiReplayToLocalPlayer() throws Exception {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/client/input/UndoRedoKeyController.java"));
 

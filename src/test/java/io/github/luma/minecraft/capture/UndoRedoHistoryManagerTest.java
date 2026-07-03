@@ -106,7 +106,7 @@ class UndoRedoHistoryManagerTest {
     }
 
     @Test
-    void relatedChangeWithoutActorDoesNotJoinAnotherPlayersLatestAction() {
+    void relatedChangeWithBlankActorDoesNotJoinAnotherPlayersLatestAction() {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
         String projectId = "related-change-no-actor-test";
         historyManager.clearProject(projectId);
@@ -133,6 +133,7 @@ class UndoRedoHistoryManagerTest {
         historyManager.recordRelatedChange(
                 projectId,
                 "minecraft:overworld",
+                "",
                 change(3),
                 Instant.parse("2026-04-23T08:00:02Z"),
                 Duration.ofSeconds(10),

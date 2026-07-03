@@ -34,6 +34,7 @@ public final class UndoRedoKeyController {
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final ExternalUndoRedoPolicy externalUndoRedoPolicy = new ExternalUndoRedoPolicy();
     private final AxiomUndoRedoBridge axiomUndoRedoBridge = new AxiomUndoRedoBridge();
+    private final NativeUndoRedoVerifier nativeUndoRedoVerifier = new NativeUndoRedoVerifier();
     private final UndoRedoRequestQueue requestQueue = new UndoRedoRequestQueue();
     private final UndoRedoFailurePolicy failurePolicy = new UndoRedoFailurePolicy();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
@@ -234,6 +235,19 @@ public final class UndoRedoKeyController {
             );
         } else {
             this.dispatchNativeToolCommand(client, level.getServer(), undo ? "undo" : "redo");
+            this.awaitQueuedServerWork(level.getServer());
+        }
+
+        if (!this.nativeUndoRedoVerifier.matches(level, action, undo)) {
+            if (decision == ExternalUndoRedoPolicy.Decision.NATIVE_TOOL_COMMAND) {
+                LumaMod.LOGGER.info(
+                        "Native {} for action {} did not reach expected targets; falling back to Lumi replay",
+                        undo ? "undo" : "redo",
+                        action.id()
+                );
+                return false;
+            }
+            throw new IllegalStateException("Native undo/redo did not reach the selected Lumi action; history left unchanged");
         }
 
         boolean completed = false;
@@ -269,9 +283,9 @@ public final class UndoRedoKeyController {
 
         try {
             server.submit(() -> {
-                WorldMutationContext.runWithCaptureSuppressed(() ->
-                        server.getCommands().performPrefixedCommand(player.createCommandSourceStack(), command)
-                );
+                try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression()) {
+                    server.getCommands().performPrefixedCommand(player.createCommandSourceStack(), command);
+                }
                 return null;
             }).join();
         } catch (CompletionException exception) {

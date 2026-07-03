@@ -361,17 +361,10 @@ final class LiveUndoRedoActionRecorder {
                 );
                 continue;
             }
-            this.historyManager.recordRelatedChange(
-                    trackedProject.project().id().toString(),
-                    level.dimension().identifier().toString(),
-                    change,
-                    now,
-                    relatedJoinWindowFor(change),
-                    relatedJoinRadiusFor(change)
-            );
-            this.historyDebugLog.logLiveUndoRedoBlock(
+            this.historyDebugLog.logSkippedLiveUndoRedoBlock(
                     trackedProject.project(),
                     "reconciled-related",
+                    "missing-action-context",
                     "",
                     null,
                     change
