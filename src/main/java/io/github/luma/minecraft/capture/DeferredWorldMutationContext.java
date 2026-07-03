@@ -15,7 +15,7 @@ public record DeferredWorldMutationContext(
         int propagationDepth
 ) {
 
-    static final int MAX_MECHANISM_PROPAGATION_DEPTH = 2;
+    static final int MAX_MECHANISM_PROPAGATION_DEPTH = 32;
 
     public DeferredWorldMutationContext {
         source = source == null ? WorldMutationSource.SYSTEM : source;

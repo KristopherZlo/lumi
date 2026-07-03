@@ -41,33 +41,36 @@ class DeferredWorldMutationContextsTest {
     }
 
     @Test
-    void mechanismContextPropagationIsBounded() {
-        Carrier first = new Carrier();
-        Carrier second = new Carrier();
-        Carrier third = new Carrier();
+    void mechanismContextPropagationSurvivesDeepRedstoneCascadesButStopsEventually() {
+        Carrier current = new Carrier();
 
         try (WorldMutationContext.SourceFrame ignored =
                      WorldMutationContext.pushSource(WorldMutationSource.PLAYER, "builder", "action-1", true)) {
-            DeferredWorldMutationContexts.remember(first, WorldMutationSource.BLOCK_UPDATE);
+            DeferredWorldMutationContexts.remember(current, WorldMutationSource.BLOCK_UPDATE);
+        }
+        assertEquals(1, current.luma$deferredMutationContext().propagationDepth());
+
+        for (int depth = 2; depth <= DeferredWorldMutationContext.MAX_MECHANISM_PROPAGATION_DEPTH; depth++) {
+            Carrier next = new Carrier();
+            DeferredWorldMutationContexts.push(current);
+            try {
+                DeferredWorldMutationContexts.remember(next, WorldMutationSource.BLOCK_UPDATE);
+            } finally {
+                DeferredWorldMutationContexts.pop();
+            }
+            assertEquals(depth, next.luma$deferredMutationContext().propagationDepth());
+            assertEquals("action-1", next.luma$deferredMutationContext().actionId());
+            current = next;
         }
 
-        DeferredWorldMutationContexts.push(first);
+        Carrier overflow = new Carrier();
+        DeferredWorldMutationContexts.push(current);
         try {
-            DeferredWorldMutationContexts.remember(second, WorldMutationSource.PISTON);
+            DeferredWorldMutationContexts.remember(overflow, WorldMutationSource.BLOCK_UPDATE);
         } finally {
             DeferredWorldMutationContexts.pop();
         }
-
-        assertEquals(2, second.luma$deferredMutationContext().propagationDepth());
-
-        DeferredWorldMutationContexts.push(second);
-        try {
-            DeferredWorldMutationContexts.remember(third, WorldMutationSource.BLOCK_UPDATE);
-        } finally {
-            DeferredWorldMutationContexts.pop();
-        }
-
-        assertNull(third.luma$deferredMutationContext());
+        assertNull(overflow.luma$deferredMutationContext());
     }
 
     @Test
