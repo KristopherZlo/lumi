@@ -17,6 +17,14 @@ public final class EntitySnapshotService {
     private final EntitySnapshotSanitizer sanitizer = new EntitySnapshotSanitizer();
 
     public EntityPayload capture(ServerLevel level, Entity entity) {
+        return this.capture(level, entity, true);
+    }
+
+    public EntityPayload captureExact(ServerLevel level, Entity entity) {
+        return this.capture(level, entity, false);
+    }
+
+    private EntityPayload capture(ServerLevel level, Entity entity, boolean normalize) {
         if (level == null || entity == null || entity instanceof ServerPlayer) {
             return null;
         }
@@ -32,7 +40,7 @@ public final class EntitySnapshotService {
             return null;
         }
 
-        CompoundTag tag = normalizeForHistory(output.buildResult());
+        CompoundTag tag = normalize ? normalizeForHistory(output.buildResult()) : output.buildResult().copy();
         if (!tag.contains("id")) {
             tag.putString("id", net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
         }

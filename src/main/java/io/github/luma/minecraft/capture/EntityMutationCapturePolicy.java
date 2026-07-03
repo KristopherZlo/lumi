@@ -4,6 +4,7 @@ import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.util.EnumSet;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -37,6 +38,9 @@ public final class EntityMutationCapturePolicy {
             WorldMutationSource.EXPLOSION,
             WorldMutationSource.MOB,
             WorldMutationSource.EXPLOSIVE
+    );
+    private static final Set<WorldMutationSource> UNDO_ONLY_TRANSIENT_ENTITY_STATE_SOURCES = EnumSet.of(
+            WorldMutationSource.PLAYER
     );
     private static final String PRIMED_TNT_ENTITY_TYPE = "minecraft:tnt";
     private final PlacedEntityHistoryPolicy placedEntityHistoryPolicy = new PlacedEntityHistoryPolicy();
@@ -135,11 +139,22 @@ public final class EntityMutationCapturePolicy {
     boolean shouldInspectUndoOnlyMutation(WorldMutationSource source, String entityType) {
         return (UNDO_ONLY_ITEM_DROP_SOURCES.contains(source) && "minecraft:item".equals(entityType))
                 || (UNDO_ONLY_PRIMED_TNT_SOURCES.contains(source) && PRIMED_TNT_ENTITY_TYPE.equals(entityType))
-                || (UNDO_ONLY_TRANSIENT_ENTITY_SOURCES.contains(source)
+                || this.shouldInspectUndoOnlyTransientEntity(source, entityType);
+    }
+
+    boolean shouldInspectUndoOnlyStateMutation(WorldMutationSource source, String entityType) {
+        return UNDO_ONLY_TRANSIENT_ENTITY_STATE_SOURCES.contains(source)
+                && this.shouldInspectUndoOnlyTransientEntity(source, entityType)
+                && !"minecraft:item".equals(entityType)
+                && !PRIMED_TNT_ENTITY_TYPE.equals(entityType);
+    }
+
+    private boolean shouldInspectUndoOnlyTransientEntity(WorldMutationSource source, String entityType) {
+        return UNDO_ONLY_TRANSIENT_ENTITY_SOURCES.contains(source)
                 && entityType != null
                 && !entityType.isBlank()
                 && !EXCLUDED_ENTITY_TYPES.contains(entityType)
-                && !this.placedEntityHistoryPolicy.shouldPersist(entityType));
+                && !this.placedEntityHistoryPolicy.shouldPersist(entityType);
     }
 
     boolean shouldCaptureMutation(WorldMutationSource source, EntityPayload oldValue, EntityPayload newValue) {
@@ -147,8 +162,16 @@ public final class EntityMutationCapturePolicy {
     }
 
     boolean shouldCaptureUndoOnlyMutation(WorldMutationSource source, EntityPayload oldValue, EntityPayload newValue) {
-        return this.shouldInspectUndoOnlyMutation(source, this.entityType(oldValue, newValue))
-                && (oldValue == null || newValue == null);
+        String entityType = this.entityType(oldValue, newValue);
+        if (!this.shouldInspectUndoOnlyMutation(source, entityType)) {
+            return false;
+        }
+        if (oldValue == null || newValue == null) {
+            return true;
+        }
+        return this.shouldInspectUndoOnlyStateMutation(source, entityType)
+                && Objects.equals(oldValue.entityId(), newValue.entityId())
+                && Objects.equals(oldValue.blockPos(), newValue.blockPos());
     }
 
     private String entityId(EntityPayload oldValue, EntityPayload newValue) {

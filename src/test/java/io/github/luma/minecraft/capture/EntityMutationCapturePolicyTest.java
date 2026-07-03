@@ -111,6 +111,29 @@ class EntityMutationCapturePolicyTest {
 
         assertFalse(this.policy.captureUndoOnly(WorldMutationSource.MOB, oldCow, movedCow).isPresent());
         assertFalse(this.policy.captureUndoOnly(WorldMutationSource.EXPLOSION, oldCow, movedCow).isPresent());
+        assertFalse(this.policy.captureUndoOnly(WorldMutationSource.PLAYER, oldCow, movedCow).isPresent());
+    }
+
+    @Test
+    void playerTransientEntityStateChangesAreUndoOnlyForLiveReplay() {
+        EntityPayload oldCreeper = entityWithFlag(
+                "minecraft:creeper",
+                "00000000-0000-0000-0000-000000000057",
+                1.0D,
+                "ignited",
+                false
+        );
+        EntityPayload ignitedCreeper = entityWithFlag(
+                "minecraft:creeper",
+                "00000000-0000-0000-0000-000000000057",
+                1.0D,
+                "ignited",
+                true
+        );
+
+        assertFalse(this.policy.capture(WorldMutationSource.PLAYER, oldCreeper, ignitedCreeper).isPresent());
+        assertTrue(this.policy.captureUndoOnly(WorldMutationSource.PLAYER, oldCreeper, ignitedCreeper).isPresent());
+        assertFalse(this.policy.captureUndoOnly(WorldMutationSource.MOB, oldCreeper, ignitedCreeper).isPresent());
     }
 
     @Test
@@ -258,6 +281,12 @@ class EntityMutationCapturePolicyTest {
     private static EntityPayload entityWithVariant(String type, String uuid, double x, String variant) {
         CompoundTag tag = entity(type, uuid, x).copyTag();
         tag.putString("variant", variant);
+        return new EntityPayload(tag);
+    }
+
+    private static EntityPayload entityWithFlag(String type, String uuid, double x, String key, boolean value) {
+        CompoundTag tag = entity(type, uuid, x).copyTag();
+        tag.putBoolean(key, value);
         return new EntityPayload(tag);
     }
 }

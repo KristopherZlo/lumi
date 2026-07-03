@@ -60,7 +60,8 @@ public final class EntityMutationTracker {
                 SNAPSHOT_SERVICE.capture(level, entity),
                 operation,
                 false,
-                actionStartedAt
+                actionStartedAt,
+                false
         );
     }
 
@@ -68,7 +69,11 @@ public final class EntityMutationTracker {
         if (pending == null || pending.isEmpty() || !(entity.level() instanceof ServerLevel level)) {
             return;
         }
-        EntityPayload newPayload = entity.isRemoved() ? null : SNAPSHOT_SERVICE.capture(level, entity);
+        EntityPayload newPayload = entity.isRemoved()
+                ? null
+                : pending.exactPayloads()
+                ? SNAPSHOT_SERVICE.captureExact(level, entity)
+                : SNAPSHOT_SERVICE.capture(level, entity);
         record(level, pending.oldPayload(), newPayload, pending.operation(), pending.undoOnly(), pending.actionStartedAt());
     }
 
@@ -134,6 +139,24 @@ public final class EntityMutationTracker {
                 .orElse(pending);
     }
 
+    public static PendingEntityMutation captureUndoOnlyBefore(Entity entity) {
+        if (!(entity.level() instanceof ServerLevel level) || WorldMutationContext.captureSuppressed()) {
+            return PendingEntityMutation.empty();
+        }
+        String entityType = entityType(entity);
+        if (!CAPTURE_POLICY.shouldInspectUndoOnlyStateMutation(WorldMutationContext.currentSource(), entityType)) {
+            return PendingEntityMutation.empty();
+        }
+        return new PendingEntityMutation(
+                level,
+                SNAPSHOT_SERVICE.captureExact(level, entity),
+                null,
+                true,
+                EntityCausalContextRegistry.currentStartedAt().orElse(null),
+                true
+        );
+    }
+
     private static PendingEntityMutation captureUndoOnlyRemoval(Entity entity) {
         if (!(entity.level() instanceof ServerLevel level) || WorldMutationContext.captureSuppressed()) {
             return PendingEntityMutation.empty();
@@ -147,7 +170,8 @@ public final class EntityMutationTracker {
                 SNAPSHOT_SERVICE.capture(level, entity),
                 null,
                 true,
-                EntityCausalContextRegistry.currentStartedAt().orElse(null)
+                EntityCausalContextRegistry.currentStartedAt().orElse(null),
+                false
         );
     }
 
@@ -362,11 +386,12 @@ public final class EntityMutationTracker {
             EntityPayload oldPayload,
             ObservedExternalToolOperation operation,
             boolean undoOnly,
-            Instant actionStartedAt
+            Instant actionStartedAt,
+            boolean exactPayloads
     ) {
 
         public static PendingEntityMutation empty() {
-            return new PendingEntityMutation(null, null, null, false, null);
+            return new PendingEntityMutation(null, null, null, false, null, false);
         }
 
         public boolean isEmpty() {
@@ -379,7 +404,8 @@ public final class EntityMutationTracker {
                     oldPayload,
                     this.operation,
                     this.undoOnly,
-                    this.actionStartedAt
+                    this.actionStartedAt,
+                    this.exactPayloads
             );
         }
     }

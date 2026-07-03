@@ -20,6 +20,8 @@ class SynchedEntityDataMutationMixinTest {
         assertTrue(dataMixin.contains("@WrapMethod(method = \"set(Lnet/minecraft/network/syncher/EntityDataAccessor;Ljava/lang/Object;Z)V\")"));
         assertTrue(dataMixin.contains("!access.luma$baseEntityConstructed()"));
         assertTrue(dataMixin.contains("EntityMutationTracker.captureBefore(modifiedEntity)"));
+        assertTrue(dataMixin.contains("rememberCurrentPlayerActionIfAbsent(entity, level)"));
+        assertTrue(dataMixin.contains("EntityMutationTracker.captureUndoOnlyBefore(modifiedEntity)"));
         assertTrue(dataMixin.contains("EntityMutationTracker.captureAfter(modifiedEntity, pending)"));
         assertTrue(mixins.contains("\"SynchedEntityDataMutationMixin\""));
     }

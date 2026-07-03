@@ -6,34 +6,27 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ServerGamePacketListenerMixinTest {
 
     @Test
-    void interactPacketsRememberEntityStateBeforeVanillaHandling() throws IOException {
+    void interactPacketsOpenPlayerSourceAroundVanillaHandling() throws IOException {
         String source = Files.readString(
                 Path.of("src/main/java/io/github/luma/mixin/ServerGamePacketListenerMixin.java"),
                 StandardCharsets.UTF_8
         );
 
-        assertTrue(source.contains("luma$rememberInteractedEntity(packet);"));
-        assertTrue(source.contains("packet.getTarget(level)"));
-        assertTrue(source.contains("rememberCurrentPlayerAction(target, level)"));
-        int rememberCall = source.indexOf("luma$rememberInteractedEntity(packet);");
-        assertTrue(rememberCall < source.indexOf("original.call(packet);", rememberCall));
-    }
+        int pushCall = source.indexOf("this.luma$pushPlayerSource();");
+        int vanillaCall = source.indexOf("original.call(packet);", pushCall);
+        int popCall = source.indexOf("this.luma$popPlayerSource();", vanillaCall);
 
-    @Test
-    void creeperInteractPacketsLogRememberedCausalContext() throws IOException {
-        String source = Files.readString(
-                Path.of("src/main/java/io/github/luma/mixin/ServerGamePacketListenerMixin.java"),
-                StandardCharsets.UTF_8
-        );
-
-        assertTrue(source.contains("target instanceof Creeper"));
-        assertTrue(source.contains("LumaLoadLog.event(\"creeper-explosion\", \"interact-context\""));
-        assertTrue(source.contains("remembered=\" + remembered"));
+        assertTrue(pushCall > 0);
+        assertTrue(vanillaCall > pushCall);
+        assertTrue(popCall > vanillaCall);
+        assertFalse(source.contains("packet.getTarget(level)"));
+        assertFalse(source.contains("rememberCurrentPlayerAction(target, level)"));
     }
 
     @Test
