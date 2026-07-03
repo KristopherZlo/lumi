@@ -12,6 +12,11 @@ public record StatePayload(
 
     private static final CompoundTag AIR_STATE_TAG = createAirStateTag();
 
+    public StatePayload {
+        stateTag = stateTag == null ? null : stateTag.copy();
+        blockEntityTag = blockEntityTag == null ? null : blockEntityTag.copy();
+    }
+
     public static StatePayload capture(BlockState state, CompoundTag blockEntityTag) {
         if (state == null) {
             return new StatePayload(AIR_STATE_TAG.copy(), null);
@@ -43,6 +48,16 @@ public record StatePayload(
                 this.stateTag == null ? null : this.stateTag.copy(),
                 blockEntityTag == null ? null : blockEntityTag.copy()
         );
+    }
+
+    @Override
+    public CompoundTag stateTag() {
+        return this.stateTag == null ? null : this.stateTag.copy();
+    }
+
+    @Override
+    public CompoundTag blockEntityTag() {
+        return this.blockEntityTag == null ? null : this.blockEntityTag.copy();
     }
 
     public boolean equalsState(StatePayload other) {

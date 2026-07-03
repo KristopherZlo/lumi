@@ -19,6 +19,7 @@ public final class UndoRedoAction {
     private final String dimensionId;
     private final Instant startedAt;
     private Instant updatedAt;
+    private long version;
     private final LinkedHashMap<BlockPoint, StoredBlockChange> changes = new LinkedHashMap<>();
     private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
 
@@ -47,6 +48,7 @@ public final class UndoRedoAction {
                 this.startedAt,
                 this.updatedAt
         );
+        copy.version = this.version;
         for (StoredBlockChange change : this.changes.values()) {
             copy.changes.put(key(change), change);
         }
@@ -54,22 +56,36 @@ public final class UndoRedoAction {
         return copy;
     }
 
-    public void recordChange(StoredBlockChange change, Instant now) {
-        if (change == null) {
-            return;
+    public boolean recordChange(StoredBlockChange change, Instant now) {
+        if (change == null || change.isNoOp()) {
+            return false;
         }
 
+        StoredBlockChange before = this.changes.get(key(change));
         StoredChangeAccumulator.mergeBlockChange(this.changes, change);
+        StoredBlockChange after = this.changes.get(key(change));
+        if (Objects.equals(before, after)) {
+            return false;
+        }
         this.updatedAt = now;
+        this.version += 1;
+        return true;
     }
 
-    public void recordEntityChange(StoredEntityChange change, Instant now) {
-        if (change == null || change.entityId() == null || change.entityId().isBlank()) {
-            return;
+    public boolean recordEntityChange(StoredEntityChange change, Instant now) {
+        if (change == null || change.isNoOp() || change.entityId() == null || change.entityId().isBlank()) {
+            return false;
         }
 
+        StoredEntityChange before = this.entityChanges.get(change.entityId());
         StoredChangeAccumulator.mergeUndoableEntityChange(this.entityChanges, change);
+        StoredEntityChange after = this.entityChanges.get(change.entityId());
+        if (Objects.equals(before, after)) {
+            return false;
+        }
         this.updatedAt = now;
+        this.version += 1;
+        return true;
     }
 
     public boolean canAbsorbRelatedChange(
@@ -215,6 +231,10 @@ public final class UndoRedoAction {
 
     public Instant updatedAt() {
         return this.updatedAt;
+    }
+
+    public long version() {
+        return this.version;
     }
 
     private static BlockPoint key(StoredBlockChange change) {

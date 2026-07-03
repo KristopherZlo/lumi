@@ -118,7 +118,7 @@ class UndoRedoActionStackTest {
     }
 
     @Test
-    void selectedUndoCompletesAfterRelatedChangeJoinsSameAction() {
+    void staleSelectionDoesNotCompleteAfterSameActionChanges() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
 
@@ -132,9 +132,26 @@ class UndoRedoActionStackTest {
         );
         stack.completeUndo(selection);
 
-        assertFalse(stack.canUndo());
+        assertTrue(stack.canUndo());
+        assertFalse(stack.canRedo());
+        assertEquals(2, stack.recentUndoActions(1).getFirst().size());
+    }
+
+    @Test
+    void duplicateWriteDoesNotAdvanceRevisionOrClearRedo() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        StoredBlockChange original = change(1, "minecraft:stone", "minecraft:dirt");
+        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", original, NOW);
+        stack.recordChange("action-2", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:air", "minecraft:oak_planks"), NOW.plusSeconds(1));
+        stack.completeUndo(stack.selectUndo());
+        long revision = stack.revision();
+
+        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", original, NOW.plusSeconds(2));
+
+        assertEquals(revision, stack.revision());
         assertTrue(stack.canRedo());
-        assertEquals(2, stack.recentRedoActions(1).getFirst().size());
+        assertEquals("action-2", stack.recentRedoActions(1).getFirst().id());
     }
 
     @Test
