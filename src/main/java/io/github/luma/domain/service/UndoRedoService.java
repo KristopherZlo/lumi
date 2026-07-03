@@ -54,6 +54,12 @@ public final class UndoRedoService {
         UndoRedoActionStack.Selection selection = actor == null || actor.isBlank()
                 ? this.historyManager.selectUndo(project.id().toString())
                 : this.historyManager.selectUndo(project.id().toString(), actor);
+        if (selection == null && !level.getServer().isDedicatedServer()) {
+            UndoRedoActionStack.Selection fallback = this.historyManager.selectUndo(project.id().toString());
+            if (this.canUseSingleplayerFallback(fallback)) {
+                selection = fallback;
+            }
+        }
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to undo");
         }
@@ -72,6 +78,12 @@ public final class UndoRedoService {
         UndoRedoActionStack.Selection selection = actor == null || actor.isBlank()
                 ? this.historyManager.selectRedo(project.id().toString())
                 : this.historyManager.selectRedo(project.id().toString(), actor);
+        if (selection == null && !level.getServer().isDedicatedServer()) {
+            UndoRedoActionStack.Selection fallback = this.historyManager.selectRedo(project.id().toString());
+            if (this.canUseSingleplayerFallback(fallback)) {
+                selection = fallback;
+            }
+        }
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to redo");
         }
@@ -198,6 +210,16 @@ public final class UndoRedoService {
                 direction.label() + "-fallout-" + UUID.randomUUID(),
                 true
         );
+    }
+
+    private boolean canUseSingleplayerFallback(UndoRedoActionStack.Selection selection) {
+        if (selection == null || selection.action() == null) {
+            return false;
+        }
+        return switch (selection.action().actor()) {
+            case "explosion", "explosive", "mob" -> true;
+            default -> false;
+        };
     }
 
     private List<PreparedChunkBatch> withReplayContext(

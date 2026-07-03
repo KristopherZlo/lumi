@@ -39,4 +39,13 @@ class UndoRedoServiceDiagnosticsTest {
         assertTrue(source.contains("this.historyManager.selectUndo(project.id().toString(), actor)"));
         assertTrue(source.contains("this.historyManager.selectRedo(project.id().toString(), actor)"));
     }
+
+    @Test
+    void singleplayerUndoRedoFallsBackToProjectWideActionsAfterActorMiss() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/UndoRedoService.java"));
+
+        assertTrue(source.contains("selection == null && !level.getServer().isDedicatedServer()"));
+        assertTrue(source.contains("this.historyManager.selectUndo(project.id().toString())"));
+        assertTrue(source.contains("this.historyManager.selectRedo(project.id().toString())"));
+    }
 }
