@@ -6,6 +6,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.Explosion;
 import org.junit.jupiter.api.Test;
 
@@ -31,5 +33,23 @@ class TntBlockMixinTest {
         assertArrayEquals(new String[]{"wasExploded"}, wrapMethod.method());
         assertEquals(Void.TYPE, method.getReturnType());
         assertTrue(Modifier.isPrivate(method.getModifiers()));
+    }
+
+    @Test
+    void wrapsSharedPrimeForAllPrimingCallers() throws NoSuchMethodException {
+        Method method = TntBlockMixin.class.getDeclaredMethod(
+                "luma$wrapPrime",
+                Level.class,
+                BlockPos.class,
+                LivingEntity.class,
+                Operation.class
+        );
+
+        WrapMethod wrapMethod = method.getAnnotation(WrapMethod.class);
+        assertNotNull(wrapMethod, "TntBlockMixin must wrap TntBlock.prime so fire and dispenser priming keep action ownership");
+        assertArrayEquals(new String[]{"prime(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/entity/LivingEntity;)Z"}, wrapMethod.method());
+        assertEquals(Boolean.TYPE, method.getReturnType());
+        assertTrue(Modifier.isPrivate(method.getModifiers()));
+        assertTrue(Modifier.isStatic(method.getModifiers()));
     }
 }

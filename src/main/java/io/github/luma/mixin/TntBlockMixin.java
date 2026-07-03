@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.ItemStack;
@@ -105,6 +106,24 @@ abstract class TntBlockMixin {
         }
     }
 
+    @WrapMethod(method = "prime(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/entity/LivingEntity;)Z")
+    private static boolean luma$wrapPrime(
+            Level level,
+            BlockPos pos,
+            LivingEntity owner,
+            Operation<Boolean> original
+    ) {
+        if (luma$shouldSuppressReplayActivation(level)) {
+            return false;
+        }
+        WorldMutationContext.SourceFrame frame = luma$pushExplosiveSource(level);
+        try {
+            return original.call(level, pos, owner);
+        } finally {
+            luma$closeSource(frame);
+        }
+    }
+
     @WrapMethod(method = "wasExploded")
     private void luma$wrapWasExploded(
             ServerLevel level,
@@ -124,7 +143,7 @@ abstract class TntBlockMixin {
     }
 
     @Unique
-    private WorldMutationContext.SourceFrame luma$pushExplosiveSource(Level level) {
+    private static WorldMutationContext.SourceFrame luma$pushExplosiveSource(Level level) {
         if (level.isClientSide()) {
             return null;
         }
@@ -133,7 +152,7 @@ abstract class TntBlockMixin {
     }
 
     @Unique
-    private boolean luma$shouldSuppressReplayActivation(Level level) {
+    private static boolean luma$shouldSuppressReplayActivation(Level level) {
         return LUMA_REPLAY_ACTIVATION_POLICY.shouldSuppressActivation(
                 level.isClientSide(),
                 WorldMutationContext.currentSource(),
@@ -142,7 +161,7 @@ abstract class TntBlockMixin {
     }
 
     @Unique
-    private void luma$closeSource(WorldMutationContext.SourceFrame frame) {
+    private static void luma$closeSource(WorldMutationContext.SourceFrame frame) {
         if (frame != null) {
             frame.close();
         }
