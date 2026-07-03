@@ -16,7 +16,9 @@ import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
+import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.EntityApplyMode;
+import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
@@ -173,6 +175,9 @@ public final class QuickRollbackService {
                                 batches
                         );
                     }
+                    EntityBatch.ReplayContext replayContext =
+                            new EntityBatch.ReplayContext(this.currentActorOr(plan.actor()), plan.actionId(), true);
+                    batches = this.withReplayContext(batches, replayContext);
                     List<PreparedChunkBatch> finalBatches = batches;
                     return new WorldOperationManager.PreparedApplyOperation(
                             finalBatches,
@@ -283,6 +288,28 @@ public final class QuickRollbackService {
                 PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY_AND_SUPPRESS_POST_REPLAY_MECHANISM
         ));
         return this.batchCollapser.collapse(combined);
+    }
+
+    private String currentActorOr(String fallback) {
+        String actor = WorldMutationContext.currentActor();
+        return actor == null || actor.isBlank() || "world".equals(actor) ? fallback : actor;
+    }
+
+    private List<PreparedChunkBatch> withReplayContext(
+            List<PreparedChunkBatch> batches,
+            EntityBatch.ReplayContext replayContext
+    ) {
+        if (batches == null || batches.isEmpty()) {
+            return List.of();
+        }
+        return batches.stream()
+                .map(batch -> new PreparedChunkBatch(
+                        batch.chunk(),
+                        batch.placements(),
+                        batch.nativeSections(),
+                        batch.entityBatch().withReplayContext(replayContext)
+                ))
+                .toList();
     }
 
     List<BlockPoint> mechanismReconciliationPositions(

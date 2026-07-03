@@ -17,7 +17,8 @@ public record EntityBatch(
         List<String> entityIdsToRemove,
         List<CompoundTag> entitiesToUpdate,
         boolean replaceEntities,
-        Set<String> excludedEntityTypes
+        Set<String> excludedEntityTypes,
+        ReplayContext replayContext
 ) {
 
     public EntityBatch {
@@ -25,6 +26,17 @@ public record EntityBatch(
         entityIdsToRemove = entityIdsToRemove == null ? List.of() : List.copyOf(entityIdsToRemove);
         entitiesToUpdate = copyTags(entitiesToUpdate);
         excludedEntityTypes = copyTypes(excludedEntityTypes);
+        replayContext = replayContext == null || replayContext.actionId().isBlank() ? null : replayContext;
+    }
+
+    public EntityBatch(
+            List<CompoundTag> entitiesToSpawn,
+            List<String> entityIdsToRemove,
+            List<CompoundTag> entitiesToUpdate,
+            boolean replaceEntities,
+            Set<String> excludedEntityTypes
+    ) {
+        this(entitiesToSpawn, entityIdsToRemove, entitiesToUpdate, replaceEntities, excludedEntityTypes, null);
     }
 
     public EntityBatch(List<CompoundTag> entitiesToSpawn, List<String> entityIdsToRemove) {
@@ -67,6 +79,17 @@ public record EntityBatch(
                 && !this.replaceEntities;
     }
 
+    public EntityBatch withReplayContext(ReplayContext replayContext) {
+        return new EntityBatch(
+                this.entitiesToSpawn,
+                this.entityIdsToRemove,
+                this.entitiesToUpdate,
+                this.replaceEntities,
+                this.excludedEntityTypes,
+                replayContext
+        );
+    }
+
     private static List<CompoundTag> copyTags(List<CompoundTag> tags) {
         if (tags == null || tags.isEmpty()) {
             return List.of();
@@ -87,5 +110,13 @@ public record EntityBatch(
             }
         }
         return Set.copyOf(normalized);
+    }
+
+    public record ReplayContext(String actor, String actionId, boolean accessAllowed) {
+
+        public ReplayContext {
+            actor = actor == null || actor.isBlank() ? "world" : actor;
+            actionId = actionId == null ? "" : actionId;
+        }
     }
 }

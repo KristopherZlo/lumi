@@ -17,4 +17,16 @@ class UndoRedoServiceDiagnosticsTest {
         assertTrue(source.contains("targetEntities=\" + targetEntityChanges.size()"));
         assertTrue(source.contains("adjustmentBlocks=\" + pendingAdjustments.size()"));
     }
+
+    @Test
+    void restoredEntityReplayReceivesCausalContextForFollowUpMobFallout() throws Exception {
+        String undoRedoService = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/UndoRedoService.java"));
+        String quickRollbackService = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/QuickRollbackService.java"));
+        String applier = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/world/BlockChangeApplier.java"));
+
+        assertTrue(undoRedoService.contains("new EntityBatch.ReplayContext("));
+        assertTrue(undoRedoService.contains("withReplayContext(batches, replayContext)"));
+        assertTrue(quickRollbackService.contains("withReplayContext(batches, replayContext)"));
+        assertTrue(applier.contains("rememberReplayAction("));
+    }
 }

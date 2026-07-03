@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.io.IOException;
@@ -53,6 +54,8 @@ public final class BlockChangeApplier {
             UPDATE_BROADCASTER,
             SECTION_NATIVE_COMMIT_STRATEGY);
     private static final EntitySnapshotService ENTITY_SNAPSHOT_SERVICE = new EntitySnapshotService();
+    private static final EntityCausalContextRegistry ENTITY_CAUSAL_CONTEXTS =
+            EntityCausalContextRegistry.getInstance();
     private static final RestoreEntityCleanupPolicy RESTORE_ENTITY_CLEANUP_POLICY = new RestoreEntityCleanupPolicy();
 
     private BlockChangeApplier() {
@@ -300,12 +303,12 @@ public final class BlockChangeApplier {
                 int updateIndex = entityIndex - removalCount;
                 if (updateIndex < updateCount) {
                     CompoundTag entityTag = entityBatch.entitiesToUpdate().get(updateIndex);
-                    spawnEntity(level, entityTag);
+                    spawnEntity(level, entityTag, entityBatch.replayContext());
                     continue;
                 }
 
                 int spawnIndex = updateIndex - updateCount;
-                spawnEntity(level, entityBatch.entitiesToSpawn().get(spawnIndex));
+                spawnEntity(level, entityBatch.entitiesToSpawn().get(spawnIndex), entityBatch.replayContext());
             } catch (Exception exception) {
                 recordApplyFailure(metrics, "entity-tail", null, exception);
             }
@@ -430,7 +433,7 @@ public final class BlockChangeApplier {
         }
     }
 
-    private static void spawnEntity(ServerLevel level, CompoundTag entityTag) {
+    private static void spawnEntity(ServerLevel level, CompoundTag entityTag, EntityBatch.ReplayContext replayContext) {
         if (entityTag == null || entityTag.isEmpty()) {
             return;
         }
@@ -451,6 +454,7 @@ public final class BlockChangeApplier {
             if (existing != null && !existing.isRemoved()) {
                 if (existing.getType() == entity.getType()) {
                     existing.restoreFrom(entity);
+                    rememberReplayAction(level, existing, replayContext);
                     return;
                 }
                 existing.discard();
@@ -460,8 +464,27 @@ public final class BlockChangeApplier {
             }
         }
         try (WorldMutationContext.EntityReplayFrame ignored = WorldMutationContext.pushHistoryEntityReplay()) {
-            level.tryAddFreshEntityWithPassengers(entity);
+            if (level.tryAddFreshEntityWithPassengers(entity)) {
+                rememberReplayAction(level, entity, replayContext);
+            }
         }
+    }
+
+    private static void rememberReplayAction(
+            ServerLevel level,
+            Entity entity,
+            EntityBatch.ReplayContext replayContext
+    ) {
+        if (replayContext == null) {
+            return;
+        }
+        ENTITY_CAUSAL_CONTEXTS.rememberReplayAction(
+                entity,
+                level,
+                replayContext.actor(),
+                replayContext.actionId(),
+                replayContext.accessAllowed()
+        );
     }
 
     private static void removeExtraEntities(ServerLevel level, ChunkPoint chunk, EntityBatch targetBatch) {

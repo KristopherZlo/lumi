@@ -41,6 +41,21 @@ class EntityBatchTest {
     }
 
     @Test
+    void replayContextIsCopiedIntoEntityBatch() {
+        EntityBatch batch = new EntityBatch(
+                List.of(entity("minecraft:creeper", "00000000-0000-0000-0000-000000000009")),
+                List.of(),
+                List.of()
+        );
+        EntityBatch.ReplayContext context = new EntityBatch.ReplayContext("builder", "rollback-action", true);
+
+        EntityBatch contextual = batch.withReplayContext(context);
+
+        assertEquals(context, contextual.replayContext());
+        assertEquals(batch.entitiesToSpawn(), contextual.entitiesToSpawn());
+    }
+
+    @Test
     void preparedChunkBatchCarriesEntityBatchIntoChunkBatch() {
         EntityBatch entityBatch = new EntityBatch(
                 List.of(entity("minecraft:item", "00000000-0000-0000-0000-000000000003")),

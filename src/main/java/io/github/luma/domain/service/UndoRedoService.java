@@ -14,14 +14,17 @@ import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
+import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.minecraft.world.EntityApplyMode;
+import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -90,6 +93,7 @@ public final class UndoRedoService {
                 : action.redoEntityChanges();
         boolean completeOnServerThread = this.canCompleteOnServerThread(targetChanges, targetEntityChanges);
         String label = direction == Direction.UNDO ? "undo-action" : "redo-action";
+        EntityBatch.ReplayContext replayContext = this.replayContext(action, direction);
         int totalChanges = targetChanges.size() + targetEntityChanges.size();
         this.deferredActionFalloutGuard.suppressAction(action.id(), level.getGameTime());
         LumaLoadLog.event("undo-redo", "selected-action",
@@ -133,6 +137,7 @@ public final class UndoRedoService {
                             ),
                             EntityApplyMode.DELTA
                     );
+                    batches = this.withReplayContext(batches, replayContext);
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,
                             () -> {
@@ -169,6 +174,35 @@ public final class UndoRedoService {
     ) {
         return targetEntityChanges.isEmpty()
                 && targetChanges.size() <= SERVER_THREAD_COMPLETION_MAX_BLOCKS;
+    }
+
+    private EntityBatch.ReplayContext replayContext(UndoRedoAction action, Direction direction) {
+        String actor = WorldMutationContext.currentActor();
+        if (actor == null || actor.isBlank() || "world".equals(actor)) {
+            actor = action.actor();
+        }
+        return new EntityBatch.ReplayContext(
+                actor,
+                direction.label() + "-fallout-" + UUID.randomUUID(),
+                true
+        );
+    }
+
+    private List<PreparedChunkBatch> withReplayContext(
+            List<PreparedChunkBatch> batches,
+            EntityBatch.ReplayContext replayContext
+    ) {
+        if (batches == null || batches.isEmpty()) {
+            return List.of();
+        }
+        return batches.stream()
+                .map(batch -> new PreparedChunkBatch(
+                        batch.chunk(),
+                        batch.placements(),
+                        batch.nativeSections(),
+                        batch.entityBatch().withReplayContext(replayContext)
+                ))
+                .toList();
     }
 
     private enum Direction {
