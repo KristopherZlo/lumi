@@ -20,6 +20,10 @@ public final class GlobalDispatcher {
     }
 
     public ChunkBatch pollNext() {
+        return this.pollNext(System.nanoTime());
+    }
+
+    ChunkBatch pollNext(long nowNanos) {
         for (LocalQueue queue : this.localQueues) {
             ChunkBatch batch = queue.pollCompleted();
             if (batch != null) {
@@ -27,7 +31,6 @@ public final class GlobalDispatcher {
             }
         }
 
-        long nowNanos = System.nanoTime();
         int waitingIncomplete = 0;
         long oldestWaitMillis = Long.MAX_VALUE;
         for (LocalQueue queue : this.localQueues) {

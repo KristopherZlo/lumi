@@ -68,10 +68,23 @@ class GlobalDispatcherTest {
         }
         dispatcher.enqueue(incompleteQueue);
 
-        Assertions.assertNull(dispatcher.pollNext());
+        Assertions.assertNull(dispatcher.pollNext(incompleteQueue.createdAtNanos()));
 
         incompleteQueue.offer(chunkBatch(63, BatchState.INCOMPLETE));
-        ChunkBatch released = dispatcher.pollNext();
+        ChunkBatch released = dispatcher.pollNext(incompleteQueue.createdAtNanos());
+        Assertions.assertNotNull(released);
+        Assertions.assertEquals(0, released.chunk().x());
+    }
+
+    @Test
+    void dispatcherReleasesIncompleteQueuesAfterWaitTimeout() {
+        GlobalDispatcher dispatcher = new GlobalDispatcher();
+        LocalQueue incompleteQueue = new LocalQueue();
+        incompleteQueue.offer(chunkBatch(0, BatchState.INCOMPLETE));
+        dispatcher.enqueue(incompleteQueue);
+
+        ChunkBatch released = dispatcher.pollNext(System.nanoTime() + 30_000_000L);
+
         Assertions.assertNotNull(released);
         Assertions.assertEquals(0, released.chunk().x());
     }
