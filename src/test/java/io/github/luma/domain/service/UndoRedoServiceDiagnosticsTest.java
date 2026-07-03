@@ -29,4 +29,14 @@ class UndoRedoServiceDiagnosticsTest {
         assertTrue(quickRollbackService.contains("withReplayContext(batches, replayContext)"));
         assertTrue(applier.contains("rememberReplayAction("));
     }
+
+    @Test
+    void playerScopedUndoRedoSelectsActorStackWhenActorIsKnown() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/UndoRedoService.java"));
+
+        assertTrue(source.contains("undo(ServerLevel level, String projectName, String actor)"));
+        assertTrue(source.contains("redo(ServerLevel level, String projectName, String actor)"));
+        assertTrue(source.contains("this.historyManager.selectUndo(project.id().toString(), actor)"));
+        assertTrue(source.contains("this.historyManager.selectRedo(project.id().toString(), actor)"));
+    }
 }

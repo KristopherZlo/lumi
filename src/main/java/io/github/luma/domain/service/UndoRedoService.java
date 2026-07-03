@@ -43,11 +43,17 @@ public final class UndoRedoService {
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
     public OperationHandle undo(ServerLevel level, String projectName) throws IOException {
+        return this.undo(level, projectName, null);
+    }
+
+    public OperationHandle undo(ServerLevel level, String projectName, String actor) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
         EntityMutationTracker.drainPendingSpawns(level.getServer());
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
         this.ensureStabilizationReady(level, project);
-        UndoRedoActionStack.Selection selection = this.historyManager.selectUndo(project.id().toString());
+        UndoRedoActionStack.Selection selection = actor == null || actor.isBlank()
+                ? this.historyManager.selectUndo(project.id().toString())
+                : this.historyManager.selectUndo(project.id().toString(), actor);
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to undo");
         }
@@ -55,11 +61,17 @@ public final class UndoRedoService {
     }
 
     public OperationHandle redo(ServerLevel level, String projectName) throws IOException {
+        return this.redo(level, projectName, null);
+    }
+
+    public OperationHandle redo(ServerLevel level, String projectName, String actor) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
         EntityMutationTracker.drainPendingSpawns(level.getServer());
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
         this.ensureStabilizationReady(level, project);
-        UndoRedoActionStack.Selection selection = this.historyManager.selectRedo(project.id().toString());
+        UndoRedoActionStack.Selection selection = actor == null || actor.isBlank()
+                ? this.historyManager.selectRedo(project.id().toString())
+                : this.historyManager.selectRedo(project.id().toString(), actor);
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to redo");
         }

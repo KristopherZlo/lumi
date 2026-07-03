@@ -120,10 +120,11 @@ public final class UndoRedoKeyController {
                 return TickResult.terminalNoOperation();
             }
             OperationHandle handle;
+            String actor = this.playerActor(client);
             if (undo) {
-                handle = this.undoRedoService.undo(level, project.name());
+                handle = this.undoRedoService.undo(level, project.name(), actor);
             } else {
-                handle = this.undoRedoService.redo(level, project.name());
+                handle = this.undoRedoService.redo(level, project.name(), actor);
             }
             client.gui.setOverlayMessage(ActionBarMessagePresenter.info(
                     undo ? "luma.status.undo_started" : "luma.status.redo_started"
@@ -168,9 +169,10 @@ public final class UndoRedoKeyController {
             BuildProject project,
             boolean undo
     ) throws Exception {
+        String actor = this.playerActor(client);
         UndoRedoActionStack.Selection selection = undo
-                ? this.historyManager.selectUndo(project.id().toString())
-                : this.historyManager.selectRedo(project.id().toString());
+                ? this.historyManager.selectUndo(project.id().toString(), actor)
+                : this.historyManager.selectRedo(project.id().toString(), actor);
         if (selection == null) {
             return false;
         }
@@ -186,8 +188,8 @@ public final class UndoRedoKeyController {
 
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
         selection = undo
-                ? this.historyManager.selectUndo(project.id().toString())
-                : this.historyManager.selectRedo(project.id().toString());
+                ? this.historyManager.selectUndo(project.id().toString(), actor)
+                : this.historyManager.selectRedo(project.id().toString(), actor);
         if (selection == null) {
             return false;
         }
@@ -296,6 +298,10 @@ public final class UndoRedoKeyController {
                 actor,
                 Instant.now()
         );
+    }
+
+    private String playerActor(Minecraft client) {
+        return client == null || client.player == null ? "player" : client.player.getName().getString();
     }
 
     private record CurrentTarget(ServerLevel level, BuildProject project, UndoRedoRequestQueue.Scope scope) {
