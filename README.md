@@ -60,7 +60,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 - Keeps recovery drafts for interrupted work.
 - Lets you mark active work zones, save a zone separately, and keep unrelated pending work.
 - Lets work zones grow from causal tree growth, hide boundary boxes, delete zone metadata without deleting commits, and optionally show zone commits in global history with zone color markers.
-- Initializes the current world workspace after you enter a world, then captures normal Minecraft edits, tracked player-caused mob block changes, plus supported WorldEdit, FAWE, and Axiom mutation paths on a best-effort basis.
+- Initializes the current world workspace after you enter a world, then captures normal Minecraft edits, keeps player-caused mob and explosion fallout in live undo/redo, plus records supported WorldEdit, FAWE, and Axiom mutation paths on a best-effort basis.
 
 ### Quick Start
 
@@ -245,10 +245,12 @@ Hard rules:
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
 - Live undo/redo, recent previews, and pending overlays include explosion and mob block fallout only when it is causally tied to a player action; passive mob edits and ambient explosions remain actionless.
+- Player-caused mob and explosion fallout is live undo-only: it can be undone/redone for cleanup, but it must not dirty recovery drafts or saved project history.
+- Live undo/redo actions are actor-scoped. Multiplayer undo/redo selects only the local player's stack, project-wide overlays aggregate unconflicted actions, and an action is hidden once another actor later touches the same block or entity target.
 - Client modal overlays consume pointer input so underlying workspace actions cannot fire while a modal is open.
 - Saved commits keep entity checkpoints for entities present at save time. Whole-dimension saves include chunks with currently loaded live non-player entities, and player-spawned non-player entities make durable pending work so entity-only saves are possible. Full restore and whole-dimension quick rollback treat target entity-checkpoint chunks as authoritative even when no block batch touched that chunk, so saved mobs/decorative entities return and stray dropped items in those chunks are cleaned up. Partial and zone restore invert live entity fallout inside the selected scope, so current item drops are removed instead of duplicated. Restore can skip selected entity types for a single run without changing the saved commit.
 - Restore confirmation entity summaries count only entities inside the resolved restore scope for zones and selected/outside partial restores.
-- Live undo may track transient entity spawns/removals to clean up active fallout, including killed mobs from player-caused explosion and mob actions. Causal mob deaths use the pre-damage or pre-interaction entity snapshot and drain through a deduplicated batched tick queue; remembered interaction contexts survive later non-lethal damage until they expire or are consumed, so restored entities do not replay death, creeper fuse, or ignition state. Undo/quick-rollback entity replay gives restored mobs the same short causal context so immediate follow-up explosions stay undoable unless a later explicit player interaction takes ownership. Recovery drafts and saved commits must not persist undo-only transient entities.
+- Live undo may track transient entity spawns/removals to clean up active fallout, including killed mobs from player-caused explosion and mob actions. Causal mob deaths use the pre-damage or pre-interaction entity snapshot and drain through a deduplicated batched tick queue; remembered interaction contexts are scoped by dimension and entity UUID, survive later non-lethal damage until they expire or are consumed, and must not be created merely because a mob targets a player. Restored entities do not replay death, creeper fuse, or ignition state. Undo/quick-rollback entity replay gives restored mobs the same short causal context so immediate follow-up explosions stay undoable unless a later explicit player interaction takes ownership. Delayed entity fallout that arrives after an action has moved to redo must not reopen a fresh undo action or clear redo. Recovery drafts and saved commits must not persist undo-only transient entities.
 
 ### Diagnostics
 
