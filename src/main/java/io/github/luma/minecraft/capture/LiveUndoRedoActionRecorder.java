@@ -138,6 +138,7 @@ final class LiveUndoRedoActionRecorder {
         this.historyManager.recordRelatedChange(
                 trackedProject.project().id().toString(),
                 level.dimension().identifier().toString(),
+                WorldMutationContext.currentActor(),
                 change,
                 now,
                 relatedJoinWindowFor(WorldMutationContext.currentSource()),
@@ -253,6 +254,7 @@ final class LiveUndoRedoActionRecorder {
         this.historyManager.recordRelatedEntityChange(
                 trackedProject.project().id().toString(),
                 level.dimension().identifier().toString(),
+                WorldMutationContext.currentActor(),
                 change,
                 now,
                 relatedJoinWindowFor(source),

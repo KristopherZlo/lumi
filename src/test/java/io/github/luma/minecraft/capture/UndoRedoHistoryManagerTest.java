@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.UndoRedoActionStack;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
@@ -46,6 +47,35 @@ class UndoRedoHistoryManagerTest {
     }
 
     @Test
+    void projectRevisionAdvancesWhenSecondActorStackChanges() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "project-revision-second-actor-test";
+        historyManager.clearProject(projectId);
+
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-action",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        long revision = historyManager.revision(projectId);
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "steve-action",
+                "Steve",
+                List.of(change(2)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        assertTrue(historyManager.revision(projectId) > revision);
+    }
+
+    @Test
     void playerScopedSelectionDoesNotReturnOtherPlayerActions() {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
         String projectId = "player-scoped-selection-test";
@@ -73,6 +103,83 @@ class UndoRedoHistoryManagerTest {
         assertEquals("alex-action", historyManager.selectUndo(projectId, "Alex").action().id());
         assertEquals("steve-action", historyManager.selectUndo(projectId, "Steve").action().id());
         assertNull(historyManager.selectUndo(projectId, "Herobrine"));
+    }
+
+    @Test
+    void relatedChangeWithoutActorDoesNotJoinAnotherPlayersLatestAction() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "related-change-no-actor-test";
+        historyManager.clearProject(projectId);
+
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-action",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "steve-action",
+                "Steve",
+                List.of(change(2)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        historyManager.recordRelatedChange(
+                projectId,
+                "minecraft:overworld",
+                change(3),
+                Instant.parse("2026-04-23T08:00:02Z"),
+                Duration.ofSeconds(10),
+                2
+        );
+
+        assertEquals(1, historyManager.selectUndo(projectId, "Alex").action().size());
+        assertEquals(1, historyManager.selectUndo(projectId, "Steve").action().size());
+    }
+
+    @Test
+    void relatedChangeWithActorJoinsThatActorsLatestActionOnly() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "related-change-actor-test";
+        historyManager.clearProject(projectId);
+
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-action",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "steve-action",
+                "Steve",
+                List.of(change(2)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        historyManager.recordRelatedChange(
+                projectId,
+                "minecraft:overworld",
+                "Alex",
+                change(3),
+                Instant.parse("2026-04-23T08:00:02Z"),
+                Duration.ofSeconds(10),
+                2
+        );
+
+        assertEquals(2, historyManager.selectUndo(projectId, "Alex").action().size());
+        assertEquals(1, historyManager.selectUndo(projectId, "Steve").action().size());
     }
 
     @Test
