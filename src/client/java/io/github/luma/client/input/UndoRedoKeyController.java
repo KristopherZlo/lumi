@@ -169,10 +169,9 @@ public final class UndoRedoKeyController {
             BuildProject project,
             boolean undo
     ) throws Exception {
-        String actor = this.playerActor(client);
         UndoRedoActionStack.Selection selection = undo
-                ? this.historyManager.selectUndo(project.id().toString(), actor)
-                : this.historyManager.selectRedo(project.id().toString(), actor);
+                ? this.historyManager.selectUndo(project.id().toString())
+                : this.historyManager.selectRedo(project.id().toString());
         if (selection == null) {
             return false;
         }
@@ -188,8 +187,8 @@ public final class UndoRedoKeyController {
 
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
         selection = undo
-                ? this.historyManager.selectUndo(project.id().toString(), actor)
-                : this.historyManager.selectRedo(project.id().toString(), actor);
+                ? this.historyManager.selectUndo(project.id().toString())
+                : this.historyManager.selectRedo(project.id().toString());
         if (selection == null) {
             return false;
         }

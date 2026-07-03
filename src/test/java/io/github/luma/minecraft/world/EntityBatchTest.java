@@ -56,6 +56,24 @@ class EntityBatchTest {
     }
 
     @Test
+    void preparedChunkBatchCopiesReplayContextIntoEntityBatch() {
+        EntityBatch batch = new EntityBatch(
+                List.of(entity("minecraft:creeper", "00000000-0000-0000-0000-000000000010")),
+                List.of(),
+                List.of()
+        );
+        PreparedChunkBatch prepared = new PreparedChunkBatch(new ChunkPoint(9, 10), List.of(), batch);
+        EntityBatch.ReplayContext context = new EntityBatch.ReplayContext("builder", "undo-fallout", true);
+
+        PreparedChunkBatch contextual = prepared.withEntityReplayContext(context);
+
+        assertEquals(context, contextual.entityBatch().replayContext());
+        assertEquals(prepared.chunk(), contextual.chunk());
+        assertEquals(prepared.placements(), contextual.placements());
+        assertEquals(prepared.nativeSections(), contextual.nativeSections());
+    }
+
+    @Test
     void preparedChunkBatchCarriesEntityBatchIntoChunkBatch() {
         EntityBatch entityBatch = new EntityBatch(
                 List.of(entity("minecraft:item", "00000000-0000-0000-0000-000000000003")),

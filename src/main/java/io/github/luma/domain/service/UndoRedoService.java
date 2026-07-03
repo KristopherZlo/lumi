@@ -161,7 +161,9 @@ public final class UndoRedoService {
                             ),
                             EntityApplyMode.DELTA
                     );
-                    batches = this.withReplayContext(batches, replayContext);
+                    batches = batches.stream()
+                            .map(batch -> batch.withEntityReplayContext(replayContext))
+                            .toList();
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,
                             () -> {
@@ -220,23 +222,6 @@ public final class UndoRedoService {
             case "explosion", "explosive", "mob" -> true;
             default -> false;
         };
-    }
-
-    private List<PreparedChunkBatch> withReplayContext(
-            List<PreparedChunkBatch> batches,
-            EntityBatch.ReplayContext replayContext
-    ) {
-        if (batches == null || batches.isEmpty()) {
-            return List.of();
-        }
-        return batches.stream()
-                .map(batch -> new PreparedChunkBatch(
-                        batch.chunk(),
-                        batch.placements(),
-                        batch.nativeSections(),
-                        batch.entityBatch().withReplayContext(replayContext)
-                ))
-                .toList();
     }
 
     private enum Direction {

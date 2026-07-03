@@ -25,8 +25,8 @@ class UndoRedoServiceDiagnosticsTest {
         String applier = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/world/BlockChangeApplier.java"));
 
         assertTrue(undoRedoService.contains("new EntityBatch.ReplayContext("));
-        assertTrue(undoRedoService.contains("withReplayContext(batches, replayContext)"));
-        assertTrue(quickRollbackService.contains("withReplayContext(batches, replayContext)"));
+        assertTrue(undoRedoService.contains("batch.withEntityReplayContext(replayContext)"));
+        assertTrue(quickRollbackService.contains("batch.withEntityReplayContext(replayContext)"));
         assertTrue(applier.contains("rememberReplayAction("));
     }
 

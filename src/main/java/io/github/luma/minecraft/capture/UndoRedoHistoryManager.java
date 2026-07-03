@@ -20,7 +20,7 @@ public final class UndoRedoHistoryManager {
     private static final UndoRedoHistoryManager INSTANCE = new UndoRedoHistoryManager();
 
     private final Map<String, Map<String, UndoRedoActionStack>> projectStacks = new HashMap<>();
-    private final Map<String, Map<String, String>> projectKeyOwners = new HashMap<>();
+    private final Map<String, Map<String, KeyOwner>> projectKeyOwners = new HashMap<>();
 
     private UndoRedoHistoryManager() {
     }
@@ -42,7 +42,7 @@ public final class UndoRedoHistoryManager {
         }
         UndoRedoActionStack stack = this.stack(projectId, actor);
         stack.recordChange(actionId, actor, projectId, dimensionId, change, now);
-        this.markOwner(projectId, actionId, dimensionId, change);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized void recordRelatedChange(
@@ -64,7 +64,7 @@ public final class UndoRedoHistoryManager {
         long revision = stack.revision();
         stack.recordRelatedChange(dimensionId, change, now, maxIdle, chunkRadius);
         if (before != null && stack.revision() != revision) {
-            this.markOwner(projectId, before.id(), dimensionId, change);
+            this.rebuildOwners(projectId);
         }
     }
 
@@ -83,7 +83,7 @@ public final class UndoRedoHistoryManager {
         }
         UndoRedoAction action = stack.selectUndo().action();
         stack.recordCausalChange(actionId, change, now);
-        this.markOwner(projectId, actionId, action.dimensionId(), change);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized void recordCurrentCausalChange(
@@ -99,7 +99,7 @@ public final class UndoRedoHistoryManager {
         }
         UndoRedoActionStack stack = this.stack(projectId, actor);
         stack.recordCurrentCausalChange(actionId, actor, projectId, dimensionId, change, now);
-        this.markOwner(projectId, actionId, dimensionId, change);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized void recordRelatedEntityChange(
@@ -121,7 +121,7 @@ public final class UndoRedoHistoryManager {
         long revision = stack.revision();
         stack.recordRelatedEntityChange(dimensionId, change, now, maxIdle, chunkRadius);
         if (before != null && stack.revision() != revision) {
-            this.markOwner(projectId, before.id(), dimensionId, change);
+            this.rebuildOwners(projectId);
         }
     }
 
@@ -140,7 +140,7 @@ public final class UndoRedoHistoryManager {
         }
         UndoRedoAction action = stack.selectUndo().action();
         stack.recordCausalEntityChange(actionId, change, now);
-        this.markOwner(projectId, actionId, action.dimensionId(), change);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized void recordEntityChange(
@@ -156,7 +156,7 @@ public final class UndoRedoHistoryManager {
         }
         UndoRedoActionStack stack = this.stack(projectId, actor);
         stack.recordEntityChange(actionId, actor, projectId, dimensionId, change, now);
-        this.markOwner(projectId, actionId, dimensionId, change);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized void recordDelayedEntityChange(
@@ -181,7 +181,7 @@ public final class UndoRedoHistoryManager {
                 actionStartedAt,
                 now
         );
-        this.markOwner(projectId, actionId, dimensionId, change);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized void recordDelayedEntityChanges(
@@ -206,7 +206,7 @@ public final class UndoRedoHistoryManager {
                 actionStartedAt,
                 now
         );
-        this.markOwners(projectId, actionId, dimensionId, List.of(), changes);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized void recordAction(
@@ -223,7 +223,7 @@ public final class UndoRedoHistoryManager {
         }
         UndoRedoActionStack stack = this.stack(projectId, actor);
         stack.recordAction(actionId, actor, projectId, dimensionId, changes, entityChanges, now);
-        this.markOwners(projectId, actionId, dimensionId, changes, entityChanges);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized void recordCausalAction(
@@ -242,7 +242,7 @@ public final class UndoRedoHistoryManager {
         }
         UndoRedoAction action = stack.selectUndo().action();
         stack.recordCausalAction(actionId, changes, entityChanges, now);
-        this.markOwners(projectId, actionId, action.dimensionId(), changes, entityChanges);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized void recordCurrentCausalAction(
@@ -267,7 +267,7 @@ public final class UndoRedoHistoryManager {
                 entityChanges,
                 now
         );
-        this.markOwners(projectId, actionId, dimensionId, changes, entityChanges);
+        this.rebuildOwners(projectId);
     }
 
     public synchronized UndoRedoActionStack.Selection selectUndo(String projectId) {
@@ -293,13 +293,14 @@ public final class UndoRedoHistoryManager {
             return null;
         }
         UndoRedoActionStack.Selection selection = stack.selectRedo();
-        return this.isCurrent(projectId, selection) ? selection : null;
+        return this.canRedo(projectId, selection) ? selection : null;
     }
 
     public synchronized void completeUndo(String projectId, UndoRedoActionStack.Selection selection) {
         UndoRedoActionStack stack = this.stackForSelection(projectId, selection);
         if (stack != null) {
             stack.completeUndo(selection);
+            this.rebuildOwners(projectId);
         }
     }
 
@@ -307,6 +308,7 @@ public final class UndoRedoHistoryManager {
         UndoRedoActionStack stack = this.stackForSelection(projectId, selection);
         if (stack != null) {
             stack.completeRedo(selection);
+            this.rebuildOwners(projectId);
         }
     }
 
@@ -425,7 +427,7 @@ public final class UndoRedoHistoryManager {
         }
         return stacks.values().stream()
                 .map(stack -> undo ? stack.selectUndo() : stack.selectRedo())
-                .filter(selection -> this.isCurrent(projectId, selection))
+                .filter(selection -> undo ? this.isCurrent(projectId, selection) : this.canRedo(projectId, selection))
                 .max(Comparator.comparing(selection -> selection.action().updatedAt()))
                 .orElse(null);
     }
@@ -443,7 +445,7 @@ public final class UndoRedoHistoryManager {
             actions.addAll(undo ? stack.recentUndoActions(count) : stack.recentRedoActions(count));
         }
         return actions.stream()
-                .filter(action -> this.actionIsCurrent(projectId, action))
+                .filter(action -> undo ? this.actionIsCurrent(projectId, action) : this.actionCanRedo(projectId, action))
                 .sorted(Comparator.comparing(UndoRedoAction::updatedAt).reversed())
                 .limit(count)
                 .toList();
@@ -453,54 +455,70 @@ public final class UndoRedoHistoryManager {
         return selection != null && this.actionIsCurrent(projectId, selection.action());
     }
 
+    private boolean canRedo(String projectId, UndoRedoActionStack.Selection selection) {
+        return selection != null && this.actionCanRedo(projectId, selection.action());
+    }
+
     private boolean actionIsCurrent(String projectId, UndoRedoAction action) {
         if (action == null) {
             return false;
         }
-        Map<String, String> owners = this.projectKeyOwners.get(projectId);
+        Map<String, KeyOwner> owners = this.projectKeyOwners.get(projectId);
         if (owners == null || owners.isEmpty()) {
             return true;
         }
         for (String key : this.keys(action)) {
-            String owner = owners.get(key);
-            if (owner != null && !owner.equals(action.id())) {
+            KeyOwner owner = owners.get(key);
+            if (owner != null && !owner.actionId().equals(action.id())) {
                 return false;
             }
         }
         return true;
     }
 
-    private void markOwners(
-            String projectId,
-            String actionId,
-            String dimensionId,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges
-    ) {
-        for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
-            this.markOwner(projectId, actionId, dimensionId, change);
+    private boolean actionCanRedo(String projectId, UndoRedoAction action) {
+        if (action == null) {
+            return false;
         }
-        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
-            this.markOwner(projectId, actionId, dimensionId, change);
+        Map<String, KeyOwner> owners = this.projectKeyOwners.get(projectId);
+        if (owners == null || owners.isEmpty()) {
+            return true;
+        }
+        for (String key : this.keys(action)) {
+            KeyOwner owner = owners.get(key);
+            if (owner != null && owner.updatedAt().isAfter(action.updatedAt())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void rebuildOwners(String projectId) {
+        Map<String, UndoRedoActionStack> stacks = this.projectStacks.get(projectId);
+        if (stacks == null || stacks.isEmpty()) {
+            this.projectKeyOwners.remove(projectId);
+            return;
+        }
+
+        Map<String, KeyOwner> owners = new HashMap<>();
+        stacks.values().stream()
+                .flatMap(stack -> stack.recentUndoActions(64).stream())
+                .sorted(Comparator.comparing(UndoRedoAction::updatedAt))
+                .forEach(action -> this.markOwners(owners, action));
+        if (owners.isEmpty()) {
+            this.projectKeyOwners.remove(projectId);
+        } else {
+            this.projectKeyOwners.put(projectId, owners);
         }
     }
 
-    private void markOwner(String projectId, String actionId, String dimensionId, StoredBlockChange change) {
-        if (projectId == null || projectId.isBlank() || actionId == null || actionId.isBlank()
-                || change == null || change.pos() == null) {
+    private void markOwners(Map<String, KeyOwner> owners, UndoRedoAction action) {
+        if (owners == null || action == null || action.id() == null || action.id().isBlank()) {
             return;
         }
-        this.projectKeyOwners.computeIfAbsent(projectId, ignored -> new HashMap<>())
-                .put("b:" + dimensionId + ":" + change.pos().x() + ":" + change.pos().y() + ":" + change.pos().z(), actionId);
-    }
-
-    private void markOwner(String projectId, String actionId, String dimensionId, StoredEntityChange change) {
-        if (projectId == null || projectId.isBlank() || actionId == null || actionId.isBlank()
-                || change == null || change.entityId() == null || change.entityId().isBlank()) {
-            return;
+        for (String key : this.keys(action)) {
+            owners.put(key, new KeyOwner(action.id(), action.updatedAt()));
         }
-        this.projectKeyOwners.computeIfAbsent(projectId, ignored -> new HashMap<>())
-                .put("e:" + dimensionId + ":" + change.entityId(), actionId);
     }
 
     private List<String> keys(UndoRedoAction action) {
@@ -540,5 +558,8 @@ public final class UndoRedoHistoryManager {
             undoActions = undoActions == null ? List.of() : List.copyOf(undoActions);
             redoActions = redoActions == null ? List.of() : List.copyOf(redoActions);
         }
+    }
+
+    private record KeyOwner(String actionId, Instant updatedAt) {
     }
 }

@@ -3,6 +3,7 @@ package io.github.luma.minecraft.capture;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.UndoRedoActionStack;
 import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
@@ -101,6 +102,78 @@ class UndoRedoHistoryManagerTest {
 
         assertNull(historyManager.selectUndo(projectId, "Alex"));
         assertEquals("steve-action", historyManager.selectUndo(projectId, "Steve").action().id());
+    }
+
+    @Test
+    void undoingLaterPlayerEditRevealsPreviousOwnerForSameBlock() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "player-conflict-ledger-undo-test";
+        historyManager.clearProject(projectId);
+
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-action",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "steve-action",
+                "Steve",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        UndoRedoActionStack.Selection steveUndo = historyManager.selectUndo(projectId, "Steve");
+        historyManager.completeUndo(projectId, steveUndo);
+
+        assertEquals("alex-action", historyManager.selectUndo(projectId, "Alex").action().id());
+        assertEquals("steve-action", historyManager.selectRedo(projectId, "Steve").action().id());
+    }
+
+    @Test
+    void laterEditAfterUndoBlocksRedoForSameBlock() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "player-conflict-ledger-redo-test";
+        historyManager.clearProject(projectId);
+
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-action",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "steve-action",
+                "Steve",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        historyManager.completeUndo(projectId, historyManager.selectUndo(projectId, "Steve"));
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-followup",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:02Z")
+        );
+
+        assertEquals("alex-followup", historyManager.selectUndo(projectId, "Alex").action().id());
+        assertNull(historyManager.selectRedo(projectId, "Steve"));
     }
 
     private static StoredBlockChange change(int x) {
