@@ -2,6 +2,7 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import io.github.luma.minecraft.capture.EntityConstructionStateAccess;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.EntityMutationTracker.PendingEntityMutation;
@@ -19,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Entity.class)
-abstract class EntityMutationMixin {
+abstract class EntityMutationMixin implements EntityConstructionStateAccess {
 
     @Unique
     private static final EntityCausalContextRegistry LUMA_ENTITY_CAUSAL_CONTEXTS =
@@ -31,6 +32,11 @@ abstract class EntityMutationMixin {
     @Inject(method = "<init>", at = @At("RETURN"))
     private void luma$markBaseEntityConstructed(EntityType<?> entityType, Level level, CallbackInfo ci) {
         this.luma$baseEntityConstructed = true;
+    }
+
+    @Override
+    public boolean luma$baseEntityConstructed() {
+        return this.luma$baseEntityConstructed;
     }
 
     @WrapMethod(method = "setPos(DDD)V")
