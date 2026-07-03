@@ -6,7 +6,6 @@ import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -47,27 +46,6 @@ public final class UndoRedoHistoryManager {
         this.finishStackMutation(projectId, stack, revision);
     }
 
-    public synchronized void recordRelatedChange(
-            String projectId,
-            String dimensionId,
-            String actor,
-            StoredBlockChange change,
-            Instant now,
-            Duration maxIdle,
-            int chunkRadius
-    ) {
-        if (projectId == null || projectId.isBlank() || actor == null || actor.isBlank()) {
-            return;
-        }
-        UndoRedoActionStack stack = this.stack(projectId, actor, false);
-        if (stack == null) {
-            return;
-        }
-        long revision = stack.revision();
-        stack.recordRelatedChange(dimensionId, change, now, maxIdle, chunkRadius);
-        this.finishStackMutation(projectId, stack, revision);
-    }
-
     public synchronized void recordCausalChange(
             String projectId,
             String actionId,
@@ -100,27 +78,6 @@ public final class UndoRedoHistoryManager {
         UndoRedoActionStack stack = this.stack(projectId, actor);
         long revision = stack.revision();
         stack.recordCurrentCausalChange(actionId, actor, projectId, dimensionId, change, now);
-        this.finishStackMutation(projectId, stack, revision);
-    }
-
-    public synchronized void recordRelatedEntityChange(
-            String projectId,
-            String dimensionId,
-            String actor,
-            StoredEntityChange change,
-            Instant now,
-            Duration maxIdle,
-            int chunkRadius
-    ) {
-        if (projectId == null || projectId.isBlank() || actor == null || actor.isBlank()) {
-            return;
-        }
-        UndoRedoActionStack stack = this.stack(projectId, actor, false);
-        if (stack == null) {
-            return;
-        }
-        long revision = stack.revision();
-        stack.recordRelatedEntityChange(dimensionId, change, now, maxIdle, chunkRadius);
         this.finishStackMutation(projectId, stack, revision);
     }
 

@@ -1,6 +1,5 @@
 package io.github.luma.domain.model;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -86,79 +85,6 @@ public final class UndoRedoAction {
         this.updatedAt = now;
         this.version += 1;
         return true;
-    }
-
-    public boolean canAbsorbRelatedChange(
-            String dimensionId,
-            StoredBlockChange change,
-            Instant now,
-            Duration maxIdle,
-            int chunkRadius
-    ) {
-        if (change == null || change.isNoOp() || now == null || maxIdle == null || this.isEmpty()) {
-            return false;
-        }
-        if (!Objects.equals(this.dimensionId, dimensionId)) {
-            return false;
-        }
-        if (Duration.between(this.updatedAt, now).compareTo(maxIdle) > 0) {
-            return false;
-        }
-
-        int targetChunkX = change.pos().x() >> 4;
-        int targetChunkZ = change.pos().z() >> 4;
-        for (StoredBlockChange existing : this.changes.values()) {
-            int chunkX = existing.pos().x() >> 4;
-            int chunkZ = existing.pos().z() >> 4;
-            if (Math.abs(chunkX - targetChunkX) <= chunkRadius
-                    && Math.abs(chunkZ - targetChunkZ) <= chunkRadius) {
-                return true;
-            }
-        }
-        for (StoredEntityChange existing : this.entityChanges.values()) {
-            ChunkPoint chunk = existing.chunk();
-            if (Math.abs(chunk.x() - targetChunkX) <= chunkRadius
-                    && Math.abs(chunk.z() - targetChunkZ) <= chunkRadius) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public boolean canAbsorbRelatedEntityChange(
-            String dimensionId,
-            StoredEntityChange change,
-            Instant now,
-            Duration maxIdle,
-            int chunkRadius
-    ) {
-        if (change == null || change.isNoOp() || now == null || maxIdle == null || this.isEmpty()) {
-            return false;
-        }
-        if (!Objects.equals(this.dimensionId, dimensionId)) {
-            return false;
-        }
-        if (Duration.between(this.updatedAt, now).compareTo(maxIdle) > 0) {
-            return false;
-        }
-
-        ChunkPoint targetChunk = change.chunk();
-        for (StoredBlockChange existing : this.changes.values()) {
-            int chunkX = existing.pos().x() >> 4;
-            int chunkZ = existing.pos().z() >> 4;
-            if (Math.abs(chunkX - targetChunk.x()) <= chunkRadius
-                    && Math.abs(chunkZ - targetChunk.z()) <= chunkRadius) {
-                return true;
-            }
-        }
-        for (StoredEntityChange existing : this.entityChanges.values()) {
-            ChunkPoint chunk = existing.chunk();
-            if (Math.abs(chunk.x() - targetChunk.x()) <= chunkRadius
-                    && Math.abs(chunk.z() - targetChunk.z()) <= chunkRadius) {
-                return true;
-            }
-        }
-        return false;
     }
 
     public boolean isEmpty() {

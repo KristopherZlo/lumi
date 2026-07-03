@@ -2,18 +2,15 @@ package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
-import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -21,38 +18,6 @@ import net.minecraft.server.level.ServerLevel;
  * working draft.
  */
 final class LiveUndoRedoActionRecorder {
-
-    private static final Duration SECONDARY_ACTION_JOIN_WINDOW = Duration.ofSeconds(10);
-    private static final int SECONDARY_SOURCE_JOIN_RADIUS = 2;
-    private static final Duration SPREADING_FALLOUT_JOIN_WINDOW = Duration.ofSeconds(60);
-    private static final int SPREADING_FALLOUT_JOIN_RADIUS = 8;
-    private static final Set<String> FALLING_BLOCK_IDS = Set.of(
-            "minecraft:sand",
-            "minecraft:red_sand",
-            "minecraft:gravel",
-            "minecraft:suspicious_sand",
-            "minecraft:suspicious_gravel",
-            "minecraft:dragon_egg",
-            "minecraft:anvil",
-            "minecraft:chipped_anvil",
-            "minecraft:damaged_anvil",
-            "minecraft:white_concrete_powder",
-            "minecraft:light_gray_concrete_powder",
-            "minecraft:gray_concrete_powder",
-            "minecraft:black_concrete_powder",
-            "minecraft:brown_concrete_powder",
-            "minecraft:red_concrete_powder",
-            "minecraft:orange_concrete_powder",
-            "minecraft:yellow_concrete_powder",
-            "minecraft:lime_concrete_powder",
-            "minecraft:green_concrete_powder",
-            "minecraft:cyan_concrete_powder",
-            "minecraft:light_blue_concrete_powder",
-            "minecraft:blue_concrete_powder",
-            "minecraft:purple_concrete_powder",
-            "minecraft:magenta_concrete_powder",
-            "minecraft:pink_concrete_powder"
-    );
 
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final UndoRedoActionGroupingPolicy groupingPolicy = new UndoRedoActionGroupingPolicy();
@@ -98,17 +63,6 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
         if (actionAllowed && !actionId.isBlank()) {
-            if (defersImmediateCausalChange(WorldMutationContext.currentSource(), change)) {
-                this.historyDebugLog.logSkippedLiveUndoRedoBlock(
-                        trackedProject.project(),
-                        "growth-deferred-immediate",
-                        "waiting-for-settled-reconciliation",
-                        actionId,
-                        WorldMutationContext.currentSource(),
-                        change
-                );
-                return;
-            }
             this.historyManager.recordCurrentCausalChange(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
@@ -135,18 +89,10 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
 
-        this.historyManager.recordRelatedChange(
-                trackedProject.project().id().toString(),
-                level.dimension().identifier().toString(),
-                WorldMutationContext.currentActor(),
-                change,
-                now,
-                relatedJoinWindowFor(WorldMutationContext.currentSource()),
-                relatedJoinRadiusFor(WorldMutationContext.currentSource())
-        );
-        this.historyDebugLog.logLiveUndoRedoBlock(
+        this.historyDebugLog.logSkippedLiveUndoRedoBlock(
                 trackedProject.project(),
-                "related",
+                "missing-action-context",
+                "live-undo-requires-action-id",
                 actionId,
                 WorldMutationContext.currentSource(),
                 change
@@ -250,16 +196,6 @@ final class LiveUndoRedoActionRecorder {
         if (this.sourcePolicy.isExplicitRootSource(source) || requiresCausalActionForEntityReplay(source)) {
             return;
         }
-
-        this.historyManager.recordRelatedEntityChange(
-                trackedProject.project().id().toString(),
-                level.dimension().identifier().toString(),
-                WorldMutationContext.currentActor(),
-                change,
-                now,
-                relatedJoinWindowFor(source),
-                relatedJoinRadiusFor(source)
-        );
     }
 
     void recordEntityAction(
@@ -313,7 +249,7 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
         Map<CaptureSessionState.DeferredActionContext, List<StoredBlockChange>> actionChanges = new LinkedHashMap<>();
-        List<StoredBlockChange> relatedChanges = new ArrayList<>();
+        List<StoredBlockChange> skippedChanges = new ArrayList<>();
         Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredContexts =
                 result.deferredActionContexts();
         for (StoredBlockChange change : changes) {
@@ -325,7 +261,7 @@ final class LiveUndoRedoActionRecorder {
             if (this.canRecordDeferredAction(level, deferredContext)) {
                 actionChanges.computeIfAbsent(deferredContext, ignored -> new ArrayList<>()).add(change);
             } else {
-                relatedChanges.add(change);
+                skippedChanges.add(change);
             }
         }
 
@@ -349,7 +285,7 @@ final class LiveUndoRedoActionRecorder {
             );
         }
 
-        for (StoredBlockChange change : relatedChanges) {
+        for (StoredBlockChange change : skippedChanges) {
             if (change.hidden()) {
                 this.historyDebugLog.logSkippedLiveUndoRedoBlock(
                         trackedProject.project(),
@@ -372,22 +308,6 @@ final class LiveUndoRedoActionRecorder {
         }
     }
 
-    static Duration relatedJoinWindowFor(WorldMutationSource source) {
-        return isSpreadingFalloutSource(source) ? SPREADING_FALLOUT_JOIN_WINDOW : SECONDARY_ACTION_JOIN_WINDOW;
-    }
-
-    static int relatedJoinRadiusFor(WorldMutationSource source) {
-        return isSpreadingFalloutSource(source) ? SPREADING_FALLOUT_JOIN_RADIUS : SECONDARY_SOURCE_JOIN_RADIUS;
-    }
-
-    static Duration relatedJoinWindowFor(StoredBlockChange change) {
-        return isSpreadingFalloutChange(change) ? SPREADING_FALLOUT_JOIN_WINDOW : SECONDARY_ACTION_JOIN_WINDOW;
-    }
-
-    static int relatedJoinRadiusFor(StoredBlockChange change) {
-        return isSpreadingFalloutChange(change) ? SPREADING_FALLOUT_JOIN_RADIUS : SECONDARY_SOURCE_JOIN_RADIUS;
-    }
-
     static List<StoredBlockChange> recordableBlockChanges(List<StoredBlockChange> changes) {
         return changes == null
                 ? List.of()
@@ -396,36 +316,8 @@ final class LiveUndoRedoActionRecorder {
                 .toList();
     }
 
-    static boolean defersImmediateCausalChange(WorldMutationSource source, StoredBlockChange change) {
-        return false;
-    }
-
     static boolean requiresCausalActionForEntityReplay(WorldMutationSource source) {
         return source == WorldMutationSource.EXPLOSION || source == WorldMutationSource.MOB;
-    }
-
-    private static boolean isSpreadingFalloutSource(WorldMutationSource source) {
-        return source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK;
-    }
-
-    private static boolean isSpreadingFalloutChange(StoredBlockChange change) {
-        return change != null
-                && (isFluidState(change.oldValue())
-                || isFluidState(change.newValue())
-                || isFallingBlockState(change.oldValue())
-                || isFallingBlockState(change.newValue()));
-    }
-
-    private static boolean isFluidState(StatePayload payload) {
-        if (payload == null) {
-            return false;
-        }
-        String blockId = payload.blockId();
-        return "minecraft:water".equals(blockId) || "minecraft:lava".equals(blockId);
-    }
-
-    private static boolean isFallingBlockState(StatePayload payload) {
-        return payload != null && FALLING_BLOCK_IDS.contains(payload.blockId());
     }
 
     private boolean canRecordDeferredAction(

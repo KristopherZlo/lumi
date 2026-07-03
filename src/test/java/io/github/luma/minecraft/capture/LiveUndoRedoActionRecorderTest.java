@@ -7,7 +7,6 @@ import io.github.luma.domain.model.WorldMutationSource;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
@@ -18,39 +17,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LiveUndoRedoActionRecorderTest {
-
-    @Test
-    void spreadingFalloutUsesWiderRelatedActionWindow() {
-        assertEquals(Duration.ofSeconds(60), LiveUndoRedoActionRecorder.relatedJoinWindowFor(WorldMutationSource.FLUID));
-        assertEquals(Duration.ofSeconds(60), LiveUndoRedoActionRecorder.relatedJoinWindowFor(WorldMutationSource.FALLING_BLOCK));
-        assertEquals(8, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(WorldMutationSource.FLUID));
-        assertEquals(8, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(WorldMutationSource.FALLING_BLOCK));
-    }
-
-    @Test
-    void ordinarySecondarySourcesKeepTightRelatedActionWindow() {
-        assertEquals(Duration.ofSeconds(10), LiveUndoRedoActionRecorder.relatedJoinWindowFor(WorldMutationSource.BLOCK_UPDATE));
-        assertEquals(2, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(WorldMutationSource.BLOCK_UPDATE));
-    }
-
-    @Test
-    void reconciledFluidFallbackChangesUseWiderRelatedActionWindow() {
-        StoredBlockChange fluidChange = new StoredBlockChange(
-                new BlockPoint(0, 64, 0),
-                state("minecraft:air"),
-                state("minecraft:water")
-        );
-        StoredBlockChange ordinaryChange = new StoredBlockChange(
-                new BlockPoint(1, 64, 0),
-                state("minecraft:air"),
-                state("minecraft:stone")
-        );
-
-        assertEquals(Duration.ofSeconds(60), LiveUndoRedoActionRecorder.relatedJoinWindowFor(fluidChange));
-        assertEquals(8, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(fluidChange));
-        assertEquals(Duration.ofSeconds(10), LiveUndoRedoActionRecorder.relatedJoinWindowFor(ordinaryChange));
-        assertEquals(2, LiveUndoRedoActionRecorder.relatedJoinRadiusFor(ordinaryChange));
-    }
 
     @Test
     void hiddenCausalBlockChangesRemainRecordableForUndoRedo() {
@@ -78,21 +44,6 @@ class LiveUndoRedoActionRecorderTest {
     }
 
     @Test
-    void hiddenGrowthChangesRecordImmediatelyForUndoRedo() {
-        StoredBlockChange hiddenGrowth = new StoredBlockChange(
-                new BlockPoint(0, 64, 0),
-                state("minecraft:moss_block"),
-                state("minecraft:azalea"),
-                true
-        );
-
-        assertFalse(LiveUndoRedoActionRecorder.defersImmediateCausalChange(
-                WorldMutationSource.GROWTH,
-                hiddenGrowth
-        ));
-    }
-
-    @Test
     void mobAndExplosionEntityReplayRequireCausalAction() {
         assertTrue(LiveUndoRedoActionRecorder.requiresCausalActionForEntityReplay(WorldMutationSource.EXPLOSION));
         assertTrue(LiveUndoRedoActionRecorder.requiresCausalActionForEntityReplay(WorldMutationSource.MOB));
@@ -116,6 +67,15 @@ class LiveUndoRedoActionRecorderTest {
         assertTrue(source.contains("void recordEntityAction(")
                 && source.contains("List<StoredEntityChange> changes"));
         assertTrue(source.contains("recordDelayedEntityChanges("));
+    }
+
+    @Test
+    void liveRecorderDoesNotUseRelatedJoinFallback() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/LiveUndoRedoActionRecorder.java"));
+
+        assertFalse(source.contains("recordRelatedChange("));
+        assertFalse(source.contains("recordRelatedEntityChange("));
+        assertFalse(source.contains("relatedJoin"));
     }
 
     private static StatePayload state(String blockId) {

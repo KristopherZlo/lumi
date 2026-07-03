@@ -98,18 +98,16 @@ class UndoRedoActionStackTest {
     }
 
     @Test
-    void relatedChangesDoNotClearRedoStack() {
+    void causalSecondaryChangesDoNotClearRedoStack() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
         stack.recordChange("action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
         stack.completeUndo(stack.selectUndo());
 
-        stack.recordRelatedChange(
-                "minecraft:overworld",
+        stack.recordCausalChange(
+                "action-1",
                 change(3, "minecraft:air", "minecraft:water"),
-                NOW.plusSeconds(2),
-                java.time.Duration.ofSeconds(10),
-                2
+                NOW.plusSeconds(2)
         );
 
         assertTrue(stack.canRedo());
@@ -123,12 +121,10 @@ class UndoRedoActionStackTest {
         stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
 
         UndoRedoActionStack.Selection selection = stack.selectUndo();
-        stack.recordRelatedChange(
-                "minecraft:overworld",
+        stack.recordCausalChange(
+                "action-1",
                 change(2, "minecraft:air", "minecraft:water"),
-                NOW.plusSeconds(2),
-                java.time.Duration.ofSeconds(10),
-                2
+                NOW.plusSeconds(2)
         );
         stack.completeUndo(selection);
 
@@ -152,25 +148,6 @@ class UndoRedoActionStackTest {
         assertEquals(revision, stack.revision());
         assertTrue(stack.canRedo());
         assertEquals("action-2", stack.recentRedoActions(1).getFirst().id());
-    }
-
-    @Test
-    void relatedChangesJoinLatestActionInsideJoinWindow() {
-        UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
-
-        stack.recordRelatedChange(
-                "minecraft:overworld",
-                change(18, "minecraft:air", "minecraft:water"),
-                NOW.plusSeconds(5),
-                java.time.Duration.ofSeconds(10),
-                2
-        );
-
-        UndoRedoActionStack.Selection selection = stack.selectUndo();
-        assertNotNull(selection);
-        assertEquals("action-1", selection.action().id());
-        assertEquals(2, selection.action().size());
     }
 
     @Test
@@ -255,27 +232,6 @@ class UndoRedoActionStackTest {
     }
 
     @Test
-    void relatedFluidUsesLatestAppliedStateFromOlderAction() {
-        UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("pre-cut-gap", "Alex", "project", "minecraft:overworld",
-                change(1, "minecraft:grass_block", "minecraft:air"), NOW);
-        stack.recordChange("release-water", "Alex", "project", "minecraft:overworld",
-                change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
-
-        stack.recordRelatedChange(
-                "minecraft:overworld",
-                change(1, "minecraft:grass_block", "minecraft:water"),
-                NOW.plusSeconds(2),
-                java.time.Duration.ofSeconds(10),
-                1
-        );
-
-        StoredBlockChange floodedGap = changeAt(stack.selectUndo().action(), 1);
-        assertEquals("minecraft:air", floodedGap.oldValue().blockId());
-        assertEquals("minecraft:water", floodedGap.newValue().blockId());
-    }
-
-    @Test
     void causalFluidDoesNotUseAppliedStateFromAnotherDimension() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("nether-place", "Alex", "project", "minecraft:the_nether",
@@ -307,27 +263,6 @@ class UndoRedoActionStackTest {
                 List.of(change(1, "minecraft:grass_block", "minecraft:water")),
                 List.of(),
                 NOW.plusSeconds(2)
-        );
-
-        StoredBlockChange floodedGap = changeAt(stack.selectUndo().action(), 1);
-        assertEquals("minecraft:grass_block", floodedGap.oldValue().blockId());
-        assertEquals("minecraft:water", floodedGap.newValue().blockId());
-    }
-
-    @Test
-    void relatedFluidDoesNotUseAppliedStateFromAnotherDimension() {
-        UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("nether-place", "Alex", "project", "minecraft:the_nether",
-                change(1, "minecraft:netherrack", "minecraft:redstone_torch"), NOW);
-        stack.recordChange("overworld-release", "Alex", "project", "minecraft:overworld",
-                change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
-
-        stack.recordRelatedChange(
-                "minecraft:overworld",
-                change(1, "minecraft:grass_block", "minecraft:water"),
-                NOW.plusSeconds(2),
-                java.time.Duration.ofSeconds(10),
-                1
         );
 
         StoredBlockChange floodedGap = changeAt(stack.selectUndo().action(), 1);
@@ -676,57 +611,6 @@ class UndoRedoActionStackTest {
         stack.completeRedo(stack.selectRedo());
         assertTrue(stack.canUndo());
         assertFalse(stack.canRedo());
-    }
-
-    @Test
-    void relatedEntityDropsJoinLatestNearbyAction() {
-        UndoRedoActionStack stack = new UndoRedoActionStack();
-        String entityId = "00000000-0000-0000-0000-000000000011";
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:air"), NOW);
-
-        stack.recordRelatedEntityChange(
-                "minecraft:overworld",
-                new StoredEntityChange(entityId, "minecraft:item", null, entity("minecraft:item", entityId, 2.0D)),
-                NOW.plusSeconds(2),
-                java.time.Duration.ofSeconds(10),
-                2
-        );
-
-        UndoRedoActionStack.Selection selection = stack.selectUndo();
-        assertNotNull(selection);
-        assertEquals(2, selection.action().size());
-        assertEquals(entityId, selection.action().undoEntityChanges().getFirst().entityId());
-    }
-
-    @Test
-    void relatedMinecartMovementJoinsLatestNearbyAction() {
-        UndoRedoActionStack stack = new UndoRedoActionStack();
-        String entityId = "00000000-0000-0000-0000-000000000018";
-        stack.recordChange("rail-toggle", "Alex", "project", "minecraft:overworld",
-                change(1, "minecraft:air", "minecraft:lever"), NOW);
-
-        stack.recordRelatedEntityChange(
-                "minecraft:overworld",
-                new StoredEntityChange(
-                        entityId,
-                        "minecraft:minecart",
-                        entity("minecraft:minecart", entityId, 1.0D),
-                        entity("minecraft:minecart", entityId, 2.0D)
-                ),
-                NOW.plusSeconds(2),
-                java.time.Duration.ofSeconds(10),
-                2
-        );
-
-        UndoRedoActionStack.Selection selection = stack.selectUndo();
-        assertNotNull(selection);
-        UndoRedoAction action = selection.action();
-        StoredEntityChange undo = action.undoEntityChanges().getFirst();
-        assertEquals(entityId, undo.entityId());
-        assertEquals(1.0D, action.inverseEntityChanges().getFirst().newValue()
-                .entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
-        assertEquals(2.0D, action.redoEntityChanges().getFirst().newValue()
-                .entityTag().getListOrEmpty("Pos").getDoubleOr(0, 0.0D));
     }
 
     @Test

@@ -1,6 +1,5 @@
 package io.github.luma.domain.model;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -51,22 +50,6 @@ public final class UndoRedoActionStack {
         return this.recordIntoAction(action, change, now, true);
     }
 
-    public long recordRelatedChange(
-            String dimensionId,
-            StoredBlockChange change,
-            Instant now,
-            Duration maxIdle,
-            int chunkRadius
-    ) {
-        UndoRedoAction action = this.undoStack.peekFirst();
-        StoredBlockChange recordableChange = this.withAppliedOldValue(dimensionId, change);
-        if (action == null || !action.canAbsorbRelatedChange(dimensionId, recordableChange, now, maxIdle, chunkRadius)) {
-            return this.revision;
-        }
-
-        return this.recordIntoAction(action, recordableChange, now, false);
-    }
-
     public long recordCausalChange(
             String actionId,
             StoredBlockChange change,
@@ -113,21 +96,6 @@ public final class UndoRedoActionStack {
         }
 
         return this.recordIntoAction(action, recordableChange, now, true);
-    }
-
-    public long recordRelatedEntityChange(
-            String dimensionId,
-            StoredEntityChange change,
-            Instant now,
-            Duration maxIdle,
-            int chunkRadius
-    ) {
-        UndoRedoAction action = this.undoStack.peekFirst();
-        if (action == null || !action.canAbsorbRelatedEntityChange(dimensionId, change, now, maxIdle, chunkRadius)) {
-            return this.revision;
-        }
-
-        return this.recordEntityIntoAction(action, change, now, false);
     }
 
     public long recordCausalEntityChange(
