@@ -325,6 +325,22 @@ public final class HistoryCaptureManager {
                 }
                 WorldMutationCapturePolicy.CapturedMutation mutation = captureResult.mutation();
                 StoredBlockChange capturedChange = mutation == null ? null : mutation.change();
+                if (ELIGIBILITY.isLiveUndoOnlySource(source)) {
+                    if (capturedChange != null) {
+                        this.liveUndoRedoActionRecorder.recordBlockAction(trackedProject, level, capturedChange, now);
+                        this.historyDebugLog.logCapturedBlock(
+                                trackedProject.project(),
+                                "live-only",
+                                source,
+                                pos,
+                                mutation.oldState(),
+                                mutation.newState(),
+                                0,
+                                0
+                        );
+                    }
+                    continue;
+                }
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }

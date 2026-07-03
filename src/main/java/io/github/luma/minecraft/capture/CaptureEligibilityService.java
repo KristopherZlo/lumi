@@ -74,6 +74,10 @@ final class CaptureEligibilityService {
         return this.sourcePolicy.usesLiveStateReconciliation(source);
     }
 
+    boolean isLiveUndoOnlySource(WorldMutationSource source) {
+        return this.sourcePolicy.isLiveUndoOnlySource(source);
+    }
+
     boolean canCaptureDeferredPreMutationBaseline(
             BuildProject project,
             WorldMutationSource source,
