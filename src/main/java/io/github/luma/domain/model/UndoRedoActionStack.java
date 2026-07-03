@@ -211,6 +211,9 @@ public final class UndoRedoActionStack {
 
         UndoRedoAction action = this.findUndoAction(actionId);
         if (action == null) {
+            if (this.findRedoAction(actionId) != null) {
+                return this.revision;
+            }
             Instant startedAt = actionStartedAt == null ? now : actionStartedAt;
             action = new UndoRedoAction(actionId, actor, projectId, dimensionId, startedAt, startedAt);
             this.insertUndoActionByStartedAt(action);
@@ -348,10 +351,18 @@ public final class UndoRedoActionStack {
     }
 
     private UndoRedoAction findUndoAction(String actionId) {
+        return this.findAction(this.undoStack, actionId);
+    }
+
+    private UndoRedoAction findRedoAction(String actionId) {
+        return this.findAction(this.redoStack, actionId);
+    }
+
+    private UndoRedoAction findAction(Deque<UndoRedoAction> stack, String actionId) {
         if (actionId == null || actionId.isBlank()) {
             return null;
         }
-        for (UndoRedoAction action : this.undoStack) {
+        for (UndoRedoAction action : stack) {
             if (action.id().equals(actionId)) {
                 return action;
             }

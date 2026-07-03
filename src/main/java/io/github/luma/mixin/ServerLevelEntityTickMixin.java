@@ -3,7 +3,6 @@ package io.github.luma.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
-import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.server.level.ServerLevel;
@@ -53,30 +52,7 @@ abstract class ServerLevelEntityTickMixin {
 
     @Unique
     private WorldMutationContext.SourceFrame luma$pushEntityTickSource(Entity entity, WorldMutationSource source) {
-        ServerPlayer player = source == WorldMutationSource.MOB ? this.luma$causalTargetPlayer(entity) : null;
-        if (player != null) {
-            WorldMutationContext.SourceFrame frame = WorldMutationContext.pushPlayerSource(
-                    WorldMutationSource.MOB,
-                    player.getName().getString(),
-                    LumaAccessControl.getInstance().canUse(player) || WorldMutationContext.currentAccessAllowed()
-            );
-            LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentPlayerActionIfAbsent(entity, (ServerLevel) (Object) this);
-            return frame;
-        }
         return WorldMutationContext.pushSource(source);
-    }
-
-    @Unique
-    private ServerPlayer luma$causalTargetPlayer(Entity entity) {
-        if (entity instanceof Mob mob && mob.getTarget() instanceof ServerPlayer player) {
-            return player;
-        }
-        if (entity instanceof Projectile projectile
-                && projectile.getOwner() instanceof Mob owner
-                && owner.getTarget() instanceof ServerPlayer player) {
-            return player;
-        }
-        return null;
     }
 
     @Unique

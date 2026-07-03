@@ -51,6 +51,29 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void delayedEntityFalloutAfterUndoDoesNotReopenUndoAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        String cowId = "00000000-0000-0000-0000-000000000060";
+        stack.recordChange("kill-cow", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:stone", "minecraft:air"), NOW);
+        stack.completeUndo(stack.selectUndo());
+
+        stack.recordDelayedEntityChange(
+                "kill-cow",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                new StoredEntityChange(cowId, "minecraft:cow", entity("minecraft:cow", cowId, 1.0D), null),
+                NOW,
+                NOW.plusSeconds(1)
+        );
+
+        assertFalse(stack.canUndo());
+        assertTrue(stack.canRedo());
+        assertEquals("kill-cow", stack.recentRedoActions(1).getFirst().id());
+    }
+
+    @Test
     void newActionClearsRedoStack() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);

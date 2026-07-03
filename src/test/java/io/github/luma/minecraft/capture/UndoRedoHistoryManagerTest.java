@@ -9,6 +9,7 @@ import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UndoRedoHistoryManagerTest {
@@ -41,6 +42,65 @@ class UndoRedoHistoryManagerTest {
 
         assertTrue(historyManager.revision(projectId) > snapshot.revision());
         assertEquals(List.of("large-action"), snapshot.actions().stream().map(action -> action.id()).toList());
+    }
+
+    @Test
+    void playerScopedSelectionDoesNotReturnOtherPlayerActions() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "player-scoped-selection-test";
+        historyManager.clearProject(projectId);
+
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-action",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "steve-action",
+                "Steve",
+                List.of(change(2)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        assertEquals("alex-action", historyManager.selectUndo(projectId, "Alex").action().id());
+        assertEquals("steve-action", historyManager.selectUndo(projectId, "Steve").action().id());
+        assertNull(historyManager.selectUndo(projectId, "Herobrine"));
+    }
+
+    @Test
+    void laterPlayerEditBlocksStaleUndoForSameBlock() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "player-conflict-ledger-test";
+        historyManager.clearProject(projectId);
+
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-action",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "steve-action",
+                "Steve",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        assertNull(historyManager.selectUndo(projectId, "Alex"));
+        assertEquals("steve-action", historyManager.selectUndo(projectId, "Steve").action().id());
     }
 
     private static StoredBlockChange change(int x) {

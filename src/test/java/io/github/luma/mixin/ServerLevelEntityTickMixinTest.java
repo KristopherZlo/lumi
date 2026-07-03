@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ServerLevelEntityTickMixinTest {
@@ -20,23 +21,22 @@ class ServerLevelEntityTickMixinTest {
     }
 
     @Test
-    void aggroedMobTicksCarryPlayerCausalAction() throws Exception {
+    void aggroedMobTicksDoNotCreatePlayerActions() throws Exception {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelEntityTickMixin.java"));
 
         assertTrue(source.contains("entity instanceof Mob"));
-        assertTrue(source.contains("entity instanceof Mob mob"));
-        assertTrue(source.contains("mob.getTarget() instanceof ServerPlayer player"));
-        assertTrue(source.contains("WorldMutationContext.pushPlayerSource("));
-        assertTrue(source.contains("rememberCurrentPlayerActionIfAbsent"));
+        assertFalse(source.contains("mob.getTarget() instanceof ServerPlayer player"));
+        assertFalse(source.contains("WorldMutationContext.pushPlayerSource("));
+        assertFalse(source.contains("rememberCurrentPlayerActionIfAbsent"));
     }
 
     @Test
-    void mobProjectilesCarryOwnerTargetCausalAction() throws Exception {
+    void mobProjectilesDoNotCreatePlayerActionsFromOwnerTargets() throws Exception {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelEntityTickMixin.java"));
 
         assertTrue(source.contains("entity instanceof Projectile projectile"));
-        assertTrue(source.contains("projectile.getOwner() instanceof Mob owner"));
-        assertTrue(source.contains("owner.getTarget() instanceof ServerPlayer player"));
+        assertTrue(source.contains("projectile.getOwner() instanceof Mob"));
+        assertFalse(source.contains("owner.getTarget() instanceof ServerPlayer player"));
     }
 
     @Test
