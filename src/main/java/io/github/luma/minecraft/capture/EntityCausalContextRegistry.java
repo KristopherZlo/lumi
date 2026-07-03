@@ -26,7 +26,7 @@ public final class EntityCausalContextRegistry {
             ThreadLocal.withInitial(ArrayDeque::new);
 
     private final EntitySnapshotService snapshotService = new EntitySnapshotService();
-    private final Map<UUID, EntityCausalContext> contexts = new HashMap<>();
+    private final Map<EntityContextKey, EntityCausalContext> contexts = new HashMap<>();
 
     private EntityCausalContextRegistry() {
     }
@@ -46,7 +46,7 @@ public final class EntityCausalContextRegistry {
         }
 
         this.removeExpired(level.getGameTime());
-        this.contexts.put(entity.getUUID(), new EntityCausalContext(
+        this.contexts.put(this.key(entity, level), new EntityCausalContext(
                 WorldMutationContext.currentSource(),
                 WorldMutationContext.currentActor(),
                 WorldMutationContext.currentActionId(),
@@ -120,7 +120,7 @@ public final class EntityCausalContextRegistry {
         }
 
         this.removeExpired(level.getGameTime());
-        this.contexts.put(entity.getUUID(), new EntityCausalContext(
+        this.contexts.put(this.key(entity, level), new EntityCausalContext(
                 WorldMutationSource.MOB,
                 actor,
                 actionId,
@@ -139,7 +139,7 @@ public final class EntityCausalContextRegistry {
 
     public synchronized void clear(Entity entity) {
         if (entity != null && entity.getUUID() != null) {
-            this.contexts.remove(entity.getUUID());
+            this.contexts.keySet().removeIf(key -> entity.getUUID().equals(key.entityUuid()));
         }
     }
 
@@ -172,7 +172,7 @@ public final class EntityCausalContextRegistry {
             return null;
         }
         this.removeExpired(level.getGameTime());
-        return this.contexts.get(entity.getUUID());
+        return this.contexts.get(this.key(entity, level));
     }
 
     private boolean currentFrameHasDifferentAction(String expectedActionId) {
@@ -181,12 +181,19 @@ public final class EntityCausalContextRegistry {
     }
 
     private void removeExpired(long gameTime) {
-        Iterator<Map.Entry<UUID, EntityCausalContext>> iterator = this.contexts.entrySet().iterator();
+        Iterator<Map.Entry<EntityContextKey, EntityCausalContext>> iterator = this.contexts.entrySet().iterator();
         while (iterator.hasNext()) {
             if (iterator.next().getValue().expiresAtGameTime() < gameTime) {
                 iterator.remove();
             }
         }
+    }
+
+    private EntityContextKey key(Entity entity, ServerLevel level) {
+        return new EntityContextKey(level.dimension().identifier().toString(), entity.getUUID());
+    }
+
+    private record EntityContextKey(String dimensionId, UUID entityUuid) {
     }
 
     private record EntityCausalContext(

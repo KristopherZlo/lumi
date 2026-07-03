@@ -39,4 +39,14 @@ class EntityCausalContextRegistryTest {
         assertTrue(contextCheck > method);
         assertTrue(contextCheck < rememberCall);
     }
+
+    @Test
+    void causalContextsAreScopedByDimensionAndEntityUuid() throws Exception {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/capture/EntityCausalContextRegistry.java")
+        );
+
+        assertTrue(source.contains("Map<EntityContextKey, EntityCausalContext> contexts"));
+        assertTrue(source.contains("new EntityContextKey(level.dimension().identifier().toString(), entity.getUUID())"));
+    }
 }
