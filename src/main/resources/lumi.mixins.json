@@ -29,6 +29,7 @@
     "MovingPistonBlockTickerMixin",
     "PistonBaseBlockMixin",
     "PistonMovingBlockEntityContextMixin",
+    "ProjectileCausalContextMixin",
     "SaplingBlockMixin",
     "SculkSensorBlockEntityMixin",
     "ScheduledTickContextMixin",

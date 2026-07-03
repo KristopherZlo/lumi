@@ -57,6 +57,21 @@ abstract class LivingEntityCausalContextMixin {
         }
     }
 
+    @WrapMethod(method = "stopUsingItem")
+    private void luma$wrapStopUsingItem(Operation<Void> original) {
+        if (!((Object) this instanceof ServerPlayer player)) {
+            original.call();
+            return;
+        }
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushPlayerSource(
+                WorldMutationSource.PLAYER,
+                player.getName().getString(),
+                LumaAccessControl.getInstance().canUse(player) || WorldMutationContext.currentAccessAllowed()
+        )) {
+            original.call();
+        }
+    }
+
     @Unique
     private boolean luma$rememberDamageContext(LivingEntity entity, ServerLevel level, DamageSource damageSource) {
         if (LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentPlayerAction(entity, level)) {

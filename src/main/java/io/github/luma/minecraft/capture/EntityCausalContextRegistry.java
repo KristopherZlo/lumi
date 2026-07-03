@@ -66,6 +66,14 @@ public final class EntityCausalContextRegistry {
         return this.rememberCurrentPlayerAction(entity, level);
     }
 
+    public synchronized boolean rememberCurrentActionIfAbsent(Entity entity, ServerLevel level) {
+        EntityCausalContext context = this.context(entity, level);
+        if (context != null) {
+            return false;
+        }
+        return this.rememberCurrentPlayerAction(entity, level);
+    }
+
     public ContextFrame pushIfPresent(Entity entity, ServerLevel level) {
         return this.pushIfPresent(entity, level, null);
     }
