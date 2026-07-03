@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
+import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,6 +12,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
@@ -23,6 +25,9 @@ abstract class ServerLevelEntityTickMixin {
     @Unique
     private static final EntityCausalContextRegistry LUMA_ENTITY_CAUSAL_CONTEXTS =
             EntityCausalContextRegistry.getInstance();
+    @Unique
+    private static final ExplosiveEntityContextRegistry LUMA_EXPLOSIVE_CONTEXTS =
+            ExplosiveEntityContextRegistry.getInstance();
 
     @WrapMethod(method = "tickNonPassenger")
     private void luma$wrapEntityTick(Entity entity, Operation<Void> original) {
@@ -32,11 +37,13 @@ abstract class ServerLevelEntityTickMixin {
             return;
         }
 
-        EntityCausalContextRegistry.ContextFrame causalFrame =
-                this.luma$pushRememberedCausalMobAction(entity, source);
+        boolean explosiveFrame = this.luma$pushRememberedExplosiveAction(entity);
+        EntityCausalContextRegistry.ContextFrame causalFrame = explosiveFrame
+                ? null
+                : this.luma$pushRememberedCausalMobAction(entity, source);
         WorldMutationContext.SourceFrame sourceFrame = null;
         try {
-            if (causalFrame == null || !causalFrame.active()) {
+            if (!explosiveFrame && (causalFrame == null || !causalFrame.active())) {
                 sourceFrame = this.luma$pushEntityTickSource(entity, source);
             }
             original.call(entity);
@@ -46,6 +53,9 @@ abstract class ServerLevelEntityTickMixin {
             }
             if (causalFrame != null) {
                 causalFrame.close();
+            }
+            if (explosiveFrame) {
+                WorldMutationContext.popSource();
             }
         }
     }
@@ -67,9 +77,17 @@ abstract class ServerLevelEntityTickMixin {
     }
 
     @Unique
+    private boolean luma$pushRememberedExplosiveAction(Entity entity) {
+        return entity instanceof PrimedTnt && LUMA_EXPLOSIVE_CONTEXTS.pushContext(entity);
+    }
+
+    @Unique
     private WorldMutationSource luma$sourceForTrackedEntity(Entity entity) {
         if (entity instanceof ServerPlayer) {
             return null;
+        }
+        if (entity instanceof PrimedTnt) {
+            return WorldMutationSource.EXPLOSIVE;
         }
         if (entity instanceof FallingBlockEntity) {
             return WorldMutationSource.FALLING_BLOCK;

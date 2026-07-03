@@ -6,6 +6,7 @@ import io.github.luma.integration.common.ExternalToolMutationSourceResolver;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import io.github.luma.minecraft.capture.BlockEntitySnapshot;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.PostCallbackBlockMutationPolicy;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.ExactReplayStateGuard;
@@ -31,6 +32,9 @@ abstract class LevelSetBlockMixin {
     @Unique
     private static final ExactReplayStateGuard LUMA_EXACT_REPLAY_STATE_GUARD =
             ExactReplayStateGuard.getInstance();
+    @Unique
+    private static final PostCallbackBlockMutationPolicy LUMA_POST_CALLBACK_MUTATION_POLICY =
+            new PostCallbackBlockMutationPolicy();
 
     @WrapMethod(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z")
     private boolean luma$wrapSetBlock(
@@ -68,7 +72,7 @@ abstract class LevelSetBlockMixin {
             if (changed) {
                 BlockState appliedState = serverLevel.getBlockState(mutation.pos());
                 CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, mutation.pos(), appliedState);
-                this.luma$recordMutation(serverLevel, mutation, appliedState, newBlockEntity);
+                this.luma$recordMutation(serverLevel, mutation, newState, appliedState, newBlockEntity);
             }
             return changed;
         } finally {
@@ -115,18 +119,36 @@ abstract class LevelSetBlockMixin {
     private void luma$recordMutation(
             ServerLevel serverLevel,
             PendingBlockMutation mutation,
+            BlockState requestedState,
             BlockState appliedState,
             CompoundTag newBlockEntity
     ) {
-        ObservedExternalToolOperation operation = mutation.operation();
+        for (HistoryCaptureManager.BlockChangeInput input : LUMA_POST_CALLBACK_MUTATION_POLICY.changesAfterCallbacks(
+                mutation.pos(),
+                mutation.oldState(),
+                requestedState,
+                appliedState,
+                mutation.oldBlockEntity(),
+                newBlockEntity
+        )) {
+            this.luma$recordMutation(serverLevel, mutation.operation(), input);
+        }
+    }
+
+    @Unique
+    private void luma$recordMutation(
+            ServerLevel serverLevel,
+            ObservedExternalToolOperation operation,
+            HistoryCaptureManager.BlockChangeInput input
+    ) {
         if (operation == null) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     serverLevel,
-                    mutation.pos(),
-                    mutation.oldState(),
-                    appliedState,
-                    mutation.oldBlockEntity(),
-                    newBlockEntity
+                    input.pos(),
+                    input.oldState(),
+                    input.newState(),
+                    input.oldBlockEntity(),
+                    input.newBlockEntity()
             );
             return;
         }
@@ -140,11 +162,11 @@ abstract class LevelSetBlockMixin {
         )) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     serverLevel,
-                    mutation.pos(),
-                    mutation.oldState(),
-                    appliedState,
-                    mutation.oldBlockEntity(),
-                    newBlockEntity
+                    input.pos(),
+                    input.oldState(),
+                    input.newState(),
+                    input.oldBlockEntity(),
+                    input.newBlockEntity()
             );
         }
     }

@@ -1,9 +1,14 @@
 package io.github.luma.mixin;
 
+import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import net.minecraft.world.entity.Entity;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,5 +61,18 @@ class ServerLevelEntityTickMixinTest {
 
         assertTrue(rememberedFrame > tickMethod);
         assertTrue(fallbackFrame > rememberedFrame);
+    }
+
+    @Test
+    void carriesPrimedTntContextAcrossEntityTick() throws NoSuchFieldException, NoSuchMethodException {
+        Field registry = ServerLevelEntityTickMixin.class.getDeclaredField("LUMA_EXPLOSIVE_CONTEXTS");
+        assertEquals(ExplosiveEntityContextRegistry.class, registry.getType());
+
+        Method method = ServerLevelEntityTickMixin.class.getDeclaredMethod(
+                "luma$pushRememberedExplosiveAction",
+                Entity.class
+        );
+        assertEquals(Boolean.TYPE, method.getReturnType());
+        assertTrue(java.lang.reflect.Modifier.isPrivate(method.getModifiers()));
     }
 }

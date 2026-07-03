@@ -1196,7 +1196,7 @@ final class SingleplayerTestRun {
     private void checkPoweredTntUndo() {
         this.check(this.poweredTntUndoReport != null
                         && this.poweredTntUndoReport.restoredBeforeExplosionUndo(this.level),
-                "Powered TNT undo restored inert TNT block and removed primed entity");
+                "Powered TNT undo removed same-action primed entity without restoring inert TNT");
         this.completePhase(this.level.getServer(), Phase.START_CHAINED_TNT_INTERACTION);
     }
 
@@ -1237,7 +1237,7 @@ final class SingleplayerTestRun {
                 capturedBlocks.add(change.pos());
             }
             this.check(capturedBlocks.containsAll(this.chainedTntReport.expectedUndoRedoBlocks()),
-                    "Redstone TNT chain live undo action owns every primed and witness block");
+                    "Redstone TNT chain live undo action owns every persistent TNT and witness block");
         }
         this.completePhase(server, Phase.START_CHAINED_TNT_UNDO);
     }
@@ -1253,7 +1253,7 @@ final class SingleplayerTestRun {
 
     private void checkChainedTntUndo() {
         this.check(this.chainedTntReport != null && this.chainedTntReport.restoredAfterUndo(this.level),
-                "Redstone TNT chain undo restored all TNT and blast witness blocks as one action");
+                "Redstone TNT chain undo restored persistent TNT and blast witness blocks as one action");
         this.completePhase(this.level.getServer(), Phase.START_EXPLOSION_INTERACTION);
     }
 
@@ -1943,7 +1943,7 @@ final class SingleplayerTestRun {
         START_CHAINED_TNT_INTERACTION("Redstone TNT chain", "place TNT on redstone and let it ignite a TNT chain"),
         CHECK_CHAINED_TNT_CAPTURE("Verify TNT chain capture", "check that one live undo action owns the full chain"),
         START_CHAINED_TNT_UNDO("Queue TNT chain undo", "undo the redstone TNT chain through the operation model"),
-        CHECK_CHAINED_TNT_UNDO("Verify TNT chain undo", "check that all TNT chain blocks and witnesses were restored"),
+        CHECK_CHAINED_TNT_UNDO("Verify TNT chain undo", "check that persistent TNT chain blocks and witnesses were restored"),
         START_EXPLOSION_INTERACTION("TNT interaction", "place and ignite TNT through player game-mode actions"),
         CHECK_EXPLOSION_CAPTURE("Verify TNT capture", "wait for the controlled explosion and inspect its draft"),
         START_EXPLOSION_UNDO("Queue TNT undo", "undo the controlled explosion through the operation model"),
