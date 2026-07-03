@@ -94,6 +94,10 @@ public final class EntityCausalContextRegistry {
         return Optional.of(new EntityPayload(context.oldPayload().copyTag()));
     }
 
+    public boolean hasContext(Entity entity, ServerLevel level) {
+        return this.context(entity, level) != null;
+    }
+
     public static Optional<Instant> currentStartedAt() {
         Deque<Instant> frames = ACTIVE_STARTED_AT.get();
         return frames.isEmpty() ? Optional.empty() : Optional.of(frames.peek());

@@ -30,6 +30,7 @@ abstract class LivingEntityCausalContextMixin {
             Operation<Boolean> original
     ) {
         LivingEntity entity = (LivingEntity) (Object) this;
+        boolean hadCausalContext = LUMA_ENTITY_CAUSAL_CONTEXTS.hasContext(entity, serverLevel);
         boolean remembered = this.luma$rememberDamageContext(entity, serverLevel, damageSource);
         try {
             boolean damaged = original.call(serverLevel, damageSource, amount);
@@ -38,7 +39,7 @@ abstract class LivingEntityCausalContextMixin {
             }
             return damaged;
         } finally {
-            if (remembered && !entity.isDeadOrDying() && !entity.isRemoved()) {
+            if (remembered && !hadCausalContext && !entity.isDeadOrDying() && !entity.isRemoved()) {
                 LUMA_ENTITY_CAUSAL_CONTEXTS.clear(entity);
             }
         }

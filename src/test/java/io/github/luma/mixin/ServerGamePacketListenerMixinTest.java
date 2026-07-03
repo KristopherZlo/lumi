@@ -61,4 +61,20 @@ class ServerGamePacketListenerMixinTest {
         assertTrue(source.contains("entity.isDeadOrDying()"));
         assertTrue(deathCapture > vanillaDamage);
     }
+
+    @Test
+    void nonLethalDamageKeepsExistingCreeperInteractionContext() throws IOException {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/mixin/LivingEntityCausalContextMixin.java"),
+                StandardCharsets.UTF_8
+        );
+
+        int existingContext = source.indexOf("boolean hadCausalContext = LUMA_ENTITY_CAUSAL_CONTEXTS.hasContext(entity, serverLevel);");
+        int clearGuard = source.indexOf("!hadCausalContext");
+        int clearCall = source.indexOf("LUMA_ENTITY_CAUSAL_CONTEXTS.clear(entity)");
+
+        assertTrue(existingContext > 0);
+        assertTrue(clearGuard > existingContext);
+        assertTrue(clearGuard < clearCall);
+    }
 }
