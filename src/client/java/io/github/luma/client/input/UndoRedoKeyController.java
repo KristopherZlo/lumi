@@ -60,6 +60,7 @@ public final class UndoRedoKeyController {
         try {
             CurrentTarget target = this.currentTarget(client);
             scope = target.scope();
+            this.requestQueue.retainOnly(scope);
             if (this.requestQueue.isEmpty(scope)) {
                 return TickResult.idle();
             }
@@ -76,6 +77,9 @@ public final class UndoRedoKeyController {
             if (intent != null && scope != null && this.failurePolicy.shouldRetry(statusKey)) {
                 this.requestQueue.offerFirst(scope, intent);
                 return TickResult.idle();
+            }
+            if (scope == null) {
+                this.requestQueue.clear();
             }
             client.gui.setOverlayMessage(this.failurePolicy.statusMessage(statusKey), false);
             return TickResult.terminalNoOperation();
@@ -232,12 +236,24 @@ public final class UndoRedoKeyController {
             this.dispatchNativeToolCommand(client, level.getServer(), undo ? "undo" : "redo");
         }
 
-        if (undo) {
-            this.historyManager.completeUndo(project.id().toString(), selection);
-            this.applyPendingAdjustments(level, project, action.inverseChanges(), action.inverseEntityChanges(), action.actor());
-        } else {
-            this.historyManager.completeRedo(project.id().toString(), selection);
-            this.applyPendingAdjustments(level, project, action.redoChanges(), action.redoEntityChanges(), action.actor());
+        boolean completed = false;
+        try {
+            completed = undo
+                    ? this.historyManager.completeUndo(project.id().toString(), selection)
+                    : this.historyManager.completeRedo(project.id().toString(), selection);
+            if (!completed) {
+                throw new IllegalStateException("Undo/redo history changed before completion; try again");
+            }
+            if (undo) {
+                this.applyPendingAdjustments(level, project, action.inverseChanges(), action.inverseEntityChanges(), action.actor());
+            } else {
+                this.applyPendingAdjustments(level, project, action.redoChanges(), action.redoEntityChanges(), action.actor());
+            }
+        } catch (Exception exception) {
+            if (completed) {
+                this.rollbackHistoryCompletion(project.id().toString(), selection, undo);
+            }
+            throw exception;
         }
         return true;
     }
@@ -297,6 +313,21 @@ public final class UndoRedoKeyController {
                 actor,
                 Instant.now()
         );
+    }
+
+    private void rollbackHistoryCompletion(
+            String projectId,
+            UndoRedoActionStack.Selection selection,
+            boolean undo
+    ) {
+        boolean rolledBack = undo
+                ? this.historyManager.completeRedo(projectId, selection)
+                : this.historyManager.completeUndo(projectId, selection);
+        if (!rolledBack) {
+            LumaMod.LOGGER.warn("Failed to roll back native {} history completion for action {}",
+                    undo ? "undo" : "redo",
+                    selection.action().id());
+        }
     }
 
     private String playerActor(Minecraft client) {

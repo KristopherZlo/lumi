@@ -65,4 +65,17 @@ class UndoRedoRequestQueueTest {
         assertEquals(1, queue.size(OTHER));
         assertEquals(UndoRedoRequestQueue.Intent.REDO, queue.poll(OTHER));
     }
+
+    @Test
+    void dropsPendingRequestsForInactiveScopes() {
+        UndoRedoRequestQueue queue = new UndoRedoRequestQueue();
+        queue.offer(MAIN, UndoRedoRequestQueue.Intent.UNDO);
+        queue.offer(OTHER, UndoRedoRequestQueue.Intent.REDO);
+
+        queue.retainOnly(MAIN);
+
+        assertEquals(UndoRedoRequestQueue.Intent.UNDO, queue.poll(MAIN));
+        assertNull(queue.poll(OTHER));
+        assertFalse(queue.hasAnyPending());
+    }
 }

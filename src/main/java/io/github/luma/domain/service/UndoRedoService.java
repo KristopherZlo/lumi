@@ -167,19 +167,26 @@ public final class UndoRedoService {
                     return new WorldOperationManager.PreparedApplyOperation(
                             batches,
                             () -> {
-                                if (direction == Direction.UNDO) {
-                                    this.historyManager.completeUndo(project.id().toString(), selection);
-                                } else {
-                                    this.historyManager.completeRedo(project.id().toString(), selection);
+                                boolean completed = false;
+                                try {
+                                    completed = this.completeHistory(project.id().toString(), selection, direction);
+                                    if (!completed) {
+                                        throw new IllegalStateException("Undo/redo history changed before completion; try again");
+                                    }
+                                    this.captureManager.applyLiveActionAdjustments(
+                                            level.getServer(),
+                                            project.id().toString(),
+                                            pendingAdjustments,
+                                            pendingEntityAdjustments,
+                                            action.actor(),
+                                            Instant.now()
+                                    );
+                                } catch (Exception exception) {
+                                    if (completed) {
+                                        this.rollbackHistoryCompletion(project.id().toString(), selection, direction);
+                                    }
+                                    throw exception;
                                 }
-                                this.captureManager.applyLiveActionAdjustments(
-                                        level.getServer(),
-                                        project.id().toString(),
-                                        pendingAdjustments,
-                                        pendingEntityAdjustments,
-                                        action.actor(),
-                                        Instant.now()
-                                );
                                 LumaMod.LOGGER.info(
                                         "Completed {} for project {} with {} block and {} entity changes",
                                         direction.label(),
@@ -192,6 +199,31 @@ public final class UndoRedoService {
                     );
                 }
         );
+    }
+
+    private boolean completeHistory(
+            String projectId,
+            UndoRedoActionStack.Selection selection,
+            Direction direction
+    ) {
+        return direction == Direction.UNDO
+                ? this.historyManager.completeUndo(projectId, selection)
+                : this.historyManager.completeRedo(projectId, selection);
+    }
+
+    private void rollbackHistoryCompletion(
+            String projectId,
+            UndoRedoActionStack.Selection selection,
+            Direction direction
+    ) {
+        boolean rolledBack = direction == Direction.UNDO
+                ? this.historyManager.completeRedo(projectId, selection)
+                : this.historyManager.completeUndo(projectId, selection);
+        if (!rolledBack) {
+            LumaMod.LOGGER.warn("Failed to roll back {} history completion for action {}",
+                    direction.label(),
+                    selection.action().id());
+        }
     }
 
     private boolean canCompleteOnServerThread(

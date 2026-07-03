@@ -51,6 +51,14 @@ final class UndoRedoRequestQueue {
         return !this.intentsByScope.isEmpty();
     }
 
+    void retainOnly(Scope scope) {
+        if (scope == null) {
+            this.clear();
+            return;
+        }
+        this.intentsByScope.keySet().removeIf(existing -> !existing.equals(scope));
+    }
+
     int size(Scope scope) {
         Deque<Intent> intents = this.intentsByScope.get(scope);
         return intents == null ? 0 : intents.size();
