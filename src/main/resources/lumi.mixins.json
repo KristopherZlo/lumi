@@ -6,6 +6,7 @@
     "ChunkAccessSectionOwnershipMixin",
     "ComparatorBlockEntityMixin",
     "CropBlockMixin",
+    "CreeperReplayStateAccess",
     "EntityMutationMixin",
     "AxiomSetBufferPacketMixin",
     "AxiomSetBlockPacketMixin",

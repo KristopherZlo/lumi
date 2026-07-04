@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.mixin.CreeperReplayStateAccess;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
@@ -23,6 +24,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityProcessor;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -445,6 +447,7 @@ public final class BlockChangeApplier {
         if (entity == null || entity instanceof ServerPlayer) {
             return;
         }
+        resetCreeperReplayState(entity);
         Optional<UUID> entityId = EntityPayload.readUuid(entityTag);
         if (entityId.isPresent()) {
             Entity existing = level.getEntity(entityId.get());
@@ -454,6 +457,7 @@ public final class BlockChangeApplier {
             if (existing != null && !existing.isRemoved()) {
                 if (existing.getType() == entity.getType()) {
                     existing.restoreFrom(entity);
+                    resetCreeperReplayState(existing);
                     rememberReplayAction(level, existing, replayContext);
                     return;
                 }
@@ -465,9 +469,21 @@ public final class BlockChangeApplier {
         }
         try (WorldMutationContext.EntityReplayFrame ignored = WorldMutationContext.pushHistoryEntityReplay()) {
             if (level.tryAddFreshEntityWithPassengers(entity)) {
+                resetCreeperReplayState(entity);
                 rememberReplayAction(level, entity, replayContext);
             }
         }
+    }
+
+    private static void resetCreeperReplayState(Entity entity) {
+        if (!(entity instanceof Creeper creeper)) {
+            return;
+        }
+        CreeperReplayStateAccess access = (CreeperReplayStateAccess) creeper;
+        access.luma$setSwell(0);
+        access.luma$setOldSwell(0);
+        creeper.setSwellDir(-1);
+        creeper.getEntityData().set(CreeperReplayStateAccess.luma$dataIsIgnited(), false);
     }
 
     private static void rememberReplayAction(
