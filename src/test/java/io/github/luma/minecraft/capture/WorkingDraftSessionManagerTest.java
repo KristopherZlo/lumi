@@ -262,8 +262,7 @@ class WorkingDraftSessionManagerTest {
             assertTrue(coordinator.hasPendingBaselineWrite(project.id().toString(), chunkSnapshot().chunk()));
         } finally {
             releaseBaseline.countDown();
-            draftExecutor.shutdownNow();
-            baselineExecutor.shutdownNow();
+            stopExecutors(draftExecutor, baselineExecutor);
         }
     }
 
@@ -299,8 +298,7 @@ class WorkingDraftSessionManagerTest {
             assertTrue(coordinator.hasPendingBaselineWrite(project.id().toString(), chunkSnapshot().chunk()));
         } finally {
             releaseBaseline.countDown();
-            draftExecutor.shutdownNow();
-            baselineExecutor.shutdownNow();
+            stopExecutors(draftExecutor, baselineExecutor);
         }
     }
 
@@ -336,8 +334,7 @@ class WorkingDraftSessionManagerTest {
             assertTrue(coordinator.hasPendingBaselineWrite(project.id().toString(), chunkSnapshot().chunk()));
         } finally {
             releaseBaseline.countDown();
-            draftExecutor.shutdownNow();
-            baselineExecutor.shutdownNow();
+            stopExecutors(draftExecutor, baselineExecutor);
         }
     }
 
@@ -374,8 +371,7 @@ class WorkingDraftSessionManagerTest {
             assertTrue(coordinator.hasPendingBaselineWrite(project.id().toString(), chunkSnapshot().chunk()));
         } finally {
             releaseBaseline.countDown();
-            draftExecutor.shutdownNow();
-            baselineExecutor.shutdownNow();
+            stopExecutors(draftExecutor, baselineExecutor);
         }
     }
 
@@ -468,5 +464,14 @@ class WorkingDraftSessionManagerTest {
             }
         }
         return packed;
+    }
+
+    private static void stopExecutors(ExecutorService... executors) throws InterruptedException {
+        for (ExecutorService executor : executors) {
+            executor.shutdownNow();
+        }
+        for (ExecutorService executor : executors) {
+            assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS));
+        }
     }
 }
