@@ -97,8 +97,8 @@ class EntityBatchTest {
         );
         PreparedChunkBatch prepared = new PreparedChunkBatch(new ChunkPoint(4, 5), List.of(), entityBatch);
 
-        WorldOperationManager.PreparedApplyOperation operation =
-                new WorldOperationManager.PreparedApplyOperation(List.of(prepared), () -> {
+        PreparedApplyOperation operation =
+                new PreparedApplyOperation(List.of(prepared), () -> {
                 });
 
         assertEquals(3, operation.totalWorkUnits());

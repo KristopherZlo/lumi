@@ -14,6 +14,7 @@ import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.world.EntityApplyMode;
+import io.github.luma.minecraft.world.PreparedApplyOperation;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -126,7 +127,7 @@ public final class RecoveryService {
                 progressSink -> {
                     progressSink.update(OperationStage.PREPARING, 0, draft.totalChangeCount(), "Decoding recovery draft");
                     List<PreparedChunkBatch> batches = this.decodeDraft(level, draft, progressSink);
-                    return new WorldOperationManager.PreparedApplyOperation(
+                    return new PreparedApplyOperation(
                             batches,
                             () -> {
                                 this.recoveryRepository.deleteDraft(layout);

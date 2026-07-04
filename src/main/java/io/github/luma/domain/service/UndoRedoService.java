@@ -6,6 +6,8 @@ import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
+import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
@@ -19,6 +21,7 @@ import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.minecraft.world.EntityApplyMode;
 import io.github.luma.minecraft.world.EntityBatch;
+import io.github.luma.minecraft.world.PreparedApplyOperation;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -33,6 +36,8 @@ import net.minecraft.server.level.ServerLevel;
  */
 public final class UndoRedoService {
 
+    private static final String TNT_BLOCK_ID = "minecraft:tnt";
+    private static final String PRIMED_TNT_ENTITY_TYPE = "minecraft:tnt";
     private static final int SERVER_THREAD_COMPLETION_MAX_BLOCKS = 256;
 
     private final ProjectService projectService = new ProjectService();
@@ -65,7 +70,8 @@ public final class UndoRedoService {
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to undo");
         }
-        return this.startOperation(level, project, selection, Direction.UNDO);
+        boolean freezeWorldTicks = this.shouldFreezeWorldTicks(selection.action());
+        return this.startOperation(level, project, selection, Direction.UNDO, freezeWorldTicks);
     }
 
     public OperationHandle redo(ServerLevel level, String projectName) throws IOException {
@@ -89,14 +95,11 @@ public final class UndoRedoService {
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to redo");
         }
-        return this.startOperation(level, project, selection, Direction.REDO);
+        boolean freezeWorldTicks = this.shouldFreezeWorldTicks(selection.action());
+        return this.startOperation(level, project, selection, Direction.REDO, freezeWorldTicks);
     }
 
     private void ensureStabilizationReady(ServerLevel level, BuildProject project) throws IOException {
-        // ponytail: global TNT gate; make it per-world/project if multiplayer needs concurrent explosive undo.
-        if (this.explosiveContexts.hasActiveContexts()) {
-            throw new IllegalStateException("TNT fallout is still settling; try undo/redo again in a moment");
-        }
         if (this.captureManager.hasPendingUndoRedoStabilization(level.getServer(), project.id().toString())) {
             throw new IllegalStateException("Redstone or piston fallout is still settling; try undo/redo again in a moment");
         }
@@ -106,7 +109,8 @@ public final class UndoRedoService {
             ServerLevel level,
             BuildProject project,
             UndoRedoActionStack.Selection selection,
-            Direction direction
+            Direction direction,
+            boolean freezeWorldTicks
     ) {
         UndoRedoAction action = selection.action();
         List<StoredBlockChange> targetChanges = direction == Direction.UNDO
@@ -170,7 +174,7 @@ public final class UndoRedoService {
                     batches = batches.stream()
                             .map(batch -> batch.withEntityReplayContext(replayContext))
                             .toList();
-                    return new WorldOperationManager.PreparedApplyOperation(
+                    return new PreparedApplyOperation(
                             batches,
                             () -> {
                                 boolean completed = false;
@@ -203,7 +207,8 @@ public final class UndoRedoService {
                             },
                             completeOnServerThread
                     );
-                }
+                },
+                freezeWorldTicks
         );
     }
 
@@ -238,6 +243,45 @@ public final class UndoRedoService {
     ) {
         return targetEntityChanges.isEmpty()
                 && targetChanges.size() <= SERVER_THREAD_COMPLETION_MAX_BLOCKS;
+    }
+
+    private boolean shouldFreezeWorldTicks(UndoRedoAction action) {
+        return this.explosiveContexts.hasActiveContexts() || requiresWorldTickFreeze(action);
+    }
+
+    static boolean requiresWorldTickFreeze(UndoRedoAction action) {
+        if (action == null) {
+            return false;
+        }
+        if ("explosion".equals(action.actor()) || "explosive".equals(action.actor())) {
+            return true;
+        }
+        for (StoredBlockChange change : action.redoChanges()) {
+            if (isTntBlock(change.oldValue()) || isTntBlock(change.newValue())) {
+                return true;
+            }
+        }
+        for (StoredEntityChange change : action.redoEntityChanges()) {
+            if (isPrimedTnt(change)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isTntBlock(StatePayload payload) {
+        return payload != null && TNT_BLOCK_ID.equals(payload.blockId());
+    }
+
+    private static boolean isPrimedTnt(StoredEntityChange change) {
+        return change != null
+                && (PRIMED_TNT_ENTITY_TYPE.equals(change.entityType())
+                || isPrimedTnt(change.oldValue())
+                || isPrimedTnt(change.newValue()));
+    }
+
+    private static boolean isPrimedTnt(EntityPayload payload) {
+        return payload != null && PRIMED_TNT_ENTITY_TYPE.equals(payload.entityType());
     }
 
     private EntityBatch.ReplayContext replayContext(UndoRedoAction action, Direction direction) {

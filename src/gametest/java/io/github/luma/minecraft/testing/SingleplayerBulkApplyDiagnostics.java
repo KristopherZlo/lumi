@@ -4,15 +4,16 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.OperationStage;
+import io.github.luma.domain.model.SectionChangeMask;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.LumiSectionBuffer;
+import io.github.luma.minecraft.world.PreparedApplyOperation;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedSectionApplyBatch;
 import io.github.luma.minecraft.world.SectionApplySafetyClassifier;
-import io.github.luma.domain.model.SectionChangeMask;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -351,7 +352,7 @@ final class SingleplayerBulkApplyDiagnostics {
                                 this.scenario.targetCellCount(),
                                 "Prepared " + this.scenario.name()
                         );
-                        return new WorldOperationManager.PreparedApplyOperation(batches, () -> {
+                        return new PreparedApplyOperation(batches, () -> {
                         });
                     }
             );

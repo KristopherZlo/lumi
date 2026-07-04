@@ -20,6 +20,7 @@ import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.EntityApplyMode;
 import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.MechanismReplayScope;
+import io.github.luma.minecraft.world.PreparedApplyOperation;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
@@ -181,7 +182,7 @@ public final class QuickRollbackService {
                             .map(batch -> batch.withEntityReplayContext(replayContext))
                             .toList();
                     List<PreparedChunkBatch> finalBatches = batches;
-                    return new WorldOperationManager.PreparedApplyOperation(
+                    return new PreparedApplyOperation(
                             finalBatches,
                             () -> this.completeQuickRollback(level, layout, project, activeVariant, plan, finalBatches.size())
                     );

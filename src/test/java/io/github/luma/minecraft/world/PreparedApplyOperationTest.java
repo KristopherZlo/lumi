@@ -10,8 +10,8 @@ class PreparedApplyOperationTest {
 
     @Test
     void completionDefaultsToBackgroundThread() {
-        WorldOperationManager.PreparedApplyOperation operation =
-                new WorldOperationManager.PreparedApplyOperation(List.of(), () -> {
+        PreparedApplyOperation operation =
+                new PreparedApplyOperation(List.of(), () -> {
                 });
 
         assertFalse(operation.completeOnServerThread());
@@ -19,8 +19,8 @@ class PreparedApplyOperationTest {
 
     @Test
     void callersCanRequestServerThreadCompletionForLightweightActions() {
-        WorldOperationManager.PreparedApplyOperation operation =
-                new WorldOperationManager.PreparedApplyOperation(List.of(), () -> {
+        PreparedApplyOperation operation =
+                new PreparedApplyOperation(List.of(), () -> {
                 }, true);
 
         assertTrue(operation.completeOnServerThread());

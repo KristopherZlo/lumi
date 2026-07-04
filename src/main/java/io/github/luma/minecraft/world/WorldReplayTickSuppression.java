@@ -19,6 +19,7 @@ public final class WorldReplayTickSuppression {
     private static final WorldReplayTickSuppression INSTANCE = new WorldReplayTickSuppression();
 
     private final Map<ServerLevel, Long2LongLinkedOpenHashMap> protectedPositions = new IdentityHashMap<>();
+    private final Map<ServerLevel, Integer> frozenWorldTicks = new IdentityHashMap<>();
 
     private WorldReplayTickSuppression() {
     }
@@ -50,6 +51,29 @@ public final class WorldReplayTickSuppression {
             return;
         }
         this.protectedPositions.remove(level);
+    }
+
+    public synchronized void freezeWorldTick(ServerLevel level) {
+        if (level == null) {
+            return;
+        }
+        this.frozenWorldTicks.merge(level, 1, Integer::sum);
+    }
+
+    public synchronized void releaseWorldTickFreeze(ServerLevel level) {
+        if (level == null) {
+            return;
+        }
+        Integer count = this.frozenWorldTicks.get(level);
+        if (count == null || count <= 1) {
+            this.frozenWorldTicks.remove(level);
+            return;
+        }
+        this.frozenWorldTicks.put(level, count - 1);
+    }
+
+    public synchronized boolean shouldFreezeWorldTick(ServerLevel level) {
+        return level != null && this.frozenWorldTicks.containsKey(level);
     }
 
     public synchronized boolean shouldSuppress(ServerLevel level, BlockPos pos) {

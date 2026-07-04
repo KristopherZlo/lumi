@@ -30,6 +30,7 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.world.EntityApplyMode;
 import io.github.luma.minecraft.debug.PartialRestoreDiagnosticsLog;
 import io.github.luma.minecraft.world.MechanismReplayScope;
+import io.github.luma.minecraft.world.PreparedApplyOperation;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
@@ -296,7 +297,7 @@ public final class RestoreService {
         );
     }
 
-    private WorldOperationManager.PreparedApplyOperation prepareRestoreOperation(
+    private PreparedApplyOperation prepareRestoreOperation(
             ServerLevel level,
             ProjectLayout layout,
             io.github.luma.domain.model.BuildProject project,
@@ -450,7 +451,7 @@ public final class RestoreService {
                 batches,
                 selection
         );
-        return new WorldOperationManager.PreparedApplyOperation(
+        return new PreparedApplyOperation(
                 finalBatches,
                 () -> this.completionCoordinator.completeRestore(
                         level,

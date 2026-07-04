@@ -135,6 +135,18 @@ public final class WorldOperationManager {
             boolean debugEnabled,
             PreparedApplyWork work
     ) {
+        return this.startPreparedApplyOperation(level, projectId, label, unitLabel, debugEnabled, work, false);
+    }
+
+    public OperationHandle startPreparedApplyOperation(
+            ServerLevel level,
+            String projectId,
+            String label,
+            String unitLabel,
+            boolean debugEnabled,
+            PreparedApplyWork work,
+            boolean freezeWorldTicks
+    ) {
         String serverKey = this.serverKey(level.getServer());
         synchronized (this) {
             this.lifecycle.ensureIdle(serverKey);
@@ -143,7 +155,8 @@ public final class WorldOperationManager {
                     level,
                     new OperationHandle(UUID.randomUUID().toString(), projectId, label, Instant.now(), debugEnabled),
                     unitLabel,
-                    work
+                    work,
+                    freezeWorldTicks
             );
             this.lifecycle.start(serverKey, operation);
             LumaMod.LOGGER.info(
@@ -261,40 +274,6 @@ public final class WorldOperationManager {
         void update(OperationStage stage, int completedUnits, int totalUnits, String detail);
     }
 
-    @FunctionalInterface
-    public interface CompletionAction {
-        void run() throws Exception;
-    }
-
-    public record PreparedApplyOperation(
-            LocalQueue localQueue,
-            CompletionAction onComplete,
-            boolean completeOnServerThread
-    ) {
-
-        public PreparedApplyOperation(List<PreparedChunkBatch> batches, CompletionAction onComplete) {
-            this(batches, onComplete, false);
-        }
-
-        public PreparedApplyOperation(
-                List<PreparedChunkBatch> batches,
-                CompletionAction onComplete,
-                boolean completeOnServerThread
-        ) {
-            this(
-                    LocalQueue.completed(batches == null
-                            ? List.of()
-                            : batches.stream().map(ChunkBatch::fromPrepared).toList()),
-                    onComplete,
-                    completeOnServerThread
-            );
-        }
-
-        public int totalWorkUnits() {
-            return this.localQueue == null ? 0 : this.localQueue.totalWorkUnits();
-        }
-    }
-
     abstract static class ActiveOperation {
 
         private final ServerLevel level;
@@ -304,11 +283,18 @@ public final class WorldOperationManager {
         private volatile OperationStage lastLoggedStage;
         private volatile int lastLoggedPercent = -1;
         protected final WorldApplyPerformanceGovernor performanceGovernor = new WorldApplyPerformanceGovernor();
+        private final boolean freezeWorldTicks;
+        private boolean worldTickFreezeReleased;
 
         ActiveOperation(ServerLevel level, OperationHandle handle, String unitLabel) {
+            this(level, handle, unitLabel, false);
+        }
+
+        ActiveOperation(ServerLevel level, OperationHandle handle, String unitLabel, boolean freezeWorldTicks) {
             this.level = level;
             this.handle = handle;
             this.unitLabel = unitLabel == null || unitLabel.isBlank() ? "items" : unitLabel;
+            this.freezeWorldTicks = freezeWorldTicks;
             this.snapshot = new OperationSnapshot(
                     handle,
                     OperationStage.QUEUED,
@@ -325,6 +311,9 @@ public final class WorldOperationManager {
                     this.handle.projectId(),
                     this.unitLabel
             );
+            if (freezeWorldTicks) {
+                WorldReplayTickSuppression.getInstance().freezeWorldTick(level);
+            }
         }
 
         protected ServerLevel level() {
@@ -390,6 +379,7 @@ public final class WorldOperationManager {
         }
 
         protected void complete(String detail) {
+            this.releaseWorldTickFreeze();
             OperationProgress progress = this.snapshot.progress();
             int completed = progress.totalUnits() <= 0 ? progress.completedUnits() : progress.totalUnits();
             this.snapshot = new OperationSnapshot(
@@ -416,6 +406,7 @@ public final class WorldOperationManager {
         }
 
         protected void fail(Exception exception) {
+            this.releaseWorldTickFreeze();
             this.snapshot = new OperationSnapshot(
                     this.handle,
                     OperationStage.FAILED,
@@ -451,6 +442,14 @@ public final class WorldOperationManager {
 
         protected boolean drainBeforeShutdown() {
             return false;
+        }
+
+        private void releaseWorldTickFreeze() {
+            if (!this.freezeWorldTicks || this.worldTickFreezeReleased) {
+                return;
+            }
+            this.worldTickFreezeReleased = true;
+            WorldReplayTickSuppression.getInstance().releaseWorldTickFreeze(this.level);
         }
 
         private void logProgressIfNeeded(OperationStage stage, OperationProgress progress, String detail) {
@@ -562,9 +561,10 @@ public final class WorldOperationManager {
                 ServerLevel level,
                 OperationHandle handle,
                 String unitLabel,
-                PreparedApplyWork work
+                PreparedApplyWork work,
+                boolean freezeWorldTicks
         ) {
-            super(level, handle, unitLabel);
+            super(level, handle, unitLabel, freezeWorldTicks);
             this.profile = WorldOperationManager.this.applyOperationProfile.profileFor(handle.label());
             this.preparationStartedAtNanos = System.nanoTime();
             this.future = CompletableFuture.supplyAsync(() -> {

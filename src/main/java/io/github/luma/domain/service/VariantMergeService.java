@@ -24,6 +24,7 @@ import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.world.EntityApplyMode;
+import io.github.luma.minecraft.world.PreparedApplyOperation;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
@@ -117,7 +118,7 @@ public final class VariantMergeService {
                             author,
                             progressSink
                     );
-                    return new WorldOperationManager.PreparedApplyOperation(
+                    return new PreparedApplyOperation(
                             merge.batches(),
                             () -> this.completeLocalMerge(
                                     level,

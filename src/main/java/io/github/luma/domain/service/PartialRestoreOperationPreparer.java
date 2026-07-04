@@ -21,6 +21,7 @@ import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.debug.PartialRestoreDiagnosticsLog;
 import io.github.luma.minecraft.world.EntityApplyMode;
+import io.github.luma.minecraft.world.PreparedApplyOperation;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.minecraft.world.PreparedWorldChangeBatches;
@@ -65,7 +66,7 @@ final class PartialRestoreOperationPreparer {
         this.diagnosticsLog = diagnosticsLog == null ? new PartialRestoreDiagnosticsLog() : diagnosticsLog;
     }
 
-    WorldOperationManager.PreparedApplyOperation prepare(
+    PreparedApplyOperation prepare(
             ServerLevel level,
             ProjectLayout layout,
             BuildProject project,
@@ -140,7 +141,7 @@ final class PartialRestoreOperationPreparer {
             batches = this.batchCollapser.collapse(decodedBatches);
         }
         boolean diagnosticsEnabled = this.diagnosticsLog.enabled(request);
-        return new WorldOperationManager.PreparedApplyOperation(
+        return new PreparedApplyOperation(
                 batches,
                 () -> {
                     if (diagnosticsEnabled) {
