@@ -23,7 +23,6 @@ import net.minecraft.core.BlockPos;
 public final class PendingChangesOverlayRenderer {
 
     private static final int MAX_SECTION_UPLOADS_PER_FRAME = 12;
-    private static final int MAX_SECTION_DRAWS_PER_FRAME = 64;
     private static final int DETAILED_DIFF_RENDER_LIMIT = CompareOverlayRenderer.DETAILED_DIFF_RENDER_LIMIT;
     private static final int FILL_ALPHA = 52;
     private static final int DENSE_FILL_ALPHA = 36;
@@ -180,8 +179,7 @@ public final class PendingChangesOverlayRenderer {
                 CompareOverlayRenderTypes.outline(false),
                 camera,
                 renderDistanceChunks(),
-                MAX_SECTION_UPLOADS_PER_FRAME,
-                MAX_SECTION_DRAWS_PER_FRAME
+                MAX_SECTION_UPLOADS_PER_FRAME
         );
         OverlayDiagnostics.getInstance().log(
                 state.debugEnabled(),

@@ -35,4 +35,12 @@ class WorkZoneOverlayMeshTest {
 
         assertTrue(source.contains("private static final float OUTSET = 0.01F;"));
     }
+
+    @Test
+    void mergedSurfaceKeepsBlockSquareOutlinesWithoutClippingVisibleSections() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/overlay/OverlayMeshBatch.java"));
+
+        assertTrue(source.contains("emitSquareOutlines("));
+        assertTrue(!source.contains("subList(0, drawLimit)"));
+    }
 }

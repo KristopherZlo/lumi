@@ -10,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RecentChangesOverlayCoordinatorTest {
 
     @Test
-    void recentOverlayUsesBoundedPreviewSnapshotsWithoutDrainingStabilization() throws IOException {
+    void recentOverlayUsesFullPreviewSnapshotsWithoutDrainingStabilization() throws IOException {
         String source = Files.readString(Path.of(
                 "src/client/java/io/github/luma/ui/overlay/RecentChangesOverlayCoordinator.java"
         ));
 
         assertTrue(!source.contains("drainUndoRedoStabilization("));
-        assertTrue(source.contains("MAX_PREVIEW_ENTRIES_PER_ACTION"));
+        assertTrue(!source.contains("MAX_PREVIEW_ENTRIES_PER_ACTION"));
         assertTrue(source.contains("recentUndoPreviewActionsSnapshot("));
         assertTrue(source.contains("recentRedoPreviewActionsSnapshot("));
         assertTrue(source.contains("recentUndoRedoPreviewActionsSnapshot("));

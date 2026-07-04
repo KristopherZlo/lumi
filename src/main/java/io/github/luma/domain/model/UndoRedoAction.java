@@ -57,35 +57,6 @@ public final class UndoRedoAction {
         return copy;
     }
 
-    public UndoRedoAction previewCopy(int maxEntries) {
-        UndoRedoAction copy = new UndoRedoAction(
-                this.id,
-                this.actor,
-                this.projectId,
-                this.dimensionId,
-                this.startedAt,
-                this.updatedAt
-        );
-        copy.version = this.version;
-        int remaining = Math.max(0, maxEntries);
-        for (StoredBlockChange change : this.changes.values()) {
-            if (remaining <= 0) {
-                return copy;
-            }
-            copy.changes.put(key(change), change);
-            remaining -= 1;
-        }
-        copy.latestBlockStates.putAll(this.latestBlockStates);
-        for (var entry : this.entityChanges.entrySet()) {
-            if (remaining <= 0) {
-                return copy;
-            }
-            copy.entityChanges.put(entry.getKey(), entry.getValue());
-            remaining -= 1;
-        }
-        return copy;
-    }
-
     public boolean recordChange(StoredBlockChange change, Instant now) {
         if (change == null || change.isNoOp()) {
             return false;

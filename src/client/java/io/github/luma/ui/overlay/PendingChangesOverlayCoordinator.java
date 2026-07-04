@@ -5,6 +5,8 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.ui.controller.ClientProjectAccess;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -17,7 +19,8 @@ import net.minecraft.client.Minecraft;
 public final class PendingChangesOverlayCoordinator {
 
     private static final PendingChangesOverlayCoordinator INSTANCE = new PendingChangesOverlayCoordinator();
-    private static final int SNAPSHOT_REQUEST_INTERVAL_TICKS = 5;
+    private static final int SNAPSHOT_REQUEST_INTERVAL_TICKS = 10;
+    private static final Duration ACTIVE_DRAFT_PREVIEW_QUIET_PERIOD = Duration.ofMillis(500);
 
     private final ProjectService projectService = new ProjectService();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
@@ -83,7 +86,9 @@ public final class PendingChangesOverlayCoordinator {
         this.pendingKey = requestKey;
         CompletableFuture
                 .supplyAsync(() -> this.loadSnapshot(client, requestKey.projectId()), this.previewExecutor)
-                .thenApply(snapshot -> PendingChangesOverlayRenderer.prepare(snapshot, debugEnabled))
+                .thenApply(snapshot -> snapshot == null
+                        ? null
+                        : PendingChangesOverlayRenderer.prepare(snapshot, debugEnabled))
                 .whenComplete((prepared, exception) -> {
                     if (requestKey.equals(this.pendingKey)) {
                         this.pendingKey = null;
@@ -98,6 +103,9 @@ public final class PendingChangesOverlayCoordinator {
                                 exception.getClass().getSimpleName(),
                                 exception.getMessage()
                         );
+                        return;
+                    }
+                    if (prepared == null) {
                         return;
                     }
                     if (!requestKey.equals(this.requestedKey)) {
@@ -123,6 +131,9 @@ public final class PendingChangesOverlayCoordinator {
                     ClientProjectAccess.requireSingleplayerServer(client),
                     projectId
             );
+            if (draft.isPresent() && shouldDeferHotDraft(draft.get(), Instant.now())) {
+                return null;
+            }
             return draft
                     .map(value -> PendingChangesOverlaySnapshot.fromDraft(projectId, value))
                     .orElseGet(() -> PendingChangesOverlaySnapshot.empty(projectId));
@@ -137,6 +148,13 @@ public final class PendingChangesOverlayCoordinator {
         this.preparedKey = null;
         this.requestCooldown = 0;
         PendingChangesOverlayRenderer.clear();
+    }
+
+    static boolean shouldDeferHotDraft(RecoveryDraft draft, Instant now) {
+        if (draft == null || draft.updatedAt() == null || now == null) {
+            return false;
+        }
+        return Duration.between(draft.updatedAt(), now).compareTo(ACTIVE_DRAFT_PREVIEW_QUIET_PERIOD) < 0;
     }
 
     private record RequestKey(String projectId) {

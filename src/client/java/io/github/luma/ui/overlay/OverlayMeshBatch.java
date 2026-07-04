@@ -12,7 +12,6 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.luma.domain.model.WorkZoneShellFace;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +29,6 @@ final class OverlayMeshBatch implements AutoCloseable {
 
     private static final int SECTION_SIZE = 16;
     private static final int DEFAULT_UPLOAD_BUDGET = 64;
-    private static final int DEFAULT_DRAW_BUDGET = 384;
 
     static final OverlayMeshBatch EMPTY = new OverlayMeshBatch(List.of());
 
@@ -80,17 +78,6 @@ final class OverlayMeshBatch implements AutoCloseable {
             int renderDistanceChunks,
             int uploadBudget
     ) {
-        return this.render(fillType, outlineType, camera, renderDistanceChunks, uploadBudget, DEFAULT_DRAW_BUDGET);
-    }
-
-    synchronized RenderStats render(
-            RenderType fillType,
-            RenderType outlineType,
-            Vec3 camera,
-            int renderDistanceChunks,
-            int uploadBudget,
-            int drawBudget
-    ) {
         if (this.closed || this.closeRequested || this.sections.isEmpty() || camera == null) {
             return RenderStats.empty(this.sections.size());
         }
@@ -104,13 +91,6 @@ final class OverlayMeshBatch implements AutoCloseable {
                 continue;
             }
             visibleSections.add(section);
-        }
-
-        int drawLimit = Math.max(1, drawBudget);
-        if (visibleSections.size() > drawLimit) {
-            visibleSections.sort(Comparator.comparingDouble(section -> section.distanceSquaredTo(camera)));
-            skipped += visibleSections.size() - drawLimit;
-            visibleSections = visibleSections.subList(0, drawLimit);
         }
 
         List<SectionMesh> drawableSections = new ArrayList<>(visibleSections.size());
@@ -429,19 +409,7 @@ final class OverlayMeshBatch implements AutoCloseable {
         @Override
         public void emitOutline(PoseStack matrices, VertexConsumer consumer, int originX, int originY, int originZ) {
             for (SurfaceFaceRun face : this.faces) {
-                OverlayBounds local = face.bounds(this.style.outset()).translate(-originX, -originY, -originZ);
-                renderOutline(
-                        matrices,
-                        consumer,
-                        local.minX(),
-                        local.minY(),
-                        local.minZ(),
-                        local.maxX() - local.minX(),
-                        local.maxY() - local.minY(),
-                        local.maxZ() - local.minZ(),
-                        this.style.outlineArgb(),
-                        this.style.outlineWidth()
-                );
+                face.emitSquareOutlines(matrices, consumer, originX, originY, originZ, this.style);
             }
         }
     }
@@ -636,6 +604,63 @@ final class OverlayMeshBatch implements AutoCloseable {
                         this.plane - outset,
                         this.maxA + outset,
                         this.maxB + outset,
+                        this.plane + outset
+                );
+            };
+        }
+
+        private void emitSquareOutlines(
+                PoseStack matrices,
+                VertexConsumer consumer,
+                int originX,
+                int originY,
+                int originZ,
+                SurfaceStyle style
+        ) {
+            for (int b = this.minB; b < this.maxB; b++) {
+                for (int a = this.minA; a < this.maxA; a++) {
+                    OverlayBounds local = this.squareBounds(a, b, style.outset())
+                            .translate(-originX, -originY, -originZ);
+                    renderOutline(
+                            matrices,
+                            consumer,
+                            local.minX(),
+                            local.minY(),
+                            local.minZ(),
+                            local.maxX() - local.minX(),
+                            local.maxY() - local.minY(),
+                            local.maxZ() - local.minZ(),
+                            style.outlineArgb(),
+                            style.outlineWidth()
+                    );
+                }
+            }
+        }
+
+        private OverlayBounds squareBounds(int a, int b, float outset) {
+            return switch (this.side) {
+                case WEST, EAST -> OverlayBounds.of(
+                        this.plane - outset,
+                        a - outset,
+                        b - outset,
+                        this.plane + outset,
+                        a + 1.0D + outset,
+                        b + 1.0D + outset
+                );
+                case DOWN, UP -> OverlayBounds.of(
+                        a - outset,
+                        this.plane - outset,
+                        b - outset,
+                        a + 1.0D + outset,
+                        this.plane + outset,
+                        b + 1.0D + outset
+                );
+                case NORTH, SOUTH -> OverlayBounds.of(
+                        a - outset,
+                        b - outset,
+                        this.plane - outset,
+                        a + 1.0D + outset,
+                        b + 1.0D + outset,
                         this.plane + outset
                 );
             };

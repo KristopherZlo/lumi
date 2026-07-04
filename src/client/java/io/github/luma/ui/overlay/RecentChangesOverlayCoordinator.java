@@ -17,7 +17,6 @@ public final class RecentChangesOverlayCoordinator {
 
     private static final RecentChangesOverlayCoordinator INSTANCE = new RecentChangesOverlayCoordinator();
     private static final int PREVIEW_ACTION_COUNT = 10;
-    private static final int MAX_PREVIEW_ENTRIES_PER_ACTION = 2048;
 
     private final ProjectService projectService = new ProjectService();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
@@ -197,8 +196,7 @@ public final class RecentChangesOverlayCoordinator {
             UndoRedoHistoryManager.UndoRedoActionsSnapshot snapshot =
                     this.historyManager.recentUndoRedoPreviewActionsSnapshot(
                             projectId,
-                            PREVIEW_ACTION_COUNT,
-                            MAX_PREVIEW_ENTRIES_PER_ACTION
+                            PREVIEW_ACTION_COUNT
                     );
             return new RecentChangesPreviewSession.ActionSnapshot(
                     snapshot.revision(),
@@ -210,8 +208,7 @@ public final class RecentChangesOverlayCoordinator {
         if (previewTarget == PreviewTarget.REDO) {
             snapshot = this.historyManager.recentRedoPreviewActionsSnapshot(
                     projectId,
-                    PREVIEW_ACTION_COUNT,
-                    MAX_PREVIEW_ENTRIES_PER_ACTION
+                    PREVIEW_ACTION_COUNT
             );
             return new RecentChangesPreviewSession.ActionSnapshot(
                     snapshot.revision(),
@@ -221,8 +218,7 @@ public final class RecentChangesOverlayCoordinator {
         } else {
             snapshot = this.historyManager.recentUndoPreviewActionsSnapshot(
                     projectId,
-                    PREVIEW_ACTION_COUNT,
-                    MAX_PREVIEW_ENTRIES_PER_ACTION
+                    PREVIEW_ACTION_COUNT
             );
             return new RecentChangesPreviewSession.ActionSnapshot(
                     snapshot.revision(),

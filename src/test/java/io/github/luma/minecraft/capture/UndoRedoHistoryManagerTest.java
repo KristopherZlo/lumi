@@ -46,9 +46,9 @@ class UndoRedoHistoryManagerTest {
     }
 
     @Test
-    void recentUndoPreviewSnapshotCapsCopiesWithoutTruncatingSelectedAction() {
+    void recentUndoPreviewSnapshotKeepsFullActionForOverlay() {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
-        String projectId = "recent-preview-cap-test";
+        String projectId = "recent-preview-full-action-test";
         historyManager.clearProject(projectId);
         historyManager.recordAction(
                 projectId,
@@ -61,16 +61,16 @@ class UndoRedoHistoryManagerTest {
         );
 
         UndoRedoHistoryManager.RecentActionsSnapshot snapshot =
-                historyManager.recentUndoPreviewActionsSnapshot(projectId, 10, 2);
+                historyManager.recentUndoPreviewActionsSnapshot(projectId, 10);
 
-        assertEquals(2, snapshot.actions().getFirst().size());
+        assertEquals(3, snapshot.actions().getFirst().size());
         assertEquals(3, historyManager.selectUndo(projectId, "Alex").action().size());
     }
 
     @Test
-    void recentUndoPreviewFiltersConflictsBeforeCappingEntries() {
+    void recentUndoPreviewFiltersConflictsBeforeCopyingActions() {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
-        String projectId = "recent-preview-conflict-cap-test";
+        String projectId = "recent-preview-conflict-copy-test";
         historyManager.clearProject(projectId);
         historyManager.recordAction(
                 projectId,
@@ -92,7 +92,7 @@ class UndoRedoHistoryManagerTest {
         );
 
         UndoRedoHistoryManager.RecentActionsSnapshot snapshot =
-                historyManager.recentUndoPreviewActionsSnapshot(projectId, 10, 1);
+                historyManager.recentUndoPreviewActionsSnapshot(projectId, 10);
 
         assertEquals(List.of("later-conflict"), snapshot.actions().stream().map(action -> action.id()).toList());
     }

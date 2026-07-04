@@ -52,6 +52,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 - Compares saved versions, branches, and current unsaved work.
 - Provides a Compare workspace page for picking two saves from branch histories before showing the overlay.
 - Shows changed blocks with an in-world overlay.
+- Renders large pending and recent-change overlays as merged section meshes while preserving per-block square outlines.
 - Restores a whole save, a selected area, or everything outside a selected area.
 - Lets you branch risky ideas and merge local branches back into the active branch.
 - Shows each branch history from its current head through reachable parent saves and restorable forward descendants.
