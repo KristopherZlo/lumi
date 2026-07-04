@@ -54,52 +54,27 @@ abstract class ServerGamePacketListenerMixin {
 
     @WrapMethod(method = "handleInteract")
     private void luma$wrapInteract(ServerboundInteractPacket packet, Operation<Void> original) {
-        this.luma$pushPlayerSource();
-        try {
-            original.call(packet);
-        } finally {
-            this.luma$popPlayerSource();
-        }
+        this.luma$callWithPlayerSource(packet, original);
     }
 
     @WrapMethod(method = "handlePlayerAction")
     private void luma$wrapPlayerAction(ServerboundPlayerActionPacket packet, Operation<Void> original) {
-        this.luma$pushPlayerSource();
-        try {
-            original.call(packet);
-        } finally {
-            this.luma$popPlayerSource();
-        }
+        this.luma$callWithPlayerSource(packet, original);
     }
 
     @WrapMethod(method = "handleUseItemOn")
     private void luma$wrapUseItemOn(ServerboundUseItemOnPacket packet, Operation<Void> original) {
-        this.luma$pushPlayerSource();
-        try {
-            original.call(packet);
-        } finally {
-            this.luma$popPlayerSource();
-        }
+        this.luma$callWithPlayerSource(packet, original);
     }
 
     @WrapMethod(method = "handleContainerClick")
     private void luma$wrapContainerClick(ServerboundContainerClickPacket packet, Operation<Void> original) {
-        this.luma$pushPlayerSource();
-        try {
-            original.call(packet);
-        } finally {
-            this.luma$popPlayerSource();
-        }
+        this.luma$callWithPlayerSource(packet, original);
     }
 
     @WrapMethod(method = "handleContainerButtonClick")
     private void luma$wrapContainerButtonClick(ServerboundContainerButtonClickPacket packet, Operation<Void> original) {
-        this.luma$pushPlayerSource();
-        try {
-            original.call(packet);
-        } finally {
-            this.luma$popPlayerSource();
-        }
+        this.luma$callWithPlayerSource(packet, original);
     }
 
     @WrapMethod(method = "handleContainerSlotStateChanged")
@@ -107,16 +82,16 @@ abstract class ServerGamePacketListenerMixin {
             ServerboundContainerSlotStateChangedPacket packet,
             Operation<Void> original
     ) {
-        this.luma$pushPlayerSource();
-        try {
-            original.call(packet);
-        } finally {
-            this.luma$popPlayerSource();
-        }
+        this.luma$callWithPlayerSource(packet, original);
     }
 
     @WrapMethod(method = "handleSetCreativeModeSlot")
     private void luma$wrapSetCreativeModeSlot(ServerboundSetCreativeModeSlotPacket packet, Operation<Void> original) {
+        this.luma$callWithPlayerSource(packet, original);
+    }
+
+    @Unique
+    private void luma$callWithPlayerSource(Object packet, Operation<Void> original) {
         this.luma$pushPlayerSource();
         try {
             original.call(packet);

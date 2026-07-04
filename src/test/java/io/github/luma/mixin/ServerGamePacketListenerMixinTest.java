@@ -18,13 +18,10 @@ class ServerGamePacketListenerMixinTest {
                 StandardCharsets.UTF_8
         );
 
-        int pushCall = source.indexOf("this.luma$pushPlayerSource();");
-        int vanillaCall = source.indexOf("original.call(packet);", pushCall);
-        int popCall = source.indexOf("this.luma$popPlayerSource();", vanillaCall);
+        int method = source.indexOf("luma$wrapInteract");
+        int helperCall = source.indexOf("this.luma$callWithPlayerSource(packet, original);", method);
 
-        assertTrue(pushCall > 0);
-        assertTrue(vanillaCall > pushCall);
-        assertTrue(popCall > vanillaCall);
+        assertTrue(helperCall > method);
         assertFalse(source.contains("packet.getTarget(level)"));
         assertFalse(source.contains("rememberCurrentPlayerAction(target, level)"));
     }
@@ -40,14 +37,10 @@ class ServerGamePacketListenerMixinTest {
         assertTrue(source.contains("method = \"handleUseItemOn\""));
 
         int method = source.indexOf("luma$wrapUseItemOn");
-        int pushCall = source.indexOf("this.luma$pushPlayerSource();", method);
-        int vanillaCall = source.indexOf("original.call(packet);", pushCall);
-        int popCall = source.indexOf("this.luma$popPlayerSource();", vanillaCall);
+        int helperCall = source.indexOf("this.luma$callWithPlayerSource(packet, original);", method);
 
         assertTrue(method > 0);
-        assertTrue(pushCall > method);
-        assertTrue(vanillaCall > pushCall);
-        assertTrue(popCall > vanillaCall);
+        assertTrue(helperCall > method);
     }
 
     @Test
@@ -61,24 +54,20 @@ class ServerGamePacketListenerMixinTest {
         assertTrue(source.contains("method = \"handlePlayerAction\""));
 
         int method = source.indexOf("luma$wrapPlayerAction");
-        int pushCall = source.indexOf("this.luma$pushPlayerSource();", method);
-        int vanillaCall = source.indexOf("original.call(packet);", pushCall);
-        int popCall = source.indexOf("this.luma$popPlayerSource();", vanillaCall);
+        int helperCall = source.indexOf("this.luma$callWithPlayerSource(packet, original);", method);
 
         assertTrue(method > 0);
-        assertTrue(pushCall > method);
-        assertTrue(vanillaCall > pushCall);
-        assertTrue(popCall > vanillaCall);
+        assertTrue(helperCall > method);
     }
 
     @Test
-    void axiomSetBlockPacketSourceReceivesPacketForReasonAwareActions() throws IOException {
+    void axiomSetBlockPacketSourceUsesPlayerIdentity() throws IOException {
         String source = Files.readString(
                 Path.of("src/main/java/io/github/luma/mixin/AxiomSetBlockPacketMixin.java"),
                 StandardCharsets.UTF_8
         );
 
-        assertTrue(source.contains("pushPacketSource(this, player)"));
+        assertTrue(source.contains("pushPacketSource(player)"));
     }
 
     @Test

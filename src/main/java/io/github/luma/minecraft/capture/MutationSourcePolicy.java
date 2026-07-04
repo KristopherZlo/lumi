@@ -18,11 +18,6 @@ final class MutationSourcePolicy {
             WorldMutationSource.FAWE,
             WorldMutationSource.AXIOM
     );
-    private static final EnumSet<WorldMutationSource> AUTOMATIC_PROJECT_SOURCES = EnumSet.of(
-            WorldMutationSource.PLAYER,
-            WorldMutationSource.ENTITY,
-            WorldMutationSource.EXPLOSIVE
-    );
     private static final EnumSet<WorldMutationSource> TRACKED_CHUNK_EXPANSION_SOURCES = EnumSet.of(
             WorldMutationSource.PLAYER,
             WorldMutationSource.ENTITY,
@@ -43,25 +38,6 @@ final class MutationSourcePolicy {
             WorldMutationSource.PISTON,
             WorldMutationSource.FALLING_BLOCK
     );
-    private static final EnumSet<WorldMutationSource> CAUSAL_SESSION_BOOTSTRAP_SOURCES = EnumSet.of(
-            WorldMutationSource.EXPLOSION,
-            WorldMutationSource.GROWTH,
-            WorldMutationSource.MOB
-    );
-    private static final EnumSet<WorldMutationSource> ALWAYS_DEFERRED_STABILIZATION_SOURCES = EnumSet.of(
-            WorldMutationSource.BLOCK_UPDATE,
-            WorldMutationSource.PISTON
-    );
-    private static final EnumSet<WorldMutationSource> WHOLE_DIMENSION_DEFERRED_STABILIZATION_SOURCES = EnumSet.of(
-            WorldMutationSource.FLUID,
-            WorldMutationSource.FALLING_BLOCK
-    );
-    private static final EnumSet<WorldMutationSource> DEFERRED_STABILIZATION_REQUIRES_ACTION_SOURCES = EnumSet.of(
-            WorldMutationSource.BLOCK_UPDATE,
-            WorldMutationSource.PISTON,
-            WorldMutationSource.FLUID,
-            WorldMutationSource.FALLING_BLOCK
-    );
     private static final EnumSet<WorldMutationSource> REUSABLE_DEFERRED_CONTEXT_SOURCES = EnumSet.of(
             WorldMutationSource.BLOCK_UPDATE,
             WorldMutationSource.PISTON,
@@ -77,17 +53,14 @@ final class MutationSourcePolicy {
             WorldMutationSource.FALLING_BLOCK,
             WorldMutationSource.MOB
     );
-    private static final EnumSet<WorldMutationSource> LIVE_UNDO_ONLY_SOURCES = EnumSet.of(
-            WorldMutationSource.MOB,
-            WorldMutationSource.EXPLOSION
-    );
-
     boolean isExplicitRootSource(WorldMutationSource source) {
         return source != null && EXPLICIT_ROOT_SOURCES.contains(source);
     }
 
     boolean allowsAutomaticProjectCreation(WorldMutationSource source) {
-        return source != null && AUTOMATIC_PROJECT_SOURCES.contains(source);
+        return source == WorldMutationSource.PLAYER
+                || source == WorldMutationSource.ENTITY
+                || source == WorldMutationSource.EXPLOSIVE;
     }
 
     boolean allowsSessionBootstrap(WorldMutationSource source) {
@@ -95,8 +68,9 @@ final class MutationSourcePolicy {
     }
 
     boolean allowsCausalSessionBootstrap(WorldMutationSource source, String actionId) {
-        return source != null
-                && CAUSAL_SESSION_BOOTSTRAP_SOURCES.contains(source)
+        return (source == WorldMutationSource.EXPLOSION
+                || source == WorldMutationSource.GROWTH
+                || source == WorldMutationSource.MOB)
                 && this.hasCausalAction(actionId);
     }
 
@@ -121,9 +95,10 @@ final class MutationSourcePolicy {
         if (project == null || source == null) {
             return false;
         }
-        return ALWAYS_DEFERRED_STABILIZATION_SOURCES.contains(source)
+        return source == WorldMutationSource.BLOCK_UPDATE
+                || source == WorldMutationSource.PISTON
                 || (project.tracksWholeDimension()
-                && WHOLE_DIMENSION_DEFERRED_STABILIZATION_SOURCES.contains(source));
+                && (source == WorldMutationSource.FLUID || source == WorldMutationSource.FALLING_BLOCK));
     }
 
     boolean usesLiveStateReconciliation(WorldMutationSource source) {
@@ -131,7 +106,7 @@ final class MutationSourcePolicy {
     }
 
     boolean isLiveUndoOnlySource(WorldMutationSource source) {
-        return source != null && LIVE_UNDO_ONLY_SOURCES.contains(source);
+        return source == WorldMutationSource.MOB || source == WorldMutationSource.EXPLOSION;
     }
 
     boolean canCaptureDeferredPreMutationBaseline(
@@ -153,7 +128,10 @@ final class MutationSourcePolicy {
     }
 
     boolean requiresCausalActionForDeferredStabilization(WorldMutationSource source) {
-        return source != null && DEFERRED_STABILIZATION_REQUIRES_ACTION_SOURCES.contains(source);
+        return source == WorldMutationSource.BLOCK_UPDATE
+                || source == WorldMutationSource.PISTON
+                || source == WorldMutationSource.FLUID
+                || source == WorldMutationSource.FALLING_BLOCK;
     }
 
     boolean canUseDeferredStabilization(WorldMutationSource source, String actionId) {

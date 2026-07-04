@@ -67,13 +67,9 @@ public final class LumaCommands {
                     : "luma.status.admin_required"));
             return 0;
         }
-        BuildProject project = existing.orElseGet(() -> {
-            try {
-                return this.projectService.ensureWorldProject(source.getLevel(), author);
-            } catch (IOException exception) {
-                throw new RuntimeException(exception);
-            }
-        });
+        BuildProject project = existing.isPresent()
+                ? existing.get()
+                : this.projectService.ensureWorldProject(source.getLevel(), author);
         var handle = this.versionService.startSaveVersion(source.getLevel(), project.name(), normalizedMessage, author);
         source.sendSuccess(() -> Component.literal("Lumi save started: " + handle.id()), false);
         return 1;
