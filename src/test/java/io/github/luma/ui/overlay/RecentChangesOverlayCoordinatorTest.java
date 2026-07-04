@@ -10,17 +10,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RecentChangesOverlayCoordinatorTest {
 
     @Test
-    void recentOverlayDrainsStabilizationBeforeSnapshottingUndoHistory() throws IOException {
+    void recentOverlayUsesBoundedPreviewSnapshotsWithoutDrainingStabilization() throws IOException {
         String source = Files.readString(Path.of(
                 "src/client/java/io/github/luma/ui/overlay/RecentChangesOverlayCoordinator.java"
         ));
 
-        int drainIndex = source.indexOf("this.captureManager.drainUndoRedoStabilization(");
-        int undoSnapshotIndex = source.indexOf("this.historyManager.recentUndoActionsSnapshot(");
-        int bothSnapshotIndex = source.indexOf("this.historyManager.recentUndoRedoActionsSnapshot(");
+        assertTrue(!source.contains("drainUndoRedoStabilization("));
+        assertTrue(source.contains("MAX_PREVIEW_ENTRIES_PER_ACTION"));
+        assertTrue(source.contains("recentUndoPreviewActionsSnapshot("));
+        assertTrue(source.contains("recentRedoPreviewActionsSnapshot("));
+        assertTrue(source.contains("recentUndoRedoPreviewActionsSnapshot("));
 
-        assertTrue(drainIndex >= 0);
-        assertTrue(drainIndex < undoSnapshotIndex);
-        assertTrue(drainIndex < bothSnapshotIndex);
+        int pendingIndex = source.indexOf("RecentChangesPreviewSession.PreviewKey pending = this.pendingPreview;");
+        int requestIndex = source.indexOf("this.previewSession.request(");
+        assertTrue(pendingIndex >= 0);
+        assertTrue(pendingIndex < requestIndex);
     }
 }

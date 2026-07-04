@@ -2,7 +2,6 @@ package io.github.luma.ui.overlay;
 
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.service.ProjectService;
-import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import java.util.List;
@@ -18,9 +17,9 @@ public final class RecentChangesOverlayCoordinator {
 
     private static final RecentChangesOverlayCoordinator INSTANCE = new RecentChangesOverlayCoordinator();
     private static final int PREVIEW_ACTION_COUNT = 10;
+    private static final int MAX_PREVIEW_ENTRIES_PER_ACTION = 2048;
 
     private final ProjectService projectService = new ProjectService();
-    private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final ExecutorService previewExecutor = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "lumi-recent-overlay-preview");
@@ -80,11 +79,17 @@ public final class RecentChangesOverlayCoordinator {
 
             String projectId = project.get().id().toString();
             long streamRevision = this.historyManager.revision(projectId);
+            RecentChangesPreviewSession.PreviewKey pending = this.pendingPreview;
+            if (pending != null
+                    && projectId.equals(pending.projectId())
+                    && previewTarget == pending.previewTarget()) {
+                return true;
+            }
             RecentChangesPreviewSession.PinnedPreview pinnedPreview = this.previewSession.request(
                     projectId,
                     previewTarget,
                     streamRevision,
-                    () -> this.recentActionsSnapshot(client, projectId, previewTarget)
+                    () -> this.recentActionsSnapshot(projectId, previewTarget)
             );
             if (!pinnedPreview.hasBlockPreview()) {
                 this.clearPreview();
@@ -185,21 +190,16 @@ public final class RecentChangesOverlayCoordinator {
     }
 
     private RecentChangesPreviewSession.ActionSnapshot recentActionsSnapshot(
-            Minecraft client,
             String projectId,
             PreviewTarget previewTarget
     ) {
-        try {
-            this.captureManager.drainUndoRedoStabilization(
-                    ClientProjectAccess.requireSingleplayerServer(client),
-                    projectId
-            );
-        } catch (Exception exception) {
-            throw new IllegalStateException("Recent overlay stabilization drain failed", exception);
-        }
         if (previewTarget == PreviewTarget.BOTH) {
             UndoRedoHistoryManager.UndoRedoActionsSnapshot snapshot =
-                    this.historyManager.recentUndoRedoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
+                    this.historyManager.recentUndoRedoPreviewActionsSnapshot(
+                            projectId,
+                            PREVIEW_ACTION_COUNT,
+                            MAX_PREVIEW_ENTRIES_PER_ACTION
+                    );
             return new RecentChangesPreviewSession.ActionSnapshot(
                     snapshot.revision(),
                     snapshot.undoActions(),
@@ -208,14 +208,22 @@ public final class RecentChangesOverlayCoordinator {
         }
         UndoRedoHistoryManager.RecentActionsSnapshot snapshot;
         if (previewTarget == PreviewTarget.REDO) {
-            snapshot = this.historyManager.recentRedoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
+            snapshot = this.historyManager.recentRedoPreviewActionsSnapshot(
+                    projectId,
+                    PREVIEW_ACTION_COUNT,
+                    MAX_PREVIEW_ENTRIES_PER_ACTION
+            );
             return new RecentChangesPreviewSession.ActionSnapshot(
                     snapshot.revision(),
                     List.of(),
                     snapshot.actions()
             );
         } else {
-            snapshot = this.historyManager.recentUndoActionsSnapshot(projectId, PREVIEW_ACTION_COUNT);
+            snapshot = this.historyManager.recentUndoPreviewActionsSnapshot(
+                    projectId,
+                    PREVIEW_ACTION_COUNT,
+                    MAX_PREVIEW_ENTRIES_PER_ACTION
+            );
             return new RecentChangesPreviewSession.ActionSnapshot(
                     snapshot.revision(),
                     snapshot.actions(),

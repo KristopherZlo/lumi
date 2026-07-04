@@ -312,6 +312,49 @@ public final class UndoRedoHistoryManager {
         );
     }
 
+    public synchronized RecentActionsSnapshot recentUndoPreviewActionsSnapshot(
+            String projectId,
+            int count,
+            int maxEntriesPerAction
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return new RecentActionsSnapshot(0L, List.of());
+        }
+        return new RecentActionsSnapshot(
+                this.revision(projectId),
+                this.recentPreviewActions(projectId, count, maxEntriesPerAction, true)
+        );
+    }
+
+    public synchronized RecentActionsSnapshot recentRedoPreviewActionsSnapshot(
+            String projectId,
+            int count,
+            int maxEntriesPerAction
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return new RecentActionsSnapshot(0L, List.of());
+        }
+        return new RecentActionsSnapshot(
+                this.revision(projectId),
+                this.recentPreviewActions(projectId, count, maxEntriesPerAction, false)
+        );
+    }
+
+    public synchronized UndoRedoActionsSnapshot recentUndoRedoPreviewActionsSnapshot(
+            String projectId,
+            int count,
+            int maxEntriesPerAction
+    ) {
+        if (projectId == null || projectId.isBlank()) {
+            return new UndoRedoActionsSnapshot(0L, List.of(), List.of());
+        }
+        return new UndoRedoActionsSnapshot(
+                this.revision(projectId),
+                this.recentPreviewActions(projectId, count, maxEntriesPerAction, true),
+                this.recentPreviewActions(projectId, count, maxEntriesPerAction, false)
+        );
+    }
+
     public synchronized long revision(String projectId) {
         if (projectId == null || projectId.isBlank()) {
             return 0L;
@@ -404,6 +447,31 @@ public final class UndoRedoHistoryManager {
         }
         return actions.stream()
                 .filter(action -> undo ? this.actionIsCurrent(projectId, action) : this.actionCanRedo(projectId, action))
+                .sorted(Comparator.comparing(UndoRedoAction::updatedAt).reversed())
+                .limit(count)
+                .toList();
+    }
+
+    private List<UndoRedoAction> recentPreviewActions(
+            String projectId,
+            int count,
+            int maxEntriesPerAction,
+            boolean undo
+    ) {
+        if (count <= 0 || maxEntriesPerAction <= 0) {
+            return List.of();
+        }
+        Map<String, UndoRedoActionStack> stacks = this.projectStacks.get(projectId);
+        if (stacks == null || stacks.isEmpty()) {
+            return List.of();
+        }
+        List<UndoRedoAction> actions = new ArrayList<>();
+        for (UndoRedoActionStack stack : stacks.values()) {
+            actions.addAll(undo
+                    ? stack.recentUndoActionPreviews(count, maxEntriesPerAction)
+                    : stack.recentRedoActionPreviews(count, maxEntriesPerAction));
+        }
+        return actions.stream()
                 .sorted(Comparator.comparing(UndoRedoAction::updatedAt).reversed())
                 .limit(count)
                 .toList();

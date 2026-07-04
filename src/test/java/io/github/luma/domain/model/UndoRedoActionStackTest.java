@@ -51,6 +51,19 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void recentPreviewCopiesAreCappedWithoutTruncatingUndoHistory() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("blast", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:air"), NOW);
+        stack.recordChange("blast", "Alex", "project", "minecraft:overworld", change(2, "minecraft:stone", "minecraft:air"), NOW);
+        stack.recordChange("blast", "Alex", "project", "minecraft:overworld", change(3, "minecraft:stone", "minecraft:air"), NOW);
+
+        UndoRedoAction preview = stack.recentUndoActionPreviews(1, 2).getFirst();
+
+        assertEquals(2, preview.size());
+        assertEquals(3, stack.selectUndo().action().size());
+    }
+
+    @Test
     void delayedEntityFalloutAfterUndoDoesNotReopenUndoAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String cowId = "00000000-0000-0000-0000-000000000060";
