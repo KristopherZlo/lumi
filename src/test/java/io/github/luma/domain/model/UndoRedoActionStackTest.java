@@ -87,6 +87,27 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void linkedBlockFalloutAfterUndoDoesNotReopenRedoAction() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        stack.recordChange("blast", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:stone", "minecraft:air"), NOW);
+        stack.completeUndo(stack.selectUndo());
+
+        stack.recordCurrentCausalChange(
+                "blast",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                change(2, "minecraft:stone", "minecraft:air"),
+                NOW.plusSeconds(1)
+        );
+
+        assertFalse(stack.canUndo());
+        assertTrue(stack.canRedo());
+        assertEquals("blast", stack.recentRedoActions(1).getFirst().id());
+    }
+
+    @Test
     void newActionClearsRedoStack() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
@@ -117,8 +138,11 @@ class UndoRedoActionStackTest {
         stack.recordChange("action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
         stack.completeUndo(stack.selectUndo());
 
-        stack.recordCausalChange(
+        stack.recordCurrentCausalChange(
                 "action-1",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 change(3, "minecraft:air", "minecraft:water"),
                 NOW.plusSeconds(2)
         );
@@ -134,8 +158,11 @@ class UndoRedoActionStackTest {
         stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
 
         UndoRedoActionStack.Selection selection = stack.selectUndo();
-        stack.recordCausalChange(
+        stack.recordCurrentCausalChange(
                 "action-1",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 change(2, "minecraft:air", "minecraft:water"),
                 NOW.plusSeconds(2)
         );
@@ -164,15 +191,18 @@ class UndoRedoActionStackTest {
     }
 
     @Test
-    void causalChangesDoNotCreateNewTopActionAfterNewerBuilderAction() {
+    void linkedChangesJoinOlderActionWithoutPromotion() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:lever"), NOW);
         stack.recordChange("latest-placement", "Alex", "project", "minecraft:overworld",
                 change(30, "minecraft:air", "minecraft:stone"), NOW.plusSeconds(1));
 
-        stack.recordCausalChange(
+        stack.recordCurrentCausalChange(
                 "redstone-toggle",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 change(2, "minecraft:repeater", "minecraft:comparator"),
                 NOW.plusSeconds(2)
         );
@@ -180,7 +210,7 @@ class UndoRedoActionStackTest {
         List<UndoRedoAction> recent = stack.recentUndoActions(2);
         assertEquals(List.of("latest-placement", "redstone-toggle"), recent.stream().map(UndoRedoAction::id).toList());
         assertEquals(1, recent.getFirst().size());
-        assertEquals(1, recent.get(1).size());
+        assertEquals(2, recent.get(1).size());
     }
 
     @Test
@@ -189,8 +219,11 @@ class UndoRedoActionStackTest {
         stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:lever"), NOW);
 
-        stack.recordCausalChange(
+        stack.recordCurrentCausalChange(
                 "redstone-toggle",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 change(2, "minecraft:repeater", "minecraft:comparator"),
                 NOW.plusSeconds(1)
         );
@@ -209,8 +242,11 @@ class UndoRedoActionStackTest {
         stack.recordChange("release-water", "Alex", "project", "minecraft:overworld",
                 change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
 
-        stack.recordCausalChange(
+        stack.recordCurrentCausalChange(
                 "release-water",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 change(1, "minecraft:grass_block", "minecraft:water"),
                 NOW.plusSeconds(2)
         );
@@ -232,8 +268,11 @@ class UndoRedoActionStackTest {
         stack.recordChange("release-water", "Alex", "project", "minecraft:overworld",
                 change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
 
-        stack.recordCausalAction(
+        stack.recordCurrentCausalAction(
                 "release-water",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 List.of(change(1, "minecraft:air", "minecraft:water")),
                 List.of(),
                 NOW.plusSeconds(2)
@@ -252,8 +291,11 @@ class UndoRedoActionStackTest {
         stack.recordChange("overworld-release", "Alex", "project", "minecraft:overworld",
                 change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
 
-        stack.recordCausalChange(
+        stack.recordCurrentCausalChange(
                 "overworld-release",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 change(1, "minecraft:grass_block", "minecraft:water"),
                 NOW.plusSeconds(2)
         );
@@ -271,8 +313,11 @@ class UndoRedoActionStackTest {
         stack.recordChange("overworld-release", "Alex", "project", "minecraft:overworld",
                 change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
 
-        stack.recordCausalAction(
+        stack.recordCurrentCausalAction(
                 "overworld-release",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 List.of(change(1, "minecraft:grass_block", "minecraft:water")),
                 List.of(),
                 NOW.plusSeconds(2)
@@ -289,8 +334,11 @@ class UndoRedoActionStackTest {
         stack.recordChange("place-water", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:water"), NOW);
 
-        stack.recordCausalChange(
+        stack.recordCurrentCausalChange(
                 "place-water",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 hiddenChange(2, "minecraft:air", "minecraft:cobblestone"),
                 NOW.plusSeconds(1)
         );
@@ -390,8 +438,11 @@ class UndoRedoActionStackTest {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String dropId = "00000000-0000-0000-0000-000000000021";
 
-        stack.recordCausalAction(
-                "ambient-mob",
+        stack.recordCurrentCausalAction(
+                "",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 List.of(change(1, "minecraft:stone", "minecraft:air")),
                 List.of(new StoredEntityChange(dropId, "minecraft:item", null, entity("minecraft:item", dropId, 1.0D))),
                 NOW
@@ -430,8 +481,11 @@ class UndoRedoActionStackTest {
         stack.recordChange("latest-placement", "Alex", "project", "minecraft:overworld",
                 change(30, "minecraft:air", "minecraft:stone"), NOW.plusSeconds(1));
 
-        stack.recordCausalAction(
+        stack.recordCurrentCausalAction(
                 "redstone-toggle",
+                "Alex",
+                "project",
+                "minecraft:overworld",
                 List.of(change(2, "minecraft:repeater", "minecraft:comparator")),
                 List.of(),
                 NOW.plusSeconds(2)
@@ -440,7 +494,7 @@ class UndoRedoActionStackTest {
         List<UndoRedoAction> recent = stack.recentUndoActions(2);
         assertEquals(List.of("latest-placement", "redstone-toggle"), recent.stream().map(UndoRedoAction::id).toList());
         assertEquals(1, recent.getFirst().size());
-        assertEquals(1, recent.get(1).size());
+        assertEquals(2, recent.get(1).size());
     }
 
     @Test

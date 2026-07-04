@@ -39,36 +39,7 @@ public final class UndoRedoActionStack {
         if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
             return this.revision;
         }
-
-        UndoRedoAction action = this.undoStack.peekFirst();
-        if (action == null || !action.id().equals(actionId)) {
-            action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
-            this.undoStack.addFirst(action);
-            this.trimUndoStack();
-        }
-
-        return this.recordIntoAction(action, change, now, true);
-    }
-
-    public long recordCausalChange(
-            String actionId,
-            StoredBlockChange change,
-            Instant now
-    ) {
-        if (actionId == null || actionId.isBlank() || change == null) {
-            return this.revision;
-        }
-
-        UndoRedoAction action = this.undoStack.peekFirst();
-        if (action == null || !action.id().equals(actionId)) {
-            return this.revision;
-        }
-
-        StoredBlockChange recordableChange = this.withAppliedOldValue(action.dimensionId(), change);
-        if (recordableChange == null || recordableChange.isNoOp()) {
-            return this.revision;
-        }
-        return this.recordIntoAction(action, recordableChange, now, false);
+        return this.recordAction(actionId, actor, projectId, dimensionId, List.of(change), List.of(), now);
     }
 
     public long recordCurrentCausalChange(
@@ -82,37 +53,7 @@ public final class UndoRedoActionStack {
         if (actionId == null || actionId.isBlank() || change == null) {
             return this.revision;
         }
-
-        StoredBlockChange recordableChange = this.withAppliedOldValue(dimensionId, change);
-        if (recordableChange == null || recordableChange.isNoOp()) {
-            return this.revision;
-        }
-
-        UndoRedoAction action = this.findUndoAction(actionId);
-        if (action == null) {
-            action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
-            this.undoStack.addFirst(action);
-            this.trimUndoStack();
-        }
-
-        return this.recordIntoAction(action, recordableChange, now, true);
-    }
-
-    public long recordCausalEntityChange(
-            String actionId,
-            StoredEntityChange change,
-            Instant now
-    ) {
-        if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
-            return this.revision;
-        }
-
-        UndoRedoAction action = this.undoStack.peekFirst();
-        if (action == null || !action.id().equals(actionId)) {
-            return this.revision;
-        }
-
-        return this.recordEntityIntoAction(action, change, now, false);
+        return this.recordCurrentCausalAction(actionId, actor, projectId, dimensionId, List.of(change), List.of(), now);
     }
 
     public long recordEntityChange(
@@ -126,15 +67,7 @@ public final class UndoRedoActionStack {
         if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
             return this.revision;
         }
-
-        UndoRedoAction action = this.undoStack.peekFirst();
-        if (action == null || !action.id().equals(actionId)) {
-            action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
-            this.undoStack.addFirst(action);
-            this.trimUndoStack();
-        }
-
-        return this.recordEntityIntoAction(action, change, now, true);
+        return this.recordAction(actionId, actor, projectId, dimensionId, List.of(), List.of(change), now);
     }
 
     public long recordDelayedEntityChange(
@@ -178,6 +111,7 @@ public final class UndoRedoActionStack {
         }
 
         UndoRedoAction action = this.findUndoAction(actionId);
+        boolean created = false;
         if (action == null) {
             if (this.findRedoAction(actionId) != null) {
                 return this.revision;
@@ -186,9 +120,10 @@ public final class UndoRedoActionStack {
             action = new UndoRedoAction(actionId, actor, projectId, dimensionId, startedAt, startedAt);
             this.insertUndoActionByStartedAt(action);
             this.trimUndoStack();
+            created = true;
         }
 
-        return this.recordSecondaryIntoExistingAction(action, List.of(), recordableChanges, now, true);
+        return this.recordSecondaryIntoExistingAction(action, List.of(), recordableChanges, now, created);
     }
 
     public long recordAction(
@@ -214,24 +149,6 @@ public final class UndoRedoActionStack {
         return this.recordIntoExistingAction(action, changes, entityChanges, now, true);
     }
 
-    public long recordCausalAction(
-            String actionId,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            Instant now
-    ) {
-        if (actionId == null || actionId.isBlank()) {
-            return this.revision;
-        }
-
-        UndoRedoAction action = this.undoStack.peekFirst();
-        if (action == null || !action.id().equals(actionId)) {
-            return this.revision;
-        }
-
-        return this.recordSecondaryIntoExistingAction(action, changes, entityChanges, now);
-    }
-
     public long recordCurrentCausalAction(
             String actionId,
             String actor,
@@ -246,13 +163,18 @@ public final class UndoRedoActionStack {
         }
 
         UndoRedoAction action = this.findUndoAction(actionId);
+        boolean created = false;
         if (action == null) {
+            if (this.findRedoAction(actionId) != null) {
+                return this.revision;
+            }
             action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
             this.undoStack.addFirst(action);
             this.trimUndoStack();
+            created = true;
         }
 
-        return this.recordSecondaryIntoExistingAction(action, changes, entityChanges, now, true);
+        return this.recordSecondaryIntoExistingAction(action, changes, entityChanges, now, created);
     }
 
     public Selection selectUndo() {
@@ -441,34 +363,6 @@ public final class UndoRedoActionStack {
         return this.revision;
     }
 
-    private long recordIntoAction(
-            UndoRedoAction action,
-            StoredBlockChange change,
-            Instant now,
-            boolean clearRedoOnMutation
-    ) {
-        boolean changed = action.recordChange(change, now);
-        if (action.isEmpty()) {
-            this.undoStack.remove(action);
-        }
-        if (changed) {
-            if (clearRedoOnMutation) {
-                this.redoStack.clear();
-            }
-            this.revision += 1;
-        }
-        return this.revision;
-    }
-
-    private long recordSecondaryIntoExistingAction(
-            UndoRedoAction action,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            Instant now
-    ) {
-        return this.recordSecondaryIntoExistingAction(action, changes, entityChanges, now, false);
-    }
-
     private long recordSecondaryIntoExistingAction(
             UndoRedoAction action,
             List<StoredBlockChange> changes,
@@ -494,25 +388,6 @@ public final class UndoRedoActionStack {
             this.undoStack.remove(action);
         }
         if (recorded) {
-            if (clearRedoOnMutation) {
-                this.redoStack.clear();
-            }
-            this.revision += 1;
-        }
-        return this.revision;
-    }
-
-    private long recordEntityIntoAction(
-            UndoRedoAction action,
-            StoredEntityChange change,
-            Instant now,
-            boolean clearRedoOnMutation
-    ) {
-        boolean changed = action.recordEntityChange(change, now);
-        if (action.isEmpty()) {
-            this.undoStack.remove(action);
-        }
-        if (changed) {
             if (clearRedoOnMutation) {
                 this.redoStack.clear();
             }

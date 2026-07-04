@@ -5,8 +5,8 @@ import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,31 +37,10 @@ public final class UndoRedoHistoryManager {
             StoredBlockChange change,
             Instant now
     ) {
-        if (projectId == null || projectId.isBlank()) {
+        if (change == null || change.isNoOp()) {
             return;
         }
-        UndoRedoActionStack stack = this.stack(projectId, actor);
-        long revision = stack.revision();
-        stack.recordChange(actionId, actor, projectId, dimensionId, change, now);
-        this.finishStackMutation(projectId, stack, revision);
-    }
-
-    public synchronized void recordCausalChange(
-            String projectId,
-            String actionId,
-            StoredBlockChange change,
-            Instant now
-    ) {
-        if (projectId == null || projectId.isBlank()) {
-            return;
-        }
-        UndoRedoActionStack stack = this.stackForUndoAction(projectId, actionId);
-        if (stack == null) {
-            return;
-        }
-        long revision = stack.revision();
-        stack.recordCausalChange(actionId, change, now);
-        this.finishStackMutation(projectId, stack, revision);
+        this.recordAction(projectId, dimensionId, actionId, actor, List.of(change), List.of(), now);
     }
 
     public synchronized void recordCurrentCausalChange(
@@ -72,31 +51,10 @@ public final class UndoRedoHistoryManager {
             StoredBlockChange change,
             Instant now
     ) {
-        if (projectId == null || projectId.isBlank()) {
+        if (change == null || change.isNoOp()) {
             return;
         }
-        UndoRedoActionStack stack = this.stack(projectId, actor);
-        long revision = stack.revision();
-        stack.recordCurrentCausalChange(actionId, actor, projectId, dimensionId, change, now);
-        this.finishStackMutation(projectId, stack, revision);
-    }
-
-    public synchronized void recordCausalEntityChange(
-            String projectId,
-            String actionId,
-            StoredEntityChange change,
-            Instant now
-    ) {
-        if (projectId == null || projectId.isBlank()) {
-            return;
-        }
-        UndoRedoActionStack stack = this.stackForUndoAction(projectId, actionId);
-        if (stack == null) {
-            return;
-        }
-        long revision = stack.revision();
-        stack.recordCausalEntityChange(actionId, change, now);
-        this.finishStackMutation(projectId, stack, revision);
+        this.recordCurrentCausalAction(projectId, dimensionId, actionId, actor, List.of(change), List.of(), now);
     }
 
     public synchronized void recordEntityChange(
@@ -107,13 +65,10 @@ public final class UndoRedoHistoryManager {
             StoredEntityChange change,
             Instant now
     ) {
-        if (projectId == null || projectId.isBlank()) {
+        if (change == null || change.isNoOp()) {
             return;
         }
-        UndoRedoActionStack stack = this.stack(projectId, actor);
-        long revision = stack.revision();
-        stack.recordEntityChange(actionId, actor, projectId, dimensionId, change, now);
-        this.finishStackMutation(projectId, stack, revision);
+        this.recordAction(projectId, dimensionId, actionId, actor, List.of(), List.of(change), now);
     }
 
     public synchronized void recordDelayedEntityChange(
@@ -125,21 +80,15 @@ public final class UndoRedoHistoryManager {
             Instant actionStartedAt,
             Instant now
     ) {
-        if (projectId == null || projectId.isBlank()) {
-            return;
-        }
-        UndoRedoActionStack stack = this.stack(projectId, actor);
-        long revision = stack.revision();
-        stack.recordDelayedEntityChange(
-                actionId,
-                actor,
+        this.recordDelayedEntityChanges(
                 projectId,
                 dimensionId,
-                change,
+                actionId,
+                actor,
+                change == null ? List.of() : List.of(change),
                 actionStartedAt,
                 now
         );
-        this.finishStackMutation(projectId, stack, revision);
     }
 
     public synchronized void recordDelayedEntityChanges(
@@ -183,25 +132,6 @@ public final class UndoRedoHistoryManager {
         UndoRedoActionStack stack = this.stack(projectId, actor);
         long revision = stack.revision();
         stack.recordAction(actionId, actor, projectId, dimensionId, changes, entityChanges, now);
-        this.finishStackMutation(projectId, stack, revision);
-    }
-
-    public synchronized void recordCausalAction(
-            String projectId,
-            String actionId,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            Instant now
-    ) {
-        if (projectId == null || projectId.isBlank()) {
-            return;
-        }
-        UndoRedoActionStack stack = this.stackForUndoAction(projectId, actionId);
-        if (stack == null) {
-            return;
-        }
-        long revision = stack.revision();
-        stack.recordCausalAction(actionId, changes, entityChanges, now);
         this.finishStackMutation(projectId, stack, revision);
     }
 
@@ -391,19 +321,6 @@ public final class UndoRedoHistoryManager {
             return stacks.get(this.actorKey(actor));
         }
         return stacks.computeIfAbsent(this.actorKey(actor), ignored -> new UndoRedoActionStack());
-    }
-
-    private UndoRedoActionStack stackForUndoAction(String projectId, String actionId) {
-        Map<String, UndoRedoActionStack> stacks = this.projectStacks.get(projectId);
-        if (stacks == null || actionId == null || actionId.isBlank()) {
-            return null;
-        }
-        for (UndoRedoActionStack stack : stacks.values()) {
-            if (stack.recentUndoActions(64).stream().anyMatch(action -> action.id().equals(actionId))) {
-                return stack;
-            }
-        }
-        return null;
     }
 
     private void finishStackMutation(String projectId, UndoRedoActionStack stack, long revisionBefore) {

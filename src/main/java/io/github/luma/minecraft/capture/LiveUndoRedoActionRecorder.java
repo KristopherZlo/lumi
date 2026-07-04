@@ -20,7 +20,6 @@ import net.minecraft.server.level.ServerLevel;
 final class LiveUndoRedoActionRecorder {
 
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
-    private final UndoRedoActionGroupingPolicy groupingPolicy = new UndoRedoActionGroupingPolicy();
     private final MutationSourcePolicy sourcePolicy = new MutationSourcePolicy();
     private final HistoryDebugLog historyDebugLog;
 
@@ -38,11 +37,7 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
 
-        String actionId = this.groupingPolicy.actionIdForBlockChange(
-                WorldMutationContext.currentSource(),
-                WorldMutationContext.currentActionId(),
-                change
-        );
+        String actionId = WorldMutationContext.currentActionId();
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
         if (actionAllowed && !actionId.isBlank() && this.sourcePolicy.isExplicitRootSource(WorldMutationContext.currentSource())) {
             this.historyManager.recordChange(
