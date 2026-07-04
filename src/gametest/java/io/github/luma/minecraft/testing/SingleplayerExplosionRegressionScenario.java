@@ -193,6 +193,7 @@ final class SingleplayerExplosionRegressionScenario {
         boolean restoredAfterUndo(ServerLevel level) {
             return this.persistentTntBlocksRestored(level)
                     && this.consumedTntBlocksCleared(level)
+                    && !this.primedTntPresent(level)
                     && this.witnessBlocks.stream().allMatch(pos -> level.getBlockState(pos).is(Blocks.OAK_PLANKS));
         }
 

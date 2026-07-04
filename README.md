@@ -245,6 +245,7 @@ Hard rules:
 - Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
+- Restore, recovery, merge, quick rollback, and undo/redo replay must verify final target state before reporting success.
 - Live undo/redo, recent previews, and pending overlays include explosion and mob block fallout only when it is causally tied to a player action; passive mob edits and ambient explosions remain actionless.
 - Player-caused mob and explosion fallout is live undo-only: it can be undone/redone for cleanup, but it must not dirty recovery drafts or saved project history.
 - Live undo/redo actions are actor-scoped. Multiplayer undo/redo selects only the local player's stack, singleplayer can fall back to neutral explosion/mob cleanup actions, project-wide overlays aggregate unconflicted actions from a monotonic project revision, and an action is hidden once another actor later touches the same block or entity target. That target ownership is computed from recent applied undo actions when selecting or previewing instead of maintained as a separate mutation ledger. Secondary fallout joins live undo only through an explicit action id or deferred carrier context; Lumi does not guess ownership from nearby latest actions. Undo/redo completion rejects stale selections whose action changed after preview/selection.

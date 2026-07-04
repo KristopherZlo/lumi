@@ -554,6 +554,7 @@ public final class WorldOperationManager {
         private final WorldApplyNoOpPruner noOpPruner = new WorldApplyNoOpPruner();
         private final WorldApplyVerificationService verificationService = new WorldApplyVerificationService();
         private final WorldApplyVerificationRepairer verificationRepairer = new WorldApplyVerificationRepairer();
+        private final WorldApplyFinalVerificationGate finalVerificationGate = new WorldApplyFinalVerificationGate();
         private WorldApplyVerificationResult currentVerificationResult;
         private int currentVerificationRepaired;
 
@@ -819,6 +820,7 @@ public final class WorldOperationManager {
                     }
                     tickCounters.recordChunkFinished();
                     this.exactReplayStateQueue.record(this.currentBatch);
+                    this.finalVerificationGate.record(this.currentBatch);
                     this.logBlockApplyChunkFinish(this.currentBatch);
                     this.currentBatch = null;
                     this.currentNativeSections = List.of();
@@ -881,6 +883,17 @@ public final class WorldOperationManager {
                     return false;
                 }
                 if (!this.drainExactReplayStates(budget, deadlineNanos)) {
+                    return false;
+                }
+                if (this.shouldVerifyPostApply() && !this.finalVerificationGate.advance(
+                        this.level(),
+                        budget,
+                        deadlineNanos,
+                        this.applyMetrics,
+                        this.redstoneUpdateQueue,
+                        this.lightUpdateQueue,
+                        this.performanceGovernor
+                )) {
                     return false;
                 }
                 this.progressSink().update(
