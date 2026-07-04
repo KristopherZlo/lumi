@@ -20,8 +20,8 @@ class UndoRedoActionStackTest {
     void groupsRepeatedPositionsInsideOneAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
 
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:dirt", "minecraft:gold_block"), NOW);
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:dirt", "minecraft:gold_block"), NOW);
 
         UndoRedoActionStack.Selection selection = stack.selectUndo();
         assertNotNull(selection);
@@ -34,7 +34,7 @@ class UndoRedoActionStackTest {
     @Test
     void undoAndRedoMoveActionsBetweenStacks() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
 
         UndoRedoActionStack.Selection undo = stack.selectUndo();
         stack.completeUndo(undo);
@@ -53,9 +53,9 @@ class UndoRedoActionStackTest {
     @Test
     void recentPreviewCopiesAreCappedWithoutTruncatingUndoHistory() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("blast", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:air"), NOW);
-        stack.recordChange("blast", "Alex", "project", "minecraft:overworld", change(2, "minecraft:stone", "minecraft:air"), NOW);
-        stack.recordChange("blast", "Alex", "project", "minecraft:overworld", change(3, "minecraft:stone", "minecraft:air"), NOW);
+        recordChange(stack, "blast", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:air"), NOW);
+        recordChange(stack, "blast", "Alex", "project", "minecraft:overworld", change(2, "minecraft:stone", "minecraft:air"), NOW);
+        recordChange(stack, "blast", "Alex", "project", "minecraft:overworld", change(3, "minecraft:stone", "minecraft:air"), NOW);
 
         UndoRedoAction preview = stack.recentUndoActionPreviews(1, 2).getFirst();
 
@@ -67,11 +67,11 @@ class UndoRedoActionStackTest {
     void delayedEntityFalloutAfterUndoDoesNotReopenUndoAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String cowId = "00000000-0000-0000-0000-000000000060";
-        stack.recordChange("kill-cow", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "kill-cow", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:stone", "minecraft:air"), NOW);
         stack.completeUndo(stack.selectUndo());
 
-        stack.recordDelayedEntityChange(
+        recordDelayedEntityChange(stack,
                 "kill-cow",
                 "Alex",
                 "project",
@@ -89,11 +89,11 @@ class UndoRedoActionStackTest {
     @Test
     void linkedBlockFalloutAfterUndoDoesNotReopenRedoAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("blast", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "blast", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:stone", "minecraft:air"), NOW);
         stack.completeUndo(stack.selectUndo());
 
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "blast",
                 "Alex",
                 "project",
@@ -110,10 +110,10 @@ class UndoRedoActionStackTest {
     @Test
     void newActionClearsRedoStack() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
         stack.completeUndo(stack.selectUndo());
 
-        stack.recordChange("action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
+        recordChange(stack, "action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
 
         assertFalse(stack.canRedo());
         assertEquals("action-2", stack.recentUndoActions(1).getFirst().id());
@@ -122,7 +122,7 @@ class UndoRedoActionStackTest {
     @Test
     void clearDropsUndoAndRedoStacks() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
         stack.completeUndo(stack.selectUndo());
 
         stack.clear();
@@ -134,11 +134,11 @@ class UndoRedoActionStackTest {
     @Test
     void causalSecondaryChangesDoNotClearRedoStack() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
-        stack.recordChange("action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+        recordChange(stack, "action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
         stack.completeUndo(stack.selectUndo());
 
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "action-1",
                 "Alex",
                 "project",
@@ -155,10 +155,10 @@ class UndoRedoActionStackTest {
     @Test
     void staleSelectionDoesNotCompleteAfterSameActionChanges() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
 
         UndoRedoActionStack.Selection selection = stack.selectUndo();
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "action-1",
                 "Alex",
                 "project",
@@ -177,13 +177,13 @@ class UndoRedoActionStackTest {
     void duplicateWriteDoesNotAdvanceRevisionOrClearRedo() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         StoredBlockChange original = change(1, "minecraft:stone", "minecraft:dirt");
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", original, NOW);
-        stack.recordChange("action-2", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", original, NOW);
+        recordChange(stack, "action-2", "Alex", "project", "minecraft:overworld",
                 change(2, "minecraft:air", "minecraft:oak_planks"), NOW.plusSeconds(1));
         stack.completeUndo(stack.selectUndo());
         long revision = stack.revision();
 
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", original, NOW.plusSeconds(2));
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", original, NOW.plusSeconds(2));
 
         assertEquals(revision, stack.revision());
         assertTrue(stack.canRedo());
@@ -193,12 +193,12 @@ class UndoRedoActionStackTest {
     @Test
     void linkedChangesJoinOlderActionWithoutPromotion() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "redstone-toggle", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:lever"), NOW);
-        stack.recordChange("latest-placement", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "latest-placement", "Alex", "project", "minecraft:overworld",
                 change(30, "minecraft:air", "minecraft:stone"), NOW.plusSeconds(1));
 
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "redstone-toggle",
                 "Alex",
                 "project",
@@ -216,10 +216,10 @@ class UndoRedoActionStackTest {
     @Test
     void causalChangesCanStillJoinCurrentTopAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "redstone-toggle", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:lever"), NOW);
 
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "redstone-toggle",
                 "Alex",
                 "project",
@@ -237,12 +237,12 @@ class UndoRedoActionStackTest {
     @Test
     void causalFluidUsesLatestAppliedStateFromOlderAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("pre-cut-gap", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "pre-cut-gap", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:grass_block", "minecraft:air"), NOW);
-        stack.recordChange("release-water", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "release-water", "Alex", "project", "minecraft:overworld",
                 change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
 
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "release-water",
                 "Alex",
                 "project",
@@ -263,9 +263,9 @@ class UndoRedoActionStackTest {
     @Test
     void causalFluidRestoresBlockPlacedByOlderAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("place-torch", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "place-torch", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:redstone_torch"), NOW);
-        stack.recordChange("release-water", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "release-water", "Alex", "project", "minecraft:overworld",
                 change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
 
         stack.recordCurrentCausalAction(
@@ -286,12 +286,12 @@ class UndoRedoActionStackTest {
     @Test
     void causalFluidDoesNotUseAppliedStateFromAnotherDimension() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("nether-place", "Alex", "project", "minecraft:the_nether",
+        recordChange(stack, "nether-place", "Alex", "project", "minecraft:the_nether",
                 change(1, "minecraft:netherrack", "minecraft:redstone_torch"), NOW);
-        stack.recordChange("overworld-release", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "overworld-release", "Alex", "project", "minecraft:overworld",
                 change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
 
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "overworld-release",
                 "Alex",
                 "project",
@@ -308,9 +308,9 @@ class UndoRedoActionStackTest {
     @Test
     void causalBatchDoesNotUseAppliedStateFromAnotherDimension() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("nether-place", "Alex", "project", "minecraft:the_nether",
+        recordChange(stack, "nether-place", "Alex", "project", "minecraft:the_nether",
                 change(1, "minecraft:netherrack", "minecraft:redstone_torch"), NOW);
-        stack.recordChange("overworld-release", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "overworld-release", "Alex", "project", "minecraft:overworld",
                 change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
 
         stack.recordCurrentCausalAction(
@@ -331,10 +331,10 @@ class UndoRedoActionStackTest {
     @Test
     void causalHiddenChangesStayInUndoRedoPayload() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("place-water", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "place-water", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:water"), NOW);
 
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "place-water",
                 "Alex",
                 "project",
@@ -354,10 +354,10 @@ class UndoRedoActionStackTest {
     @Test
     void currentCausalChangeStartsNewUndoActionWhenNoRootBlockChanged() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("previous-placement", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "previous-placement", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:oak_sapling"), NOW);
 
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "bonemeal-growth",
                 "Alex",
                 "project",
@@ -399,7 +399,7 @@ class UndoRedoActionStackTest {
     void currentCausalPiecesMergeExistingActionWithoutPromotion() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
 
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "creeper-blast",
                 "Alex",
                 "project",
@@ -407,7 +407,7 @@ class UndoRedoActionStackTest {
                 hiddenChange(1, "minecraft:sand", "minecraft:air"),
                 NOW
         );
-        stack.recordChange("latest-placement", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "latest-placement", "Alex", "project", "minecraft:overworld",
                 change(30, "minecraft:air", "minecraft:stone"), NOW.plusSeconds(1));
 
         stack.recordCurrentCausalAction(
@@ -419,7 +419,7 @@ class UndoRedoActionStackTest {
                 List.of(),
                 NOW.plusSeconds(2)
         );
-        stack.recordCurrentCausalChange(
+        recordCurrentCausalChange(stack,
                 "creeper-blast",
                 "Alex",
                 "project",
@@ -476,9 +476,9 @@ class UndoRedoActionStackTest {
     @Test
     void causalBatchDoesNotPromoteOlderRedstoneAction() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("redstone-toggle", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "redstone-toggle", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:lever"), NOW);
-        stack.recordChange("latest-placement", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "latest-placement", "Alex", "project", "minecraft:overworld",
                 change(30, "minecraft:air", "minecraft:stone"), NOW.plusSeconds(1));
 
         stack.recordCurrentCausalAction(
@@ -500,10 +500,10 @@ class UndoRedoActionStackTest {
     @Test
     void staleSelectionDoesNotDropUndoHistory() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
-        stack.recordChange("action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
+        recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
 
         UndoRedoActionStack.Selection staleSelection = stack.selectUndo();
-        stack.recordChange("action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
+        recordChange(stack, "action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
         stack.completeUndo(staleSelection);
 
         assertTrue(stack.canUndo());
@@ -516,7 +516,7 @@ class UndoRedoActionStackTest {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String entityId = "00000000-0000-0000-0000-000000000010";
 
-        stack.recordEntityChange(
+        recordEntityChange(stack,
                 "action-entity",
                 "Axiom",
                 "project",
@@ -545,7 +545,7 @@ class UndoRedoActionStackTest {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String entityId = "00000000-0000-0000-0000-000000000013";
 
-        stack.recordEntityChange(
+        recordEntityChange(stack,
                 "action-entity",
                 "tester",
                 "project",
@@ -558,7 +558,7 @@ class UndoRedoActionStackTest {
                 ),
                 NOW
         );
-        stack.recordEntityChange(
+        recordEntityChange(stack,
                 "action-entity",
                 "tester",
                 "project",
@@ -586,11 +586,11 @@ class UndoRedoActionStackTest {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String entityId = "00000000-0000-0000-0000-000000000014";
 
-        stack.recordChange("earlier-placement", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "earlier-placement", "Alex", "project", "minecraft:overworld",
                 change(1, "minecraft:air", "minecraft:stone"), NOW);
-        stack.recordChange("latest-bridge", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "latest-bridge", "Alex", "project", "minecraft:overworld",
                 change(30, "minecraft:air", "minecraft:spruce_planks"), NOW.plusSeconds(2));
-        stack.recordDelayedEntityChange(
+        recordDelayedEntityChange(stack,
                 "entity-spawn",
                 "Alex",
                 "project",
@@ -611,7 +611,7 @@ class UndoRedoActionStackTest {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String entityId = "00000000-0000-0000-0000-000000000015";
 
-        stack.recordEntityChange(
+        recordEntityChange(stack,
                 "entity-spawn",
                 "Alex",
                 "project",
@@ -624,9 +624,9 @@ class UndoRedoActionStackTest {
                 ),
                 NOW
         );
-        stack.recordChange("latest-bridge", "Alex", "project", "minecraft:overworld",
+        recordChange(stack, "latest-bridge", "Alex", "project", "minecraft:overworld",
                 change(30, "minecraft:air", "minecraft:spruce_planks"), NOW.plusSeconds(1));
-        stack.recordDelayedEntityChange(
+        recordDelayedEntityChange(stack,
                 "entity-spawn",
                 "Alex",
                 "project",
@@ -686,7 +686,7 @@ class UndoRedoActionStackTest {
         String cowId = "00000000-0000-0000-0000-000000000016";
         String dropId = "00000000-0000-0000-0000-000000000017";
 
-        stack.recordDelayedEntityChange(
+        recordDelayedEntityChange(stack,
                 "kill-cow",
                 "Alex",
                 "project",
@@ -695,7 +695,7 @@ class UndoRedoActionStackTest {
                 NOW,
                 NOW
         );
-        stack.recordDelayedEntityChange(
+        recordDelayedEntityChange(stack,
                 "kill-cow",
                 "Alex",
                 "project",
@@ -747,6 +747,63 @@ class UndoRedoActionStackTest {
         assertEquals(List.of(pigId, cowId), action.inverseEntityChanges().stream()
                 .map(StoredEntityChange::entityId)
                 .toList());
+    }
+
+    private static long recordChange(
+            UndoRedoActionStack stack,
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            StoredBlockChange change,
+            Instant now
+    ) {
+        return stack.recordAction(actionId, actor, projectId, dimensionId, List.of(change), List.of(), now);
+    }
+
+    private static long recordCurrentCausalChange(
+            UndoRedoActionStack stack,
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            StoredBlockChange change,
+            Instant now
+    ) {
+        return stack.recordCurrentCausalAction(actionId, actor, projectId, dimensionId, List.of(change), List.of(), now);
+    }
+
+    private static long recordEntityChange(
+            UndoRedoActionStack stack,
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            StoredEntityChange change,
+            Instant now
+    ) {
+        return stack.recordAction(actionId, actor, projectId, dimensionId, List.of(), List.of(change), now);
+    }
+
+    private static long recordDelayedEntityChange(
+            UndoRedoActionStack stack,
+            String actionId,
+            String actor,
+            String projectId,
+            String dimensionId,
+            StoredEntityChange change,
+            Instant actionStartedAt,
+            Instant now
+    ) {
+        return stack.recordDelayedEntityChanges(
+                actionId,
+                actor,
+                projectId,
+                dimensionId,
+                change == null ? List.of() : List.of(change),
+                actionStartedAt,
+                now
+        );
     }
 
     private static StoredBlockChange change(int x, String oldBlock, String newBlock) {

@@ -28,68 +28,6 @@ public final class UndoRedoActionStack {
         this.limit = Math.max(1, limit);
     }
 
-    public long recordChange(
-            String actionId,
-            String actor,
-            String projectId,
-            String dimensionId,
-            StoredBlockChange change,
-            Instant now
-    ) {
-        if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
-            return this.revision;
-        }
-        return this.recordAction(actionId, actor, projectId, dimensionId, List.of(change), List.of(), now);
-    }
-
-    public long recordCurrentCausalChange(
-            String actionId,
-            String actor,
-            String projectId,
-            String dimensionId,
-            StoredBlockChange change,
-            Instant now
-    ) {
-        if (actionId == null || actionId.isBlank() || change == null) {
-            return this.revision;
-        }
-        return this.recordCurrentCausalAction(actionId, actor, projectId, dimensionId, List.of(change), List.of(), now);
-    }
-
-    public long recordEntityChange(
-            String actionId,
-            String actor,
-            String projectId,
-            String dimensionId,
-            StoredEntityChange change,
-            Instant now
-    ) {
-        if (actionId == null || actionId.isBlank() || change == null || change.isNoOp()) {
-            return this.revision;
-        }
-        return this.recordAction(actionId, actor, projectId, dimensionId, List.of(), List.of(change), now);
-    }
-
-    public long recordDelayedEntityChange(
-            String actionId,
-            String actor,
-            String projectId,
-            String dimensionId,
-            StoredEntityChange change,
-            Instant actionStartedAt,
-            Instant now
-    ) {
-        return this.recordDelayedEntityChanges(
-                actionId,
-                actor,
-                projectId,
-                dimensionId,
-                change == null ? List.of() : List.of(change),
-                actionStartedAt,
-                now
-        );
-    }
-
     public long recordDelayedEntityChanges(
             String actionId,
             String actor,
