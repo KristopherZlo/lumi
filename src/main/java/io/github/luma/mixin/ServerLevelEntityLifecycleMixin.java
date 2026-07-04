@@ -37,7 +37,7 @@ abstract class ServerLevelEntityLifecycleMixin {
     private void luma$captureAddFreshEntity(Entity entity, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) {
             this.luma$rememberProjectileAction(entity);
-            LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity);
+            LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity, (ServerLevel) (Object) this);
             EntityMutationTracker.captureSpawn((ServerLevel) (Object) this, entity);
         }
     }
@@ -53,7 +53,7 @@ abstract class ServerLevelEntityLifecycleMixin {
     private void luma$captureAddWithUuid(Entity entity, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) {
             this.luma$rememberProjectileAction(entity);
-            LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity);
+            LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity, (ServerLevel) (Object) this);
             EntityMutationTracker.captureSpawn((ServerLevel) (Object) this, entity);
         }
     }
@@ -68,7 +68,7 @@ abstract class ServerLevelEntityLifecycleMixin {
     @Inject(method = "addDuringTeleport", at = @At("RETURN"))
     private void luma$captureAddDuringTeleport(Entity entity, CallbackInfo ci) {
         this.luma$rememberProjectileAction(entity);
-        LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity);
+        LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity, (ServerLevel) (Object) this);
         EntityMutationTracker.captureSpawn((ServerLevel) (Object) this, entity);
     }
 

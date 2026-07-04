@@ -1,11 +1,13 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.PrimedTnt;
 
@@ -27,6 +29,20 @@ public final class ExplosiveEntityContextRegistry {
 
     public void rememberSpawn(Entity entity) {
         ExplosiveContext.captureCurrent().ifPresent(context -> this.remember(entity, context));
+    }
+
+    public void rememberSpawn(Entity entity, ServerLevel level) {
+        if (!(entity instanceof PrimedTnt)) {
+            return;
+        }
+        Optional<ExplosiveContext> current = ExplosiveContext.captureCurrent();
+        if (current.isPresent()) {
+            this.remember(entity, current.get());
+            return;
+        }
+        ExplosiveContext.captureDeferred(
+                HistoryCaptureManager.getInstance().deferredActionContextNear(level, entity.blockPosition())
+        ).ifPresent(context -> this.remember(entity, context));
     }
 
     public Optional<ExplosiveContext> contextFor(Entity entity) {
@@ -99,6 +115,19 @@ public final class ExplosiveEntityContextRegistry {
                     WorldMutationContext.currentActor(),
                     actionId,
                     WorldMutationContext.currentAccessAllowed(),
+                    System.currentTimeMillis()
+            ));
+        }
+
+        static Optional<ExplosiveContext> captureDeferred(CaptureSessionState.DeferredActionContext context) {
+            if (context == null || !context.hasAction()) {
+                return Optional.empty();
+            }
+            return Optional.of(new ExplosiveContext(
+                    WorldMutationSource.EXPLOSIVE,
+                    context.actor(),
+                    context.actionId(),
+                    context.accessAllowed(),
                     System.currentTimeMillis()
             ));
         }

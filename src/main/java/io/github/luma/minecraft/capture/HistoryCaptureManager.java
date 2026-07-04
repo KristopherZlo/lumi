@@ -68,6 +68,8 @@ public final class HistoryCaptureManager {
             this.projectRepository,
             this.variantRepository
     );
+    private final DeferredActionContextResolver deferredActionContextResolver =
+            new DeferredActionContextResolver(this.trackedProjectCatalog, this.workingDrafts);
     private final UndoOnlyEntityChangeRecorder undoOnlyEntityChangeRecorder =
             new UndoOnlyEntityChangeRecorder(
                     ENTITY_CAPTURE_POLICY,
@@ -1176,6 +1178,10 @@ public final class HistoryCaptureManager {
 
     public void invalidateProjectCache(MinecraftServer server) {
         this.trackedProjectCatalog.invalidate(server);
+    }
+
+    public CaptureSessionState.DeferredActionContext deferredActionContextNear(ServerLevel level, BlockPos pos) {
+        return this.deferredActionContextResolver.near(level, pos);
     }
 
     private void drainUndoRedoStabilizationOnServerThread(MinecraftServer server, String projectId) throws IOException {

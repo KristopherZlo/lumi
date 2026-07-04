@@ -18,6 +18,7 @@ class ProjectileCausalContextMixinTest {
         assertTrue(living.contains("@WrapMethod(method = \"stopUsingItem\")"));
         assertTrue(lifecycle.contains("entity instanceof Projectile"));
         assertTrue(lifecycle.contains("rememberCurrentActionIfAbsent(entity, level)"));
+        assertTrue(lifecycle.contains("rememberSpawn(entity, (ServerLevel) (Object) this)"));
         assertTrue(projectile.contains("@Mixin(Projectile.class)"));
         assertTrue(projectile.contains("@WrapMethod(method = \"onHit\")"));
         assertTrue(projectile.contains("pushIfPresent(projectile, level)"));
