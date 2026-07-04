@@ -543,10 +543,11 @@ public final class RecentChangesOverlayRenderer {
 
         private OverlayMeshBatch buildMeshBatch() {
             OverlayMeshBatch.Builder builder = OverlayMeshBatch.builder();
+            Map<OverlayMeshBatch.SurfaceStyle, List<CompareOverlaySurfaceResolver.SurfaceBlock>> groupedSurfaceBlocks =
+                    new LinkedHashMap<>();
             for (SurfaceEntry surfaceEntry : this.surfaceEntries) {
                 int fillAlpha = Math.max(MIN_FILL_ALPHA, Math.round(surfaceEntry.entry().alpha() * FILL_ALPHA_SCALE));
-                builder.addSurfaceBlock(
-                        surfaceEntry.surfaceBlock(),
+                OverlayMeshBatch.SurfaceStyle style = new OverlayMeshBatch.SurfaceStyle(
                         surfaceEntry.entry().red(),
                         surfaceEntry.entry().green(),
                         surfaceEntry.entry().blue(),
@@ -555,6 +556,12 @@ public final class RecentChangesOverlayRenderer {
                         OUTLINE_WIDTH,
                         FACE_OUTSET
                 );
+                groupedSurfaceBlocks.computeIfAbsent(style, ignored -> new ArrayList<>())
+                        .add(surfaceEntry.surfaceBlock());
+            }
+            for (Map.Entry<OverlayMeshBatch.SurfaceStyle, List<CompareOverlaySurfaceResolver.SurfaceBlock>> entry
+                    : groupedSurfaceBlocks.entrySet()) {
+                builder.addMergedSurfaceBlocks(entry.getValue(), entry.getKey());
             }
             return builder.build();
         }

@@ -103,7 +103,10 @@ class CompareOverlayRendererStateTest {
         assertEquals(2168, CompareOverlayRenderer.visibleSurfaceBlockCountForTest(10.5D, 70.5D, 10.5D));
         assertEquals(0, CompareOverlayRenderer.visibleVolumeBoxCountForTest(10.5D, 70.5D, 10.5D));
         assertEquals(8, CompareOverlayRenderer.meshSectionCountForTest());
-        assertEquals(2168, CompareOverlayRenderer.meshPrimitiveCountForTest());
+        assertEquals(
+                CompareOverlayRenderer.meshSectionCountForTest(),
+                CompareOverlayRenderer.meshPrimitiveCountForTest()
+        );
     }
 
     @Test
@@ -120,7 +123,7 @@ class CompareOverlayRendererStateTest {
         assertEquals(expectedSurfaceBlocks, CompareOverlayRenderer.visibleSurfaceBlockCountForTest(8.5D, 80.5D, 8.5D));
         assertEquals(0, CompareOverlayRenderer.visibleVolumeBoxCountForTest(8.5D, 80.5D, 8.5D));
         assertEquals(16, CompareOverlayRenderer.meshSectionCountForTest());
-        assertEquals(expectedSurfaceBlocks, CompareOverlayRenderer.meshPrimitiveCountForTest());
+        assertEquals(CompareOverlayRenderer.meshSectionCountForTest(), CompareOverlayRenderer.meshPrimitiveCountForTest());
         assertEquals(16, CompareOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 72.5D, 8.5D, 0));
         assertEquals(0, CompareOverlayRenderer.visibleMeshSectionCountForTest(2048.0D, 80.5D, 2048.0D, 0));
     }

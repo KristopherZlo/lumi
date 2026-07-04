@@ -256,29 +256,29 @@ final class OverlayMeshBatch implements AutoCloseable {
 
         private final Map<SectionKey, SectionBuilder> sections = new LinkedHashMap<>();
 
-        void addSurfaceBlock(
-                CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock,
-                int red,
-                int green,
-                int blue,
-                int fillAlpha,
-                int outlineArgb,
-                float outlineWidth,
-                float fillOutset
+        void addMergedSurfaceBlocks(
+                List<CompareOverlaySurfaceResolver.SurfaceBlock> surfaceBlocks,
+                SurfaceStyle style
         ) {
-            var pos = surfaceBlock.entry().pos();
-            SectionKey key = SectionKey.fromBlock(pos.x(), pos.y(), pos.z());
-            this.add(key, new SurfaceBlockPrimitive(
-                    surfaceBlock,
-                    red,
-                    green,
-                    blue,
-                    fillAlpha,
-                    outlineArgb,
-                    outlineWidth,
-                    fillOutset,
-                    0.0F
-            ));
+            if (surfaceBlocks == null || surfaceBlocks.isEmpty()) {
+                return;
+            }
+
+            Map<SectionKey, SurfaceSectionBuilder> builders = new LinkedHashMap<>();
+            for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : surfaceBlocks) {
+                if (surfaceBlock == null) {
+                    continue;
+                }
+                var pos = surfaceBlock.entry().pos();
+                SectionKey key = SectionKey.fromBlock(pos.x(), pos.y(), pos.z());
+                builders.computeIfAbsent(key, SurfaceSectionBuilder::new).add(surfaceBlock);
+            }
+            for (SurfaceSectionBuilder builder : builders.values()) {
+                MergedSurfacePrimitive primitive = builder.build(style);
+                if (primitive != null) {
+                    this.add(builder.key(), primitive);
+                }
+            }
         }
 
         void addBox(
@@ -359,6 +359,17 @@ final class OverlayMeshBatch implements AutoCloseable {
         }
     }
 
+    record SurfaceStyle(
+            int red,
+            int green,
+            int blue,
+            int fillAlpha,
+            int outlineArgb,
+            float outlineWidth,
+            float outset
+    ) {
+    }
+
     private enum MeshLayer {
         FILL,
         OUTLINE
@@ -373,48 +384,21 @@ final class OverlayMeshBatch implements AutoCloseable {
         void emitOutline(PoseStack matrices, VertexConsumer consumer, int originX, int originY, int originZ);
     }
 
-    private static final class SurfaceBlockPrimitive implements OverlayPrimitive {
+    private static final class MergedSurfacePrimitive implements OverlayPrimitive {
 
-        private final CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock;
-        private final int red;
-        private final int green;
-        private final int blue;
-        private final int fillAlpha;
-        private final int outlineArgb;
-        private final float outlineWidth;
-        private final float fillOutset;
-        private final float outlineOutset;
+        private final List<SurfaceFaceRun> faces;
+        private final SurfaceStyle style;
         private final OverlayBounds bounds;
 
-        private SurfaceBlockPrimitive(
-                CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock,
-                int red,
-                int green,
-                int blue,
-                int fillAlpha,
-                int outlineArgb,
-                float outlineWidth,
-                float fillOutset,
-                float outlineOutset
-        ) {
-            this.surfaceBlock = surfaceBlock;
-            this.red = red;
-            this.green = green;
-            this.blue = blue;
-            this.fillAlpha = fillAlpha;
-            this.outlineArgb = outlineArgb;
-            this.outlineWidth = outlineWidth;
-            this.fillOutset = fillOutset;
-            this.outlineOutset = outlineOutset;
-            var pos = surfaceBlock.entry().pos();
-            this.bounds = OverlayBounds.of(
-                    pos.x() - fillOutset,
-                    pos.y() - fillOutset,
-                    pos.z() - fillOutset,
-                    pos.x() + 1.0D + fillOutset,
-                    pos.y() + 1.0D + fillOutset,
-                    pos.z() + 1.0D + fillOutset
-            );
+        private MergedSurfacePrimitive(List<SurfaceFaceRun> faces, SurfaceStyle style) {
+            this.faces = List.copyOf(faces);
+            this.style = style;
+            OverlayBounds union = null;
+            for (SurfaceFaceRun face : this.faces) {
+                OverlayBounds faceBounds = face.bounds(style.outset());
+                union = union == null ? faceBounds : union.union(faceBounds);
+            }
+            this.bounds = union;
         }
 
         @Override
@@ -424,39 +408,237 @@ final class OverlayMeshBatch implements AutoCloseable {
 
         @Override
         public void emitFill(PoseStack matrices, VertexConsumer consumer, int originX, int originY, int originZ) {
-            var pos = this.surfaceBlock.entry().pos();
-            OverlayFaceRenderer.renderFilledBox(
-                    matrices,
-                    consumer,
-                    pos.x() - originX - this.fillOutset,
-                    pos.y() - originY - this.fillOutset,
-                    pos.z() - originZ - this.fillOutset,
-                    pos.x() + 1.0F - originX + this.fillOutset,
-                    pos.y() + 1.0F - originY + this.fillOutset,
-                    pos.z() + 1.0F - originZ + this.fillOutset,
-                    this.surfaceBlock,
-                    this.red,
-                    this.green,
-                    this.blue,
-                    this.fillAlpha
-            );
+            for (SurfaceFaceRun face : this.faces) {
+                OverlayFaceRenderer.renderFace(
+                        matrices,
+                        consumer,
+                        face.side(),
+                        face.fillPlane(this.style.outset()) - face.axisOffset(originX, originY, originZ),
+                        face.minA() - this.style.outset() - face.minAOffset(originX, originY, originZ),
+                        face.maxA() + this.style.outset() - face.minAOffset(originX, originY, originZ),
+                        face.minB() - this.style.outset() - face.minBOffset(originX, originY, originZ),
+                        face.maxB() + this.style.outset() - face.minBOffset(originX, originY, originZ),
+                        this.style.red(),
+                        this.style.green(),
+                        this.style.blue(),
+                        this.style.fillAlpha()
+                );
+            }
         }
 
         @Override
         public void emitOutline(PoseStack matrices, VertexConsumer consumer, int originX, int originY, int originZ) {
-            var pos = this.surfaceBlock.entry().pos();
-            renderOutline(
-                    matrices,
-                    consumer,
-                    pos.x() - originX - this.outlineOutset,
-                    pos.y() - originY - this.outlineOutset,
-                    pos.z() - originZ - this.outlineOutset,
-                    1.0D + (this.outlineOutset * 2.0D),
-                    1.0D + (this.outlineOutset * 2.0D),
-                    1.0D + (this.outlineOutset * 2.0D),
-                    this.outlineArgb,
-                    this.outlineWidth
-            );
+            for (SurfaceFaceRun face : this.faces) {
+                OverlayBounds local = face.bounds(this.style.outset()).translate(-originX, -originY, -originZ);
+                renderOutline(
+                        matrices,
+                        consumer,
+                        local.minX(),
+                        local.minY(),
+                        local.minZ(),
+                        local.maxX() - local.minX(),
+                        local.maxY() - local.minY(),
+                        local.maxZ() - local.minZ(),
+                        this.style.outlineArgb(),
+                        this.style.outlineWidth()
+                );
+            }
+        }
+    }
+
+    private static final class SurfaceSectionBuilder {
+
+        private final SectionKey key;
+        private final Map<SurfacePlaneKey, boolean[]> planes = new LinkedHashMap<>();
+
+        private SurfaceSectionBuilder(SectionKey key) {
+            this.key = key;
+        }
+
+        private SectionKey key() {
+            return this.key;
+        }
+
+        private void add(CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock) {
+            var pos = surfaceBlock.entry().pos();
+            int localX = pos.x() - this.key.originX();
+            int localY = pos.y() - this.key.originY();
+            int localZ = pos.z() - this.key.originZ();
+
+            if (surfaceBlock.northExposed()) {
+                this.add(WorkZoneShellFace.Side.NORTH, pos.z(), localX, localY);
+            }
+            if (surfaceBlock.southExposed()) {
+                this.add(WorkZoneShellFace.Side.SOUTH, pos.z() + 1, localX, localY);
+            }
+            if (surfaceBlock.westExposed()) {
+                this.add(WorkZoneShellFace.Side.WEST, pos.x(), localY, localZ);
+            }
+            if (surfaceBlock.eastExposed()) {
+                this.add(WorkZoneShellFace.Side.EAST, pos.x() + 1, localY, localZ);
+            }
+            if (surfaceBlock.downExposed()) {
+                this.add(WorkZoneShellFace.Side.DOWN, pos.y(), localX, localZ);
+            }
+            if (surfaceBlock.upExposed()) {
+                this.add(WorkZoneShellFace.Side.UP, pos.y() + 1, localX, localZ);
+            }
+        }
+
+        private void add(WorkZoneShellFace.Side side, int plane, int localA, int localB) {
+            this.planes.computeIfAbsent(new SurfacePlaneKey(side, plane), ignored -> new boolean[SECTION_SIZE * SECTION_SIZE])
+                    [index(localA, localB)] = true;
+        }
+
+        private MergedSurfacePrimitive build(SurfaceStyle style) {
+            List<SurfaceFaceRun> faces = new ArrayList<>();
+            for (Map.Entry<SurfacePlaneKey, boolean[]> entry : this.planes.entrySet()) {
+                faces.addAll(this.mergePlane(entry.getKey(), entry.getValue()));
+            }
+            return faces.isEmpty() ? null : new MergedSurfacePrimitive(faces, style);
+        }
+
+        private List<SurfaceFaceRun> mergePlane(SurfacePlaneKey key, boolean[] cells) {
+            boolean[] used = new boolean[cells.length];
+            List<SurfaceFaceRun> faces = new ArrayList<>();
+            for (int b = 0; b < SECTION_SIZE; b++) {
+                for (int a = 0; a < SECTION_SIZE; a++) {
+                    int index = index(a, b);
+                    if (!cells[index] || used[index]) {
+                        continue;
+                    }
+
+                    int width = 1;
+                    while (a + width < SECTION_SIZE
+                            && cells[index(a + width, b)]
+                            && !used[index(a + width, b)]) {
+                        width += 1;
+                    }
+
+                    int height = 1;
+                    while (b + height < SECTION_SIZE && this.rowAvailable(cells, used, a, b + height, width)) {
+                        height += 1;
+                    }
+
+                    this.markUsed(used, a, b, width, height);
+                    faces.add(new SurfaceFaceRun(
+                            key.side(),
+                            key.plane(),
+                            this.originA(key.side()) + a,
+                            this.originA(key.side()) + a + width,
+                            this.originB(key.side()) + b,
+                            this.originB(key.side()) + b + height
+                    ));
+                }
+            }
+            return faces;
+        }
+
+        private boolean rowAvailable(boolean[] cells, boolean[] used, int minA, int b, int width) {
+            for (int offset = 0; offset < width; offset++) {
+                int index = index(minA + offset, b);
+                if (!cells[index] || used[index]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private void markUsed(boolean[] used, int minA, int minB, int width, int height) {
+            for (int b = minB; b < minB + height; b++) {
+                for (int a = minA; a < minA + width; a++) {
+                    used[index(a, b)] = true;
+                }
+            }
+        }
+
+        private int originA(WorkZoneShellFace.Side side) {
+            return switch (side) {
+                case WEST, EAST -> this.key.originY();
+                case DOWN, UP, NORTH, SOUTH -> this.key.originX();
+            };
+        }
+
+        private int originB(WorkZoneShellFace.Side side) {
+            return switch (side) {
+                case WEST, EAST, DOWN, UP -> this.key.originZ();
+                case NORTH, SOUTH -> this.key.originY();
+            };
+        }
+
+        private static int index(int a, int b) {
+            return (b * SECTION_SIZE) + a;
+        }
+    }
+
+    private record SurfacePlaneKey(WorkZoneShellFace.Side side, int plane) {
+    }
+
+    private record SurfaceFaceRun(
+            WorkZoneShellFace.Side side,
+            int plane,
+            int minA,
+            int maxA,
+            int minB,
+            int maxB
+    ) {
+
+        private float fillPlane(float outset) {
+            return switch (this.side) {
+                case WEST, DOWN, NORTH -> this.plane - outset;
+                case EAST, UP, SOUTH -> this.plane + outset;
+            };
+        }
+
+        private int axisOffset(int originX, int originY, int originZ) {
+            return switch (this.side) {
+                case WEST, EAST -> originX;
+                case DOWN, UP -> originY;
+                case NORTH, SOUTH -> originZ;
+            };
+        }
+
+        private int minAOffset(int originX, int originY, int originZ) {
+            return switch (this.side) {
+                case WEST, EAST -> originY;
+                case DOWN, UP, NORTH, SOUTH -> originX;
+            };
+        }
+
+        private int minBOffset(int originX, int originY, int originZ) {
+            return switch (this.side) {
+                case WEST, EAST, DOWN, UP -> originZ;
+                case NORTH, SOUTH -> originY;
+            };
+        }
+
+        private OverlayBounds bounds(float outset) {
+            return switch (this.side) {
+                case WEST, EAST -> OverlayBounds.of(
+                        this.plane - outset,
+                        this.minA - outset,
+                        this.minB - outset,
+                        this.plane + outset,
+                        this.maxA + outset,
+                        this.maxB + outset
+                );
+                case DOWN, UP -> OverlayBounds.of(
+                        this.minA - outset,
+                        this.plane - outset,
+                        this.minB - outset,
+                        this.maxA + outset,
+                        this.plane + outset,
+                        this.maxB + outset
+                );
+                case NORTH, SOUTH -> OverlayBounds.of(
+                        this.minA - outset,
+                        this.minB - outset,
+                        this.plane - outset,
+                        this.maxA + outset,
+                        this.maxB + outset,
+                        this.plane + outset
+                );
+            };
         }
     }
 

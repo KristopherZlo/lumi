@@ -333,9 +333,9 @@ public final class PendingChangesOverlayRenderer {
 
         private OverlayMeshBatch buildMeshBatch() {
             OverlayMeshBatch.Builder builder = OverlayMeshBatch.builder();
-            for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : this.surfaceBlocksByPosition.values()) {
-                builder.addSurfaceBlock(
-                        surfaceBlock,
+            builder.addMergedSurfaceBlocks(
+                    new ArrayList<>(this.surfaceBlocksByPosition.values()),
+                    new OverlayMeshBatch.SurfaceStyle(
                         ORANGE_RED,
                         ORANGE_GREEN,
                         ORANGE_BLUE,
@@ -343,8 +343,8 @@ public final class PendingChangesOverlayRenderer {
                         ORANGE_OUTLINE,
                         OUTLINE_WIDTH,
                         FACE_OUTSET
-                );
-            }
+                    )
+            );
             for (VolumeBox volumeBox : this.volumeBoxes) {
                 OverlayVolumeMerger.OverlayBox box = volumeBox.box();
                 builder.addBox(

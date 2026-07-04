@@ -60,6 +60,25 @@ class PendingChangesOverlayRendererStateTest {
     }
 
     @Test
+    void exactPendingOverlayMergesSurfaceBlocksBySection() {
+        PendingChangesOverlaySnapshot snapshot = PendingChangesOverlaySnapshot.fromDraft(
+                "project",
+                draft(cuboidChanges(20, 20, 20, 60))
+        );
+
+        PendingChangesOverlayRenderer.activate(PendingChangesOverlayRenderer.prepare(snapshot, false));
+
+        assertTrue(PendingChangesOverlayRenderer.visible());
+        assertEquals(2168, PendingChangesOverlayRenderer.visibleSurfaceEntryCountForTest(10.5D, 70.5D, 10.5D));
+        assertEquals(0, PendingChangesOverlayRenderer.visibleAggregateBoxCountForTest(10.5D, 70.5D, 10.5D));
+        assertEquals(8, PendingChangesOverlayRenderer.meshSectionCountForTest());
+        assertEquals(
+                PendingChangesOverlayRenderer.meshSectionCountForTest(),
+                PendingChangesOverlayRenderer.meshPrimitiveCountForTest()
+        );
+    }
+
+    @Test
     void emptySnapshotClearsOverlay() {
         PendingChangesOverlayRenderer.activate(PendingChangesOverlayRenderer.prepare(
                 PendingChangesOverlaySnapshot.empty("project"),
@@ -104,6 +123,20 @@ class PendingChangesOverlayRendererStateTest {
         StatePayload newValue = new StatePayload(state("minecraft:glass"), null);
         for (int index = 0; index < count; index++) {
             changes.add(new StoredBlockChange(new BlockPoint(startX + index, 64, 0), oldValue, newValue));
+        }
+        return List.copyOf(changes);
+    }
+
+    private static List<StoredBlockChange> cuboidChanges(int sizeX, int sizeY, int sizeZ, int minY) {
+        List<StoredBlockChange> changes = new ArrayList<>(sizeX * sizeY * sizeZ);
+        StatePayload oldValue = new StatePayload(state("minecraft:stone"), null);
+        StatePayload newValue = new StatePayload(state("minecraft:glass"), null);
+        for (int x = 0; x < sizeX; x++) {
+            for (int y = minY; y < minY + sizeY; y++) {
+                for (int z = 0; z < sizeZ; z++) {
+                    changes.add(new StoredBlockChange(new BlockPoint(x, y, z), oldValue, newValue));
+                }
+            }
         }
         return List.copyOf(changes);
     }

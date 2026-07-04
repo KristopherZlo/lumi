@@ -153,7 +153,10 @@ class RecentChangesOverlayRendererStateTest {
         assertEquals(2168, renderedSurfaceEntries);
         assertEquals(0, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(10.5D, 70.5D, 10.5D));
         assertEquals(8, RecentChangesOverlayRenderer.meshSectionCountForTest());
-        assertEquals(2168, RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
+        assertEquals(
+                RecentChangesOverlayRenderer.meshSectionCountForTest(),
+                RecentChangesOverlayRenderer.meshPrimitiveCountForTest()
+        );
     }
 
     @Test
@@ -169,7 +172,10 @@ class RecentChangesOverlayRendererStateTest {
         assertEquals(expectedSurfaceEntries, RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(8.5D, 80.5D, 8.5D));
         assertEquals(0, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(8.5D, 80.5D, 8.5D));
         assertEquals(8, RecentChangesOverlayRenderer.meshSectionCountForTest());
-        assertEquals(expectedSurfaceEntries, RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
+        assertEquals(
+                RecentChangesOverlayRenderer.meshSectionCountForTest(),
+                RecentChangesOverlayRenderer.meshPrimitiveCountForTest()
+        );
         assertEquals(8, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 80.5D, 8.5D, 0));
         assertEquals(0, RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(2048.0D, 80.5D, 2048.0D, 0));
     }
@@ -189,7 +195,10 @@ class RecentChangesOverlayRendererStateTest {
         assertEquals(expectedSurfaceEntries, RecentChangesOverlayRenderer.visibleSurfaceEntryCountForTest(8.5D, 80.5D, 8.5D));
         assertEquals(0, RecentChangesOverlayRenderer.visibleAggregateBoxCountForTest(8.5D, 80.5D, 8.5D));
         assertEquals(34, RecentChangesOverlayRenderer.meshSectionCountForTest());
-        assertEquals(expectedSurfaceEntries, RecentChangesOverlayRenderer.meshPrimitiveCountForTest());
+        assertEquals(
+                RecentChangesOverlayRenderer.meshSectionCountForTest(),
+                RecentChangesOverlayRenderer.meshPrimitiveCountForTest()
+        );
         int nearbySections = RecentChangesOverlayRenderer.visibleMeshSectionCountForTest(8.5D, 80.5D, 8.5D, 0);
         assertTrue(nearbySections > 0);
         assertTrue(nearbySections < RecentChangesOverlayRenderer.meshSectionCountForTest());

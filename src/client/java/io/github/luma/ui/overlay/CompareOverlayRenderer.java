@@ -700,10 +700,11 @@ public final class CompareOverlayRenderer {
             OverlayMeshBatch.Builder builder = OverlayMeshBatch.builder();
             int fillAlpha = Math.round(xrayEnabled ? XRAY_FILL_ALPHA : NORMAL_FILL_ALPHA);
             int denseFillAlpha = Math.round(xrayEnabled ? DENSE_XRAY_FILL_ALPHA : DENSE_NORMAL_FILL_ALPHA);
+            Map<OverlayMeshBatch.SurfaceStyle, List<CompareOverlaySurfaceResolver.SurfaceBlock>> groupedSurfaceBlocks =
+                    new LinkedHashMap<>();
             for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : surfaceBlocks) {
                 ColorChannels color = ColorChannels.of(surfaceBlock.entry().changeType());
-                builder.addSurfaceBlock(
-                        surfaceBlock,
+                OverlayMeshBatch.SurfaceStyle style = new OverlayMeshBatch.SurfaceStyle(
                         color.red(),
                         color.green(),
                         color.blue(),
@@ -712,6 +713,11 @@ public final class CompareOverlayRenderer {
                         OUTLINE_WIDTH,
                         FACE_OUTSET
                 );
+                groupedSurfaceBlocks.computeIfAbsent(style, ignored -> new ArrayList<>()).add(surfaceBlock);
+            }
+            for (Map.Entry<OverlayMeshBatch.SurfaceStyle, List<CompareOverlaySurfaceResolver.SurfaceBlock>> entry
+                    : groupedSurfaceBlocks.entrySet()) {
+                builder.addMergedSurfaceBlocks(entry.getValue(), entry.getKey());
             }
             for (VolumeBox volumeBox : volumeBoxes) {
                 OverlayVolumeMerger.OverlayBox box = volumeBox.box();
