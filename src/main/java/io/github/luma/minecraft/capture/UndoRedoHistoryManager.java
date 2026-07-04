@@ -19,7 +19,6 @@ public final class UndoRedoHistoryManager {
     private static final UndoRedoHistoryManager INSTANCE = new UndoRedoHistoryManager();
 
     private final Map<String, Map<String, UndoRedoActionStack>> projectStacks = new HashMap<>();
-    private final Map<String, Map<String, KeyOwner>> projectKeyOwners = new HashMap<>();
     private final Map<String, Long> projectRevisions = new HashMap<>();
 
     private UndoRedoHistoryManager() {
@@ -297,7 +296,6 @@ public final class UndoRedoHistoryManager {
             return;
         }
         this.projectStacks.remove(projectId);
-        this.projectKeyOwners.remove(projectId);
         this.projectRevisions.remove(projectId);
     }
 
@@ -328,7 +326,6 @@ public final class UndoRedoHistoryManager {
             return;
         }
         this.projectRevisions.merge(projectId, 1L, Long::sum);
-        this.rebuildOwners(projectId);
     }
 
     private UndoRedoActionStack stackForSelection(String projectId, UndoRedoActionStack.Selection selection) {
@@ -406,7 +403,7 @@ public final class UndoRedoHistoryManager {
         if (action == null) {
             return false;
         }
-        Map<String, KeyOwner> owners = this.projectKeyOwners.get(projectId);
+        Map<String, KeyOwner> owners = this.currentOwners(projectId);
         if (owners == null || owners.isEmpty()) {
             return true;
         }
@@ -423,7 +420,7 @@ public final class UndoRedoHistoryManager {
         if (action == null) {
             return false;
         }
-        Map<String, KeyOwner> owners = this.projectKeyOwners.get(projectId);
+        Map<String, KeyOwner> owners = this.currentOwners(projectId);
         if (owners == null || owners.isEmpty()) {
             return true;
         }
@@ -436,11 +433,10 @@ public final class UndoRedoHistoryManager {
         return true;
     }
 
-    private void rebuildOwners(String projectId) {
+    private Map<String, KeyOwner> currentOwners(String projectId) {
         Map<String, UndoRedoActionStack> stacks = this.projectStacks.get(projectId);
         if (stacks == null || stacks.isEmpty()) {
-            this.projectKeyOwners.remove(projectId);
-            return;
+            return Map.of();
         }
 
         Map<String, KeyOwner> owners = new HashMap<>();
@@ -448,11 +444,7 @@ public final class UndoRedoHistoryManager {
                 .flatMap(stack -> stack.recentUndoActions(64).stream())
                 .sorted(Comparator.comparing(UndoRedoAction::updatedAt))
                 .forEach(action -> this.markOwners(owners, action));
-        if (owners.isEmpty()) {
-            this.projectKeyOwners.remove(projectId);
-        } else {
-            this.projectKeyOwners.put(projectId, owners);
-        }
+        return owners;
     }
 
     private void markOwners(Map<String, KeyOwner> owners, UndoRedoAction action) {
