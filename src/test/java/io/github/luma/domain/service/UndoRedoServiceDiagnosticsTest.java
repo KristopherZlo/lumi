@@ -48,4 +48,18 @@ class UndoRedoServiceDiagnosticsTest {
         assertTrue(source.contains("this.historyManager.selectUndo(project.id().toString())"));
         assertTrue(source.contains("this.historyManager.selectRedo(project.id().toString())"));
     }
+
+    @Test
+    void undoRedoWaitsForActiveExplosiveContextsBeforeSelectingActions() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/UndoRedoService.java"));
+
+        int settlingIndex = source.indexOf("this.ensureStabilizationReady(level, project);");
+        int selectUndoIndex = source.indexOf("this.historyManager.selectUndo(project.id().toString())");
+        int selectRedoIndex = source.indexOf("this.historyManager.selectRedo(project.id().toString())");
+
+        assertTrue(source.contains("ExplosiveEntityContextRegistry"));
+        assertTrue(source.contains("this.explosiveContexts.hasActiveContexts()"));
+        assertTrue(settlingIndex >= 0);
+        assertTrue(settlingIndex < selectUndoIndex && settlingIndex < selectRedoIndex);
+    }
 }

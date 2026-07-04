@@ -40,14 +40,13 @@ class RecentChangesPreviewSessionTest {
     }
 
     @Test
-    void refreshesPinnedPreviewWhenStreamRevisionChanges() {
+    void keepsPinnedPreviewWhenStreamRevisionChangesDuringHold() {
         RecentChangesPreviewSession session = new RecentChangesPreviewSession();
         AtomicInteger snapshotReads = new AtomicInteger();
 
         RecentChangesPreviewSession.PinnedPreview first = session.request(
                 "project",
                 RecentChangesOverlayCoordinator.PreviewTarget.BOTH,
-                50L,
                 () -> new RecentChangesPreviewSession.ActionSnapshot(
                         50L,
                         List.of(blockAction("undo-before")),
@@ -57,7 +56,6 @@ class RecentChangesPreviewSessionTest {
         RecentChangesPreviewSession.PinnedPreview afterUndoRedo = session.request(
                 "project",
                 RecentChangesOverlayCoordinator.PreviewTarget.BOTH,
-                90L,
                 () -> {
                     snapshotReads.incrementAndGet();
                     return new RecentChangesPreviewSession.ActionSnapshot(
@@ -68,11 +66,11 @@ class RecentChangesPreviewSessionTest {
                 }
         );
 
-        assertEquals(1, snapshotReads.get());
+        assertSame(first, afterUndoRedo);
+        assertEquals(0, snapshotReads.get());
         assertEquals(50L, first.key().revision());
-        assertEquals(90L, afterUndoRedo.key().revision());
-        assertEquals("undo-after", afterUndoRedo.undoActions().get(0).id());
-        assertEquals("redo-after", afterUndoRedo.redoActions().get(0).id());
+        assertEquals("undo-before", afterUndoRedo.undoActions().get(0).id());
+        assertEquals("redo-before", afterUndoRedo.redoActions().get(0).id());
     }
 
     @Test

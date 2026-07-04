@@ -12,6 +12,7 @@ import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
+import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
@@ -37,6 +38,7 @@ public final class UndoRedoService {
     private final ProjectService projectService = new ProjectService();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
+    private final ExplosiveEntityContextRegistry explosiveContexts = ExplosiveEntityContextRegistry.getInstance();
     private final DeferredActionFalloutGuard deferredActionFalloutGuard = DeferredActionFalloutGuard.getInstance();
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
@@ -91,6 +93,10 @@ public final class UndoRedoService {
     }
 
     private void ensureStabilizationReady(ServerLevel level, BuildProject project) throws IOException {
+        // ponytail: global TNT gate; make it per-world/project if multiplayer needs concurrent explosive undo.
+        if (this.explosiveContexts.hasActiveContexts()) {
+            throw new IllegalStateException("TNT fallout is still settling; try undo/redo again in a moment");
+        }
         if (this.captureManager.hasPendingUndoRedoStabilization(level.getServer(), project.id().toString())) {
             throw new IllegalStateException("Redstone or piston fallout is still settling; try undo/redo again in a moment");
         }

@@ -77,7 +77,6 @@ public final class RecentChangesOverlayCoordinator {
             }
 
             String projectId = project.get().id().toString();
-            long streamRevision = this.historyManager.revision(projectId);
             RecentChangesPreviewSession.PreviewKey pending = this.pendingPreview;
             if (pending != null
                     && projectId.equals(pending.projectId())
@@ -87,7 +86,6 @@ public final class RecentChangesOverlayCoordinator {
             RecentChangesPreviewSession.PinnedPreview pinnedPreview = this.previewSession.request(
                     projectId,
                     previewTarget,
-                    streamRevision,
                     () -> this.recentActionsSnapshot(projectId, previewTarget)
             );
             if (!pinnedPreview.hasBlockPreview()) {

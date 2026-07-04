@@ -11,8 +11,6 @@ import java.util.function.Supplier;
  */
 final class RecentChangesPreviewSession {
 
-    private static final long UNTRACKED_STREAM_REVISION = Long.MIN_VALUE;
-
     private PinnedPreview pinnedPreview;
 
     PinnedPreview request(
@@ -20,20 +18,11 @@ final class RecentChangesPreviewSession {
             RecentChangesOverlayCoordinator.PreviewTarget previewTarget,
             Supplier<ActionSnapshot> snapshotSupplier
     ) {
-        return this.request(projectId, previewTarget, UNTRACKED_STREAM_REVISION, snapshotSupplier);
-    }
-
-    PinnedPreview request(
-            String projectId,
-            RecentChangesOverlayCoordinator.PreviewTarget previewTarget,
-            long streamRevision,
-            Supplier<ActionSnapshot> snapshotSupplier
-    ) {
         RecentChangesOverlayCoordinator.PreviewTarget normalizedTarget = Objects.requireNonNullElse(
                 previewTarget,
                 RecentChangesOverlayCoordinator.PreviewTarget.UNDO
         );
-        if (this.needsNewPreview(projectId, normalizedTarget, streamRevision)) {
+        if (this.needsNewPreview(projectId, normalizedTarget)) {
             ActionSnapshot snapshot = snapshotSupplier.get();
             this.pinnedPreview = new PinnedPreview(
                     new PreviewKey(projectId, snapshot.revision(), normalizedTarget),
@@ -50,14 +39,9 @@ final class RecentChangesPreviewSession {
 
     private boolean needsNewPreview(
             String projectId,
-            RecentChangesOverlayCoordinator.PreviewTarget previewTarget,
-            long streamRevision
+            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
     ) {
-        if (this.pinnedPreview == null || !this.pinnedPreview.key().samePreviewStream(projectId, previewTarget)) {
-            return true;
-        }
-        return streamRevision != UNTRACKED_STREAM_REVISION
-                && this.pinnedPreview.key().revision() != streamRevision;
+        return this.pinnedPreview == null || !this.pinnedPreview.key().samePreviewStream(projectId, previewTarget);
     }
 
     record PreviewKey(

@@ -3,6 +3,7 @@ package io.github.luma.minecraft.capture;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -109,5 +110,31 @@ class ExplosiveEntityContextRegistryTest {
         assertEquals("builder", captured.get().actor());
         assertEquals("action-1", captured.get().actionId());
         assertTrue(captured.get().accessAllowed());
+    }
+
+    @Test
+    void reportsActiveContextsUntilTheyExpire() {
+        ExplosiveEntityContextRegistry registry = new ExplosiveEntityContextRegistry();
+        UUID activeId = UUID.randomUUID();
+        registry.remember(activeId, new ExplosiveEntityContextRegistry.ExplosiveContext(
+                WorldMutationSource.EXPLOSIVE,
+                "builder",
+                "action-1",
+                true,
+                System.currentTimeMillis()
+        ));
+
+        assertTrue(registry.hasActiveContexts());
+
+        registry.remember(UUID.randomUUID(), new ExplosiveEntityContextRegistry.ExplosiveContext(
+                WorldMutationSource.EXPLOSIVE,
+                "builder",
+                "action-2",
+                true,
+                System.currentTimeMillis() - 121_000L
+        ));
+        registry.forget(activeId);
+
+        assertTrue(!registry.hasActiveContexts());
     }
 }

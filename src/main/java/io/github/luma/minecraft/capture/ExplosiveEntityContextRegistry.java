@@ -20,7 +20,7 @@ public final class ExplosiveEntityContextRegistry {
 
     private final Map<UUID, ExplosiveContext> contexts = new HashMap<>();
 
-    private ExplosiveEntityContextRegistry() {
+    ExplosiveEntityContextRegistry() {
     }
 
     public static ExplosiveEntityContextRegistry getInstance() {
@@ -64,12 +64,26 @@ public final class ExplosiveEntityContextRegistry {
         return true;
     }
 
+    public boolean hasActiveContexts() {
+        this.pruneExpiredContexts();
+        synchronized (this.contexts) {
+            return !this.contexts.isEmpty();
+        }
+    }
+
     public void forget(Entity entity) {
         if (entity == null) {
             return;
         }
+        this.forget(entity.getUUID());
+    }
+
+    void forget(UUID entityId) {
+        if (entityId == null) {
+            return;
+        }
         synchronized (this.contexts) {
-            this.contexts.remove(entity.getUUID());
+            this.contexts.remove(entityId);
         }
     }
 
@@ -77,8 +91,15 @@ public final class ExplosiveEntityContextRegistry {
         if (!(entity instanceof PrimedTnt) || context == null) {
             return;
         }
+        this.remember(entity.getUUID(), context);
+    }
+
+    void remember(UUID entityId, ExplosiveContext context) {
+        if (entityId == null || context == null) {
+            return;
+        }
         synchronized (this.contexts) {
-            this.contexts.put(entity.getUUID(), context);
+            this.contexts.put(entityId, context);
         }
     }
 
