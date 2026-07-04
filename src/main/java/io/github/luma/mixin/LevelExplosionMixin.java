@@ -10,6 +10,7 @@ import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.level.ExplosionDamageCalculator;
 import net.minecraft.world.level.Level;
@@ -49,6 +50,7 @@ abstract class LevelExplosionMixin {
         }
         String contextKind = entityContextual ? "entity-causal" : explosiveContextual ? "explosive" : "ambient";
         this.luma$logCreeperExplosion(entity, x, y, z, power, createFire, interaction, contextKind);
+        this.luma$logPrimedTntExplosion(entity, x, y, z, power, createFire, interaction, contextKind);
 
         try {
             original.call(entity, damageSource, calculator, x, y, z, power, createFire, interaction);
@@ -90,6 +92,34 @@ abstract class LevelExplosionMixin {
             return;
         }
         LumaLoadLog.event("creeper-explosion", "level-explode",
+                "uuid=" + entity.getUUID()
+                        + ", context=" + contextKind
+                        + ", source=" + WorldMutationContext.currentSource()
+                        + ", action=" + WorldMutationContext.currentActionId()
+                        + ", actor=" + WorldMutationContext.currentActor()
+                        + ", access=" + WorldMutationContext.currentAccessAllowed()
+                        + ", time=" + level.getGameTime()
+                        + ", pos=" + x + "," + y + "," + z
+                        + ", power=" + power
+                        + ", fire=" + createFire
+                        + ", interaction=" + interaction);
+    }
+
+    @Unique
+    private void luma$logPrimedTntExplosion(
+            Entity entity,
+            double x,
+            double y,
+            double z,
+            float power,
+            boolean createFire,
+            Level.ExplosionInteraction interaction,
+            String contextKind
+    ) {
+        if (!(entity instanceof PrimedTnt) || !((Object) this instanceof ServerLevel level)) {
+            return;
+        }
+        LumaLoadLog.event("tnt-replay", "level-explode",
                 "uuid=" + entity.getUUID()
                         + ", context=" + contextKind
                         + ", source=" + WorldMutationContext.currentSource()

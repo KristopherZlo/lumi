@@ -279,6 +279,11 @@ The `lumi.ui.*` flags are dev-only tuning knobs for Lumi's in-game menus.
 to 2, including Lumi button tooltips and the Special Thanks player showcase,
 and the icon button flags tune the button box and the 24x24 texture draw size.
 
+`-Dlumi.loadLog=true` writes `logs/lumi-load.log`. TNT undo/redo debugging uses
+`undo-redo/selected-action`, `tnt-context/*`, and `tnt-replay/*` events to show
+freeze decisions, explosive context lifecycle, replayed primed TNT entities,
+TNT activation callbacks, cancelled world ticks, and TNT explosion context.
+
 Runtime logs are written under the normal Minecraft `logs/` directory or the world-local `lumi/test-logs/` directory for test profiles, including multiplayer work-zone smoke behavior logs.
 
 ## License

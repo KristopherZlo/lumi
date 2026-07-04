@@ -6,6 +6,8 @@ import io.github.luma.minecraft.world.ExactReplayStateGuard;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
@@ -62,5 +64,18 @@ class TntBlockMixinTest {
         assertEquals(ExactReplayStateGuard.class, guard.getType());
         assertTrue(Modifier.isPrivate(guard.getModifiers()));
         assertTrue(Modifier.isStatic(guard.getModifiers()));
+    }
+
+    @Test
+    void logsReplayActivationDecisionsForTntCallbacks() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/TntBlockMixin.java"));
+
+        assertTrue(source.contains("LumaLoadLog.event(\"tnt-replay\", \"activation\""));
+        assertTrue(source.contains("callback=\" + callback"));
+        assertTrue(source.contains("frozen=\" + frozen"));
+        assertTrue(source.contains("luma$shouldSuppressReplayActivation(level, pos, \"onPlace\")"));
+        assertTrue(source.contains("luma$shouldSuppressReplayActivation(level, pos, \"neighborChanged\")"));
+        assertTrue(source.contains("luma$shouldSuppressReplayActivation(level, pos, \"wasExploded\")"));
+        assertTrue(source.contains("luma$shouldSuppressReplayActivation(level, pos, \"prime\")"));
     }
 }

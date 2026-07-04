@@ -2,6 +2,8 @@ package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.WorldMutationSource;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -110,6 +112,19 @@ class ExplosiveEntityContextRegistryTest {
         assertEquals("builder", captured.get().actor());
         assertEquals("action-1", captured.get().actionId());
         assertTrue(captured.get().accessAllowed());
+    }
+
+    @Test
+    void logsExplosiveContextLifecycleForTntDiagnostics() throws Exception {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/capture/ExplosiveEntityContextRegistry.java")
+        );
+
+        assertTrue(source.contains("activeContextCount()"));
+        assertTrue(source.contains("LumaLoadLog.event(\"tnt-context\", \"remember\""));
+        assertTrue(source.contains("LumaLoadLog.event(\"tnt-context\", \"forget\""));
+        assertTrue(source.contains("LumaLoadLog.event(\"tnt-context\", \"spawn-context\""));
+        assertTrue(source.contains("origin=\" + origin"));
     }
 
     @Test

@@ -2,6 +2,7 @@ package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.debug.LumaLoadLog;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -38,11 +39,19 @@ public final class ExplosiveEntityContextRegistry {
         Optional<ExplosiveContext> current = ExplosiveContext.captureCurrent();
         if (current.isPresent()) {
             this.remember(entity, current.get());
+            this.logSpawnContext("current", entity, level, current.get());
             return;
         }
-        ExplosiveContext.captureDeferred(
+        Optional<ExplosiveContext> deferred = ExplosiveContext.captureDeferred(
                 HistoryCaptureManager.getInstance().deferredActionContextNear(level, entity.blockPosition())
-        ).ifPresent(context -> this.remember(entity, context));
+        );
+        deferred.ifPresent(context -> {
+            this.remember(entity, context);
+            this.logSpawnContext("deferred", entity, level, context);
+        });
+        if (deferred.isEmpty()) {
+            this.logSpawnContext("missing", entity, level, null);
+        }
     }
 
     public Optional<ExplosiveContext> contextFor(Entity entity) {
@@ -65,9 +74,13 @@ public final class ExplosiveEntityContextRegistry {
     }
 
     public boolean hasActiveContexts() {
+        return this.activeContextCount() > 0;
+    }
+
+    public int activeContextCount() {
         this.pruneExpiredContexts();
         synchronized (this.contexts) {
-            return !this.contexts.isEmpty();
+            return this.contexts.size();
         }
     }
 
@@ -85,6 +98,7 @@ public final class ExplosiveEntityContextRegistry {
         synchronized (this.contexts) {
             this.contexts.remove(entityId);
         }
+        LumaLoadLog.event("tnt-context", "forget", "uuid=" + entityId);
     }
 
     void remember(Entity entity, ExplosiveContext context) {
@@ -101,6 +115,24 @@ public final class ExplosiveEntityContextRegistry {
         synchronized (this.contexts) {
             this.contexts.put(entityId, context);
         }
+        LumaLoadLog.event("tnt-context", "remember",
+                "uuid=" + entityId
+                        + ", action=" + context.actionId()
+                        + ", actor=" + context.actor()
+                        + ", source=" + context.source());
+    }
+
+    private void logSpawnContext(String origin, Entity entity, ServerLevel level, ExplosiveContext context) {
+        LumaLoadLog.event("tnt-context", "spawn-context",
+                "origin=" + origin
+                        + ", uuid=" + entity.getUUID()
+                        + ", time=" + (level == null ? -1 : level.getGameTime())
+                        + ", pos=" + entity.blockPosition().getX()
+                        + "," + entity.blockPosition().getY()
+                        + "," + entity.blockPosition().getZ()
+                        + ", action=" + (context == null ? "<none>" : context.actionId())
+                        + ", actor=" + (context == null ? "<none>" : context.actor())
+                        + ", source=" + (context == null ? "<none>" : context.source()));
     }
 
     private void pruneExpiredContexts() {

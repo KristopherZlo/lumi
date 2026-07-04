@@ -18,7 +18,9 @@ abstract class ServerLevelTickFreezeMixin {
 
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void luma$freezeWorldTick(BooleanSupplier hasTimeLeft, CallbackInfo callback) {
-        if (LUMA_REPLAY_TICK_SUPPRESSION.shouldFreezeWorldTick((ServerLevel) (Object) this)) {
+        ServerLevel level = (ServerLevel) (Object) this;
+        if (LUMA_REPLAY_TICK_SUPPRESSION.shouldFreezeWorldTick(level)) {
+            LUMA_REPLAY_TICK_SUPPRESSION.logFrozenWorldTick(level);
             callback.cancel();
         }
     }

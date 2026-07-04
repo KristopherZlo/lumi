@@ -30,6 +30,16 @@ class ServerLevelExplosionMixinTest {
     }
 
     @Test
+    void serverPrimedTntExplosionsLogSelectedCausalContext() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelExplosionMixin.java"));
+
+        assertTrue(source.contains("entity instanceof PrimedTnt"));
+        assertTrue(source.contains("LumaLoadLog.event(\"tnt-replay\", \"server-explode\""));
+        assertTrue(source.contains("context=\" + contextKind"));
+        assertTrue(source.contains("access=\" + WorldMutationContext.currentAccessAllowed()"));
+    }
+
+    @Test
     void baseLevelExplosionsUseRememberedEntityCausalContextOnServers() throws Exception {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/LevelExplosionMixin.java"));
 
@@ -45,5 +55,15 @@ class ServerLevelExplosionMixinTest {
         assertTrue(source.contains("entity instanceof Creeper"));
         assertTrue(source.contains("LumaLoadLog.event(\"creeper-explosion\", \"level-explode\""));
         assertTrue(source.contains("context=\" + contextKind"));
+    }
+
+    @Test
+    void baseLevelPrimedTntExplosionsLogSelectedCausalContext() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/LevelExplosionMixin.java"));
+
+        assertTrue(source.contains("entity instanceof PrimedTnt"));
+        assertTrue(source.contains("LumaLoadLog.event(\"tnt-replay\", \"level-explode\""));
+        assertTrue(source.contains("context=\" + contextKind"));
+        assertTrue(source.contains("access=\" + WorldMutationContext.currentAccessAllowed()"));
     }
 }

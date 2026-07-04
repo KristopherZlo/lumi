@@ -2,10 +2,12 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.ExactReplayStateGuard;
 import io.github.luma.minecraft.world.TntReplayActivationPolicy;
+import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -33,6 +35,9 @@ abstract class TntBlockMixin {
     @Unique
     private static final ExactReplayStateGuard LUMA_EXACT_REPLAY_STATE_GUARD =
             ExactReplayStateGuard.getInstance();
+    @Unique
+    private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
+            WorldReplayTickSuppression.getInstance();
 
     @WrapMethod(method = "onPlace")
     private void luma$wrapOnPlace(
@@ -43,7 +48,7 @@ abstract class TntBlockMixin {
             boolean moved,
             Operation<Void> original
     ) {
-        if (this.luma$shouldSuppressReplayActivation(level, pos)) {
+        if (this.luma$shouldSuppressReplayActivation(level, pos, "onPlace")) {
             return;
         }
         WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
@@ -64,7 +69,7 @@ abstract class TntBlockMixin {
             boolean movedByPiston,
             Operation<Void> original
     ) {
-        if (this.luma$shouldSuppressReplayActivation(level, pos)) {
+        if (this.luma$shouldSuppressReplayActivation(level, pos, "neighborChanged")) {
             return;
         }
         WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
@@ -117,7 +122,7 @@ abstract class TntBlockMixin {
             LivingEntity owner,
             Operation<Boolean> original
     ) {
-        if (luma$shouldSuppressReplayActivation(level, pos)) {
+        if (luma$shouldSuppressReplayActivation(level, pos, "prime")) {
             return false;
         }
         WorldMutationContext.SourceFrame frame = luma$pushExplosiveSource(level);
@@ -135,7 +140,7 @@ abstract class TntBlockMixin {
             Explosion explosion,
             Operation<Void> original
     ) {
-        if (this.luma$shouldSuppressReplayActivation(level, pos)) {
+        if (this.luma$shouldSuppressReplayActivation(level, pos, "wasExploded")) {
             return;
         }
         WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
@@ -156,19 +161,55 @@ abstract class TntBlockMixin {
     }
 
     @Unique
-    private static boolean luma$shouldSuppressReplayActivation(Level level, BlockPos pos) {
-        return LUMA_REPLAY_ACTIVATION_POLICY.shouldSuppressActivation(
+    private static boolean luma$shouldSuppressReplayActivation(Level level, BlockPos pos, String callback) {
+        boolean guarded = luma$isReplayGuarded(level, pos);
+        boolean frozen = luma$isFrozen(level);
+        boolean suppressed = LUMA_REPLAY_ACTIVATION_POLICY.shouldSuppressActivation(
                 level.isClientSide(),
                 WorldMutationContext.currentSource(),
                 WorldMutationContext.captureSuppressed(),
-                luma$isReplayGuarded(level, pos)
+                guarded
         );
+        luma$logActivation(callback, level, pos, suppressed, guarded, frozen);
+        return suppressed;
     }
 
     @Unique
     private static boolean luma$isReplayGuarded(Level level, BlockPos pos) {
         return level instanceof ServerLevel serverLevel
                 && LUMA_EXACT_REPLAY_STATE_GUARD.guards(serverLevel, pos);
+    }
+
+    @Unique
+    private static boolean luma$isFrozen(Level level) {
+        return level instanceof ServerLevel serverLevel
+                && LUMA_REPLAY_TICK_SUPPRESSION.shouldFreezeWorldTick(serverLevel);
+    }
+
+    @Unique
+    private static void luma$logActivation(
+            String callback,
+            Level level,
+            BlockPos pos,
+            boolean suppressed,
+            boolean guarded,
+            boolean frozen
+    ) {
+        if (level.isClientSide() || (!suppressed && !guarded && !frozen && !WorldMutationContext.captureSuppressed())) {
+            return;
+        }
+        long time = level instanceof ServerLevel serverLevel ? serverLevel.getGameTime() : -1;
+        LumaLoadLog.event("tnt-replay", "activation",
+                "callback=" + callback
+                        + ", suppressed=" + suppressed
+                        + ", guarded=" + guarded
+                        + ", frozen=" + frozen
+                        + ", time=" + time
+                        + ", source=" + WorldMutationContext.currentSource()
+                        + ", action=" + WorldMutationContext.currentActionId()
+                        + ", actor=" + WorldMutationContext.currentActor()
+                        + ", captureSuppressed=" + WorldMutationContext.captureSuppressed()
+                        + ", pos=" + pos.getX() + "," + pos.getY() + "," + pos.getZ());
     }
 
     @Unique

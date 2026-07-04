@@ -16,6 +16,10 @@ class WorldReplayTickSuppressionTest {
         assertTrue(source.contains("freezeWorldTick(ServerLevel level)"));
         assertTrue(source.contains("releaseWorldTickFreeze(ServerLevel level)"));
         assertTrue(source.contains("shouldFreezeWorldTick(ServerLevel level)"));
+        assertTrue(source.contains("logFrozenWorldTick(ServerLevel level)"));
+        assertTrue(source.contains("LumaLoadLog.event(\"tnt-replay\", \"freeze-acquire\""));
+        assertTrue(source.contains("LumaLoadLog.event(\"tnt-replay\", \"freeze-release\""));
+        assertTrue(source.contains("LumaLoadLog.event(\"tnt-replay\", \"world-tick-cancelled\""));
         assertTrue(manager.contains("startPreparedApplyOperation("));
         assertTrue(manager.contains("boolean freezeWorldTicks"));
         assertTrue(manager.contains("releaseWorldTickFreeze"));

@@ -34,6 +34,20 @@ class BlockChangeApplierSafetyTest {
     }
 
     @Test
+    void primedTntEntityReplayLogsLoadRestoreAndSpawnPhases() throws IOException {
+        String applier = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/world/BlockChangeApplier.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertTrue(applier.contains("PRIMED_TNT_ENTITY_TYPE = \"minecraft:tnt\""));
+        assertTrue(applier.contains("logEntityReplay(\"load\""));
+        assertTrue(applier.contains("logEntityReplay(\"restore-existing\""));
+        assertTrue(applier.contains("logEntityReplay(\"spawn\""));
+        assertTrue(applier.contains("LumaLoadLog.event(\"tnt-replay\", \"entity-replay\""));
+    }
+
+    @Test
     void blockEntityTailExceptionCountsAsProcessedAndRecordsFailure() {
         WorldApplyMetrics metrics = new WorldApplyMetrics();
         CompoundTag blockEntity = new CompoundTag();

@@ -65,8 +65,8 @@ class UndoRedoServiceDiagnosticsTest {
 
         int undoMethod = source.indexOf("public OperationHandle undo(ServerLevel level, String projectName, String actor)");
         int redoMethod = source.indexOf("public OperationHandle redo(ServerLevel level, String projectName, String actor)");
-        int undoFreezeIndex = source.indexOf("this.shouldFreezeWorldTicks(selection.action())", undoMethod);
-        int redoFreezeIndex = source.indexOf("this.shouldFreezeWorldTicks(selection.action())", redoMethod);
+        int undoFreezeIndex = source.indexOf("FreezeDecision freezeDecision = this.freezeDecision(selection.action())", undoMethod);
+        int redoFreezeIndex = source.indexOf("FreezeDecision freezeDecision = this.freezeDecision(selection.action())", redoMethod);
         int undoUnavailableIndex = source.indexOf("throw new IllegalArgumentException(\"No Lumi action is available to undo\")", undoMethod);
         int redoUnavailableIndex = source.indexOf("throw new IllegalArgumentException(\"No Lumi action is available to redo\")", redoMethod);
 
@@ -76,8 +76,10 @@ class UndoRedoServiceDiagnosticsTest {
         assertTrue(redoFreezeIndex >= 0);
         assertTrue(undoFreezeIndex > undoUnavailableIndex);
         assertTrue(redoFreezeIndex > redoUnavailableIndex);
-        assertTrue(source.contains("this.startOperation(level, project, selection, Direction.UNDO, freezeWorldTicks)"));
-        assertTrue(source.contains("this.startOperation(level, project, selection, Direction.REDO, freezeWorldTicks)"));
+        assertTrue(source.contains("this.startOperation(level, project, selection, Direction.UNDO, freezeDecision)"));
+        assertTrue(source.contains("this.startOperation(level, project, selection, Direction.REDO, freezeDecision)"));
+        assertTrue(source.contains("freezeReason="));
+        assertTrue(source.contains("activeExplosiveContexts="));
     }
 
     @Test

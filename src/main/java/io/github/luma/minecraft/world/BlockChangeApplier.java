@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.mixin.CreeperReplayStateAccess;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
@@ -59,6 +60,7 @@ public final class BlockChangeApplier {
     private static final EntityCausalContextRegistry ENTITY_CAUSAL_CONTEXTS =
             EntityCausalContextRegistry.getInstance();
     private static final RestoreEntityCleanupPolicy RESTORE_ENTITY_CLEANUP_POLICY = new RestoreEntityCleanupPolicy();
+    private static final String PRIMED_TNT_ENTITY_TYPE = "minecraft:tnt";
 
     private BlockChangeApplier() {
     }
@@ -447,6 +449,7 @@ public final class BlockChangeApplier {
         if (entity == null || entity instanceof ServerPlayer) {
             return;
         }
+        logEntityReplay("load", level, entity, entityTag, replayContext);
         resetCreeperReplayState(entity);
         Optional<UUID> entityId = EntityPayload.readUuid(entityTag);
         if (entityId.isPresent()) {
@@ -459,6 +462,7 @@ public final class BlockChangeApplier {
                     existing.restoreFrom(entity);
                     resetCreeperReplayState(existing);
                     rememberReplayAction(level, existing, replayContext);
+                    logEntityReplay("restore-existing", level, existing, entityTag, replayContext);
                     return;
                 }
                 existing.discard();
@@ -471,8 +475,31 @@ public final class BlockChangeApplier {
             if (level.tryAddFreshEntityWithPassengers(entity)) {
                 resetCreeperReplayState(entity);
                 rememberReplayAction(level, entity, replayContext);
+                logEntityReplay("spawn", level, entity, entityTag, replayContext);
             }
         }
+    }
+
+    private static void logEntityReplay(
+            String phase,
+            ServerLevel level,
+            Entity entity,
+            CompoundTag entityTag,
+            EntityBatch.ReplayContext replayContext
+    ) {
+        String entityType = entityTag.getString("id").orElse("");
+        if (!PRIMED_TNT_ENTITY_TYPE.equals(entityType)) {
+            return;
+        }
+        LumaLoadLog.event("tnt-replay", "entity-replay",
+                "phase=" + phase
+                        + ", uuid=" + entity.getUUID()
+                        + ", time=" + level.getGameTime()
+                        + ", replayAction=" + (replayContext == null ? "<none>" : replayContext.actionId())
+                        + ", replayActor=" + (replayContext == null ? "<none>" : replayContext.actor())
+                        + ", pos=" + entity.blockPosition().getX()
+                        + "," + entity.blockPosition().getY()
+                        + "," + entity.blockPosition().getZ());
     }
 
     private static void resetCreeperReplayState(Entity entity) {

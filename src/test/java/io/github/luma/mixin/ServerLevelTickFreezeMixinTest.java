@@ -17,6 +17,7 @@ class ServerLevelTickFreezeMixinTest {
         assertTrue(source.contains("@Mixin(ServerLevel.class)"));
         assertTrue(source.contains("@Inject(method = \"tick\""));
         assertTrue(source.contains("LUMA_REPLAY_TICK_SUPPRESSION.shouldFreezeWorldTick"));
+        assertTrue(source.contains("LUMA_REPLAY_TICK_SUPPRESSION.logFrozenWorldTick(level)"));
         assertTrue(source.contains("callback.cancel();"));
     }
 }

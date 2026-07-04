@@ -70,8 +70,8 @@ public final class UndoRedoService {
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to undo");
         }
-        boolean freezeWorldTicks = this.shouldFreezeWorldTicks(selection.action());
-        return this.startOperation(level, project, selection, Direction.UNDO, freezeWorldTicks);
+        FreezeDecision freezeDecision = this.freezeDecision(selection.action());
+        return this.startOperation(level, project, selection, Direction.UNDO, freezeDecision);
     }
 
     public OperationHandle redo(ServerLevel level, String projectName) throws IOException {
@@ -95,8 +95,8 @@ public final class UndoRedoService {
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to redo");
         }
-        boolean freezeWorldTicks = this.shouldFreezeWorldTicks(selection.action());
-        return this.startOperation(level, project, selection, Direction.REDO, freezeWorldTicks);
+        FreezeDecision freezeDecision = this.freezeDecision(selection.action());
+        return this.startOperation(level, project, selection, Direction.REDO, freezeDecision);
     }
 
     private void ensureStabilizationReady(ServerLevel level, BuildProject project) throws IOException {
@@ -110,7 +110,7 @@ public final class UndoRedoService {
             BuildProject project,
             UndoRedoActionStack.Selection selection,
             Direction direction,
-            boolean freezeWorldTicks
+            FreezeDecision freezeDecision
     ) {
         UndoRedoAction action = selection.action();
         List<StoredBlockChange> targetChanges = direction == Direction.UNDO
@@ -139,6 +139,9 @@ public final class UndoRedoService {
                         + ", targetEntities=" + targetEntityChanges.size()
                         + ", adjustmentBlocks=" + pendingAdjustments.size()
                         + ", adjustmentEntities=" + pendingEntityAdjustments.size()
+                        + ", freezeWorldTicks=" + freezeDecision.freeze()
+                        + ", freezeReason=" + freezeDecision.reason()
+                        + ", activeExplosiveContexts=" + freezeDecision.activeContextCount()
                         + ", completeOnServerThread=" + completeOnServerThread);
         this.historyDebugLog.logUndoRedoSelection(
                 project,
@@ -208,7 +211,7 @@ public final class UndoRedoService {
                             completeOnServerThread
                     );
                 },
-                freezeWorldTicks
+                freezeDecision.freeze()
         );
     }
 
@@ -245,8 +248,14 @@ public final class UndoRedoService {
                 && targetChanges.size() <= SERVER_THREAD_COMPLETION_MAX_BLOCKS;
     }
 
-    private boolean shouldFreezeWorldTicks(UndoRedoAction action) {
-        return this.explosiveContexts.hasActiveContexts() || requiresWorldTickFreeze(action);
+    private FreezeDecision freezeDecision(UndoRedoAction action) {
+        int activeContextCount = this.explosiveContexts.activeContextCount();
+        boolean activeContexts = activeContextCount > 0;
+        boolean actionRequiresFreeze = requiresWorldTickFreeze(action);
+        String reason = activeContexts && actionRequiresFreeze
+                ? "active-contexts+selected-action-tnt"
+                : activeContexts ? "active-contexts" : actionRequiresFreeze ? "selected-action-tnt" : "none";
+        return new FreezeDecision(activeContexts || actionRequiresFreeze, reason, activeContextCount);
     }
 
     static boolean requiresWorldTickFreeze(UndoRedoAction action) {
@@ -319,5 +328,8 @@ public final class UndoRedoService {
         private String label() {
             return this.label;
         }
+    }
+
+    private record FreezeDecision(boolean freeze, String reason, int activeContextCount) {
     }
 }
