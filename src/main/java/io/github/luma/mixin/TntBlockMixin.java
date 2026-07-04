@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.world.ExactReplayStateGuard;
 import io.github.luma.minecraft.world.TntReplayActivationPolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -29,6 +30,9 @@ abstract class TntBlockMixin {
     @Unique
     private static final TntReplayActivationPolicy LUMA_REPLAY_ACTIVATION_POLICY =
             new TntReplayActivationPolicy();
+    @Unique
+    private static final ExactReplayStateGuard LUMA_EXACT_REPLAY_STATE_GUARD =
+            ExactReplayStateGuard.getInstance();
 
     @WrapMethod(method = "onPlace")
     private void luma$wrapOnPlace(
@@ -39,7 +43,7 @@ abstract class TntBlockMixin {
             boolean moved,
             Operation<Void> original
     ) {
-        if (this.luma$shouldSuppressReplayActivation(level)) {
+        if (this.luma$shouldSuppressReplayActivation(level, pos)) {
             return;
         }
         WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
@@ -60,7 +64,7 @@ abstract class TntBlockMixin {
             boolean movedByPiston,
             Operation<Void> original
     ) {
-        if (this.luma$shouldSuppressReplayActivation(level)) {
+        if (this.luma$shouldSuppressReplayActivation(level, pos)) {
             return;
         }
         WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
@@ -113,7 +117,7 @@ abstract class TntBlockMixin {
             LivingEntity owner,
             Operation<Boolean> original
     ) {
-        if (luma$shouldSuppressReplayActivation(level)) {
+        if (luma$shouldSuppressReplayActivation(level, pos)) {
             return false;
         }
         WorldMutationContext.SourceFrame frame = luma$pushExplosiveSource(level);
@@ -131,7 +135,7 @@ abstract class TntBlockMixin {
             Explosion explosion,
             Operation<Void> original
     ) {
-        if (this.luma$shouldSuppressReplayActivation(level)) {
+        if (this.luma$shouldSuppressReplayActivation(level, pos)) {
             return;
         }
         WorldMutationContext.SourceFrame frame = this.luma$pushExplosiveSource(level);
@@ -152,12 +156,19 @@ abstract class TntBlockMixin {
     }
 
     @Unique
-    private static boolean luma$shouldSuppressReplayActivation(Level level) {
+    private static boolean luma$shouldSuppressReplayActivation(Level level, BlockPos pos) {
         return LUMA_REPLAY_ACTIVATION_POLICY.shouldSuppressActivation(
                 level.isClientSide(),
                 WorldMutationContext.currentSource(),
-                WorldMutationContext.captureSuppressed()
+                WorldMutationContext.captureSuppressed(),
+                luma$isReplayGuarded(level, pos)
         );
+    }
+
+    @Unique
+    private static boolean luma$isReplayGuarded(Level level, BlockPos pos) {
+        return level instanceof ServerLevel serverLevel
+                && LUMA_EXACT_REPLAY_STATE_GUARD.guards(serverLevel, pos);
     }
 
     @Unique

@@ -106,6 +106,11 @@ public final class ExactReplayStateGuard {
         this.clear(level);
     }
 
+    public synchronized boolean guards(ServerLevel level, BlockPos pos) {
+        GuardedWorld guardedWorld = this.guardedWorld(level);
+        return guardedWorld != null && guardedWorld.contains(pos);
+    }
+
     boolean shouldGuard(PreparedBlockPlacement placement) {
         return placement != null
                 && (placement.replayHint().suppressesPostReplayFluid()
@@ -353,6 +358,10 @@ public final class ExactReplayStateGuard {
             if (this.cursor >= this.placements.size()) {
                 this.cursor = 0;
             }
+        }
+
+        boolean contains(BlockPos pos) {
+            return pos != null && this.placements.containsKey(pos.asLong());
         }
     }
 

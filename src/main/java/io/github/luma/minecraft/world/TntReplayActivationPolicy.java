@@ -12,7 +12,22 @@ public final class TntReplayActivationPolicy {
             WorldMutationSource source,
             boolean captureSuppressed
     ) {
-        if (clientSide || !captureSuppressed) {
+        return this.shouldSuppressActivation(clientSide, source, captureSuppressed, false);
+    }
+
+    public boolean shouldSuppressActivation(
+            boolean clientSide,
+            WorldMutationSource source,
+            boolean captureSuppressed,
+            boolean protectedByReplayGuard
+    ) {
+        if (clientSide) {
+            return false;
+        }
+        if (protectedByReplayGuard) {
+            return true;
+        }
+        if (!captureSuppressed) {
             return false;
         }
         return switch (source == null ? WorldMutationSource.SYSTEM : source) {

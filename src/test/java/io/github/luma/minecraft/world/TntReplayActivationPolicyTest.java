@@ -23,4 +23,11 @@ class TntReplayActivationPolicyTest {
         assertFalse(this.policy.shouldSuppressActivation(false, WorldMutationSource.AXIOM, true));
         assertFalse(this.policy.shouldSuppressActivation(true, WorldMutationSource.RESTORE, true));
     }
+
+    @Test
+    void suppressesLiveExplosionActivationWhileTntIsReplayGuarded() {
+        assertTrue(this.policy.shouldSuppressActivation(false, WorldMutationSource.EXPLOSION, false, true));
+        assertTrue(this.policy.shouldSuppressActivation(false, WorldMutationSource.EXPLOSIVE, false, true));
+        assertFalse(this.policy.shouldSuppressActivation(false, WorldMutationSource.EXPLOSION, false, false));
+    }
 }

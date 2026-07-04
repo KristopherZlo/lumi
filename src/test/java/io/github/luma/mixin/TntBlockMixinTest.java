@@ -2,6 +2,8 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import io.github.luma.minecraft.world.ExactReplayStateGuard;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import net.minecraft.core.BlockPos;
@@ -51,5 +53,14 @@ class TntBlockMixinTest {
         assertEquals(Boolean.TYPE, method.getReturnType());
         assertTrue(Modifier.isPrivate(method.getModifiers()));
         assertTrue(Modifier.isStatic(method.getModifiers()));
+    }
+
+    @Test
+    void consultsExactReplayGuardBeforeTntActivation() throws NoSuchFieldException {
+        Field guard = TntBlockMixin.class.getDeclaredField("LUMA_EXACT_REPLAY_STATE_GUARD");
+
+        assertEquals(ExactReplayStateGuard.class, guard.getType());
+        assertTrue(Modifier.isPrivate(guard.getModifiers()));
+        assertTrue(Modifier.isStatic(guard.getModifiers()));
     }
 }
