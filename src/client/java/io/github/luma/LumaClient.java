@@ -301,6 +301,9 @@ public final class LumaClient implements ClientModInitializer {
         boolean projectScreenQuickSave = client.screen instanceof ProjectScreen;
         boolean workZoneScreenQuickSave = client.screen instanceof WorkZoneScreen;
         if ((worldInputActive || projectScreenQuickSave || workZoneScreenQuickSave) && overlayHold && quickSaveClicked) {
+            if (worldInputActive && this.workspaceOpenService.rejectIfSurvivalDisabled(client)) {
+                return;
+            }
             if (client.screen instanceof ProjectScreen projectScreen) {
                 projectScreen.openSaveDialog();
             } else if (client.screen instanceof WorkZoneScreen workZoneScreen) {
@@ -315,6 +318,9 @@ public final class LumaClient implements ClientModInitializer {
             hotkeyInfoClicked = true;
         }
         if (worldInputActive && overlayHold && hotkeyInfoClicked) {
+            if (this.workspaceOpenService.rejectIfSurvivalDisabled(client)) {
+                return;
+            }
             client.setScreen(new HotkeyInfoScreen(null));
             return;
         }

@@ -158,6 +158,7 @@ public final class UndoRedoKeyController {
         ServerLevel level = this.currentLevel(client);
         BuildProject project = this.projectService.findWorldProject(level)
                 .orElseThrow(() -> new IllegalArgumentException("No active Lumi workspace in this dimension"));
+        ClientProjectAccess.requireProjectAccess(client, project);
         return new CurrentTarget(
                 level,
                 project,

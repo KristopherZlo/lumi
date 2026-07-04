@@ -12,7 +12,8 @@ public record ProjectSettings(
         boolean autoCheckpointEnabled,
         int autoCheckpointLargeChangeThreshold,
         Boolean workspaceHudEnabled,
-        Boolean showHiddenCommits
+        Boolean showHiddenCommits,
+        Boolean survivalModeEnabled
 ) {
     public static final int DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD = 512;
 
@@ -41,6 +42,38 @@ public record ProjectSettings(
                 autoCheckpointEnabled,
                 autoCheckpointLargeChangeThreshold,
                 workspaceHudEnabled,
+                false,
+                false
+        );
+    }
+
+    public ProjectSettings(
+            boolean autoVersionsEnabled,
+            int autoVersionMinutes,
+            int sessionIdleSeconds,
+            int snapshotEveryVersions,
+            double snapshotVolumeThreshold,
+            boolean safetySnapshotBeforeRestore,
+            boolean previewGenerationEnabled,
+            boolean debugLoggingEnabled,
+            boolean autoCheckpointEnabled,
+            int autoCheckpointLargeChangeThreshold,
+            Boolean workspaceHudEnabled,
+            Boolean showHiddenCommits
+    ) {
+        this(
+                autoVersionsEnabled,
+                autoVersionMinutes,
+                sessionIdleSeconds,
+                snapshotEveryVersions,
+                snapshotVolumeThreshold,
+                safetySnapshotBeforeRestore,
+                previewGenerationEnabled,
+                debugLoggingEnabled,
+                autoCheckpointEnabled,
+                autoCheckpointLargeChangeThreshold,
+                workspaceHudEnabled,
+                showHiddenCommits,
                 false
         );
     }
@@ -58,6 +91,7 @@ public record ProjectSettings(
                 false,
                 DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD,
                 true,
+                false,
                 false
         );
     }
@@ -81,7 +115,8 @@ public record ProjectSettings(
                         ? DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD
                         : settings.autoCheckpointLargeChangeThreshold(),
                 settings.workspaceHudEnabled() == null ? true : settings.workspaceHudEnabled(),
-                settings.showHiddenCommits() == null ? false : settings.showHiddenCommits()
+                settings.showHiddenCommits() == null ? false : settings.showHiddenCommits(),
+                settings.survivalModeEnabled() == null ? false : settings.survivalModeEnabled()
         );
     }
 
@@ -91,5 +126,9 @@ public record ProjectSettings(
 
     public boolean hiddenCommitsVisible() {
         return Boolean.TRUE.equals(this.showHiddenCommits);
+    }
+
+    public boolean survivalModeAllowed() {
+        return Boolean.TRUE.equals(this.survivalModeEnabled);
     }
 }

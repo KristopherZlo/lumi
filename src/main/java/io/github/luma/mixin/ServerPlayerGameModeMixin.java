@@ -72,10 +72,12 @@ abstract class ServerPlayerGameModeMixin {
     @Unique
     private void luma$pushPlayerSource() {
         this.luma$playerMutationDepth += 1;
+        LumaAccessControl accessControl = LumaAccessControl.getInstance();
         WorldMutationContext.pushPlayerSource(
                 WorldMutationSource.PLAYER,
                 this.player == null ? "player" : this.player.getName().getString(),
-                LumaAccessControl.getInstance().canUse(this.player) || WorldMutationContext.currentAccessAllowed()
+                accessControl.canUse(this.player) || WorldMutationContext.currentAccessAllowed(),
+                accessControl.survivalMode(this.player) || WorldMutationContext.currentSurvivalMode()
         );
     }
 

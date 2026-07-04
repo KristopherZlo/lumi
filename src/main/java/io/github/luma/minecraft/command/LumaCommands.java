@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.OperationSnapshot;
+import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.minecraft.access.LumaAccessControl;
@@ -58,7 +59,21 @@ public final class LumaCommands {
         }
         var player = source.getPlayerOrException();
         String author = player.getName().getString();
-        BuildProject project = this.projectService.ensureWorldProject(source.getLevel(), author);
+        Optional<BuildProject> existing = this.projectService.findWorldProject(source.getLevel());
+        ProjectSettings settings = existing.map(BuildProject::settings).orElse(ProjectSettings.defaults());
+        if (!this.accessControl.canUse(player, settings)) {
+            source.sendFailure(Component.translatable(this.accessControl.survivalModeDisabled(player, settings)
+                    ? "luma.status.survival_disabled"
+                    : "luma.status.admin_required"));
+            return 0;
+        }
+        BuildProject project = existing.orElseGet(() -> {
+            try {
+                return this.projectService.ensureWorldProject(source.getLevel(), author);
+            } catch (IOException exception) {
+                throw new RuntimeException(exception);
+            }
+        });
         var handle = this.versionService.startSaveVersion(source.getLevel(), project.name(), normalizedMessage, author);
         source.sendSuccess(() -> Component.literal("Lumi save started: " + handle.id()), false);
         return 1;

@@ -17,6 +17,7 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
 import io.github.luma.minecraft.bootstrap.WorldInitialBackupService;
 import io.github.luma.minecraft.world.WorldOperationManager;
+import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.HistoryTombstoneRepository;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -142,6 +143,11 @@ public final class ProjectService {
         WorldOriginInfo origin = this.ensureWorldOrigin(server);
         this.worldInitialBackupService.backupIfNeeded(server, origin);
         for (var player : server.getPlayerList().getPlayers()) {
+            Optional<BuildProject> existing = this.findWorldProject(player.level());
+            ProjectSettings settings = existing.map(BuildProject::settings).orElse(ProjectSettings.defaults());
+            if (!LumaAccessControl.getInstance().canUse(player, settings)) {
+                continue;
+            }
             this.ensureWorldProject(player.level(), "Lumi");
         }
         boolean activeOperation = this.worldOperationManager.hasActiveOperation(server);

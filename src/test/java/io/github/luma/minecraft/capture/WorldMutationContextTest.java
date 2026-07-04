@@ -166,6 +166,25 @@ class WorldMutationContextTest {
     }
 
     @Test
+    void playerSurvivalModeFlagIsInheritedByCausalSources() {
+        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "builder", true, true);
+        String playerActionId = WorldMutationContext.currentActionId();
+        try {
+            assertTrue(WorldMutationContext.currentSurvivalMode());
+
+            WorldMutationContext.pushSource(WorldMutationSource.BLOCK_UPDATE);
+            try {
+                assertEquals(playerActionId, WorldMutationContext.currentActionId());
+                assertTrue(WorldMutationContext.currentSurvivalMode());
+            } finally {
+                WorldMutationContext.popSource();
+            }
+        } finally {
+            WorldMutationContext.popSource();
+        }
+    }
+
+    @Test
     void sourceFrameClosesAfterException() {
         assertEquals(WorldMutationSource.SYSTEM, WorldMutationContext.currentSource());
 

@@ -43,7 +43,7 @@ Lumi also declares owo-lib and cloth-config as Fabric dependencies. Install the 
 3. Start Minecraft and open a singleplayer world.
 4. Keep a normal world backup before relying on an alpha build.
 
-For dedicated servers, install Lumi on both the server and every client that uses Lumi screens or overlays. Dedicated server actions require operator-level permission; `/lumi save <message>` saves tracked work from the server side.
+For dedicated servers, install Lumi on both the server and every client that uses Lumi screens or overlays. Dedicated server actions require operator-level permission; `/lumi save <message>` saves tracked work from the server side. Survival-mode access is disabled by default in Lumi settings; when it is enabled, the player still needs operator-level permission.
 
 ### What Lumi Does
 
@@ -232,7 +232,7 @@ Important records:
 - `cache/`: disposable UI and diagnostic cache
 
 Current writers create patch payload schema v9 and snapshot payload schema v8. Current readers intentionally support patch payload schema v9 and snapshot payload schemas v7-v8. See [docs/storage-format.md](docs/storage-format.md) for exact layout and compatibility rules.
-Project settings include `showHiddenCommits` for showing live-zone commits in global history; deleted-zone commits return to global history because deleting a zone only removes `work-zones.json` metadata. Restore safety checkpoints stay hidden from normal history and are exposed through the restore return-point flow instead.
+Project settings include `showHiddenCommits` for showing live-zone commits in global history and `survivalModeEnabled` for the opt-in Survival-mode access gate; deleted-zone commits return to global history because deleting a zone only removes `work-zones.json` metadata. Restore safety checkpoints stay hidden from normal history and are exposed through the restore return-point flow instead.
 
 ### Runtime Model
 

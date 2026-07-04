@@ -90,6 +90,7 @@ public final class HistoryCaptureManager {
     private final WorkingDraftLiveStateReconciler liveStateReconciler = new WorkingDraftLiveStateReconciler();
     private final ServerThreadExecutor serverThreadExecutor = new ServerThreadExecutor();
     private final ActiveSessionRegionPolicy activeSessionRegionPolicy = new ActiveSessionRegionPolicy();
+    private final CaptureAccessGuard accessGuard = new CaptureAccessGuard(ELIGIBILITY);
     private long idleFlushTicker;
 
     private HistoryCaptureManager() {
@@ -127,7 +128,7 @@ public final class HistoryCaptureManager {
         boolean explicitRootSource = ELIGIBILITY.isExplicitRootSource(source);
         if (level == null || pos == null || this.shouldSkipSuppressedReplay(level)
                 || !shouldCaptureMutation(source)
-                || !this.canUseMutationSource(level.getServer(), source)) {
+                || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
             return;
         }
 
@@ -135,7 +136,7 @@ public final class HistoryCaptureManager {
             Instant now = Instant.now();
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
             if (matchingProjects.isEmpty()) {
-                if (!explicitRootSource || !allowsAutomaticProjectCreation(source)) {
+                if (!explicitRootSource || !allowsAutomaticProjectCreation(source) || !this.accessGuard.canCreateProjectInCurrentMode()) {
                     return;
                 }
                 this.projectService.ensureWorldProject(level, defaultActor(source));
@@ -144,6 +145,7 @@ public final class HistoryCaptureManager {
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
+                if (!this.accessGuard.canUseProjectInCurrentMode(trackedProject)) { continue; }
                 String projectId = trackedProject.project().id().toString();
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
@@ -220,7 +222,7 @@ public final class HistoryCaptureManager {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
         if (level == null || this.shouldSkipSuppressedReplay(level)
                 || !shouldCaptureMutation(source)
-                || !this.canUseMutationSource(level.getServer(), source)) {
+                || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
             return;
         }
 
@@ -229,7 +231,7 @@ public final class HistoryCaptureManager {
             WorldMutationCapturePolicy.CaptureResult captureResult = null;
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
             if (matchingProjects.isEmpty()) {
-                if (!allowsAutomaticProjectCreation(source)) {
+                if (!allowsAutomaticProjectCreation(source) || !this.accessGuard.canCreateProjectInCurrentMode()) {
                     LumaDebugLog.log(
                             "capture",
                             "Skipped {} mutation at {} in {} because no tracked workspace exists and the source cannot bootstrap one",
@@ -271,6 +273,7 @@ public final class HistoryCaptureManager {
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
+                if (!this.accessGuard.canUseProjectInCurrentMode(trackedProject)) { continue; }
                 String projectId = trackedProject.project().id().toString();
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
@@ -457,7 +460,7 @@ public final class HistoryCaptureManager {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
         if (level == null || changes == null || changes.isEmpty() || this.shouldSkipSuppressedReplay(level)
                 || !shouldCaptureMutation(source)
-                || !this.canUseMutationSource(level.getServer(), source)) {
+                || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
             return;
         }
 
@@ -521,7 +524,8 @@ public final class HistoryCaptureManager {
         if (matchingProjects.isEmpty()
                 && !autoWorkspaceCreated
                 && captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.CAPTURED
-                && allowsAutomaticProjectCreation(source)) {
+                && allowsAutomaticProjectCreation(source)
+                && this.accessGuard.canCreateProjectInCurrentMode()) {
             this.projectService.ensureWorldProject(level, defaultActor(source));
             this.invalidateProjectCache(level.getServer());
             matchingProjects = this.matchingProjects(level, input.pos());
@@ -533,6 +537,7 @@ public final class HistoryCaptureManager {
         }
 
         for (TrackedProject trackedProject : matchingProjects) {
+            if (!this.accessGuard.canUseProjectInCurrentMode(trackedProject)) { continue; }
             this.recordBulkBlockChangeForProject(
                     level,
                     trackedProject,
@@ -699,7 +704,7 @@ public final class HistoryCaptureManager {
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
         if (level == null || this.shouldSkipSuppressedReplay(level)
-                || !this.canUseMutationSource(level.getServer(), source)) {
+                || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
             return;
         }
 
@@ -714,7 +719,7 @@ public final class HistoryCaptureManager {
             Instant now = Instant.now();
             List<TrackedProject> matchingProjects = this.matchingEntityProjects(level, mutationPositions);
             if (matchingProjects.isEmpty()) {
-                if (!allowsAutomaticProjectCreation(source)) {
+                if (!allowsAutomaticProjectCreation(source) || !this.accessGuard.canCreateProjectInCurrentMode()) {
                     LumaDebugLog.log(
                             "capture",
                             "Skipped {} entity mutation at {} in {} because no tracked workspace exists and the source cannot bootstrap one",
@@ -731,6 +736,7 @@ public final class HistoryCaptureManager {
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
+                if (!this.accessGuard.canUseProjectInCurrentMode(trackedProject)) { continue; }
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
@@ -1245,14 +1251,6 @@ public final class HistoryCaptureManager {
                 pendingChunks.size(),
                 loaded,
                 alreadyLoaded
-        );
-    }
-
-    private boolean canUseMutationSource(MinecraftServer server, io.github.luma.domain.model.WorldMutationSource source) {
-        return canUseMutationSource(
-                server != null && server.isDedicatedServer(),
-                WorldMutationContext.currentAccessAllowed(),
-                source
         );
     }
 

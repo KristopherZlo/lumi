@@ -5,6 +5,7 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.access.LumaAccessControl;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -54,6 +55,9 @@ final class UndoOnlyEntityChangeRecorder {
             BlockPos pos = this.entityMutationPos(oldPayload, newPayload);
             Instant now = Instant.now();
             for (TrackedProject trackedProject : this.trackedProjects.matching(level, pos)) {
+                if (!this.canUseProjectInCurrentMode(trackedProject)) {
+                    continue;
+                }
                 this.liveUndoRedoActionRecorder.recordEntityAction(
                         trackedProject,
                         level,
@@ -102,6 +106,9 @@ final class UndoOnlyEntityChangeRecorder {
                 StoredEntityChange capturedChange = capturedMutation.get();
                 BlockPos pos = this.entityMutationPos(oldPayload, null);
                 for (TrackedProject trackedProject : this.trackedProjects.matching(level, pos)) {
+                    if (!this.canUseProjectInCurrentMode(trackedProject)) {
+                        continue;
+                    }
                     String projectId = trackedProject.project().id().toString();
                     liveUndoProjects.putIfAbsent(projectId, trackedProject);
                     liveUndoChanges.computeIfAbsent(projectId, ignored -> new ArrayList<>()).add(capturedChange);
@@ -130,6 +137,14 @@ final class UndoOnlyEntityChangeRecorder {
                 level.getServer() != null && level.getServer().isDedicatedServer(),
                 WorldMutationContext.currentAccessAllowed(),
                 source
+        );
+    }
+
+    private boolean canUseProjectInCurrentMode(TrackedProject trackedProject) {
+        return trackedProject != null && LumaAccessControl.getInstance().canUse(
+                trackedProject.project().settings(),
+                WorldMutationContext.currentSurvivalMode(),
+                WorldMutationContext.currentAccessAllowed()
         );
     }
 

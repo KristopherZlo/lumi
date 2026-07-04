@@ -30,7 +30,12 @@ public final class DashboardScreenController {
                 level = server.overworld();
             }
 
-            this.projectService.ensureWorldProject(level, this.client.getUser().getName());
+            ClientProjectAccess.ensureCurrentWorldProject(
+                    this.client,
+                    this.projectService,
+                    level,
+                    this.client.getUser().getName()
+            );
             for (var project : this.projectService.listProjects(server)) {
                 var draft = this.recoveryService.loadDraft(server, project.name()).orElse(null);
                 boolean interruptedDraft = this.recoveryService.hasInterruptedDraft(server, project.name());

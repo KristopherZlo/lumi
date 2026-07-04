@@ -4,6 +4,7 @@ import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.PendingChangeSummary;
+import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.WorkZone;
@@ -114,12 +115,30 @@ public final class WorkZoneServerNetworking {
             boolean createIfMissing
     ) throws Exception {
         if (!request.projectName().isBlank()) {
-            return this.projectService.loadProject(server, request.projectName());
+            BuildProject project = this.projectService.loadProject(server, request.projectName());
+            this.requireAccess(player, project.settings());
+            return project;
+        }
+        Optional<BuildProject> existing = this.projectService.findWorldProject(player.level());
+        if (existing.isPresent()) {
+            this.requireAccess(player, existing.get().settings());
+            return existing.get();
         }
         if (createIfMissing) {
+            this.requireAccess(player, ProjectSettings.defaults());
             return this.projectService.ensureWorldProject(player.level(), player.getName().getString());
         }
         return this.projectService.findWorldProject(player.level()).orElse(null);
+    }
+
+    private void requireAccess(ServerPlayer player, ProjectSettings settings) {
+        if (LumaAccessControl.getInstance().canUse(player, settings)) {
+            return;
+        }
+        if (LumaAccessControl.getInstance().survivalModeDisabled(player, settings)) {
+            throw new IllegalStateException("Lumi is disabled for survival mode");
+        }
+        throw new IllegalStateException("Lumi requires admin permissions or cheats enabled");
     }
 
     private WorkZoneSnapshot snapshot(
@@ -205,6 +224,9 @@ public final class WorkZoneServerNetworking {
         String message = exception.getMessage() == null ? "" : exception.getMessage().toLowerCase(Locale.ROOT);
         if (message.contains("admin") || message.contains("cheats")) {
             return "luma.status.admin_required";
+        }
+        if (message.contains("disabled for survival mode")) {
+            return "luma.status.survival_disabled";
         }
         return "luma.status.world_operation_busy";
     }

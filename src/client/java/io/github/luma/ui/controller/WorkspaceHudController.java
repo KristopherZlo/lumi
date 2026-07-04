@@ -31,7 +31,12 @@ public final class WorkspaceHudController {
                 level = server.overworld();
             }
 
-            var project = this.projectService.ensureWorldProject(level, this.client.getUser().getName());
+            var project = ClientProjectAccess.ensureCurrentWorldProject(
+                    this.client,
+                    this.projectService,
+                    level,
+                    this.client.getUser().getName()
+            );
             PendingChangeSummary pending = this.recoveryService.loadDraft(server, project.name())
                     .map(draft -> ChangeStatsFactory.summarizePending(draft.changes()))
                     .orElse(PendingChangeSummary.empty());

@@ -27,6 +27,7 @@ public final class QuickRollbackKeyController {
             ServerLevel level = this.currentLevel(client);
             var project = this.projectService.findWorldProject(level)
                     .orElseThrow(() -> new IllegalArgumentException("No active Lumi workspace in this dimension"));
+            ClientProjectAccess.requireProjectAccess(client, project);
             Optional<Bounds3i> selectedBounds = LumiRegionSelectionController.getInstance().selectedBounds(
                     project.name(),
                     project.dimensionId()
@@ -54,6 +55,9 @@ public final class QuickRollbackKeyController {
         if (message.contains("admin permissions") || message.contains("cheats enabled")) {
             return "luma.status.admin_required";
         }
+        if (message.contains("disabled for survival mode")) {
+            return "luma.status.survival_disabled";
+        }
         if (message.contains("Another world operation is already running")) {
             return "luma.status.world_operation_busy";
         }
@@ -69,7 +73,8 @@ public final class QuickRollbackKeyController {
     private Component statusMessage(String key) {
         if ("luma.status.operation_failed".equals(key)
                 || "luma.status.world_operation_busy".equals(key)
-                || "luma.status.admin_required".equals(key)) {
+                || "luma.status.admin_required".equals(key)
+                || "luma.status.survival_disabled".equals(key)) {
             return ActionBarMessagePresenter.error(key);
         }
         return ActionBarMessagePresenter.warning(key);

@@ -34,6 +34,10 @@ public final class WorldMutationContext {
         return currentFrame().accessAllowed();
     }
 
+    public static boolean currentSurvivalMode() {
+        return currentFrame().survivalMode();
+    }
+
     public static boolean captureSuppressed() {
         return CAPTURE_SUPPRESSION_DEPTH.get() > 0;
     }
@@ -54,7 +58,8 @@ public final class WorldMutationContext {
                     resolvedSource,
                     parent.actor(),
                     parent.actionId(),
-                    parent.accessAllowed()
+                    parent.accessAllowed(),
+                    parent.survivalMode()
             ));
             return new SourceFrame();
         }
@@ -63,6 +68,7 @@ public final class WorldMutationContext {
                 resolvedSource,
                 defaultActor(resolvedSource),
                 "",
+                false,
                 false
         ));
         return new SourceFrame();
@@ -80,7 +86,8 @@ public final class WorldMutationContext {
                     resolvedSource,
                     parent.actor(),
                     parent.actionId(),
-                    parent.accessAllowed()
+                    parent.accessAllowed(),
+                    parent.survivalMode()
             ));
             return new SourceFrame();
         }
@@ -89,6 +96,7 @@ public final class WorldMutationContext {
                 resolvedSource,
                 defaultActor(resolvedSource),
                 "",
+                false,
                 false
         ));
         return new SourceFrame();
@@ -104,12 +112,22 @@ public final class WorldMutationContext {
                 source == null ? WorldMutationSource.SYSTEM : source,
                 actor == null || actor.isBlank() ? "world" : actor,
                 actionId == null || actionId.isBlank() ? "" : actionId,
-                accessAllowed
+                accessAllowed,
+                false
         ));
         return new SourceFrame();
     }
 
     public static SourceFrame pushPlayerSource(WorldMutationSource source, String actor, boolean accessAllowed) {
+        return pushPlayerSource(source, actor, accessAllowed, false);
+    }
+
+    public static SourceFrame pushPlayerSource(
+            WorldMutationSource source,
+            String actor,
+            boolean accessAllowed,
+            boolean survivalMode
+    ) {
         WorldMutationSource resolvedSource = source == null ? WorldMutationSource.PLAYER : source;
         Frame parent = currentFrame();
         if (parent.hasAction()) {
@@ -117,7 +135,8 @@ public final class WorldMutationContext {
                     resolvedSource,
                     parent.actor(),
                     parent.actionId(),
-                    parent.accessAllowed() || accessAllowed
+                    parent.accessAllowed() || accessAllowed,
+                    parent.survivalMode() || survivalMode
             ));
             return new SourceFrame();
         }
@@ -126,7 +145,8 @@ public final class WorldMutationContext {
                 resolvedSource,
                 actor == null || actor.isBlank() ? "player" : actor,
                 UUID.randomUUID().toString(),
-                accessAllowed
+                accessAllowed,
+                survivalMode
         ));
         return new SourceFrame();
     }
@@ -145,7 +165,8 @@ public final class WorldMutationContext {
                 source == null ? WorldMutationSource.EXTERNAL_TOOL : source,
                 actor == null || actor.isBlank() ? "external-tool" : actor,
                 actionId == null || actionId.isBlank() ? UUID.randomUUID().toString() : actionId,
-                accessAllowed
+                accessAllowed,
+                false
         ));
         return new SourceFrame();
     }
@@ -252,11 +273,12 @@ public final class WorldMutationContext {
             WorldMutationSource source,
             String actor,
             String actionId,
-            boolean accessAllowed
+            boolean accessAllowed,
+            boolean survivalMode
     ) {
 
         private static Frame system() {
-            return new Frame(WorldMutationSource.SYSTEM, "world", "", false);
+            return new Frame(WorldMutationSource.SYSTEM, "world", "", false, false);
         }
 
         private boolean hasAction() {

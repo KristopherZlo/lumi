@@ -476,6 +476,8 @@
   "luma.settings.auto_checkpoint_help": "Save pending work before large fill, clone, WorldEdit, or Axiom edits. Off by default.",
   "luma.settings.auto_checkpoint_threshold": "Large edit threshold",
   "luma.settings.auto_checkpoint_threshold_help": "Minimum changed block volume for command-triggered auto checkpoints.",
+  "luma.settings.survival_mode": "Enable Lumi in Survival mode",
+  "luma.settings.survival_mode_help": "Off by default. When off, Survival players cannot open Lumi, capture changes, save, restore, or write history.",
   "luma.settings.preview_generation": "Preview generation",
   "luma.settings.preview_generation_help": "Create isometric preview images when saves are made.",
   "luma.settings.performance_title": "Performance",
@@ -522,6 +524,7 @@
 
   "luma.status.singleplayer_only": "This workflow is currently supported in local singleplayer only.",
   "luma.status.admin_required": "Lumi requires operator rights or cheats enabled in this world.",
+  "luma.status.survival_disabled": "Lumi is disabled for Survival mode. Enable it in Lumi settings to use it here.",
   "luma.status.dashboard_ready": "Dashboard loaded.",
   "luma.status.opening_workspace": "Opening workspace...",
   "luma.status.dashboard_failed": "Dashboard could not be loaded.",

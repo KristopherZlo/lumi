@@ -2,10 +2,13 @@ package io.github.luma.ui.controller;
 
 import io.github.luma.LumaMod;
 import io.github.luma.client.onboarding.ClientOnboardingService;
+import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.client.update.UpdatePromptCoordinator;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.WorkZoneService;
+import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.screen.ProjectOpeningScreen;
@@ -13,13 +16,17 @@ import io.github.luma.ui.screen.ProjectScreen;
 import io.github.luma.ui.screen.RecoveryScreen;
 import io.github.luma.ui.screen.WorkZoneScreen;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 
 /**
@@ -58,12 +65,47 @@ public final class ClientWorkspaceOpenService {
         this.openCurrentWorkspace(client, parent, WorkspaceOpenTarget.ONBOARDING);
     }
 
+    public boolean rejectIfSurvivalDisabled(Minecraft client) {
+        if (client == null || client.player == null || client.level == null || !client.hasSingleplayerServer()) {
+            return false;
+        }
+        try {
+            if (client.getSingleplayerServer() == null) {
+                return false;
+            }
+            ServerLevel level = client.getSingleplayerServer().getLevel(client.level.dimension());
+            if (level == null) {
+                level = client.getSingleplayerServer().overworld();
+            }
+            Optional<BuildProject> project = this.projectService.findWorldProject(level);
+            if (ClientProjectAccess.survivalModeDisabled(client, project.orElse(null))) {
+                this.notifySurvivalDisabled(client);
+                return true;
+            }
+        } catch (Exception ignored) {
+            return false;
+        }
+        return false;
+    }
+
+    public void notifySurvivalDisabled(Minecraft client) {
+        if (client == null || client.player == null) {
+            return;
+        }
+        Component message = Component.translatable("luma.status.survival_disabled");
+        client.player.displayClientMessage(message, true);
+        client.player.displayClientMessage(message, false);
+    }
+
     private void openCurrentWorkspace(Minecraft client, Screen parent, WorkspaceOpenTarget target) {
         if (client == null || client.player == null) {
             return;
         }
         if (!client.hasSingleplayerServer()) {
             client.setScreen(new WorkZoneScreen(parent, ""));
+            return;
+        }
+        if (this.rejectIfSurvivalDisabled(client)) {
             return;
         }
 
@@ -83,9 +125,10 @@ public final class ClientWorkspaceOpenService {
 
         ResourceKey<Level> dimension = client.level == null ? Level.OVERWORLD : client.level.dimension();
         String author = client.getUser().getName();
+        UUID playerId = client.player.getUUID();
         client.setScreen(new ProjectOpeningScreen(parent));
 
-        server.execute(() -> this.ensureWorkspace(server, dimension, author, request));
+        server.execute(() -> this.ensureWorkspace(server, dimension, author, playerId, request));
         request.whenComplete((projectName, throwable) ->
                 client.execute(() -> this.completeOpen(client, parent, request, target, projectName, throwable)));
     }
@@ -94,6 +137,7 @@ public final class ClientWorkspaceOpenService {
             MinecraftServer server,
             ResourceKey<Level> dimension,
             String author,
+            UUID playerId,
             CompletableFuture<WorkspaceOpenResult> request
     ) {
         if (request.isCancelled()) {
@@ -105,7 +149,16 @@ public final class ClientWorkspaceOpenService {
             if (level == null) {
                 level = server.overworld();
             }
-            var project = this.projectService.ensureWorldProject(level, author);
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+            Optional<BuildProject> existing = this.projectService.findWorldProject(level);
+            ProjectSettings settings = existing.map(BuildProject::settings).orElse(ProjectSettings.defaults());
+            if (!LumaAccessControl.getInstance().canUse(player, settings)) {
+                throw this.disabledReason(player, settings);
+            }
+            BuildProject project = existing.orElse(null);
+            if (project == null) {
+                project = this.projectService.ensureWorldProject(level, author);
+            }
             boolean hasActiveZone = this.workZoneService.activeZone(
                     this.projectService.resolveLayout(server, project.name()),
                     author
@@ -133,6 +186,11 @@ public final class ClientWorkspaceOpenService {
         }
 
         if (throwable != null) {
+            if (this.isSurvivalDisabled(throwable)) {
+                this.notifySurvivalDisabled(client);
+                client.setScreen(parent);
+                return;
+            }
             LumaMod.LOGGER.warn("Failed to open current Lumi workspace", throwable);
             client.gui.setOverlayMessage(ActionBarMessagePresenter.error("luma.status.project_open_failed"), false);
             client.setScreen(parent);
@@ -162,6 +220,24 @@ public final class ClientWorkspaceOpenService {
     private enum WorkspaceOpenTarget {
         PROJECT,
         ONBOARDING
+    }
+
+    private IllegalStateException disabledReason(ServerPlayer player, ProjectSettings settings) {
+        if (LumaAccessControl.getInstance().survivalModeDisabled(player, settings)) {
+            return new IllegalStateException(ClientProjectAccess.SURVIVAL_DISABLED_MESSAGE);
+        }
+        return new IllegalStateException("Lumi requires admin permissions or cheats enabled");
+    }
+
+    private boolean isSurvivalDisabled(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (ClientProjectAccess.SURVIVAL_DISABLED_MESSAGE.equals(current.getMessage())) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private record WorkspaceOpenResult(String projectName, boolean hasRecoveryDraft, boolean hasActiveZone) {

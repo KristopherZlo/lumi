@@ -24,6 +24,7 @@ class ProjectSettingsTest {
         assertEquals(ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD, settings.autoCheckpointLargeChangeThreshold());
         assertTrue(settings.workspaceHudVisible());
         assertFalse(settings.hiddenCommitsVisible());
+        assertFalse(settings.survivalModeAllowed());
     }
 
     @Test
@@ -54,6 +55,7 @@ class ProjectSettingsTest {
         assertEquals(ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD, settings.autoCheckpointLargeChangeThreshold());
         assertTrue(settings.workspaceHudVisible());
         assertFalse(settings.hiddenCommitsVisible());
+        assertFalse(settings.survivalModeAllowed());
     }
 
     @Test
@@ -95,5 +97,26 @@ class ProjectSettingsTest {
 
         assertTrue(settings.workspaceHudVisible());
         assertTrue(settings.hiddenCommitsVisible());
+    }
+
+    @Test
+    void sanitizePreservesSurvivalModeAccess() {
+        ProjectSettings settings = ProjectSettings.sanitize(new ProjectSettings(
+                false,
+                10,
+                5,
+                10,
+                0.20D,
+                true,
+                true,
+                false,
+                false,
+                256,
+                true,
+                false,
+                true
+        ));
+
+        assertTrue(settings.survivalModeAllowed());
     }
 }

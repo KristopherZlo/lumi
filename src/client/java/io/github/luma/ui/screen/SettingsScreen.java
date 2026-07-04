@@ -40,6 +40,7 @@ public final class SettingsScreen extends LumaScreen {
     private boolean previewGenerationEnabled;
     private boolean debugLoggingEnabled;
     private boolean autoCheckpointEnabled;
+    private boolean survivalModeEnabled;
     private boolean workspaceHudEnabled = true;
     private boolean hiddenCommitsVisible;
     private boolean archived;
@@ -73,6 +74,7 @@ public final class SettingsScreen extends LumaScreen {
             this.previewGenerationEnabled = project.settings().previewGenerationEnabled();
             this.debugLoggingEnabled = project.settings().debugLoggingEnabled();
             this.autoCheckpointEnabled = project.settings().autoCheckpointEnabled();
+            this.survivalModeEnabled = project.settings().survivalModeAllowed();
             this.workspaceHudEnabled = project.settings().workspaceHudVisible();
             this.hiddenCommitsVisible = project.settings().hiddenCommitsVisible();
             this.archived = project.archived();
@@ -173,6 +175,12 @@ public final class SettingsScreen extends LumaScreen {
                 Component.translatable("luma.settings.auto_checkpoint_threshold_help"),
                 this.numberInput(this.autoCheckpointLargeChangeThreshold, value -> this.autoCheckpointLargeChangeThreshold = value),
                 this.autoCheckpointLargeChangeThresholdError
+        ));
+        section.child(this.fieldWithError(
+                Component.translatable("luma.settings.survival_mode"),
+                Component.translatable("luma.settings.survival_mode_help"),
+                this.toggleControl(this.survivalModeEnabled, value -> this.survivalModeEnabled = value),
+                ""
         ));
         return section;
     }
@@ -361,7 +369,8 @@ public final class SettingsScreen extends LumaScreen {
                         this.autoCheckpointEnabled,
                         parsedAutoCheckpointLargeChangeThreshold,
                         this.workspaceHudEnabled,
-                        this.hiddenCommitsVisible
+                        this.hiddenCommitsVisible,
+                        this.survivalModeEnabled
                 ),
                 this.archived
         );

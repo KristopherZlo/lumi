@@ -74,6 +74,9 @@ public final class QuickSaveScreenController {
 
     private String illegalStateStatus(IllegalStateException exception) {
         String message = exception.getMessage() == null ? "" : exception.getMessage().toLowerCase(Locale.ROOT);
+        if (message.contains("disabled for survival mode")) {
+            return "luma.status.survival_disabled";
+        }
         if (message.contains("admin") || message.contains("cheats")) {
             return "luma.status.admin_required";
         }
@@ -145,7 +148,7 @@ public final class QuickSaveScreenController {
             }
 
             String author = this.client.getUser().getName();
-            BuildProject project = this.projectService.ensureWorldProject(level, author);
+            BuildProject project = ClientProjectAccess.ensureCurrentWorldProject(this.client, this.projectService, level, author);
             return new Workspace(level, project);
         }
 
