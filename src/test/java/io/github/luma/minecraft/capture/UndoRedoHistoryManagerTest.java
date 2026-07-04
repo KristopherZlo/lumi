@@ -127,6 +127,35 @@ class UndoRedoHistoryManagerTest {
     }
 
     @Test
+    void playerScopedSelectionIncludesOwnedExternalToolActions() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "player-owned-tool-selection-test";
+        historyManager.clearProject(projectId);
+
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-axiom-action",
+                "axiom:Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "steve-axiom-action",
+                "axiom:Steve",
+                List.of(change(2)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        assertEquals("alex-axiom-action", historyManager.selectUndo(projectId, "Alex").action().id());
+        assertEquals("steve-axiom-action", historyManager.selectUndo(projectId, "Steve").action().id());
+    }
+
+    @Test
     void laterPlayerEditBlocksStaleUndoForSameBlock() {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
         String projectId = "player-conflict-ledger-test";

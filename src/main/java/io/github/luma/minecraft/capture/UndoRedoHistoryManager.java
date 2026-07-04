@@ -5,10 +5,13 @@ import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -103,12 +106,7 @@ public final class UndoRedoHistoryManager {
     }
 
     public synchronized UndoRedoActionStack.Selection selectUndo(String projectId, String actor) {
-        UndoRedoActionStack stack = this.stack(projectId, actor, false);
-        if (stack == null) {
-            return null;
-        }
-        UndoRedoActionStack.Selection selection = stack.selectUndo();
-        return this.isCurrent(projectId, selection) ? selection : null;
+        return this.latestSelection(projectId, this.actorKeys(actor), true);
     }
 
     public synchronized UndoRedoActionStack.Selection selectRedo(String projectId) {
@@ -116,12 +114,7 @@ public final class UndoRedoHistoryManager {
     }
 
     public synchronized UndoRedoActionStack.Selection selectRedo(String projectId, String actor) {
-        UndoRedoActionStack stack = this.stack(projectId, actor, false);
-        if (stack == null) {
-            return null;
-        }
-        UndoRedoActionStack.Selection selection = stack.selectRedo();
-        return this.canRedo(projectId, selection) ? selection : null;
+        return this.latestSelection(projectId, this.actorKeys(actor), false);
     }
 
     public synchronized boolean completeUndo(String projectId, UndoRedoActionStack.Selection selection) {
@@ -285,6 +278,20 @@ public final class UndoRedoHistoryManager {
                 .orElse(null);
     }
 
+    private UndoRedoActionStack.Selection latestSelection(String projectId, Collection<String> actorKeys, boolean undo) {
+        Map<String, UndoRedoActionStack> stacks = this.projectStacks.get(projectId);
+        if (stacks == null || stacks.isEmpty() || actorKeys == null || actorKeys.isEmpty()) {
+            return null;
+        }
+        return actorKeys.stream()
+                .map(stacks::get)
+                .filter(stack -> stack != null)
+                .map(stack -> undo ? stack.selectUndo() : stack.selectRedo())
+                .filter(selection -> undo ? this.isCurrent(projectId, selection) : this.canRedo(projectId, selection))
+                .max(Comparator.comparing(selection -> selection.action().updatedAt()))
+                .orElse(null);
+    }
+
     private List<UndoRedoAction> recentActions(String projectId, int count, boolean undo) {
         if (count <= 0) {
             return List.of();
@@ -412,6 +419,29 @@ public final class UndoRedoHistoryManager {
 
     private String actorKey(String actor) {
         return actor == null || actor.isBlank() ? "player" : actor;
+    }
+
+    private List<String> actorKeys(String actor) {
+        String key = this.actorKey(actor);
+        String owner = this.ownerActor(key);
+        String player = owner.isBlank() ? key : owner;
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        keys.add(key);
+        if (!owner.isBlank()) {
+            keys.add(owner);
+        }
+        keys.add("axiom:" + player);
+        keys.add("worldedit:" + player);
+        keys.add("worldedit:" + player.toLowerCase(Locale.ROOT));
+        keys.add("fawe:" + player);
+        keys.add("fawe:" + player.toLowerCase(Locale.ROOT));
+        keys.add("external-tool:" + player);
+        return List.copyOf(keys);
+    }
+
+    private String ownerActor(String actor) {
+        int separator = actor == null ? -1 : actor.indexOf(':');
+        return separator >= 0 && separator + 1 < actor.length() ? actor.substring(separator + 1) : "";
     }
 
     public record RecentActionsSnapshot(long revision, List<UndoRedoAction> actions) {
