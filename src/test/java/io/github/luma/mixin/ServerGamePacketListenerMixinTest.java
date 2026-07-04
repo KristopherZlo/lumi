@@ -30,6 +30,27 @@ class ServerGamePacketListenerMixinTest {
     }
 
     @Test
+    void useItemOnPacketsOpenPlayerSourceForExtendedReachPlacements() throws IOException {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/mixin/ServerGamePacketListenerMixin.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertTrue(source.contains("ServerboundUseItemOnPacket"));
+        assertTrue(source.contains("method = \"handleUseItemOn\""));
+
+        int method = source.indexOf("luma$wrapUseItemOn");
+        int pushCall = source.indexOf("this.luma$pushPlayerSource();", method);
+        int vanillaCall = source.indexOf("original.call(packet);", pushCall);
+        int popCall = source.indexOf("this.luma$popPlayerSource();", vanillaCall);
+
+        assertTrue(method > 0);
+        assertTrue(pushCall > method);
+        assertTrue(vanillaCall > pushCall);
+        assertTrue(popCall > vanillaCall);
+    }
+
+    @Test
     void playerOwnedDamageSourcesCreateEntityCausalContext() throws IOException {
         String source = Files.readString(
                 Path.of("src/main/java/io/github/luma/mixin/LivingEntityCausalContextMixin.java"),
