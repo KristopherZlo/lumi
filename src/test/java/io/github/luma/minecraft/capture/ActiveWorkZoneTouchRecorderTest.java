@@ -65,4 +65,48 @@ class ActiveWorkZoneTouchRecorderTest {
                 service.load(layout).zones().getFirst().cells()
         );
     }
+
+    @Test
+    void axiomActorExpandsPlayerActiveZone() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Castle");
+        BuildProject project = BuildProject.createWorldWorkspace("Castle", "minecraft:overworld", NOW);
+        WorkZoneService service = new WorkZoneService();
+        service.createZone(layout, project.id().toString(), "Axiom Reach", "Builder", NOW);
+
+        try (WorldMutationContext.SourceFrame ignored =
+                     WorldMutationContext.pushSource(WorldMutationSource.AXIOM, "axiom:Builder", "axiom-reach", true)) {
+            new ActiveWorkZoneTouchRecorder().record(
+                    new TrackedProject(layout, project, List.of()),
+                    new BlockPos(48, 72, 16),
+                    NOW.plusSeconds(1)
+            );
+        }
+
+        assertEquals(
+                List.of(new WorkZoneCell(3, 4, 1)),
+                service.load(layout).zones().getFirst().cells()
+        );
+    }
+
+    @Test
+    void worldEditActorExpandsSingleActiveZoneWhenOwnerIsUnknown() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Castle");
+        BuildProject project = BuildProject.createWorldWorkspace("Castle", "minecraft:overworld", NOW);
+        WorkZoneService service = new WorkZoneService();
+        service.createZone(layout, project.id().toString(), "WorldEdit Paste", "Builder", NOW);
+
+        try (WorldMutationContext.SourceFrame ignored =
+                     WorldMutationContext.pushSource(WorldMutationSource.WORLDEDIT, "worldedit", "paste", true)) {
+            new ActiveWorkZoneTouchRecorder().record(
+                    new TrackedProject(layout, project, List.of()),
+                    new BlockPos(16, 80, 32),
+                    NOW.plusSeconds(1)
+            );
+        }
+
+        assertEquals(
+                List.of(new WorkZoneCell(1, 5, 2)),
+                service.load(layout).zones().getFirst().cells()
+        );
+    }
 }

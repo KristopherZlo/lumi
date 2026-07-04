@@ -59,7 +59,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 - Adds live undo/redo for recent tracked edits.
 - Keeps recovery drafts for interrupted work.
 - Lets you mark active work zones, save a zone separately, and keep unrelated pending work.
-- Lets work zones grow from causal tree growth, hide boundary boxes, delete zone metadata without deleting commits, and optionally show zone commits in global history with zone color markers.
+- Lets work zones grow from causal tree growth and supported external-tool edits, hide boundary boxes, delete zone metadata without deleting commits, and optionally show zone commits in global history with zone color markers.
 - Initializes the current world workspace after you enter a world, then captures normal Minecraft edits, keeps player-caused mob and explosion fallout in live undo/redo, plus records supported WorldEdit, FAWE, and Axiom mutation paths, including Axiom infinite reach, fast place, and bulldozer block actions, on a best-effort basis.
 
 ### Quick Start
