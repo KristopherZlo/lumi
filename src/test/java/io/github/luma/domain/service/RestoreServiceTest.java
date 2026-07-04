@@ -342,6 +342,42 @@ class RestoreServiceTest {
     }
 
     @Test
+    void directWorldRootRestoreSurvivesLegacyMissingBaselineChunk(@TempDir Path tempDir)
+            throws Throwable {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        this.patchMetaRepository.save(layout, this.patchDataRepository.writePayload(
+                layout,
+                "patch-0002",
+                "project",
+                "v0002",
+                List.of(new StoredBlockChange(
+                        new BlockPoint(-145, 64, -200),
+                        new StatePayload(state("minecraft:stone"), null),
+                        new StatePayload(state("minecraft:air"), null),
+                        true
+                )),
+                List.of()
+        ));
+        BuildProject project = BuildProject.createWorldWorkspace("project", "minecraft:overworld", NOW)
+                .withActiveVariantId("main", NOW);
+        ProjectVersion root = version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT);
+        ProjectVersion head = version("v0002", "main", "v0001", "", List.of("patch-0002"));
+        ProjectVariant activeVariant = new ProjectVariant("main", "main", "v0001", "v0002", true, NOW);
+
+        Optional<List<PreparedChunkBatch>> decoded = invokeTryDecodeDirectRestore(
+                service,
+                layout,
+                project,
+                List.of(root, head),
+                List.of(activeVariant),
+                root
+        );
+
+        assertTrue(decoded.isPresent());
+    }
+
+    @Test
     void directRestoreFiltersExcludedEntityPatchDeltas(@TempDir Path tempDir) throws Throwable {
         RestoreService service = new RestoreService();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));

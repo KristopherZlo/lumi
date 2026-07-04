@@ -1,5 +1,6 @@
 package io.github.luma.domain.service;
 
+import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChunkPoint;
@@ -24,7 +25,6 @@ final class ExactRootStateRestoreDecoder {
     private final SnapshotReader snapshotReader;
     private final RestoreChunkCollector chunkCollector;
     private final SnapshotBatchPreparer snapshotBatchPreparer;
-    private final RestoreBaselineRequirementValidator baselineRequirementValidator;
 
     ExactRootStateRestoreDecoder(
             BaselineChunkRepository baselineChunkRepository,
@@ -36,7 +36,6 @@ final class ExactRootStateRestoreDecoder {
         this.snapshotReader = snapshotReader;
         this.chunkCollector = chunkCollector;
         this.snapshotBatchPreparer = snapshotBatchPreparer;
-        this.baselineRequirementValidator = new RestoreBaselineRequirementValidator(baselineChunkRepository);
     }
 
     DecodedExactRootState decode(
@@ -149,12 +148,18 @@ final class ExactRootStateRestoreDecoder {
         if (targetVersion.versionKind() != VersionKind.WORLD_ROOT) {
             return positions;
         }
-        this.baselineRequirementValidator.requirePresent(
-                layout,
-                this.chunkCollector.chunksForPositions(positions),
-                "exact world-root restore"
-        );
-        return positions;
+        List<BlockPoint> available = positions.stream()
+                .filter(position -> position != null && this.baselineChunkRepository.contains(layout, ChunkPoint.from(position)))
+                .toList();
+        int skipped = positions.size() - available.size();
+        if (skipped > 0) {
+            LumaMod.LOGGER.warn(
+                    "Skipped exact world-root replay for {} positions in version {} because legacy baseline chunks are missing",
+                    skipped,
+                    targetVersion.id()
+            );
+        }
+        return available;
     }
 
     record DecodedExactRootState(List<PreparedChunkBatch> batches, int completedSources) {

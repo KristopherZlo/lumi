@@ -5,7 +5,6 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.storage.ProjectLayout;
-import io.github.luma.storage.repository.BaselineChunkRepository;
 import java.io.IOException;
 import java.util.List;
 
@@ -15,18 +14,9 @@ import java.util.List;
 final class ExactRootStateRestorePlanner {
 
     private final RestoreChunkCollector chunkCollector;
-    private final RestoreBaselineRequirementValidator baselineRequirementValidator;
 
     ExactRootStateRestorePlanner(RestoreChunkCollector chunkCollector) {
-        this(new BaselineChunkRepository(), chunkCollector);
-    }
-
-    ExactRootStateRestorePlanner(
-            BaselineChunkRepository baselineChunkRepository,
-            RestoreChunkCollector chunkCollector
-    ) {
         this.chunkCollector = chunkCollector;
-        this.baselineRequirementValidator = new RestoreBaselineRequirementValidator(baselineChunkRepository);
     }
 
     ExactRootStateRestorePlan plan(
@@ -43,12 +33,7 @@ final class ExactRootStateRestorePlanner {
             return ExactRootStateRestorePlan.none();
         }
         if (targetVersion.versionKind() == VersionKind.WORLD_ROOT) {
-            List<ChunkPoint> baselineChunks = this.baselineRequirementValidator.requirePresent(
-                    layout,
-                    affectedChunks,
-                    "exact world-root restore plan"
-            );
-            return ExactRootStateRestorePlan.worldRoot(baselineChunks);
+            return ExactRootStateRestorePlan.worldRoot(affectedChunks);
         }
         return ExactRootStateRestorePlan.initialSnapshot(affectedChunks);
     }

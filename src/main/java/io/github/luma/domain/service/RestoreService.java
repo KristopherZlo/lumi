@@ -114,7 +114,6 @@ public final class RestoreService {
             this.snapshotBatchPreparer
     );
     private final ExactRootStateRestorePlanner exactRootStateRestorePlanner = new ExactRootStateRestorePlanner(
-            this.baselineChunkRepository,
             this.chunkCollector
     );
     private final RootLikeRestoreChunkResolver rootLikeRestoreChunkResolver = new RootLikeRestoreChunkResolver(

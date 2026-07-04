@@ -26,7 +26,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExactRootStateRestorePlannerTest {
@@ -123,22 +122,22 @@ class ExactRootStateRestorePlannerTest {
     }
 
     @Test
-    void failsWhenAffectedWorldRootChunkHasNoBaseline(@TempDir Path tempDir) throws Exception {
+    void plansAffectedWorldRootChunksEvenWhenLegacyBaselineIsMissing(@TempDir Path tempDir) throws Exception {
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
         ChunkPoint missingChunk = new ChunkPoint(2, 0);
         ProjectVersion root = version("v0001", "", "", List.of(), VersionKind.WORLD_ROOT);
         ProjectVersion head = version("v0002", "v0001", "", List.of("patch-0002"), VersionKind.MANUAL);
         this.savePatchMetadata(layout, "patch-0002", "v0002", List.of(missingChunk));
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> this.planner.plan(
+        ExactRootStateRestorePlan plan = this.planner.plan(
                 layout,
                 root,
                 null,
                 new DirectRestorePatchPlan(List.of(head), List.of())
-        ));
+        );
 
-        assertTrue(exception.getMessage().contains("Missing baseline chunks"));
-        assertTrue(exception.getMessage().contains("2:0"));
+        assertTrue(plan.append());
+        assertEquals(List.of(missingChunk), plan.chunks());
     }
 
     private void savePatchMetadata(
