@@ -8,8 +8,12 @@ import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket;
+import net.minecraft.network.protocol.game.ServerboundContainerButtonClickPacket;
+import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
+import net.minecraft.network.protocol.game.ServerboundContainerSlotStateChangedPacket;
 import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
+import net.minecraft.network.protocol.game.ServerboundSetCreativeModeSlotPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -70,6 +74,49 @@ abstract class ServerGamePacketListenerMixin {
 
     @WrapMethod(method = "handleUseItemOn")
     private void luma$wrapUseItemOn(ServerboundUseItemOnPacket packet, Operation<Void> original) {
+        this.luma$pushPlayerSource();
+        try {
+            original.call(packet);
+        } finally {
+            this.luma$popPlayerSource();
+        }
+    }
+
+    @WrapMethod(method = "handleContainerClick")
+    private void luma$wrapContainerClick(ServerboundContainerClickPacket packet, Operation<Void> original) {
+        this.luma$pushPlayerSource();
+        try {
+            original.call(packet);
+        } finally {
+            this.luma$popPlayerSource();
+        }
+    }
+
+    @WrapMethod(method = "handleContainerButtonClick")
+    private void luma$wrapContainerButtonClick(ServerboundContainerButtonClickPacket packet, Operation<Void> original) {
+        this.luma$pushPlayerSource();
+        try {
+            original.call(packet);
+        } finally {
+            this.luma$popPlayerSource();
+        }
+    }
+
+    @WrapMethod(method = "handleContainerSlotStateChanged")
+    private void luma$wrapContainerSlotStateChanged(
+            ServerboundContainerSlotStateChangedPacket packet,
+            Operation<Void> original
+    ) {
+        this.luma$pushPlayerSource();
+        try {
+            original.call(packet);
+        } finally {
+            this.luma$popPlayerSource();
+        }
+    }
+
+    @WrapMethod(method = "handleSetCreativeModeSlot")
+    private void luma$wrapSetCreativeModeSlot(ServerboundSetCreativeModeSlotPacket packet, Operation<Void> original) {
         this.luma$pushPlayerSource();
         try {
             original.call(packet);
