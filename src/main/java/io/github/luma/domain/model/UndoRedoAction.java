@@ -20,6 +20,7 @@ public final class UndoRedoAction {
     private Instant updatedAt;
     private long version;
     private final LinkedHashMap<BlockPoint, StoredBlockChange> changes = new LinkedHashMap<>();
+    private final LinkedHashMap<BlockPoint, StatePayload> latestBlockStates = new LinkedHashMap<>();
     private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
 
     public UndoRedoAction(
@@ -51,6 +52,7 @@ public final class UndoRedoAction {
         for (StoredBlockChange change : this.changes.values()) {
             copy.changes.put(key(change), change);
         }
+        copy.latestBlockStates.putAll(this.latestBlockStates);
         copy.entityChanges.putAll(this.entityChanges);
         return copy;
     }
@@ -73,6 +75,7 @@ public final class UndoRedoAction {
             copy.changes.put(key(change), change);
             remaining -= 1;
         }
+        copy.latestBlockStates.putAll(this.latestBlockStates);
         for (var entry : this.entityChanges.entrySet()) {
             if (remaining <= 0) {
                 return copy;
@@ -90,6 +93,7 @@ public final class UndoRedoAction {
 
         StoredBlockChange before = this.changes.get(key(change));
         StoredChangeAccumulator.mergeBlockChange(this.changes, change);
+        this.latestBlockStates.put(key(change), change.newValue());
         StoredBlockChange after = this.changes.get(key(change));
         if (Objects.equals(before, after)) {
             return false;
@@ -129,6 +133,10 @@ public final class UndoRedoAction {
 
     StoredBlockChange blockChangeAt(BlockPoint pos) {
         return pos == null ? null : this.changes.get(pos);
+    }
+
+    StatePayload appliedStateAt(BlockPoint pos) {
+        return pos == null ? null : this.latestBlockStates.get(pos);
     }
 
     public List<StoredBlockChange> undoChanges() {

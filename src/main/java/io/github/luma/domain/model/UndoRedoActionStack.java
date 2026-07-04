@@ -353,6 +353,10 @@ public final class UndoRedoActionStack {
             if (!Objects.equals(action.dimensionId(), dimensionId)) {
                 continue;
             }
+            StatePayload appliedState = action.appliedStateAt(pos);
+            if (appliedState != null) {
+                return appliedState;
+            }
             StoredBlockChange existing = action.blockChangeAt(pos);
             if (existing != null) {
                 return existing.newValue();

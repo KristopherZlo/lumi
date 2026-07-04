@@ -53,6 +53,7 @@ public final class HistoryCaptureManager {
 
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final CaptureDiagnosticsLogger diagnosticsLogger = new CaptureDiagnosticsLogger();
+    private final DeferredActionFalloutGuard deferredActionFalloutGuard = DeferredActionFalloutGuard.getInstance();
     private final BlockMutationCaptureGate blockMutationGate =
             new BlockMutationCaptureGate(ELIGIBILITY, this.diagnosticsLogger);
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
@@ -124,8 +125,7 @@ public final class HistoryCaptureManager {
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
         boolean explicitRootSource = ELIGIBILITY.isExplicitRootSource(source);
-        if (level == null
-                || pos == null
+        if (level == null || pos == null || this.shouldSkipSuppressedReplay(level)
                 || !shouldCaptureMutation(source)
                 || !this.canUseMutationSource(level.getServer(), source)) {
             return;
@@ -218,7 +218,9 @@ public final class HistoryCaptureManager {
             CompoundTag newBlockEntity
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (!shouldCaptureMutation(source) || !this.canUseMutationSource(level.getServer(), source)) {
+        if (level == null || this.shouldSkipSuppressedReplay(level)
+                || !shouldCaptureMutation(source)
+                || !this.canUseMutationSource(level.getServer(), source)) {
             return;
         }
 
@@ -453,9 +455,7 @@ public final class HistoryCaptureManager {
             List<BlockChangeInput> changes
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (level == null
-                || changes == null
-                || changes.isEmpty()
+        if (level == null || changes == null || changes.isEmpty() || this.shouldSkipSuppressedReplay(level)
                 || !shouldCaptureMutation(source)
                 || !this.canUseMutationSource(level.getServer(), source)) {
             return;
@@ -698,7 +698,8 @@ public final class HistoryCaptureManager {
             Instant actionStartedAt
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (!this.canUseMutationSource(level.getServer(), source)) {
+        if (level == null || this.shouldSkipSuppressedReplay(level)
+                || !this.canUseMutationSource(level.getServer(), source)) {
             return;
         }
 
@@ -794,6 +795,7 @@ public final class HistoryCaptureManager {
             EntityPayload oldPayload,
             EntityPayload newPayload
     ) {
+        if (this.shouldSkipSuppressedReplay(level)) return;
         this.undoOnlyEntityChangeRecorder.record(level, oldPayload, newPayload, null);
     }
 
@@ -803,6 +805,7 @@ public final class HistoryCaptureManager {
             EntityPayload newPayload,
             Instant actionStartedAt
     ) {
+        if (this.shouldSkipSuppressedReplay(level)) return;
         this.undoOnlyEntityChangeRecorder.record(level, oldPayload, newPayload, actionStartedAt);
     }
 
@@ -811,6 +814,7 @@ public final class HistoryCaptureManager {
             List<EntityPayload> oldPayloads,
             Instant actionStartedAt
     ) {
+        if (this.shouldSkipSuppressedReplay(level)) return;
         this.undoOnlyEntityChangeRecorder.recordBatch(level, oldPayloads, actionStartedAt);
     }
 
@@ -1759,6 +1763,8 @@ public final class HistoryCaptureManager {
         }
         return null;
     }
+
+    private boolean shouldSkipSuppressedReplay(ServerLevel level) { return this.deferredActionFalloutGuard.shouldSuppressCurrent(level); }
 
     public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
         if (WorldMutationContext.captureSuppressed()) {

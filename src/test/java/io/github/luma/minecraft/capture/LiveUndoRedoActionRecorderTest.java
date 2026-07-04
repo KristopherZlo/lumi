@@ -70,6 +70,14 @@ class LiveUndoRedoActionRecorderTest {
     }
 
     @Test
+    void historyCaptureSkipsReplaySuppressedFalloutBeforeRecording() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/HistoryCaptureManager.java"));
+
+        assertTrue(source.contains("DeferredActionFalloutGuard"));
+        assertTrue(source.contains("shouldSkipSuppressedReplay(level)"));
+    }
+
+    @Test
     void liveRecorderDoesNotUseRelatedJoinFallback() throws IOException {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/LiveUndoRedoActionRecorder.java"));
 

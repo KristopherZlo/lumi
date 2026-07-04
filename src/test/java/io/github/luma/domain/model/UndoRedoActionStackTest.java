@@ -498,6 +498,30 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void duplicateReconciledRemovalDoesNotRestoreDestroyedTriggerBlock() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        recordChange(stack, "blast", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:air", "minecraft:redstone_block"), NOW);
+        recordChange(stack, "blast", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:tnt", "minecraft:air"), NOW.plusSeconds(1));
+        recordChange(stack, "blast", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:redstone_block", "minecraft:air"), NOW.plusSeconds(2));
+
+        recordCurrentCausalChange(stack,
+                "blast",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                change(1, "minecraft:redstone_block", "minecraft:air"),
+                NOW.plusSeconds(3)
+        );
+
+        UndoRedoAction action = stack.selectUndo().action();
+        assertEquals("minecraft:air", changeAt(action, 2).newValue().blockId());
+        assertFalse(action.redoChanges().stream().anyMatch(change -> change.pos().x() == 1));
+    }
+
+    @Test
     void staleSelectionDoesNotDropUndoHistory() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
