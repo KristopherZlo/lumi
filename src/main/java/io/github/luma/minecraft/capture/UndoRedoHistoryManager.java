@@ -28,68 +28,6 @@ public final class UndoRedoHistoryManager {
         return INSTANCE;
     }
 
-    public synchronized void recordChange(
-            String projectId,
-            String dimensionId,
-            String actionId,
-            String actor,
-            StoredBlockChange change,
-            Instant now
-    ) {
-        if (change == null || change.isNoOp()) {
-            return;
-        }
-        this.recordAction(projectId, dimensionId, actionId, actor, List.of(change), List.of(), now);
-    }
-
-    public synchronized void recordCurrentCausalChange(
-            String projectId,
-            String dimensionId,
-            String actionId,
-            String actor,
-            StoredBlockChange change,
-            Instant now
-    ) {
-        if (change == null || change.isNoOp()) {
-            return;
-        }
-        this.recordCurrentCausalAction(projectId, dimensionId, actionId, actor, List.of(change), List.of(), now);
-    }
-
-    public synchronized void recordEntityChange(
-            String projectId,
-            String dimensionId,
-            String actionId,
-            String actor,
-            StoredEntityChange change,
-            Instant now
-    ) {
-        if (change == null || change.isNoOp()) {
-            return;
-        }
-        this.recordAction(projectId, dimensionId, actionId, actor, List.of(), List.of(change), now);
-    }
-
-    public synchronized void recordDelayedEntityChange(
-            String projectId,
-            String dimensionId,
-            String actionId,
-            String actor,
-            StoredEntityChange change,
-            Instant actionStartedAt,
-            Instant now
-    ) {
-        this.recordDelayedEntityChanges(
-                projectId,
-                dimensionId,
-                actionId,
-                actor,
-                change == null ? List.of() : List.of(change),
-                actionStartedAt,
-                now
-        );
-    }
-
     public synchronized void recordDelayedEntityChanges(
             String projectId,
             String dimensionId,

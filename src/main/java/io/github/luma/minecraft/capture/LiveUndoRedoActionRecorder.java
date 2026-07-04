@@ -40,12 +40,13 @@ final class LiveUndoRedoActionRecorder {
         String actionId = WorldMutationContext.currentActionId();
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
         if (actionAllowed && !actionId.isBlank() && this.sourcePolicy.isExplicitRootSource(WorldMutationContext.currentSource())) {
-            this.historyManager.recordChange(
+            this.historyManager.recordAction(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
                     actionId,
                     WorldMutationContext.currentActor(),
-                    change,
+                    List.of(change),
+                    List.of(),
                     now
             );
             this.historyDebugLog.logLiveUndoRedoBlock(
@@ -58,12 +59,13 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
         if (actionAllowed && !actionId.isBlank()) {
-            this.historyManager.recordCurrentCausalChange(
+            this.historyManager.recordCurrentCausalAction(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
                     actionId,
                     WorldMutationContext.currentActor(),
-                    change,
+                    List.of(change),
+                    List.of(),
                     now
             );
             this.historyDebugLog.logLiveUndoRedoBlock(
@@ -142,21 +144,22 @@ final class LiveUndoRedoActionRecorder {
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
         if (actionAllowed && !actionId.isBlank() && this.sourcePolicy.isExplicitRootSource(source)) {
             if (actionStartedAt == null) {
-                this.historyManager.recordEntityChange(
+                this.historyManager.recordAction(
                         trackedProject.project().id().toString(),
                         level.dimension().identifier().toString(),
                         actionId,
                         WorldMutationContext.currentActor(),
-                        change,
+                        List.of(),
+                        List.of(change),
                         now
                 );
             } else {
-                this.historyManager.recordDelayedEntityChange(
+                this.historyManager.recordDelayedEntityChanges(
                         trackedProject.project().id().toString(),
                         level.dimension().identifier().toString(),
                         actionId,
                         WorldMutationContext.currentActor(),
-                        change,
+                        List.of(change),
                         actionStartedAt,
                         now
                 );
@@ -175,12 +178,12 @@ final class LiveUndoRedoActionRecorder {
                         now
                 );
             } else {
-                this.historyManager.recordDelayedEntityChange(
+                this.historyManager.recordDelayedEntityChanges(
                         trackedProject.project().id().toString(),
                         level.dimension().identifier().toString(),
                         actionId,
                         WorldMutationContext.currentActor(),
-                        change,
+                        List.of(change),
                         actionStartedAt,
                         now
                 );

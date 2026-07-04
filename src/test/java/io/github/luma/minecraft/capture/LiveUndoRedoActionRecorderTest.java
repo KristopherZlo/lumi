@@ -57,7 +57,7 @@ class LiveUndoRedoActionRecorderTest {
         int causalBranch = source.indexOf("if (actionAllowed && !actionId.isBlank())", entityMethod);
 
         assertTrue(source.indexOf("recordCurrentCausalAction(", causalBranch) >= 0);
-        assertTrue(source.indexOf("recordDelayedEntityChange(", causalBranch) >= 0);
+        assertTrue(source.indexOf("recordDelayedEntityChanges(", causalBranch) >= 0);
     }
 
     @Test
