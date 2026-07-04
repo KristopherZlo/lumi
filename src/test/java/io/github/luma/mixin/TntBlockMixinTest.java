@@ -73,6 +73,7 @@ class TntBlockMixinTest {
         assertTrue(source.contains("LumaLoadLog.event(\"tnt-replay\", \"activation\""));
         assertTrue(source.contains("callback=\" + callback"));
         assertTrue(source.contains("frozen=\" + frozen"));
+        assertTrue(source.contains("boolean suppressed = frozen || LUMA_REPLAY_ACTIVATION_POLICY.shouldSuppressActivation("));
         assertTrue(source.contains("luma$shouldSuppressReplayActivation(level, pos, \"onPlace\")"));
         assertTrue(source.contains("luma$shouldSuppressReplayActivation(level, pos, \"neighborChanged\")"));
         assertTrue(source.contains("luma$shouldSuppressReplayActivation(level, pos, \"wasExploded\")"));

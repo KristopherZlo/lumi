@@ -75,4 +75,18 @@ class ServerLevelEntityTickMixinTest {
         assertEquals(Boolean.TYPE, method.getReturnType());
         assertTrue(java.lang.reflect.Modifier.isPrivate(method.getModifiers()));
     }
+
+    @Test
+    void tntReplayFreezeSkipsOnlyPrimedTntEntityTicks() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelEntityTickMixin.java"));
+        int tickMethod = source.indexOf("private void luma$wrapEntityTick");
+        int freezeCheck = source.indexOf("this.luma$shouldFreezePrimedTnt(entity)", tickMethod);
+        int originalCall = source.indexOf("original.call(entity)", tickMethod);
+
+        assertTrue(source.contains("WorldReplayTickSuppression"));
+        assertTrue(freezeCheck > tickMethod);
+        assertTrue(freezeCheck < originalCall);
+        assertTrue(source.contains("entity instanceof PrimedTnt"));
+        assertTrue(source.contains("shouldFreezeWorldTick((ServerLevel) (Object) this)"));
+    }
 }

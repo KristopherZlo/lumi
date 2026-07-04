@@ -36,7 +36,6 @@
     "ScheduledTickContextMixin",
     "ServerLevelBlockEventContextMixin",
     "ServerLevelEntityTickMixin",
-    "ServerLevelTickFreezeMixin",
     "ServerLevelExplosionMixin",
     "ServerGamePacketListenerMixin",
     "ServerLevelEntityLifecycleMixin",

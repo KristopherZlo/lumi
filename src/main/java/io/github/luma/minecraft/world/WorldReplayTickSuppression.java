@@ -21,7 +21,6 @@ public final class WorldReplayTickSuppression {
 
     private final Map<ServerLevel, Long2LongLinkedOpenHashMap> protectedPositions = new IdentityHashMap<>();
     private final Map<ServerLevel, Integer> frozenWorldTicks = new IdentityHashMap<>();
-    private final Map<ServerLevel, Long> lastFrozenTickLogNanos = new IdentityHashMap<>();
 
     private WorldReplayTickSuppression() {
     }
@@ -73,7 +72,6 @@ public final class WorldReplayTickSuppression {
         Integer count = this.frozenWorldTicks.get(level);
         if (count == null || count <= 1) {
             this.frozenWorldTicks.remove(level);
-            this.lastFrozenTickLogNanos.remove(level);
             LumaLoadLog.event("tnt-replay", "freeze-release",
                     "dimension=" + level.dimension().identifier()
                             + ", time=" + level.getGameTime()
@@ -90,22 +88,6 @@ public final class WorldReplayTickSuppression {
 
     public synchronized boolean shouldFreezeWorldTick(ServerLevel level) {
         return level != null && this.frozenWorldTicks.containsKey(level);
-    }
-
-    public synchronized void logFrozenWorldTick(ServerLevel level) {
-        if (level == null || !this.frozenWorldTicks.containsKey(level)) {
-            return;
-        }
-        long now = System.nanoTime();
-        long previous = this.lastFrozenTickLogNanos.getOrDefault(level, 0L);
-        if (now - previous < 1_000_000_000L) {
-            return;
-        }
-        this.lastFrozenTickLogNanos.put(level, now);
-        LumaLoadLog.event("tnt-replay", "world-tick-cancelled",
-                "dimension=" + level.dimension().identifier()
-                        + ", time=" + level.getGameTime()
-                        + ", count=" + this.frozenWorldTicks.get(level));
     }
 
     public synchronized boolean shouldSuppress(ServerLevel level, BlockPos pos) {

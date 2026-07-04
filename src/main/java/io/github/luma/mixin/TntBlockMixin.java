@@ -164,7 +164,7 @@ abstract class TntBlockMixin {
     private static boolean luma$shouldSuppressReplayActivation(Level level, BlockPos pos, String callback) {
         boolean guarded = luma$isReplayGuarded(level, pos);
         boolean frozen = luma$isFrozen(level);
-        boolean suppressed = LUMA_REPLAY_ACTIVATION_POLICY.shouldSuppressActivation(
+        boolean suppressed = frozen || LUMA_REPLAY_ACTIVATION_POLICY.shouldSuppressActivation(
                 level.isClientSide(),
                 WorldMutationContext.currentSource(),
                 WorldMutationContext.captureSuppressed(),
