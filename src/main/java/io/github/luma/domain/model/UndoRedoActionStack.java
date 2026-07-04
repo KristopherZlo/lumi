@@ -3,6 +3,7 @@ package io.github.luma.domain.model;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
@@ -116,7 +117,9 @@ public final class UndoRedoActionStack {
     }
 
     public Selection selectUndo() {
-        UndoRedoAction action = this.undoStack.peekFirst();
+        UndoRedoAction action = this.undoStack.stream()
+                .max(Comparator.comparing(UndoRedoAction::updatedAt))
+                .orElse(null);
         return action == null ? null : new Selection(action.copy(), this.revision, action.version());
     }
 
@@ -369,10 +372,11 @@ public final class UndoRedoActionStack {
         if (selection.action() == null) {
             return false;
         }
-        UndoRedoAction current = stack.peekFirst();
-        return current != null
-                && current.id().equals(selection.action().id())
-                && current.version() == selection.actionVersion();
+        if (this.revision != selection.revision()) {
+            return false;
+        }
+        UndoRedoAction current = this.findAction(stack, selection.action().id());
+        return current != null && current.version() == selection.actionVersion();
     }
 
     private UndoRedoAction removeById(Deque<UndoRedoAction> stack, String actionId) {

@@ -327,12 +327,14 @@ public final class UndoRedoHistoryManager {
         List<UndoRedoAction> actions = new ArrayList<>();
         for (UndoRedoActionStack stack : stacks.values()) {
             actions.addAll(undo
-                    ? stack.recentUndoActionPreviews(count, maxEntriesPerAction)
-                    : stack.recentRedoActionPreviews(count, maxEntriesPerAction));
+                    ? stack.recentUndoActions(64)
+                    : stack.recentRedoActions(64));
         }
         return actions.stream()
+                .filter(action -> undo ? this.actionIsCurrent(projectId, action) : this.actionCanRedo(projectId, action))
                 .sorted(Comparator.comparing(UndoRedoAction::updatedAt).reversed())
                 .limit(count)
+                .map(action -> action.previewCopy(maxEntriesPerAction))
                 .toList();
     }
 

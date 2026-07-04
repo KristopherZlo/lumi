@@ -68,6 +68,36 @@ class UndoRedoHistoryManagerTest {
     }
 
     @Test
+    void recentUndoPreviewFiltersConflictsBeforeCappingEntries() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "recent-preview-conflict-cap-test";
+        historyManager.clearProject(projectId);
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "wide-action",
+                "Alex",
+                List.of(change(1), change(2)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "later-conflict",
+                "Steve",
+                List.of(change(2)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        UndoRedoHistoryManager.RecentActionsSnapshot snapshot =
+                historyManager.recentUndoPreviewActionsSnapshot(projectId, 10, 1);
+
+        assertEquals(List.of("later-conflict"), snapshot.actions().stream().map(action -> action.id()).toList());
+    }
+
+    @Test
     void projectRevisionAdvancesWhenSecondActorStackChanges() {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
         String projectId = "project-revision-second-actor-test";

@@ -606,7 +606,7 @@ class UndoRedoActionStackTest {
     }
 
     @Test
-    void delayedEntitySpawnDoesNotBecomeLatestUndoAction() {
+    void delayedEntitySpawnBecomesUndoTargetWhenItIsLatestWorldChange() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         String entityId = "00000000-0000-0000-0000-000000000014";
 
@@ -627,7 +627,7 @@ class UndoRedoActionStackTest {
         List<UndoRedoAction> recent = stack.recentUndoActions(3);
         assertEquals(List.of("latest-bridge", "entity-spawn", "earlier-placement"),
                 recent.stream().map(UndoRedoAction::id).toList());
-        assertEquals("latest-bridge", stack.selectUndo().action().id());
+        assertEquals("entity-spawn", stack.selectUndo().action().id());
     }
 
     @Test
