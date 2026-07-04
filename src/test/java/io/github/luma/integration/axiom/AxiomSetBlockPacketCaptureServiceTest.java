@@ -28,6 +28,19 @@ class AxiomSetBlockPacketCaptureServiceTest {
     }
 
     @Test
+    void infiniteReachPacketSourceUsesAxiomInfiniteReachActionIdentity() {
+        AxiomSetBlockPacketCaptureService service = new AxiomSetBlockPacketCaptureService(() -> ACTION_UUID);
+
+        try (WorldMutationContext.SourceFrame ignored =
+                     service.pushPacketSource(new FakeAxiomSetBlockPacket(64), null)) {
+            assertEquals(WorldMutationSource.AXIOM, WorldMutationContext.currentSource());
+            assertEquals("axiom", WorldMutationContext.currentActor());
+            assertEquals("axiom-infinite-reach-" + ACTION_UUID, WorldMutationContext.currentActionId());
+            assertTrue(WorldMutationContext.currentAccessAllowed());
+        }
+    }
+
+    @Test
     void dedicatedServerIdentityRequiresPlayerAccess() {
         AxiomSetBlockPacketCaptureService service = new AxiomSetBlockPacketCaptureService(() -> ACTION_UUID);
 
@@ -58,5 +71,14 @@ class AxiomSetBlockPacketCaptureServiceTest {
                 service.sourceIdentity(" ", false, true);
 
         assertEquals("axiom", identity.actor());
+    }
+
+    private static final class FakeAxiomSetBlockPacket {
+
+        private final int reason;
+
+        private FakeAxiomSetBlockPacket(int reason) {
+            this.reason = reason;
+        }
     }
 }

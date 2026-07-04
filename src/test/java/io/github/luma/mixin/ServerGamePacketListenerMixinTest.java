@@ -51,6 +51,37 @@ class ServerGamePacketListenerMixinTest {
     }
 
     @Test
+    void playerActionPacketsOpenPlayerSourceForAxiomBulldozerBreaks() throws IOException {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/mixin/ServerGamePacketListenerMixin.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertTrue(source.contains("ServerboundPlayerActionPacket"));
+        assertTrue(source.contains("method = \"handlePlayerAction\""));
+
+        int method = source.indexOf("luma$wrapPlayerAction");
+        int pushCall = source.indexOf("this.luma$pushPlayerSource();", method);
+        int vanillaCall = source.indexOf("original.call(packet);", pushCall);
+        int popCall = source.indexOf("this.luma$popPlayerSource();", vanillaCall);
+
+        assertTrue(method > 0);
+        assertTrue(pushCall > method);
+        assertTrue(vanillaCall > pushCall);
+        assertTrue(popCall > vanillaCall);
+    }
+
+    @Test
+    void axiomSetBlockPacketSourceReceivesPacketForReasonAwareActions() throws IOException {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/mixin/AxiomSetBlockPacketMixin.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertTrue(source.contains("pushPacketSource(this, player)"));
+    }
+
+    @Test
     void playerOwnedDamageSourcesCreateEntityCausalContext() throws IOException {
         String source = Files.readString(
                 Path.of("src/main/java/io/github/luma/mixin/LivingEntityCausalContextMixin.java"),

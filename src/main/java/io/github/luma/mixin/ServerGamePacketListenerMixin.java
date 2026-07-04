@@ -9,6 +9,7 @@ import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket;
 import net.minecraft.network.protocol.game.ServerboundInteractPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -49,6 +50,16 @@ abstract class ServerGamePacketListenerMixin {
 
     @WrapMethod(method = "handleInteract")
     private void luma$wrapInteract(ServerboundInteractPacket packet, Operation<Void> original) {
+        this.luma$pushPlayerSource();
+        try {
+            original.call(packet);
+        } finally {
+            this.luma$popPlayerSource();
+        }
+    }
+
+    @WrapMethod(method = "handlePlayerAction")
+    private void luma$wrapPlayerAction(ServerboundPlayerActionPacket packet, Operation<Void> original) {
         this.luma$pushPlayerSource();
         try {
             original.call(packet);

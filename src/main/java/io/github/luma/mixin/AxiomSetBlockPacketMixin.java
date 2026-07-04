@@ -33,7 +33,7 @@ abstract class AxiomSetBlockPacketMixin {
             }
 
             try (WorldMutationContext.SourceFrame ignored =
-                         AxiomSetBlockPacketCaptureService.getInstance().pushPacketSource(player)) {
+                         AxiomSetBlockPacketCaptureService.getInstance().pushPacketSource(this, player)) {
                 original.call(server, player);
             }
         } finally {
