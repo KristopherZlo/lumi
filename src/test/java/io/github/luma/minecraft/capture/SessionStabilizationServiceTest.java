@@ -612,6 +612,57 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void deferredActionPayloadExcludesStartingDraftChangesInSameChunk() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        StoredBlockChange oldFloorCut = new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:sandstone"),
+                payload("minecraft:air")
+        );
+        StoredBlockChange directWater = new StoredBlockChange(
+                new BlockPoint(2, 64, 1),
+                payload("minecraft:air"),
+                payload("minecraft:water")
+        );
+
+        List<StoredBlockChange> actionChanges = service.reconciliationActionChanges(
+                List.of(oldFloorCut),
+                List.of(directWater),
+                List.of(oldFloorCut, directWater),
+                Map.of(new ChunkPoint(0, 0),
+                        new CaptureSessionState.DeferredActionContext("release-water", "Alex", true))
+        );
+
+        assertTrue(actionChanges.isEmpty());
+    }
+
+    @Test
+    void hiddenDeferredActionPayloadExcludesVisibleStartingDraftChangesInSameChunk() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        StoredBlockChange oldFloorCut = new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:sandstone"),
+                payload("minecraft:air")
+        );
+        StoredBlockChange floodedRedstone = new StoredBlockChange(
+                new BlockPoint(2, 64, 1),
+                payload("minecraft:redstone_wire"),
+                payload("minecraft:water"),
+                true
+        );
+
+        List<StoredBlockChange> actionChanges = service.reconciliationActionChanges(
+                List.of(oldFloorCut),
+                List.of(floodedRedstone),
+                List.of(oldFloorCut, floodedRedstone),
+                Map.of(new ChunkPoint(0, 0),
+                        new CaptureSessionState.DeferredActionContext("release-water", "Alex", true, true))
+        );
+
+        assertEquals(List.of(floodedRedstone), actionChanges);
+    }
+
+    @Test
     void reconciliationRelatedDeltasExcludeAlreadyTrackedDirectChanges() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange directPlacement = new StoredBlockChange(

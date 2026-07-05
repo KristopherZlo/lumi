@@ -95,6 +95,7 @@ public final class SessionStabilizationService {
                     capturedChunks.captured()
             );
             List<StoredBlockChange> actionChanges = this.reconciliationActionChanges(
+                    startingChanges,
                     currentChanges,
                     composedChanges,
                     deferredActionContexts
@@ -513,6 +514,20 @@ public final class SessionStabilizationService {
         return this.hiddenDeferredReconciliationActionChanges(currentChanges, composedChanges);
     }
 
+    List<StoredBlockChange> reconciliationActionChanges(
+            List<StoredBlockChange> startingChanges,
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> composedChanges,
+            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
+    ) {
+        List<StoredBlockChange> draftBeforeReconciliation = composeChanges(startingChanges, currentChanges);
+        return this.reconciliationActionChanges(
+                draftBeforeReconciliation,
+                composedChanges,
+                deferredActionContexts
+        );
+    }
+
     private List<StoredBlockChange> hiddenDeferredReconciliationActionChanges(
             List<StoredBlockChange> currentChanges,
             List<StoredBlockChange> composedChanges
@@ -538,7 +553,11 @@ public final class SessionStabilizationService {
                 changes.add(actionChange);
                 continue;
             }
-            if (currentChange != null && currentChange.equals(composedChange)) {
+            if (currentChange != null
+                    && currentChange.hidden()
+                    && composedChange != null
+                    && composedChange.hidden()
+                    && currentChange.equals(composedChange)) {
                 changes.add(composedChange);
             }
         }
