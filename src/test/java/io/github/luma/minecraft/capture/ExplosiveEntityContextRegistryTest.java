@@ -115,6 +115,26 @@ class ExplosiveEntityContextRegistryTest {
     }
 
     @Test
+    void explosiveContextRoundTripsThroughDeferredCarrierContext() {
+        ExplosiveEntityContextRegistry.ExplosiveContext context =
+                new ExplosiveEntityContextRegistry.ExplosiveContext(
+                        WorldMutationSource.EXPLOSIVE,
+                        "builder",
+                        "action-1",
+                        true,
+                        System.currentTimeMillis()
+                );
+
+        ExplosiveEntityContextRegistry.ExplosiveContext roundTripped =
+                ExplosiveEntityContextRegistry.ExplosiveContext.fromDeferred(context.toDeferred());
+
+        assertEquals(WorldMutationSource.EXPLOSIVE, roundTripped.source());
+        assertEquals("builder", roundTripped.actor());
+        assertEquals("action-1", roundTripped.actionId());
+        assertTrue(roundTripped.accessAllowed());
+    }
+
+    @Test
     void logsExplosiveContextLifecycleForTntDiagnostics() throws Exception {
         String source = Files.readString(
                 Path.of("src/main/java/io/github/luma/minecraft/capture/ExplosiveEntityContextRegistry.java")

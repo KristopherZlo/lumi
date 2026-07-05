@@ -48,6 +48,43 @@ class BlockChangeApplierSafetyTest {
     }
 
     @Test
+    void replayClearsQueuedTicksAndBlockEventsForRestoredPositions() throws IOException {
+        String cleaner = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/world/ReplayQueuedTickCleaner.java"),
+                StandardCharsets.UTF_8
+        );
+        String applier = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/world/BlockChangeApplier.java"),
+                StandardCharsets.UTF_8
+        );
+        String directSection = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/world/DirectSectionBlockCommitStrategy.java"),
+                StandardCharsets.UTF_8
+        );
+        String sectionNative = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/world/SectionNativeBlockCommitStrategy.java"),
+                StandardCharsets.UTF_8
+        );
+        String directChunk = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/world/DirectChunkBlockCommitStrategy.java"),
+                StandardCharsets.UTF_8
+        );
+        String exactPlacement = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/world/MinecraftExactReplayPlacementApplier.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertTrue(cleaner.contains("level.clearBlockEvents(box);"));
+        assertTrue(cleaner.contains("level.getBlockTicks().clearArea(box);"));
+        assertTrue(cleaner.contains("level.getFluidTicks().clearArea(box);"));
+        assertTrue(applier.contains("ReplayQueuedTickCleaner.clear(level, pos);"));
+        assertTrue(directSection.contains("ReplayQueuedTickCleaner.clear(level, pos);"));
+        assertTrue(sectionNative.contains("ReplayQueuedTickCleaner.clear(level, mutablePos);"));
+        assertTrue(directChunk.contains("ReplayQueuedTickCleaner.clear(level, mutablePos);"));
+        assertTrue(exactPlacement.contains("ReplayQueuedTickCleaner.clear(level, pos);"));
+    }
+
+    @Test
     void blockEntityTailExceptionCountsAsProcessedAndRecordsFailure() {
         WorldApplyMetrics metrics = new WorldApplyMetrics();
         CompoundTag blockEntity = new CompoundTag();

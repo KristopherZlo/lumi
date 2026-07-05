@@ -258,6 +258,7 @@ final class DirectChunkBlockCommitStrategy {
             level.updatePOIOnBlockStateChange(mutablePos, currentState, targetState);
         }
         section.setBlockState(localX, localY, localZ, targetState, false);
+        ReplayQueuedTickCleaner.clear(level, mutablePos);
         heightmapPlan.record(sectionY, SectionChangeMask.localIndex(localX, localY, localZ));
         this.lightUpdatePlanner.plan(lightBatch, mutablePos, currentState, targetState);
         this.redstoneUpdatePlanner.propagate(level, mutablePos, currentState, targetState);

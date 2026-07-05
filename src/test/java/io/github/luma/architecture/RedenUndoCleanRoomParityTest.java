@@ -19,8 +19,10 @@ class RedenUndoCleanRoomParityTest {
         assertTrue(mixins.contains("\"BlockEventDataContextMixin\""));
         assertTrue(mixins.contains("\"PistonMovingBlockEntityContextMixin\""));
         assertTrue(mixins.contains("\"MovingPistonBlockTickerMixin\""));
+        assertTrue(mixins.contains("\"PrimedTntCausalContextMixin\""));
         assertTrue(mixins.contains("\"TntBlockMixin\""));
         assertTrue(mixins.contains("\"ServerLevelEntityTickMixin\""));
+        assertTrue(mixins.contains("\"ServerExplosionContextMixin\""));
         assertTrue(mixins.contains("\"ServerLevelExplosionMixin\""));
         assertTrue(mixins.contains("\"LevelExplosionMixin\""));
         assertTrue(mixins.contains("\"ProjectileCausalContextMixin\""));

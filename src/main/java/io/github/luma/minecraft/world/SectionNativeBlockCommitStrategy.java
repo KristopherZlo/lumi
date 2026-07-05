@@ -194,6 +194,7 @@ final class SectionNativeBlockCommitStrategy {
             level.removeBlockEntity(mutablePos);
         }
         section.setBlockState(localX, localY, localZ, targetState, false);
+        ReplayQueuedTickCleaner.clear(level, mutablePos);
         this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, targetState);
         this.poiUpdatePlanner.update(level, mutablePos, currentState, targetState);
         this.lightUpdatePlanner.plan(lightBatch, mutablePos, currentState, targetState);
@@ -235,6 +236,7 @@ final class SectionNativeBlockCommitStrategy {
             level.removeBlockEntity(mutablePos);
         }
         section.setBlockState(localX, localY, localZ, targetState, false);
+        ReplayQueuedTickCleaner.clear(level, mutablePos);
         this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, targetState);
         this.poiUpdatePlanner.update(level, mutablePos, currentState, targetState);
         this.lightUpdatePlanner.plan(cursor.lightBatch(), mutablePos, currentState, targetState);

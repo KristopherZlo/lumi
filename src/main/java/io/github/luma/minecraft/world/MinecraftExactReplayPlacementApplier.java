@@ -40,6 +40,7 @@ final class MinecraftExactReplayPlacementApplier implements ExactReplayPlacement
 
         level.removeBlockEntity(pos);
         level.setBlock(pos, targetState, this.updatePolicy.placementFlags(targetState));
+        ReplayQueuedTickCleaner.clear(level, pos);
         if (targetBlockEntityTag != null) {
             BlockEntity blockEntity = BlockEntity.loadStatic(
                     pos,

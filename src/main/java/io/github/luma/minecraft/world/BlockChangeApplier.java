@@ -345,6 +345,7 @@ public final class BlockChangeApplier {
 
         level.removeBlockEntity(pos);
         level.setBlock(pos, state, UPDATE_POLICY.placementFlags(state));
+        ReplayQueuedTickCleaner.clear(level, pos);
         REDSTONE_UPDATE_PLANNER.propagate(level, pos, currentState, state);
 
         if (blockEntityTag != null) {
@@ -376,6 +377,7 @@ public final class BlockChangeApplier {
 
         level.removeBlockEntity(pos);
         level.setBlock(pos, state, UPDATE_POLICY.placementFlags(state));
+        ReplayQueuedTickCleaner.clear(level, pos);
         REDSTONE_UPDATE_PLANNER.propagate(level, pos, currentState, state);
         return true;
     }

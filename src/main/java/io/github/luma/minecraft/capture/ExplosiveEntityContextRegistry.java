@@ -58,6 +58,10 @@ public final class ExplosiveEntityContextRegistry {
         if (!(entity instanceof PrimedTnt)) {
             return Optional.empty();
         }
+        Optional<ExplosiveContext> carrierContext = this.carrierContext(entity);
+        if (carrierContext.isPresent()) {
+            return carrierContext;
+        }
         this.pruneExpiredContexts();
         synchronized (this.contexts) {
             return Optional.ofNullable(this.contexts.get(entity.getUUID()));
@@ -105,6 +109,7 @@ public final class ExplosiveEntityContextRegistry {
         if (!(entity instanceof PrimedTnt) || context == null) {
             return;
         }
+        this.rememberCarrier(entity, context);
         this.remember(entity.getUUID(), context);
     }
 
@@ -133,6 +138,28 @@ public final class ExplosiveEntityContextRegistry {
                         + ", action=" + (context == null ? "<none>" : context.actionId())
                         + ", actor=" + (context == null ? "<none>" : context.actor())
                         + ", source=" + (context == null ? "<none>" : context.source()));
+    }
+
+    private Optional<ExplosiveContext> carrierContext(Entity entity) {
+        if (!(entity instanceof DeferredWorldMutationContextAccess access)) {
+            return Optional.empty();
+        }
+        DeferredWorldMutationContext context = access.luma$deferredMutationContext();
+        if (context == null || !context.hasAction()) {
+            return Optional.empty();
+        }
+        return Optional.of(ExplosiveContext.fromDeferred(context));
+    }
+
+    private void rememberCarrier(Entity entity, ExplosiveContext context) {
+        if (!(entity instanceof DeferredWorldMutationContextAccess access)) {
+            return;
+        }
+        DeferredWorldMutationContext existing = access.luma$deferredMutationContext();
+        if (existing != null && existing.hasAction()) {
+            return;
+        }
+        access.luma$setDeferredMutationContext(context.toDeferred());
     }
 
     private void pruneExpiredContexts() {
@@ -183,6 +210,26 @@ public final class ExplosiveEntityContextRegistry {
                     context.accessAllowed(),
                     System.currentTimeMillis()
             ));
+        }
+
+        static ExplosiveContext fromDeferred(DeferredWorldMutationContext context) {
+            return new ExplosiveContext(
+                    WorldMutationSource.EXPLOSIVE,
+                    context.actor(),
+                    context.actionId(),
+                    context.accessAllowed(),
+                    System.currentTimeMillis()
+            );
+        }
+
+        DeferredWorldMutationContext toDeferred() {
+            return new DeferredWorldMutationContext(
+                    this.source,
+                    this.actor,
+                    this.actionId,
+                    this.accessAllowed,
+                    0
+            );
         }
 
         void push() {

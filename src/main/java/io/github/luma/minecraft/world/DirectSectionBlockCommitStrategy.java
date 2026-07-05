@@ -78,6 +78,7 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
 
             level.removeBlockEntity(pos);
             section.setBlockState(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, targetState, false);
+            ReplayQueuedTickCleaner.clear(level, pos);
             this.updateHeightmaps(chunk, pos, targetState);
             level.updatePOIOnBlockStateChange(pos, currentState, targetState);
             this.lightUpdatePlanner.plan(lightBatch, pos, currentState, targetState);
