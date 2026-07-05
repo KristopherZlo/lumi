@@ -37,7 +37,8 @@ public final class EntityMutationCapturePolicy {
             WorldMutationSource.ENTITY,
             WorldMutationSource.EXPLOSION,
             WorldMutationSource.MOB,
-            WorldMutationSource.EXPLOSIVE
+            WorldMutationSource.EXPLOSIVE,
+            WorldMutationSource.FALLING_BLOCK
     );
     private static final Set<WorldMutationSource> UNDO_ONLY_TRANSIENT_ENTITY_STATE_SOURCES = EnumSet.of(
             WorldMutationSource.PLAYER

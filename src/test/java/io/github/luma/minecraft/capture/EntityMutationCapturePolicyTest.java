@@ -190,6 +190,18 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
+    void fallingBlockEntitySpawnIsUndoOnly() {
+        EntityPayload fallingBlock = entity(
+                "minecraft:falling_block",
+                "00000000-0000-0000-0000-000000000058",
+                1.0D
+        );
+
+        assertFalse(this.policy.capture(WorldMutationSource.FALLING_BLOCK, null, fallingBlock).isPresent());
+        assertTrue(this.policy.captureUndoOnly(WorldMutationSource.FALLING_BLOCK, null, fallingBlock).isPresent());
+    }
+
+    @Test
     void blockUpdateInspectionSkipsTransientEntitiesForDurableHistory() {
         assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.BLOCK_UPDATE, "minecraft:minecart"));
         assertFalse(this.policy.shouldInspectMutation(WorldMutationSource.BLOCK_UPDATE, "minecraft:chest_minecart"));
