@@ -108,7 +108,9 @@ public final class EntityMutationCapturePolicy {
         }
         if (source == WorldMutationSource.PLAYER
                 || source == WorldMutationSource.ENTITY
-                || source == WorldMutationSource.EXPLOSIVE) {
+                || source == WorldMutationSource.EXPLOSIVE
+                || source == WorldMutationSource.EXPLOSION
+                || source == WorldMutationSource.MOB) {
             return this.placedEntityHistoryPolicy.shouldPersist(entityType);
         }
         if (source == WorldMutationSource.EXTERNAL_TOOL

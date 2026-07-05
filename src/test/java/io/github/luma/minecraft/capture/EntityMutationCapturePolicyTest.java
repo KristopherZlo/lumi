@@ -151,6 +151,23 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
+    void playerCausedFalloutPlacedEntityRemovalStaysDurable() {
+        for (WorldMutationSource source : new WorldMutationSource[]{WorldMutationSource.EXPLOSION, WorldMutationSource.MOB}) {
+            EntityPayload stand = entity(
+                    "minecraft:armor_stand",
+                    "00000000-0000-0000-0000-000000000059",
+                    1.0D
+            );
+
+            var captured = this.policy.capture(source, stand, null);
+
+            assertTrue(captured.isPresent(), source.name());
+            assertEquals("minecraft:armor_stand", captured.get().entityType());
+            assertFalse(this.policy.captureUndoOnly(source, stand, null).isPresent(), source.name());
+        }
+    }
+
+    @Test
     void systemSourceDoesNotCaptureChunkLoadNoise() {
         assertFalse(this.policy.capture(
                 WorldMutationSource.SYSTEM,
