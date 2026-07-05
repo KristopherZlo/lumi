@@ -358,7 +358,7 @@ public final class VersionService {
             throw new IllegalArgumentException("No pending tracked changes for active work zone");
         }
         if (!split.remainder().isEmpty()) {
-            // ponytail: one full-draft write protects out-of-zone edits if zone-save isolation is interrupted.
+            // ponytail: one full-draft write protects out-of-zone edits; revisit if zone-save draft writes show in load logs.
             this.recoveryRepository.saveDraft(layout, draft);
         }
 
