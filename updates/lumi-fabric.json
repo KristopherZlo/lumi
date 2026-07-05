@@ -3,18 +3,18 @@
   "modId": "lumi",
   "versions": [
     {
-      "version": "0.1.0-alpha.2",
-      "versionCode": 100002,
+      "version": "0.1.0-alpha.3",
+      "versionCode": 100003,
       "minecraftVersions": [
         "1.21.11"
       ],
       "loader": "fabric",
       "channel": "alpha",
-      "title": "Lumi alpha 0.1.0-alpha.2",
-      "summary": "Alpha 0.1.0-alpha.2 changes:\nStartup update checks run without local override flags.\nWorld chat shows one clickable update notice per version.\nBuild History opens the updater as a modal dialog.\nRestore confirmations are moving to modal dialogs over the current screen.",
-      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.2",
-      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.2",
-      "sha256": "1BFC8743A3D92AB6CA4011BDEA28C553169AB36D05384A9B9D643D790415ADA7"
+      "title": "Lumi alpha 0.1.0-alpha.3",
+      "summary": "Alpha 0.1.0-alpha.3 changes:\nImproved live undo/redo ownership for TNT, explosions, redstone, and mob fallout.\nPrevented replay-restored TNT from re-igniting through stale queued callbacks.\nAdded player-scoped undo/redo selection, native-tool verification, and queued shortcut handling.\nImproved overlay performance, restore reliability, and localized UI coverage.",
+      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.3",
+      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.3",
+      "sha256": "54484E9A25B6AF1D10CF2A400C97A3E524553122BAC49BB838A1B54BA99C4551"
     }
   ]
 }
