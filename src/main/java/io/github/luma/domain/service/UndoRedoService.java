@@ -14,6 +14,7 @@ import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
 import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
+import io.github.luma.minecraft.capture.EntitySnapshotService;
 import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
@@ -27,9 +28,15 @@ import io.github.luma.minecraft.world.WorldChangeBatchPreparer;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.PrimedTnt;
 
 /**
  * Starts prepared world operations for live undo and redo actions.
@@ -46,6 +53,7 @@ public final class UndoRedoService {
     private final ExplosiveEntityContextRegistry explosiveContexts = ExplosiveEntityContextRegistry.getInstance();
     private final DeferredActionFalloutGuard deferredActionFalloutGuard = DeferredActionFalloutGuard.getInstance();
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
+    private final EntitySnapshotService entitySnapshotService = new EntitySnapshotService();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
 
@@ -54,6 +62,10 @@ public final class UndoRedoService {
     }
 
     public OperationHandle undo(ServerLevel level, String projectName, String actor) throws IOException {
+        return this.runOnServerThread(level, () -> this.undoOnServerThread(level, projectName, actor));
+    }
+
+    private OperationHandle undoOnServerThread(ServerLevel level, String projectName, String actor) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
         EntityMutationTracker.drainPendingSpawns(level.getServer());
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
@@ -70,7 +82,6 @@ public final class UndoRedoService {
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to undo");
         }
-        this.ensureStabilizationReady(level, project, selection.action());
         FreezeDecision freezeDecision = this.freezeDecision(selection.action());
         return this.startOperation(level, project, selection, Direction.UNDO, freezeDecision);
     }
@@ -80,6 +91,10 @@ public final class UndoRedoService {
     }
 
     public OperationHandle redo(ServerLevel level, String projectName, String actor) throws IOException {
+        return this.runOnServerThread(level, () -> this.redoOnServerThread(level, projectName, actor));
+    }
+
+    private OperationHandle redoOnServerThread(ServerLevel level, String projectName, String actor) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
         EntityMutationTracker.drainPendingSpawns(level.getServer());
         this.captureManager.drainUndoRedoStabilization(level.getServer(), project.id().toString());
@@ -96,7 +111,6 @@ public final class UndoRedoService {
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to redo");
         }
-        this.ensureStabilizationReady(level, project, selection.action());
         FreezeDecision freezeDecision = this.freezeDecision(selection.action());
         return this.startOperation(level, project, selection, Direction.REDO, freezeDecision);
     }
@@ -104,13 +118,6 @@ public final class UndoRedoService {
     private void ensureStabilizationReady(ServerLevel level, BuildProject project) throws IOException {
         if (this.captureManager.hasPendingUndoRedoStabilization(level.getServer(), project.id().toString())) {
             throw new IllegalStateException("Redstone or piston fallout is still settling; try undo/redo again in a moment");
-        }
-    }
-
-    private void ensureStabilizationReady(ServerLevel level, BuildProject project, UndoRedoAction action) throws IOException {
-        this.ensureStabilizationReady(level, project);
-        if (action != null && this.explosiveContexts.hasActiveContextForAction(action.id())) {
-            throw new IllegalStateException("TNT fallout is still settling; try undo/redo again in a moment");
         }
     }
 
@@ -125,9 +132,13 @@ public final class UndoRedoService {
         List<StoredBlockChange> targetChanges = direction == Direction.UNDO
                 ? action.undoChanges()
                 : action.redoChanges();
-        List<StoredEntityChange> targetEntityChanges = direction == Direction.UNDO
+        List<StoredEntityChange> selectedTargetEntityChanges = direction == Direction.UNDO
                 ? action.undoEntityChanges()
                 : action.redoEntityChanges();
+        if (direction == Direction.UNDO) {
+            selectedTargetEntityChanges = this.withActiveExplosiveInterruptions(level, action, selectedTargetEntityChanges);
+        }
+        List<StoredEntityChange> targetEntityChanges = selectedTargetEntityChanges;
         List<StoredBlockChange> pendingAdjustments = direction == Direction.UNDO
                 ? action.inverseChanges()
                 : action.redoChanges();
@@ -224,6 +235,48 @@ public final class UndoRedoService {
         );
     }
 
+    private List<StoredEntityChange> withActiveExplosiveInterruptions(
+            ServerLevel level,
+            UndoRedoAction action,
+            List<StoredEntityChange> targetEntityChanges
+    ) {
+        List<StoredEntityChange> existingChanges = targetEntityChanges == null ? List.of() : targetEntityChanges;
+        if (level == null || action == null) {
+            return existingChanges;
+        }
+        List<UUID> activeEntityIds = this.explosiveContexts.activeEntityIdsForAction(action.id());
+        if (activeEntityIds.isEmpty()) {
+            return existingChanges;
+        }
+
+        Set<String> alreadyTargeted = new LinkedHashSet<>();
+        for (StoredEntityChange change : existingChanges) {
+            if (change != null && change.entityId() != null && !change.entityId().isBlank()) {
+                alreadyTargeted.add(change.entityId());
+            }
+        }
+
+        List<StoredEntityChange> augmented = new ArrayList<>(existingChanges);
+        for (UUID entityId : activeEntityIds) {
+            String id = entityId.toString();
+            if (alreadyTargeted.contains(id)) {
+                continue;
+            }
+            Entity entity = level.getEntity(entityId);
+            if (!(entity instanceof PrimedTnt)) {
+                this.explosiveContexts.forget(entityId);
+                continue;
+            }
+            EntityPayload payload = this.entitySnapshotService.capture(level, entity);
+            if (payload == null) {
+                continue;
+            }
+            augmented.add(new StoredEntityChange(id, PRIMED_TNT_ENTITY_TYPE, null, payload));
+            alreadyTargeted.add(id);
+        }
+        return List.copyOf(augmented);
+    }
+
     private boolean completeHistory(
             String projectId,
             UndoRedoActionStack.Selection selection,
@@ -232,6 +285,38 @@ public final class UndoRedoService {
         return direction == Direction.UNDO
                 ? this.historyManager.completeUndo(projectId, selection)
                 : this.historyManager.completeRedo(projectId, selection);
+    }
+
+    private OperationHandle runOnServerThread(ServerLevel level, OperationTask task) throws IOException {
+        if (level == null || level.getServer() == null || level.getServer().isSameThread()) {
+            return task.run();
+        }
+        try {
+            return level.getServer().submit(() -> {
+                try {
+                    return task.run();
+                } catch (IOException exception) {
+                    throw new CompletionException(exception);
+                }
+            }).join();
+        } catch (CompletionException exception) {
+            Throwable cause = this.unwrapCompletion(exception);
+            if (cause instanceof IOException ioException) {
+                throw ioException;
+            }
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw exception;
+        }
+    }
+
+    private Throwable unwrapCompletion(Throwable throwable) {
+        Throwable current = throwable;
+        while (current instanceof CompletionException && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private void rollbackHistoryCompletion(
@@ -340,5 +425,10 @@ public final class UndoRedoService {
     }
 
     private record FreezeDecision(boolean freeze, String reason, int activeContextCount) {
+    }
+
+    @FunctionalInterface
+    private interface OperationTask {
+        OperationHandle run() throws IOException;
     }
 }

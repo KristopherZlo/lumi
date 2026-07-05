@@ -3,8 +3,10 @@ package io.github.luma.minecraft.capture;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.debug.LumaLoadLog;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -81,14 +83,19 @@ public final class ExplosiveEntityContextRegistry {
         return this.activeContextCount() > 0;
     }
 
-    public boolean hasActiveContextForAction(String actionId) {
+    public List<UUID> activeEntityIdsForAction(String actionId) {
         if (actionId == null || actionId.isBlank()) {
-            return false;
+            return List.of();
         }
         this.pruneExpiredContexts();
         synchronized (this.contexts) {
-            return this.contexts.values().stream()
-                    .anyMatch(context -> actionId.equals(context.actionId()));
+            List<UUID> entityIds = new ArrayList<>();
+            for (Map.Entry<UUID, ExplosiveContext> entry : this.contexts.entrySet()) {
+                if (actionId.equals(entry.getValue().actionId())) {
+                    entityIds.add(entry.getKey());
+                }
+            }
+            return List.copyOf(entityIds);
         }
     }
 
@@ -106,7 +113,7 @@ public final class ExplosiveEntityContextRegistry {
         this.forget(entity.getUUID());
     }
 
-    void forget(UUID entityId) {
+    public void forget(UUID entityId) {
         if (entityId == null) {
             return;
         }

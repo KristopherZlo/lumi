@@ -60,7 +60,7 @@ class UndoRedoServiceDiagnosticsTest {
     }
 
     @Test
-    void undoRedoWaitsForActiveExplosiveContextsBeforeReplay() throws Exception {
+    void undoRedoInterruptsActiveExplosiveContextsInsteadOfWaiting() throws Exception {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/UndoRedoService.java"));
 
         int undoMethod = source.indexOf("public OperationHandle undo(ServerLevel level, String projectName, String actor)");
@@ -69,16 +69,14 @@ class UndoRedoServiceDiagnosticsTest {
         int redoFreezeIndex = source.indexOf("FreezeDecision freezeDecision = this.freezeDecision(selection.action())", redoMethod);
         int undoUnavailableIndex = source.indexOf("throw new IllegalArgumentException(\"No Lumi action is available to undo\")", undoMethod);
         int redoUnavailableIndex = source.indexOf("throw new IllegalArgumentException(\"No Lumi action is available to redo\")", redoMethod);
-        int undoStabilizationIndex = source.indexOf("this.ensureStabilizationReady(level, project, selection.action())", undoMethod);
-        int redoStabilizationIndex = source.indexOf("this.ensureStabilizationReady(level, project, selection.action())", redoMethod);
 
         assertTrue(source.contains("ExplosiveEntityContextRegistry"));
-        assertTrue(source.contains("hasActiveContextForAction(action.id())"));
-        assertTrue(source.contains("TNT fallout is still settling"));
-        assertTrue(undoStabilizationIndex > undoUnavailableIndex);
-        assertTrue(redoStabilizationIndex > redoUnavailableIndex);
-        assertTrue(undoStabilizationIndex < undoFreezeIndex);
-        assertTrue(redoStabilizationIndex < redoFreezeIndex);
+        assertTrue(source.contains("runOnServerThread(level, () -> this.undoOnServerThread"));
+        assertTrue(source.contains("runOnServerThread(level, () -> this.redoOnServerThread"));
+        assertTrue(source.contains("withActiveExplosiveInterruptions(level, action, selectedTargetEntityChanges)"));
+        assertTrue(source.contains("activeEntityIdsForAction(action.id())"));
+        assertFalse(source.contains("TNT fallout is still settling"));
+        assertFalse(source.contains("ensureStabilizationReady(level, project, selection.action())"));
         assertTrue(undoFreezeIndex >= 0);
         assertTrue(redoFreezeIndex >= 0);
         assertTrue(undoFreezeIndex > undoUnavailableIndex);

@@ -4,6 +4,7 @@ import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -177,7 +178,8 @@ class ExplosiveEntityContextRegistryTest {
     @Test
     void reportsActiveContextForSelectedActionOnly() {
         ExplosiveEntityContextRegistry registry = new ExplosiveEntityContextRegistry();
-        registry.remember(UUID.randomUUID(), new ExplosiveEntityContextRegistry.ExplosiveContext(
+        UUID actionEntityId = UUID.randomUUID();
+        registry.remember(actionEntityId, new ExplosiveEntityContextRegistry.ExplosiveContext(
                 WorldMutationSource.EXPLOSIVE,
                 "builder",
                 "action-1",
@@ -185,8 +187,8 @@ class ExplosiveEntityContextRegistryTest {
                 System.currentTimeMillis()
         ));
 
-        assertTrue(registry.hasActiveContextForAction("action-1"));
-        assertFalse(registry.hasActiveContextForAction("action-2"));
-        assertFalse(registry.hasActiveContextForAction(""));
+        assertEquals(List.of(actionEntityId), registry.activeEntityIdsForAction("action-1"));
+        assertTrue(registry.activeEntityIdsForAction("action-2").isEmpty());
+        assertTrue(registry.activeEntityIdsForAction("").isEmpty());
     }
 }

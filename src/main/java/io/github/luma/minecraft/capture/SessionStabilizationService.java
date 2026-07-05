@@ -510,7 +510,39 @@ public final class SessionStabilizationService {
         if (!hasHiddenDeferredAction(deferredActionContexts)) {
             return this.reconciliationActionChanges(currentChanges, composedChanges);
         }
-        return composedChanges == null ? List.of() : List.copyOf(composedChanges);
+        return this.hiddenDeferredReconciliationActionChanges(currentChanges, composedChanges);
+    }
+
+    private List<StoredBlockChange> hiddenDeferredReconciliationActionChanges(
+            List<StoredBlockChange> currentChanges,
+            List<StoredBlockChange> composedChanges
+    ) {
+        Map<BlockPoint, StoredBlockChange> currentByPos = new LinkedHashMap<>();
+        for (StoredBlockChange currentChange : currentChanges == null ? List.<StoredBlockChange>of() : currentChanges) {
+            currentByPos.put(currentChange.pos(), currentChange);
+        }
+        Map<BlockPoint, StoredBlockChange> composedByPos = new LinkedHashMap<>();
+        for (StoredBlockChange composedChange : composedChanges == null ? List.<StoredBlockChange>of() : composedChanges) {
+            composedByPos.put(composedChange.pos(), composedChange);
+        }
+
+        List<StoredBlockChange> changes = new ArrayList<>();
+        LinkedHashSet<BlockPoint> positions = new LinkedHashSet<>();
+        positions.addAll(currentByPos.keySet());
+        positions.addAll(composedByPos.keySet());
+        for (BlockPoint pos : positions) {
+            StoredBlockChange currentChange = currentByPos.get(pos);
+            StoredBlockChange composedChange = composedByPos.get(pos);
+            StoredBlockChange actionChange = this.reconciliationActionChange(pos, currentChange, composedChange);
+            if (actionChange != null && !actionChange.isNoOp()) {
+                changes.add(actionChange);
+                continue;
+            }
+            if (currentChange != null && currentChange.equals(composedChange)) {
+                changes.add(composedChange);
+            }
+        }
+        return List.copyOf(changes);
     }
 
     private static boolean hasHiddenDeferredAction(

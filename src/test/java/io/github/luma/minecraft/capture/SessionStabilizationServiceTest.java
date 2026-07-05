@@ -581,6 +581,37 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void hiddenDeferredFluidUsesDraftTargetAsUndoBaseline() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint pos = new BlockPoint(2, 64, 1);
+        StoredBlockChange placedRedstone = new StoredBlockChange(
+                pos,
+                payload("minecraft:stone"),
+                payload("minecraft:redstone_wire")
+        );
+        StoredBlockChange floodedRedstone = new StoredBlockChange(
+                pos,
+                payload("minecraft:stone"),
+                payload("minecraft:water"),
+                true
+        );
+
+        List<StoredBlockChange> actionChanges = service.reconciliationActionChanges(
+                List.of(placedRedstone),
+                List.of(floodedRedstone),
+                Map.of(
+                        new ChunkPoint(0, 0),
+                        new CaptureSessionState.DeferredActionContext("release-water", "Alex", true, true)
+                )
+        );
+
+        assertEquals(1, actionChanges.size());
+        assertEquals(pos, actionChanges.getFirst().pos());
+        assertEquals("minecraft:redstone_wire", actionChanges.getFirst().oldValue().blockId());
+        assertEquals("minecraft:water", actionChanges.getFirst().newValue().blockId());
+    }
+
+    @Test
     void reconciliationRelatedDeltasExcludeAlreadyTrackedDirectChanges() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange directPlacement = new StoredBlockChange(
