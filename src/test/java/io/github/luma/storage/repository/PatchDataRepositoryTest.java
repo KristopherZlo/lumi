@@ -235,9 +235,14 @@ class PatchDataRepositoryTest {
     }
 
     @Test
-    void roundTripsEntityChangesInChunkPayload() throws Exception {
+    void roundTripsBlockAndEntityChangesInChunkPayload() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         String entityId = "00000000-0000-0000-0000-000000000030";
+        List<StoredBlockChange> blockChanges = List.of(new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:stone", null),
+                payload("minecraft:gold_block", null)
+        ));
         List<StoredEntityChange> entityChanges = List.of(new StoredEntityChange(
                 entityId,
                 "minecraft:block_display",
@@ -250,12 +255,13 @@ class PatchDataRepositoryTest {
                 "patch-entity",
                 "project",
                 "v0002",
-                List.of(),
+                blockChanges,
                 entityChanges
         );
         PatchWorldChanges restored = this.repository.loadWorldChanges(layout, metadata);
 
-        assertTrue(restored.blockChanges().isEmpty());
+        assertEquals(1, restored.blockChanges().size());
+        assertEquals("minecraft:gold_block", restored.blockChanges().getFirst().newValue().blockId());
         assertEquals(1, restored.entityChanges().size());
         assertEquals(entityId, restored.entityChanges().getFirst().entityId());
         assertEquals(2.0D, restored.entityChanges().getFirst().newValue()

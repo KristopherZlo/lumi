@@ -1096,6 +1096,8 @@ final class SingleplayerTestRun {
                             && "lumi-runtime-entity".equals(entity.getCustomName().getString()),
                     "Quick rollback restored gameplay entity name");
         }
+        this.check("Quick rollback did not create a replay recovery draft",
+                () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
         this.completePhase(server, Phase.START_GAMEPLAY_ENTITY_UPDATE_SAVE);
     }
 

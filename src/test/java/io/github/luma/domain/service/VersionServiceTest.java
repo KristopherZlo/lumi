@@ -192,10 +192,14 @@ class VersionServiceTest {
         assertEquals(new BlockPoint(1, 64, 1), split.selected().changes().getFirst().pos());
         assertEquals(1, split.selected().entityChanges().size());
         assertEquals(insideEntityId, split.selected().entityChanges().getFirst().entityId());
+        assertEquals(1.0D, x(split.selected().entityChanges().getFirst().oldValue()));
+        assertEquals(2.0D, x(split.selected().entityChanges().getFirst().newValue()));
         assertEquals(1, split.remainder().changes().size());
         assertEquals(new BlockPoint(32, 64, 32), split.remainder().changes().getFirst().pos());
         assertEquals(1, split.remainder().entityChanges().size());
         assertEquals(outsideEntityId, split.remainder().entityChanges().getFirst().entityId());
+        assertEquals(32.0D, x(split.remainder().entityChanges().getFirst().oldValue()));
+        assertEquals(33.0D, x(split.remainder().entityChanges().getFirst().newValue()));
     }
 
     @Test

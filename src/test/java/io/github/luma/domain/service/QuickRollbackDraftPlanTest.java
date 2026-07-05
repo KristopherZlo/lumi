@@ -116,10 +116,14 @@ class QuickRollbackDraftPlanTest {
         assertEquals(2, plan.totalChangeCount());
         assertEquals(new BlockPoint(1, 64, 1), plan.blockChanges().getFirst().pos());
         assertEquals(insideEntityId, plan.entityChanges().getFirst().entityId());
+        assertEquals(2.0D, x(plan.entityChanges().getFirst().oldValue()));
+        assertEquals(1.0D, x(plan.entityChanges().getFirst().newValue()));
         assertNotNull(plan.remainingDraft());
         assertEquals(2, plan.remainingDraft().totalChangeCount());
         assertEquals(new BlockPoint(8, 64, 1), plan.remainingDraft().changes().getFirst().pos());
         assertEquals(outsideEntityId, plan.remainingDraft().entityChanges().getFirst().entityId());
+        assertEquals(8.0D, x(plan.remainingDraft().entityChanges().getFirst().oldValue()));
+        assertEquals(9.0D, x(plan.remainingDraft().entityChanges().getFirst().newValue()));
     }
 
     private static StoredBlockChange change(int x, String oldBlock, String newBlock) {

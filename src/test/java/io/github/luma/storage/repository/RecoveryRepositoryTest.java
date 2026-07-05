@@ -132,7 +132,7 @@ class RecoveryRepositoryTest {
     }
 
     @Test
-    void roundTripsEntityChangesInRecoveryDraft() throws Exception {
+    void roundTripsBlockAndEntityChangesInRecoveryDraft() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         String entityId = "00000000-0000-0000-0000-000000000020";
         RecoveryDraft draft = new RecoveryDraft(
@@ -143,7 +143,11 @@ class RecoveryRepositoryTest {
                 WorldMutationSource.AXIOM,
                 Instant.parse("2026-04-20T10:00:00Z"),
                 Instant.parse("2026-04-20T10:00:30Z"),
-                List.of(),
+                List.of(new StoredBlockChange(
+                        new BlockPoint(1, 64, 1),
+                        payload("minecraft:stone"),
+                        payload("minecraft:gold_block")
+                )),
                 List.of(new StoredEntityChange(
                         entityId,
                         "minecraft:block_display",
@@ -155,6 +159,8 @@ class RecoveryRepositoryTest {
         this.repository.saveDraft(layout, draft);
 
         RecoveryDraft restored = this.repository.loadDraft(layout).orElseThrow();
+        assertEquals(1, restored.changes().size());
+        assertEquals("minecraft:gold_block", restored.changes().getFirst().newValue().blockId());
         assertEquals(1, restored.entityChanges().size());
         assertEquals(entityId, restored.entityChanges().getFirst().entityId());
         assertEquals("minecraft:block_display", restored.entityChanges().getFirst().newValue().entityType());
