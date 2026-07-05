@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExplosiveEntityContextRegistryTest {
@@ -171,5 +172,21 @@ class ExplosiveEntityContextRegistryTest {
         registry.forget(activeId);
 
         assertTrue(!registry.hasActiveContexts());
+    }
+
+    @Test
+    void reportsActiveContextForSelectedActionOnly() {
+        ExplosiveEntityContextRegistry registry = new ExplosiveEntityContextRegistry();
+        registry.remember(UUID.randomUUID(), new ExplosiveEntityContextRegistry.ExplosiveContext(
+                WorldMutationSource.EXPLOSIVE,
+                "builder",
+                "action-1",
+                true,
+                System.currentTimeMillis()
+        ));
+
+        assertTrue(registry.hasActiveContextForAction("action-1"));
+        assertFalse(registry.hasActiveContextForAction("action-2"));
+        assertFalse(registry.hasActiveContextForAction(""));
     }
 }

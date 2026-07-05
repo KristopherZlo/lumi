@@ -81,6 +81,17 @@ public final class ExplosiveEntityContextRegistry {
         return this.activeContextCount() > 0;
     }
 
+    public boolean hasActiveContextForAction(String actionId) {
+        if (actionId == null || actionId.isBlank()) {
+            return false;
+        }
+        this.pruneExpiredContexts();
+        synchronized (this.contexts) {
+            return this.contexts.values().stream()
+                    .anyMatch(context -> actionId.equals(context.actionId()));
+        }
+    }
+
     public int activeContextCount() {
         this.pruneExpiredContexts();
         synchronized (this.contexts) {

@@ -70,6 +70,7 @@ public final class UndoRedoService {
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to undo");
         }
+        this.ensureStabilizationReady(level, project, selection.action());
         FreezeDecision freezeDecision = this.freezeDecision(selection.action());
         return this.startOperation(level, project, selection, Direction.UNDO, freezeDecision);
     }
@@ -95,6 +96,7 @@ public final class UndoRedoService {
         if (selection == null) {
             throw new IllegalArgumentException("No Lumi action is available to redo");
         }
+        this.ensureStabilizationReady(level, project, selection.action());
         FreezeDecision freezeDecision = this.freezeDecision(selection.action());
         return this.startOperation(level, project, selection, Direction.REDO, freezeDecision);
     }
@@ -102,6 +104,13 @@ public final class UndoRedoService {
     private void ensureStabilizationReady(ServerLevel level, BuildProject project) throws IOException {
         if (this.captureManager.hasPendingUndoRedoStabilization(level.getServer(), project.id().toString())) {
             throw new IllegalStateException("Redstone or piston fallout is still settling; try undo/redo again in a moment");
+        }
+    }
+
+    private void ensureStabilizationReady(ServerLevel level, BuildProject project, UndoRedoAction action) throws IOException {
+        this.ensureStabilizationReady(level, project);
+        if (action != null && this.explosiveContexts.hasActiveContextForAction(action.id())) {
+            throw new IllegalStateException("TNT fallout is still settling; try undo/redo again in a moment");
         }
     }
 
