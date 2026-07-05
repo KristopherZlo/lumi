@@ -733,7 +733,7 @@ public final class ProjectScreenController {
         if (draft == null || draft.isEmpty()) {
             return io.github.luma.domain.model.PendingChangeSummary.empty();
         }
-        return ChangeStatsFactory.summarizePending(draft.changes());
+        return ChangeStatsFactory.summarizePending(draft.changes(), draft.entityChanges());
     }
 
 }

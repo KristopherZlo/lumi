@@ -9,6 +9,7 @@ import io.github.luma.domain.model.PatchStats;
 import io.github.luma.domain.model.PatchChunkSlice;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.StoredEntityChange;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,11 +82,18 @@ public final class ChangeStatsFactory {
     }
 
     public static PendingChangeSummary summarizePending(List<StoredBlockChange> changes) {
+        return summarizePending(changes, List.of());
+    }
+
+    public static PendingChangeSummary summarizePending(
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges
+    ) {
         int added = 0;
         int removed = 0;
         int changed = 0;
 
-        for (StoredBlockChange change : changes) {
+        for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
             if (!BUILDER_SURFACE.includes(change)) {
                 continue;
             }
@@ -100,7 +108,14 @@ public final class ChangeStatsFactory {
             }
         }
 
-        return new PendingChangeSummary(added, removed, changed);
+        int changedEntities = 0;
+        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
+            if (change != null && !change.isNoOp()) {
+                changedEntities += 1;
+            }
+        }
+
+        return new PendingChangeSummary(added, removed, changed, changedEntities);
     }
 
     private static boolean isAir(String state) {

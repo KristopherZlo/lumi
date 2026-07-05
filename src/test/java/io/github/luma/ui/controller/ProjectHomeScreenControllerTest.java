@@ -15,11 +15,15 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorkZoneState;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.domain.service.ProjectVersionVisibility;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.ListTag;
 import io.github.luma.integration.common.IntegrationStatus;
 import java.time.Instant;
 import java.util.List;
@@ -65,6 +69,18 @@ class ProjectHomeScreenControllerTest {
 
         assertFalse(state.hasRecoveryDraft());
         assertEquals(1, state.pendingChanges().addedBlocks());
+    }
+
+    @Test
+    void currentRunEntityDraftShowsPendingChanges() {
+        FakeQuery query = new FakeQuery();
+        query.draft = entityOnlyDraft();
+        ProjectHomeScreenController controller = new ProjectHomeScreenController(query);
+
+        var state = controller.loadState("Tower", "luma.status.project_ready", false);
+
+        assertFalse(state.pendingChanges().isEmpty());
+        assertEquals(1, state.pendingChanges().total());
     }
 
     @Test
@@ -318,10 +334,42 @@ class ProjectHomeScreenControllerTest {
         );
     }
 
+    private static RecoveryDraft entityOnlyDraft() {
+        String entityId = "00000000-0000-0000-0000-000000000201";
+        return new RecoveryDraft(
+                "11111111-1111-1111-1111-111111111111",
+                "main",
+                "v0002",
+                "tester",
+                WorldMutationSource.PLAYER,
+                instant(120),
+                instant(121),
+                List.of(),
+                List.of(new StoredEntityChange(
+                        entityId,
+                        "minecraft:block_display",
+                        entity(entityId, 1.0D),
+                        entity(entityId, 2.0D)
+                ))
+        );
+    }
+
     private static StatePayload payload(String blockId) {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", blockId);
         return new StatePayload(tag, null);
+    }
+
+    private static EntityPayload entity(String entityId, double x) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", "minecraft:block_display");
+        tag.putString("UUID", entityId);
+        ListTag pos = new ListTag();
+        pos.add(DoubleTag.valueOf(x));
+        pos.add(DoubleTag.valueOf(64.0D));
+        pos.add(DoubleTag.valueOf(1.0D));
+        tag.put("Pos", pos);
+        return new EntityPayload(tag);
     }
 
     private static Instant instant(long seconds) {

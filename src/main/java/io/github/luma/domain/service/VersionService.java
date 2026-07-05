@@ -423,7 +423,8 @@ public final class VersionService {
         if (draft == null || draft.isEmpty() || zone == null || zone.cells().isEmpty()) {
             return PendingChangeSummary.empty();
         }
-        return ChangeStatsFactory.summarizePending(splitDraftForZone(draft, zone).selected().changes());
+        RecoveryDraft selected = splitDraftForZone(draft, zone).selected();
+        return ChangeStatsFactory.summarizePending(selected.changes(), selected.entityChanges());
     }
 
     private static boolean entityTouchesZone(StoredEntityChange change, WorkZone zone) {

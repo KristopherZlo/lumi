@@ -38,7 +38,7 @@ public final class WorkspaceHudController {
                     this.client.getUser().getName()
             );
             PendingChangeSummary pending = this.recoveryService.loadDraft(server, project.name())
-                    .map(draft -> ChangeStatsFactory.summarizePending(draft.changes()))
+                    .map(draft -> ChangeStatsFactory.summarizePending(draft.changes(), draft.entityChanges()))
                     .orElse(PendingChangeSummary.empty());
             var operationSnapshot = WorldOperationManager.getInstance()
                     .snapshot(server, project.id().toString())

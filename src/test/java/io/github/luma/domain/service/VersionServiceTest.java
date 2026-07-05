@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -229,6 +230,39 @@ class VersionServiceTest {
         assertEquals(1, summary.addedBlocks());
         assertEquals(1, summary.removedBlocks());
         assertEquals(0, summary.changedBlocks());
+    }
+
+    @Test
+    void summarizePendingForZoneIncludesZoneEntities() {
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                instant(10),
+                instant(20),
+                List.of(),
+                List.of(
+                        entityChange("00000000-0000-0000-0000-000000000105", 1.0D, 2.0D),
+                        entityChange("00000000-0000-0000-0000-000000000106", 32.0D, 33.0D)
+                )
+        );
+        WorkZone zone = new WorkZone(
+                "zone",
+                "project",
+                "Tower",
+                0xFFFFFF,
+                List.of(new WorkZoneCell(0, 4, 0)),
+                "tester",
+                instant(0),
+                instant(0)
+        );
+
+        PendingChangeSummary summary = VersionService.summarizePendingForZone(draft, zone);
+
+        assertFalse(summary.isEmpty());
+        assertEquals(1, summary.total());
     }
 
     @Test

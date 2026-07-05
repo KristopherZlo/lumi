@@ -81,7 +81,9 @@ public final class ProjectHomeScreenController {
                     project,
                     loadedVersions,
                     loadedVariants,
-                    draft == null ? PendingChangeSummary.empty() : ChangeStatsFactory.summarizePending(draft.changes()),
+                    draft == null
+                            ? PendingChangeSummary.empty()
+                            : ChangeStatsFactory.summarizePending(draft.changes(), draft.entityChanges()),
                     interruptedDraft,
                     this.query.loadOperationSnapshot(project),
                     advanced,
