@@ -8,6 +8,7 @@ import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -42,7 +43,7 @@ abstract class ServerLevelEntityLifecycleMixin {
     @Inject(method = "addFreshEntity", at = @At("RETURN"))
     private void luma$captureAddFreshEntity(Entity entity, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) {
-            this.luma$rememberProjectileAction(entity);
+            this.luma$rememberCausalEntityAction(entity);
             LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity, (ServerLevel) (Object) this);
             EntityMutationTracker.captureSpawn((ServerLevel) (Object) this, entity);
         }
@@ -59,7 +60,7 @@ abstract class ServerLevelEntityLifecycleMixin {
     @Inject(method = "addWithUUID", at = @At("RETURN"))
     private void luma$captureAddWithUuid(Entity entity, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) {
-            this.luma$rememberProjectileAction(entity);
+            this.luma$rememberCausalEntityAction(entity);
             LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity, (ServerLevel) (Object) this);
             EntityMutationTracker.captureSpawn((ServerLevel) (Object) this, entity);
         }
@@ -75,15 +76,15 @@ abstract class ServerLevelEntityLifecycleMixin {
 
     @Inject(method = "addDuringTeleport", at = @At("RETURN"))
     private void luma$captureAddDuringTeleport(Entity entity, CallbackInfo ci) {
-        this.luma$rememberProjectileAction(entity);
+        this.luma$rememberCausalEntityAction(entity);
         LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity, (ServerLevel) (Object) this);
         EntityMutationTracker.captureSpawn((ServerLevel) (Object) this, entity);
         this.luma$logPrimedTntSpawn("addDuringTeleport", entity, true);
     }
 
     @Unique
-    private void luma$rememberProjectileAction(Entity entity) {
-        if (entity instanceof Projectile) {
+    private void luma$rememberCausalEntityAction(Entity entity) {
+        if (entity instanceof Projectile || entity instanceof FallingBlockEntity) {
             ServerLevel level = (ServerLevel) (Object) this;
             LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentActionIfAbsent(entity, level);
         }

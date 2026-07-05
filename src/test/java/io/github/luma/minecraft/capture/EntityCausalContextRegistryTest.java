@@ -18,6 +18,7 @@ class EntityCausalContextRegistryTest {
         assertTrue(this.registry.canRememberSource(WorldMutationSource.MOB, "action-1"));
         assertTrue(this.registry.canRememberSource(WorldMutationSource.EXPLOSION, "action-1"));
         assertTrue(this.registry.canRememberSource(WorldMutationSource.EXPLOSIVE, "action-1"));
+        assertTrue(this.registry.canRememberSource(WorldMutationSource.FALLING_BLOCK, "action-1"));
     }
 
     @Test

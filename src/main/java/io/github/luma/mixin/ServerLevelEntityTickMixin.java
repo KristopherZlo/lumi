@@ -47,7 +47,7 @@ abstract class ServerLevelEntityTickMixin {
         boolean explosiveFrame = this.luma$pushRememberedExplosiveAction(entity);
         EntityCausalContextRegistry.ContextFrame causalFrame = explosiveFrame
                 ? null
-                : this.luma$pushRememberedCausalMobAction(entity, source);
+                : this.luma$pushRememberedCausalAction(entity, source);
         WorldMutationContext.SourceFrame sourceFrame = null;
         try {
             if (!explosiveFrame && (causalFrame == null || !causalFrame.active())) {
@@ -73,11 +73,11 @@ abstract class ServerLevelEntityTickMixin {
     }
 
     @Unique
-    private EntityCausalContextRegistry.ContextFrame luma$pushRememberedCausalMobAction(
+    private EntityCausalContextRegistry.ContextFrame luma$pushRememberedCausalAction(
             Entity entity,
             WorldMutationSource source
     ) {
-        if (source != WorldMutationSource.MOB) {
+        if (source != WorldMutationSource.MOB && source != WorldMutationSource.FALLING_BLOCK) {
             return null;
         }
         return LUMA_ENTITY_CAUSAL_CONTEXTS.pushIfPresent(entity, (ServerLevel) (Object) this, source);

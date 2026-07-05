@@ -170,7 +170,8 @@ public final class EntityCausalContextRegistry {
         return (source == WorldMutationSource.PLAYER
                 || source == WorldMutationSource.MOB
                 || source == WorldMutationSource.EXPLOSION
-                || source == WorldMutationSource.EXPLOSIVE)
+                || source == WorldMutationSource.EXPLOSIVE
+                || source == WorldMutationSource.FALLING_BLOCK)
                 && actionId != null
                 && !actionId.isBlank();
     }
