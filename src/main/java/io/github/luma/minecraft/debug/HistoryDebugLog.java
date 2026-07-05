@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.debug;
 
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.LumaDiagnosticsLog;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.OperationHandle;
@@ -8,12 +9,14 @@ import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
+import io.github.luma.domain.model.UndoRedoActionStack;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.ChunkBatch;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
 import io.github.luma.minecraft.world.PreparedSectionApplyBatch;
 import io.github.luma.minecraft.world.SectionBatch;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -24,6 +27,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.material.FluidState;
 
 /**
  * Formats focused history diagnostics without making normal gameplay logs noisy.
@@ -54,6 +58,15 @@ public final class HistoryDebugLog {
             LumaDebugLog.log(project, "history-action", "Recorded live block route={} source={} action={} actor={} change={}",
                     route, source, blank(actionId), WorldMutationContext.currentActor(), this.describe(change));
         }
+        if (LumaDiagnosticsLog.fluidUndoEnabled() && change != null) {
+            LumaDiagnosticsLog.fluidUndoEvent("undo-block-recorded",
+                    "project=" + projectId(project)
+                            + ", route=" + blank(route)
+                            + ", source=" + source
+                            + ", action=" + blank(actionId)
+                            + ", actor=" + actor(WorldMutationContext.currentActor())
+                            + ", change=" + this.describe(change));
+        }
     }
 
     public void logSkippedLiveUndoRedoBlock(BuildProject project, String route, String reason, String actionId,
@@ -64,6 +77,16 @@ public final class HistoryDebugLog {
                     route, reason == null ? "unknown" : reason, source, blank(actionId),
                     WorldMutationContext.currentActor(), this.describe(change));
         }
+        if (LumaDiagnosticsLog.fluidUndoEnabled() && change != null) {
+            LumaDiagnosticsLog.fluidUndoEvent("undo-block-skipped",
+                    "project=" + projectId(project)
+                            + ", route=" + blank(route)
+                            + ", reason=" + blank(reason)
+                            + ", source=" + source
+                            + ", action=" + blank(actionId)
+                            + ", actor=" + actor(WorldMutationContext.currentActor())
+                            + ", change=" + this.describe(change));
+        }
     }
 
     public void logLiveUndoRedoActionBatch(BuildProject project, String route, String actionId, String actor,
@@ -73,6 +96,16 @@ public final class HistoryDebugLog {
                     "Recorded live block batch route={} action={} actor={} blocks={} hidden={} sample=[{}]",
                     route, blank(actionId), actor == null || actor.isBlank() ? "world" : actor,
                     changes.size(), hiddenCount(changes), this.sampleChanges(changes));
+        }
+        if (LumaDiagnosticsLog.fluidUndoEnabled() && changes != null && !changes.isEmpty()) {
+            LumaDiagnosticsLog.fluidUndoEvent("undo-block-batch-recorded",
+                    "project=" + projectId(project)
+                            + ", route=" + blank(route)
+                            + ", action=" + blank(actionId)
+                            + ", actor=" + actor(actor)
+                            + ", blocks=" + changes.size()
+                            + ", hidden=" + hiddenCount(changes)
+                            + ", sample=[" + this.sampleAnyChanges(changes) + "]");
         }
     }
 
@@ -147,6 +180,79 @@ public final class HistoryDebugLog {
         }
     }
 
+    public void logFluidReplayGuard(ServerLevel level, int exactStates, int callbackPositions, int fluidTailPositions,
+            int ticks) {
+        if (LumaDiagnosticsLog.fluidUndoEnabled() && (exactStates > 0 || callbackPositions > 0 || fluidTailPositions > 0)) {
+            LumaDiagnosticsLog.fluidUndoEvent("replay-guard",
+                    "dimension=" + dimension(level)
+                            + ", time=" + time(level)
+                            + ", exactStates=" + exactStates
+                            + ", callbackPositions=" + callbackPositions
+                            + ", fluidTailPositions=" + fluidTailPositions
+                            + ", ticks=" + ticks
+                            + ", source=" + WorldMutationContext.currentSource()
+                            + ", action=" + blank(WorldMutationContext.currentActionId())
+                            + ", actor=" + actor(WorldMutationContext.currentActor()));
+        }
+    }
+
+    public void logFluidTick(String name, ServerLevel level, BlockPos pos, BlockState blockState,
+            FluidState fluidState, String reason) {
+        if (LumaDiagnosticsLog.fluidUndoEnabled()) {
+            LumaDiagnosticsLog.fluidUndoEvent(name,
+                    "dimension=" + dimension(level)
+                            + ", time=" + time(level)
+                            + ", pos=" + this.format(pos)
+                            + ", reason=" + blank(reason)
+                            + ", source=" + WorldMutationContext.currentSource()
+                            + ", action=" + blank(WorldMutationContext.currentActionId())
+                            + ", actor=" + actor(WorldMutationContext.currentActor())
+                            + ", block=" + this.describe(blockState)
+                            + ", fluid=" + this.describe(fluidState));
+        }
+    }
+
+    public void logFluidUndoActionRecord(String name, String projectId, String dimensionId, String actionId,
+            String actor, List<StoredBlockChange> changes, List<StoredEntityChange> entityChanges, Instant now) {
+        if (LumaDiagnosticsLog.fluidUndoEnabled()) {
+            LumaDiagnosticsLog.fluidUndoEvent(name,
+                    "project=" + blank(projectId)
+                            + ", dimension=" + blank(dimensionId)
+                            + ", action=" + blank(actionId)
+                            + ", actor=" + actor(actor)
+                            + ", at=" + now
+                            + ", source=" + WorldMutationContext.currentSource()
+                            + ", contextAction=" + blank(WorldMutationContext.currentActionId())
+                            + ", blocks=" + size(changes)
+                            + ", entities=" + size(entityChanges)
+                            + ", hidden=" + hiddenCount(changes)
+                            + ", sample=[" + this.sampleAnyChanges(changes) + "]");
+        }
+    }
+
+    public void logFluidUndoSelection(String name, String projectId, String actorFilter,
+            UndoRedoActionStack.Selection selection) {
+        if (LumaDiagnosticsLog.fluidUndoEnabled()) {
+            LumaDiagnosticsLog.fluidUndoEvent(name,
+                    "project=" + blank(projectId)
+                            + ", actorFilter=" + actor(actorFilter)
+                            + ", selected=" + (selection != null && selection.action() != null)
+                            + ", revision=" + (selection == null ? -1 : selection.revision())
+                            + ", actionVersion=" + (selection == null ? -1 : selection.actionVersion())
+                            + ", " + this.actionDetail(selection == null ? null : selection.action()));
+        }
+    }
+
+    public void logFluidUndoCompletion(String name, String projectId, UndoRedoActionStack.Selection selection,
+            boolean completed) {
+        if (LumaDiagnosticsLog.fluidUndoEnabled()) {
+            LumaDiagnosticsLog.fluidUndoEvent(name,
+                    "project=" + blank(projectId)
+                            + ", completed=" + completed
+                            + ", " + this.actionDetail(selection == null ? null : selection.action()));
+        }
+    }
+
     public void logSuppressedCallback(String callback, ServerLevel level, BlockPos pos, BlockState state, String detail) {
         if (LumaDebugLog.globalEnabled()) {
             LumaDebugLog.log("mechanism-callback", "Suppressed {} time={} source={} action={} pos={} state={} {}",
@@ -206,6 +312,14 @@ public final class HistoryDebugLog {
         return String.join("; ", samples);
     }
 
+    private String sampleAnyChanges(List<StoredBlockChange> changes) {
+        return (changes == null ? List.<StoredBlockChange>of() : changes).stream()
+                .limit(ACTION_SAMPLE_LIMIT)
+                .map(this::describe)
+                .reduce((left, right) -> left + "; " + right)
+                .orElse("");
+    }
+
     private List<String> sampleMechanismPlacements(ChunkBatch batch) {
         List<String> sample = new ArrayList<>();
         for (PreparedSectionApplyBatch section : batch.orderedNativeSections()) {
@@ -245,6 +359,13 @@ public final class HistoryDebugLog {
         return this.shouldTraceBlockId(payload.blockId()) ? payload.toStateSnbt() + suffix : payload.blockId() + suffix;
     }
 
+    private String describe(FluidState state) {
+        if (state == null || state.isEmpty()) {
+            return "minecraft:empty";
+        }
+        return String.valueOf(state);
+    }
+
     private boolean shouldTraceBlockId(String blockId) {
         if (blockId == null || blockId.isBlank()) {
             return false;
@@ -272,6 +393,23 @@ public final class HistoryDebugLog {
         return pos == null ? "unknown" : pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
 
+    private String actionDetail(UndoRedoAction action) {
+        if (action == null) {
+            return "action=<none>";
+        }
+        List<StoredBlockChange> changes = action.redoChanges();
+        List<StoredEntityChange> entityChanges = action.redoEntityChanges();
+        return "action=" + blank(action.id())
+                + ", actionActor=" + actor(action.actor())
+                + ", dimension=" + blank(action.dimensionId())
+                + ", startedAt=" + action.startedAt()
+                + ", updatedAt=" + action.updatedAt()
+                + ", blocks=" + changes.size()
+                + ", entities=" + entityChanges.size()
+                + ", hidden=" + hiddenCount(changes)
+                + ", sample=[" + this.sampleAnyChanges(changes) + "]";
+    }
+
     private String propertyValue(BlockState state, Property<?> property) { return this.propertyValueUnchecked(state, property); }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -284,6 +422,16 @@ public final class HistoryDebugLog {
     private static long time(ServerLevel level) { return level == null ? -1 : level.getGameTime(); }
 
     private static String blank(String value) { return value == null || value.isBlank() ? "<none>" : value; }
+
+    private static String actor(String value) { return value == null || value.isBlank() ? "world" : value; }
+
+    private static String dimension(ServerLevel level) {
+        return level == null ? "unknown" : level.dimension().identifier().toString();
+    }
+
+    private static String projectId(BuildProject project) {
+        return project == null || project.id() == null ? "<none>" : project.id().toString();
+    }
 
     private static long hiddenCount(List<StoredBlockChange> changes) {
         if (changes == null) {

@@ -4,6 +4,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
+import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.time.Instant;
@@ -23,6 +24,7 @@ public final class UndoRedoHistoryManager {
 
     private final Map<String, Map<String, UndoRedoActionStack>> projectStacks = new HashMap<>();
     private final Map<String, Long> projectRevisions = new HashMap<>();
+    private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
 
     private UndoRedoHistoryManager() {
     }
@@ -54,7 +56,20 @@ public final class UndoRedoHistoryManager {
                 actionStartedAt,
                 now
         );
+        boolean changed = stack.revision() != revision;
         this.finishStackMutation(projectId, stack, revision);
+        if (changed) {
+            this.historyDebugLog.logFluidUndoActionRecord(
+                    "undo-action-delayed-entity-recorded",
+                    projectId,
+                    dimensionId,
+                    actionId,
+                    actor,
+                    List.of(),
+                    changes,
+                    now
+            );
+        }
     }
 
     public synchronized void recordAction(
@@ -72,7 +87,20 @@ public final class UndoRedoHistoryManager {
         UndoRedoActionStack stack = this.stack(projectId, actor);
         long revision = stack.revision();
         stack.recordAction(actionId, actor, projectId, dimensionId, changes, entityChanges, now);
+        boolean changed = stack.revision() != revision;
         this.finishStackMutation(projectId, stack, revision);
+        if (changed) {
+            this.historyDebugLog.logFluidUndoActionRecord(
+                    "undo-action-root-recorded",
+                    projectId,
+                    dimensionId,
+                    actionId,
+                    actor,
+                    changes,
+                    entityChanges,
+                    now
+            );
+        }
     }
 
     public synchronized void recordCurrentCausalAction(
@@ -98,23 +126,44 @@ public final class UndoRedoHistoryManager {
                 entityChanges,
                 now
         );
+        boolean changed = stack.revision() != revision;
         this.finishStackMutation(projectId, stack, revision);
+        if (changed) {
+            this.historyDebugLog.logFluidUndoActionRecord(
+                    "undo-action-causal-recorded",
+                    projectId,
+                    dimensionId,
+                    actionId,
+                    actor,
+                    changes,
+                    entityChanges,
+                    now
+            );
+        }
     }
 
     public synchronized UndoRedoActionStack.Selection selectUndo(String projectId) {
-        return this.latestSelection(projectId, true);
+        UndoRedoActionStack.Selection selection = this.latestSelection(projectId, true);
+        this.historyDebugLog.logFluidUndoSelection("undo-select", projectId, null, selection);
+        return selection;
     }
 
     public synchronized UndoRedoActionStack.Selection selectUndo(String projectId, String actor) {
-        return this.latestSelection(projectId, this.actorKeys(actor), true);
+        UndoRedoActionStack.Selection selection = this.latestSelection(projectId, this.actorKeys(actor), true);
+        this.historyDebugLog.logFluidUndoSelection("undo-select", projectId, actor, selection);
+        return selection;
     }
 
     public synchronized UndoRedoActionStack.Selection selectRedo(String projectId) {
-        return this.latestSelection(projectId, false);
+        UndoRedoActionStack.Selection selection = this.latestSelection(projectId, false);
+        this.historyDebugLog.logFluidUndoSelection("redo-select", projectId, null, selection);
+        return selection;
     }
 
     public synchronized UndoRedoActionStack.Selection selectRedo(String projectId, String actor) {
-        return this.latestSelection(projectId, this.actorKeys(actor), false);
+        UndoRedoActionStack.Selection selection = this.latestSelection(projectId, this.actorKeys(actor), false);
+        this.historyDebugLog.logFluidUndoSelection("redo-select", projectId, actor, selection);
+        return selection;
     }
 
     public synchronized boolean completeUndo(String projectId, UndoRedoActionStack.Selection selection) {
@@ -123,8 +172,10 @@ public final class UndoRedoHistoryManager {
             long revision = stack.revision();
             boolean completed = stack.completeUndo(selection);
             this.finishStackMutation(projectId, stack, revision);
+            this.historyDebugLog.logFluidUndoCompletion("undo-complete", projectId, selection, completed);
             return completed;
         }
+        this.historyDebugLog.logFluidUndoCompletion("undo-complete", projectId, selection, false);
         return false;
     }
 
@@ -134,8 +185,10 @@ public final class UndoRedoHistoryManager {
             long revision = stack.revision();
             boolean completed = stack.completeRedo(selection);
             this.finishStackMutation(projectId, stack, revision);
+            this.historyDebugLog.logFluidUndoCompletion("redo-complete", projectId, selection, completed);
             return completed;
         }
+        this.historyDebugLog.logFluidUndoCompletion("redo-complete", projectId, selection, false);
         return false;
     }
 

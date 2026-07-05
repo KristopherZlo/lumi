@@ -248,7 +248,7 @@ Hard rules:
 - Restore, recovery, merge, quick rollback, and undo/redo replay must verify final target state before reporting success.
 - Live undo/redo, recent previews, and pending overlays include explosion and mob block fallout only when it is causally tied to a player action; passive mob edits and ambient explosions remain actionless.
 - Player-caused mob and explosion fallout is live undo-only: it can be undone/redone for cleanup, but it must not dirty recovery drafts or saved project history.
-- Live undo/redo actions are actor-scoped. Multiplayer undo/redo selects only the local player's stack, singleplayer can fall back to neutral explosion/mob cleanup actions, project-wide overlays aggregate unconflicted actions from a monotonic project revision, and an action is hidden once another actor later touches the same block or entity target. That target ownership is computed from recent applied undo actions when selecting or previewing instead of maintained as a separate mutation ledger. Secondary fallout joins live undo only through an explicit action id or deferred carrier context; Lumi does not guess ownership from nearby latest actions. Undo/redo waits for redstone and piston fallout to settle, selects Lumi replay on the server thread, freezes primed TNT ticks during replay, removes active primed TNT tied to the undo action, suppresses TNT activation callbacks, and rejects stale selections whose action changed after preview/selection. Hidden fluid fallout records the settled transition from the current draft target, so undoing water removes water and restores redstone/mechanism states instead of older session-baseline blocks.
+- Live undo/redo actions are actor-scoped. Multiplayer undo/redo selects only the local player's stack, singleplayer can fall back to neutral explosion/mob cleanup actions, project-wide overlays aggregate unconflicted actions from a monotonic project revision, and an action is hidden once another actor later touches the same block or entity target. That target ownership is computed from recent applied undo actions when selecting or previewing instead of maintained as a separate mutation ledger. Secondary fallout joins live undo only through an explicit action id or deferred carrier context; Lumi does not guess ownership from nearby latest actions. Undo/redo waits for redstone and piston fallout to settle, selects Lumi replay on the server thread, freezes primed TNT ticks during replay, removes active primed TNT tied to the undo action, suppresses TNT activation callbacks and stale delayed fluid ticks for that action, and rejects stale selections whose action changed after preview/selection. Hidden fluid fallout records the settled transition from the current draft target, so undoing water removes water and restores redstone/mechanism states instead of older session-baseline blocks; live undo/redo replays those targets Reden-style without scheduling extra fluid replay cleanup.
 - Native external-tool undo/redo is advisory. Lumi delegates only for known supported actions, waits for queued server work, and advances its stack only after current block or entity targets match the selected action. Generic native mismatches fall back to Lumi replay; verified Axiom dispatch mismatches fail without moving Lumi history.
 - If a placed block is synchronously consumed by vanilla callbacks before `Level#setBlock` returns, Lumi keeps the requested transition inside the same live action before recording the final settled state. Undo therefore removes block-to-entity transitions such as instant-primed TNT instead of restoring the short-lived placed block.
 - Client modal overlays consume pointer input so underlying workspace actions cannot fire while a modal is open.
@@ -267,6 +267,7 @@ Useful JVM flags:
 -Dlumi.lightLog=true
 -Dlumi.blockApplyLog=true
 -Dlumi.partialRestoreLog=true
+-Dlumi.fluidUndoLog=true
 -Dlumi.testerDiagnostics=true
 -Dlumi.ui.targetGuiScale=2
 -Dlumi.ui.iconButtonWidth=26
@@ -283,6 +284,11 @@ and the icon button flags tune the button box and the 24x24 texture draw size.
 `undo-redo/selected-action`, `tnt-context/*`, and `tnt-replay/*` events to show
 freeze decisions, explosive context lifecycle, replayed primed TNT entities,
 TNT activation callbacks, frozen primed TNT ticks, and TNT explosion context.
+
+`-Dlumi.fluidUndoLog=true` writes `logs/lumi-fluid-undo.log` with fluid ticks,
+replay suppression, fluid-tail guards, live undo/redo action records, and
+undo/redo selection/completion events. It is separate from `lumi.loadLog`, so it
+can be enabled alone while the broader logs stay off.
 
 Runtime logs are written under the normal Minecraft `logs/` directory or the world-local `lumi/test-logs/` directory for test profiles, including multiplayer work-zone smoke behavior logs.
 

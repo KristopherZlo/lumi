@@ -27,6 +27,13 @@ public final class LumaDiagnosticsLog {
             "logs/lumi-partial-restore.log",
             false
     );
+    private static final StructuredDiagnosticsLog FLUID_UNDO_LOG = new StructuredDiagnosticsLog(
+            "fluid-undo",
+            "lumi.fluidUndoLog",
+            "lumi.fluidUndoLog.path",
+            "logs/lumi-fluid-undo.log",
+            false
+    );
 
     private LumaDiagnosticsLog() {
     }
@@ -75,9 +82,22 @@ public final class LumaDiagnosticsLog {
         PARTIAL_RESTORE_LOG.event("partial-restore", name, detail);
     }
 
+    public static boolean fluidUndoEnabled() {
+        return FLUID_UNDO_LOG.enabled();
+    }
+
+    public static Path fluidUndoPath() {
+        return FLUID_UNDO_LOG.configuredPath();
+    }
+
+    public static void fluidUndoEvent(String name, String detail) {
+        FLUID_UNDO_LOG.event("fluid-undo", name, detail);
+    }
+
     public static void close() {
         LIGHT_LOG.close();
         BLOCK_APPLY_LOG.close();
         PARTIAL_RESTORE_LOG.close();
+        FLUID_UNDO_LOG.close();
     }
 }

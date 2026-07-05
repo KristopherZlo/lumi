@@ -395,7 +395,7 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
-    void undoRedoWaterBrokenDoublePlantGuardsBothHalvesAgainstFluidReplay() throws Exception {
+    void undoRedoWaterBrokenDoublePlantRestoresBothHalvesWithoutFluidReplay() throws Exception {
         BlockPos lower = new BlockPos(1, 64, 1);
         BlockState lowerPlant = Blocks.SUNFLOWER.defaultBlockState()
                 .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.LOWER);
@@ -427,8 +427,32 @@ class WorldChangeBatchPreparerTest {
         PreparedBlockPlacement lowerPlacement = placementAt(batches.getFirst(), lower);
         PreparedBlockPlacement upperPlacement = placementAt(batches.getFirst(), lower.above());
 
-        assertTrue(lowerPlacement.replayHint().suppressesPostReplayFluid());
-        assertTrue(upperPlacement.replayHint().suppressesPostReplayFluid());
+        assertFalse(lowerPlacement.replayHint().suppressesPostReplayFluid());
+        assertFalse(upperPlacement.replayHint().suppressesPostReplayFluid());
+    }
+
+    @Test
+    void undoRedoRestoresFloodedRedstoneWithoutFluidReplay() throws Exception {
+        BlockPos pos = new BlockPos(1, 64, 1);
+
+        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+                null,
+                List.of(new StoredBlockChange(
+                        BlockPoint.from(pos),
+                        payload(Blocks.REDSTONE_WIRE.defaultBlockState()),
+                        payload(Blocks.WATER.defaultBlockState())
+                )),
+                List.of(),
+                false,
+                null,
+                EntityApplyMode.DELTA
+        );
+
+        PreparedBlockPlacement placement = placementAt(batches.getFirst(), pos);
+
+        assertEquals(Blocks.REDSTONE_WIRE.defaultBlockState(), placement.state());
+        assertTrue(placement.replayHint().suppressesPostReplayMechanism());
+        assertFalse(placement.replayHint().suppressesPostReplayFluid());
     }
 
     @Test

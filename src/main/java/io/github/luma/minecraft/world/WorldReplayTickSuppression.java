@@ -2,6 +2,7 @@ package io.github.luma.minecraft.world;
 
 import it.unimi.dsi.fastutil.longs.Long2LongLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
+import io.github.luma.debug.LumaDiagnosticsLog;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.minecraft.capture.WorldMutationContext;
@@ -45,6 +46,14 @@ public final class WorldReplayTickSuppression {
             }
         }
         this.removeExpired(level, worldPositions, level.getGameTime());
+        if (LumaDiagnosticsLog.fluidUndoEnabled()) {
+            LumaDiagnosticsLog.fluidUndoEvent("replay-protect",
+                    "dimension=" + level.dimension().identifier()
+                            + ", time=" + level.getGameTime()
+                            + ", ticks=" + ticks
+                            + ", positions=" + positions.size()
+                            + ", sample=[" + samplePositions(positions) + "]");
+        }
     }
 
     public synchronized void clear(ServerLevel level) {
@@ -103,7 +112,18 @@ public final class WorldReplayTickSuppression {
         long now = level.getGameTime();
         this.removeExpired(level, worldPositions, now);
         long expiresAt = worldPositions.getOrDefault(pos.asLong(), Long.MIN_VALUE);
-        return expiresAt >= now;
+        boolean suppressed = expiresAt >= now;
+        if (suppressed && LumaDiagnosticsLog.fluidUndoEnabled()) {
+            LumaDiagnosticsLog.fluidUndoEvent("replay-suppress",
+                    "dimension=" + level.dimension().identifier()
+                            + ", time=" + now
+                            + ", pos=" + format(pos)
+                            + ", expiresAt=" + expiresAt
+                            + ", source=" + WorldMutationContext.currentSource()
+                            + ", action=" + blank(WorldMutationContext.currentActionId())
+                            + ", actor=" + blank(WorldMutationContext.currentActor()));
+        }
+        return suppressed;
     }
 
     public boolean shouldSuppressCallback(ServerLevel level, BlockPos pos) {
@@ -142,5 +162,35 @@ public final class WorldReplayTickSuppression {
         if (worldPositions.isEmpty()) {
             this.protectedPositions.remove(level);
         }
+    }
+
+    private static String samplePositions(Collection<BlockPos> positions) {
+        if (positions == null || positions.isEmpty()) {
+            return "";
+        }
+        StringBuilder sample = new StringBuilder();
+        int count = 0;
+        for (BlockPos pos : positions) {
+            if (pos == null) {
+                continue;
+            }
+            if (sample.length() > 0) {
+                sample.append("; ");
+            }
+            sample.append(format(pos));
+            count += 1;
+            if (count >= 12) {
+                break;
+            }
+        }
+        return sample.toString();
+    }
+
+    private static String format(BlockPos pos) {
+        return pos == null ? "unknown" : pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
+    private static String blank(String value) {
+        return value == null || value.isBlank() ? "<none>" : value;
     }
 }

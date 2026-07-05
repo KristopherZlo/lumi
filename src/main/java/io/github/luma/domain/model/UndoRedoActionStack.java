@@ -282,27 +282,28 @@ public final class UndoRedoActionStack {
             List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges,
             Instant now,
-            boolean clearRedoOnMutation
+            boolean newAction
     ) {
         boolean recorded = false;
+        Instant recordedAt = newAction ? now : action.updatedAt();
         for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
             StoredBlockChange recordableChange = this.withAppliedOldValue(action.dimensionId(), change);
             if (recordableChange == null || recordableChange.isNoOp()) {
                 continue;
             }
-            recorded |= action.recordChange(recordableChange, now);
+            recorded |= action.recordChange(recordableChange, recordedAt);
         }
         for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
             if (change == null || change.isNoOp()) {
                 continue;
             }
-            recorded |= action.recordEntityChange(change, now);
+            recorded |= action.recordEntityChange(change, recordedAt);
         }
         if (action.isEmpty()) {
             this.undoStack.remove(action);
         }
         if (recorded) {
-            if (clearRedoOnMutation) {
+            if (newAction) {
                 this.redoStack.clear();
             }
             this.revision += 1;

@@ -124,7 +124,7 @@ class WorldApplyNoOpPrunerTest {
                 new BlockPos(4, 64, 4),
                 Blocks.AIR.defaultBlockState(),
                 null,
-                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_MECHANISM
+                PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY
         );
 
         PreparedBlockPlacement promoted = this.withLiveFluidReplayHint(
@@ -133,6 +133,24 @@ class WorldApplyNoOpPrunerTest {
         );
 
         assertTrue(promoted.replayHint().suppressesPostReplayFluid());
+        assertTrue(promoted.replayHint().forcesFinalReplay());
+    }
+
+    @Test
+    void mechanismReplayOverLiveWaterDoesNotPromoteFluidTailCleanup() {
+        PreparedBlockPlacement placement = new PreparedBlockPlacement(
+                new BlockPos(4, 64, 4),
+                Blocks.REDSTONE_WIRE.defaultBlockState(),
+                null,
+                PreparedBlockPlacement.ReplayHint.SUPPRESS_POST_REPLAY_MECHANISM
+        );
+
+        PreparedBlockPlacement promoted = this.withLiveFluidReplayHint(
+                placement,
+                Blocks.WATER.defaultBlockState()
+        );
+
+        assertFalse(promoted.replayHint().suppressesPostReplayFluid());
         assertTrue(promoted.replayHint().suppressesPostReplayMechanism());
     }
 

@@ -196,6 +196,7 @@ class UndoRedoActionStackTest {
 
         List<UndoRedoAction> recent = stack.recentUndoActions(2);
         assertEquals(List.of("latest-placement", "redstone-toggle"), recent.stream().map(UndoRedoAction::id).toList());
+        assertEquals("latest-placement", stack.selectUndo().action().id());
         assertEquals(1, recent.getFirst().size());
         assertEquals(2, recent.get(1).size());
     }
@@ -268,6 +269,29 @@ class UndoRedoActionStackTest {
         StoredBlockChange brokenTorch = changeAt(stack.selectUndo().action(), 1);
         assertEquals("minecraft:redstone_torch", brokenTorch.oldValue().blockId());
         assertEquals("minecraft:water", brokenTorch.newValue().blockId());
+    }
+
+    @Test
+    void causalFluidTailDoesNotPromoteOlderWaterActionForUndoSelection() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        recordChange(stack, "release-water", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:grass_block", "minecraft:air"), NOW);
+        recordChange(stack, "break-floor", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:grass_block", "minecraft:air"), NOW.plusSeconds(1));
+
+        recordCurrentCausalChange(stack,
+                "release-water",
+                "Alex",
+                "project",
+                "minecraft:overworld",
+                change(2, "minecraft:grass_block", "minecraft:water"),
+                NOW.plusSeconds(2)
+        );
+
+        assertEquals("break-floor", stack.selectUndo().action().id());
+        StoredBlockChange floodedFloor = changeAt(stack.recentUndoActions(2).get(1), 2);
+        assertEquals("minecraft:air", floodedFloor.oldValue().blockId());
+        assertEquals("minecraft:water", floodedFloor.newValue().blockId());
     }
 
     @Test
@@ -480,6 +504,7 @@ class UndoRedoActionStackTest {
 
         List<UndoRedoAction> recent = stack.recentUndoActions(2);
         assertEquals(List.of("latest-placement", "redstone-toggle"), recent.stream().map(UndoRedoAction::id).toList());
+        assertEquals("latest-placement", stack.selectUndo().action().id());
         assertEquals(1, recent.getFirst().size());
         assertEquals(2, recent.get(1).size());
     }

@@ -59,12 +59,6 @@ loom {
             runDir = 'run/test-client'
             programArg '--username'
             programArg providers.gradleProperty('lumi.testUsername').orElse('LumiTestClient').get()
-            vmArg '-Dlumi.debug=true'
-            vmArg '-Dlumi.startupProfile=true'
-            vmArg '-Dlumi.loadLog=true'
-            vmArg '-Dlumi.clientLoadLog=true'
-            vmArg '-Dlumi.lightLog=true'
-            vmArg '-Dlumi.blockApplyLog=true'
             vmArg '-Dlumi.testing.enabled=true'
         }
 

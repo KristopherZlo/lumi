@@ -70,11 +70,19 @@ public final class ExactReplayStateGuard {
             callbackProtectedPositions.addAll(this.callbackSuppressionPositions(copied));
         }
         this.addFluidReplayTargets(placements, callbackProtectedPositions);
-        exactStates += this.guardConnectedFluidTails(level, placements, guardedWorld, expiresAt, callbackProtectedPositions);
+        int fluidTailStates = this.guardConnectedFluidTails(
+                level,
+                placements,
+                guardedWorld,
+                expiresAt,
+                callbackProtectedPositions
+        );
+        exactStates += fluidTailStates;
 
         this.replaySuppression.protect(level, callbackProtectedPositions, ticks);
         this.fluidReplayUpdateScheduler.schedule(level, placements);
         this.historyDebugLog.logExactGuard(level, exactStates, callbackProtectedPositions.size(), ticks);
+        this.historyDebugLog.logFluidReplayGuard(level, exactStates, callbackProtectedPositions.size(), fluidTailStates, ticks);
         guardedWorld.removeExpired(level.getGameTime());
         if (guardedWorld.isEmpty()) {
             this.guardedWorlds.remove(level);

@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ArchitectureGuardrailsTest {
@@ -333,6 +334,13 @@ class ArchitectureGuardrailsTest {
         assertTrue(
                 buildScript.contains("vmArg '-Dlumi.testing.enabled=true'"),
                 "Loom testClient run must enable runtime testing explicitly"
+        );
+        assertFalse(
+                buildScript.contains("vmArg '-Dlumi.debug=true'")
+                        || buildScript.contains("vmArg '-Dlumi.loadLog=true'")
+                        || buildScript.contains("vmArg '-Dlumi.lightLog=true'")
+                        || buildScript.contains("vmArg '-Dlumi.blockApplyLog=true'"),
+                "Loom testClient run must keep broad diagnostics opt-in"
         );
         assertTrue(
                 buildScript.contains("jvmArgs('-Dlumi.testing.enabled=true')"),

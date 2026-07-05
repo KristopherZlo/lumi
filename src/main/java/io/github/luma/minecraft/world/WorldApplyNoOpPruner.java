@@ -309,6 +309,9 @@ final class WorldApplyNoOpPruner {
         if (placement == null || placement.pos() == null || placement.state() == null || currentState == null) {
             return placement;
         }
+        if (placement.replayHint().suppressesPostReplayMechanism()) {
+            return placement;
+        }
         if (currentState.getFluidState().isEmpty() || !placement.state().getFluidState().isEmpty()) {
             return placement;
         }

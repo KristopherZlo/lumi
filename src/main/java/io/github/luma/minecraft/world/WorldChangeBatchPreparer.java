@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -117,9 +118,32 @@ public final class WorldChangeBatchPreparer {
             ProgressListener progressListener,
             EntityApplyMode entityApplyMode
     ) throws IOException {
+        return this.prepareAnalyzed(
+                level,
+                changes,
+                entityChanges,
+                applyNewValues,
+                progressListener,
+                entityApplyMode,
+                WorldChangeBatchPreparer::replayHintFor
+        );
+    }
+
+    private PreparedWorldChangeBatches prepareAnalyzed(
+            ServerLevel level,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            boolean applyNewValues,
+            ProgressListener progressListener,
+            EntityApplyMode entityApplyMode,
+            BiFunction<BlockState, BlockState, PreparedBlockPlacement.ReplayHint> replayHintResolver
+    ) throws IOException {
         changes = changes == null ? List.of() : changes;
         entityChanges = entityChanges == null ? List.of() : entityChanges;
         progressListener = progressListener == null ? ProgressListener.NO_OP : progressListener;
+        replayHintResolver = replayHintResolver == null
+                ? WorldChangeBatchPreparer::replayHintFor
+                : replayHintResolver;
         int total = changes.size() + entityChanges.size();
         int completed = 0;
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
@@ -137,7 +161,7 @@ public final class WorldChangeBatchPreparer {
                             pos,
                             targetState,
                             target == null || target.blockEntityTag() == null ? null : target.blockEntityTag().copy(),
-                            replayHintFor(sourceState, targetState)
+                            replayHintResolver.apply(sourceState, targetState)
                     ),
                     sourceState
             ));
@@ -179,7 +203,15 @@ public final class WorldChangeBatchPreparer {
         changes = changes == null ? List.of() : changes;
         entityChanges = undoRedoReplayEntityChanges(entityChanges, applyNewValues);
         if (changes.size() < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD) {
-            return this.prepare(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode);
+            return this.prepareAnalyzed(
+                    level,
+                    changes,
+                    entityChanges,
+                    applyNewValues,
+                    progressListener,
+                    entityApplyMode,
+                    WorldChangeBatchPreparer::undoRedoReplayHintFor
+            ).batches();
         }
 
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
@@ -193,7 +225,15 @@ public final class WorldChangeBatchPreparer {
                 entityApplyMode
         );
         return analyzed == null
-                ? this.prepare(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode)
+                ? this.prepareAnalyzed(
+                        level,
+                        changes,
+                        entityChanges,
+                        applyNewValues,
+                        progressListener,
+                        entityApplyMode,
+                        WorldChangeBatchPreparer::undoRedoReplayHintFor
+                ).batches()
                 : analyzed.batches();
     }
 
@@ -208,7 +248,15 @@ public final class WorldChangeBatchPreparer {
         changes = changes == null ? List.of() : changes;
         entityChanges = undoRedoReplayEntityChanges(entityChanges, applyNewValues);
         if (changes.size() < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD) {
-            return this.prepareAnalyzed(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode);
+            return this.prepareAnalyzed(
+                    level,
+                    changes,
+                    entityChanges,
+                    applyNewValues,
+                    progressListener,
+                    entityApplyMode,
+                    WorldChangeBatchPreparer::undoRedoReplayHintFor
+            );
         }
 
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
@@ -222,7 +270,15 @@ public final class WorldChangeBatchPreparer {
                 entityApplyMode
         );
         return analyzed == null
-                ? this.prepareAnalyzed(level, changes, entityChanges, applyNewValues, progressListener, entityApplyMode)
+                ? this.prepareAnalyzed(
+                        level,
+                        changes,
+                        entityChanges,
+                        applyNewValues,
+                        progressListener,
+                        entityApplyMode,
+                        WorldChangeBatchPreparer::undoRedoReplayHintFor
+                )
                 : analyzed;
     }
 
@@ -378,6 +434,11 @@ public final class WorldChangeBatchPreparer {
         boolean mechanism = isMechanismRelated(sourceState) || isMechanismRelated(targetState);
         boolean forceFinalReplay = mechanism && (targetState == null || targetState.isAir());
         return PreparedBlockPlacement.ReplayHint.of(forceFinalReplay, fluid, mechanism);
+    }
+
+    private static PreparedBlockPlacement.ReplayHint undoRedoReplayHintFor(BlockState ignoredSourceState, BlockState targetState) {
+        boolean mechanism = isMechanismRelated(targetState);
+        return PreparedBlockPlacement.ReplayHint.of(false, false, mechanism);
     }
 
     private MechanismReplayScope mechanismScope(
@@ -624,7 +685,7 @@ public final class WorldChangeBatchPreparer {
 
             SectionKey key = SectionKey.from(change);
             BlockPos pos = change.pos().toBlockPos();
-            PreparedBlockPlacement.ReplayHint replayHint = replayHintFor(sourceState, targetState);
+            PreparedBlockPlacement.ReplayHint replayHint = undoRedoReplayHintFor(sourceState, targetState);
             sectionBuilders.computeIfAbsent(key, ignored -> LumiSectionBuffer.builder(key.sectionY()))
                     .set(
                             change.pos().x() & 15,

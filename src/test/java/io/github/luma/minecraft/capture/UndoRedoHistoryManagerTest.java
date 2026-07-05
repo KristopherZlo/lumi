@@ -1,9 +1,12 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.debug.LumaDiagnosticsLog;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.UndoRedoActionStack;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
@@ -247,6 +250,45 @@ class UndoRedoHistoryManagerTest {
     }
 
     @Test
+    void fluidUndoDiagnosticsLogRecordsSelectionAndCompletion() throws Exception {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "fluid-undo-diagnostics-test";
+        Path logPath = Files.createTempFile("lumi-fluid-undo", ".log");
+        String previousEnabled = System.getProperty("lumi.fluidUndoLog");
+        String previousPath = System.getProperty("lumi.fluidUndoLog.path");
+        try {
+            System.setProperty("lumi.fluidUndoLog", "true");
+            System.setProperty("lumi.fluidUndoLog.path", logPath.toString());
+            historyManager.clearProject(projectId);
+
+            historyManager.recordAction(
+                    projectId,
+                    "minecraft:overworld",
+                    "water-tail",
+                    "Alex",
+                    List.of(change(3)),
+                    List.of(),
+                    Instant.parse("2026-04-23T08:00:00Z")
+            );
+            UndoRedoActionStack.Selection selection = historyManager.selectUndo(projectId, "Alex");
+            historyManager.completeUndo(projectId, selection);
+            LumaDiagnosticsLog.close();
+
+            String log = Files.readString(logPath);
+            assertTrue(log.contains("undo-action-root-recorded"));
+            assertTrue(log.contains("undo-select"));
+            assertTrue(log.contains("undo-complete"));
+            assertTrue(log.contains("water-tail"));
+        } finally {
+            LumaDiagnosticsLog.close();
+            restoreProperty("lumi.fluidUndoLog", previousEnabled);
+            restoreProperty("lumi.fluidUndoLog.path", previousPath);
+            historyManager.clearProject(projectId);
+            Files.deleteIfExists(logPath);
+        }
+    }
+
+    @Test
     void laterEditAfterUndoBlocksRedoForSameBlock() {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
         String projectId = "player-conflict-ledger-redo-test";
@@ -298,5 +340,13 @@ class UndoRedoHistoryManagerTest {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", blockId);
         return tag;
+    }
+
+    private static void restoreProperty(String name, String value) {
+        if (value == null) {
+            System.clearProperty(name);
+            return;
+        }
+        System.setProperty(name, value);
     }
 }
