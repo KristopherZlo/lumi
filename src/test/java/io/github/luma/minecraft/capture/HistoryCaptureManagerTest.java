@@ -186,13 +186,15 @@ class HistoryCaptureManagerTest {
     }
 
     @Test
-    void liveUndoOnlySourcesAreRecordedBeforeOpeningDurableDrafts() throws Exception {
+    void singleBlockEntityFalloutDoesNotBypassDurableDraftCapture() throws Exception {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/HistoryCaptureManager.java"));
         int method = source.indexOf("public void recordBlockChange(");
         int liveOnlyBranch = source.indexOf("ELIGIBILITY.isLiveUndoOnlySource(source)", method);
         int draftOpen = source.indexOf("this.getOrCreateWorkingDraft(trackedProject, source, now)", method);
+        int liveUndoRecord = source.indexOf("this.liveUndoRedoActionRecorder.recordBlockAction", method);
 
-        assertTrue(liveOnlyBranch > method);
-        assertTrue(liveOnlyBranch < draftOpen);
+        assertEquals(-1, liveOnlyBranch);
+        assertTrue(draftOpen > method);
+        assertTrue(liveUndoRecord > draftOpen);
     }
 }

@@ -149,15 +149,6 @@ class MutationSourcePolicyTest {
     }
 
     @Test
-    void playerCausedMobAndExplosionFalloutAreLiveUndoOnly() {
-        assertTrue(this.policy.isLiveUndoOnlySource(WorldMutationSource.MOB));
-        assertTrue(this.policy.isLiveUndoOnlySource(WorldMutationSource.EXPLOSION));
-        assertFalse(this.policy.isLiveUndoOnlySource(WorldMutationSource.PLAYER));
-        assertFalse(this.policy.isLiveUndoOnlySource(WorldMutationSource.GROWTH));
-        assertFalse(this.policy.isLiveUndoOnlySource(WorldMutationSource.FLUID));
-    }
-
-    @Test
     void playerCausedExplosionsCanBootstrapTrackedSessionsWithoutCreatingProjects() {
         BuildProject wholeDimension = BuildProject.createWorldWorkspace(
                 "World",

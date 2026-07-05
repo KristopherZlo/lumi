@@ -105,10 +105,6 @@ final class MutationSourcePolicy {
         return source != null && source != WorldMutationSource.GROWTH;
     }
 
-    boolean isLiveUndoOnlySource(WorldMutationSource source) {
-        return source == WorldMutationSource.MOB || source == WorldMutationSource.EXPLOSION;
-    }
-
     boolean canCaptureDeferredPreMutationBaseline(
             BuildProject project,
             WorldMutationSource source,
