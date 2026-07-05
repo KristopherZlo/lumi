@@ -137,7 +137,7 @@ class WorldApplyNoOpPrunerTest {
     }
 
     @Test
-    void mechanismReplayOverLiveWaterDoesNotPromoteFluidTailCleanup() {
+    void mechanismReplayOverLiveWaterPromotesFluidTailCleanup() {
         PreparedBlockPlacement placement = new PreparedBlockPlacement(
                 new BlockPos(4, 64, 4),
                 Blocks.REDSTONE_WIRE.defaultBlockState(),
@@ -150,7 +150,7 @@ class WorldApplyNoOpPrunerTest {
                 Blocks.WATER.defaultBlockState()
         );
 
-        assertFalse(promoted.replayHint().suppressesPostReplayFluid());
+        assertTrue(promoted.replayHint().suppressesPostReplayFluid());
         assertTrue(promoted.replayHint().suppressesPostReplayMechanism());
     }
 
