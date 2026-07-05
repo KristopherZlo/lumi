@@ -190,6 +190,16 @@ final class SingleplayerExplosionRegressionScenario {
                     && !this.primedTntPresent(level);
         }
 
+        Set<BlockPoint> destroyedWitnessBlocks(ServerLevel level) {
+            LinkedHashSet<BlockPoint> blocks = new LinkedHashSet<>();
+            for (BlockPos witness : this.witnessBlocks) {
+                if (level.getBlockState(witness).isAir()) {
+                    blocks.add(BlockPoint.from(witness));
+                }
+            }
+            return Set.copyOf(blocks);
+        }
+
         boolean restoredAfterUndo(ServerLevel level) {
             return this.persistentTntBlocksRestored(level)
                     && this.consumedTntBlocksCleared(level)

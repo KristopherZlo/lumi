@@ -2,8 +2,6 @@ package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.WorldMutationSource;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -183,18 +181,5 @@ class HistoryCaptureManagerTest {
         assertEquals("axiom", HistoryCaptureManager.defaultActor(WorldMutationSource.AXIOM));
         assertEquals("world", HistoryCaptureManager.defaultActor(WorldMutationSource.SYSTEM));
         assertEquals("world", HistoryCaptureManager.defaultActor(null));
-    }
-
-    @Test
-    void singleBlockEntityFalloutDoesNotBypassDurableDraftCapture() throws Exception {
-        String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/HistoryCaptureManager.java"));
-        int method = source.indexOf("public void recordBlockChange(");
-        int liveOnlyBranch = source.indexOf("ELIGIBILITY.isLiveUndoOnlySource(source)", method);
-        int draftOpen = source.indexOf("this.getOrCreateWorkingDraft(trackedProject, source, now)", method);
-        int liveUndoRecord = source.indexOf("this.liveUndoRedoActionRecorder.recordBlockAction", method);
-
-        assertEquals(-1, liveOnlyBranch);
-        assertTrue(draftOpen > method);
-        assertTrue(liveUndoRecord > draftOpen);
     }
 }

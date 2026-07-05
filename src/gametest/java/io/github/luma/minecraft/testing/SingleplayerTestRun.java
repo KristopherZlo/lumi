@@ -124,6 +124,7 @@ final class SingleplayerTestRun {
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport poweredTntUndoReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport chainedTntReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
+    private Set<BlockPoint> explosionDestroyedWitnessBlocks = Set.of();
     private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
     private SingleplayerLargeHistoryScenario largeHistoryScenario;
     private SingleplayerStructureFixtureScenario structureFixtureScenario;
@@ -1285,14 +1286,15 @@ final class SingleplayerTestRun {
         RecoveryDraft draft = this.value("Explosion recovery draft can be loaded", () ->
                 HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
         if (draft != null && this.explosionReport != null) {
+            this.explosionDestroyedWitnessBlocks = this.explosionReport.destroyedWitnessBlocks(this.level);
+            this.check(!this.explosionDestroyedWitnessBlocks.isEmpty(),
+                    "Controlled TNT explosion removed at least one witness block");
             Set<BlockPoint> capturedBlocks = new HashSet<>();
             for (var change : draft.changes()) {
                 capturedBlocks.add(change.pos());
             }
-            this.check(this.explosionReport.witnessBlocks().stream()
-                            .map(BlockPoint::from)
-                            .anyMatch(capturedBlocks::contains),
-                    "Explosion draft includes at least one blast witness block");
+            this.check(capturedBlocks.containsAll(this.explosionDestroyedWitnessBlocks),
+                    "Explosion draft includes every removed blast witness block");
         }
         this.completePhase(server, Phase.START_EXPLOSION_UNDO);
     }
@@ -1321,6 +1323,11 @@ final class SingleplayerTestRun {
     private void checkExplosionRedo() {
         this.check(this.explosionReport != null && this.explosionReport.removedAfterRedo(this.level),
                 "Explosion redo removed TNT and blast witness blocks again");
+        if (!this.explosionDestroyedWitnessBlocks.isEmpty()) {
+            this.check(this.explosionDestroyedWitnessBlocks.stream()
+                            .allMatch(pos -> this.level.getBlockState(pos.toBlockPos()).isAir()),
+                    "Explosion redo removed every draft-tracked blast witness block again");
+        }
         this.completePhase(this.level.getServer(), Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
     }
 
