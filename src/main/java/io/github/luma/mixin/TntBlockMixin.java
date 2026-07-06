@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.ExplosiveSourceContextPolicy;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.ExactReplayStateGuard;
 import io.github.luma.minecraft.world.TntReplayActivationPolicy;
@@ -38,6 +39,9 @@ abstract class TntBlockMixin {
     @Unique
     private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
             WorldReplayTickSuppression.getInstance();
+    @Unique
+    private static final ExplosiveSourceContextPolicy LUMA_EXPLOSIVE_SOURCE_CONTEXT_POLICY =
+            new ExplosiveSourceContextPolicy();
 
     @WrapMethod(method = "onPlace")
     private void luma$wrapOnPlace(
@@ -154,6 +158,9 @@ abstract class TntBlockMixin {
     @Unique
     private static WorldMutationContext.SourceFrame luma$pushExplosiveSource(Level level) {
         if (level.isClientSide()) {
+            return null;
+        }
+        if (!LUMA_EXPLOSIVE_SOURCE_CONTEXT_POLICY.canOpenExplosiveSource()) {
             return null;
         }
 
