@@ -60,7 +60,7 @@ public final class ChunkSnapshotCaptureService {
             return Optional.empty();
         }
         LevelChunk levelChunk = level.getChunk(chunk.x(), chunk.z());
-        return Optional.of(this.capture(level, levelChunk, null, null, null, EntitySnapshotOverride.none()));
+        return Optional.of(this.capture(level, levelChunk, List.of(), EntitySnapshotOverride.none()));
     }
 
     public Optional<ChunkSnapshotPayload> captureEntityCheckpointChunk(ServerLevel level, ChunkPoint chunk) {
@@ -86,7 +86,20 @@ public final class ChunkSnapshotCaptureService {
             BlockState overrideState,
             CompoundTag overrideBlockEntity
     ) {
-        return this.captureLoadedChunk(level, chunk, overridePos, overrideState, overrideBlockEntity, EntitySnapshotOverride.none());
+        return this.captureLoadedChunk(
+                level,
+                chunk,
+                blockStateOverrides(overridePos, overrideState, overrideBlockEntity),
+                EntitySnapshotOverride.none()
+        );
+    }
+
+    Optional<ChunkSnapshotPayload> captureLoadedChunk(
+            ServerLevel level,
+            ChunkPoint chunk,
+            List<BlockStateOverride> blockStateOverrides
+    ) {
+        return this.captureLoadedChunk(level, chunk, blockStateOverrides, EntitySnapshotOverride.none());
     }
 
     public Optional<ChunkSnapshotPayload> captureLoadedChunk(
@@ -101,9 +114,7 @@ public final class ChunkSnapshotCaptureService {
         return this.captureLoadedChunk(
                 level,
                 chunk,
-                overridePos,
-                overrideState,
-                overrideBlockEntity,
+                blockStateOverrides(overridePos, overrideState, overrideBlockEntity),
                 new EntitySnapshotOverride(oldEntityPayload, newEntityPayload)
         );
     }
@@ -136,9 +147,7 @@ public final class ChunkSnapshotCaptureService {
     private Optional<ChunkSnapshotPayload> captureLoadedChunk(
             ServerLevel level,
             ChunkPoint chunk,
-            BlockPos overridePos,
-            BlockState overrideState,
-            CompoundTag overrideBlockEntity,
+            List<BlockStateOverride> blockStateOverrides,
             EntitySnapshotOverride entityOverride
     ) {
         if (level == null || chunk == null) {
@@ -148,22 +157,17 @@ public final class ChunkSnapshotCaptureService {
         if (levelChunk == null) {
             return Optional.empty();
         }
-        return Optional.of(this.capture(level, levelChunk, overridePos, overrideState, overrideBlockEntity, entityOverride));
+        return Optional.of(this.capture(level, levelChunk, blockStateOverrides, entityOverride));
     }
 
     private ChunkSnapshotPayload capture(
             ServerLevel level,
             LevelChunk chunk,
-            BlockPos overridePos,
-            BlockState overrideState,
-            CompoundTag overrideBlockEntity,
+            List<BlockStateOverride> blockStateOverrides,
             EntitySnapshotOverride entityOverride
     ) {
-        BlockPos immutableOverridePos = overridePos == null ? null : overridePos.immutable();
-        PersistentBlockStatePolicy.PersistentBlockState normalizedOverride = overrideState == null
-                ? null
-                : this.blockStatePolicy.normalize(overrideState, overrideBlockEntity);
-        int overrideSectionY = immutableOverridePos == null ? Integer.MIN_VALUE : immutableOverridePos.getY() >> 4;
+        Map<Integer, List<NormalizedBlockStateOverride>> overridesBySection =
+                this.normalizedOverridesBySection(blockStateOverrides);
         List<ChunkSectionSnapshotPayload> sections = new ArrayList<>();
 
         LevelChunkSection[] chunkSections = chunk.getSections();
@@ -174,12 +178,12 @@ public final class ChunkSnapshotCaptureService {
             }
             int sectionY = level.getSectionYFromSectionIndex(index);
             LevelChunkSection sectionCopy = section.copy();
-            if (immutableOverridePos != null && sectionY == overrideSectionY && overrideState != null) {
+            for (NormalizedBlockStateOverride override : overridesBySection.getOrDefault(sectionY, List.of())) {
                 sectionCopy.setBlockState(
-                        immutableOverridePos.getX() & 15,
-                        immutableOverridePos.getY() & 15,
-                        immutableOverridePos.getZ() & 15,
-                        normalizedOverride.state()
+                        override.pos().getX() & 15,
+                        override.pos().getY() & 15,
+                        override.pos().getZ() & 15,
+                        override.state().state()
                 );
             }
             ChunkSectionSnapshotPayload sectionPayload = this.captureSection(sectionCopy, sectionY);
@@ -189,16 +193,18 @@ public final class ChunkSnapshotCaptureService {
         }
 
         Map<Integer, CompoundTag> blockEntities = this.captureBlockEntities(level, chunk);
-        if (immutableOverridePos != null) {
-            int packedIndex = SnapshotWriter.packVerticalIndex(
-                    immutableOverridePos.getY() - level.getMinY(),
-                    immutableOverridePos.getX() & 15,
-                    immutableOverridePos.getZ() & 15
-            );
-            if (normalizedOverride == null || normalizedOverride.blockEntityTag() == null || normalizedOverride.state().isAir()) {
-                blockEntities.remove(packedIndex);
-            } else {
-                blockEntities.put(packedIndex, normalizedOverride.blockEntityTag());
+        for (List<NormalizedBlockStateOverride> sectionOverrides : overridesBySection.values()) {
+            for (NormalizedBlockStateOverride override : sectionOverrides) {
+                int packedIndex = SnapshotWriter.packVerticalIndex(
+                        override.pos().getY() - level.getMinY(),
+                        override.pos().getX() & 15,
+                        override.pos().getZ() & 15
+                );
+                if (override.state().blockEntityTag() == null || override.state().state().isAir()) {
+                    blockEntities.remove(packedIndex);
+                } else {
+                    blockEntities.put(packedIndex, override.state().blockEntityTag());
+                }
             }
         }
 
@@ -211,6 +217,34 @@ public final class ChunkSnapshotCaptureService {
                 blockEntities,
                 this.captureEntities(level, chunk, entityOverride)
         );
+    }
+
+    private static List<BlockStateOverride> blockStateOverrides(
+            BlockPos overridePos,
+            BlockState overrideState,
+            CompoundTag overrideBlockEntity
+    ) {
+        return overridePos == null || overrideState == null
+                ? List.of()
+                : List.of(new BlockStateOverride(overridePos, overrideState, overrideBlockEntity));
+    }
+
+    private Map<Integer, List<NormalizedBlockStateOverride>> normalizedOverridesBySection(
+            List<BlockStateOverride> overrides
+    ) {
+        LinkedHashMap<Integer, List<NormalizedBlockStateOverride>> bySection = new LinkedHashMap<>();
+        for (BlockStateOverride override : overrides == null ? List.<BlockStateOverride>of() : overrides) {
+            if (override == null || override.pos() == null || override.state() == null) {
+                continue;
+            }
+            BlockPos pos = override.pos().immutable();
+            bySection.computeIfAbsent(pos.getY() >> 4, ignored -> new ArrayList<>())
+                    .add(new NormalizedBlockStateOverride(
+                            pos,
+                            this.blockStatePolicy.normalize(override.state(), override.blockEntityTag())
+                    ));
+        }
+        return bySection;
     }
 
     private ChunkSectionSnapshotPayload captureSection(LevelChunkSection section, int sectionY) {
@@ -336,5 +370,19 @@ public final class ChunkSnapshotCaptureService {
 
     private boolean isRemoved(Entity entity) {
         return entity == null || entity.isRemoved();
+    }
+
+    record BlockStateOverride(BlockPos pos, BlockState state, CompoundTag blockEntityTag) {
+
+        BlockStateOverride {
+            pos = pos == null ? null : pos.immutable();
+            blockEntityTag = blockEntityTag == null ? null : blockEntityTag.copy();
+        }
+    }
+
+    private record NormalizedBlockStateOverride(
+            BlockPos pos,
+            PersistentBlockStatePolicy.PersistentBlockState state
+    ) {
     }
 }

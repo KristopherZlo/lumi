@@ -148,12 +148,26 @@ public final class SessionStabilizationService {
             net.minecraft.world.level.block.state.BlockState overrideState,
             CompoundTag overrideBlockEntity
     ) {
-        return this.chunkSnapshotCaptureService.captureLoadedChunk(
-                        level,
-                        chunk,
+        List<ChunkSnapshotCaptureService.BlockStateOverride> overrides = overridePos == null || overrideState == null
+                ? List.of()
+                : List.of(new ChunkSnapshotCaptureService.BlockStateOverride(
                         overridePos,
                         overrideState,
                         overrideBlockEntity
+                ));
+        return this.captureBaselineChunkState(level, project, chunk, overrides);
+    }
+
+    public ChunkSnapshotPayload captureBaselineChunkState(
+            ServerLevel level,
+            BuildProject project,
+            ChunkPoint chunk,
+            List<ChunkSnapshotCaptureService.BlockStateOverride> overrides
+    ) {
+        return this.chunkSnapshotCaptureService.captureLoadedChunk(
+                        level,
+                        chunk,
+                        overrides
                 )
                 .orElseThrow(() -> new IllegalStateException(
                         "Chunk %d:%d is not loaded for session baseline capture in %s".formatted(

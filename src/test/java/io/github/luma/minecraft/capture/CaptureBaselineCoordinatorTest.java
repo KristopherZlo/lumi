@@ -8,6 +8,8 @@ import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.StatePayload;
+import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.time.Instant;
@@ -49,6 +51,33 @@ class CaptureBaselineCoordinatorTest {
         this.coordinator.captureSessionChunkBaseline(session, snapshot.chunk(), snapshot);
 
         assertSame(snapshot, session.baselineChunkState(snapshot.chunk()));
+    }
+
+    @Test
+    void baselineOverridesPreferDraftOldValueForSameChunkPendingBlocks() {
+        CaptureSessionState session = session();
+        BlockPoint pos = new BlockPoint(5, 64, 9);
+        session.buffer().addChange(new StoredBlockChange(
+                pos,
+                StatePayload.capture(Blocks.AIR.defaultBlockState(), null),
+                StatePayload.capture(Blocks.TNT.defaultBlockState(), null)
+        ), Instant.EPOCH);
+
+        List<ChunkSnapshotCaptureService.BlockStateOverride> overrides = this.coordinator.baselineOverrides(
+                null,
+                session,
+                ChunkPoint.from(pos),
+                pos.toBlockPos(),
+                Blocks.TNT.defaultBlockState(),
+                null
+        );
+
+        ChunkSnapshotCaptureService.BlockStateOverride override = overrides.stream()
+                .filter(candidate -> candidate.pos().equals(pos.toBlockPos()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1, overrides.size());
+        assertEquals(Blocks.AIR, override.state().getBlock());
     }
 
     private static CaptureSessionState session() {

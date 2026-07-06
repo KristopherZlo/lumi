@@ -378,6 +378,56 @@ class RestoreServiceTest {
     }
 
     @Test
+    void directRestoreRollsBackPendingTntToTargetAir(@TempDir Path tempDir) throws Throwable {
+        RestoreService service = new RestoreService();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        BlockPoint pos = new BlockPoint(1, 64, 1);
+        this.snapshotWriter.writeFile(layout.snapshotFile("snapshot-0001"), snapshotWithState("minecraft:air"));
+        BuildProject project = BuildProject.create(
+                        "project",
+                        "minecraft:overworld",
+                        new Bounds3i(new BlockPoint(0, 0, 0), new BlockPoint(16, 128, 16)),
+                        new BlockPoint(0, 64, 0),
+                        NOW
+                )
+                .withActiveVariantId("main", NOW);
+        ProjectVersion target = version("v0001", "main", "", "snapshot-0001", List.of(), VersionKind.INITIAL);
+        ProjectVariant activeVariant = new ProjectVariant("main", "main", "v0001", "v0001", true, NOW);
+        RecoveryDraft pendingDraft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "Alex",
+                WorldMutationSource.PLAYER,
+                NOW,
+                NOW,
+                List.of(new StoredBlockChange(
+                        pos,
+                        StatePayload.air(),
+                        new StatePayload(state("minecraft:tnt"), null)
+                ))
+        );
+
+        Optional<List<PreparedChunkBatch>> decoded = invokeTryDecodeDirectRestore(
+                service,
+                layout,
+                project,
+                List.of(target),
+                List.of(activeVariant),
+                target,
+                pendingDraft
+        );
+
+        assertTrue(decoded.isPresent());
+        List<PreparedBlockPlacement> placements = decoded.orElseThrow().stream()
+                .flatMap(batch -> batch.placements().stream())
+                .filter(placement -> placement.pos().equals(pos.toBlockPos()))
+                .toList();
+        assertTrue(placements.stream().anyMatch(placement -> placement.state().isAir()));
+        assertFalse(placements.stream().anyMatch(placement -> placement.state().is(Blocks.TNT)));
+    }
+
+    @Test
     void directRestoreFiltersExcludedEntityPatchDeltas(@TempDir Path tempDir) throws Throwable {
         RestoreService service = new RestoreService();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
@@ -1048,6 +1098,7 @@ class RestoreServiceTest {
                 versions,
                 variants,
                 targetVersion,
+                null,
                 RestoreEntityTypeSelection.includeAll()
         );
     }
@@ -1060,6 +1111,51 @@ class RestoreServiceTest {
             List<ProjectVersion> versions,
             List<ProjectVariant> variants,
             ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft
+    ) throws Throwable {
+        return invokeTryDecodeDirectRestore(
+                service,
+                layout,
+                project,
+                versions,
+                variants,
+                targetVersion,
+                pendingDraft,
+                RestoreEntityTypeSelection.includeAll()
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<List<PreparedChunkBatch>> invokeTryDecodeDirectRestore(
+            RestoreService service,
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVersion targetVersion,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws Throwable {
+        return invokeTryDecodeDirectRestore(
+                service,
+                layout,
+                project,
+                versions,
+                variants,
+                targetVersion,
+                null,
+                entityTypeSelection
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<List<PreparedChunkBatch>> invokeTryDecodeDirectRestore(
+            RestoreService service,
+            ProjectLayout layout,
+            BuildProject project,
+            List<ProjectVersion> versions,
+            List<ProjectVariant> variants,
+            ProjectVersion targetVersion,
+            RecoveryDraft pendingDraft,
             RestoreEntityTypeSelection entityTypeSelection
     ) throws Throwable {
         Method method = RestoreService.class.getDeclaredMethod(
@@ -1083,7 +1179,7 @@ class RestoreServiceTest {
                     versions,
                     variants,
                     targetVersion,
-                    null,
+                    pendingDraft,
                     null,
                     entityTypeSelection,
                     (WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
