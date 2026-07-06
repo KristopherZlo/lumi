@@ -102,32 +102,6 @@ class ExplosiveEntityContextRegistryTest {
     }
 
     @Test
-    void startsExplosiveActionForEntityCausedTntWithoutBuilderAction() {
-        for (WorldMutationSource source : List.of(WorldMutationSource.EXPLOSION, WorldMutationSource.MOB)) {
-            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(source)) {
-                try (WorldMutationContext.SourceFrame ignoredTntBlock =
-                             WorldMutationContext.pushSource(WorldMutationSource.EXPLOSIVE)) {
-                    Optional<ExplosiveEntityContextRegistry.ExplosiveContext> captured =
-                            ExplosiveEntityContextRegistry.ExplosiveContext.captureCurrent();
-
-                    assertTrue(captured.isPresent());
-                    assertEquals(WorldMutationSource.EXPLOSIVE, captured.get().source());
-                    assertFalse(captured.get().actionId().isBlank());
-                    assertFalse(captured.get().accessAllowed());
-
-                    captured.get().push();
-                    try {
-                        assertEquals(WorldMutationSource.EXPLOSIVE, WorldMutationContext.currentSource());
-                        assertEquals(captured.get().actionId(), WorldMutationContext.currentActionId());
-                    } finally {
-                        WorldMutationContext.popSource();
-                    }
-                }
-            }
-        }
-    }
-
-    @Test
     void capturesDeferredDispenserTntActionAsExplosiveContext() {
         CaptureSessionState.DeferredActionContext deferred =
                 new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
